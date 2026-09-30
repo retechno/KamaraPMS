@@ -165,3 +165,26 @@ DELETE FROM reservation_room_rates WHERE property_id = @property_id AND reservat
 -- name: ListRoomsForBooking :many
 SELECT id, room_number, room_type_id, is_active FROM rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
+
+-- Tape chart: active rooms with their type, the CONFIRMED / CHECKED_IN lines and the active blocks that touch [from, to).
+-- name: ListTapeRooms :many
+SELECT r.id, r.room_number, r.room_type_id, t.code AS room_type_code, t.sort_order
+FROM rooms r JOIN room_types t ON t.property_id = r.property_id AND t.id = r.room_type_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
+ORDER BY t.sort_order, t.code, r.room_number;
+
+-- name: ListTapeLines :many
+SELECT l.id, l.reservation_id, res.confirmation_number, l.status, l.room_id, l.room_type_id, l.arrival_date, l.departure_date,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM reservation_rooms l
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status IN ('CONFIRMED', 'CHECKED_IN')
+  AND l.arrival_date < @window_end::date AND l.departure_date > @window_start::date
+ORDER BY l.arrival_date, l.id;
+
+-- name: ListTapeBlocks :many
+SELECT id, room_id, block_type, start_date, end_date FROM room_blocks
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'ACTIVE'
+  AND start_date < @window_end::date AND end_date > @window_start::date
+ORDER BY start_date, id;

@@ -908,6 +908,337 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Availability per room type and night, with rate plan prices (reservation.read)
+         * @description Advisory: only booking decides. `arrival` must not be before the business date, `departure` is after
+         *     arrival, at most 365 nights. `available` is `sellable - demand` and never negative. A rate plan with
+         *     nights that have no rate is listed with `missing_nights` and no `estimate`.
+         */
+        get: operations["searchAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/availability/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Free specific rooms of a room type for [arrival, departure) (reservation.read) */
+        get: operations["listFreeRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Search reservations, newest first (reservation.read)
+         * @description `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number and the booker's name.
+         */
+        get: operations["listReservations"];
+        put?: never;
+        /**
+         * Create a draft reservation, optionally confirming it at once (reservation.create)
+         * @description The `Idempotency-Key` header is required: the same key with the same body returns the stored
+         *     reservation, the same key with another body is 422 `IDEMPOTENCY_KEY_REUSED`. Drafts hold no inventory.
+         *     With `confirm: true` a booker is required and every room goes through the availability check (409
+         *     `ROOM_TYPE_NOT_AVAILABLE` or `ROOM_NOT_AVAILABLE`); `room_id` is only accepted then, and must be a room
+         *     of the booked type. Every night needs a grid price or a `nightly_overrides` entry (needs
+         *     `reservation.override_rate`), otherwise 409 `RATE_NOT_SET`.
+         */
+        post: operations["createReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Reservation detail with rooms, nightly rates, estimates and folios (reservation.read) */
+        get: operations["getReservation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit header fields (reservation.update); needs the current version */
+        patch: operations["updateReservation"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a draft reservation (reservation.create)
+         * @description All draft rooms become CONFIRMED or none does. A booker is required. 409 `ROOM_TYPE_NOT_AVAILABLE` lists the failing nights in `context.nights`; 409 `ROOM_NOT_AVAILABLE` names the room and why.
+         */
+        post: operations["confirmReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a reservation (reservation.cancel)
+         * @description A reason is required. Rejected (409 `RESERVATION_HAS_STAYS`) once any room is checked in or completed. `requires_folio_resolution` is true when an open folio still has a balance (a deposit to refund, a fee to post).
+         */
+        post: operations["cancelReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reinstate a cancelled reservation (reservation.reinstate)
+         * @description Only the rooms that were cancelled together with the reservation come back, if they arrive on or after the business date and the inventory still has room.
+         */
+        post: operations["reinstateReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a room to a draft or confirmed reservation (reservation.update)
+         * @description On a confirmed reservation the room is created CONFIRMED and goes through the availability check.
+         */
+        post: operations["addReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Amend a draft or confirmed room (reservation.update)
+         * @description Availability is re-checked without the room's own demand. Nights that survive keep their price
+         *     snapshot; changing the rate plan or room type prices every night again; new nights come from the
+         *     grid. The room type cannot change while a room is assigned (409 `ROOM_ASSIGNED`).
+         */
+        patch: operations["updateReservationRoom"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel one room (reservation.cancel)
+         * @description The reservation is cancelled with its last room that is not cancelled.
+         */
+        post: operations["cancelReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/no-show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a confirmed room as a no-show (nightaudit.no_show)
+         * @description Only a CONFIRMED room whose arrival date has come (arrival on or before the business date). Releases its inventory.
+         */
+        post: operations["markReservationRoomNoShow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/assign-room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign a specific room (reservation.update)
+         * @description A room of another type than the booked one is an upgrade: it needs `upgrade: true` and `reservation.upgrade`, and the room type of the room must have the inventory. The room must be free (409 `ROOM_NOT_AVAILABLE` with the reasons).
+         */
+        post: operations["assignReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the assigned room off (reservation.update)
+         * @description The room goes back to consuming its booked room type, which must have the inventory when it was an upgrade.
+         */
+        post: operations["unassignReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tape-chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms with the bookings and blocks touching [from, to) (reservation.read)
+         * @description Read-only. The window is at most 62 days. Rows are the active rooms; CONFIRMED and CHECKED_IN room lines without a specific room are listed per room type under `unassigned`.
+         */
+        get: operations["getTapeChart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1729,6 +2060,305 @@ export interface components {
              */
             status: string;
         };
+        Night: {
+            date: components["schemas"]["Date"];
+            sellable: number;
+            demand: number;
+            available: number;
+        };
+        NightAmount: {
+            date: components["schemas"]["Date"];
+            amount: string;
+        };
+        Estimate: {
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+        };
+        PlanOffer: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            price_mode: components["schemas"]["PriceMode"];
+            nightly: components["schemas"]["NightAmount"][];
+            /** @description Nights without a rate; the plan cannot be booked without overrides when above 0. */
+            missing_nights: number;
+            estimate: components["schemas"]["Estimate"] | null;
+        };
+        TypeOffer: {
+            /** Format: int64 */
+            room_type_id: number;
+            code: string;
+            name: string;
+            fits_occupancy: boolean;
+            available_min: number;
+            per_night: components["schemas"]["Night"][];
+            rate_plans: components["schemas"]["PlanOffer"][];
+        };
+        AvailabilitySearch: {
+            nights: components["schemas"]["Date"][];
+            room_types: components["schemas"]["TypeOffer"][];
+        };
+        FreeRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            floor?: string;
+            building?: string;
+            housekeeping_status: string;
+        };
+        NightOverride: {
+            date: components["schemas"]["Date"];
+            /** @description The agreed price of the night */
+            amount: string;
+            discount_amount?: string;
+        };
+        RoomInput: {
+            /** Format: int64 */
+            room_type_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            /**
+             * Format: int64
+             * @description The occupant
+             */
+            guest_id?: number;
+            /**
+             * Format: int64
+             * @description Only with confirm; must be a room of the booked type.
+             */
+            room_id?: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        CreateReservationRequest: {
+            /**
+             * Format: int64
+             * @description The booker; required when confirming.
+             */
+            guest_id?: number;
+            source: components["schemas"]["ReservationSource"];
+            market?: string;
+            special_request?: string;
+            remarks?: string;
+            /** @default false */
+            confirm: boolean;
+            rooms: components["schemas"]["RoomInput"][];
+        };
+        /** @enum {string} */
+        ReservationSource: "WALK_IN" | "PHONE" | "EMAIL" | "WEBSITE" | "OTA" | "AGENT" | "OTHER";
+        PatchReservationRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            guest_id?: number;
+            source?: components["schemas"]["ReservationSource"];
+            market?: string;
+            special_request?: string;
+            remarks?: string;
+        };
+        VersionRequest: {
+            /** Format: int32 */
+            version: number;
+        };
+        ReasonRequest: {
+            /** Format: int32 */
+            version: number;
+            /** @description Required to cancel; optional for a no-show. */
+            reason?: string;
+        };
+        AddRoomRequest: components["schemas"]["RoomInput"] & {
+            /** Format: int32 */
+            version: number;
+        };
+        PatchReservationRoomRequest: {
+            /** Format: int32 */
+            version: number;
+            arrival_date?: components["schemas"]["Date"];
+            departure_date?: components["schemas"]["Date"];
+            /** Format: int64 */
+            room_type_id?: number;
+            /** Format: int64 */
+            rate_plan_id?: number;
+            adult_count?: number;
+            child_count?: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        AssignRoomRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            room_id: number;
+            /** @default false */
+            upgrade: boolean;
+        };
+        GuestName: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            first_name?: string;
+            last_name: string;
+        };
+        NightRate: {
+            date: components["schemas"]["Date"];
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** Format: int64 */
+            charge_code_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            /** @description The grid price when the snapshot was taken; null for an override on a night without a grid price. */
+            base_rate: string | null;
+            discount_amount: string;
+            amount: string;
+            is_override: boolean;
+        };
+        ReservationRoom: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CHECKED_IN" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            /** Format: int64 */
+            rate_plan_id: number;
+            rate_plan_code: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest?: components["schemas"]["GuestName"];
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            nights: number;
+            adult_count: number;
+            child_count: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
+            /** Format: date-time */
+            no_show_at?: string | null;
+            nightly_rates: components["schemas"]["NightRate"][];
+            estimate: components["schemas"]["Estimate"];
+        };
+        ReservationFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Debits minus credits. */
+            balance: string;
+        };
+        Reservation: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest?: components["schemas"]["GuestName"];
+            reservation_date: components["schemas"]["Date"];
+            source: components["schemas"]["ReservationSource"];
+            market?: string;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            /** @enum {string} */
+            display_status: "DRAFT" | "CONFIRMED" | "IN_HOUSE" | "CHECKED_OUT" | "NO_SHOW" | "CANCELLED";
+            special_request?: string;
+            remarks?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            confirmed_at?: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
+            /** Format: int32 */
+            version: number;
+            rooms: components["schemas"]["ReservationRoom"][];
+            folios: components["schemas"]["ReservationFolio"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationSummary: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest_name?: string;
+            source: components["schemas"]["ReservationSource"];
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            room_count: number;
+            /** Format: int32 */
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationPage: {
+            data: components["schemas"]["ReservationSummary"][];
+            next_cursor?: string;
+        };
+        CancelResult: {
+            reservation: components["schemas"]["Reservation"];
+            folio_balance: string;
+            requires_folio_resolution: boolean;
+        };
+        TapeBooking: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** @enum {string} */
+            status: "CONFIRMED" | "CHECKED_IN";
+            guest_name?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+        };
+        TapeBlock: {
+            /** Format: int64 */
+            id: number;
+            block_type: components["schemas"]["BlockType"];
+            start_date: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+        };
+        TapeRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            bookings: components["schemas"]["TapeBooking"][];
+            blocks: components["schemas"]["TapeBlock"][];
+        };
+        TapeUnassigned: {
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            bookings: components["schemas"]["TapeBooking"][];
+        };
+        TapeChart: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rooms: components["schemas"]["TapeRoom"][];
+            unassigned: components["schemas"]["TapeUnassigned"][];
+        };
         FieldError: {
             field: string;
             code: string;
@@ -1770,6 +2400,7 @@ export interface components {
     parameters: {
         PropertyId: number;
         Id: number;
+        LineId: number;
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
@@ -3466,6 +4097,501 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FillRatesResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    searchAvailability: {
+        parameters: {
+            query: {
+                arrival: components["schemas"]["Date"];
+                departure: components["schemas"]["Date"];
+                adults?: number;
+                children?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The search result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilitySearch"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFreeRooms: {
+        parameters: {
+            query: {
+                room_type_id: number;
+                arrival: components["schemas"]["Date"];
+                departure: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The free rooms, with their housekeeping status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FreeRoom"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listReservations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                arrival_from?: components["schemas"]["Date"];
+                arrival_to?: components["schemas"]["Date"];
+                status?: "DRAFT" | "CONFIRMED" | "CANCELLED";
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of reservations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createReservation: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReservationRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchReservationRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    confirmReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reinstateReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchReservationRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    markReservationRoomNoShow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    assignReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    unassignReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTapeChart: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapeChart"];
                 };
             };
             403: components["responses"]["Problem"];

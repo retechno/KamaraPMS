@@ -46,6 +46,16 @@ export const router = createRouter({
     { path: '/setup/charge-codes', name: 'charge-codes', component: () => import('@/views/billing/ChargeCodesView.vue'), meta: { title: 'Charge codes' } },
     { path: '/setup/rate-plans', name: 'rate-plans', component: () => import('@/views/rates/RatePlansView.vue'), meta: { title: 'Rate plans' } },
     { path: '/setup/rates', name: 'rate-grid', component: () => import('@/views/rates/RateGridView.vue'), meta: { title: 'Rate grid' } },
+    { path: '/reservations', name: 'reservations', component: () => import('@/views/reservations/ReservationsView.vue'), meta: { title: 'Reservations' } },
+    { path: '/reservations/new', name: 'reservation-new', component: () => import('@/views/reservations/NewReservationView.vue'), meta: { title: 'New reservation' } },
+    { path: '/reservations/tape', name: 'tape-chart', component: () => import('@/views/reservations/TapeChartView.vue'), meta: { title: 'Tape chart' } },
+    {
+      path: '/reservations/:id(\\d+)',
+      name: 'reservation',
+      component: () => import('@/views/reservations/ReservationDetailView.vue'),
+      props: true,
+      meta: { title: 'Reservation' },
+    },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

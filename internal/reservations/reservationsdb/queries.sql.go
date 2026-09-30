@@ -1041,6 +1041,173 @@ func (q *Queries) ListStaysOfLines(ctx context.Context, arg ListStaysOfLinesPara
 	return items, nil
 }
 
+const listTapeBlocks = `-- name: ListTapeBlocks :many
+SELECT id, room_id, block_type, start_date, end_date FROM room_blocks
+WHERE tenant_id = $1 AND property_id = $2 AND status = 'ACTIVE'
+  AND start_date < $3::date AND end_date > $4::date
+ORDER BY start_date, id
+`
+
+type ListTapeBlocksParams struct {
+	TenantID    int64
+	PropertyID  int64
+	WindowEnd   civil.Date
+	WindowStart civil.Date
+}
+
+type ListTapeBlocksRow struct {
+	ID        int64
+	RoomID    int64
+	BlockType string
+	StartDate civil.Date
+	EndDate   civil.Date
+}
+
+func (q *Queries) ListTapeBlocks(ctx context.Context, arg ListTapeBlocksParams) ([]ListTapeBlocksRow, error) {
+	rows, err := q.db.Query(ctx, listTapeBlocks,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.WindowEnd,
+		arg.WindowStart,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTapeBlocksRow{}
+	for rows.Next() {
+		var i ListTapeBlocksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.BlockType,
+			&i.StartDate,
+			&i.EndDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTapeLines = `-- name: ListTapeLines :many
+SELECT l.id, l.reservation_id, res.confirmation_number, l.status, l.room_id, l.room_type_id, l.arrival_date, l.departure_date,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM reservation_rooms l
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status IN ('CONFIRMED', 'CHECKED_IN')
+  AND l.arrival_date < $3::date AND l.departure_date > $4::date
+ORDER BY l.arrival_date, l.id
+`
+
+type ListTapeLinesParams struct {
+	TenantID    int64
+	PropertyID  int64
+	WindowEnd   civil.Date
+	WindowStart civil.Date
+}
+
+type ListTapeLinesRow struct {
+	ID                 int64
+	ReservationID      int64
+	ConfirmationNumber string
+	Status             string
+	RoomID             *int64
+	RoomTypeID         int64
+	ArrivalDate        civil.Date
+	DepartureDate      civil.Date
+	GuestFirstName     *string
+	GuestLastName      *string
+}
+
+func (q *Queries) ListTapeLines(ctx context.Context, arg ListTapeLinesParams) ([]ListTapeLinesRow, error) {
+	rows, err := q.db.Query(ctx, listTapeLines,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.WindowEnd,
+		arg.WindowStart,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTapeLinesRow{}
+	for rows.Next() {
+		var i ListTapeLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReservationID,
+			&i.ConfirmationNumber,
+			&i.Status,
+			&i.RoomID,
+			&i.RoomTypeID,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.GuestFirstName,
+			&i.GuestLastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTapeRooms = `-- name: ListTapeRooms :many
+SELECT r.id, r.room_number, r.room_type_id, t.code AS room_type_code, t.sort_order
+FROM rooms r JOIN room_types t ON t.property_id = r.property_id AND t.id = r.room_type_id
+WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.is_active
+ORDER BY t.sort_order, t.code, r.room_number
+`
+
+type ListTapeRoomsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListTapeRoomsRow struct {
+	ID           int64
+	RoomNumber   string
+	RoomTypeID   int64
+	RoomTypeCode string
+	SortOrder    int32
+}
+
+// Tape chart: active rooms with their type, the CONFIRMED / CHECKED_IN lines and the active blocks that touch [from, to).
+func (q *Queries) ListTapeRooms(ctx context.Context, arg ListTapeRoomsParams) ([]ListTapeRoomsRow, error) {
+	rows, err := q.db.Query(ctx, listTapeRooms, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTapeRoomsRow{}
+	for rows.Next() {
+		var i ListTapeRoomsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomNumber,
+			&i.RoomTypeID,
+			&i.RoomTypeCode,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchReservations = `-- name: SearchReservations :many
 SELECT r.id, r.tenant_id, r.property_id, r.confirmation_number, r.guest_id, r.reservation_date, r.source, r.market, r.status, r.special_request, r.remarks, r.confirmed_at, r.confirmed_by, r.cancelled_at, r.cancelled_by, r.cancellation_reason, r.version, r.created_at, r.created_by, r.updated_at, r.updated_by, r.idempotency_key, r.idempotency_hash,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,

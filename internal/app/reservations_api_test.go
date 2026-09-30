@@ -119,6 +119,14 @@ func TestReservationsAPIFlow(t *testing.T) {
 		t.Fatalf("amend: %d %v", amended.status, amended.body)
 	}
 
+	tape := abc.do(http.MethodGet, base+"/tape-chart?from=2026-10-01&to=2026-10-08", nil)
+	if tape.status != 200 || len(tape.body["rooms"].([]any)) != 1 || len(tape.body["unassigned"].([]any)) != 1 {
+		t.Fatalf("tape chart: %d %v", tape.status, tape.body)
+	}
+	if r := abc.do(http.MethodGet, base+"/tape-chart?from=2026-10-01&to=2027-10-01", nil); r.status != 422 {
+		t.Fatalf("tape window: %d %v", r.status, r.body)
+	}
+
 	// Cancel needs a reason; the response carries the folio fields; reinstate brings it back.
 	if r := abc.do(http.MethodPost, base+"/reservations/"+resID+"/cancel", map[string]any{"version": 6}); r.status != 422 || fieldsOf(r)["reason"] != "REQUIRED" {
 		t.Fatalf("reason: %d %v", r.status, r.body)

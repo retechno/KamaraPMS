@@ -298,7 +298,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Purpose:** availability per room type and night, with rate estimates.
 - **Response:** `{ nights[], room_types: [{ room_type_id, fits_occupancy, available_min, per_night: [{date, sellable, demand, available}], rate_plans: [{ id, code, nightly: [{date, amount}], estimate: {net, service, tax, total} }] }] }`
 - **Validation:** `departure > arrival`, `arrival ≥ BD`, and ≤ 365 nights.
-- **Rules:** Step 14 §14.1. The estimate comes from `ChargeCalculationService`. The result is advisory.
+- **Rules:** Step 14 §14.1. The estimate comes from `ChargeCalculationService`. The result is advisory. A rate plan also carries `name`, `price_mode` and `missing_nights`; with missing nights it has no `estimate`.
 - **TX:** R
 
 **GET `{P}/availability/rooms?room_type_id&arrival&departure`**
@@ -313,7 +313,12 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Response 201:** the reservation (as in GET).
 - **Validation:** Step 14 §14.2 "Create". Overrides need `reservation.override_rate`. `room_id` requires `confirm: true`.
 - **Rules:** creates the DRAFT and snapshots the nightly rows. `confirm: true` runs **confirm** in the same transaction.
-- **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks.
+- **Idempotency (implemented):** the key and a body hash are stored on the reservation; a replay returns the reservation, a different body with the same key is 422 `IDEMPOTENCY_KEY_REUSED`.
+- **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks (L2, L3) before the sequence.
+
+**GET `{P}/tape-chart?from&to`** (`reservation.read`)
+- **Purpose:** the read-only tape chart: active rooms with the CONFIRMED and CHECKED_IN lines and active blocks touching `[from, to)`, plus lines without a room per room type. At most 62 days.
+- **TX:** R
 
 **GET `{P}/reservations?arrival_from&arrival_to&status&q`**
 - **Purpose:** search (lines are joined for dates and status).
@@ -372,7 +377,8 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `…/rooms/{lineId}/unassign-room`**
 - **Request:** `{ version }`
-- **TX:** `T[L4]`
+- **Rules:** an upgraded line returns to its booked type, which must have availability.
+- **TX:** `T[L1, L2, L3, L4]` (the type locks are needed for the availability re-check)
 
 **POST `{P}/reservations/{id}/deposits`** ⓘ (`payment.post`)
 - **Purpose:** take a deposit.

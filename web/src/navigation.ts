@@ -21,7 +21,8 @@ export const navigation: NavSection[] = [
     items: [
       { label: 'Dashboard', to: '/', milestone: 'M0' },
       { label: 'Guests', to: '/guests', milestone: 'M4' },
-      { label: 'Reservations', milestone: 'M8' },
+      { label: 'Reservations', to: '/reservations', milestone: 'M8' },
+      { label: 'Tape chart', to: '/reservations/tape', milestone: 'M8' },
       { label: 'Arrivals', milestone: 'M10' },
       { label: 'In-house', milestone: 'M10' },
       { label: 'Departures', milestone: 'M12' },

@@ -22,6 +22,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}"
 	mux.Handle("GET "+p+"/availability", httpx.HandlerFunc(h.search))
 	mux.Handle("GET "+p+"/availability/rooms", httpx.HandlerFunc(h.freeRooms))
+	mux.Handle("GET "+p+"/tape-chart", httpx.HandlerFunc(h.tape))
 	mux.Handle("POST "+p+"/reservations", httpx.HandlerFunc(h.create))
 	mux.Handle("GET "+p+"/reservations", httpx.HandlerFunc(h.list))
 	mux.Handle("GET "+p+"/reservations/{id}", httpx.HandlerFunc(h.get))
@@ -404,6 +405,23 @@ func (h *Handler) unassign(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.UnassignRoom(r.Context(), pid, id, lineID, req.Version)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) tape(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var errs []apperr.FieldError
+	from, to := queryDate(r, "from", &errs, true), queryDate(r, "to", &errs, true)
+	if len(errs) > 0 {
+		return apperr.Invalid("the window is invalid", errs...)
+	}
+	res, err := h.svc.TapeChart(r.Context(), pid, *from, *to)
 	if err != nil {
 		return err
 	}

@@ -782,3 +782,34 @@ func TestOrphanedEnumerationHelpers(t *testing.T) {
 		t.Error("hash must depend on the body only")
 	}
 }
+
+func TestTapeChart(t *testing.T) {
+	f := setup(t)
+	a := f.book(t, f.dlx, "2026-10-02", "2026-10-05")
+	_, err := f.Res.AssignRoom(f.admin, f.propID, a.ID, a.Rooms[0].ID, a.Version, f.r102.ID, false)
+	must(t, err)
+	f.book(t, f.dlx, "2026-10-03", "2026-10-04") // no room yet
+	f.book(t, f.std, "2026-10-18", "2026-10-20") // outside the window
+	_, err = f.Rooms.CreateBlock(f.admin, f.propID, rooms.CreateBlockInput{RoomID: f.r101.ID, BlockType: "OOS", StartDate: d("2026-10-01"), EndDate: d("2026-10-03"), Reason: "paint"})
+	must(t, err)
+
+	tape, err := f.Res.TapeChart(f.admin, f.propID, d("2026-10-01"), d("2026-10-08"))
+	must(t, err)
+	if len(tape.Rooms) != 3 || tape.Rooms[0].RoomNumber != "101" || tape.Rooms[2].RoomTypeCode != "STD" {
+		t.Fatalf("rows: %+v", tape.Rooms)
+	}
+	if len(tape.Rooms[0].Blocks) != 1 || tape.Rooms[0].Blocks[0].BlockType != "OOS" || len(tape.Rooms[0].Bookings) != 0 {
+		t.Fatalf("room 101: %+v", tape.Rooms[0])
+	}
+	if b := tape.Rooms[1].Bookings; len(b) != 1 || b[0].ReservationID != a.ID || b[0].GuestName != "Guest" || b[0].Status != "CONFIRMED" {
+		t.Fatalf("room 102: %+v", tape.Rooms[1].Bookings)
+	}
+	if len(tape.Rooms[2].Bookings) != 0 || len(tape.Unassigned) != 1 || tape.Unassigned[0].RoomTypeCode != "DLX" || len(tape.Unassigned[0].Bookings) != 1 {
+		t.Fatalf("unassigned: %+v", tape)
+	}
+	_, err = f.Res.TapeChart(f.admin, f.propID, d("2026-10-01"), d("2026-12-31"))
+	wantCode(t, err, "VALIDATION_FAILED")
+	nobody := f.User(t, f.tenantID, f.propID, auth.PermGuestRead)
+	_, err = f.Res.TapeChart(nobody, f.propID, d("2026-10-01"), d("2026-10-08"))
+	wantCode(t, err, "PERMISSION_DENIED")
+}

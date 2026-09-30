@@ -26,7 +26,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
 - **M3** (rooms, blocks, housekeeping) is complete. No migration: the tables already exist in 00004.
   - `internal/rooms` owns room types, rooms and OOO/OOS blocks. `internal/housekeeping` owns the current status, its append-only log and the board; `housekeeping.Service.MarkDirty` is the entry point M10/M12/M13 use for system-driven changes (source CHECK_OUT, ROOM_MOVE, NIGHT_AUDIT, CHECK_IN_REVERSAL).
   - Conflict checks already read the M8/M10 tables: a block, a room type change or a room deactivation is rejected (409 `ROOM_BLOCK_CONFLICT` / `ROOM_IN_USE`, with `context.conflicts`) while an open stay segment or a CONFIRMED assigned line holds the room. An overstay holds the room through tonight (`GREATEST(departure, BD + 1)`).
-  - Deferred to M8, where the availability engine lives: the type-level `available ≥ 0` check (`INVENTORY_OVERSOLD`) on blocks, type changes and deactivation. Room type deactivation only checks active rooms and future CONFIRMED lines of the type, as specified.
+  - The type-level `available ≥ 0` check (`INVENTORY_OVERSOLD`) on blocks, block extensions, type changes and deactivation landed with the availability engine in M8. Room type deactivation only checks active rooms and future CONFIRMED lines of the type, as specified.
   - Room type codes are immutable (PATCH rejects `code`). `GET {P}/room-status` (the full derived board) stays in M10; the housekeeping board already carries derived occupancy and the active block.
   - The housekeeping board is not paginated (one row per active room, capped at 2,000).
 
@@ -52,5 +52,18 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - `internal/rates` owns rate plans, the rate grid (bulk upsert by range, weekdays and room types) and the price lookup `NightlyPrices` that M8 uses to snapshot `reservation_room_rates`.
   - A plan that has rates cannot switch to a room charge code with another price mode (it would silently reprice the grid); this is enforced under a share lock on the plan, so a fill and a switch cannot interleave.
   - **Money precision (decided):** a property may use 0 to 3 currency decimals (IDR, USD, KWD). Migration 00015 widened every money column from `numeric(18,2)` to `numeric(18,3)` (keeping existing values exactly; its Down narrows and rounds, so only run it on data without a third decimal). The application rejects amounts with more decimals than the property's currency and amounts of 10^15 or more; API amounts are formatted with the currency's decimals.
+
+- **M8** (availability and reservations) is complete. One migration, 00016 (`reservations.idempotency_key` and `idempotency_hash`, unique per property); the booking tables exist in 00008.
+  - `internal/availability` is the inventory engine of 04-operations §14.1: `sellable` (active rooms minus active OOO/OOS blocks), `demand` (CONFIRMED lines by effective type plus open stays through tonight), `available = sellable - demand`. It also answers specific-room questions (`RoomIssues`: inactive, blocked, reserved, occupied) and lists free rooms. `rooms` uses it for the `INVENTORY_OVERSOLD` check.
+  - `internal/reservations` implements create (draft, optionally confirmed at once), confirm, add and amend room, assign and unassign room, cancel (room or whole), reinstate, no-show, header edit, list and detail. Every mutation locks in the order business day (share) -> room types -> rooms -> reservation and lines, re-checks the `version`, bumps it, and audits. Sequences are taken last.
+  - Nightly snapshots (`reservation_room_rates`) come from `rates.PriceNights`; overrides need `reservation.override_rate`. Estimates go through `billingconfig.Estimate`, which runs `chargecalc` per night.
+  - **Decisions and deviations from 06-api.md §11-12:**
+    - `POST {P}/reservations` needs the `Idempotency-Key` header. The key and a hash of the body are stored on the reservation: same key and body replays it, same key with another body is 422 `IDEMPOTENCY_KEY_REUSED`, and concurrent requests with one key converge on one reservation (unique index).
+    - `unassign-room` takes the room type locks too (spec: `T[L4]` only): an upgraded line goes back to consuming its booked type, which must have the inventory.
+    - Reinstate brings back only the rooms cancelled together with the reservation (same `cancelled_at`); a room cancelled on its own earlier stays cancelled. Cancelling clears the room assignment.
+    - Cancel responses are `{reservation, folio_balance, requires_folio_resolution}`. The folio fields are computed from `folios` and `folio_items` (empty until M9).
+    - Availability search lists a plan with incomplete grid as `missing_nights` and no estimate instead of failing.
+    - The tape chart has its own read-only endpoint `GET {P}/tape-chart?from&to` (at most 62 days); the spec only named the screen. Checked-in lines are drawn in their line's room until M12 adds room moves.
+    - Deposits (`POST .../deposits`) belong to M9 with the payment service.
 
 Earlier revisions are in [archive/](archive/).
