@@ -258,11 +258,12 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **ChargeRuleResolver** (internal, used by `ChargeCalculationService` in M6): `billingconfig.Service.ResolveRules(tenant, property, chargeCode)` returns the code with its active, ordered rules and decimal rates. A mapping applies only while the tax or service charge itself is active. It is a lock-free read of committed configuration.
 
-**POST `{P}/charge-calculations`**
-- **Purpose:** preview the engine result. Nothing is posted.
-- **Request:** `{ charge_code_id, quantity, unit_price, price_mode?, discount_amount? }`
-- **Response:** the full Breakdown (base, discount, net, rounding adjustment, service components, tax components, totals).
-- **Rules:** `ChargeCalculationService`.
+**POST `{P}/charge-calculations`** (any access to the property)
+- **Purpose:** preview the engine result. Nothing is posted or stored.
+- **Request:** `{ charge_code_id, quantity, unit_price, price_mode?, discount_amount? }`. The numbers are plain decimal strings (no separators or exponents). `quantity` and `unit_price` are signed: a negative price (or quantity) previews a credit, as an adjustment does. `discount_amount` is a magnitude.
+- **Response 200:** `{ price_mode, quantity, unit_price, base_amount, discount_amount, net_amount, rounding_adjustment, service_charges: [{ rule_id, code, name, rate, base_amount, amount, sequence }], taxes: [{ ..., tax_on_service }], service_charge_total, tax_total, taxable_amount, total_amount }`. Money uses the property's currency decimals (`"7.00"`), rates four (`"11.0000"`). `discount_amount` has the sign of `base_amount`, so `net = base − discount` holds for exclusive prices.
+- **Errors:** 422 with the field (`quantity`, `unit_price`, `discount_amount`, `price_mode`, `charge_code_id`); 404 `CHARGE_CODE_NOT_FOUND` (also another property's code); 409 `CHARGE_CODE_INACTIVE`.
+- **Rules:** `billingconfig.Service.Calculate` (ChargeCalculationService): resolve the active ordered rules and the property's decimals, call `chargecalc.Calculate`. A price-mode override replaces the code's mode for this calculation only.
 - **TX:** R
 
 ## 10. Rate plans and rates

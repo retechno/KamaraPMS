@@ -4,8 +4,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/shopspring/decimal"
+
+	"kamarapms/internal/chargecalc"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/money"
 	"kamarapms/internal/tenancy"
 )
 
@@ -29,6 +33,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/charge-codes/{id}", httpx.HandlerFunc(h.getChargeCode))
 	mux.Handle("PATCH "+p+"/charge-codes/{id}", httpx.HandlerFunc(h.updateChargeCode))
 	mux.Handle("PUT "+p+"/charge-codes/{id}/rules", httpx.HandlerFunc(h.replaceRules))
+	mux.Handle("POST "+p+"/charge-calculations", httpx.HandlerFunc(h.calculate))
 }
 
 func pathID(r *http.Request, nf func() *apperr.Error) (int64, error) {
@@ -347,4 +352,111 @@ func (h *Handler) replaceRules(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, c)
+}
+
+// ---------------------------------------------------------------------------
+// Charge calculation preview
+
+type calculationRequest struct {
+	ChargeCodeID   int64   `json:"charge_code_id"`
+	Quantity       string  `json:"quantity"`
+	UnitPrice      string  `json:"unit_price"`
+	PriceMode      *string `json:"price_mode"`
+	DiscountAmount *string `json:"discount_amount"`
+}
+
+type wireComponent struct {
+	RuleID     int64  `json:"rule_id"`
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	Rate       string `json:"rate"`
+	OnService  *bool  `json:"tax_on_service,omitempty"`
+	BaseAmount string `json:"base_amount"`
+	Amount     string `json:"amount"`
+	Sequence   int    `json:"sequence"`
+}
+
+type wireBreakdown struct {
+	PriceMode          string          `json:"price_mode"`
+	Quantity           string          `json:"quantity"`
+	UnitPrice          string          `json:"unit_price"`
+	BaseAmount         string          `json:"base_amount"`
+	DiscountAmount     string          `json:"discount_amount"`
+	NetAmount          string          `json:"net_amount"`
+	RoundingAdjustment string          `json:"rounding_adjustment"`
+	ServiceCharges     []wireComponent `json:"service_charges"`
+	Taxes              []wireComponent `json:"taxes"`
+	ServiceChargeTotal string          `json:"service_charge_total"`
+	TaxTotal           string          `json:"tax_total"`
+	TaxableAmount      string          `json:"taxable_amount"`
+	TotalAmount        string          `json:"total_amount"`
+}
+
+// toWire renders a breakdown for the API: money with the currency's decimals, rates with four.
+func toWire(b chargecalc.Breakdown) wireBreakdown {
+	money := func(d decimal.Decimal) string { return d.StringFixed(b.Decimals) }
+	components := func(list []chargecalc.Component) []wireComponent {
+		out := make([]wireComponent, len(list))
+		for i, c := range list {
+			out[i] = wireComponent{RuleID: c.RuleID, Code: c.Code, Name: c.Name, Rate: FormatRate(c.Rate), OnService: c.OnService,
+				BaseAmount: money(c.BaseAmount), Amount: money(c.Amount), Sequence: c.Sequence}
+		}
+		return out
+	}
+	return wireBreakdown{
+		PriceMode: string(b.PriceMode), Quantity: b.Quantity.String(), UnitPrice: b.UnitPrice.String(),
+		BaseAmount: money(b.BaseAmount), DiscountAmount: money(b.Discount), NetAmount: money(b.NetAmount),
+		RoundingAdjustment: money(b.RoundingAdjustment), ServiceCharges: components(b.ServiceComponents), Taxes: components(b.TaxComponents),
+		ServiceChargeTotal: money(b.ServiceTotal), TaxTotal: money(b.TaxTotal), TaxableAmount: money(b.TaxableAmount), TotalAmount: money(b.TotalAmount),
+	}
+}
+
+// calculate previews the engine result for a charge code. Nothing is posted.
+func (h *Handler) calculate(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var req calculationRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	var fields []apperr.FieldError
+	amount := func(field, s string, required bool) decimal.Decimal {
+		if s == "" {
+			if required {
+				fields = append(fields, fieldErr(field, "REQUIRED", ""))
+			}
+			return decimal.Zero
+		}
+		d, err := money.Parse(s)
+		if err != nil {
+			fields = append(fields, fieldErr(field, "INVALID_AMOUNT", "a plain decimal such as 1000000 or 7.05 (no separators or exponents)"))
+		}
+		return d
+	}
+	cr := ChargeRequest{PropertyID: pid, ChargeCodeID: req.ChargeCodeID}
+	if req.ChargeCodeID < 1 {
+		fields = append(fields, fieldErr("charge_code_id", "REQUIRED", ""))
+	}
+	cr.Quantity = amount("quantity", req.Quantity, true)
+	cr.UnitPrice = amount("unit_price", req.UnitPrice, true)
+	if req.DiscountAmount != nil {
+		cr.Discount = amount("discount_amount", *req.DiscountAmount, false)
+	}
+	if req.PriceMode != nil {
+		mode := chargecalc.PriceMode(*req.PriceMode)
+		if mode != chargecalc.Exclusive && mode != chargecalc.Inclusive {
+			fields = append(fields, fieldErr("price_mode", "INVALID_VALUE", "EXCLUSIVE or INCLUSIVE"))
+		}
+		cr.PriceMode = &mode
+	}
+	if len(fields) > 0 {
+		return apperr.Invalid("the calculation is invalid", fields...)
+	}
+	b, err := h.svc.Calculate(r.Context(), cr)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toWire(b))
 }

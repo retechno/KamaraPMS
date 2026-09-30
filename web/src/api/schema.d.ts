@@ -798,6 +798,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/charge-calculations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview the charge calculation engine result (any access to the property)
+         * @description Runs the Charge Calculation Engine for a charge code and returns the full breakdown. Nothing is
+         *     posted or stored. The charge code's active, ordered rules and the property's currency precision are
+         *     used; `price_mode` overrides the code's own mode.
+         *
+         *     Amounts are signed: a negative `unit_price` (or `quantity`) calculates a credit, as adjustments do.
+         *     `discount_amount` is a non-negative magnitude, at most the amount, with no more decimals than the
+         *     currency; it always reduces the amount towards zero.
+         *
+         *     Every line amount is rounded half away from zero at the currency precision. An inclusive price
+         *     always totals exactly the quoted amount: any rounding residual is reported as `rounding_adjustment`
+         *     and added to the net revenue, never to the service charge or tax.
+         */
+        post: operations["calculateCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1476,6 +1508,54 @@ export interface components {
                 service_charge_id: number;
                 sequence: number;
             }[];
+        };
+        /**
+         * @description A plain decimal amount as a string, possibly negative. No separators or exponents.
+         * @example 1000000
+         * @example -7.05
+         */
+        SignedAmount: string;
+        CalculateChargeRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            quantity: components["schemas"]["SignedAmount"];
+            unit_price: components["schemas"]["SignedAmount"];
+            price_mode?: components["schemas"]["PriceMode"];
+            discount_amount?: components["schemas"]["SignedAmount"];
+        };
+        CalculationComponent: {
+            /** Format: int64 */
+            rule_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description Taxes only. */
+            tax_on_service?: boolean;
+            /** @description The amount the rate was applied to. */
+            base_amount: string;
+            amount: string;
+            sequence: number;
+        };
+        ChargeCalculation: {
+            price_mode: components["schemas"]["PriceMode"];
+            quantity: string;
+            unit_price: string;
+            /** @description round(quantity x unit price) */
+            base_amount: string;
+            /** @description Signed like base_amount. */
+            discount_amount: string;
+            /** @description Net revenue; includes the rounding adjustment. */
+            net_amount: string;
+            /** @description Always 0 for an exclusive price. */
+            rounding_adjustment: string;
+            service_charges: components["schemas"]["CalculationComponent"][];
+            taxes: components["schemas"]["CalculationComponent"][];
+            service_charge_total: string;
+            tax_total: string;
+            /** @description The largest tax base (display only). */
+            taxable_amount: string;
+            /** @description Net + service + tax; equals the quoted price when inclusive. */
+            total_amount: string;
         };
         HealthStatus: {
             /**
@@ -3048,6 +3128,35 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    calculateCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalculateChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The breakdown. Money uses the currency's decimals; rates use four. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCalculation"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

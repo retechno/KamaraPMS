@@ -81,6 +81,17 @@ describe('ChargeCodesView', () => {
     expect(w.find('[data-testid=rules-saved]').exists()).toBe(true)
   })
 
+  it('offers the calculator only for existing codes', async () => {
+    const w = mountView(['billing_config.manage'])
+    await flushPromises()
+    await w.get('button.btn-primary').trigger('click')
+    expect(w.find('[data-testid=calculator]').exists()).toBe(false)
+    await w.get('button[type=button]').trigger('click') // Close
+    await w.get('[data-testid=code-SPA] button').trigger('click')
+    expect(w.find('[data-testid=calculator]').exists()).toBe(true)
+    expect((w.get('[data-testid=calculator] input[name=unit_price]').element as HTMLInputElement).value).toBe('250000')
+  })
+
   it('shows a rule error such as an inactive tax', async () => {
     const w = mountView(['billing_config.manage'])
     await flushPromises()

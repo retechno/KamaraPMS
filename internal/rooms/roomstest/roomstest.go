@@ -76,13 +76,19 @@ func (e *Env) Tenant(t *testing.T, code string) tenancy.Tenant {
 	return tn
 }
 
-// Property creates a property whose business date is BD.
+// Property creates an IDR property (no decimals) whose business date is BD.
 func (e *Env) Property(t *testing.T, tenantID int64, code string) tenancy.PropertyWithDay {
+	t.Helper()
+	return e.PropertyIn(t, tenantID, code, "IDR", 0)
+}
+
+// PropertyIn creates a property with the given currency whose business date is BD.
+func (e *Env) PropertyIn(t *testing.T, tenantID int64, code, currency string, decimals int32) tenancy.PropertyWithDay {
 	t.Helper()
 	p, err := e.Tenancy.CreateProperty(Admin(tenantID), tenancy.CreatePropertyInput{
 		Code: code,
 		Settings: tenancy.PropertySettings{
-			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: "IDR", CurrencyDecimals: 0,
+			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: currency, CurrencyDecimals: decimals,
 			CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
 			NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"),
 		},

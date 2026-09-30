@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1049,6 +1049,39 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/charge-calculations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: calculateCharge
+      summary: Preview the charge calculation engine result (any access to the property)
+      description: |
+        Runs the Charge Calculation Engine for a charge code and returns the full breakdown. Nothing is
+        posted or stored. The charge code's active, ordered rules and the property's currency precision are
+        used; `price_mode` overrides the code's own mode.
+
+        Amounts are signed: a negative `unit_price` (or `quantity`) calculates a credit, as adjustments do.
+        `discount_amount` is a non-negative magnitude, at most the amount, with no more decimals than the
+        currency; it always reduces the amount towards zero.
+
+        Every line amount is rounded half away from zero at the currency precision. An inclusive price
+        always totals exactly the quoted amount: any rounding residual is reported as `rounding_adjustment`
+        and added to the net revenue, never to the service charge or tax.
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalculateChargeRequest" }
+      responses:
+        "200":
+          description: The breakdown. Money uses the currency's decimals; rates use four.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCalculation" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1858,6 +1891,54 @@ components:
             properties:
               service_charge_id: { type: integer, format: int64 }
               sequence: { type: integer, minimum: 1, maximum: 32767 }
+    SignedAmount:
+      type: string
+      pattern: '^-?[0-9]{1,16}(\.[0-9]{1,4})?$'
+      description: A plain decimal amount as a string, possibly negative. No separators or exponents.
+      examples: ["1000000", "-7.05"]
+    CalculateChargeRequest:
+      type: object
+      required: [charge_code_id, quantity, unit_price]
+      additionalProperties: false
+      properties:
+        charge_code_id: { type: integer, format: int64 }
+        quantity: { $ref: "#/components/schemas/SignedAmount" }
+        unit_price: { $ref: "#/components/schemas/SignedAmount" }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        discount_amount: { $ref: "#/components/schemas/SignedAmount" }
+    CalculationComponent:
+      type: object
+      required: [rule_id, code, name, rate, base_amount, amount, sequence]
+      properties:
+        rule_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { $ref: "#/components/schemas/Percent" }
+        tax_on_service: { type: boolean, description: Taxes only. }
+        base_amount: { type: string, description: The amount the rate was applied to. }
+        amount: { type: string }
+        sequence: { type: integer }
+    ChargeCalculation:
+      type: object
+      required: [price_mode, quantity, unit_price, base_amount, discount_amount, net_amount, rounding_adjustment, service_charges, taxes, service_charge_total, tax_total, taxable_amount, total_amount]
+      properties:
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        quantity: { type: string }
+        unit_price: { type: string }
+        base_amount: { type: string, description: round(quantity x unit price), as quoted. }
+        discount_amount: { type: string, description: Signed like base_amount. }
+        net_amount: { type: string, description: Net revenue; includes the rounding adjustment. }
+        rounding_adjustment: { type: string, description: Always 0 for an exclusive price. }
+        service_charges:
+          type: array
+          items: { $ref: "#/components/schemas/CalculationComponent" }
+        taxes:
+          type: array
+          items: { $ref: "#/components/schemas/CalculationComponent" }
+        service_charge_total: { type: string }
+        tax_total: { type: string }
+        taxable_amount: { type: string, description: The largest tax base (display only). }
+        total_amount: { type: string, description: Net + service + tax; equals the quoted price when inclusive. }
     HealthStatus:
       type: object
       required: [status]

@@ -83,6 +83,8 @@ type Breakdown struct {
 - **Rounding:** at the precision `properties.currency_decimals`, using **half away from zero**, on every *line* amount (base, each component, and net₀). `shopspring/decimal`, never float.
 - **Ordering:** discount → service charges (on net) → taxes (on net, plus service if `on_service`). **Taxes are not compounded** in the MVP. `sequence` fixes the order of calculation and display, which is where compounding can be added later.
 
+**Signs and credits (implementation notes).** Amounts are signed: a negative quantity or unit price calculates a credit, and every rounding is half away from zero, so `Calculate(−x) = −Calculate(x)` for every amount. The discount is always a non-negative *magnitude* that reduces the amount towards zero; the breakdown reports it with the sign of the base (`Discount = magnitude × sign(base)`), which keeps the ledger check `net = base − discount` true for credits too. A discount may not have more decimals than the currency. Validation errors are `*chargecalc.InputError` (naming the field) and satisfy `errors.Is(err, chargecalc.ErrInvalid)`. `ExemptTaxIDs` is reserved: a non-empty list is rejected, not ignored.
+
 ### 7.3 EXCLUSIVE
 ```
 base    = round(qty × unit_price)

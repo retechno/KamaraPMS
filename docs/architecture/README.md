@@ -43,4 +43,9 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - sqlc now maps `numeric` to `decimal.Decimal` (nullable: `*decimal.Decimal`).
   - `POST {P}/charge-calculations` (the preview endpoint) belongs to M6.
 
+- **M6** (Charge Calculation Engine) is complete; money and posting code may now build on it.
+  - `internal/chargecalc` is pure (no database, clock or country knowledge): `Calculate`, `Validate` and `Verify`. Its tests are the worked examples of Step 7 plus property-based tests (fixed seeds, 30,000 random inputs each): an inclusive total always equals the quoted price, an exclusive net is base minus discount, negation symmetry, every component is exactly `round(base × rate)` of its own base, no amount exceeds the currency's decimals, the rounding adjustment stays within a few units of the smallest currency unit, and the result depends on the rules' sequence, not their list order. Mutation checks (bank rounding, unsigned discount, residual in tax, truncation, compounding) are each caught by these tests.
+  - `billingconfig.Service.Calculate` is the `ChargeCalculationService`; `POST {P}/charge-calculations` previews it. The folio posting service (M9) and the reservation estimate (M8) must go through `Calculate`; nothing else multiplies by a rate.
+  - The charge code screen has a calculator that previews the saved rules.
+
 Earlier revisions are in [archive/](archive/).

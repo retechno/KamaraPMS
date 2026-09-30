@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { ChargeCode, ChargeType, PriceMode, ServiceCharge, Tax } from '@/api/types'
+import ChargeCalculator from '@/components/ChargeCalculator.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -40,6 +41,7 @@ const serviceRows = ref<RuleRow[]>([])
 const addTax = ref(0)
 const addService = ref(0)
 const rulesSaved = ref(false)
+const rulesVersion = ref(0) // bumped when rules are saved, so the calculator recalculates
 
 const freeTaxes = computed(() => taxes.value.filter((t) => t.is_active && !taxRows.value.some((r) => r.id === t.id)))
 const freeServices = computed(() => services.value.filter((s) => s.is_active && !serviceRows.value.some((r) => r.id === s.id)))
@@ -166,6 +168,7 @@ async function saveRules(): Promise<void> {
       editing.value = data
       loadRules(data)
       rulesSaved.value = true
+      rulesVersion.value++
     }
     await load()
   } catch (e) {
@@ -284,6 +287,13 @@ watch(() => property.currentId, load, { immediate: true })
           <span v-if="rulesSaved" class="muted" role="status" data-testid="rules-saved">Rules saved.</span>
           <button type="button" class="btn-primary" :disabled="saving || !canManage" data-testid="save-rules" @click="saveRules">Save rules</button>
         </div>
+        <ChargeCalculator
+          :key="editing.id"
+          :charge-code-id="editing.id"
+          :price-mode="editing.price_mode"
+          :default-unit-price="editing.default_unit_price"
+          :version="rulesVersion"
+        />
       </template>
     </form>
 

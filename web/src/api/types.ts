@@ -42,3 +42,7 @@ export type PriceMode = Schemas['PriceMode']
 export type TaxRule = Schemas['TaxRule']
 export type ServiceRule = Schemas['ServiceRule']
 export type ReplaceRulesRequest = Schemas['ReplaceRulesRequest']
+
+export type ChargeCalculation = Schemas['ChargeCalculation']
+export type CalculationComponent = Schemas['CalculationComponent']
+export type CalculateChargeRequest = Schemas['CalculateChargeRequest']
