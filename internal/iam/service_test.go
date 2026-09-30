@@ -3,6 +3,7 @@ package iam_test
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -306,6 +307,17 @@ func TestRolesGrantsAndAuthorization(t *testing.T) {
 	wantCode(t, e.authz.Require(fdCtx, jkt, auth.PermFolioRead), "PROPERTY_NOT_FOUND")
 	wantCode(t, e.authz.Require(fdCtx, sg, auth.PermFolioRead), "PROPERTY_NOT_FOUND")
 	wantCode(t, e.authz.Require(adminCtx, sg, auth.PermFolioRead), "PROPERTY_NOT_FOUND") // admins stay inside their tenant
+
+	// PropertiesWith: only granted properties with the permission; admins get every property of their tenant.
+	if ids, err := e.authz.PropertiesWith(fdCtx, auth.PermFolioRead); err != nil || len(ids) != 1 || ids[0] != bali {
+		t.Fatalf("PropertiesWith(folio.read): %v %v", err, ids)
+	}
+	if ids, err := e.authz.PropertiesWith(fdCtx, auth.PermPaymentPost); err != nil || len(ids) != 0 {
+		t.Fatalf("PropertiesWith(payment.post) for a role without it: %v %v", err, ids)
+	}
+	if ids, err := e.authz.PropertiesWith(adminCtx, auth.PermPaymentPost); err != nil || slices.Contains(ids, sg) || !slices.Contains(ids, bali) || !slices.Contains(ids, jkt) {
+		t.Fatalf("PropertiesWith for an admin: %v %v", err, ids)
+	}
 
 	// Role changes apply on the next request.
 	more := []auth.Permission{auth.PermFolioRead, auth.PermPaymentPost}

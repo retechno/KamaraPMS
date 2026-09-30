@@ -20,6 +20,7 @@ export const navigation: NavSection[] = [
     title: 'Front office',
     items: [
       { label: 'Dashboard', to: '/', milestone: 'M0' },
+      { label: 'Guests', to: '/guests', milestone: 'M4' },
       { label: 'Reservations', milestone: 'M8' },
       { label: 'Arrivals', milestone: 'M10' },
       { label: 'In-house', milestone: 'M10' },
@@ -30,8 +31,8 @@ export const navigation: NavSection[] = [
     title: 'Rooms',
     items: [
       { label: 'Room status', milestone: 'M10' },
-      { label: 'Housekeeping', milestone: 'M3' },
-      { label: 'Room blocks', milestone: 'M3' },
+      { label: 'Housekeeping', to: '/housekeeping', milestone: 'M3' },
+      { label: 'Room blocks', to: '/room-blocks', milestone: 'M3' },
     ],
   },
   {
@@ -51,7 +52,8 @@ export const navigation: NavSection[] = [
       { label: 'Properties', to: '/setup/properties', milestone: 'M1', adminOnly: true },
       { label: 'Users', to: '/setup/users', milestone: 'M2', adminOnly: true },
       { label: 'Roles', to: '/setup/roles', milestone: 'M2', adminOnly: true },
-      { label: 'Room types & rooms', milestone: 'M3' },
+      { label: 'Room types', to: '/setup/room-types', milestone: 'M3' },
+      { label: 'Rooms', to: '/setup/rooms', milestone: 'M3' },
       { label: 'Taxes & charge codes', milestone: 'M5' },
       { label: 'Rate plans & rates', milestone: 'M7' },
     ],

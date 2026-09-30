@@ -45,6 +45,21 @@ func (a *Authorizer) Require(ctx context.Context, propertyID int64, perm auth.Pe
 	return nil
 }
 
+// PropertiesWith lists the properties where the caller holds perm (all tenant properties for an administrator).
+func (a *Authorizer) PropertiesWith(ctx context.Context, perm auth.Permission) ([]int64, error) {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := iamdb.New(a.txm.DB(ctx))
+	if p.IsTenantAdmin {
+		return q.ListTenantPropertyIDs(ctx, p.TenantID)
+	}
+	return q.ListPropertiesWithPermission(ctx, iamdb.ListPropertiesWithPermissionParams{
+		TenantID: p.TenantID, UserID: p.UserID, PermissionCode: string(perm),
+	})
+}
+
 func (a *Authorizer) check(ctx context.Context, propertyID int64, perm auth.Permission) (bool, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {

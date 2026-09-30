@@ -69,9 +69,13 @@ func RequireTenantAdmin(ctx context.Context) (Principal, error) {
 //     the property, so other tenants' and unassigned properties look identical.
 //   - Require additionally returns PERMISSION_DENIED (403) when the caller's role at
 //     the property lacks the permission. Tenant administrators pass every check.
+//   - PropertiesWith lists the properties (ascending ids) where the caller holds perm: every property of
+//     the tenant for a tenant administrator. It is for tenant-wide resources (guests) whose visibility
+//     depends on the caller's properties.
 type Authorizer interface {
 	CanAccess(ctx context.Context, propertyID int64) error
 	Require(ctx context.Context, propertyID int64, perm Permission) error
+	PropertiesWith(ctx context.Context, perm Permission) ([]int64, error)
 }
 
 // RequireAuthenticated rejects requests without a principal (401 problem).

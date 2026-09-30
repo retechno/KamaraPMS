@@ -12,6 +12,7 @@
 | Idempotency | `Idempotency-Key` header, **required** on endpoints marked ⓘ. A replay returns the stored response. |
 | Money | Decimal **strings**. Currency and decimals come from `GET {P}`. |
 | Dates | `YYYY-MM-DD` = business or calendar date. RFC 3339 UTC = instant. **Postings never accept a business date from the client**, except as a stale-screen guard where noted. |
+| Approval | **Every correction needs approval:** adjustments, reversals, payment voids and refunds carry `approval: { email, password }` (the approver's own credentials, entered in a dialog). See §14.1. |
 | Lists | `?limit=&cursor=` → `{ data: [...], next_cursor }` |
 | Errors | RFC 9457 problem+json: `{ type, title, status, code, detail, errors: [{field, code}], context }` |
 | Status codes | 200, 201, 400, 401, 403, 404, **409** (business rule or state), **422** (validation), 429 |
@@ -190,26 +191,34 @@ There are no endpoints to open or close days directly. That only happens through
 
 ## 8. Guests (tenant-wide)
 
+**Visibility (one rule for search, profile, duplicates and history).** A guest is *linked* to a property when it is the guest's origin property, or the guest is a booker or occupant of a reservation there, or a primary or accompanying guest of a stay there (`guest_linked_to`, migration 00013). The caller's *readable properties* are those where they hold `guest.read` (tenant administrators: all). A guest is visible when the caller holds `guest.search_all` at one of their readable properties, or the guest is linked to one. An invisible guest is indistinguishable from a missing one: 404 `GUEST_NOT_FOUND`. With `property_id`, only permissions at that property count (404 `PROPERTY_NOT_FOUND` without a grant there). Without `guest.read` anywhere: 403.
+
 **GET `/guests?q&property_id`** (`guest.read`)
-- **Purpose:** search.
-- **Rules:** without `guest.search_all`, results are limited to guests linked to the user's properties (by origin, reservation or stay).
+- **Purpose:** search, alphabetical by last and first name, with keyset paging.
+- **Rules:** `q` is split into tokens; every token must match the start of the first name, last name, email, ID number or guest code, or appear inside the phone number's digits (tokens with at least 4 digits). `%` and `_` are literals. An empty `q` lists everything visible.
 - **TX:** R
 
-**POST `/guests`** (`guest.write` at `origin_property_id`)
+**POST `/guests`** (`guest.write` at `origin_property_id`, which is required)
 - **Purpose:** create a profile.
 - **Request:** `{ origin_property_id, first_name?, last_name, email?, phone?, nationality?, country_code?, date_of_birth?, gender?, id_type?, id_number?, address?, city?, notes? }`
-- **Response 201:** the guest plus `possible_duplicates[]`.
-- **Rules:** the code is generated. Duplicates are a warning only.
-- **TX:** `T[—]` + audit
+- **Validation:** `last_name` required; email format; phone digits with optional `+`, spaces, dashes and brackets; ISO alpha-2 codes (upper-cased); birth date between 1900 and today; `id_type` and `id_number` go together.
+- **Response 201:** the guest plus `possible_duplicates: [{ guest, reasons[] }]` and `hidden_duplicate_count`.
+- **Rules:** the code (`GST000001`, ...) comes from a gapless tenant-wide series (`tenant_sequences`, allocated last, rolled back with the transaction). Duplicates never block. Candidates match on email (case-insensitive), phone digits, ID type and number, or name and birth date. Look-alikes the caller may not see are only counted, so a profile at another property is not disclosed.
+- **TX:** `T[L5 sequence]` + audit
 
-**GET / PATCH `/guests/{id}`**
-- **Purpose:** view or update a profile.
-- **Rules:** visibility as for search. `guest.write` is required at any property where the guest is linked.
-- **TX:** R / `T[guest FOR UPDATE]` + audit
+**GET `/guests/{id}`** (`guest.read`)
+- **Response:** the guest plus `can_edit` (`guest.write` at a property where the guest is linked).
+- **TX:** R
 
-**GET `/guests/{id}/history`**
-- **Purpose:** reservations and stays across properties.
-- **Rules:** filtered to the user's properties unless they have `guest.history_all_properties`. Returns `hidden_count`.
+**PATCH `/guests/{id}`**
+- **Request:** any profile field; omitted fields stay, an empty string clears (including `date_of_birth`). The code and the origin property never change.
+- **Rules:** visible, and `guest.write` at a property where the guest is linked (otherwise 403). Validation applies to the merged profile.
+- **TX:** `T[guest FOR UPDATE]` + audit. The audit entry masks the ID number (last four characters) and records the notes' length only, so the trail is not a second copy of identity data.
+
+**GET `/guests/{id}/history`** (`guest.read`)
+- **Purpose:** reservations (as booker or occupant) and stays (as primary or accompanying guest) across properties, newest first.
+- **Response:** `{ data: [{ type, id, number, role, status, property_id, property_code, property_name, arrival_date, departure_date }], next_cursor?, hidden_count }`.
+- **Rules:** limited to the caller's readable properties unless they hold `guest.history_all_properties` at one of them (administrators: all). `hidden_count` counts what was left out. Reservation dates are the span of its lines.
 - **TX:** R
 
 ## 9. Billing configuration (write: `billing_config.manage`)
@@ -435,13 +444,13 @@ There are no endpoints to open or close days directly. That only happens through
 
 **POST `{P}/folios/{id}/adjustments`** ⓘ (`folio.adjust`)
 - **Purpose:** an adjustment.
-- **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id? }`
+- **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id?, approval }`
 - **Rules:** processed through the engine, with a signed base.
 - **TX:** as for charges
 
 **POST `{P}/folio-items/{id}/reverse`** (`folio.reverse`)
 - **Purpose:** a same-day reversal.
-- **Request:** `{ reason }`
+- **Request:** `{ reason, approval }`
 - **Response 201:** the reversal item.
 - **Rules:** the item's `business_date = BD` and it isn't already reversed. Not allowed on PAYMENT or REFUND items (use void). A room-charge item flips its register row to REVERSED.
 - **TX:** `T[L1 share, L4 folio]` + 🛡 UK `reverses_item_id`
@@ -454,12 +463,12 @@ There are no endpoints to open or close days directly. That only happens through
 - **TX:** see Step 15 #6
 
 **POST `{P}/payments/{id}/void`** (`payment.void`)
-- **Request:** `{ reason }`
+- **Request:** `{ reason, approval }`
 - **Rules:** same BD, POSTED, the folio is OPEN, and there are no refunds.
 - **TX:** `T[L1 share, L4 folio → payment]`
 
 **POST `{P}/payments/{id}/refunds`** ⓘ (`payment.refund`)
-- **Request:** `{ amount, payment_method?, reference_number?, reason }`
+- **Request:** `{ amount, payment_method?, reference_number?, reason, approval }`
 - **Rules:** `amount ≤ refundable`.
 - **TX:** `T[L1 share, L4 folio → original payment, L5]`
 
@@ -521,3 +530,16 @@ There are no endpoints to open or close days directly. That only happens through
 - **Response:** `[{ created_at, business_date, user, action, entity_type, entity_id, old_data, new_data }]`
 - **Rules:** entries for tenant-level entities (guests, users) are available at `/audit-logs?…` to tenant admins.
 - **TX:** R
+
+### 14.1 Correction approval (decision: every correction, M9)
+
+Applies to: `POST {P}/folios/{id}/adjustments`, `POST {P}/folio-items/{id}/reverse`, `POST {P}/payments/{id}/void` and `POST {P}/payments/{id}/refunds`.
+
+- **Request block:** `approval: { email, password }`. It is required; a request without it is 422 `APPROVAL_REQUIRED`.
+- **Who may approve:** any active user of the tenant who holds the new permission **`correction.approve`** at that property (tenant administrators pass every check). **The actor may approve their own correction**: they enter their own credentials again. A separate approver is optional.
+- **Two separate checks:** the actor needs the operation's permission (`folio.adjust`, `folio.reverse`, `payment.void`, `payment.refund`), and the approver needs `correction.approve`. A user with both can do both.
+- **Verification:** the approver's password is checked with the same argon2id verifier and the same rate limits as login, inside the request's transaction. Wrong email or password gives 401 `APPROVAL_INVALID_CREDENTIALS` (one generic error, no hint which part was wrong). A valid approver without the permission gives 403 `APPROVAL_NOT_PERMITTED`. Both count toward the login rate limit. Verifying an approval never creates a session or token.
+- **Never stored:** the password is not logged, not audited and not echoed back. Only the approver's user id is recorded.
+- **Recorded:** `approved_by` (NOT NULL, added by the M9 migration) on the correcting row: REVERSAL and ADJUSTMENT `folio_items`, VOIDED payments and REFUND payments. The audit entry carries `actor` and `approved_by` (equal when self-approved).
+- **Replays:** an `Idempotency-Key` replay returns the stored result and does not ask for approval again.
+- **Correction routes by date:** same business date → void (payments) or reversal (charges); an earlier date → an ADJUSTMENT or a REFUND posted on the current business date. A void or reversal of an earlier date is 409 `CORRECTION_REQUIRES_ADJUSTMENT`. Nothing is ever back-posted.

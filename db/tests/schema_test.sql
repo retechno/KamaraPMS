@@ -226,6 +226,21 @@ INSERT INTO guests (tenant_id, code, origin_property_id, last_name) VALUES
 SELECT expect_error('guest origin property must be in the same tenant', '23503',
     $q$INSERT INTO guests (tenant_id, code, origin_property_id, last_name) VALUES (tn('ABC'), 'G3', pr('SG'), 'X')$q$);
 
+SELECT expect_ok('guest is linked to its origin property',
+    $q$SELECT 1 / (CASE WHEN guest_linked_to(tn('ABC'), gu('G1'), pr('BALI'), ARRAY[pr('BALI')]) THEN 1 ELSE 0 END)$q$);
+SELECT expect_ok('guest is not linked to an unrelated property',
+    $q$SELECT 1 / (CASE WHEN NOT guest_linked_to(tn('ABC'), gu('G1'), pr('BALI'), ARRAY[pr('SG')]) THEN 1 ELSE 0 END)$q$);
+SELECT expect_ok('an empty property list links nothing',
+    $q$SELECT 1 / (CASE WHEN NOT guest_linked_to(tn('ABC'), gu('G1'), pr('BALI'), ARRAY[]::bigint[]) THEN 1 ELSE 0 END)$q$);
+
+INSERT INTO tenant_sequences (tenant_id, sequence_type, prefix, next_value) VALUES (tn('ABC'), 'GUEST', 'GST', 2);
+SELECT expect_error('tenant sequence type is a known series', '23514',
+    $q$INSERT INTO tenant_sequences (tenant_id, sequence_type, prefix) VALUES (tn('XYZ'), 'BOGUS', 'X')$q$);
+SELECT expect_error('tenant sequence next value starts at 1', '23514',
+    $q$UPDATE tenant_sequences SET next_value = 0 WHERE tenant_id = tn('ABC')$q$);
+SELECT expect_error('one series per tenant and type', '23505',
+    $q$INSERT INTO tenant_sequences (tenant_id, sequence_type, prefix) VALUES (tn('ABC'), 'GUEST', 'GST')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Billing configuration
 ------------------------------------------------------------------------------------------

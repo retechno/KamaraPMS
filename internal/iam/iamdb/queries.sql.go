@@ -477,6 +477,40 @@ func (q *Queries) InsertUserGrant(ctx context.Context, arg InsertUserGrantParams
 	return err
 }
 
+const listPropertiesWithPermission = `-- name: ListPropertiesWithPermission :many
+SELECT up.property_id FROM user_properties up
+JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = $1
+WHERE up.tenant_id = $2 AND up.user_id = $3
+ORDER BY up.property_id
+`
+
+type ListPropertiesWithPermissionParams struct {
+	PermissionCode string
+	TenantID       int64
+	UserID         int64
+}
+
+// Properties where a non-admin holds a permission.
+func (q *Queries) ListPropertiesWithPermission(ctx context.Context, arg ListPropertiesWithPermissionParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPropertiesWithPermission, arg.PermissionCode, arg.TenantID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var property_id int64
+		if err := rows.Scan(&property_id); err != nil {
+			return nil, err
+		}
+		items = append(items, property_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRolePermissions = `-- name: ListRolePermissions :many
 SELECT role_id, permission_code FROM role_permissions
 WHERE role_id = ANY($1::bigint[])
@@ -562,6 +596,30 @@ func (q *Queries) ListTenantProperties(ctx context.Context, tenantID int64) ([]L
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenantPropertyIDs = `-- name: ListTenantPropertyIDs :many
+SELECT id FROM properties WHERE tenant_id = $1 ORDER BY id
+`
+
+func (q *Queries) ListTenantPropertyIDs(ctx context.Context, tenantID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listTenantPropertyIDs, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

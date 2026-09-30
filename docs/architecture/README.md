@@ -23,4 +23,17 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - Authorization is per property: 404 without access, 403 without the permission. Users, roles and property creation are for tenant administrators.
   - The M1 development header login was removed.
 
+- **M3** (rooms, blocks, housekeeping) is complete. No migration: the tables already exist in 00004.
+  - `internal/rooms` owns room types, rooms and OOO/OOS blocks. `internal/housekeeping` owns the current status, its append-only log and the board; `housekeeping.Service.MarkDirty` is the entry point M10/M12/M13 use for system-driven changes (source CHECK_OUT, ROOM_MOVE, NIGHT_AUDIT, CHECK_IN_REVERSAL).
+  - Conflict checks already read the M8/M10 tables: a block, a room type change or a room deactivation is rejected (409 `ROOM_BLOCK_CONFLICT` / `ROOM_IN_USE`, with `context.conflicts`) while an open stay segment or a CONFIRMED assigned line holds the room. An overstay holds the room through tonight (`GREATEST(departure, BD + 1)`).
+  - Deferred to M8, where the availability engine lives: the type-level `available ≥ 0` check (`INVENTORY_OVERSOLD`) on blocks, type changes and deactivation. Room type deactivation only checks active rooms and future CONFIRMED lines of the type, as specified.
+  - Room type codes are immutable (PATCH rejects `code`). `GET {P}/room-status` (the full derived board) stays in M10; the housekeeping board already carries derived occupancy and the active block.
+  - The housekeeping board is not paginated (one row per active room, capped at 2,000).
+
+- **M4** (guests) is complete. Migration 00013 adds `tenant_sequences` (gapless tenant-wide guest numbers) and the SQL function `guest_linked_to`, the single definition of "a guest is linked to a property".
+  - `auth.Authorizer.PropertiesWith(perm)` lists the caller's properties holding a permission. Tenant-wide resources use it to derive visibility; the visibility, write and history rules are in [06-api.md §8](06-api.md).
+  - Duplicate hints never block creation; look-alikes at properties the caller cannot see are counted, not shown.
+  - Search is prefix and token based on the existing btree indexes. `pg_trgm` (fuzzy matching) is still later. Phone numbers are compared by digits only, with no country-code normalisation.
+  - Merging duplicate profiles is not part of M4.
+
 Earlier revisions are in [archive/](archive/).
