@@ -1,0 +1,71 @@
+# sqlc: type-safe Go from SQL. Regenerate with scripts/sqlc.sh (runs sqlc in Docker).
+# The schema is read from the goose migrations (sqlc ignores the Down sections).
+version: "2"
+
+overrides:
+  go:
+    overrides:
+      # Business dates are civil.Date, never time.Time (a time.Time can shift a day across zones).
+      - db_type: "date"
+        go_type: "kamarapms/internal/platform/civil.Date"
+      - db_type: "date"
+        nullable: true
+        go_type: { import: "kamarapms/internal/platform/civil", type: "Date", pointer: true }
+      - db_type: "pg_catalog.time"
+        go_type: "kamarapms/internal/platform/civil.TimeOfDay"
+      # Instants
+      - db_type: "timestamptz"
+        go_type: "time.Time"
+      - db_type: "timestamptz"
+        nullable: true
+        go_type: { import: "time", type: "Time", pointer: true }
+      # Nullable scalars as plain pointers instead of pgtype wrappers
+      - db_type: "pg_catalog.varchar"
+        nullable: true
+        go_type: { type: "string", pointer: true }
+      - db_type: "text"
+        nullable: true
+        go_type: { type: "string", pointer: true }
+      - db_type: "pg_catalog.bpchar"
+        nullable: true
+        go_type: { type: "string", pointer: true }
+      - db_type: "pg_catalog.int8"
+        nullable: true
+        go_type: { type: "int64", pointer: true }
+      - db_type: "pg_catalog.bool"
+        nullable: true
+        go_type: { type: "bool", pointer: true }
+
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/tenancy/queries.sql
+    gen:
+      go:
+        package: tenancydb
+        out: internal/tenancy/tenancydb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/audit/queries.sql
+    gen:
+      go:
+        package: auditdb
+        out: internal/audit/auditdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/iam/queries.sql
+    gen:
+      go:
+        package: iamdb
+        out: internal/iam/iamdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true

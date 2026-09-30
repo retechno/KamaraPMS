@@ -1,0 +1,21 @@
+# Local development database. Port 55432 avoids clashing with a locally installed PostgreSQL.
+#   docker compose up -d db
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pms
+      POSTGRES_USER: pms
+      POSTGRES_PASSWORD: pms
+    ports:
+      - "55432:5432"
+    volumes:
+      - pms-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U pms -d pms"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pms-db:

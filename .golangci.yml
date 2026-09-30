@@ -1,0 +1,41 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - forbidigo
+    - gosec
+    - misspell
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # Business dates come from the OPEN business_days row, instants from platform/clock.
+        # time.Now in business code is how "server date used as hotel date" bugs start.
+        - pattern: ^time\.Now$
+          msg: "use platform/clock (server instants) or tenancy.BusinessDayService (business dates)"
+        # Money is never a float.
+        - pattern: ^decimal\.NewFromFloat(32)?$
+          msg: "build money from strings or integers (money.Parse / decimal.NewFromInt), never floats"
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: internal/platform/clock/
+        linters: [forbidigo]
+      - path: _test\.go
+        linters: [forbidigo, gosec, noctx]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - kamarapms

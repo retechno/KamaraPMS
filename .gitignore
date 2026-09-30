@@ -1,0 +1,24 @@
+# Build output
+/bin/
+*.exe
+/web/dist/
+
+# Dependencies
+/web/node_modules/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Test and tooling artefacts
+*.out
+coverage.*
+/web/coverage/
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

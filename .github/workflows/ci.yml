@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Go (lint, vet, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: sqlc generated code is up to date with the queries
+        run: scripts/sqlc.sh diff
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+      # Database tests start PostgreSQL with testcontainers (Docker is available on ubuntu runners).
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+
+  schema:
+    name: Schema (migrations up/down/up + integrity tests)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres: ["postgres:16-alpine", "postgres:18-alpine"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migrations and schema tests
+        run: scripts/db-test.sh
+        env:
+          PG_IMAGE: ${{ matrix.postgres }}
+
+  web:
+    name: Web (types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Generated API types are up to date with api/openapi.yaml
+        run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
+      - run: npm run type-check
+      - run: npm test
+      - run: npm run build
