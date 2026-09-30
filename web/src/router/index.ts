@@ -69,6 +69,7 @@ export const router = createRouter({
     { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/ArrivalsView.vue'), meta: { title: 'Arrivals' } },
     { path: '/walk-in', name: 'walk-in', component: () => import('@/views/frontdesk/WalkInView.vue'), meta: { title: 'Walk-in' } },
     { path: '/in-house', name: 'in-house', component: () => import('@/views/frontdesk/InHouseView.vue'), meta: { title: 'In-house' } },
+    { path: '/departures', name: 'departures', component: () => import('@/views/frontdesk/DeparturesView.vue'), meta: { title: 'Departures' } },
     {
       path: '/stays/:id(\\d+)',
       name: 'stay',

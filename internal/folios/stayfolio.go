@@ -9,6 +9,7 @@ import (
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/db"
 	"kamarapms/internal/tenancy"
 )
 
@@ -106,4 +107,56 @@ func (s *Service) StayFolios(ctx context.Context, tenantID, propertyID, stayID i
 	}
 	sf, err := s.stayFolio(ctx, propertyID, f)
 	return []StayFolio{sf}, err
+}
+
+// ClosedFolio is a folio closed by a check-out.
+type ClosedFolio struct {
+	ID          int64  `json:"id"`
+	FolioNumber string `json:"folio_number"`
+	Status      string `json:"status"`
+}
+
+// CloseStayFolios closes every OPEN folio of a stay at check-out (folio policy of the MVP: each balance is
+// exactly zero). A balance that is not zero is 409 FOLIO_NOT_BALANCED with the balances in the context, and
+// nothing is closed. The folios are locked in id order (L4) before their balances are read.
+func (s *Service) CloseStayFolios(ctx context.Context, p auth.Principal, propertyID, stayID int64) ([]ClosedFolio, error) {
+	q := s.q(ctx)
+	open, err := q.ListStayOpenFolios(ctx, foliosdb.ListStayOpenFoliosParams{TenantID: p.TenantID, PropertyID: propertyID, StayID: &stayID})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, len(open))
+	for i, f := range open {
+		ids[i] = f.ID
+	}
+	if err := db.LockRows(ctx, db.Folios, db.ForUpdate, propertyID, ids); err != nil {
+		return nil, mapNotFound(err, errFolioNotFound())
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	var unbalanced []map[string]any
+	for _, f := range open {
+		bal, _, err := s.balanceOf(ctx, propertyID, f.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !bal.IsZero() {
+			unbalanced = append(unbalanced, map[string]any{"folio_id": f.ID, "folio_number": f.FolioNumber, "balance": fixed(bal, decimals)})
+		}
+	}
+	if len(unbalanced) > 0 {
+		return nil, apperr.Conflict("FOLIO_NOT_BALANCED", "every folio of the stay must have a zero balance to check out").WithContext("folios", unbalanced)
+	}
+	now := s.clock.Now()
+	out := make([]ClosedFolio, 0, len(open))
+	for _, f := range open {
+		c, err := q.CloseFolio(ctx, foliosdb.CloseFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ID: f.ID, Now: now, ActorID: p.ActorID()})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ClosedFolio{ID: c.ID, FolioNumber: c.FolioNumber, Status: c.Status})
+	}
+	return out, nil
 }

@@ -16,7 +16,7 @@ func (s *Service) ListStays(ctx context.Context, propertyID int64, f StayFilter,
 		return nil, err
 	}
 	rows, err := s.q(ctx).ListStays(ctx, frontdeskdb.ListStaysParams{
-		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), DepartureDate: f.DepartureDate, RoomID: f.RoomID, RowLimit: rowLimit(limit),
+		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), DepartureDate: f.DepartureDate, DepartureUntil: f.DepartureUntil, RoomID: f.RoomID, RowLimit: rowLimit(limit),
 	})
 	if err != nil {
 		return nil, err
@@ -92,6 +92,11 @@ func (s *Service) GetStay(ctx context.Context, propertyID, id int64) (StayDetail
 	if err != nil {
 		return StayDetail{}, err
 	}
+	return s.stayDetail(ctx, p, propertyID, id)
+}
+
+// stayDetail builds the detail view of a stay for a caller who has already been authorized.
+func (s *Service) stayDetail(ctx context.Context, p auth.Principal, propertyID, id int64) (StayDetail, error) {
 	q := s.q(ctx)
 	st, err := q.GetStay(ctx, frontdeskdb.GetStayParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
 	if err != nil {

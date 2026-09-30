@@ -1617,6 +1617,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/stays/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an in-house stay to another room (frontdesk.room_move)
+         * @description The current segment closes and a new one opens for the target room; the old room becomes DIRTY. The target must be free for the rest of the stay (409 `ROOM_OCCUPIED`, `ROOM_NOT_AVAILABLE`), have inventory if its type differs (409 `ROOM_TYPE_NOT_AVAILABLE`) and be clean (409 `ROOM_NOT_READY`, override needs `frontdesk.override_room_not_ready`). `new_nightly_rates` (needs `frontdesk.rate_change`) may reprice the nights not yet charged (409 `NIGHT_ALREADY_POSTED`).
+         */
+        post: operations["moveStay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/change-departure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend or shorten an in-house stay (reservation.update)
+         * @description Extending needs the room free for the extra nights (409 `ROOM_NOT_AVAILABLE_FOR_EXTENSION`, the context lists `alternative_rooms` and `suggest_room_move`) and inventory. Shortening needs a date after the business date and after the last charged night (409 `NIGHT_ALREADY_POSTED`). The reservation line keeps its own dates.
+         */
+        post: operations["changeStayDeparture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/guests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an accompanying guest (frontdesk.checkin)
+         * @description 409 `GUEST_ALREADY_ON_STAY` when the guest is already the main or an accompanying guest.
+         */
+        post: operations["addStayGuest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/check-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check an in-house stay out (frontdesk.checkout)
+         * @description Posts every unposted night up to the business date (trigger CHECK_OUT), requires every folio of the stay to have a zero balance (409 `FOLIO_NOT_BALANCED`, context `folios`), closes the folios and the segment, completes the room line and makes the room DIRTY (and VACANT, derived). Leaving before the booked departure needs `confirm_early_departure` (409 `EARLY_DEPARTURE_NOT_CONFIRMED`); the stay then ends at the business date, or the next day once the calendar date has passed it. A room charge that cannot be posted refuses the check-out (409 `REQUIRED_CHARGES_NOT_POSTED`). Everything happens in one transaction. The `Idempotency-Key` header is required; a retry with the same version of an already completed check-out returns its result.
+         */
+        post: operations["checkOutStay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
         parameters: {
             query?: never;
@@ -3097,6 +3189,61 @@ export interface components {
         ReverseResult: {
             stay: components["schemas"]["Stay"];
             folio: components["schemas"]["StayFolio"];
+        };
+        MoveRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            /** Format: int64 */
+            room_id: number;
+            reason: string;
+            new_nightly_rates?: components["schemas"]["NightOverride"][];
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        MoveResult: {
+            stay: components["schemas"]["Stay"];
+            closed_segment: components["schemas"]["StaySegment"];
+            new_segment: components["schemas"]["StaySegment"];
+        };
+        ChangeDepartureRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            departure_date: components["schemas"]["Date"];
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        AddStayGuestRequest: {
+            /** Format: int64 */
+            guest_id: number;
+        };
+        CheckOutRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            /** @default false */
+            confirm_early_departure: boolean;
+        };
+        ClosedFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+        };
+        CheckOutResult: {
+            stay: components["schemas"]["Stay"];
+            posted_room_charges: components["schemas"]["RoomChargeItem"][];
+            folios: components["schemas"]["ClosedFolio"][];
+            /** @description The housekeeping status the room has now (DIRTY). */
+            housekeeping: string;
         };
         StaySummary: {
             /** Format: int64 */
@@ -5942,6 +6089,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 status?: "OPEN" | "CHECKED_OUT" | "CANCELLED";
                 departure_date?: components["schemas"]["Date"];
+                /** @description Stays leaving on or before this date (the departures list */
+                departure_until?: components["schemas"]["Date"];
                 /** @description The room of the open segment. */
                 room_id?: number;
             };
@@ -6015,6 +6164,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReverseResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    moveStay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    changeStayDeparture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDepartureRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stay"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addStayGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddStayGuestRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    checkOutStay: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckOutRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOutResult"];
                 };
             };
             403: components["responses"]["Problem"];

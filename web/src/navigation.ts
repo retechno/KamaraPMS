@@ -26,7 +26,7 @@ export const navigation: NavSection[] = [
       { label: 'Arrivals', to: '/arrivals', milestone: 'M10' },
       { label: 'Walk-in', to: '/walk-in', milestone: 'M10' },
       { label: 'In-house', to: '/in-house', milestone: 'M10' },
-      { label: 'Departures', milestone: 'M12' },
+      { label: 'Departures', to: '/departures', milestone: 'M12' },
     ],
   },
   {

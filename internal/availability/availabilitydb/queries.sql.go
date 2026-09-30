@@ -267,19 +267,21 @@ SELECT s.id, s.stay_number, s.departure_date FROM stay_rooms sr
 JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
 WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.room_id = $3
   AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-  AND $4::date < $5::date
-  AND $6::date < GREATEST(s.departure_date, $7::date)
+  AND ($4::bigint IS NULL OR s.id <> $4::bigint)
+  AND $5::date < $6::date
+  AND $7::date < GREATEST(s.departure_date, $8::date)
 ORDER BY s.id
 `
 
 type ListRoomStayOverlapsParams struct {
-	TenantID     int64
-	PropertyID   int64
-	RoomID       int64
-	BusinessDate civil.Date
-	EndDate      civil.Date
-	StartDate    civil.Date
-	NextDate     civil.Date
+	TenantID      int64
+	PropertyID    int64
+	RoomID        int64
+	ExcludeStayID *int64
+	BusinessDate  civil.Date
+	EndDate       civil.Date
+	StartDate     civil.Date
+	NextDate      civil.Date
 }
 
 type ListRoomStayOverlapsRow struct {
@@ -294,6 +296,7 @@ func (q *Queries) ListRoomStayOverlaps(ctx context.Context, arg ListRoomStayOver
 		arg.TenantID,
 		arg.PropertyID,
 		arg.RoomID,
+		arg.ExcludeStayID,
 		arg.BusinessDate,
 		arg.EndDate,
 		arg.StartDate,

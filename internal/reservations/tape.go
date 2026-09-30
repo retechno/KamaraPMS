@@ -2,6 +2,7 @@ package reservations
 
 import (
 	"context"
+	"sort"
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -57,7 +58,7 @@ type Tape struct {
 }
 
 // TapeChart lists rooms with the bookings and blocks that touch [from, to) (reservation.read). It reads
-// committed data and takes no locks. A checked-in line is shown in its line's room.
+// committed data and takes no locks. A checked-in line is drawn from its stay's segments.
 func (s *Service) TapeChart(ctx context.Context, propertyID int64, from, to civil.Date) (Tape, error) {
 	p, err := s.writer(ctx, propertyID, auth.PermReservationRead)
 	if err != nil {
@@ -72,6 +73,10 @@ func (s *Service) TapeChart(ctx context.Context, propertyID int64, from, to civi
 		return Tape{}, err
 	}
 	lines, err := q.ListTapeLines(ctx, reservationsdb.ListTapeLinesParams{TenantID: p.TenantID, PropertyID: propertyID, WindowStart: from, WindowEnd: to})
+	if err != nil {
+		return Tape{}, err
+	}
+	segments, err := q.ListTapeSegments(ctx, reservationsdb.ListTapeSegmentsParams{TenantID: p.TenantID, PropertyID: propertyID, WindowStart: from, WindowEnd: to})
 	if err != nil {
 		return Tape{}, err
 	}
@@ -113,6 +118,22 @@ func (s *Service) TapeChart(ctx context.Context, propertyID int64, from, to civi
 			unassigned[l.RoomTypeID] = i
 		}
 		out.Unassigned[i].Bookings = append(out.Unassigned[i].Bookings, b)
+	}
+	for _, sg := range segments {
+		row := byRoom[sg.RoomID]
+		if row == nil {
+			continue
+		}
+		name := deref(sg.GuestLastName)
+		if fn := deref(sg.GuestFirstName); fn != "" {
+			name = fn + " " + name
+		}
+		row.Bookings = append(row.Bookings, TapeBooking{ReservationID: sg.ReservationID, ConfirmationNumber: sg.ConfirmationNumber, ReservationRoomID: sg.ID,
+			Status: "CHECKED_IN", GuestName: name, ArrivalDate: sg.StartBusinessDate, DepartureDate: sg.EndDate})
+	}
+	for i := range out.Rooms {
+		bk := out.Rooms[i].Bookings
+		sort.SliceStable(bk, func(a, b int) bool { return bk[a].ArrivalDate.Before(bk[b].ArrivalDate) })
 	}
 	return out, nil
 }

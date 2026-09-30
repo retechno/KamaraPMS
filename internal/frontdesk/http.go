@@ -26,6 +26,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/stays", httpx.HandlerFunc(h.list))
 	mux.Handle("GET "+p+"/stays/{id}", httpx.HandlerFunc(h.get))
 	mux.Handle("POST "+p+"/stays/{id}/reverse-check-in", httpx.HandlerFunc(h.reverse))
+	mux.Handle("POST "+p+"/stays/{id}/move", httpx.HandlerFunc(h.move))
+	mux.Handle("POST "+p+"/stays/{id}/change-departure", httpx.HandlerFunc(h.changeDeparture))
+	mux.Handle("POST "+p+"/stays/{id}/guests", httpx.HandlerFunc(h.addGuest))
+	mux.Handle("POST "+p+"/stays/{id}/check-out", httpx.HandlerFunc(h.checkOut))
 }
 
 func pathID(r *http.Request, name string) (int64, error) {
@@ -137,6 +141,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 		}
 		f.DepartureDate = &d
 	}
+	if s := r.URL.Query().Get("departure_until"); s != "" {
+		d, err := civil.ParseDate(s)
+		if err != nil {
+			errs = append(errs, fieldErr("departure_until", "INVALID_FORMAT", "YYYY-MM-DD"))
+		}
+		f.DepartureUntil = &d
+	}
 	if s := r.URL.Query().Get("room_id"); s != "" {
 		id, err := strconv.ParseInt(s, 10, 64)
 		if err != nil || id < 1 {
@@ -200,6 +211,81 @@ func (h *Handler) reverse(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.ReverseCheckIn(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func stayRoute(r *http.Request) (propertyID, id int64, err error) {
+	if propertyID, err = tenancy.PropertyID(r); err != nil {
+		return 0, 0, err
+	}
+	id, err = pathID(r, "id")
+	return propertyID, id, err
+}
+
+func (h *Handler) move(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := stayRoute(r)
+	if err != nil {
+		return err
+	}
+	var in MoveInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.Move(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) changeDeparture(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := stayRoute(r)
+	if err != nil {
+		return err
+	}
+	var in ChangeDepartureInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.ChangeDeparture(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) addGuest(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := stayRoute(r)
+	if err != nil {
+		return err
+	}
+	var in AddGuestInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.AddGuest(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) checkOut(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := stayRoute(r)
+	if err != nil {
+		return err
+	}
+	if _, err := idempotencyKey(r); err != nil {
+		return err
+	}
+	var in CheckOutInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.CheckOut(r.Context(), pid, id, in)
 	if err != nil {
 		return err
 	}

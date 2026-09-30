@@ -172,3 +172,6 @@ SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id
 -- name: CountChargeItems :one
 SELECT count(*)::int FROM folio_items
 WHERE property_id = @property_id AND folio_id = @folio_id AND transaction_type = 'CHARGE';
+
+-- name: ListStayOpenFolios :many
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'OPEN' ORDER BY id;

@@ -13,6 +13,54 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const bumpStay = `-- name: BumpStay :one
+UPDATE stays SET version = version + 1, updated_by = $1
+WHERE tenant_id = $2 AND property_id = $3 AND id = $4
+RETURNING id, tenant_id, property_id, stay_number, reservation_room_id, guest_id, arrival_date, departure_date, adult_count, child_count, status, actual_check_in_at, actual_check_in_by, actual_check_out_at, actual_check_out_by, remarks, version, created_at, created_by, updated_at, updated_by, idempotency_key
+`
+
+type BumpStayParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) BumpStay(ctx context.Context, arg BumpStayParams) (Stay, error) {
+	row := q.db.QueryRow(ctx, bumpStay,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i Stay
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.StayNumber,
+		&i.ReservationRoomID,
+		&i.GuestID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+		&i.AdultCount,
+		&i.ChildCount,
+		&i.Status,
+		&i.ActualCheckInAt,
+		&i.ActualCheckInBy,
+		&i.ActualCheckOutAt,
+		&i.ActualCheckOutBy,
+		&i.Remarks,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
 const cancelStay = `-- name: CancelStay :one
 UPDATE stays SET status = 'CANCELLED', version = version + 1, updated_by = $1
 WHERE tenant_id = $2 AND property_id = $3 AND id = $4
@@ -29,6 +77,59 @@ type CancelStayParams struct {
 func (q *Queries) CancelStay(ctx context.Context, arg CancelStayParams) (Stay, error) {
 	row := q.db.QueryRow(ctx, cancelStay,
 		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i Stay
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.StayNumber,
+		&i.ReservationRoomID,
+		&i.GuestID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+		&i.AdultCount,
+		&i.ChildCount,
+		&i.Status,
+		&i.ActualCheckInAt,
+		&i.ActualCheckInBy,
+		&i.ActualCheckOutAt,
+		&i.ActualCheckOutBy,
+		&i.Remarks,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
+const checkOutStay = `-- name: CheckOutStay :one
+UPDATE stays SET status = 'CHECKED_OUT', actual_check_out_at = $1::timestamptz, actual_check_out_by = $2,
+    departure_date = $3, version = version + 1, updated_by = $2
+WHERE tenant_id = $4 AND property_id = $5 AND id = $6
+RETURNING id, tenant_id, property_id, stay_number, reservation_room_id, guest_id, arrival_date, departure_date, adult_count, child_count, status, actual_check_in_at, actual_check_in_by, actual_check_out_at, actual_check_out_by, remarks, version, created_at, created_by, updated_at, updated_by, idempotency_key
+`
+
+type CheckOutStayParams struct {
+	Now           time.Time
+	ActorID       *int64
+	DepartureDate civil.Date
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) CheckOutStay(ctx context.Context, arg CheckOutStayParams) (Stay, error) {
+	row := q.db.QueryRow(ctx, checkOutStay,
+		arg.Now,
+		arg.ActorID,
+		arg.DepartureDate,
 		arg.TenantID,
 		arg.PropertyID,
 		arg.ID,
@@ -128,6 +229,60 @@ func (q *Queries) GetGuestBrief(ctx context.Context, arg GetGuestBriefParams) (G
 		&i.Code,
 		&i.FirstName,
 		&i.LastName,
+	)
+	return i, err
+}
+
+const getOpenSegment = `-- name: GetOpenSegment :one
+SELECT s.id, s.tenant_id, s.property_id, s.stay_id, s.room_id, s.check_in_at, s.check_out_at, s.start_business_date, s.end_business_date, s.move_reason, s.created_at, s.created_by, s.updated_at, r.room_number, r.room_type_id FROM stay_rooms s
+JOIN rooms r ON r.property_id = s.property_id AND r.id = s.room_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.stay_id = $3 AND s.check_out_at IS NULL
+`
+
+type GetOpenSegmentParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     int64
+}
+
+type GetOpenSegmentRow struct {
+	ID                int64
+	TenantID          int64
+	PropertyID        int64
+	StayID            int64
+	RoomID            int64
+	CheckInAt         time.Time
+	CheckOutAt        *time.Time
+	StartBusinessDate civil.Date
+	EndBusinessDate   *civil.Date
+	MoveReason        *string
+	CreatedAt         time.Time
+	CreatedBy         *int64
+	UpdatedAt         time.Time
+	RoomNumber        string
+	RoomTypeID        int64
+}
+
+// The open segment of a stay: the room it is in now.
+func (q *Queries) GetOpenSegment(ctx context.Context, arg GetOpenSegmentParams) (GetOpenSegmentRow, error) {
+	row := q.db.QueryRow(ctx, getOpenSegment, arg.TenantID, arg.PropertyID, arg.StayID)
+	var i GetOpenSegmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.StayID,
+		&i.RoomID,
+		&i.CheckInAt,
+		&i.CheckOutAt,
+		&i.StartBusinessDate,
+		&i.EndBusinessDate,
+		&i.MoveReason,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.RoomNumber,
+		&i.RoomTypeID,
 	)
 	return i, err
 }
@@ -325,6 +480,23 @@ func (q *Queries) GetStayLine(ctx context.Context, arg GetStayLineParams) (GetSt
 	return i, err
 }
 
+const hasStayGuest = `-- name: HasStayGuest :one
+SELECT EXISTS (SELECT 1 FROM stay_guests WHERE property_id = $1 AND stay_id = $2 AND guest_id = $3) AS present
+`
+
+type HasStayGuestParams struct {
+	PropertyID int64
+	StayID     int64
+	GuestID    int64
+}
+
+func (q *Queries) HasStayGuest(ctx context.Context, arg HasStayGuestParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasStayGuest, arg.PropertyID, arg.StayID, arg.GuestID)
+	var present bool
+	err := row.Scan(&present)
+	return present, err
+}
+
 const insertStay = `-- name: InsertStay :one
 
 INSERT INTO stays (
@@ -465,6 +637,25 @@ func (q *Queries) InsertStayRoom(ctx context.Context, arg InsertStayRoomParams) 
 	return i, err
 }
 
+const lastPostedNight = `-- name: LastPostedNight :one
+SELECT COALESCE(max(service_date), '0001-01-01'::date)::date AS last_night FROM stay_charge_postings
+WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'POSTED'
+`
+
+type LastPostedNightParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     int64
+}
+
+// The last night of the stay that has been charged (room postings); 0001-01-01 (the zero date) when none.
+func (q *Queries) LastPostedNight(ctx context.Context, arg LastPostedNightParams) (civil.Date, error) {
+	row := q.db.QueryRow(ctx, lastPostedNight, arg.TenantID, arg.PropertyID, arg.StayID)
+	var last_night civil.Date
+	err := row.Scan(&last_night)
+	return last_night, err
+}
+
 const listArrivals = `-- name: ListArrivals :many
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
        l.room_id, r.room_number, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
@@ -534,6 +725,37 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostedNights = `-- name: ListPostedNights :many
+SELECT service_date FROM stay_charge_postings
+WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'POSTED'
+`
+
+type ListPostedNightsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     int64
+}
+
+func (q *Queries) ListPostedNights(ctx context.Context, arg ListPostedNightsParams) ([]civil.Date, error) {
+	rows, err := q.db.Query(ctx, listPostedNights, arg.TenantID, arg.PropertyID, arg.StayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []civil.Date{}
+	for rows.Next() {
+		var service_date civil.Date
+		if err := rows.Scan(&service_date); err != nil {
+			return nil, err
+		}
+		items = append(items, service_date)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -719,19 +941,21 @@ JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservat
 WHERE s.tenant_id = $1 AND s.property_id = $2 AND ($3::bigint = 0 OR s.id < $3::bigint)
   AND ($4::text IS NULL OR s.status = $4::text)
   AND ($5::date IS NULL OR s.departure_date = $5::date)
-  AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM stay_rooms x WHERE x.stay_id = s.id AND x.room_id = $6::bigint AND x.check_out_at IS NULL))
+  AND ($6::date IS NULL OR s.departure_date <= $6::date)
+  AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM stay_rooms x WHERE x.stay_id = s.id AND x.room_id = $7::bigint AND x.check_out_at IS NULL))
 ORDER BY s.id DESC
-LIMIT $7
+LIMIT $8
 `
 
 type ListStaysParams struct {
-	TenantID      int64
-	PropertyID    int64
-	BeforeID      int64
-	Status        *string
-	DepartureDate *civil.Date
-	RoomID        *int64
-	RowLimit      int32
+	TenantID       int64
+	PropertyID     int64
+	BeforeID       int64
+	Status         *string
+	DepartureDate  *civil.Date
+	DepartureUntil *civil.Date
+	RoomID         *int64
+	RowLimit       int32
 }
 
 type ListStaysRow struct {
@@ -773,6 +997,7 @@ func (q *Queries) ListStays(ctx context.Context, arg ListStaysParams) ([]ListSta
 		arg.BeforeID,
 		arg.Status,
 		arg.DepartureDate,
+		arg.DepartureUntil,
 		arg.RoomID,
 		arg.RowLimit,
 	)
@@ -821,4 +1046,54 @@ func (q *Queries) ListStays(ctx context.Context, arg ListStaysParams) ([]ListSta
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateStayDeparture = `-- name: UpdateStayDeparture :one
+UPDATE stays SET departure_date = $1, version = version + 1, updated_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5
+RETURNING id, tenant_id, property_id, stay_number, reservation_room_id, guest_id, arrival_date, departure_date, adult_count, child_count, status, actual_check_in_at, actual_check_in_by, actual_check_out_at, actual_check_out_by, remarks, version, created_at, created_by, updated_at, updated_by, idempotency_key
+`
+
+type UpdateStayDepartureParams struct {
+	DepartureDate civil.Date
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) UpdateStayDeparture(ctx context.Context, arg UpdateStayDepartureParams) (Stay, error) {
+	row := q.db.QueryRow(ctx, updateStayDeparture,
+		arg.DepartureDate,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i Stay
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.StayNumber,
+		&i.ReservationRoomID,
+		&i.GuestID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+		&i.AdultCount,
+		&i.ChildCount,
+		&i.Status,
+		&i.ActualCheckInAt,
+		&i.ActualCheckInBy,
+		&i.ActualCheckOutAt,
+		&i.ActualCheckOutBy,
+		&i.Remarks,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.IdempotencyKey,
+	)
+	return i, err
 }

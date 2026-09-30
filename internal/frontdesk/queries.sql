@@ -80,6 +80,7 @@ JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservat
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND (@before_id::bigint = 0 OR s.id < @before_id::bigint)
   AND (sqlc.narg(status)::text IS NULL OR s.status = sqlc.narg(status)::text)
   AND (sqlc.narg(departure_date)::date IS NULL OR s.departure_date = sqlc.narg(departure_date)::date)
+  AND (sqlc.narg(departure_until)::date IS NULL OR s.departure_date <= sqlc.narg(departure_until)::date)
   AND (sqlc.narg(room_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM stay_rooms x WHERE x.stay_id = s.id AND x.room_id = sqlc.narg(room_id)::bigint AND x.check_out_at IS NULL))
 ORDER BY s.id DESC
 LIMIT @row_limit;
@@ -105,3 +106,37 @@ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.id = @id;
 -- name: GetRoomTypeLimits :one
 SELECT id, code, is_active, max_adult, max_child, max_occupancy FROM room_types
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: UpdateStayDeparture :one
+UPDATE stays SET departure_date = @departure_date, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: BumpStay :one
+UPDATE stays SET version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: CheckOutStay :one
+UPDATE stays SET status = 'CHECKED_OUT', actual_check_out_at = @now::timestamptz, actual_check_out_by = sqlc.narg(actor_id),
+    departure_date = @departure_date, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- The last night of the stay that has been charged (room postings); 0001-01-01 (the zero date) when none.
+-- name: LastPostedNight :one
+SELECT COALESCE(max(service_date), '0001-01-01'::date)::date AS last_night FROM stay_charge_postings
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'POSTED';
+
+-- The open segment of a stay: the room it is in now.
+-- name: GetOpenSegment :one
+SELECT s.*, r.room_number, r.room_type_id FROM stay_rooms s
+JOIN rooms r ON r.property_id = s.property_id AND r.id = s.room_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.stay_id = @stay_id AND s.check_out_at IS NULL;
+
+-- name: HasStayGuest :one
+SELECT EXISTS (SELECT 1 FROM stay_guests WHERE property_id = @property_id AND stay_id = @stay_id AND guest_id = @guest_id) AS present;
+
+-- name: ListPostedNights :many
+SELECT service_date FROM stay_charge_postings
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'POSTED';

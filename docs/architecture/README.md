@@ -63,7 +63,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
     - Reinstate brings back only the rooms cancelled together with the reservation (same `cancelled_at`); a room cancelled on its own earlier stays cancelled. Cancelling clears the room assignment.
     - Cancel responses are `{reservation, folio_balance, requires_folio_resolution}`. The folio fields are computed from `folios` and `folio_items` (empty until M9).
     - Availability search lists a plan with incomplete grid as `missing_nights` and no estimate instead of failing.
-    - The tape chart has its own read-only endpoint `GET {P}/tape-chart?from&to` (at most 62 days); the spec only named the screen. Checked-in lines are drawn in their line's room until M12 adds room moves.
+    - The tape chart has its own read-only endpoint `GET {P}/tape-chart?from&to` (at most 62 days); the spec only named the screen. Checked-in lines are drawn from their stay segments (M12), so moves, extensions and early departures show.
     - Deposits (`POST .../deposits`) belong to M9 with the payment service.
 
 - **M9** (folio core and payments) is complete. One migration, 00017: `approved_by` on `folio_items` and `payments`, with CHECKs (`folio_items_approval_ck`: ADJUSTMENT and REVERSAL items carry an approver and no other item does; `payments_approval_ck`: REFUND and VOIDED payments carry one and no other payment does) and the payments guard now lets `approved_by` change with POSTED -> VOIDED. The new permission is `correction.approve`.
@@ -89,7 +89,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
     - Walk-in answers `{reservation: {id, confirmation_number, status, version}, stay, stay_room, folio}`; the full reservation is one `GET` away.
     - Reverse check-in is refused after the arrival day or after a room move (`CHECK_IN_NOT_REVERSIBLE`), once a CHARGE is posted to the stay's folio (`CHECK_IN_HAS_CHARGES`), and always needs a reason; the room line goes back to CONFIRMED and keeps its room.
     - `GET {P}/arrivals?date` is new (the arrivals screen needs rooms, not reservations); `GET {P}/stays/{id}` shows `posted: false` for every night until room charges exist (M11), and has no `expected_charges` yet.
-    - Move, extend, shorten, add guest and check-out are M12.
+    - Move, extend, shorten, add guest and check-out are M12 (below).
   - The frontend has the arrivals list with the check-in panel (free rooms with housekeeping status, upgrade note, not-ready override), the walk-in screen, the in-house list, the stay detail with reverse check-in, and the room status board.
 
 - **M11** (expected charges and room charge posting) is complete. No migration: `stay_charge_postings` and its partial unique index exist in 00010.
@@ -102,5 +102,18 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
     - The night's ledger item carries the service date of the night and the business date of the posting, so a night caught up later keeps its own service date.
     - The `revalidation` of a posting answer is read after the commit: `ready`, `errors` (ERROR nights as items) and `invalid` (posted nights that should not exist).
   - The frontend has the "Room charges" screen: the preview table (missing nights marked), totals, problems, and "Post room charges".
+
+- **M12** (stay changes and check-out) is complete. No migration: it uses the stay, segment, reservation and folio tables.
+  - `internal/frontdesk` gained `Move` (RoomMoveService), `ChangeDeparture` (StayChangeService), `AddGuest` and `CheckOut` (CheckOutService). `reservations` gained `ExtendNights`, `TrimNights`, `OverrideNights` and `MarkCompleted`; `folios` gained `CloseStayFolios`; `availability.RoomIssuesFor` can exclude the stay being extended; `housekeeping.MarkDirtyLocked` marks a room DIRTY from a caller that already holds the business day and room locks; `roomcharge.PostLocked` is `Post` for a caller past L1.
+  - Lock order (05-transactions-locking rows 4 and 7): business day, room types, rooms (the old room is marked DIRTY here), the stay, the folios. Check-out locks the room, then the stay, then posts (stays and folios again at the same levels) and closes the folios, all in one transaction: a folio that is not balanced rolls the tonight room charge back too.
+  - **Room move** needs `frontdesk.room_move` (`frontdesk.rate_change` for `new_nightly_rates`, which may only touch uncharged nights). The target must be free for `[BD, max(departure, BD+1))`, have inventory if its type differs, and be CLEAN (INSPECTED when the property requires it; override needs `frontdesk.checkin_unready_room`). The open segment is closed, a new one opened; the old room becomes DIRTY (housekeeping log source ROOM_MOVE). Tonight's room charge follows the segment that covers the night.
+  - **Change departure** needs `reservation.update`. Extending needs the room free for the extra nights (409 `ROOM_NOT_AVAILABLE_FOR_EXTENSION` with `alternative_rooms` and `suggest_room_move`) and inventory; the new nights are priced from the grid or `nightly_overrides`. Shortening needs a date after the business date and after the last charged night (409 `NIGHT_ALREADY_POSTED`). The reservation line keeps its own dates; the stay's are the truth for demand.
+  - **Check-out** needs `frontdesk.checkout`. It posts every unposted night up to the business date with trigger CHECK_OUT, requires a zero balance on every folio of the stay (409 `FOLIO_NOT_BALANCED`, context `folios`), closes them, closes the segment, completes the room line (display status CHECKED_OUT) and makes the room DIRTY (occupancy VACANT is derived). Early departure needs `confirm_early_departure` (409 `EARLY_DEPARTURE_NOT_CONFIRMED`). A night that cannot be posted refuses the check-out (409 `REQUIRED_CHARGES_NOT_POSTED`).
+  - **Decisions and deviations from 06-api.md §14:**
+    - Check-out after midnight (the calendar date passed the business date, the audit has not run): the guest still owes the night of the business date and the stay ends the next day; before midnight a guest leaving today ends the stay today. A same-day arrival and departure is charged one night (there is no day use).
+    - `Idempotency-Key` is required on check-out but not stored: a retry with the same stay version of a completed check-out returns its result; other versions are 409.
+    - `GET {P}/stays` gained `departure_until` for the departures list.
+    - `change-departure` is open to `reservation.update`; add guest to `frontdesk.checkin`.
+  - The frontend has the departures list, the check-out wizard (early-departure confirmation, unbalanced folio links, result summary), and on the stay detail the room move, extend/shorten and add-guest dialogs.
 
 Earlier revisions are in [archive/](archive/).

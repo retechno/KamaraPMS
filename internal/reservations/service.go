@@ -330,9 +330,16 @@ type pricedLine struct {
 // keep lists nights whose stored snapshot is retained unchanged (the caller does not rewrite them).
 func (s *Service) priceLine(ctx context.Context, propertyID, tenantID int64, prefix string, planID, typeID int64, arrival, departure civil.Date,
 	overrides []NightOverride, decimals int32, keep map[civil.Date]bool) (pricedLine, error) {
+	return s.priceLinePerm(ctx, auth.PermReservationOverrideRate, propertyID, tenantID, prefix, planID, typeID, arrival, departure, overrides, decimals, keep)
+}
+
+// priceLinePerm is priceLine with the permission overrides need (reservation.override_rate when booking,
+// frontdesk.rate_change when a room move changes rates).
+func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, propertyID, tenantID int64, prefix string, planID, typeID int64, arrival, departure civil.Date,
+	overrides []NightOverride, decimals int32, keep map[civil.Date]bool) (pricedLine, error) {
 	byDate := map[civil.Date]NightOverride{}
 	if len(overrides) > 0 {
-		if err := s.authz.Require(ctx, propertyID, auth.PermReservationOverrideRate); err != nil {
+		if err := s.authz.Require(ctx, propertyID, perm); err != nil {
 			return pricedLine{}, err
 		}
 	}

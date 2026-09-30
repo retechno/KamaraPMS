@@ -19,6 +19,7 @@ import (
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/reservations"
+	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/tenancy"
 )
 
@@ -26,22 +27,23 @@ import (
 // check-in. Locks follow docs/architecture/05-transactions-locking.md row 3: business day (share), room types,
 // rooms, reservation and lines, stays, folios, and sequences last.
 type Service struct {
-	txm    *db.TxManager
-	clock  clock.Clock
-	audit  *audit.Writer
-	authz  auth.Authorizer
-	days   *tenancy.Service
-	avail  *availability.Service
-	guests *guests.Service
-	hk     *housekeeping.Service
-	res    *reservations.Service
-	folios *folios.Service
+	txm     *db.TxManager
+	clock   clock.Clock
+	audit   *audit.Writer
+	authz   auth.Authorizer
+	days    *tenancy.Service
+	avail   *availability.Service
+	guests  *guests.Service
+	hk      *housekeeping.Service
+	res     *reservations.Service
+	folios  *folios.Service
+	charges *roomcharge.Service
 }
 
 // NewService wires the front desk service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, avail *availability.Service,
-	g *guests.Service, hk *housekeeping.Service, r *reservations.Service, f *folios.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, avail: avail, guests: g, hk: hk, res: r, folios: f}
+	g *guests.Service, hk *housekeeping.Service, r *reservations.Service, f *folios.Service, rc *roomcharge.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, avail: avail, guests: g, hk: hk, res: r, folios: f, charges: rc}
 }
 
 func (s *Service) q(ctx context.Context) *frontdeskdb.Queries { return frontdeskdb.New(s.txm.DB(ctx)) }

@@ -75,6 +75,7 @@ SELECT s.id, s.stay_number, s.departure_date FROM stay_rooms sr
 JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
 WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.room_id = @room_id
   AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+  AND (sqlc.narg(exclude_stay_id)::bigint IS NULL OR s.id <> sqlc.narg(exclude_stay_id)::bigint)
   AND @business_date::date < @end_date::date
   AND @start_date::date < GREATEST(s.departure_date, @next_date::date)
 ORDER BY s.id;

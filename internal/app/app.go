@@ -55,9 +55,8 @@ func NewHandler(d Deps) http.Handler {
 	foliosSvc := folios.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, billingSvc, iamSvc)
 	reservationsSvc := reservations.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, ratesSvc, billingSvc, guestsSvc)
 
-	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc)
-
 	roomChargeSvc := roomcharge.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, expected.NewLoader(d.TxManager), billingSvc, foliosSvc.RoomPoster())
+	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc, roomChargeSvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()

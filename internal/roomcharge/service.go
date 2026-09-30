@@ -129,15 +129,31 @@ func resultOf(c expected.Charge, decimals int32) Result {
 // locks the stays FOR UPDATE in id order, evaluates after the locks, locks the folios, and posts in order of
 // stay and night. ERROR items are reported, never posted.
 func (s *Service) Post(ctx context.Context, p auth.Principal, propertyID int64, cmd PostCmd) (Report, error) {
+	return s.post(ctx, p, propertyID, cmd, nil)
+}
+
+// PostLocked is Post for a caller that already holds the business day share lock (day is that row) and
+// whose lock level is past L1, such as check-out: the day is not locked again, so the lock order holds.
+func (s *Service) PostLocked(ctx context.Context, p auth.Principal, propertyID int64, day tenancy.BusinessDay, cmd PostCmd) (Report, error) {
+	return s.post(ctx, p, propertyID, cmd, &day)
+}
+
+func (s *Service) post(ctx context.Context, p auth.Principal, propertyID int64, cmd PostCmd, held *tenancy.BusinessDay) (Report, error) {
 	if cmd.DryRun {
 		return s.dryRun(ctx, p, propertyID, cmd)
 	}
 	var rep Report
 	err := s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		bd := cmd.BusinessDate
-		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, &bd) // L1
-		if err != nil {
-			return err
+		var day tenancy.BusinessDay
+		if held != nil {
+			day = *held
+		} else {
+			var err error
+			day, err = s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, &bd) // L1
+			if err != nil {
+				return err
+			}
 		}
 		decimals, err := s.decimals(ctx, propertyID)
 		if err != nil {

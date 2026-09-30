@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.12.0
+  version: 0.13.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1953,6 +1953,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CHECKED_OUT, CANCELLED] } }
         - { name: departure_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: departure_until, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Stays leaving on or before this date (the departures list, with status OPEN). }
         - { name: room_id, in: query, schema: { type: integer, format: int64 }, description: The room of the open segment. }
       responses:
         "200":
@@ -2000,6 +2001,104 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReverseResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveStay
+      summary: Move an in-house stay to another room (frontdesk.room_move)
+      description: "The current segment closes and a new one opens for the target room; the old room becomes DIRTY. The target must be free for the rest of the stay (409 `ROOM_OCCUPIED`, `ROOM_NOT_AVAILABLE`), have inventory if its type differs (409 `ROOM_TYPE_NOT_AVAILABLE`) and be clean (409 `ROOM_NOT_READY`, override needs `frontdesk.override_room_not_ready`). `new_nightly_rates` (needs `frontdesk.rate_change`) may reprice the nights not yet charged (409 `NIGHT_ALREADY_POSTED`)."
+      tags: [frontdesk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveRequest" }
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoveResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/change-departure:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: changeStayDeparture
+      summary: Extend or shorten an in-house stay (reservation.update)
+      description: "Extending needs the room free for the extra nights (409 `ROOM_NOT_AVAILABLE_FOR_EXTENSION`, the context lists `alternative_rooms` and `suggest_room_move`) and inventory. Shortening needs a date after the business date and after the last charged night (409 `NIGHT_ALREADY_POSTED`). The reservation line keeps its own dates."
+      tags: [frontdesk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeDepartureRequest" }
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stay" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/guests:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: addStayGuest
+      summary: Add an accompanying guest (frontdesk.checkin)
+      description: "409 `GUEST_ALREADY_ON_STAY` when the guest is already the main or an accompanying guest."
+      tags: [frontdesk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddStayGuestRequest" }
+      responses:
+        "201":
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/check-out:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: checkOutStay
+      summary: Check an in-house stay out (frontdesk.checkout)
+      description: "Posts every unposted night up to the business date (trigger CHECK_OUT), requires every folio of the stay to have a zero balance (409 `FOLIO_NOT_BALANCED`, context `folios`), closes the folios and the segment, completes the room line and makes the room DIRTY (and VACANT, derived). Leaving before the booked departure needs `confirm_early_departure` (409 `EARLY_DEPARTURE_NOT_CONFIRMED`); the stay then ends at the business date, or the next day once the calendar date has passed it. A room charge that cannot be posted refuses the check-out (409 `REQUIRED_CHARGES_NOT_POSTED`). Everything happens in one transaction. The `Idempotency-Key` header is required; a retry with the same version of an already completed check-out returns its result."
+      tags: [frontdesk]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckOutRequest" }
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckOutResult" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -3681,6 +3780,68 @@ components:
       properties:
         stay: { $ref: "#/components/schemas/Stay" }
         folio: { $ref: "#/components/schemas/StayFolio" }
+    MoveRequest:
+      type: object
+      required: [version, room_id, reason]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32, description: The stay's version. }
+        room_id: { type: integer, format: int64 }
+        reason: { type: string, maxLength: 500 }
+        new_nightly_rates:
+          type: array
+          items: { $ref: "#/components/schemas/NightOverride" }
+        override_room_not_ready: { type: boolean, default: false }
+        override_reason: { type: string, maxLength: 500 }
+    MoveResult:
+      type: object
+      required: [stay, closed_segment, new_segment]
+      properties:
+        stay: { $ref: "#/components/schemas/Stay" }
+        closed_segment: { $ref: "#/components/schemas/StaySegment" }
+        new_segment: { $ref: "#/components/schemas/StaySegment" }
+    ChangeDepartureRequest:
+      type: object
+      required: [version, departure_date]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32, description: The stay's version. }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        nightly_overrides:
+          type: array
+          items: { $ref: "#/components/schemas/NightOverride" }
+    AddStayGuestRequest:
+      type: object
+      required: [guest_id]
+      additionalProperties: false
+      properties:
+        guest_id: { type: integer, format: int64 }
+    CheckOutRequest:
+      type: object
+      required: [version]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32, description: The stay's version. }
+        confirm_early_departure: { type: boolean, default: false }
+    ClosedFolio:
+      type: object
+      required: [id, folio_number, status]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+    CheckOutResult:
+      type: object
+      required: [stay, posted_room_charges, folios, housekeeping]
+      properties:
+        stay: { $ref: "#/components/schemas/Stay" }
+        posted_room_charges:
+          type: array
+          items: { $ref: "#/components/schemas/RoomChargeItem" }
+        folios:
+          type: array
+          items: { $ref: "#/components/schemas/ClosedFolio" }
+        housekeeping: { type: string, description: The housekeeping status the room has now (DIRTY). }
     StaySummary:
       type: object
       required: [id, stay_number, status, guest_id, guest_name, room_id, reservation_id, confirmation_number, arrival_date, departure_date, adult_count, child_count, version]

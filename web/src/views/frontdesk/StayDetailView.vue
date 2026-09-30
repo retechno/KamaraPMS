@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { StayDetail } from '@/api/types'
+import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import StayActions from '@/components/StayActions.vue'
+import type { CheckOutResult, StayDetail } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -16,11 +18,13 @@ const notice = ref('')
 const reversing = ref(false)
 const reason = ref('')
 const busy = ref(false)
+const checkingOut = ref(false)
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const canReverse = computed(() => can('frontdesk.reverse_checkin') && detail.value?.stay.status === 'OPEN' && detail.value.stay.arrival_date === businessDate.value && detail.value.segments.length === 1)
+const canCheckOut = computed(() => can('frontdesk.checkout') && detail.value?.stay.status === 'OPEN')
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 async function load(): Promise<void> {
@@ -56,6 +60,16 @@ async function reverse(): Promise<void> {
   }
 }
 
+async function changed(message: string): Promise<void> {
+  if (message) notice.value = message
+  await load()
+}
+
+async function checkedOut(result: CheckOutResult): Promise<void> {
+  notice.value = `Checked out with ${result.posted_room_charges.length} room charge(s) posted.`
+  await load()
+}
+
 watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
@@ -82,6 +96,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <template v-for="f in detail.folios" :key="f.id"> · Folio <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> (balance {{ f.balance }})</template>
       </p>
       <p v-if="detail.guests.length" class="muted" data-testid="companions">With {{ detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }}</p>
+      <div v-if="canCheckOut && !checkingOut" class="form-actions">
+        <button type="button" class="btn-primary" data-testid="checkout" @click="checkingOut = true">Check out</button>
+      </div>
       <div v-if="canReverse" class="form-actions">
         <button v-if="!reversing" type="button" data-testid="reverse" @click="reversing = true">Reverse check-in</button>
       </div>
@@ -95,6 +112,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <button type="button" @click="reversing = false">Keep</button>
       </form>
     </section>
+
+    <CheckOutWizard v-if="checkingOut && detail.stay.status === 'OPEN'" :detail="detail" @cancel="checkingOut = false" @done="checkedOut" />
+    <StayActions v-if="!checkingOut" :detail="detail" @changed="changed" />
 
     <section class="card">
       <h2>Rooms</h2>

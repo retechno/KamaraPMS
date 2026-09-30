@@ -158,6 +158,11 @@ func (s *Service) BlockShortfalls(ctx context.Context, tenantID, propertyID, roo
 // CONFIRMED line, or occupied by an open stay. No issues means it is free. excludeLine ignores one line
 // (the one being assigned or amended).
 func (s *Service) RoomIssues(ctx context.Context, tenantID, propertyID, roomID int64, bd, start, end civil.Date, excludeLine *int64) ([]RoomIssue, error) {
+	return s.RoomIssuesFor(ctx, tenantID, propertyID, roomID, bd, start, end, excludeLine, nil)
+}
+
+// RoomIssuesFor is RoomIssues that also ignores one open stay (the stay being extended holds its own room).
+func (s *Service) RoomIssuesFor(ctx context.Context, tenantID, propertyID, roomID int64, bd, start, end civil.Date, excludeLine, excludeStay *int64) ([]RoomIssue, error) {
 	q := s.q(ctx)
 	room, err := q.GetRoomForCheck(ctx, availabilitydb.GetRoomForCheckParams{TenantID: tenantID, PropertyID: propertyID, ID: roomID})
 	if err != nil {
@@ -184,7 +189,7 @@ func (s *Service) RoomIssues(ctx context.Context, tenantID, propertyID, roomID i
 		issues = append(issues, RoomIssue{Kind: IssueReserved, ID: l.ID, From: l.ArrivalDate, To: l.DepartureDate})
 	}
 	stays, err := q.ListRoomStayOverlaps(ctx, availabilitydb.ListRoomStayOverlapsParams{
-		TenantID: tenantID, PropertyID: propertyID, RoomID: roomID, BusinessDate: bd, NextDate: bd.AddDays(1), StartDate: start, EndDate: end})
+		TenantID: tenantID, PropertyID: propertyID, RoomID: roomID, BusinessDate: bd, NextDate: bd.AddDays(1), StartDate: start, EndDate: end, ExcludeStayID: excludeStay})
 	if err != nil {
 		return nil, err
 	}

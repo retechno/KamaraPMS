@@ -179,9 +179,26 @@ SELECT l.id, l.reservation_id, res.confirmation_number, l.status, l.room_id, l.r
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
-WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status IN ('CONFIRMED', 'CHECKED_IN')
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
   AND l.arrival_date < @window_end::date AND l.departure_date > @window_start::date
 ORDER BY l.arrival_date, l.id;
+
+-- Checked-in lines are drawn from their open stay: one bar per room segment, the open one up to the stay's
+-- departure (at least one night), so room moves, extensions and shortened stays show as they are.
+-- name: ListTapeSegments :many
+SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date,
+       COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1))::date AS end_date,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM stays st
+JOIN stay_rooms sr ON sr.property_id = st.property_id AND sr.stay_id = st.id
+JOIN reservation_rooms l ON l.property_id = st.property_id AND l.id = st.reservation_room_id
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = st.guest_id
+WHERE st.tenant_id = @tenant_id AND st.property_id = @property_id AND st.status = 'OPEN'
+  AND sr.start_business_date < @window_end::date
+  AND COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1)) > @window_start::date
+  AND COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1)) > sr.start_business_date
+ORDER BY sr.start_business_date, sr.id;
 
 -- name: ListTapeBlocks :many
 SELECT id, room_id, block_type, start_date, end_date FROM room_blocks

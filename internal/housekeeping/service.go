@@ -120,6 +120,23 @@ func (s *Service) MarkDirty(ctx context.Context, tenantID, propertyID, roomID in
 	if err != nil {
 		return err
 	}
+	return s.markDirtyAt(ctx, tenantID, propertyID, roomID, day.BusinessDate, source, notes, actorID)
+}
+
+// MarkDirtyLocked is MarkDirty for a caller that already holds the business day lock (bd is the locked date) and
+// has moved on to the room locks: it does not re-enter the business day level, so it can be used after the room
+// types and rooms are locked.
+func (s *Service) MarkDirtyLocked(ctx context.Context, tenantID, propertyID, roomID int64, bd civil.Date, source Source, notes string, actorID *int64) error {
+	if source == SourceManual {
+		return errors.New("housekeeping: MarkDirtyLocked is for system sources; use SetStatus for manual changes")
+	}
+	if _, err := db.Tx(ctx); err != nil {
+		return err
+	}
+	return s.markDirtyAt(ctx, tenantID, propertyID, roomID, bd, source, notes, actorID)
+}
+
+func (s *Service) markDirtyAt(ctx context.Context, tenantID, propertyID, roomID int64, bd civil.Date, source Source, notes string, actorID *int64) error {
 	from, err := s.lockStatus(ctx, tenantID, propertyID, roomID)
 	if err != nil {
 		return err
@@ -129,7 +146,7 @@ func (s *Service) MarkDirty(ctx context.Context, tenantID, propertyID, roomID in
 	}
 	_, err = s.apply(ctx, change{
 		TenantID: tenantID, PropertyID: propertyID, RoomID: roomID, From: from, To: Dirty,
-		Source: source, Notes: notes, BusinessDate: day.BusinessDate, ActorID: actorID,
+		Source: source, Notes: notes, BusinessDate: bd, ActorID: actorID,
 	})
 	return err
 }

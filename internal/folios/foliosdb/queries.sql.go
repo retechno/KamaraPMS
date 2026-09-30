@@ -1167,6 +1167,53 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 	return items, nil
 }
 
+const listStayOpenFolios = `-- name: ListStayOpenFolios :many
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'OPEN' ORDER BY id
+`
+
+type ListStayOpenFoliosParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     *int64
+}
+
+func (q *Queries) ListStayOpenFolios(ctx context.Context, arg ListStayOpenFoliosParams) ([]Folio, error) {
+	rows, err := q.db.Query(ctx, listStayOpenFolios, arg.TenantID, arg.PropertyID, arg.StayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Folio{}
+	for rows.Next() {
+		var i Folio
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.FolioNumber,
+			&i.ReservationID,
+			&i.StayID,
+			&i.FolioType,
+			&i.Status,
+			&i.OpenedAt,
+			&i.ClosedAt,
+			&i.ClosedBy,
+			&i.Version,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const paymentTotals = `-- name: PaymentTotals :many
 SELECT payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT'), 0)::numeric AS paid,

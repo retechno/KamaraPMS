@@ -78,8 +78,9 @@ func Setup(t *testing.T) *Env {
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
+	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
-	return &Env{IAM: ia, Folios: fo, Front: frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo), Charges: roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster()), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+	return &Env{IAM: ia, Folios: fo, Front: frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc), Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs}
 }
 

@@ -1100,7 +1100,7 @@ SELECT l.id, l.reservation_id, res.confirmation_number, l.status, l.room_id, l.r
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
-WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status IN ('CONFIRMED', 'CHECKED_IN')
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
   AND l.arrival_date < $3::date AND l.departure_date > $4::date
 ORDER BY l.arrival_date, l.id
 `
@@ -1197,6 +1197,76 @@ func (q *Queries) ListTapeRooms(ctx context.Context, arg ListTapeRoomsParams) ([
 			&i.RoomTypeID,
 			&i.RoomTypeCode,
 			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTapeSegments = `-- name: ListTapeSegments :many
+SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date,
+       COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1))::date AS end_date,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM stays st
+JOIN stay_rooms sr ON sr.property_id = st.property_id AND sr.stay_id = st.id
+JOIN reservation_rooms l ON l.property_id = st.property_id AND l.id = st.reservation_room_id
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = st.guest_id
+WHERE st.tenant_id = $1 AND st.property_id = $2 AND st.status = 'OPEN'
+  AND sr.start_business_date < $3::date
+  AND COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1)) > $4::date
+  AND COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1)) > sr.start_business_date
+ORDER BY sr.start_business_date, sr.id
+`
+
+type ListTapeSegmentsParams struct {
+	TenantID    int64
+	PropertyID  int64
+	WindowEnd   civil.Date
+	WindowStart civil.Date
+}
+
+type ListTapeSegmentsRow struct {
+	ID                 int64
+	ReservationID      int64
+	ConfirmationNumber string
+	RoomID             int64
+	StartBusinessDate  civil.Date
+	EndDate            civil.Date
+	GuestFirstName     *string
+	GuestLastName      *string
+}
+
+// Checked-in lines are drawn from their open stay: one bar per room segment, the open one up to the stay's
+// departure (at least one night), so room moves, extensions and shortened stays show as they are.
+func (q *Queries) ListTapeSegments(ctx context.Context, arg ListTapeSegmentsParams) ([]ListTapeSegmentsRow, error) {
+	rows, err := q.db.Query(ctx, listTapeSegments,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.WindowEnd,
+		arg.WindowStart,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTapeSegmentsRow{}
+	for rows.Next() {
+		var i ListTapeSegmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReservationID,
+			&i.ConfirmationNumber,
+			&i.RoomID,
+			&i.StartBusinessDate,
+			&i.EndDate,
+			&i.GuestFirstName,
+			&i.GuestLastName,
 		); err != nil {
 			return nil, err
 		}
