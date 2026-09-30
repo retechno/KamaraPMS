@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1583,6 +1583,284 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listFolios
+      summary: List folios with their balances (folio.read)
+      tags: [folios]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
+      responses:
+        "200":
+          description: A page of folios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getFolio
+      summary: A folio with its ledger items and components (folio.read)
+      description: "`balance` is debits minus credits; it is never stored. Amounts are formatted with the property's currency decimals."
+      tags: [folios]
+      responses:
+        "200":
+          description: The folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folio" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/charges:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: postFolioCharge
+      summary: Post a manual charge (folio.post_charge)
+      description: |
+        The breakdown comes only from the charge calculation engine. A charge code of type ROOM is refused (409 `ROOM_CHARGE_REQUIRES_ROOM_POSTING`). `unit_price` falls back to the charge code's default price. The folio must be OPEN. The same Idempotency-Key replays the stored item.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostChargeRequest" }
+      responses:
+        "201":
+          description: The item and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/adjustments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: postFolioAdjustment
+      summary: Post a signed adjustment on the current business date (folio.adjust, needs approval)
+      description: |
+        Needs the `approval` block (docs 06-api.md §14.1). The engine runs on a signed amount, so taxes and service charges follow the sign. A replay of the same Idempotency-Key returns the stored item and does not ask for approval again.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostAdjustmentRequest" }
+      responses:
+        "201":
+          description: The item and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/payments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: postFolioPayment
+      summary: Take a payment (payment.post)
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostPaymentRequest" }
+      responses:
+        "201":
+          description: The payment, its ledger entry and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/close:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: closeFolio
+      summary: Close a folio with a zero balance (folio.post_charge)
+      description: For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VersionRequest" }
+      responses:
+        "200":
+          description: The closed folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folio" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folio-items/{id}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseFolioItem
+      summary: Reverse an item posted on the current business date (folio.reverse, needs approval)
+      description: |
+        Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`).
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "201":
+          description: The reversal item and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/deposits:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: postDeposit
+      summary: Take a deposit on a draft or confirmed reservation (payment.post)
+      description: The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostPaymentRequest" }
+      responses:
+        "201":
+          description: The payment, its ledger entry and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPayments
+      summary: The cashier list, newest first, with net totals per method for a business date (folio.read)
+      description: "`totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded."
+      tags: [folios]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: business_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: method, in: query, schema: { $ref: "#/components/schemas/PaymentMethod" } }
+      responses:
+        "200":
+          description: A page of payments.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payments/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidPayment
+      summary: Void a payment taken on the current business date (payment.void, needs approval)
+      description: The payment becomes VOIDED and its ledger entry is reversed. Rejected for a payment with refunds, for a refund, and for an earlier date (refund it instead).
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The voided payment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payments/{id}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: refundPayment
+      summary: Refund part or all of a payment (payment.refund, needs approval)
+      description: The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`).
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefundRequest" }
+      responses:
+        "201":
+          description: The refund, its ledger entry and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -2885,6 +3163,208 @@ components:
         unassigned:
           type: array
           items: { $ref: "#/components/schemas/TapeUnassigned" }
+    Approval:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      description: "The approver's own credentials (a user holding `correction.approve` at the property; the actor may approve their own correction). The password is verified and never stored, logged or echoed."
+      properties:
+        email: { type: string }
+        password: { type: string, format: password }
+    PaymentMethod:
+      type: string
+      enum: [CASH, CARD, BANK_TRANSFER, OTHER]
+    PostChargeRequest:
+      type: object
+      required: [charge_code_id, quantity]
+      additionalProperties: false
+      properties:
+        charge_code_id: { type: integer, format: int64 }
+        quantity: { type: string, description: A positive number with at most 3 decimals. }
+        unit_price: { type: string, description: Defaults to the charge code's default price. }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        discount_amount: { type: string }
+        service_date: { $ref: "#/components/schemas/Date" }
+        description: { type: string, maxLength: 300 }
+    PostAdjustmentRequest:
+      type: object
+      required: [charge_code_id, amount, reason, approval]
+      additionalProperties: false
+      properties:
+        charge_code_id: { type: integer, format: int64 }
+        amount: { type: string, description: "Signed, non-zero, in the price mode's terms." }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        reason: { type: string, maxLength: 500 }
+        related_item_id: { type: integer, format: int64 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    CorrectionRequest:
+      type: object
+      required: [reason, approval]
+      additionalProperties: false
+      properties:
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PostPaymentRequest:
+      type: object
+      required: [amount, payment_method]
+      additionalProperties: false
+      properties:
+        amount: { type: string }
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        reference_number: { type: string, maxLength: 100 }
+        remarks: { type: string, maxLength: 500 }
+    RefundRequest:
+      type: object
+      required: [amount, reason, approval]
+      additionalProperties: false
+      properties:
+        amount: { type: string }
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        reference_number: { type: string, maxLength: 100 }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    FolioComponent:
+      type: object
+      required: [component_type, code, name, rate, base_amount, amount, sequence]
+      properties:
+        component_type: { type: string, enum: [SERVICE_CHARGE, TAX] }
+        code: { type: string }
+        name: { type: string }
+        rate: { type: string }
+        base_amount: { type: string }
+        amount: { type: string }
+        sequence: { type: integer }
+    FolioItem:
+      type: object
+      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_id: { type: integer, format: int64 }
+        transaction_type: { type: string, enum: [CHARGE, ADJUSTMENT, PAYMENT, REFUND, REVERSAL] }
+        business_date: { $ref: "#/components/schemas/Date" }
+        service_date: { $ref: "#/components/schemas/Date" }
+        transaction_at: { type: string, format: date-time }
+        description: { type: string }
+        charge_code: { type: string }
+        charge_code_id: { type: [integer, "null"], format: int64 }
+        quantity: { type: string }
+        unit_price: { type: string }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        base_amount: { type: string }
+        discount_amount: { type: string }
+        net_amount: { type: string }
+        rounding_adjustment: { type: string }
+        service_charge_total: { type: string }
+        tax_total: { type: string }
+        debit: { type: string }
+        credit: { type: string }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/FolioComponent" }
+        payment_id: { type: [integer, "null"], format: int64 }
+        reverses_item_id: { type: [integer, "null"], format: int64 }
+        reversed_by_item_id: { type: [integer, "null"], format: int64 }
+        reason: { type: string }
+        room_number: { type: string }
+        created_by: { type: [integer, "null"], format: int64 }
+        approved_by: { type: [integer, "null"], format: int64 }
+    FolioTotals:
+      type: object
+      required: [debit, credit]
+      properties:
+        debit: { type: string }
+        credit: { type: string }
+    Folio:
+      type: object
+      required: [id, folio_number, folio_type, status, reservation_id, stay_id, opened_at, closed_at, version, balance, totals, items]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_type: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        reservation_id: { type: integer, format: int64 }
+        stay_id: { type: [integer, "null"], format: int64 }
+        opened_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        version: { type: integer, format: int32 }
+        balance: { type: string }
+        totals: { $ref: "#/components/schemas/FolioTotals" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FolioItem" }
+    FolioSummary:
+      type: object
+      required: [id, folio_number, status, reservation_id, stay_id, opened_at, version, balance]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        reservation_id: { type: integer, format: int64 }
+        stay_id: { type: [integer, "null"], format: int64 }
+        opened_at: { type: string, format: date-time }
+        version: { type: integer, format: int32 }
+        balance: { type: string }
+    FolioPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/FolioSummary" }
+        next_cursor: { type: string }
+    ItemResult:
+      type: object
+      required: [item, folio_balance]
+      properties:
+        item: { $ref: "#/components/schemas/FolioItem" }
+        folio_balance: { type: string }
+    Payment:
+      type: object
+      required: [id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, refund_of_payment_id, status, voided_at, created_by, approved_by]
+      properties:
+        id: { type: integer, format: int64 }
+        payment_number: { type: string }
+        folio_id: { type: integer, format: int64 }
+        payment_type: { type: string, enum: [PAYMENT, REFUND] }
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        amount: { type: string }
+        paid_at: { type: string, format: date-time }
+        business_date: { $ref: "#/components/schemas/Date" }
+        reference_number: { type: string }
+        refund_of_payment_id: { type: [integer, "null"], format: int64 }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        voided_at: { type: [string, "null"], format: date-time }
+        void_reason: { type: string }
+        remarks: { type: string }
+        refundable: { type: string, description: What is left to refund; only on a posted payment. }
+        created_by: { type: [integer, "null"], format: int64 }
+        approved_by: { type: [integer, "null"], format: int64 }
+    PaymentResult:
+      type: object
+      required: [payment, folio_item, folio_balance]
+      properties:
+        payment: { $ref: "#/components/schemas/Payment" }
+        folio_item: { $ref: "#/components/schemas/FolioItem" }
+        folio_balance: { type: string }
+    MethodTotal:
+      type: object
+      required: [payment_method, paid, refunded, net]
+      properties:
+        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        paid: { type: string }
+        refunded: { type: string }
+        net: { type: string }
+    PaymentPage:
+      type: object
+      required: [data, totals]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Payment" }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/MethodTotal" }
+        next_cursor: { type: string }
     FieldError:
       type: object
       required: [field, code]

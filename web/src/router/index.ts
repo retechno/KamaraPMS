@@ -56,6 +56,15 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Reservation' },
     },
+    { path: '/folios', name: 'folios', component: () => import('@/views/billing/FoliosView.vue'), meta: { title: 'Folios' } },
+    {
+      path: '/folios/:id(\\d+)',
+      name: 'folio',
+      component: () => import('@/views/billing/FolioView.vue'),
+      props: true,
+      meta: { title: 'Folio' },
+    },
+    { path: '/cashier', name: 'cashier', component: () => import('@/views/billing/CashierView.vue'), meta: { title: 'Cashier' } },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

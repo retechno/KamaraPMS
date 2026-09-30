@@ -6,7 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { guestLabel, statusLabel } from '@/utils/reservations'
+import { guestLabel, newIdempotencyKey, statusLabel } from '@/utils/reservations'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -22,6 +22,8 @@ const asking = ref<{ kind: 'cancel' | 'cancel-room' | 'no-show'; lineId?: number
 const reason = ref('')
 const assigning = ref<{ lineId: number; typeId: number; rooms: FreeRoom[]; roomId: number | null } | null>(null)
 const header = reactive({ source: 'PHONE', remarks: '' })
+const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
+let depositKey = newIdempotencyKey() // kept while a request may have been lost, renewed once the server has answered
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -134,6 +136,30 @@ function submitAssign(): Promise<void> {
   return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/assign-room', {
     params: lineParams(a.lineId), body: { version: version(), room_id: a.roomId as number, upgrade },
   }))
+}
+
+async function takeDeposit(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  busy.value = true
+  error.value = null
+  notice.value = ''
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/reservations/{id}/deposits', {
+      params: { path: { propertyId, id: Number(props.id) }, header: { 'Idempotency-Key': depositKey } },
+      body: { amount: deposit.amount, payment_method: deposit.method, reference_number: deposit.reference || undefined },
+    })
+    depositKey = newIdempotencyKey()
+    deposit.amount = ''
+    deposit.reference = ''
+    notice.value = data ? `Deposit ${data.payment.payment_number} taken; the folio balance is ${data.folio_balance}.` : ''
+    await load()
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+    if (e instanceof ApiError) depositKey = newIdempotencyKey()
+  } finally {
+    busy.value = false
+  }
 }
 
 const typeCode = (id: number) => types.value.find((t) => t.id === id)?.code ?? String(id)
@@ -259,9 +285,33 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <section v-if="res.folios.length" class="card" data-testid="folios">
       <h2>Folios</h2>
       <ul>
-        <li v-for="f in res.folios" :key="f.id">{{ f.folio_number }} · {{ f.status }} · balance {{ f.balance }}</li>
+        <li v-for="f in res.folios" :key="f.id">
+          <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink> · {{ f.status }} · balance {{ f.balance }}
+        </li>
       </ul>
     </section>
+
+    <form v-if="(status === 'DRAFT' || status === 'CONFIRMED') && can('payment.post')" class="card" novalidate data-testid="deposit-form" @submit.prevent="takeDeposit">
+      <h2>Take a deposit</h2>
+      <div class="form-grid">
+        <label class="field">
+          <span>Amount</span>
+          <input v-model="deposit.amount" name="deposit_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
+          <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
+        </label>
+        <label class="field">
+          <span>Method</span>
+          <select v-model="deposit.method" name="deposit_method">
+            <option v-for="m in ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']" :key="m" :value="m">{{ m }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Reference</span>
+          <input v-model="deposit.reference" name="deposit_reference" />
+        </label>
+      </div>
+      <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy || !deposit.amount">Take deposit</button></div>
+    </form>
   </template>
 </template>
 

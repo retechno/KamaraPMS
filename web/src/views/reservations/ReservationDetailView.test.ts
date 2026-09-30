@@ -26,7 +26,7 @@ const reservation = (over: object = {}) => ({
 })
 const types = [{ id: 10, code: 'DLX', is_active: true }, { id: 11, code: 'STD', is_active: true }]
 
-const ALL = ['reservation.read', 'reservation.create', 'reservation.update', 'reservation.cancel', 'reservation.reinstate', 'nightaudit.no_show']
+const ALL = ['payment.post', 'reservation.read', 'reservation.create', 'reservation.update', 'reservation.cancel', 'reservation.reinstate', 'nightaudit.no_show']
 
 function mountView(res: object = reservation(), permissions = ALL) {
   const pinia = createPinia()
@@ -142,12 +142,29 @@ describe('ReservationDetailView', () => {
     expect(w.text()).toContain('version 5')
   })
 
+  it('takes a deposit with an Idempotency-Key and links the folio', async () => {
+    const w = mountView(reservation({ folios: [{ id: 3, folio_number: 'FOL000001', stay_id: null, status: 'OPEN', balance: '-100000' }] }))
+    await flushPromises()
+    expect(w.get('[data-testid=folio-link-3]').attributes('href')).toBe('/folios/3')
+    POST.mockResolvedValue({ data: { payment: { payment_number: 'PAY000001' }, folio_balance: '-600000' } })
+    await w.get('input[name=deposit_amount]').setValue('500000')
+    await w.get('select[name=deposit_method]').setValue('BANK_TRANSFER')
+    await w.get('form[data-testid=deposit-form]').trigger('submit')
+    await flushPromises()
+    const [path, init] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: object }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/reservations/{id}/deposits')
+    expect(init.params.header['Idempotency-Key']).toBeTruthy()
+    expect(init.body).toMatchObject({ amount: '500000', payment_method: 'BANK_TRANSFER' })
+    expect(w.get('[data-testid=notice]').text()).toContain('PAY000001')
+  })
+
   it('hides actions the role does not have', async () => {
     const w = mountView(reservation(), ['reservation.read'])
     await flushPromises()
     expect(w.find('[data-testid=cancel]').exists()).toBe(false)
     expect(w.find('[data-testid=assign-4]').exists()).toBe(false)
     expect(w.find('form[data-testid=header-form]').exists()).toBe(false)
+    expect(w.find('form[data-testid=deposit-form]').exists()).toBe(false)
     expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
   })
 })

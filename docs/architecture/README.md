@@ -66,4 +66,18 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
     - The tape chart has its own read-only endpoint `GET {P}/tape-chart?from&to` (at most 62 days); the spec only named the screen. Checked-in lines are drawn in their line's room until M12 adds room moves.
     - Deposits (`POST .../deposits`) belong to M9 with the payment service.
 
+- **M9** (folio core and payments) is complete. One migration, 00017: `approved_by` on `folio_items` and `payments`, with CHECKs (`folio_items_approval_ck`: ADJUSTMENT and REVERSAL items carry an approver and no other item does; `payments_approval_ck`: REFUND and VOIDED payments carry one and no other payment does) and the payments guard now lets `approved_by` change with POSTED -> VOIDED. The new permission is `correction.approve`.
+  - `internal/iam/approval.go`: `Service.VerifyApproval` checks the approver's email and password with the login verifier and login rate limits (same limiters, an `approval|tenant|email` key), then `correction.approve` at the property (tenant administrators hold it everywhere). It returns an `iam.Approval` whose only constructor is that function, so posting code that takes an `Approval` knows a password was checked. Errors: 422 `APPROVAL_REQUIRED`, 401 `APPROVAL_INVALID_CREDENTIALS` (one generic error), 403 `APPROVAL_NOT_PERMITTED`, 429 `TOO_MANY_ATTEMPTS`. The password is never stored, audited or echoed (a test greps the audit log for it).
+  - `internal/folios`: `posting.go` is `FolioPostingService` and the only writer of `folio_items` and components (charge, adjustment, payment and refund entries, reversal). `payments.go` is `PaymentService` (post, deposit, void, refund, cashier list). `charges.go` holds the charge, adjustment and reversal use cases. Every posting bumps `folios.version`, so a stale "close" is rejected.
+  - **Decisions and deviations:**
+    - The approval is verified **before** the transaction opens, not inside it (06-api.md §14.1 said inside): no lock is held while argon2 runs. A replay (same `Idempotency-Key`) is answered before the approval is checked.
+    - Charges, adjustments, payments, deposits and refunds need `Idempotency-Key` (400 `IDEMPOTENCY_KEY_REQUIRED`). The key is stored on the item or payment; a replay returns the stored result, a key reused on another folio is 422 `IDEMPOTENCY_KEY_REUSED`, concurrent requests with one key converge on one row.
+    - Manual charges refuse ROOM codes (409 `ROOM_CHARGE_REQUIRES_ROOM_POSTING`); adjustments may use them. Room postings arrive with M11.
+    - A closed folio takes no postings (409 `FOLIO_CLOSED`); `folio.post_after_checkout` and `folio.reopen` are not used yet.
+    - A payment is voided (same business date, no refunds, POSTED, PAYMENT type) with its ledger entry reversed and the payment marked VOIDED; an earlier date is refunded instead. Refunds check `amount <= original - refunds` under the original payment's row lock.
+    - The reversal of a room-charge item flips its `stay_charge_postings` row to REVERSED (tested with a seeded register row).
+    - A deposit locks the reservation, then finds or creates its open folio without a stay; the new folio is not locked again after its number is taken (lock order).
+    - Payment lists: `GET {P}/payments?business_date&method` returns net totals per method only when `business_date` is given, voided payments excluded.
+  - The frontend has the folio screen (items, components, balance, charge and payment forms), the shared Approval dialog (the approver's password lives only in the dialog and is cleared once handed over), the cashier screen, a folio list, and a deposit form on the reservation.
+
 Earlier revisions are in [archive/](archive/).

@@ -39,8 +39,8 @@ export const navigation: NavSection[] = [
   {
     title: 'Billing',
     items: [
-      { label: 'Folios', milestone: 'M9' },
-      { label: 'Cashier', milestone: 'M9' },
+      { label: 'Folios', to: '/folios', milestone: 'M9' },
+      { label: 'Cashier', to: '/cashier', milestone: 'M9' },
     ],
   },
   {

@@ -1239,6 +1239,251 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/folios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List folios with their balances (folio.read) */
+        get: operations["listFolios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A folio with its ledger items and components (folio.read)
+         * @description `balance` is debits minus credits; it is never stored. Amounts are formatted with the property's currency decimals.
+         */
+        get: operations["getFolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a manual charge (folio.post_charge)
+         * @description The breakdown comes only from the charge calculation engine. A charge code of type ROOM is refused (409 `ROOM_CHARGE_REQUIRES_ROOM_POSTING`). `unit_price` falls back to the charge code's default price. The folio must be OPEN. The same Idempotency-Key replays the stored item.
+         */
+        post: operations["postFolioCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a signed adjustment on the current business date (folio.adjust, needs approval)
+         * @description Needs the `approval` block (docs 06-api.md §14.1). The engine runs on a signed amount, so taxes and service charges follow the sign. A replay of the same Idempotency-Key returns the stored item and does not ask for approval again.
+         */
+        post: operations["postFolioAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a payment (payment.post) */
+        post: operations["postFolioPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a folio with a zero balance (folio.post_charge)
+         * @description For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
+         */
+        post: operations["closeFolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folio-items/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse an item posted on the current business date (folio.reverse, needs approval)
+         * @description Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`).
+         */
+        post: operations["reverseFolioItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a deposit on a draft or confirmed reservation (payment.post)
+         * @description The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+         */
+        post: operations["postDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The cashier list, newest first, with net totals per method for a business date (folio.read)
+         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded.
+         */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment taken on the current business date (payment.void, needs approval)
+         * @description The payment becomes VOIDED and its ledger entry is reversed. Rejected for a payment with refunds, for a refund, and for an earlier date (refund it instead).
+         */
+        post: operations["voidPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund part or all of a payment (payment.refund, needs approval)
+         * @description The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`).
+         */
+        post: operations["refundPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2358,6 +2603,198 @@ export interface components {
             to: components["schemas"]["Date"];
             rooms: components["schemas"]["TapeRoom"][];
             unassigned: components["schemas"]["TapeUnassigned"][];
+        };
+        /** @description The approver's own credentials (a user holding `correction.approve` at the property; the actor may approve their own correction). The password is verified and never stored, logged or echoed. */
+        Approval: {
+            email: string;
+            /** Format: password */
+            password: string;
+        };
+        /** @enum {string} */
+        PaymentMethod: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+        PostChargeRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            /** @description A positive number with at most 3 decimals. */
+            quantity: string;
+            /** @description Defaults to the charge code's default price. */
+            unit_price?: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            discount_amount?: string;
+            service_date?: components["schemas"]["Date"];
+            description?: string;
+        };
+        PostAdjustmentRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            /** @description Signed, non-zero, in the price mode's terms. */
+            amount: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            reason: string;
+            /** Format: int64 */
+            related_item_id?: number;
+            approval: components["schemas"]["Approval"];
+        };
+        CorrectionRequest: {
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        PostPaymentRequest: {
+            amount: string;
+            payment_method: components["schemas"]["PaymentMethod"];
+            reference_number?: string;
+            remarks?: string;
+        };
+        RefundRequest: {
+            amount: string;
+            payment_method?: components["schemas"]["PaymentMethod"];
+            reference_number?: string;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        FolioComponent: {
+            /** @enum {string} */
+            component_type: "SERVICE_CHARGE" | "TAX";
+            code: string;
+            name: string;
+            rate: string;
+            base_amount: string;
+            amount: string;
+            sequence: number;
+        };
+        FolioItem: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            folio_id: number;
+            /** @enum {string} */
+            transaction_type: "CHARGE" | "ADJUSTMENT" | "PAYMENT" | "REFUND" | "REVERSAL";
+            business_date: components["schemas"]["Date"];
+            service_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            transaction_at: string;
+            description: string;
+            charge_code?: string;
+            /** Format: int64 */
+            charge_code_id?: number | null;
+            quantity: string;
+            unit_price: string;
+            price_mode: components["schemas"]["PriceMode"];
+            base_amount: string;
+            discount_amount: string;
+            net_amount: string;
+            rounding_adjustment: string;
+            service_charge_total: string;
+            tax_total: string;
+            debit: string;
+            credit: string;
+            components: components["schemas"]["FolioComponent"][];
+            /** Format: int64 */
+            payment_id?: number | null;
+            /** Format: int64 */
+            reverses_item_id?: number | null;
+            /** Format: int64 */
+            reversed_by_item_id?: number | null;
+            reason?: string;
+            room_number?: string;
+            /** Format: int64 */
+            created_by?: number | null;
+            /** Format: int64 */
+            approved_by?: number | null;
+        };
+        FolioTotals: {
+            debit: string;
+            credit: string;
+        };
+        Folio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            folio_type: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: int32 */
+            version: number;
+            balance: string;
+            totals: components["schemas"]["FolioTotals"];
+            items: components["schemas"]["FolioItem"][];
+        };
+        FolioSummary: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: int32 */
+            version: number;
+            balance: string;
+        };
+        FolioPage: {
+            data: components["schemas"]["FolioSummary"][];
+            next_cursor?: string;
+        };
+        ItemResult: {
+            item: components["schemas"]["FolioItem"];
+            folio_balance: string;
+        };
+        Payment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            folio_id: number;
+            /** @enum {string} */
+            payment_type: "PAYMENT" | "REFUND";
+            payment_method: components["schemas"]["PaymentMethod"];
+            amount: string;
+            /** Format: date-time */
+            paid_at: string;
+            business_date: components["schemas"]["Date"];
+            reference_number?: string;
+            /** Format: int64 */
+            refund_of_payment_id: number | null;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            remarks?: string;
+            /** @description What is left to refund; only on a posted payment. */
+            refundable?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+        };
+        PaymentResult: {
+            payment: components["schemas"]["Payment"];
+            folio_item: components["schemas"]["FolioItem"];
+            folio_balance: string;
+        };
+        MethodTotal: {
+            payment_method: components["schemas"]["PaymentMethod"];
+            paid: string;
+            refunded: string;
+            net: string;
+        };
+        PaymentPage: {
+            data: components["schemas"]["Payment"][];
+            totals: components["schemas"]["MethodTotal"][];
+            next_cursor?: string;
         };
         FieldError: {
             field: string;
@@ -4597,6 +5034,365 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listFolios: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                reservation_id?: number;
+                stay_id?: number;
+                status?: "OPEN" | "CLOSED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of folios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folio"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    postFolioCharge: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postFolioAdjustment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostAdjustmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    postFolioPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    closeFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The closed folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folio"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reverseFolioItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    postDeposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPayments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                business_date?: components["schemas"]["Date"];
+                method?: components["schemas"]["PaymentMethod"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of payments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided payment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    refundPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The refund, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
 }
