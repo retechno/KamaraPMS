@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ \"$CLAUDE_CODE_REMOTE\" = \"true\" ]; then \"$CLAUDE_PROJECT_DIR/scripts/cloud-setup.sh\"; fi",
+            "timeout": 600,
+            "statusMessage": "Preparing the KamaraPMS sandbox (PostgreSQL, dependencies, migrations)..."
+          }
+        ]
+      }
+    ]
+  }
+}

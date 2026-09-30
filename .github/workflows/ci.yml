@@ -24,7 +24,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.14.0
       # Database tests start PostgreSQL with testcontainers (Docker is available on ubuntu runners).
       - name: Test (race detector)
         run: go test -race -count=1 ./...

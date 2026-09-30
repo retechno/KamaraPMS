@@ -37,6 +37,13 @@ The dev API port is 18080 because 8080 is often taken by other local services. O
 - Every request re-checks the session in the database, so logout and deactivation take effect immediately.
 - Local development uses `PMS_COOKIE_SECURE=false` (plain `http://localhost`). Production refuses it.
 
+## Cloud / sandboxes without Docker
+
+`scripts/cloud-setup.sh` prepares a Linux sandbox: it installs and starts PostgreSQL, writes `.env`
+(including `PMS_TEST_DATABASE_URL`) and applies migrations. Claude Code on the web runs it automatically
+(SessionStart hook in `.claude/settings.json`). Tests, `scripts/db-test.sh`, `scripts/sqlc.sh` and
+`scripts/lint.sh` all work without Docker. See `CLAUDE.md` for the working conventions.
+
 ## Test
 
 ```bash
@@ -47,10 +54,10 @@ scripts/db-test.sh            # migrations up/down/up + 80 schema integrity test
 cd web && npm test && npm run type-check && npm run build
 ```
 
-Lint (no local install needed):
+Lint (pinned golangci-lint v2.14.0; Docker, local binary or `go run`):
 
 ```bash
-docker run --rm -v "$PWD":/app -w /app golangci/golangci-lint:latest golangci-lint run ./...
+scripts/lint.sh
 ```
 
 ## Layout
