@@ -130,3 +130,14 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/availability/queries.sql
+    gen:
+      go:
+        package: availabilitydb
+        out: internal/availability/availabilitydb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true

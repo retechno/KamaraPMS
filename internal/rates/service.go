@@ -2,7 +2,6 @@ package rates
 
 import (
 	"context"
-	"slices"
 
 	"github.com/shopspring/decimal"
 
@@ -357,45 +356,58 @@ func (s *Service) FillRates(ctx context.Context, propertyID int64, in FillInput)
 // in. The plan must be active and every night must have a rate (409 RATE_NOT_SET lists the missing ones).
 // It reads committed data and takes no locks; callers that write snapshots hold their own locks.
 func (s *Service) NightlyPrices(ctx context.Context, tenantID, propertyID, ratePlanID, roomTypeID int64, arrival, departure civil.Date) (NightlyPrices, error) {
+	prices, missing, err := s.PriceNights(ctx, tenantID, propertyID, ratePlanID, roomTypeID, arrival, departure)
+	if err != nil {
+		return NightlyPrices{}, err
+	}
+	if len(missing) > 0 {
+		shown := make([]string, 0, min(len(missing), 31))
+		for _, d := range missing[:min(len(missing), 31)] {
+			shown = append(shown, d.String())
+		}
+		return NightlyPrices{}, apperr.Conflict("RATE_NOT_SET", "some nights have no rate for this plan and room type").
+			WithContext("nights", shown).WithContext("missing_nights", len(missing))
+	}
+	return prices, nil
+}
+
+// PriceNights is NightlyPrices without the RATE_NOT_SET error: it returns the priced nights and the nights
+// that have no rate, so a search can show a plan as incomplete instead of failing.
+func (s *Service) PriceNights(ctx context.Context, tenantID, propertyID, ratePlanID, roomTypeID int64, arrival, departure civil.Date) (NightlyPrices, []civil.Date, error) {
 	if !departure.After(arrival) || arrival.DaysUntil(departure) > MaxLookupNights {
-		return NightlyPrices{}, apperr.Invalid("the stay dates are invalid", fieldErr("departure_date", "OUT_OF_RANGE", "after arrival, at most 365 nights"))
+		return NightlyPrices{}, nil, apperr.Invalid("the stay dates are invalid", fieldErr("departure_date", "OUT_OF_RANGE", "after arrival, at most 365 nights"))
 	}
 	q := s.q(ctx)
 	plan, err := q.GetRatePlan(ctx, ratesdb.GetRatePlanParams{TenantID: tenantID, PropertyID: propertyID, ID: ratePlanID})
 	if err != nil {
-		return NightlyPrices{}, orNotFound(err, errRatePlanNotFound())
+		return NightlyPrices{}, nil, orNotFound(err, errRatePlanNotFound())
 	}
 	if !plan.IsActive {
-		return NightlyPrices{}, apperr.Conflict("RATE_PLAN_INACTIVE", "the rate plan is inactive").WithContext("rate_plan", plan.Code)
+		return NightlyPrices{}, nil, apperr.Conflict("RATE_PLAN_INACTIVE", "the rate plan is inactive").WithContext("rate_plan", plan.Code)
 	}
 	code, err := q.GetChargeCodeForPlan(ctx, ratesdb.GetChargeCodeForPlanParams{TenantID: tenantID, PropertyID: propertyID, ID: plan.RoomChargeCodeID})
 	if err != nil {
-		return NightlyPrices{}, err
+		return NightlyPrices{}, nil, err
 	}
 	rows, err := q.ListNightRates(ctx, ratesdb.ListNightRatesParams{
 		TenantID: tenantID, PropertyID: propertyID, RatePlanID: ratePlanID, RoomTypeID: roomTypeID, Arrival: arrival, Departure: departure,
 	})
 	if err != nil {
-		return NightlyPrices{}, err
+		return NightlyPrices{}, nil, err
 	}
 	have := make(map[civil.Date]decimal.Decimal, len(rows))
 	for _, r := range rows {
 		have[r.StayDate] = r.Amount
 	}
 	out := NightlyPrices{RatePlanID: plan.ID, RoomChargeCodeID: code.ID, RoomChargeCode: code.Code, PriceMode: code.PriceMode}
-	var missing []string
+	var missing []civil.Date
 	for d := arrival; d.Before(departure); d = d.AddDays(1) {
 		amount, ok := have[d]
 		if !ok {
-			missing = append(missing, d.String())
+			missing = append(missing, d)
 			continue
 		}
 		out.Nights = append(out.Nights, NightPrice{Date: d, Amount: amount})
 	}
-	if len(missing) > 0 {
-		shown := missing[:min(len(missing), 31)]
-		return NightlyPrices{}, apperr.Conflict("RATE_NOT_SET", "some nights have no rate for this plan and room type").
-			WithContext("nights", slices.Clone(shown)).WithContext("missing_nights", len(missing))
-	}
-	return out, nil
+	return out, missing, nil
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/availability"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -23,11 +24,12 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	hk    *housekeeping.Service
+	avail *availability.Service
 }
 
 // NewService wires the rooms service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, hk *housekeeping.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, hk: hk}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, hk *housekeeping.Service, avail *availability.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, hk: hk, avail: avail}
 }
 
 func (s *Service) q(ctx context.Context) *roomsdb.Queries { return roomsdb.New(s.txm.DB(ctx)) }
@@ -413,6 +415,15 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 			if len(conflicts) > 0 {
 				return apperr.Conflict("ROOM_IN_USE", "the room is occupied or assigned to future reservations").WithContext("conflicts", conflicts)
 			}
+			if before.IsActive { // the room leaves the old type's stock: that type must not end up oversold
+				short, err := s.avail.RemovalShortfalls(ctx, p.TenantID, propertyID, before.RoomTypeID, id, day.BusinessDate)
+				if err != nil {
+					return err
+				}
+				if err := oversold(short); err != nil {
+					return err
+				}
+			}
 		}
 		if in.IsActive && (typeChanged || !before.IsActive) {
 			if err := s.requireActiveType(ctx, p.TenantID, propertyID, in.RoomTypeID); err != nil {
@@ -597,6 +608,13 @@ func (s *Service) CreateBlock(ctx context.Context, propertyID int64, in CreateBl
 		if err := s.requireNoConflicts(ctx, p.TenantID, propertyID, in.RoomID, day.BusinessDate, in.StartDate, in.EndDate); err != nil {
 			return err
 		}
+		short, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, in.StartDate, in.EndDate)
+		if err != nil {
+			return err
+		}
+		if err := oversold(short); err != nil {
+			return err
+		}
 		row, err := s.q(ctx).CreateRoomBlock(ctx, roomsdb.CreateRoomBlockParams{
 			TenantID: p.TenantID, PropertyID: propertyID, RoomID: in.RoomID, BlockType: in.BlockType,
 			StartDate: in.StartDate, EndDate: in.EndDate, Reason: in.Reason, ActorID: p.ActorID(),
@@ -652,7 +670,8 @@ func (s *Service) UpdateBlock(ctx context.Context, propertyID, id int64, patch B
 		if err != nil {
 			return orNotFound(err, errBlockNotFound())
 		}
-		if _, err := s.lockRoomForBlock(ctx, p.TenantID, propertyID, peek.RoomID); err != nil {
+		room, err := s.lockRoomForBlock(ctx, p.TenantID, propertyID, peek.RoomID)
+		if err != nil {
 			return err
 		}
 		row, err := q.GetRoomBlockForUpdate(ctx, roomsdb.GetRoomBlockForUpdateParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
@@ -689,6 +708,25 @@ func (s *Service) UpdateBlock(ctx context.Context, propertyID, id int64, patch B
 				from = day.BusinessDate
 			}
 			if err := s.requireNoConflicts(ctx, p.TenantID, propertyID, before.RoomID, day.BusinessDate, from, end); err != nil {
+				return err
+			}
+			// Only the added nights take another room out of the stock.
+			var added []availability.Shortfall
+			if start.Before(before.StartDate) {
+				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, start, before.StartDate)
+				if err != nil {
+					return err
+				}
+				added = append(added, sh...)
+			}
+			if end.After(before.EndDate) {
+				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, before.EndDate, end)
+				if err != nil {
+					return err
+				}
+				added = append(added, sh...)
+			}
+			if err := oversold(added); err != nil {
 				return err
 			}
 		}
@@ -744,4 +782,18 @@ func (s *Service) CancelBlock(ctx context.Context, propertyID, id int64, reason 
 			toBlock(row), map[string]any{"block": out, "cancel_reason": reason}))
 	})
 	return out, err
+}
+
+// oversold turns a non-empty shortfall into 409 INVENTORY_OVERSOLD (the type would have fewer sellable rooms
+// than it has demand), listing the nights.
+func oversold(short []availability.Shortfall) error {
+	if len(short) == 0 {
+		return nil
+	}
+	shown := short
+	if len(shown) > 60 {
+		shown = shown[:60]
+	}
+	return apperr.Conflict("INVENTORY_OVERSOLD", "the change would leave the room type oversold on some nights").
+		WithContext("nights", shown).WithContext("short_nights", len(short))
 }

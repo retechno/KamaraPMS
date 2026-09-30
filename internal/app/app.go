@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
@@ -43,7 +44,8 @@ func NewHandler(d Deps) http.Handler {
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
-	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc)
+	availSvc := availability.NewService(d.TxManager)
+	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc, availSvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()

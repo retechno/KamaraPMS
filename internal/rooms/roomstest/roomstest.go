@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
@@ -58,9 +59,10 @@ func Setup(t *testing.T) *Env {
 	authz := iam.NewAuthorizer(txm)
 	ten := tenancy.NewService(txm, c, aw, authz)
 	hk := housekeeping.NewService(txm, c, aw, authz, ten)
+	avail := availability.NewService(txm)
 	billing := billingconfig.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk), Guests: guests.NewService(txm, c, aw, authz, ten), Billing: billing, Rates: rates.NewService(txm, c, aw, authz, ten)}
+	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: guests.NewService(txm, c, aw, authz, ten), Billing: billing, Rates: rates.NewService(txm, c, aw, authz, ten)}
 }
 
 // Admin returns a context authenticated as the tenant administrator.
