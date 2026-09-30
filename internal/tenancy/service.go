@@ -17,13 +17,29 @@ import (
 	"kamarapms/internal/tenancy/tenancydb"
 )
 
+// PropertyCreated describes a property that was just created, for modules that initialise their own
+// per-property data (charge codes, ...) in the same transaction.
+type PropertyCreated struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	ActorID      *int64
+}
+
 // Service is the tenancy application service.
 type Service struct {
-	txm   *db.TxManager
-	clock clock.Clock
-	audit *audit.Writer
-	authz auth.Authorizer
-	store store
+	onCreated []func(context.Context, PropertyCreated) error
+	txm       *db.TxManager
+	clock     clock.Clock
+	audit     *audit.Writer
+	authz     auth.Authorizer
+	store     store
+}
+
+// OnPropertyCreated registers a hook that CreateProperty runs inside its transaction. Hooks are registered
+// once at start-up (before the service handles requests). A failing hook rolls the property back.
+func (s *Service) OnPropertyCreated(fn func(context.Context, PropertyCreated) error) {
+	s.onCreated = append(s.onCreated, fn)
 }
 
 // NewService wires the tenancy service.
@@ -138,6 +154,12 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			if err := q.CreateDocumentSequence(ctx, tenancydb.CreateDocumentSequenceParams{
 				TenantID: p.TenantID, PropertyID: prop.ID, SequenceType: string(seq.Type), Prefix: seq.Prefix,
 			}); err != nil {
+				return err
+			}
+		}
+
+		for _, hook := range s.onCreated {
+			if err := hook(ctx, PropertyCreated{TenantID: p.TenantID, PropertyID: prop.ID, BusinessDate: day.BusinessDate, ActorID: p.ActorID()}); err != nil {
 				return err
 			}
 		}

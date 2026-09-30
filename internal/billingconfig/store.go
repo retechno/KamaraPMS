@@ -1,0 +1,70 @@
+package billingconfig
+
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
+
+	"kamarapms/internal/billingconfig/billingconfigdb"
+	"kamarapms/internal/platform/apperr"
+)
+
+func errTaxNotFound() *apperr.Error {
+	return apperr.NotFound("TAX_NOT_FOUND", "the tax does not exist in this property")
+}
+
+func errServiceChargeNotFound() *apperr.Error {
+	return apperr.NotFound("SERVICE_CHARGE_NOT_FOUND", "the service charge does not exist in this property")
+}
+
+func errChargeCodeNotFound() *apperr.Error {
+	return apperr.NotFound("CHARGE_CODE_NOT_FOUND", "the charge code does not exist in this property")
+}
+
+func orNotFound(err error, nf *apperr.Error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nf
+	}
+	return err
+}
+
+func toTax(t billingconfigdb.Tax) Tax {
+	return Tax{ID: t.ID, Code: t.Code, Name: t.Name, Rate: FormatRate(t.Rate), TaxOnService: t.TaxOnService, IsActive: t.IsActive,
+		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
+}
+
+func toServiceCharge(s billingconfigdb.ServiceCharge) ServiceCharge {
+	return ServiceCharge{ID: s.ID, Code: s.Code, Name: s.Name, Rate: FormatRate(s.Rate), IsActive: s.IsActive,
+		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
+}
+
+func toChargeCode(c billingconfigdb.ChargeCode) ChargeCode {
+	out := ChargeCode{
+		ID: c.ID, Code: c.Code, Name: c.Name, ChargeType: c.ChargeType, PriceMode: c.PriceMode, IsSystem: c.IsSystem, IsActive: c.IsActive,
+		Taxes: []TaxRule{}, ServiceCharges: []ServiceRule{}, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+	}
+	if c.DefaultUnitPrice != nil {
+		s := c.DefaultUnitPrice.StringFixed(2)
+		out.DefaultUnitPrice = &s
+	}
+	return out
+}
+
+func unitPrice(s string) *decimal.Decimal {
+	if s == "" {
+		return nil
+	}
+	d, _ := decimal.NewFromString(s) // validated by ParseUnitPrice
+	return &d
+}
+
+func rowLimit(n int) int32 {
+	switch {
+	case n < 1:
+		return 1
+	case n > 1000:
+		return 1000
+	}
+	return int32(n) //nolint:gosec // G115: bounded to 1..1000 above
+}

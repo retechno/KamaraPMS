@@ -262,6 +262,15 @@ INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price
     (tn('ABC'), pr('BALI'), 'NETT',        'Room nett',   'ROOM',    'INCLUSIVE'),
     (tn('ABC'), pr('BALI'), 'LAUNDRY',     'Laundry',     'SERVICE', 'EXCLUSIVE');
 
+SELECT expect_ok('seeding creates the ten standard charge codes once (idempotent)',
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 10 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 0 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 10 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_code_taxes WHERE property_id = pr('SG')) = 0 THEN 1 ELSE 0 END)$q$);
+SELECT expect_ok('seeding only fills gaps and leaves existing codes alone',
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 7 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT NOT is_system FROM charge_codes WHERE id = cc('ROOM')) THEN 1 ELSE 0 END)$q$);
+
 INSERT INTO charge_code_taxes (tenant_id, property_id, charge_code_id, tax_id, sequence) VALUES
     (tn('ABC'), pr('BALI'), cc('ROOM'),    tx('VAT'), 1),
     (tn('ABC'), pr('BALI'), cc('NETT'),    tx('VAT'), 1),

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
@@ -39,6 +40,7 @@ type Env struct {
 	HK      *housekeeping.Service
 	Rooms   *rooms.Service
 	Guests  *guests.Service
+	Billing *billingconfig.Service
 
 	seq int
 }
@@ -54,7 +56,9 @@ func Setup(t *testing.T) *Env {
 	authz := iam.NewAuthorizer(txm)
 	ten := tenancy.NewService(txm, c, aw, authz)
 	hk := housekeeping.NewService(txm, c, aw, authz, ten)
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk), Guests: guests.NewService(txm, c, aw, authz, ten)}
+	billing := billingconfig.NewService(txm, c, aw, authz, ten)
+	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
+	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk), Guests: guests.NewService(txm, c, aw, authz, ten), Billing: billing}
 }
 
 // Admin returns a context authenticated as the tenant administrator.
@@ -182,8 +186,7 @@ func (e *Env) base(t *testing.T, tenantID, propertyID int64) base {
 		return b
 	}
 	var ccID int64
-	must(t, e.Pool.QueryRow(ctx, `INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type) VALUES ($1, $2, 'ROOM', 'Room', 'ROOM') RETURNING id`,
-		tenantID, propertyID).Scan(&ccID))
+	must(t, e.Pool.QueryRow(ctx, `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'ROOM'`, propertyID).Scan(&ccID)) // seeded with the property
 	must(t, e.Pool.QueryRow(ctx, `INSERT INTO rate_plans (tenant_id, property_id, code, name, room_charge_code_id) VALUES ($1, $2, 'BAR', 'Best', $3) RETURNING id`,
 		tenantID, propertyID, ccID).Scan(&b.ratePlanID))
 	if err := e.Pool.QueryRow(ctx, `SELECT id FROM guests WHERE tenant_id = $1 AND code = 'G1'`, tenantID).Scan(&b.guestID); err != nil {

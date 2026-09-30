@@ -67,7 +67,7 @@
 - **Request:** `{ code, name, address?, city?, country_code?, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin?, night_audit_marks_occupied_dirty?, night_audit_earliest_time?, opening_business_date }`
 - **Response 201:** the property, including `business_date`.
 - **Validation:** the timezone is a valid IANA name. The currency is ISO 4217. Decimals are 0–3. The code is unique in the tenant.
-- **Rules:** creates the first OPEN business day, the 4 document sequences and the seeded charge codes (with no tax mappings).
+- **Rules:** creates the first OPEN business day, the 4 document sequences and the ten seeded system charge codes (`seed_charge_codes`, migration 00014; all EXCLUSIVE, with no tax or service mappings).
 - **TX:** `T[—]`: all inserts.
 
 **GET `{P}`**
@@ -221,33 +221,42 @@ There are no endpoints to open or close days directly. That only happens through
 - **Rules:** limited to the caller's readable properties unless they hold `guest.history_all_properties` at one of them (administrators: all). `hidden_count` counts what was left out. Reservation dates are the span of its lines.
 - **TX:** R
 
-## 9. Billing configuration (write: `billing_config.manage`)
+## 9. Billing configuration (write: `billing_config.manage`; read: any access to the property)
+
+Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage strings with four decimals (`"11.0000"`); input may omit trailing zeros. Amounts (`default_unit_price`) are plain decimal strings and may not have more decimals than the property's currency.
 
 **GET / POST `{P}/taxes`, PATCH `{P}/taxes/{id}`**
 - **Request:** `{ code, name, rate: "11.0000", tax_on_service, is_active? }`
-- **Validation:** `0 ≤ rate ≤ 100`. There is **no inclusive flag**.
+- **Validation:** `0 ≤ rate ≤ 100`, at most four decimals. There is **no inclusive flag** (unknown fields are 422 `UNKNOWN_FIELD`).
 - **Rules:**
-  - A rate change affects future postings only. The response includes `affected_open_stays` as a warning.
-  - Deactivation is rejected while the tax is actively mapped (409 `TAX_IN_USE`).
-- **TX:** master pattern
+  - A rate change affects future postings only. The PATCH response then includes `affected_open_stays`: the open stays whose remaining nights are charged through a charge code that maps this tax.
+  - Deactivation is rejected while the tax is actively mapped (409 `TAX_IN_USE`, `context.charge_code_rules`).
+- **TX:** master pattern (`T[tax FOR UPDATE]` + audit)
 
 **GET / POST `{P}/service-charges`, PATCH `/{id}`**
 - **Request:** `{ code, name, rate, is_active? }`
-- **Rules:** same as taxes.
+- **Rules:** same as taxes (409 `SERVICE_CHARGE_IN_USE`).
 - **TX:** master pattern
 
 **GET / POST `{P}/charge-codes`, GET / PATCH `/{id}`**
-- **Request:** `{ code, name, charge_type, price_mode, default_unit_price?, is_active? }`
-- **Rules:** `price_mode` is immutable once the code is used (409 `PRICE_MODE_LOCKED`). System codes can't be deactivated while they're referenced by an active rate plan.
-- **TX:** master pattern
+- **Request:** `{ code, name, charge_type, price_mode, default_unit_price?, is_active? }`. Responses carry the active rules: `taxes: [{ tax_id, code, name, rate, tax_on_service, sequence }]` and `service_charges: [{ service_charge_id, code, name, rate, sequence }]`.
+- **Filters:** `active`, `charge_type`.
+- **Rules:**
+  - `price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`, enforced by a trigger). Re-sending the current value is not a change.
+  - The charge type of a **system** code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`); a code used for room revenue stays `ROOM` (trigger, 409 `CHARGE_TYPE_LOCKED`).
+  - A code cannot be deactivated while an active rate plan sells through it (409 `CHARGE_CODE_IN_USE`).
+  - Every property starts with ten system codes: `ROOM`, `ROOM_EXEMPT` (type ROOM), `BREAKFAST`, `RESTAURANT`, `MINIBAR` (FOOD_BEVERAGE), `LAUNDRY`, `EXTRA_BED` (SERVICE), `NO_SHOW_FEE`, `CANCEL_FEE` (FEE), `OTHER`. They carry no rules; the owner maps taxes and service charges per property.
+- **TX:** master pattern (`T[charge_code FOR UPDATE]` + audit)
 
 **PUT `{P}/charge-codes/{id}/rules`**
 - **Purpose:** replace the ordered tax and service mappings.
-- **Request:** `{ taxes: [{ tax_id, sequence }], service_charges: [{ service_charge_id, sequence }] }`
+- **Request:** `{ taxes: [{ tax_id, sequence }], service_charges: [{ service_charge_id, sequence }] }` (at most 20 each; an empty list removes all rules).
 - **Response:** the charge code with its rules.
-- **Validation:** the IDs are active and in the same property. Sequences are unique and ≥ 1.
-- **Rules:** mappings that are no longer listed are set to `is_active = false`. Affects future postings only.
-- **TX:** `T[charge_code FOR UPDATE]`: upsert mappings + audit
+- **Validation:** sequences are unique per list, from 1 to 32767 (gaps allowed); ids are not repeated; the taxes and service charges exist in the property (404 `TAX_NOT_FOUND` / `SERVICE_CHARGE_NOT_FOUND`) and are active (422 `TAX_INACTIVE` / `SERVICE_CHARGE_INACTIVE`, field `taxes[i].tax_id`).
+- **Rules:** mappings that are no longer listed are set to `is_active = false` (history stays); re-adding one reuses its row. Affects future postings only.
+- **TX:** `T[L1 share, charge_code FOR UPDATE, taxes and service charges FOR SHARE]`: deactivate all, upsert the listed rules, audit with the old and new rule sets. The share locks make "map a tax" and "deactivate the tax" mutually exclusive, so an inactive tax is never mapped.
+
+**ChargeRuleResolver** (internal, used by `ChargeCalculationService` in M6): `billingconfig.Service.ResolveRules(tenant, property, chargeCode)` returns the code with its active, ordered rules and decimal rates. A mapping applies only while the tax or service charge itself is active. It is a lock-free read of committed configuration.
 
 **POST `{P}/charge-calculations`**
 - **Purpose:** preview the engine result. Nothing is posted.

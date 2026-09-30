@@ -15,7 +15,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
 **Implementation:**
 - **M0** (foundation) is complete: the platform kernel, the Go and Vue shells, CI and the lint guards. The runtime lock-order enforcement is `db.LockRows` / `db.EnterLockLevel`.
 - **M1** (tenancy and business day) is complete: property setup, `BusinessDayService` (the only source of the business date, including the night-audit time guard and `CloseAndOpenNext` for M13), gapless document numbers, the audit writer, and sqlc.
-  - Charge-code seeding on property creation moves to M5, where charge codes live.
+  - Charge-code seeding on property creation moved to M5 (done there).
 - **M2** (identity and access) is complete. JWT access tokens (15 minutes, in memory) and rotating refresh tokens in an httpOnly `SameSite=Strict` cookie.
   - Refresh-token reuse ends all of a user's sessions. Migration 00012 adds `user_sessions.revoked_reason`, so detection only fires for rotated tokens, not for a stale tab after logout. There is a 30-second grace window for tabs that refresh at the same moment.
   - Sessions are re-checked on every request, so revocation is immediate.
@@ -35,5 +35,12 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - Duplicate hints never block creation; look-alikes at properties the caller cannot see are counted, not shown.
   - Search is prefix and token based on the existing btree indexes. `pg_trgm` (fuzzy matching) is still later. Phone numbers are compared by digits only, with no country-code normalisation.
   - Merging duplicate profiles is not part of M4.
+
+- **M5** (billing configuration) is complete. Migration 00014 adds the SQL function `seed_charge_codes` (the single definition of the ten standard charge codes): `CreateProperty` runs it through the `tenancy.Service.OnPropertyCreated` hook in its own transaction, and the migration backfills properties that existed before.
+  - `internal/billingconfig` owns taxes, service charges, charge codes and the ordered rules, plus the `ChargeRuleResolver` (`ResolveRules`) that M6's calculation service reads. It computes no amounts.
+  - `price_mode` and charge-type locks are the database triggers from migration 00010 (mapped to `PRICE_MODE_LOCKED`, `CHARGE_TYPE_LOCKED`); the service adds the clearer system-code and in-use checks.
+  - Rule replacement deactivates then re-activates rows inside one transaction (the unique `(charge code, sequence)` index only covers active rows), and share-locks the mapped taxes so deactivation cannot race it.
+  - sqlc now maps `numeric` to `decimal.Decimal` (nullable: `*decimal.Decimal`).
+  - `POST {P}/charge-calculations` (the preview endpoint) belongs to M6.
 
 Earlier revisions are in [archive/](archive/).

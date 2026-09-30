@@ -19,6 +19,12 @@ overrides:
       - db_type: "timestamptz"
         nullable: true
         go_type: { import: "time", type: "Time", pointer: true }
+      # Money and percentages are decimals, never floats.
+      - db_type: "pg_catalog.numeric"
+        go_type: "github.com/shopspring/decimal.Decimal"
+      - db_type: "pg_catalog.numeric"
+        nullable: true
+        go_type: { import: "github.com/shopspring/decimal", type: "Decimal", pointer: true }
       # Nullable scalars as plain pointers instead of pgtype wrappers
       - db_type: "pg_catalog.varchar"
         nullable: true
@@ -99,6 +105,17 @@ sql:
       go:
         package: guestsdb
         out: internal/guests/guestsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/billingconfig/queries.sql
+    gen:
+      go:
+        package: billingconfigdb
+        out: internal/billingconfig/billingconfigdb
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true

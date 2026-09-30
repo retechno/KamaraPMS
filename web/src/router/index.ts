@@ -42,6 +42,8 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Guest' },
     },
+    { path: '/setup/taxes', name: 'taxes', component: () => import('@/views/billing/TaxesView.vue'), meta: { title: 'Taxes and service charges' } },
+    { path: '/setup/charge-codes', name: 'charge-codes', component: () => import('@/views/billing/ChargeCodesView.vue'), meta: { title: 'Charge codes' } },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

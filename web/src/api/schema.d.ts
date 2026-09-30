@@ -636,6 +636,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/taxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List taxes */
+        get: operations["listTaxes"];
+        put?: never;
+        /**
+         * Create a tax (billing_config.manage)
+         * @description There is no inclusive flag: whether a price contains the tax is a property of the charge code's price mode.
+         */
+        post: operations["createTax"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/taxes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a tax (billing_config.manage); the code cannot change
+         * @description A rate change affects future postings only; the response then carries `affected_open_stays`. Deactivation is 409 `TAX_IN_USE` while the tax is mapped to a charge code.
+         */
+        patch: operations["updateTax"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/service-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List service charges */
+        get: operations["listServiceCharges"];
+        put?: never;
+        /** Create a service charge (billing_config.manage) */
+        post: operations["createServiceCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/service-charges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a service charge (billing_config.manage)
+         * @description Same rules as taxes (409 `SERVICE_CHARGE_IN_USE` on deactivation while mapped).
+         */
+        patch: operations["updateServiceCharge"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List charge codes with their active rules */
+        get: operations["listChargeCodes"];
+        put?: never;
+        /**
+         * Create a charge code without rules (billing_config.manage)
+         * @description Every property starts with ten system codes (ROOM, ROOM_EXEMPT, BREAKFAST, RESTAURANT, LAUNDRY, MINIBAR, EXTRA_BED, NO_SHOW_FEE, CANCEL_FEE, OTHER) and no rules.
+         */
+        post: operations["createChargeCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A charge code with its ordered rules */
+        get: operations["getChargeCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a charge code (billing_config.manage); the code cannot change
+         * @description `price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`). The charge type of a system code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`). Deactivation is 409 `CHARGE_CODE_IN_USE` while an active rate plan sells through the code. An empty `default_unit_price` clears it.
+         */
+        patch: operations["updateChargeCode"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes/{id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the ordered tax and service rules of a charge code (billing_config.manage)
+         * @description The request is the complete rule set. Rules that are no longer listed are deactivated (history is
+         *     kept). Taxes and service charges must exist in the property (404 `TAX_NOT_FOUND`,
+         *     `SERVICE_CHARGE_NOT_FOUND`) and be active (422 `TAX_INACTIVE`, `SERVICE_CHARGE_INACTIVE`).
+         *     Sequences are unique per list and at least 1. Affects future postings only.
+         */
+        put: operations["replaceChargeCodeRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1161,6 +1323,159 @@ export interface components {
             next_cursor?: string;
             /** @description Items at properties the caller may not see. */
             hidden_count: number;
+        };
+        /**
+         * @description A percentage from 0 to 100 with at most four decimals. Always returned with four decimals.
+         * @example 11.0000
+         */
+        Percent: string;
+        /**
+         * @description A non-negative decimal amount as a string. It may not have more decimals than the property currency.
+         * @example 250000
+         */
+        Amount: string;
+        /** @enum {string} */
+        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER";
+        /**
+         * @description Whether a price excludes or already contains the mapped service charges and taxes.
+         * @enum {string}
+         */
+        PriceMode: "EXCLUSIVE" | "INCLUSIVE";
+        Tax: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description The tax is also levied on the service charges. */
+            tax_on_service: boolean;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Only on an update that changed the rate. Open stays that will be charged at the new rate from now on. */
+            affected_open_stays?: number;
+        };
+        TaxPage: {
+            data: components["schemas"]["Tax"][];
+            next_cursor?: string;
+        };
+        CreateTaxRequest: {
+            /** @description 1-20 characters, A-Z 0-9 - _ (upper-cased). */
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @default false */
+            tax_on_service: boolean;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchTaxRequest: {
+            name?: string;
+            rate?: components["schemas"]["Percent"];
+            tax_on_service?: boolean;
+            is_active?: boolean;
+        };
+        ServiceCharge: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Only on an update that changed the rate. */
+            affected_open_stays?: number;
+        };
+        ServiceChargePage: {
+            data: components["schemas"]["ServiceCharge"][];
+            next_cursor?: string;
+        };
+        CreateServiceChargeRequest: {
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchServiceChargeRequest: {
+            name?: string;
+            rate?: components["schemas"]["Percent"];
+            is_active?: boolean;
+        };
+        TaxRule: {
+            /** Format: int64 */
+            tax_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            tax_on_service: boolean;
+            /** @description Calculation and display order. */
+            sequence: number;
+        };
+        ServiceRule: {
+            /** Format: int64 */
+            service_charge_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            sequence: number;
+        };
+        ChargeCode: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            charge_type: components["schemas"]["ChargeType"];
+            price_mode: components["schemas"]["PriceMode"];
+            default_unit_price?: components["schemas"]["Amount"];
+            is_system: boolean;
+            is_active: boolean;
+            /** @description Active tax rules in calculation order. */
+            taxes: components["schemas"]["TaxRule"][];
+            /** @description Active service rules in calculation order. */
+            service_charges: components["schemas"]["ServiceRule"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ChargeCodePage: {
+            data: components["schemas"]["ChargeCode"][];
+            next_cursor?: string;
+        };
+        CreateChargeCodeRequest: {
+            code: string;
+            name: string;
+            charge_type: components["schemas"]["ChargeType"];
+            price_mode: components["schemas"]["PriceMode"];
+            default_unit_price?: components["schemas"]["Amount"];
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchChargeCodeRequest: {
+            name?: string;
+            charge_type?: components["schemas"]["ChargeType"];
+            price_mode?: components["schemas"]["PriceMode"];
+            /** @description An amount */
+            default_unit_price?: string;
+            is_active?: boolean;
+        };
+        ReplaceRulesRequest: {
+            taxes?: {
+                /** Format: int64 */
+                tax_id: number;
+                sequence: number;
+            }[];
+            service_charges?: {
+                /** Format: int64 */
+                service_charge_id: number;
+                sequence: number;
+            }[];
         };
         HealthStatus: {
             /**
@@ -2409,6 +2724,331 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listTaxes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tax"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tax"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listServiceCharges: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceChargePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createServiceCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCharge"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateServiceCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchServiceChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCharge"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listChargeCodes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                charge_type?: components["schemas"]["ChargeType"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCodePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChargeCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The charge code. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchChargeCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    replaceChargeCodeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description The charge code with its new rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

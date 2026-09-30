@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -494,7 +494,7 @@ paths:
     post:
       operationId: createRoom
       summary: Create a room and its housekeeping state (room.manage)
-      description: The housekeeping status starts as `initial_housekeeping_status` (default DIRTY); no log entry is written.
+      description: "The housekeeping status starts as `initial_housekeeping_status` (default DIRTY); no log entry is written."
       tags: [rooms]
       requestBody:
         required: true
@@ -822,6 +822,233 @@ paths:
               schema: { $ref: "#/components/schemas/GuestHistory" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/taxes:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxes
+      summary: List taxes
+      tags: [billing-config]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxPage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTax
+      summary: Create a tax (billing_config.manage)
+      description: "There is no inclusive flag: whether a price contains the tax is a property of the charge code's price mode."
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaxRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tax" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/taxes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateTax
+      summary: Edit a tax (billing_config.manage); the code cannot change
+      description: "A rate change affects future postings only; the response then carries `affected_open_stays`. Deactivation is 409 `TAX_IN_USE` while the tax is mapped to a charge code."
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchTaxRequest" }
+      responses:
+        "200":
+          description: The updated resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tax" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/service-charges:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listServiceCharges
+      summary: List service charges
+      tags: [billing-config]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceChargePage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createServiceCharge
+      summary: Create a service charge (billing_config.manage)
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateServiceChargeRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceCharge" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/service-charges/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateServiceCharge
+      summary: Edit a service charge (billing_config.manage)
+      description: "Same rules as taxes (409 `SERVICE_CHARGE_IN_USE` on deactivation while mapped)."
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchServiceChargeRequest" }
+      responses:
+        "200":
+          description: The updated resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceCharge" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/charge-codes:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listChargeCodes
+      summary: List charge codes with their active rules
+      tags: [billing-config]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+        - { name: charge_type, in: query, schema: { $ref: "#/components/schemas/ChargeType" } }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCodePage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createChargeCode
+      summary: Create a charge code without rules (billing_config.manage)
+      description: Every property starts with ten system codes (ROOM, ROOM_EXEMPT, BREAKFAST, RESTAURANT, LAUNDRY, MINIBAR, EXTRA_BED, NO_SHOW_FEE, CANCEL_FEE, OTHER) and no rules.
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateChargeCodeRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCode" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/charge-codes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getChargeCode
+      summary: A charge code with its ordered rules
+      tags: [billing-config]
+      responses:
+        "200":
+          description: The charge code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCode" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateChargeCode
+      summary: Edit a charge code (billing_config.manage); the code cannot change
+      description: "`price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`). The charge type of a system code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`). Deactivation is 409 `CHARGE_CODE_IN_USE` while an active rate plan sells through the code. An empty `default_unit_price` clears it."
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchChargeCodeRequest" }
+      responses:
+        "200":
+          description: The updated resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCode" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/charge-codes/{id}/rules:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: replaceChargeCodeRules
+      summary: Replace the ordered tax and service rules of a charge code (billing_config.manage)
+      description: |
+        The request is the complete rule set. Rules that are no longer listed are deactivated (history is
+        kept). Taxes and service charges must exist in the property (404 `TAX_NOT_FOUND`,
+        `SERVICE_CHARGE_NOT_FOUND`) and be active (422 `TAX_INACTIVE`, `SERVICE_CHARGE_INACTIVE`).
+        Sequences are unique per list and at least 1. Affects future postings only.
+      tags: [billing-config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplaceRulesRequest" }
+      responses:
+        "200":
+          description: The charge code with its new rules.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChargeCode" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1444,6 +1671,193 @@ components:
           items: { $ref: "#/components/schemas/GuestHistoryItem" }
         next_cursor: { type: string }
         hidden_count: { type: integer, description: Items at properties the caller may not see. }
+    Percent:
+      type: string
+      pattern: '^[0-9]{1,3}(\.[0-9]{1,4})?$'
+      description: A percentage from 0 to 100 with at most four decimals. Always returned with four decimals.
+      examples: ["11.0000"]
+    Amount:
+      type: string
+      pattern: '^[0-9]{1,16}(\.[0-9]{1,2})?$'
+      description: A non-negative decimal amount as a string. It may not have more decimals than the property currency.
+      examples: ["250000"]
+    ChargeType:
+      type: string
+      enum: [ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER]
+    PriceMode:
+      type: string
+      enum: [EXCLUSIVE, INCLUSIVE]
+      description: Whether a price excludes or already contains the mapped service charges and taxes.
+    Tax:
+      type: object
+      required: [id, code, name, rate, tax_on_service, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { $ref: "#/components/schemas/Percent" }
+        tax_on_service: { type: boolean, description: The tax is also levied on the service charges. }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        affected_open_stays:
+          type: integer
+          description: Only on an update that changed the rate. Open stays that will be charged at the new rate from now on.
+    TaxPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Tax" }
+        next_cursor: { type: string }
+    CreateTaxRequest:
+      type: object
+      required: [code, name, rate]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: "1-20 characters, A-Z 0-9 - _ (upper-cased)." }
+        name: { type: string, maxLength: 100 }
+        rate: { $ref: "#/components/schemas/Percent" }
+        tax_on_service: { type: boolean, default: false }
+        is_active: { type: boolean, default: true }
+    PatchTaxRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        rate: { $ref: "#/components/schemas/Percent" }
+        tax_on_service: { type: boolean }
+        is_active: { type: boolean }
+    ServiceCharge:
+      type: object
+      required: [id, code, name, rate, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { $ref: "#/components/schemas/Percent" }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        affected_open_stays: { type: integer, description: Only on an update that changed the rate. }
+    ServiceChargePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceCharge" }
+        next_cursor: { type: string }
+    CreateServiceChargeRequest:
+      type: object
+      required: [code, name, rate]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string, maxLength: 100 }
+        rate: { $ref: "#/components/schemas/Percent" }
+        is_active: { type: boolean, default: true }
+    PatchServiceChargeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        rate: { $ref: "#/components/schemas/Percent" }
+        is_active: { type: boolean }
+    TaxRule:
+      type: object
+      required: [tax_id, code, name, rate, tax_on_service, sequence]
+      properties:
+        tax_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { $ref: "#/components/schemas/Percent" }
+        tax_on_service: { type: boolean }
+        sequence: { type: integer, description: Calculation and display order. }
+    ServiceRule:
+      type: object
+      required: [service_charge_id, code, name, rate, sequence]
+      properties:
+        service_charge_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { $ref: "#/components/schemas/Percent" }
+        sequence: { type: integer }
+    ChargeCode:
+      type: object
+      required: [id, code, name, charge_type, price_mode, is_system, is_active, taxes, service_charges, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        charge_type: { $ref: "#/components/schemas/ChargeType" }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        default_unit_price: { $ref: "#/components/schemas/Amount" }
+        is_system: { type: boolean }
+        is_active: { type: boolean }
+        taxes:
+          type: array
+          description: Active tax rules in calculation order.
+          items: { $ref: "#/components/schemas/TaxRule" }
+        service_charges:
+          type: array
+          description: Active service rules in calculation order.
+          items: { $ref: "#/components/schemas/ServiceRule" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ChargeCodePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/ChargeCode" }
+        next_cursor: { type: string }
+    CreateChargeCodeRequest:
+      type: object
+      required: [code, name, charge_type, price_mode]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string, maxLength: 100 }
+        charge_type: { $ref: "#/components/schemas/ChargeType" }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        default_unit_price: { $ref: "#/components/schemas/Amount" }
+        is_active: { type: boolean, default: true }
+    PatchChargeCodeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        charge_type: { $ref: "#/components/schemas/ChargeType" }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        default_unit_price: { type: string, description: An amount, or an empty string to clear it. }
+        is_active: { type: boolean }
+    ReplaceRulesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        taxes:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [tax_id, sequence]
+            additionalProperties: false
+            properties:
+              tax_id: { type: integer, format: int64 }
+              sequence: { type: integer, minimum: 1, maximum: 32767 }
+        service_charges:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [service_charge_id, sequence]
+            additionalProperties: false
+            properties:
+              service_charge_id: { type: integer, format: int64 }
+              sequence: { type: integer, minimum: 1, maximum: 32767 }
     HealthStatus:
       type: object
       required: [status]
