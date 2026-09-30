@@ -65,6 +65,17 @@ export const router = createRouter({
       meta: { title: 'Folio' },
     },
     { path: '/cashier', name: 'cashier', component: () => import('@/views/billing/CashierView.vue'), meta: { title: 'Cashier' } },
+    { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/ArrivalsView.vue'), meta: { title: 'Arrivals' } },
+    { path: '/walk-in', name: 'walk-in', component: () => import('@/views/frontdesk/WalkInView.vue'), meta: { title: 'Walk-in' } },
+    { path: '/in-house', name: 'in-house', component: () => import('@/views/frontdesk/InHouseView.vue'), meta: { title: 'In-house' } },
+    {
+      path: '/stays/:id(\\d+)',
+      name: 'stay',
+      component: () => import('@/views/frontdesk/StayDetailView.vue'),
+      props: true,
+      meta: { title: 'Stay' },
+    },
+    { path: '/room-status', name: 'room-status', component: () => import('@/views/rooms/RoomStatusView.vue'), meta: { title: 'Room status' } },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

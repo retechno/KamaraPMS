@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1861,6 +1861,149 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/check-in:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/LineId"
+    post:
+      operationId: checkIn
+      summary: Check a confirmed room in (frontdesk.checkin)
+      description: |
+        The arrival date must be the business date (409 `ARRIVAL_DATE_MISMATCH`). `room_id` may be omitted when a room is assigned. The room must be free (409 `ROOM_OCCUPIED`, `ROOM_BLOCKED`, `ROOM_NOT_AVAILABLE`) and ready: CLEAN or INSPECTED, or INSPECTED only when the property requires an inspection (409 `ROOM_NOT_READY` with `context.current` and `context.required`). An override needs `frontdesk.checkin_unready_room` and a reason. A room of another type than the booked one is an upgrade (needs `reservation.upgrade` and the room type's inventory). The open deposit folio of the reservation is linked to the stay, otherwise a folio is created. The same Idempotency-Key returns the stay it created.
+      tags: [frontdesk]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckInRequest" }
+      responses:
+        "201":
+          description: The stay, its first segment and its folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckInResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/walk-ins:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: walkIn
+      summary: Create, confirm, assign and check in a room in one transaction (frontdesk.checkin and reservation.create)
+      description: Arrival is the business date and the source is WALK_IN. Give `guest_id` or `new_guest`. Any refusal (room not free, not ready, no rate) leaves nothing behind.
+      tags: [frontdesk]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WalkInRequest" }
+      responses:
+        "201":
+          description: The reservation, the stay and the folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckInResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/arrivals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listArrivals
+      summary: Confirmed rooms arriving on a date (reservation.read)
+      description: "`date` defaults to the business date. A room that is checked in is no longer an arrival."
+      tags: [frontdesk]
+      parameters:
+        - { name: date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The arrivals.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Arrival" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listStays
+      summary: "Stays, newest first (the in-house and due-out lists, reservation.read)"
+      tags: [frontdesk]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, CHECKED_OUT, CANCELLED] } }
+        - { name: departure_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: room_id, in: query, schema: { type: integer, format: int64 }, description: The room of the open segment. }
+      responses:
+        "200":
+          description: A page of stays.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getStay
+      summary: A stay with its segments, guests, room line, nightly rates and folio (reservation.read)
+      description: "`nightly_rates[].posted` says whether the night has been charged (always false until room charges are posted)."
+      tags: [frontdesk]
+      responses:
+        "200":
+          description: The stay.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/reverse-check-in:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseCheckIn
+      summary: Undo a check-in of the same business date (frontdesk.reverse_checkin)
+      description: The stay is cancelled, its segment closed, the room line goes back to CONFIRMED, the folio is unlinked and the room becomes DIRTY. Refused once a charge is posted to the folio (409 `CHECK_IN_HAS_CHARGES`) or on a later business day (409 `CHECK_IN_NOT_REVERSIBLE`).
+      tags: [frontdesk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReverseCheckInRequest" }
+      responses:
+        "200":
+          description: The cancelled stay and the unlinked folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReverseResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3365,6 +3508,209 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MethodTotal" }
         next_cursor: { type: string }
+    CheckInRequest:
+      type: object
+      required: [version, guest_id, adult_count]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32, description: The reservation's version. }
+        room_id: { type: integer, format: int64 }
+        guest_id: { type: integer, format: int64, description: The guest who checks in. }
+        accompanying_guest_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        adult_count: { type: integer, minimum: 1 }
+        child_count: { type: integer, minimum: 0, default: 0 }
+        override_room_not_ready: { type: boolean, default: false }
+        override_reason: { type: string, maxLength: 500 }
+    WalkInGuest:
+      type: object
+      required: [last_name]
+      additionalProperties: false
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        nationality: { type: string }
+        country_code: { type: string }
+        date_of_birth: { $ref: "#/components/schemas/Date" }
+        gender: { type: string }
+        id_type: { type: string }
+        id_number: { type: string }
+        address: { type: string }
+        city: { type: string }
+        notes: { type: string }
+    WalkInRequest:
+      type: object
+      required: [room_id, rate_plan_id, departure_date, adult_count]
+      additionalProperties: false
+      properties:
+        guest_id: { type: integer, format: int64 }
+        new_guest: { $ref: "#/components/schemas/WalkInGuest" }
+        room_id: { type: integer, format: int64 }
+        rate_plan_id: { type: integer, format: int64 }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        adult_count: { type: integer, minimum: 1 }
+        child_count: { type: integer, minimum: 0, default: 0 }
+        nightly_overrides:
+          type: array
+          items: { $ref: "#/components/schemas/NightOverride" }
+        accompanying_guest_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        override_room_not_ready: { type: boolean, default: false }
+        override_reason: { type: string, maxLength: 500 }
+    ReverseCheckInRequest:
+      type: object
+      required: [version, reason]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32, description: The stay's version. }
+        reason: { type: string, maxLength: 500 }
+    Stay:
+      type: object
+      required: [id, stay_number, reservation_id, reservation_room_id, guest_id, arrival_date, departure_date, adult_count, child_count, status, actual_check_in_at, actual_check_out_at, version]
+      properties:
+        id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        reservation_id: { type: integer, format: int64 }
+        reservation_room_id: { type: integer, format: int64 }
+        guest_id: { type: integer, format: int64 }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        adult_count: { type: integer }
+        child_count: { type: integer }
+        status: { type: string, enum: [OPEN, CHECKED_OUT, CANCELLED] }
+        actual_check_in_at: { type: string, format: date-time }
+        actual_check_out_at: { type: [string, "null"], format: date-time }
+        version: { type: integer, format: int32 }
+    StaySegment:
+      type: object
+      required: [id, room_id, room_number, check_in_at, check_out_at, start_business_date, end_business_date]
+      properties:
+        id: { type: integer, format: int64 }
+        room_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        check_in_at: { type: string, format: date-time }
+        check_out_at: { type: [string, "null"], format: date-time }
+        start_business_date: { $ref: "#/components/schemas/Date" }
+        end_business_date:
+          oneOf:
+            - { $ref: "#/components/schemas/Date" }
+            - { type: "null" }
+        move_reason: { type: string }
+    StayFolio:
+      type: object
+      required: [id, folio_number, status, balance]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        balance: { type: string }
+    ReservationRef:
+      type: object
+      required: [id, confirmation_number]
+      properties:
+        id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        status: { type: string }
+        version: { type: integer, format: int32 }
+    CheckInResult:
+      type: object
+      required: [stay, stay_room, folio]
+      properties:
+        reservation: { $ref: "#/components/schemas/ReservationRef" }
+        stay: { $ref: "#/components/schemas/Stay" }
+        stay_room: { $ref: "#/components/schemas/StaySegment" }
+        folio: { $ref: "#/components/schemas/StayFolio" }
+    ReverseResult:
+      type: object
+      required: [stay, folio]
+      properties:
+        stay: { $ref: "#/components/schemas/Stay" }
+        folio: { $ref: "#/components/schemas/StayFolio" }
+    StaySummary:
+      type: object
+      required: [id, stay_number, status, guest_id, guest_name, room_id, reservation_id, confirmation_number, arrival_date, departure_date, adult_count, child_count, version]
+      properties:
+        id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        status: { type: string, enum: [OPEN, CHECKED_OUT, CANCELLED] }
+        guest_id: { type: integer, format: int64 }
+        guest_name: { type: string }
+        room_id: { type: [integer, "null"], format: int64 }
+        room_number: { type: string }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        adult_count: { type: integer }
+        child_count: { type: integer }
+        version: { type: integer, format: int32 }
+    StayPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/StaySummary" }
+        next_cursor: { type: string }
+    Arrival:
+      type: object
+      required: [reservation_id, confirmation_number, reservation_room_id, reservation_version, guest_id, room_type_id, room_type_code, room_id, arrival_date, departure_date, adult_count, child_count]
+      properties:
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        reservation_room_id: { type: integer, format: int64 }
+        reservation_version: { type: integer, format: int32 }
+        guest_id: { type: [integer, "null"], format: int64 }
+        guest_name: { type: string }
+        room_type_id: { type: integer, format: int64 }
+        room_type_code: { type: string }
+        room_id: { type: [integer, "null"], format: int64 }
+        room_number: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        adult_count: { type: integer }
+        child_count: { type: integer }
+    StayNight:
+      type: object
+      required: [date, amount, price_mode, is_override, posted]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        amount: { type: string }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        is_override: { type: boolean }
+        posted: { type: boolean }
+    StayLine:
+      type: object
+      required: [id, reservation_id, confirmation_number, room_type_code, status]
+      properties:
+        id: { type: integer, format: int64 }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        room_type_code: { type: string }
+        status: { type: string }
+    StayDetail:
+      type: object
+      required: [stay, guest, guests, segments, line, nightly_rates, folios]
+      properties:
+        stay: { $ref: "#/components/schemas/Stay" }
+        guest: { $ref: "#/components/schemas/GuestName" }
+        guests:
+          type: array
+          items: { $ref: "#/components/schemas/GuestName" }
+        segments:
+          type: array
+          items: { $ref: "#/components/schemas/StaySegment" }
+        line: { $ref: "#/components/schemas/StayLine" }
+        nightly_rates:
+          type: array
+          items: { $ref: "#/components/schemas/StayNight" }
+        folios:
+          type: array
+          items: { $ref: "#/components/schemas/StayFolio" }
     FieldError:
       type: object
       required: [field, code]

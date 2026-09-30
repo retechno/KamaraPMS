@@ -397,6 +397,10 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Rules:** Step 14 §14.3 "Check-in", including `require_room_inspection_for_checkin`. Errors: `ARRIVAL_DATE_MISMATCH`, `ROOM_NOT_READY` (with `context.current` and `context.required`), `ROOM_OCCUPIED`, `ROOM_BLOCKED` and `ROOM_NOT_AVAILABLE`.
 - **TX:** see Step 15 #3
 
+**GET `{P}/arrivals?date`** (`reservation.read`)
+- **Purpose:** CONFIRMED rooms arriving on a date (default: the business date), for the arrivals screen.
+- **TX:** R
+
 **POST `{P}/walk-ins`** ⓘ (`frontdesk.checkin` + `reservation.create`)
 - **Purpose:** a walk-in.
 - **Request:** `{ guest_id | new_guest{...}, room_id, rate_plan_id, departure_date, adult_count, child_count, nightly_overrides?, accompanying_guest_ids? }`

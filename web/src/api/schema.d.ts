@@ -1484,6 +1484,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a confirmed room in (frontdesk.checkin)
+         * @description The arrival date must be the business date (409 `ARRIVAL_DATE_MISMATCH`). `room_id` may be omitted when a room is assigned. The room must be free (409 `ROOM_OCCUPIED`, `ROOM_BLOCKED`, `ROOM_NOT_AVAILABLE`) and ready: CLEAN or INSPECTED, or INSPECTED only when the property requires an inspection (409 `ROOM_NOT_READY` with `context.current` and `context.required`). An override needs `frontdesk.checkin_unready_room` and a reason. A room of another type than the booked one is an upgrade (needs `reservation.upgrade` and the room type's inventory). The open deposit folio of the reservation is linked to the stay, otherwise a folio is created. The same Idempotency-Key returns the stay it created.
+         */
+        post: operations["checkIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/walk-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create, confirm, assign and check in a room in one transaction (frontdesk.checkin and reservation.create)
+         * @description Arrival is the business date and the source is WALK_IN. Give `guest_id` or `new_guest`. Any refusal (room not free, not ready, no rate) leaves nothing behind.
+         */
+        post: operations["walkIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/arrivals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Confirmed rooms arriving on a date (reservation.read)
+         * @description `date` defaults to the business date. A room that is checked in is no longer an arrival.
+         */
+        get: operations["listArrivals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Stays, newest first (the in-house and due-out lists, reservation.read) */
+        get: operations["listStays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A stay with its segments, guests, room line, nightly rates and folio (reservation.read)
+         * @description `nightly_rates[].posted` says whether the night has been charged (always false until room charges are posted).
+         */
+        get: operations["getStay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/reverse-check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a check-in of the same business date (frontdesk.reverse_checkin)
+         * @description The stay is cancelled, its segment closed, the room line goes back to CONFIRMED, the folio is unlinked and the room becomes DIRTY. Refused once a charge is posted to the folio (409 `CHECK_IN_HAS_CHARGES`) or on a later business day (409 `CHECK_IN_NOT_REVERSIBLE`).
+         */
+        post: operations["reverseCheckIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2795,6 +2928,204 @@ export interface components {
             data: components["schemas"]["Payment"][];
             totals: components["schemas"]["MethodTotal"][];
             next_cursor?: string;
+        };
+        CheckInRequest: {
+            /**
+             * Format: int32
+             * @description The reservation's version.
+             */
+            version: number;
+            /** Format: int64 */
+            room_id?: number;
+            /**
+             * Format: int64
+             * @description The guest who checks in.
+             */
+            guest_id: number;
+            accompanying_guest_ids?: number[];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        WalkInGuest: {
+            first_name?: string;
+            last_name: string;
+            email?: string;
+            phone?: string;
+            nationality?: string;
+            country_code?: string;
+            date_of_birth?: components["schemas"]["Date"];
+            gender?: string;
+            id_type?: string;
+            id_number?: string;
+            address?: string;
+            city?: string;
+            notes?: string;
+        };
+        WalkInRequest: {
+            /** Format: int64 */
+            guest_id?: number;
+            new_guest?: components["schemas"]["WalkInGuest"];
+            /** Format: int64 */
+            room_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+            accompanying_guest_ids?: number[];
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        ReverseCheckInRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            reason: string;
+        };
+        Stay: {
+            /** Format: int64 */
+            id: number;
+            stay_number: string;
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int64 */
+            guest_id: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+            /** @enum {string} */
+            status: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+            /** Format: date-time */
+            actual_check_in_at: string;
+            /** Format: date-time */
+            actual_check_out_at: string | null;
+            /** Format: int32 */
+            version: number;
+        };
+        StaySegment: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            /** Format: date-time */
+            check_in_at: string;
+            /** Format: date-time */
+            check_out_at: string | null;
+            start_business_date: components["schemas"]["Date"];
+            end_business_date: components["schemas"]["Date"] | null;
+            move_reason?: string;
+        };
+        StayFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            balance: string;
+        };
+        ReservationRef: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        CheckInResult: {
+            reservation?: components["schemas"]["ReservationRef"];
+            stay: components["schemas"]["Stay"];
+            stay_room: components["schemas"]["StaySegment"];
+            folio: components["schemas"]["StayFolio"];
+        };
+        ReverseResult: {
+            stay: components["schemas"]["Stay"];
+            folio: components["schemas"]["StayFolio"];
+        };
+        StaySummary: {
+            /** Format: int64 */
+            id: number;
+            stay_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+            /** Format: int64 */
+            guest_id: number;
+            guest_name: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+            /** Format: int32 */
+            version: number;
+        };
+        StayPage: {
+            data: components["schemas"]["StaySummary"][];
+            next_cursor?: string;
+        };
+        Arrival: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int32 */
+            reservation_version: number;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest_name?: string;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+        };
+        StayNight: {
+            date: components["schemas"]["Date"];
+            amount: string;
+            price_mode: components["schemas"]["PriceMode"];
+            is_override: boolean;
+            posted: boolean;
+        };
+        StayLine: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            room_type_code: string;
+            status: string;
+        };
+        StayDetail: {
+            stay: components["schemas"]["Stay"];
+            guest: components["schemas"]["GuestName"];
+            guests: components["schemas"]["GuestName"][];
+            segments: components["schemas"]["StaySegment"][];
+            line: components["schemas"]["StayLine"];
+            nightly_rates: components["schemas"]["StayNight"][];
+            folios: components["schemas"]["StayFolio"][];
         };
         FieldError: {
             field: string;
@@ -5393,6 +5724,192 @@ export interface operations {
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    checkIn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description The stay, its first segment and its folio. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    walkIn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalkInRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation, the stay and the folio. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listArrivals: {
+        parameters: {
+            query?: {
+                date?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The arrivals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Arrival"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listStays: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+                departure_date?: components["schemas"]["Date"];
+                /** @description The room of the open segment. */
+                room_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of stays. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getStay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseCheckIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseCheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description The cancelled stay and the unlinked folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }
