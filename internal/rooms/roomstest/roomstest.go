@@ -15,6 +15,7 @@ import (
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/folios"
+	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
@@ -51,6 +52,7 @@ type Env struct {
 	Res     *reservations.Service
 	IAM     *iam.Service
 	Folios  *folios.Service
+	Front   *frontdesk.Service
 
 	seq int
 }
@@ -72,8 +74,10 @@ func Setup(t *testing.T) *Env {
 	rt := rates.NewService(txm, c, aw, authz, ten)
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
-	return &Env{IAM: ia, Folios: folios.NewService(txm, c, aw, authz, ten, billing, ia), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
-		Avail: avail, Res: reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)}
+	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
+	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
+	return &Env{IAM: ia, Folios: fo, Front: frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+		Avail: avail, Res: rs}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

@@ -152,3 +152,23 @@ FROM payments
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date = @business_date AND status = 'POSTED'
 GROUP BY payment_method
 ORDER BY payment_method;
+
+-- ---------------------------------------------------------------------------
+-- Stay folios (called by check-in and reverse check-in)
+
+-- name: LinkFolioToStay :one
+UPDATE folios SET stay_id = @stay_id, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: UnlinkFolioFromStay :one
+UPDATE folios SET stay_id = NULL, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: GetFolioOfStay :one
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND folio_type = 'GUEST';
+
+-- name: CountChargeItems :one
+SELECT count(*)::int FROM folio_items
+WHERE property_id = @property_id AND folio_id = @folio_id AND transaction_type = 'CHARGE';

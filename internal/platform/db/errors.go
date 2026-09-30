@@ -59,6 +59,7 @@ var constraintErrors = map[string]mapped{
 	// Inventory and occupancy
 	"room_blocks_no_overlap_ex":       {apperr.KindConflict, "ROOM_BLOCK_CONFLICT", "the room already has an active block for these dates"},
 	"reservation_rooms_no_overlap_ex": {apperr.KindConflict, "ROOM_NOT_AVAILABLE", "the room is already assigned for these dates"},
+	"stays_idempotency_uk":            {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was already processed"},
 	"stays_live_line_uk":              {apperr.KindConflict, "ALREADY_CHECKED_IN", "this reservation room is already checked in"},
 	"stay_rooms_open_room_uk":         {apperr.KindConflict, "ROOM_OCCUPIED", "the room is occupied"},
 	"stay_rooms_open_stay_uk":         {apperr.KindConflict, "STAY_ALREADY_IN_ROOM", "the stay already occupies a room"},

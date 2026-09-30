@@ -9,6 +9,7 @@ import (
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/reservations/reservationsdb"
 	"kamarapms/internal/tenancy"
@@ -47,7 +48,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, key string, in C
 				return res, err
 			}
 		}
-		res, err := s.create(ctx, p, propertyID, key, hash, in)
+		res, err := s.create(ctx, p, propertyID, key, hash, in, nil)
 		if key != "" && apperr.IsCode(err, "DUPLICATE_REQUEST") {
 			continue // a concurrent request with the same key won; replay it
 		}
@@ -71,14 +72,36 @@ func (s *Service) replay(ctx context.Context, p auth.Principal, propertyID int64
 	return res, true, err
 }
 
-func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64, key, hash string, in CreateInput) (Reservation, error) {
+// CreateHeld is Create for a caller that already holds the locks of the confirm protocol: the business day
+// (share) and the room types and rooms of the request (walk-in, which must create a guest before the booking
+// and so cannot let the booking take those locks after a sequence). bd is the locked business date. The input
+// is validated and priced as usual; no lock is taken here.
+func (s *Service) CreateHeld(ctx context.Context, propertyID int64, bd civil.Date, in CreateInput) (Reservation, error) {
+	p, err := s.writer(ctx, propertyID, auth.PermReservationCreate)
+	if err != nil {
+		return Reservation{}, err
+	}
+	if fields := in.validateHeader(); len(fields) > 0 {
+		return Reservation{}, apperr.Invalid("the reservation is invalid", fields...)
+	}
+	return s.create(ctx, p, propertyID, "", in.Hash(), in, &bd)
+}
+
+// create runs the creation inside a transaction. held, when set, is the business date of a caller that has
+// already taken the business day, room type and room locks.
+func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64, key, hash string, in CreateInput, held *civil.Date) (Reservation, error) {
 	var out Reservation
 	err := s.txm.WithinTx(ctx, func(ctx context.Context) error {
-		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
-		if err != nil {
-			return err
+		var bd civil.Date
+		if held != nil {
+			bd = *held
+		} else {
+			day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+			if err != nil {
+				return err
+			}
+			bd = day.BusinessDate
 		}
-		bd := day.BusinessDate
 		typeIDs := make([]int64, 0, len(in.Rooms))
 		var roomIDs []int64
 		for _, l := range in.Rooms {
@@ -88,7 +111,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			}
 		}
 		// L2 and L3 first when the reservation is confirmed at once (a draft holds nothing).
-		if in.Confirm {
+		if in.Confirm && held == nil {
 			if err := db.LockRows(ctx, db.RoomTypes, db.ForUpdate, propertyID, typeIDs); err != nil {
 				return mapNotFound(err, errRoomTypeNotFound())
 			}

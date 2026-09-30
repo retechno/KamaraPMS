@@ -80,6 +80,23 @@ func (q *Queries) CloseFolio(ctx context.Context, arg CloseFolioParams) (Folio, 
 	return i, err
 }
 
+const countChargeItems = `-- name: CountChargeItems :one
+SELECT count(*)::int FROM folio_items
+WHERE property_id = $1 AND folio_id = $2 AND transaction_type = 'CHARGE'
+`
+
+type CountChargeItemsParams struct {
+	PropertyID int64
+	FolioID    int64
+}
+
+func (q *Queries) CountChargeItems(ctx context.Context, arg CountChargeItemsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countChargeItems, arg.PropertyID, arg.FolioID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const findUnlinkedOpenFolio = `-- name: FindUnlinkedOpenFolio :one
 SELECT id FROM folios
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3 AND stay_id IS NULL AND status = 'OPEN'
@@ -273,6 +290,40 @@ func (q *Queries) GetFolioItemByKey(ctx context.Context, arg GetFolioItemByKeyPa
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.ApprovedBy,
+	)
+	return i, err
+}
+
+const getFolioOfStay = `-- name: GetFolioOfStay :one
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
+`
+
+type GetFolioOfStayParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     *int64
+}
+
+func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, getFolioOfStay, arg.TenantID, arg.PropertyID, arg.StayID)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
 	)
 	return i, err
 }
@@ -748,6 +799,53 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 	return i, err
 }
 
+const linkFolioToStay = `-- name: LinkFolioToStay :one
+
+UPDATE folios SET stay_id = $1, version = version + 1, updated_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+`
+
+type LinkFolioToStayParams struct {
+	StayID     *int64
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// ---------------------------------------------------------------------------
+// Stay folios (called by check-in and reverse check-in)
+func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, linkFolioToStay,
+		arg.StayID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const listFolioItems = `-- name: ListFolioItems :many
 SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number
 FROM folio_items i
@@ -1132,6 +1230,48 @@ func (q *Queries) SumRefundsOf(ctx context.Context, arg SumRefundsOfParams) (Sum
 	row := q.db.QueryRow(ctx, sumRefundsOf, arg.PropertyID, arg.PaymentID)
 	var i SumRefundsOfRow
 	err := row.Scan(&i.Refunded, &i.RefundCount)
+	return i, err
+}
+
+const unlinkFolioFromStay = `-- name: UnlinkFolioFromStay :one
+UPDATE folios SET stay_id = NULL, version = version + 1, updated_by = $1
+WHERE tenant_id = $2 AND property_id = $3 AND id = $4
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+`
+
+type UnlinkFolioFromStayParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromStayParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, unlinkFolioFromStay,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
 	return i, err
 }
 
