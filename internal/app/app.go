@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/health"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/rates"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
@@ -40,6 +41,7 @@ func NewHandler(d Deps) http.Handler {
 	hkSvc := housekeeping.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	billingSvc := billingconfig.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
+	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc)
 
@@ -51,6 +53,7 @@ func NewHandler(d Deps) http.Handler {
 	housekeeping.NewHandler(hkSvc).Register(api)
 	guests.NewHandler(guestsSvc).Register(api)
 	billingconfig.NewHandler(billingSvc).Register(api)
+	rates.NewHandler(ratesSvc).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))

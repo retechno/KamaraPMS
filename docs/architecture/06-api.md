@@ -268,23 +268,29 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 ## 10. Rate plans and rates
 
-**GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`)
-- **Request:** `{ code, name, description?, meal_plan, cancellation_policy?, is_refundable, room_charge_code_id, is_active? }`
-- **Validation:** the room charge code is active with `charge_type = ROOM`.
-- **Rules:** changing `room_charge_code_id` affects **new** nightly snapshots only.
-- **TX:** master pattern
+**GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`; read: any access to the property)
+- **Request:** `{ code, name, description?, meal_plan (RO|BB|HB|FB|AI), cancellation_policy?, is_refundable?, room_charge_code_id, is_active? }`. The code is upper-cased and immutable. Responses add `room_charge_code` (its code) and `price_mode` (the code's, i.e. how grid amounts are read).
+- **Validation:** the room charge code is an active charge code of this property with `charge_type = ROOM` (404 `CHARGE_CODE_NOT_FOUND` for another property's, 422 `CHARGE_CODE_NOT_ROOM` on `room_charge_code_id` otherwise; a trigger backs it up).
+- **Rules:**
+  - Changing `room_charge_code_id` affects **new** nightly snapshots only.
+  - A plan that already has rates cannot move to a room charge code with a different price mode (409 `RATE_PLAN_PRICE_MODE_MISMATCH`, with the counts in `context`): its amounts would silently be read as another kind of price. Create a new plan instead.
+  - Deactivation is allowed; it stops new bookings (M8) and leaves existing reservations alone.
+- **TX:** `T[L1 share, room charge code FOR SHARE, plan FOR UPDATE]` + audit
 
-**GET `{P}/rates?rate_plan_id&room_type_id&from&to`**
+**GET `{P}/rates?rate_plan_id&from&to&room_type_id?`**
 - **Purpose:** the rate grid, with the plan's price mode.
+- **Response:** `{ rate_plan_id, price_mode, room_charge_code, from, to, rates: [{ room_type_id, stay_date, amount }] }`, ordered by night then room type. Amounts carry the currency's decimals. Nights without a rate are absent. Not paginated: `from` and `to` (exclusive) are required and span at most 730 days.
 - **TX:** R
 
 **PUT `{P}/rates`** (`rate.manage`)
 - **Purpose:** bulk upsert.
-- **Request:** `{ rate_plan_id, room_type_ids[], from, to (exclusive), weekdays?, amount }`
-- **Response:** `{ updated_nights }`
-- **Validation:** `to > from`, a span of ≤ 730 days, and `amount ≥ 0`.
-- **Rules:** existing reservations are not affected (snapshots).
-- **TX:** `T[—]` (batched upsert) + audit summary
+- **Request:** `{ rate_plan_id, room_type_ids[] (1 to 50), from, to (exclusive), weekdays? (MON..SUN; all days when omitted), amount }`
+- **Response:** `{ updated_nights, created_nights }`: nights written (new or overwritten) and how many of those were new.
+- **Validation:** `to > from`, a span of ≤ 730 days, `amount ≥ 0` with at most the currency's decimals and never more than two (the column stores `numeric(18,2)`); the weekdays must select at least one night (422 `NO_NIGHTS`). Room types and the plan must exist in the property (404). Rates may be prepared for an inactive plan and for past dates.
+- **Rules:** all or nothing. Existing reservations are not affected (snapshots).
+- **TX:** `T[L1 share, L2 room types FOR SHARE, plan FOR SHARE]`: one batched upsert + an audit summary. The plan's share lock and the plan update's exclusive lock make a fill and a price mode switch mutually exclusive.
+
+**Price lookup** (internal, for reservations in M8): `rates.Service.NightlyPrices(tenant, property, plan, room type, arrival, departure)` returns the price of every night of `[arrival, departure)` (at most 365 nights) with the room charge code and price mode they are read in. The plan must be active (409 `RATE_PLAN_INACTIVE`) and every night must have a rate (409 `RATE_NOT_SET`, `context.nights` lists up to 31 missing nights and `context.missing_nights` the total). A missing rate is never guessed. Taxes and service are the engine's job: the caller passes each amount and the code's rules to `ChargeCalculationService`.
 
 ## 11. Availability
 

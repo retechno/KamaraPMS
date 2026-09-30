@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1082,6 +1082,117 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-plans:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listRatePlans
+      summary: List rate plans
+      tags: [rates]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: A page of rate plans.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RatePlanPage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createRatePlan
+      summary: Create a rate plan (rate.manage)
+      description: "The room charge code must be an active charge code of type ROOM. It owns the tax and service rules and the price mode the grid amounts are read in."
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRatePlanRequest" }
+      responses:
+        "201":
+          description: The created rate plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RatePlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-plans/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateRatePlan
+      summary: Edit a rate plan (rate.manage); the code cannot change
+      description: |
+        Changing the room charge code affects nightly snapshots taken from now on; existing reservations keep
+        theirs. A plan that already has rates cannot move to a room charge code with a different price mode
+        (409 `RATE_PLAN_PRICE_MODE_MISMATCH`), because its amounts would silently be read differently.
+        Deactivating a plan does not touch existing reservations.
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchRatePlanRequest" }
+      responses:
+        "200":
+          description: The updated rate plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RatePlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rates:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getRates
+      summary: The rate grid of a plan for [from, to), with the plan's price mode
+      description: "`from` and `to` are required; `to` is exclusive and the span is at most 730 days. The list is not paginated. Nights without a rate are simply absent."
+      tags: [rates]
+      parameters:
+        - { name: rate_plan_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The grid slice, ordered by night then room type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RateGrid" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: fillRates
+      summary: Bulk upsert one amount over a date range (rate.manage)
+      description: |
+        Sets `amount` for every listed room type on every night of [from, to) that falls on one of
+        `weekdays` (all days when omitted). The amount is read in the plan's price mode, is not negative and
+        has at most the currency's decimals (two at most). The whole request succeeds or nothing is written.
+        Existing reservations are not affected: they hold their own nightly snapshots.
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FillRatesRequest" }
+      responses:
+        "200":
+          description: How many nights were written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FillRatesResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1939,6 +2050,101 @@ components:
         tax_total: { type: string }
         taxable_amount: { type: string, description: The largest tax base (display only). }
         total_amount: { type: string, description: Net + service + tax; equals the quoted price when inclusive. }
+    MealPlan:
+      type: string
+      enum: [RO, BB, HB, FB, AI]
+      description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+    RatePlan:
+      type: object
+      required: [id, code, name, meal_plan, is_refundable, room_charge_code_id, room_charge_code, price_mode, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        meal_plan: { $ref: "#/components/schemas/MealPlan" }
+        cancellation_policy: { type: string }
+        is_refundable: { type: boolean }
+        room_charge_code_id: { type: integer, format: int64 }
+        room_charge_code: { type: string, description: Code of the room charge code. }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RatePlanPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/RatePlan" }
+        next_cursor: { type: string }
+    CreateRatePlanRequest:
+      type: object
+      required: [code, name, meal_plan, room_charge_code_id]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+        meal_plan: { $ref: "#/components/schemas/MealPlan" }
+        cancellation_policy: { type: string, maxLength: 2000 }
+        is_refundable: { type: boolean, default: true }
+        room_charge_code_id: { type: integer, format: int64 }
+        is_active: { type: boolean, default: true }
+    PatchRatePlanRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+        meal_plan: { $ref: "#/components/schemas/MealPlan" }
+        cancellation_policy: { type: string, maxLength: 2000 }
+        is_refundable: { type: boolean }
+        room_charge_code_id: { type: integer, format: int64 }
+        is_active: { type: boolean }
+    RateCell:
+      type: object
+      required: [room_type_id, stay_date, amount]
+      properties:
+        room_type_id: { type: integer, format: int64 }
+        stay_date: { $ref: "#/components/schemas/Date" }
+        amount: { type: string, description: Formatted with the currency's decimals. }
+    RateGrid:
+      type: object
+      required: [rate_plan_id, price_mode, room_charge_code, from, to, rates]
+      properties:
+        rate_plan_id: { type: integer, format: int64 }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        room_charge_code: { type: string }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rates:
+          type: array
+          items: { $ref: "#/components/schemas/RateCell" }
+    Weekday:
+      type: string
+      enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+    FillRatesRequest:
+      type: object
+      required: [rate_plan_id, room_type_ids, from, to, amount]
+      additionalProperties: false
+      properties:
+        rate_plan_id: { type: integer, format: int64 }
+        room_type_ids: { type: array, minItems: 1, maxItems: 50, items: { type: integer, format: int64 } }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date", description: Exclusive; after from; at most 730 days after it. }
+        weekdays:
+          type: array
+          description: Only these weekdays; all days when omitted or empty.
+          items: { $ref: "#/components/schemas/Weekday" }
+        amount: { $ref: "#/components/schemas/Amount" }
+    FillRatesResult:
+      type: object
+      required: [updated_nights, created_nights]
+      properties:
+        updated_nights: { type: integer, description: Nights written (new or overwritten). }
+        created_nights: { type: integer, description: Of those, nights that had no rate before. }
     HealthStatus:
       type: object
       required: [status]

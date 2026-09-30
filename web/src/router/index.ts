@@ -44,6 +44,8 @@ export const router = createRouter({
     },
     { path: '/setup/taxes', name: 'taxes', component: () => import('@/views/billing/TaxesView.vue'), meta: { title: 'Taxes and service charges' } },
     { path: '/setup/charge-codes', name: 'charge-codes', component: () => import('@/views/billing/ChargeCodesView.vue'), meta: { title: 'Charge codes' } },
+    { path: '/setup/rate-plans', name: 'rate-plans', component: () => import('@/views/rates/RatePlansView.vue'), meta: { title: 'Rate plans' } },
+    { path: '/setup/rates', name: 'rate-grid', component: () => import('@/views/rates/RateGridView.vue'), meta: { title: 'Rate grid' } },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

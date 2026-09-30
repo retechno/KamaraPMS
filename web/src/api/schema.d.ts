@@ -830,6 +830,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/rate-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List rate plans */
+        get: operations["listRatePlans"];
+        put?: never;
+        /**
+         * Create a rate plan (rate.manage)
+         * @description The room charge code must be an active charge code of type ROOM. It owns the tax and service rules and the price mode the grid amounts are read in.
+         */
+        post: operations["createRatePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a rate plan (rate.manage); the code cannot change
+         * @description Changing the room charge code affects nightly snapshots taken from now on; existing reservations keep
+         *     theirs. A plan that already has rates cannot move to a room charge code with a different price mode
+         *     (409 `RATE_PLAN_PRICE_MODE_MISMATCH`), because its amounts would silently be read differently.
+         *     Deactivating a plan does not touch existing reservations.
+         */
+        patch: operations["updateRatePlan"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The rate grid of a plan for [from, to), with the plan's price mode
+         * @description `from` and `to` are required; `to` is exclusive and the span is at most 730 days. The list is not paginated. Nights without a rate are simply absent.
+         */
+        get: operations["getRates"];
+        /**
+         * Bulk upsert one amount over a date range (rate.manage)
+         * @description Sets `amount` for every listed room type on every night of [from, to) that falls on one of
+         *     `weekdays` (all days when omitted). The amount is read in the plan's price mode, is not negative and
+         *     has at most the currency's decimals (two at most). The whole request succeeds or nothing is written.
+         *     Existing reservations are not affected: they hold their own nightly snapshots.
+         */
+        put: operations["fillRates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1556,6 +1634,93 @@ export interface components {
             taxable_amount: string;
             /** @description Net + service + tax; equals the quoted price when inclusive. */
             total_amount: string;
+        };
+        /**
+         * @description Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+         * @enum {string}
+         */
+        MealPlan: "RO" | "BB" | "HB" | "FB" | "AI";
+        RatePlan: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description?: string;
+            meal_plan: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            is_refundable: boolean;
+            /** Format: int64 */
+            room_charge_code_id: number;
+            /** @description Code of the room charge code. */
+            room_charge_code: string;
+            price_mode: components["schemas"]["PriceMode"];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RatePlanPage: {
+            data: components["schemas"]["RatePlan"][];
+            next_cursor?: string;
+        };
+        CreateRatePlanRequest: {
+            code: string;
+            name: string;
+            description?: string;
+            meal_plan: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            /** @default true */
+            is_refundable: boolean;
+            /** Format: int64 */
+            room_charge_code_id: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchRatePlanRequest: {
+            name?: string;
+            description?: string;
+            meal_plan?: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            is_refundable?: boolean;
+            /** Format: int64 */
+            room_charge_code_id?: number;
+            is_active?: boolean;
+        };
+        RateCell: {
+            /** Format: int64 */
+            room_type_id: number;
+            stay_date: components["schemas"]["Date"];
+            /** @description Formatted with the currency's decimals. */
+            amount: string;
+        };
+        RateGrid: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            room_charge_code: string;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rates: components["schemas"]["RateCell"][];
+        };
+        /** @enum {string} */
+        Weekday: "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+        FillRatesRequest: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            room_type_ids: number[];
+            from: components["schemas"]["Date"];
+            /** @description Exclusive; after from; at most 730 days after it. */
+            to: components["schemas"]["Date"];
+            /** @description Only these weekdays; all days when omitted or empty. */
+            weekdays?: components["schemas"]["Weekday"][];
+            amount: components["schemas"]["Amount"];
+        };
+        FillRatesResult: {
+            /** @description Nights written (new or overwritten). */
+            updated_nights: number;
+            /** @description Of those */
+            created_nights: number;
         };
         HealthStatus: {
             /**
@@ -3157,6 +3322,154 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRatePlans: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of rate plans. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlanPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createRatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRatePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The created rate plan. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateRatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRatePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated rate plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRates: {
+        parameters: {
+            query: {
+                rate_plan_id: number;
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                room_type_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grid slice, ordered by night then room type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateGrid"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fillRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FillRatesRequest"];
+            };
+        };
+        responses: {
+            /** @description How many nights were written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillRatesResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
