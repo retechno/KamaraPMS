@@ -12,6 +12,7 @@
 | Idempotency | `Idempotency-Key` header, **required** on endpoints marked ⓘ. A replay returns the stored response. |
 | Money | Decimal **strings**. Currency and decimals come from `GET {P}`. |
 | Dates | `YYYY-MM-DD` = business or calendar date. RFC 3339 UTC = instant. **Postings never accept a business date from the client**, except as a stale-screen guard where noted. |
+| Approval | **Every correction needs approval:** adjustments, reversals, payment voids and refunds carry `approval: { email, password }` (the approver's own credentials, entered in a dialog). See §14.1. |
 | Lists | `?limit=&cursor=` → `{ data: [...], next_cursor }` |
 | Errors | RFC 9457 problem+json: `{ type, title, status, code, detail, errors: [{field, code}], context }` |
 | Status codes | 200, 201, 400, 401, 403, 404, **409** (business rule or state), **422** (validation), 429 |
@@ -435,13 +436,13 @@ There are no endpoints to open or close days directly. That only happens through
 
 **POST `{P}/folios/{id}/adjustments`** ⓘ (`folio.adjust`)
 - **Purpose:** an adjustment.
-- **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id? }`
+- **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id?, approval }`
 - **Rules:** processed through the engine, with a signed base.
 - **TX:** as for charges
 
 **POST `{P}/folio-items/{id}/reverse`** (`folio.reverse`)
 - **Purpose:** a same-day reversal.
-- **Request:** `{ reason }`
+- **Request:** `{ reason, approval }`
 - **Response 201:** the reversal item.
 - **Rules:** the item's `business_date = BD` and it isn't already reversed. Not allowed on PAYMENT or REFUND items (use void). A room-charge item flips its register row to REVERSED.
 - **TX:** `T[L1 share, L4 folio]` + 🛡 UK `reverses_item_id`
@@ -454,12 +455,12 @@ There are no endpoints to open or close days directly. That only happens through
 - **TX:** see Step 15 #6
 
 **POST `{P}/payments/{id}/void`** (`payment.void`)
-- **Request:** `{ reason }`
+- **Request:** `{ reason, approval }`
 - **Rules:** same BD, POSTED, the folio is OPEN, and there are no refunds.
 - **TX:** `T[L1 share, L4 folio → payment]`
 
 **POST `{P}/payments/{id}/refunds`** ⓘ (`payment.refund`)
-- **Request:** `{ amount, payment_method?, reference_number?, reason }`
+- **Request:** `{ amount, payment_method?, reference_number?, reason, approval }`
 - **Rules:** `amount ≤ refundable`.
 - **TX:** `T[L1 share, L4 folio → original payment, L5]`
 
@@ -521,3 +522,16 @@ There are no endpoints to open or close days directly. That only happens through
 - **Response:** `[{ created_at, business_date, user, action, entity_type, entity_id, old_data, new_data }]`
 - **Rules:** entries for tenant-level entities (guests, users) are available at `/audit-logs?…` to tenant admins.
 - **TX:** R
+
+### 14.1 Correction approval (decision: every correction, M9)
+
+Applies to: `POST {P}/folios/{id}/adjustments`, `POST {P}/folio-items/{id}/reverse`, `POST {P}/payments/{id}/void` and `POST {P}/payments/{id}/refunds`.
+
+- **Request block:** `approval: { email, password }`. It is required; a request without it is 422 `APPROVAL_REQUIRED`.
+- **Who may approve:** any active user of the tenant who holds the new permission **`correction.approve`** at that property (tenant administrators pass every check). **The actor may approve their own correction**: they enter their own credentials again. A separate approver is optional.
+- **Two separate checks:** the actor needs the operation's permission (`folio.adjust`, `folio.reverse`, `payment.void`, `payment.refund`), and the approver needs `correction.approve`. A user with both can do both.
+- **Verification:** the approver's password is checked with the same argon2id verifier and the same rate limits as login, inside the request's transaction. Wrong email or password gives 401 `APPROVAL_INVALID_CREDENTIALS` (one generic error, no hint which part was wrong). A valid approver without the permission gives 403 `APPROVAL_NOT_PERMITTED`. Both count toward the login rate limit. Verifying an approval never creates a session or token.
+- **Never stored:** the password is not logged, not audited and not echoed back. Only the approver's user id is recorded.
+- **Recorded:** `approved_by` (NOT NULL) on the correcting row: REVERSAL and ADJUSTMENT `folio_items`, VOIDED payments and REFUND payments. The audit entry carries `actor` and `approved_by` (equal when self-approved).
+- **Replays:** an `Idempotency-Key` replay returns the stored result and does not ask for approval again.
+- **Correction routes by date:** same business date → void (payments) or reversal (charges); an earlier date → an ADJUSTMENT or a REFUND posted on the current business date. A void or reversal of an earlier date is 409 `CORRECTION_REQUIRES_ADJUSTMENT`. Nothing is ever back-posted.

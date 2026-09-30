@@ -279,7 +279,8 @@ All four call the same method.
 4. `PostCharge` and `PostAdjustment` get their breakdown **only** from `ChargeCalculationService`. The caller never supplies amounts, except for future `INTEGRATION` sources, which go through `Verify`.
 5. **Reverse:** the original's `business_date = BD` (same-day correction). It isn't already reversed (🛡 UK). It isn't a PAYMENT or REFUND item (those go through `PaymentService.Void`). If the original has a register row, that row is set to `REVERSED` in the same transaction.
 6. Idempotency: if `idempotency_key` already exists for the property, return the original item and write nothing.
-7. Write the item, its components (with snapshots of code, name, rate, `tax_on_service`, base, amount and sequence) and an audit log entry. The deferred trigger checks the totals at commit.
+7. **Approval (adjustment, reversal and payment void/refund entries):** the command carries a verified `ApprovedBy` user id (see [06-api.md §14.1](06-api.md)). Without it the operation fails with `APPROVAL_REQUIRED`. `FolioPostingService` and `PaymentService` never verify passwords themselves: an `approval.Verifier` (in `iam`) does that before the use case calls them, and its result is an unexported-constructor value so callers cannot fabricate one.
+8. Write the item, its components (with snapshots of code, name, rate, `tax_on_service`, base, amount and sequence) and an audit log entry. The deferred trigger checks the totals at commit.
 
 ### 10.3 Balance
 `balance = SUM(debit) − SUM(credit)` over the folio's items. It's never stored. `GetBalance(folioID)` is the only accessor.
