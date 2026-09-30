@@ -87,7 +87,8 @@ func TestParseAmountFollowsCurrencyAndColumn(t *testing.T) {
 		ok       bool
 	}{
 		{"1500000", 0, true}, {"1500000.00", 0, true}, {"1500000.50", 0, false}, {"150.50", 2, true}, {"150.505", 2, false},
-		{"150.50", 3, true}, {"150.501", 3, false}, // the column stores two decimals whatever the currency
+		{"150.50", 3, true}, {"150.501", 3, true}, {"150.5051", 3, false}, {"150.501", 2, false}, // KWD and BHD keep three decimals
+		{"999999999999999.999", 3, true}, {"1000000000000000", 0, false}, // numeric(18,3) holds 15 integer digits
 		{"0", 2, true}, {"-1", 2, false}, {"", 2, false}, {"1e3", 2, false}, {"1,5", 2, false},
 	} {
 		if _, err := ParseAmount(tc.in, tc.decimals); (err == nil) != tc.ok {

@@ -223,7 +223,7 @@ There are no endpoints to open or close days directly. That only happens through
 
 ## 9. Billing configuration (write: `billing_config.manage`; read: any access to the property)
 
-Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage strings with four decimals (`"11.0000"`); input may omit trailing zeros. Amounts (`default_unit_price`) are plain decimal strings and may not have more decimals than the property's currency.
+Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage strings with four decimals (`"11.0000"`); input may omit trailing zeros. Amounts (`default_unit_price`) are plain decimal strings, formatted with the property's currency decimals, and may not have more decimals than the currency (0 to 3).
 
 **GET / POST `{P}/taxes`, PATCH `{P}/taxes/{id}`**
 - **Request:** `{ code, name, rate: "11.0000", tax_on_service, is_active? }`
@@ -286,7 +286,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Purpose:** bulk upsert.
 - **Request:** `{ rate_plan_id, room_type_ids[] (1 to 50), from, to (exclusive), weekdays? (MON..SUN; all days when omitted), amount }`
 - **Response:** `{ updated_nights, created_nights }`: nights written (new or overwritten) and how many of those were new.
-- **Validation:** `to > from`, a span of ≤ 730 days, `amount ≥ 0` with at most the currency's decimals and never more than two (the column stores `numeric(18,2)`); the weekdays must select at least one night (422 `NO_NIGHTS`). Room types and the plan must exist in the property (404). Rates may be prepared for an inactive plan and for past dates.
+- **Validation:** `to > from`, a span of ≤ 730 days, `amount ≥ 0` with at most the currency's decimals (0 to 3) and fewer than 10^15; the weekdays must select at least one night (422 `NO_NIGHTS`). Room types and the plan must exist in the property (404). Rates may be prepared for an inactive plan and for past dates.
 - **Rules:** all or nothing. Existing reservations are not affected (snapshots).
 - **TX:** `T[L1 share, L2 room types FOR SHARE, plan FOR SHARE]`: one batched upsert + an audit summary. The plan's share lock and the plan update's exclusive lock make a fill and a price mode switch mutually exclusive.
 

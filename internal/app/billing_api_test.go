@@ -81,7 +81,7 @@ func TestBillingConfigAPIFlow(t *testing.T) {
 
 	// Charge codes.
 	cc := abc.do(http.MethodPost, base+"/charge-codes", map[string]any{"code": "spa", "name": "Spa", "charge_type": "SERVICE", "price_mode": "INCLUSIVE", "default_unit_price": "250000"})
-	if cc.status != http.StatusCreated || cc.body["default_unit_price"] != "250000.00" || cc.body["is_system"] != false || len(cc.body["taxes"].([]any)) != 0 {
+	if cc.status != http.StatusCreated || cc.body["default_unit_price"] != "250000" || cc.body["is_system"] != false || len(cc.body["taxes"].([]any)) != 0 {
 		t.Fatalf("create charge code: %d %v", cc.status, cc.body)
 	}
 	if r := abc.do(http.MethodPost, base+"/charge-codes", map[string]any{"code": "X", "name": "x", "charge_type": "SERVICE", "price_mode": "INCLUSIVE", "default_unit_price": "1.5"}); r.status != 422 || fieldsOf(r)["default_unit_price"] != "INVALID_AMOUNT" {

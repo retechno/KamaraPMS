@@ -263,7 +263,7 @@ func TestChargeCodeEditingAndLocks(t *testing.T) {
 		Code: "spa", Name: "Spa", ChargeType: "service", PriceMode: "inclusive", DefaultUnitPrice: "250000", IsActive: true,
 	})
 	if err != nil || created.Code != "SPA" || created.ChargeType != "SERVICE" || created.PriceMode != "INCLUSIVE" || created.IsSystem ||
-		created.DefaultUnitPrice == nil || *created.DefaultUnitPrice != "250000.00" {
+		created.DefaultUnitPrice == nil || *created.DefaultUnitPrice != "250000" {
 		t.Fatalf("create: %v %+v", err, created)
 	}
 	_, err = f.Billing.CreateChargeCode(f.admin, f.bali, billingconfig.ChargeCodeInput{Code: "SPA", Name: "x", ChargeType: "OTHER", PriceMode: "EXCLUSIVE", IsActive: true})
@@ -322,7 +322,7 @@ func TestChargeCodeEditingAndLocks(t *testing.T) {
 
 	// Default price: set, clear with "", precision.
 	price := "300000"
-	if u, err := f.Billing.UpdateChargeCode(f.admin, f.bali, created.ID, billingconfig.ChargeCodePatch{DefaultUnitPrice: &price}); err != nil || *u.DefaultUnitPrice != "300000.00" {
+	if u, err := f.Billing.UpdateChargeCode(f.admin, f.bali, created.ID, billingconfig.ChargeCodePatch{DefaultUnitPrice: &price}); err != nil || *u.DefaultUnitPrice != "300000" {
 		t.Fatalf("set price: %v %+v", err, u)
 	}
 	empty := ""

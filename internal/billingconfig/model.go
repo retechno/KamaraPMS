@@ -19,7 +19,7 @@ import (
 var (
 	codePattern    = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
 	ratePattern    = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,4})?$`)
-	amountPattern  = regexp.MustCompile(`^[0-9]{1,16}(\.[0-9]{1,2})?$`)
+	amountPattern  = regexp.MustCompile(`^[0-9]{1,15}(\.[0-9]{1,3})?$`)
 	hundred        = decimal.NewFromInt(100)
 	maxRulesPerSet = 20
 )

@@ -300,6 +300,15 @@ SELECT expect_error('rate plan room charge code must be charge_type ROOM', '2351
 
 INSERT INTO rates (tenant_id, property_id, rate_plan_id, room_type_id, stay_date, amount)
 VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), '2026-10-01', 1000000);
+SELECT expect_ok('money columns keep three decimals (KWD, BHD)',
+    $q$INSERT INTO rates (tenant_id, property_id, rate_plan_id, room_type_id, stay_date, amount) VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), '2027-03-01', 12.345)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT amount FROM rates WHERE rate_plan_id = rp('BAR') AND stay_date = '2027-03-01') = 12.345 THEN 1 ELSE 0 END)$q$,
+    $q$UPDATE charge_codes SET default_unit_price = 7.125 WHERE id = cc('LAUNDRY')$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT default_unit_price FROM charge_codes WHERE id = cc('LAUNDRY')) = 7.125 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'folio_items' AND column_name = 'debit') = 3
+                         AND (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'payments' AND column_name = 'amount') = 3
+                         AND (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'folio_item_components' AND column_name = 'amount') = 3
+                         AND (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'reservation_room_rates' AND column_name = 'amount') = 3 THEN 1 ELSE 0 END)$q$);
 SELECT expect_error('rate amount >= 0', '23514',
     $q$INSERT INTO rates (tenant_id, property_id, rate_plan_id, room_type_id, stay_date, amount) VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), '2026-10-02', -1)$q$);
 

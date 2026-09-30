@@ -45,7 +45,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
   `internal/platform/clock`; use the injected `clock.Clock` for instants.
 - **Dates are `civil.Date`, times of day `civil.TimeOfDay`**, never `time.Time`. Instants are UTC.
 - **Money is `decimal.Decimal`** (never float; `decimal.NewFromFloat` is lint-forbidden), a string in JSON,
-  `numeric` in SQL, rounded half away from zero at `properties.currency_decimals`.
+  `numeric(18,3)` in SQL, rounded half away from zero at `properties.currency_decimals` (0 to 3).
 - **Transactions:** a use case opens `TxManager.WithinTx`; services join the ambient transaction and never
   commit. Row locks only via `db.LockRows` / `db.EnterLockLevel` (global lock order is enforced at runtime:
   business day → room types → rooms → reservations → stays → folios → payments → sequences).

@@ -261,7 +261,7 @@ func TestFillValidationAndAtomicity(t *testing.T) {
 	if res, err := f.Rates.FillRates(f.admin, f.bali, rates.FillInput{RatePlanID: pl.ID, RoomTypeIDs: []int64{f.dlx}, From: d("2026-01-01"), To: d("2026-01-01").AddDays(730), Amount: "900000"}); err != nil || res.UpdatedNights != 730 {
 		t.Fatalf("730 nights: %v %+v", err, res)
 	}
-	// Two-decimal currency, and a three-decimal one is limited to what the column stores.
+	// Two-decimal currency keeps two decimals; a three-decimal one (KWD, BHD) keeps three.
 	usd := f.PropertyIn(t, f.tenantID, "NYC", "USD", 2)
 	usdPlan, err := f.Rates.CreateRatePlan(f.admin, usd.ID, rates.RatePlanInput{Code: "BAR", Name: "BAR", MealPlan: "RO", RoomChargeCodeID: f.codeID(t, usd.ID, "ROOM"), IsActive: true})
 	if err != nil {
@@ -277,6 +277,33 @@ func TestFillValidationAndAtomicity(t *testing.T) {
 	}
 	_, err = f.Rates.FillRates(f.admin, usd.ID, rates.FillInput{RatePlanID: usdPlan.ID, RoomTypeIDs: []int64{usdType.ID}, From: d("2026-10-01"), To: d("2026-10-02"), Amount: "150.505"})
 	wantCode(t, err, "VALIDATION_FAILED")
+
+	kwd := f.PropertyIn(t, f.tenantID, "KWT", "KWD", 3)
+	kwdPlan, err := f.Rates.CreateRatePlan(f.admin, kwd.ID, rates.RatePlanInput{Code: "BAR", Name: "BAR", MealPlan: "RO", RoomChargeCodeID: f.codeID(t, kwd.ID, "ROOM"), IsActive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kwdType := f.RoomType(t, f.admin, kwd.ID, "KING")
+	fillKWD := func(amount string) error {
+		_, err := f.Rates.FillRates(f.admin, kwd.ID, rates.FillInput{RatePlanID: kwdPlan.ID, RoomTypeIDs: []int64{kwdType.ID}, From: d("2026-10-01"), To: d("2026-10-03"), Amount: amount})
+		return err
+	}
+	if err := fillKWD("45.125"); err != nil {
+		t.Fatalf("a three-decimal amount in a three-decimal currency: %v", err)
+	}
+	g, _ = f.Rates.Rates(f.admin, kwd.ID, kwdPlan.ID, nil, d("2026-10-01"), d("2026-10-03"))
+	if len(g.Rates) != 2 || g.Rates[0].Amount != "45.125" {
+		t.Fatalf("KWD amounts keep their third decimal: %v", g.Rates)
+	}
+	prices, err := f.Rates.NightlyPrices(context.Background(), f.tenantID, kwd.ID, kwdPlan.ID, kwdType.ID, d("2026-10-01"), d("2026-10-03"))
+	if err != nil || !prices.Nights[0].Amount.Equal(decimal.RequireFromString("45.125")) {
+		t.Fatalf("the lookup does not round the stored amount: %v %+v", err, prices)
+	}
+	wantCode(t, fillKWD("45.1255"), "VALIDATION_FAILED")
+	wantCode(t, fillKWD("1000000000000000"), "VALIDATION_FAILED") // 16 digits do not fit the column
+	if err := fillKWD("999999999999999.999"); err != nil {
+		t.Fatalf("the largest amount the column holds: %v", err)
+	}
 	// The CHECK constraint is the backstop for negative amounts.
 	if err := f.Exec(t, `UPDATE rates SET amount = -1 WHERE rate_plan_id = $1`, usdPlan.ID); err == nil {
 		t.Fatal("a negative rate must be rejected by the database")

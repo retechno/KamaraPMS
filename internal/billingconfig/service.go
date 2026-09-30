@@ -380,9 +380,13 @@ func (s *Service) ListChargeCodes(ctx context.Context, propertyID, afterID int64
 	if err != nil {
 		return nil, err
 	}
+	decimals, err := s.currencyDecimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]ChargeCode, len(rows))
 	for i, r := range rows {
-		out[i] = toChargeCode(r)
+		out[i] = toChargeCode(r, decimals)
 	}
 	return out, s.attachRules(ctx, p.TenantID, propertyID, nil, out)
 }
@@ -392,7 +396,11 @@ func (s *Service) loadChargeCode(ctx context.Context, tenantID, propertyID, id i
 	if err != nil {
 		return ChargeCode{}, orNotFound(err, errChargeCodeNotFound())
 	}
-	one := []ChargeCode{toChargeCode(row)}
+	decimals, err := s.currencyDecimals(ctx, propertyID)
+	if err != nil {
+		return ChargeCode{}, err
+	}
+	one := []ChargeCode{toChargeCode(row, decimals)}
 	if err := s.attachRules(ctx, tenantID, propertyID, &id, one); err != nil {
 		return ChargeCode{}, err
 	}
@@ -436,7 +444,7 @@ func (s *Service) CreateChargeCode(ctx context.Context, propertyID int64, in Cha
 		if err != nil {
 			return err
 		}
-		out = toChargeCode(row)
+		out = toChargeCode(row, decimals)
 		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.created", "charge_code", out.ID, nil, out))
 	})
 	return out, err

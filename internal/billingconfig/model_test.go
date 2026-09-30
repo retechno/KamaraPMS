@@ -32,8 +32,20 @@ func TestParseUnitPriceFollowsCurrencyPrecision(t *testing.T) {
 	if _, err := ParseUnitPrice("7.05", 2); err != nil {
 		t.Error(err)
 	}
-	if _, err := ParseUnitPrice("7.055", 3); err == nil {
-		t.Error("the column holds two decimals at most")
+	if _, err := ParseUnitPrice("7.055", 3); err != nil {
+		t.Errorf("three-decimal currencies (KWD, BHD) keep their third decimal: %v", err)
+	}
+	if _, err := ParseUnitPrice("7.0551", 3); err == nil {
+		t.Error("a fourth decimal is more than any currency has")
+	}
+	if _, err := ParseUnitPrice("7.055", 2); err == nil {
+		t.Error("a two-decimal currency has no third decimal")
+	}
+	if _, err := ParseUnitPrice("1234567890123456", 0); err == nil {
+		t.Error("16 integer digits do not fit numeric(18,3)")
+	}
+	if _, err := ParseUnitPrice("999999999999999.999", 3); err != nil {
+		t.Errorf("the largest value the column holds: %v", err)
 	}
 	for _, bad := range []string{"-1", "", "1e3", "1,000"} {
 		if _, err := ParseUnitPrice(bad, 2); err == nil {

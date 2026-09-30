@@ -304,7 +304,7 @@ func (s *Service) FillRates(ctx context.Context, propertyID int64, in FillInput)
 	}
 	amount, perr := ParseAmount(in.Amount, decimals)
 	if perr != nil {
-		fields = append(fields, fieldErr("amount", "INVALID_AMOUNT", "a non-negative amount with at most the currency's decimals (max 2)"))
+		fields = append(fields, fieldErr("amount", "INVALID_AMOUNT", "a non-negative amount with at most the currency's decimals"))
 	}
 	if len(fields) > 0 {
 		return FillResult{}, apperr.Invalid("the rates are invalid", fields...)

@@ -182,3 +182,47 @@ func TestCalculateValidationAndScoping(t *testing.T) {
 		t.Fatalf("a preview writes nothing: %d audit entries", n)
 	}
 }
+
+// A three-decimal currency (KWD, BHD) keeps its third decimal end to end: the default price is stored and
+// returned with three decimals, and the calculation rounds at three.
+func TestThreeDecimalCurrency(t *testing.T) {
+	f := newFixture(t)
+	kwd := f.PropertyIn(t, f.tenantID, "KWT", "KWD", 3)
+	cc, err := f.Billing.CreateChargeCode(f.admin, kwd.ID, billingconfig.ChargeCodeInput{
+		Code: "SPA", Name: "Spa", ChargeType: "SERVICE", PriceMode: "EXCLUSIVE", DefaultUnitPrice: "12.345", IsActive: true,
+	})
+	if err != nil || cc.DefaultUnitPrice == nil || *cc.DefaultUnitPrice != "12.345" {
+		t.Fatalf("three-decimal default price: %v %+v", err, cc)
+	}
+	if _, err := f.Billing.CreateChargeCode(f.admin, kwd.ID, billingconfig.ChargeCodeInput{
+		Code: "X", Name: "x", ChargeType: "OTHER", PriceMode: "EXCLUSIVE", DefaultUnitPrice: "1.2345", IsActive: true,
+	}); err == nil {
+		t.Fatal("four decimals")
+	}
+	if list, _ := f.Billing.ListChargeCodes(f.admin, kwd.ID, 0, billingconfig.ChargeCodeFilter{}, 200); func() bool {
+		for _, c := range list {
+			if c.Code == "SPA" {
+				return *c.DefaultUnitPrice == "12.345"
+			}
+		}
+		return false
+	}() == false {
+		t.Fatal("the list formats amounts with the property's decimals")
+	}
+	room := f.mapRoomRules(t, kwd.ID, "ROOM", true)
+	incl := chargecalc.Inclusive
+	// 10.000 inclusive with 10% service and 11% VAT on service: net0 = 10 / 1.221 = 8.190 (3 decimals).
+	b, err := f.Billing.Calculate(f.admin, billingconfig.ChargeRequest{PropertyID: kwd.ID, ChargeCodeID: room.ID, Quantity: dec("1"), UnitPrice: dec("10.000"), PriceMode: &incl})
+	if err != nil || b.Decimals != 3 || !b.TotalAmount.Equal(dec("10.000")) || !b.NetAmount.Add(b.ServiceTotal).Add(b.TaxTotal).Equal(dec("10.000")) {
+		t.Fatalf("KWD calculation: %v %+v", err, b)
+	}
+	for _, a := range []decimal.Decimal{b.NetAmount, b.ServiceTotal, b.TaxTotal, b.TaxableAmount} {
+		if !a.Equal(a.Round(3)) {
+			t.Fatalf("amount %s has more than three decimals", a)
+		}
+	}
+	// net0 = round(10 / 1.221, 3) = 8.190; service 0.819; VAT on 9.009 = 0.991; no residual.
+	if !b.NetAmount.Equal(dec("8.190")) || !b.ServiceTotal.Equal(dec("0.819")) || !b.TaxTotal.Equal(dec("0.991")) || !b.RoundingAdjustment.IsZero() {
+		t.Fatalf("KWD amounts: %+v", b)
+	}
+}

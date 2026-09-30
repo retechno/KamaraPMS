@@ -27,6 +27,9 @@ const (
 	MaxLookupNights = 365
 )
 
+// maxAmount is the first value numeric(18,3) cannot hold (15 integer digits).
+var maxAmount = decimal.New(1, 15)
+
 var mealPlans = map[string]bool{"RO": true, "BB": true, "HB": true, "FB": true, "AI": true}
 
 // weekdays maps the API names to time.Weekday. A calendar date has one weekday whatever the time zone.
@@ -197,15 +200,13 @@ func (in FillInput) Dates() []string {
 	return out
 }
 
-// ParseAmount parses a grid amount: non-negative, with at most the currency's decimals (and the two the
-// column stores).
+// ParseAmount parses a grid amount: non-negative, with at most the currency's decimals.
 func ParseAmount(s string, currencyDecimals int32) (decimal.Decimal, error) {
 	d, err := money.Parse(s)
-	if err != nil || d.IsNegative() {
+	if err != nil || d.IsNegative() || d.GreaterThanOrEqual(maxAmount) {
 		return decimal.Decimal{}, apperr.Invalid("not an amount")
 	}
-	limit := min(currencyDecimals, 2)
-	if !d.Equal(d.Round(limit)) {
+	if !d.Equal(d.Round(currencyDecimals)) {
 		return decimal.Decimal{}, apperr.Invalid("too many decimals")
 	}
 	return d, nil

@@ -51,6 +51,6 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
 - **M7** (rate plans and rates) is complete. No migration: the tables exist in 00007.
   - `internal/rates` owns rate plans, the rate grid (bulk upsert by range, weekdays and room types) and the price lookup `NightlyPrices` that M8 uses to snapshot `reservation_room_rates`.
   - A plan that has rates cannot switch to a room charge code with another price mode (it would silently reprice the grid); this is enforced under a share lock on the plan, so a fill and a switch cannot interleave.
-  - **Known limit:** the money columns are `numeric(18,2)` while a property may declare up to 3 currency decimals. Grid amounts (like `default_unit_price`) therefore accept at most two decimals whatever the currency; a three-decimal currency (KWD, BHD) needs a migration widening the money columns before it can be used for real. This is not decided yet.
+  - **Money precision (decided):** a property may use 0 to 3 currency decimals (IDR, USD, KWD). Migration 00015 widened every money column from `numeric(18,2)` to `numeric(18,3)` (keeping existing values exactly; its Down narrows and rounds, so only run it on data without a third decimal). The application rejects amounts with more decimals than the property's currency and amounts of 10^15 or more; API amounts are formatted with the currency's decimals.
 
 Earlier revisions are in [archive/](archive/).

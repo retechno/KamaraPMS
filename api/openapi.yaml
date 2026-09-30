@@ -1822,7 +1822,7 @@ components:
       examples: ["11.0000"]
     Amount:
       type: string
-      pattern: '^[0-9]{1,16}(\.[0-9]{1,2})?$'
+      pattern: '^[0-9]{1,15}(\.[0-9]{1,3})?$'
       description: A non-negative decimal amount as a string. It may not have more decimals than the property currency.
       examples: ["250000"]
     ChargeType:
