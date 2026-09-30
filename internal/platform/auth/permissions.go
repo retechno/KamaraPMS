@@ -55,6 +55,8 @@ const (
 	PermPaymentVoid   Permission = "payment.void"
 	PermPaymentRefund Permission = "payment.refund"
 
+	PermCorrectionApprove Permission = "correction.approve"
+
 	PermNightAuditRun    Permission = "nightaudit.run"
 	PermNightAuditNoShow Permission = "nightaudit.no_show"
 
@@ -103,6 +105,7 @@ var Catalogue = []PermissionInfo{
 	{PermPaymentPost, "Billing", "Take payments and deposits", "M9"},
 	{PermPaymentVoid, "Billing", "Void same-day payments", "M9"},
 	{PermPaymentRefund, "Billing", "Refund payments", "M9"},
+	{PermCorrectionApprove, "Billing", "Approve corrections (adjustments, reversals, voids and refunds) with own credentials", "M9"},
 
 	{PermNightAuditRun, "End of day", "Run night audit and post room charges", "M13"},
 	{PermNightAuditNoShow, "End of day", "Mark arrivals as no-show", "M13"},

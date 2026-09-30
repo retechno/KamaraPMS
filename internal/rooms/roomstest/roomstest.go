@@ -5,6 +5,7 @@ package roomstest
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/folios"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
@@ -47,6 +49,8 @@ type Env struct {
 	Rates   *rates.Service
 	Avail   *availability.Service
 	Res     *reservations.Service
+	IAM     *iam.Service
+	Folios  *folios.Service
 
 	seq int
 }
@@ -67,7 +71,8 @@ func Setup(t *testing.T) *Env {
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
 	rt := rates.NewService(txm, c, aw, authz, ten)
 	gs := guests.NewService(txm, c, aw, authz, ten)
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
+	return &Env{IAM: ia, Folios: folios.NewService(txm, c, aw, authz, ten, billing, ia), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)}
 }
 
@@ -128,6 +133,47 @@ func (e *Env) User(t *testing.T, tenantID, propertyID int64, perms ...auth.Permi
 		tenantID, userID, propertyID, roleID)
 	must(t, err)
 	return auth.WithPrincipal(ctx, auth.Principal{TenantID: tenantID, UserID: userID})
+}
+
+// Password is the password of every account made by Account and AdminAccount.
+const Password = "correct horse battery staple"
+
+// Account creates a non-admin user with a real password (for approvals) holding perms at the property. It returns the
+// user's context and email.
+func (e *Env) Account(t *testing.T, tenantID, propertyID int64, perms ...auth.Permission) (context.Context, string) {
+	t.Helper()
+	ctx := e.User(t, tenantID, propertyID, perms...)
+	p, err := auth.Require(ctx)
+	must(t, err)
+	e.setPassword(t, p.UserID)
+	return ctx, e.emailOf(t, p.UserID)
+}
+
+// AdminAccount creates a tenant administrator with a real password. It returns the user's context and email.
+func (e *Env) AdminAccount(t *testing.T, tenantID int64) (context.Context, string) {
+	t.Helper()
+	e.seq++
+	email := fmt.Sprintf("admin%d@hotel.com", e.seq)
+	var id int64
+	must(t, e.Pool.QueryRow(context.Background(), `INSERT INTO users (tenant_id, email, password_hash, full_name, is_tenant_admin) VALUES ($1, $2, 'x', 'Admin', true) RETURNING id`,
+		tenantID, email).Scan(&id))
+	e.setPassword(t, id)
+	return auth.WithPrincipal(context.Background(), auth.Principal{TenantID: tenantID, UserID: id, IsTenantAdmin: true}), email
+}
+
+func (e *Env) setPassword(t *testing.T, userID int64) {
+	t.Helper()
+	hash, err := iam.HashPassword(Password)
+	must(t, err)
+	_, err = e.Pool.Exec(context.Background(), `UPDATE users SET password_hash = $2 WHERE id = $1`, userID, hash)
+	must(t, err)
+}
+
+func (e *Env) emailOf(t *testing.T, userID int64) string {
+	t.Helper()
+	var email string
+	must(t, e.Pool.QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, userID).Scan(&email))
+	return email
 }
 
 // UserAt creates a non-admin user with one role per property (different permissions at each) and returns its context.

@@ -511,10 +511,10 @@ SELECT expect_error('same stay/night cannot be posted twice, even via another se
 WITH i AS (
     INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
                              reverses_item_id, stay_id, stay_room_id, description, quantity, unit_price, price_mode,
-                             base_amount, net_amount, service_charge_total, tax_total, credit, source, reason, idempotency_key)
+                             base_amount, net_amount, service_charge_total, tax_total, credit, source, reason, idempotency_key, approved_by)
     VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'REVERSAL', cc('ROOM'),
             fi('RC-S1-1001'), st('S1'), sr('S1', '410'), 'Reversal: Room 410 - 01 Oct 2026', -1, 1000000, 'EXCLUSIVE',
-            -1000000, -1000000, -100000, -121000, 1221000, 'SYSTEM', 'Wrong rate', 'REV-RC-S1-1001')
+            -1000000, -1000000, -100000, -121000, 1221000, 'SYSTEM', 'Wrong rate', 'REV-RC-S1-1001', us('ABC', 'admin@hotel.com'))
     RETURNING id, tenant_id, property_id)
 INSERT INTO folio_item_components (tenant_id, property_id, folio_item_id, component_type, service_charge_id, tax_id,
                                    code, name, rate, tax_on_service, base_amount, amount, sequence)
@@ -525,9 +525,24 @@ SELECT i.tenant_id, i.property_id, i.id, c.*
 
 SELECT expect_error('an item can be reversed only once', '23505',
     $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                reverses_item_id, description, quantity, unit_price, price_mode, base_amount, net_amount, credit, source, reason, approved_by)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'REVERSAL', cc('ROOM'),
+               fi('RC-S1-1001'), 'dup', -1, 1221000, 'EXCLUSIVE', -1221000, -1221000, 1221000, 'SYSTEM', 'dup', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_error('a reversal needs an approver', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
                                 reverses_item_id, description, quantity, unit_price, price_mode, base_amount, net_amount, credit, source, reason)
        VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'REVERSAL', cc('ROOM'),
-               fi('RC-S1-1001'), 'dup', -1, 1221000, 'EXCLUSIVE', -1221000, -1221000, 1221000, 'SYSTEM', 'dup')$q$);
+               fi('RC-S1-1001'), 'x', -1, 1221000, 'EXCLUSIVE', -1221000, -1221000, 1221000, 'SYSTEM', 'x')$q$);
+SELECT expect_error('an adjustment needs an approver', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reason)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'ADJUSTMENT', cc('ROOM'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'MANUAL', 'x')$q$);
+SELECT expect_error('an ordinary charge has no approver', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, approved_by)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'CHARGE', cc('ROOM'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'MANUAL', us('ABC', 'admin@hotel.com'))$q$);
 
 UPDATE stay_charge_postings SET status = 'REVERSED', reversal_item_id = fi('REV-RC-S1-1001')
  WHERE folio_item_id = fi('RC-S1-1001');
@@ -582,8 +597,16 @@ SELECT expect_error('payments have no currency column', '42703',
     $q$UPDATE payments SET currency_code = 'IDR'$q$);
 SELECT expect_error('payment amount is immutable', '23001',
     $q$UPDATE payments SET amount = 1 WHERE payment_number = 'P1'$q$);
-SELECT expect_ok('payment may be voided (POSTED -> VOIDED)',
+SELECT expect_error('a void needs an approver', '23514',
     $q$UPDATE payments SET status = 'VOIDED', voided_at = now(), void_reason = 'Wrong folio' WHERE payment_number = 'P1'$q$);
+SELECT expect_error('a refund needs an approver', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, refund_of_payment_id)
+       VALUES (tn('ABC'), pr('BALI'), 'P6', fo('F1'), 'REFUND', 'CASH', 100, '2026-10-01', pm('P1'))$q$);
+SELECT expect_error('a plain payment has no approver', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, approved_by)
+       VALUES (tn('ABC'), pr('BALI'), 'P7', fo('F1'), 'PAYMENT', 'CASH', 100, '2026-10-01', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_ok('payment may be voided (POSTED -> VOIDED) with its approver',
+    $q$UPDATE payments SET status = 'VOIDED', voided_at = now(), void_reason = 'Wrong folio', approved_by = us('ABC', 'admin@hotel.com') WHERE payment_number = 'P1'$q$);
 SELECT expect_error('payments cannot be deleted', '23001',
     $q$DELETE FROM payments WHERE payment_number = 'P1'$q$);
 
