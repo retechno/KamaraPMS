@@ -555,6 +555,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/guests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search guest profiles (guest.read), alphabetically
+         * @description Free text; every space-separated token must match the start of the first name, last name, email,
+         *     ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
+         *     An empty `q` lists everything the caller may see.
+         *
+         *     Visibility: a guest is visible when the caller holds `guest.search_all` (tenant-wide) or the guest is
+         *     linked to a property where the caller holds `guest.read` (origin property, reservation booker or
+         *     occupant, stay primary or accompanying guest). With `property_id`, only permissions at that property count.
+         *     A guest the caller cannot see behaves as if it did not exist (404 `GUEST_NOT_FOUND`).
+         */
+        get: operations["searchGuests"];
+        put?: never;
+        /**
+         * Create a guest profile (guest.write at the origin property)
+         * @description The code (GST000001, ...) is generated from a gapless tenant-wide series. Possible duplicates
+         *     (same email, phone digits, ID document, or name and birth date) are a warning only: the profile is
+         *     always created. Look-alikes the caller may not see are only counted.
+         */
+        post: operations["createGuest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/guests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A guest profile (guest.read), with whether the caller may edit it */
+        get: operations["getGuest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a guest profile
+         * @description Needs `guest.write` at a property where the guest is linked. Omitted fields stay unchanged; an empty
+         *     string clears a field (including `date_of_birth`). The code and origin property never change.
+         *     The audit trail masks the ID number.
+         */
+        patch: operations["updateGuest"];
+        trace?: never;
+    };
+    "/api/v1/guests/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Reservations and stays of a guest across properties, newest first (guest.read)
+         * @description Limited to properties where the caller holds `guest.read`, unless they hold
+         *     `guest.history_all_properties`. `hidden_count` is the number of items left out.
+         */
+        get: operations["getGuestHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -975,6 +1056,111 @@ export interface components {
         HousekeepingLogPage: {
             data: components["schemas"]["HousekeepingLog"][];
             next_cursor?: string;
+        };
+        Guest: {
+            /** Format: int64 */
+            id: number;
+            /** @example GST000001 */
+            code: string;
+            /** Format: int64 */
+            origin_property_id?: number;
+            first_name?: string;
+            last_name: string;
+            email?: string;
+            phone?: string;
+            /** @description ISO 3166-1 alpha-2. */
+            nationality?: string;
+            /** @description ISO 3166-1 alpha-2. */
+            country_code?: string;
+            date_of_birth?: components["schemas"]["Date"];
+            /** @enum {string} */
+            gender?: "MALE" | "FEMALE" | "OTHER" | "UNDISCLOSED";
+            id_type?: string;
+            id_number?: string;
+            address?: string;
+            city?: string;
+            notes?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        GuestView: components["schemas"]["Guest"] & {
+            /** @description The caller holds guest.write at a property where the guest is linked. */
+            can_edit: boolean;
+        };
+        GuestPage: {
+            data: components["schemas"]["Guest"][];
+            next_cursor?: string;
+        };
+        GuestInput: {
+            first_name?: string;
+            last_name?: string;
+            email?: string;
+            phone?: string;
+            nationality?: string;
+            country_code?: string;
+            /** @description YYYY-MM-DD, between 1900 and today. An empty string clears it on PATCH. */
+            date_of_birth?: string;
+            /** @enum {string} */
+            gender?: "MALE" | "FEMALE" | "OTHER" | "UNDISCLOSED";
+            id_type?: string;
+            /** @description Requires id_type. */
+            id_number?: string;
+            address?: string;
+            city?: string;
+            notes?: string;
+        };
+        CreateGuestRequest: {
+            /** Format: int64 */
+            origin_property_id: number;
+            first_name?: string;
+            last_name: string;
+            email?: string;
+            phone?: string;
+            nationality?: string;
+            country_code?: string;
+            date_of_birth?: components["schemas"]["Date"];
+            /** @enum {string} */
+            gender?: "MALE" | "FEMALE" | "OTHER" | "UNDISCLOSED";
+            id_type?: string;
+            id_number?: string;
+            address?: string;
+            city?: string;
+            notes?: string;
+        };
+        PatchGuestRequest: components["schemas"]["GuestInput"];
+        PossibleDuplicate: {
+            guest: components["schemas"]["Guest"];
+            reasons: ("SAME_EMAIL" | "SAME_PHONE" | "SAME_ID_DOCUMENT" | "SAME_NAME_AND_BIRTH_DATE")[];
+        };
+        CreatedGuest: components["schemas"]["Guest"] & {
+            possible_duplicates: components["schemas"]["PossibleDuplicate"][];
+            /** @description Look-alike profiles the caller may not see. */
+            hidden_duplicate_count: number;
+        };
+        GuestHistoryItem: {
+            /** @enum {string} */
+            type: "RESERVATION" | "STAY";
+            /** Format: int64 */
+            id: number;
+            /** @description Confirmation or stay number. */
+            number: string;
+            /** @enum {string} */
+            role: "BOOKER" | "OCCUPANT" | "PRIMARY" | "ACCOMPANYING";
+            status: string;
+            /** Format: int64 */
+            property_id: number;
+            property_code: string;
+            property_name: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+        };
+        GuestHistory: {
+            data: components["schemas"]["GuestHistoryItem"][];
+            next_cursor?: string;
+            /** @description Items at properties the caller may not see. */
+            hidden_count: number;
         };
         HealthStatus: {
             /**
@@ -2086,6 +2272,143 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    searchGuests: {
+        parameters: {
+            query?: {
+                q?: string;
+                property_id?: number;
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of guests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGuestRequest"];
+            };
+        };
+        responses: {
+            /** @description The guest with duplicate hints. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedGuest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGuestRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated guest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGuestHistory: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of history items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestHistory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

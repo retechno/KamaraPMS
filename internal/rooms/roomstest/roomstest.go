@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -37,6 +38,7 @@ type Env struct {
 	Tenancy *tenancy.Service
 	HK      *housekeeping.Service
 	Rooms   *rooms.Service
+	Guests  *guests.Service
 
 	seq int
 }
@@ -52,7 +54,7 @@ func Setup(t *testing.T) *Env {
 	authz := iam.NewAuthorizer(txm)
 	ten := tenancy.NewService(txm, c, aw, authz)
 	hk := housekeeping.NewService(txm, c, aw, authz, ten)
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk)}
+	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk), Guests: guests.NewService(txm, c, aw, authz, ten)}
 }
 
 // Admin returns a context authenticated as the tenant administrator.
@@ -105,6 +107,29 @@ func (e *Env) User(t *testing.T, tenantID, propertyID int64, perms ...auth.Permi
 	_, err := e.Pool.Exec(ctx, `INSERT INTO user_properties (tenant_id, user_id, property_id, role_id) VALUES ($1, $2, $3, $4)`,
 		tenantID, userID, propertyID, roleID)
 	must(t, err)
+	return auth.WithPrincipal(ctx, auth.Principal{TenantID: tenantID, UserID: userID})
+}
+
+// UserAt creates a non-admin user with one role per property (different permissions at each) and returns its context.
+func (e *Env) UserAt(t *testing.T, tenantID int64, grants map[int64][]auth.Permission) context.Context {
+	t.Helper()
+	ctx := context.Background()
+	e.seq++
+	var userID int64
+	must(t, e.Pool.QueryRow(ctx, `INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, 'x', 'User') RETURNING id`,
+		tenantID, fmt.Sprintf("u%d@hotel.com", e.seq)).Scan(&userID))
+	for propertyID, perms := range grants {
+		e.seq++
+		var roleID int64
+		must(t, e.Pool.QueryRow(ctx, `INSERT INTO roles (tenant_id, name) VALUES ($1, $2) RETURNING id`, tenantID, fmt.Sprintf("Role %d", e.seq)).Scan(&roleID))
+		for _, p := range perms {
+			_, err := e.Pool.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_code) VALUES ($1, $2)`, roleID, string(p))
+			must(t, err)
+		}
+		_, err := e.Pool.Exec(ctx, `INSERT INTO user_properties (tenant_id, user_id, property_id, role_id) VALUES ($1, $2, $3, $4)`,
+			tenantID, userID, propertyID, roleID)
+		must(t, err)
+	}
 	return auth.WithPrincipal(ctx, auth.Principal{TenantID: tenantID, UserID: userID})
 }
 
@@ -162,8 +187,8 @@ func (e *Env) base(t *testing.T, tenantID, propertyID int64) base {
 	must(t, e.Pool.QueryRow(ctx, `INSERT INTO rate_plans (tenant_id, property_id, code, name, room_charge_code_id) VALUES ($1, $2, 'BAR', 'Best', $3) RETURNING id`,
 		tenantID, propertyID, ccID).Scan(&b.ratePlanID))
 	if err := e.Pool.QueryRow(ctx, `SELECT id FROM guests WHERE tenant_id = $1 AND code = 'G1'`, tenantID).Scan(&b.guestID); err != nil {
-		must(t, e.Pool.QueryRow(ctx, `INSERT INTO guests (tenant_id, code, origin_property_id, last_name) VALUES ($1, 'G1', $2, 'Guest') RETURNING id`,
-			tenantID, propertyID).Scan(&b.guestID))
+		must(t, e.Pool.QueryRow(ctx, `INSERT INTO guests (tenant_id, code, last_name) VALUES ($1, 'G1', 'Guest') RETURNING id`,
+			tenantID).Scan(&b.guestID))
 	}
 	return b
 }

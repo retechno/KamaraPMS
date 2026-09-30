@@ -30,4 +30,10 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - Room type codes are immutable (PATCH rejects `code`). `GET {P}/room-status` (the full derived board) stays in M10; the housekeeping board already carries derived occupancy and the active block.
   - The housekeeping board is not paginated (one row per active room, capped at 2,000).
 
+- **M4** (guests) is complete. Migration 00013 adds `tenant_sequences` (gapless tenant-wide guest numbers) and the SQL function `guest_linked_to`, the single definition of "a guest is linked to a property".
+  - `auth.Authorizer.PropertiesWith(perm)` lists the caller's properties holding a permission. Tenant-wide resources use it to derive visibility; the visibility, write and history rules are in [06-api.md §8](06-api.md).
+  - Duplicate hints never block creation; look-alikes at properties the caller cannot see are counted, not shown.
+  - Search is prefix and token based on the existing btree indexes. `pg_trgm` (fuzzy matching) is still later. Phone numbers are compared by digits only, with no country-code normalisation.
+  - Merging duplicate profiles is not part of M4.
+
 Earlier revisions are in [archive/](archive/).

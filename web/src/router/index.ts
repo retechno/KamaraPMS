@@ -34,6 +34,14 @@ export const router = createRouter({
       meta: { title: 'Room types' },
     },
     { path: '/setup/rooms', name: 'rooms', component: () => import('@/views/rooms/RoomsView.vue'), meta: { title: 'Rooms' } },
+    { path: '/guests', name: 'guests', component: () => import('@/views/guests/GuestsView.vue'), meta: { title: 'Guests' } },
+    {
+      path: '/guests/:id(\\d+)',
+      name: 'guest',
+      component: () => import('@/views/guests/GuestDetailView.vue'),
+      props: true,
+      meta: { title: 'Guest' },
+    },
     { path: '/account', name: 'account', component: () => import('@/views/AccountView.vue'), meta: { title: 'Account' } },
     {
       path: '/setup/properties',

@@ -20,6 +20,7 @@ export const navigation: NavSection[] = [
     title: 'Front office',
     items: [
       { label: 'Dashboard', to: '/', milestone: 'M0' },
+      { label: 'Guests', to: '/guests', milestone: 'M4' },
       { label: 'Reservations', milestone: 'M8' },
       { label: 'Arrivals', milestone: 'M10' },
       { label: 'In-house', milestone: 'M10' },

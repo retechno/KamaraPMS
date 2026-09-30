@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -714,6 +714,114 @@ paths:
               schema: { $ref: "#/components/schemas/HousekeepingLogPage" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/guests:
+    get:
+      operationId: searchGuests
+      summary: Search guest profiles (guest.read), alphabetically
+      description: |
+        Free text; every space-separated token must match the start of the first name, last name, email,
+        ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
+        An empty `q` lists everything the caller may see.
+
+        Visibility: a guest is visible when the caller holds `guest.search_all` (tenant-wide) or the guest is
+        linked to a property where the caller holds `guest.read` (origin property, reservation booker or
+        occupant, stay primary or accompanying guest). With `property_id`, only permissions at that property count.
+        A guest the caller cannot see behaves as if it did not exist (404 `GUEST_NOT_FOUND`).
+      tags: [guests]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: property_id, in: query, schema: { type: integer, format: int64 } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of guests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createGuest
+      summary: Create a guest profile (guest.write at the origin property)
+      description: |
+        The code (GST000001, ...) is generated from a gapless tenant-wide series. Possible duplicates
+        (same email, phone digits, ID document, or name and birth date) are a warning only: the profile is
+        always created. Look-alikes the caller may not see are only counted.
+      tags: [guests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGuestRequest" }
+      responses:
+        "201":
+          description: The guest with duplicate hints.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedGuest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/guests/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getGuest
+      summary: A guest profile (guest.read), with whether the caller may edit it
+      tags: [guests]
+      responses:
+        "200":
+          description: The guest.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestView" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateGuest
+      summary: Edit a guest profile
+      description: |
+        Needs `guest.write` at a property where the guest is linked. Omitted fields stay unchanged; an empty
+        string clears a field (including `date_of_birth`). The code and origin property never change.
+        The audit trail masks the ID number.
+      tags: [guests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchGuestRequest" }
+      responses:
+        "200":
+          description: The updated guest.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestView" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/guests/{id}/history:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getGuestHistory
+      summary: Reservations and stays of a guest across properties, newest first (guest.read)
+      description: |
+        Limited to properties where the caller holds `guest.read`, unless they hold
+        `guest.history_all_properties`. `hidden_count` is the number of items left out.
+      tags: [guests]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of history items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestHistory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1218,6 +1326,124 @@ components:
           type: array
           items: { $ref: "#/components/schemas/HousekeepingLog" }
         next_cursor: { type: string }
+    Guest:
+      type: object
+      required: [id, code, last_name, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string, examples: [GST000001] }
+        origin_property_id: { type: integer, format: int64 }
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        nationality: { type: string, description: ISO 3166-1 alpha-2. }
+        country_code: { type: string, description: ISO 3166-1 alpha-2. }
+        date_of_birth: { $ref: "#/components/schemas/Date" }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER, UNDISCLOSED] }
+        id_type: { type: string }
+        id_number: { type: string }
+        address: { type: string }
+        city: { type: string }
+        notes: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    GuestView:
+      allOf:
+        - $ref: "#/components/schemas/Guest"
+        - type: object
+          required: [can_edit]
+          properties:
+            can_edit: { type: boolean, description: The caller holds guest.write at a property where the guest is linked. }
+    GuestPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Guest" }
+        next_cursor: { type: string }
+    GuestInput:
+      type: object
+      additionalProperties: false
+      properties:
+        first_name: { type: string, maxLength: 100 }
+        last_name: { type: string, maxLength: 100 }
+        email: { type: string, maxLength: 254 }
+        phone: { type: string, maxLength: 30 }
+        nationality: { type: string }
+        country_code: { type: string }
+        date_of_birth: { type: string, description: "YYYY-MM-DD, between 1900 and today. An empty string clears it on PATCH." }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER, UNDISCLOSED] }
+        id_type: { type: string, maxLength: 30 }
+        id_number: { type: string, maxLength: 50, description: Requires id_type. }
+        address: { type: string, maxLength: 300 }
+        city: { type: string, maxLength: 100 }
+        notes: { type: string, maxLength: 2000 }
+    CreateGuestRequest:
+      type: object
+      required: [origin_property_id, last_name]
+      additionalProperties: false
+      properties:
+        origin_property_id: { type: integer, format: int64 }
+        first_name: { type: string, maxLength: 100 }
+        last_name: { type: string, maxLength: 100 }
+        email: { type: string, maxLength: 254 }
+        phone: { type: string, maxLength: 30 }
+        nationality: { type: string }
+        country_code: { type: string }
+        date_of_birth: { $ref: "#/components/schemas/Date" }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER, UNDISCLOSED] }
+        id_type: { type: string, maxLength: 30 }
+        id_number: { type: string, maxLength: 50 }
+        address: { type: string, maxLength: 300 }
+        city: { type: string, maxLength: 100 }
+        notes: { type: string, maxLength: 2000 }
+    PatchGuestRequest:
+      $ref: "#/components/schemas/GuestInput"
+    PossibleDuplicate:
+      type: object
+      required: [guest, reasons]
+      properties:
+        guest: { $ref: "#/components/schemas/Guest" }
+        reasons:
+          type: array
+          items: { type: string, enum: [SAME_EMAIL, SAME_PHONE, SAME_ID_DOCUMENT, SAME_NAME_AND_BIRTH_DATE] }
+    CreatedGuest:
+      allOf:
+        - $ref: "#/components/schemas/Guest"
+        - type: object
+          required: [possible_duplicates, hidden_duplicate_count]
+          properties:
+            possible_duplicates:
+              type: array
+              items: { $ref: "#/components/schemas/PossibleDuplicate" }
+            hidden_duplicate_count:
+              type: integer
+              description: Look-alike profiles the caller may not see.
+    GuestHistoryItem:
+      type: object
+      required: [type, id, number, role, status, property_id, property_code, property_name, arrival_date, departure_date]
+      properties:
+        type: { type: string, enum: [RESERVATION, STAY] }
+        id: { type: integer, format: int64 }
+        number: { type: string, description: Confirmation or stay number. }
+        role: { type: string, enum: [BOOKER, OCCUPANT, PRIMARY, ACCOMPANYING] }
+        status: { type: string }
+        property_id: { type: integer, format: int64 }
+        property_code: { type: string }
+        property_name: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+    GuestHistory:
+      type: object
+      required: [data, hidden_count]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/GuestHistoryItem" }
+        next_cursor: { type: string }
+        hidden_count: { type: integer, description: Items at properties the caller may not see. }
     HealthStatus:
       type: object
       required: [status]

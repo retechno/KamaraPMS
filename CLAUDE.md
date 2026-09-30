@@ -8,7 +8,7 @@ project: do not borrow conventions from other PMS products.
 - `docs/architecture/`: the approved design. **Read it before changing behaviour.** Start with `README.md`
   (status). Key files: `02-database-schema.md`, `03-financial-engines.md`, `04-operations.md`,
   `05-transactions-locking.md`, `06-api.md`, `07-milestones.md`.
-- Status: **M0, M1, M2, M3 done.** Next: **M4 (guests)**, then M5…M15
+- Status: **M0, M1, M2, M3, M4 done.** Next: **M5 (billing configuration)**, then M6…M15
   in order. Build one milestone at a time; each has DB, backend, API, frontend and tests (see 07-milestones.md).
 - Rejected decisions must not come back: `rooms.status`, `taxes.is_inclusive`, `payments.currency_code`,
   `properties.business_date`, microservices, reservation-header dates/room statuses.

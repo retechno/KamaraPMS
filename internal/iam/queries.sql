@@ -139,6 +139,16 @@ SELECT EXISTS (
 FROM user_properties up
 WHERE up.tenant_id = @tenant_id AND up.user_id = @user_id AND up.property_id = @property_id;
 
+-- Properties where a non-admin holds a permission.
+-- name: ListPropertiesWithPermission :many
+SELECT up.property_id FROM user_properties up
+JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = @permission_code
+WHERE up.tenant_id = @tenant_id AND up.user_id = @user_id
+ORDER BY up.property_id;
+
+-- name: ListTenantPropertyIDs :many
+SELECT id FROM properties WHERE tenant_id = @tenant_id ORDER BY id;
+
 -- name: GetTenant :one
 SELECT id, code, name, status FROM tenants WHERE id = @id;
 

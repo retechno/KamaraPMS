@@ -91,3 +91,14 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/guests/queries.sql
+    gen:
+      go:
+        package: guestsdb
+        out: internal/guests/guestsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
