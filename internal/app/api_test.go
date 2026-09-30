@@ -69,6 +69,12 @@ type client struct {
 
 func (c *client) do(method, path string, body any) response {
 	c.env.t.Helper()
+	return c.doWith(method, path, body, nil)
+}
+
+// doWith is do with extra request headers (for example Idempotency-Key).
+func (c *client) doWith(method, path string, body any, headers map[string]string) response {
+	c.env.t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -77,6 +83,9 @@ func (c *client) do(method, path string, body any) response {
 	}
 	r := httptest.NewRequest(method, path, &buf)
 	r.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 	if c.token != "" {
 		r.Header.Set("Authorization", "Bearer "+c.token)
 	}

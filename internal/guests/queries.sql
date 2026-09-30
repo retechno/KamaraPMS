@@ -30,7 +30,7 @@ SELECT * FROM guests WHERE tenant_id = @tenant_id AND id = @id FOR UPDATE;
 
 -- Is the guest linked to any of the given properties? (write access: guest.write at a linked property)
 -- name: GuestLinkedTo :one
-SELECT guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[])::boolean AS linked
+SELECT COALESCE(guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]), false)::boolean AS linked
 FROM guests g WHERE g.tenant_id = @tenant_id AND g.id = @id;
 
 -- name: UpdateGuest :one

@@ -236,3 +236,47 @@ func (s *Service) FreeRooms(ctx context.Context, tenantID, propertyID, roomTypeI
 	}
 	return out, nil
 }
+
+// SellableType is an active room type as offered by a search.
+type SellableType struct {
+	ID           int64
+	Code         string
+	Name         string
+	MaxAdult     int
+	MaxChild     int
+	MaxOccupancy int
+}
+
+// SellableTypes lists the active room types of the property in display order.
+func (s *Service) SellableTypes(ctx context.Context, tenantID, propertyID int64) ([]SellableType, error) {
+	rows, err := s.q(ctx).ListSellableRoomTypes(ctx, availabilitydb.ListSellableRoomTypesParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SellableType, len(rows))
+	for i, r := range rows {
+		out[i] = SellableType{ID: r.ID, Code: r.Code, Name: r.Name, MaxAdult: int(r.MaxAdult), MaxChild: int(r.MaxChild), MaxOccupancy: int(r.MaxOccupancy)}
+	}
+	return out, nil
+}
+
+// SellablePlan is an active rate plan as offered by a search.
+type SellablePlan struct {
+	ID        int64
+	Code      string
+	Name      string
+	PriceMode string
+}
+
+// SellablePlans lists the active rate plans of the property.
+func (s *Service) SellablePlans(ctx context.Context, tenantID, propertyID int64) ([]SellablePlan, error) {
+	rows, err := s.q(ctx).ListSellableRatePlans(ctx, availabilitydb.ListSellableRatePlansParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SellablePlan, len(rows))
+	for i, r := range rows {
+		out[i] = SellablePlan{ID: r.ID, Code: r.Code, Name: r.Name, PriceMode: r.PriceMode}
+	}
+	return out, nil
+}

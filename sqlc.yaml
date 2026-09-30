@@ -141,3 +141,14 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/reservations/queries.sql
+    gen:
+      go:
+        package: reservationsdb
+        out: internal/reservations/reservationsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true

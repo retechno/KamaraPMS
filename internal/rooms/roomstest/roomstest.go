@@ -23,6 +23,7 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
 	"kamarapms/internal/rates"
+	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
@@ -44,6 +45,8 @@ type Env struct {
 	Guests  *guests.Service
 	Billing *billingconfig.Service
 	Rates   *rates.Service
+	Avail   *availability.Service
+	Res     *reservations.Service
 
 	seq int
 }
@@ -62,7 +65,10 @@ func Setup(t *testing.T) *Env {
 	avail := availability.NewService(txm)
 	billing := billingconfig.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: guests.NewService(txm, c, aw, authz, ten), Billing: billing, Rates: rates.NewService(txm, c, aw, authz, ten)}
+	rt := rates.NewService(txm, c, aw, authz, ten)
+	gs := guests.NewService(txm, c, aw, authz, ten)
+	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+		Avail: avail, Res: reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

@@ -168,6 +168,13 @@ func (s *Service) Get(ctx context.Context, id int64) (View, error) {
 	return View{Guest: toGuest(row), CanEdit: canEdit}, nil
 }
 
+// RequireVisible fails with 404 GUEST_NOT_FOUND unless the caller may see the guest (the same rule as Get).
+// Reservations use it to accept a booker or occupant.
+func (s *Service) RequireVisible(ctx context.Context, id int64) error {
+	_, err := s.Get(ctx, id)
+	return err
+}
+
 // canWrite: guest.write at a property where the guest is linked.
 func (s *Service) canWrite(ctx context.Context, p auth.Principal, id int64) (bool, error) {
 	writable, err := s.authz.PropertiesWith(ctx, auth.PermGuestWrite)

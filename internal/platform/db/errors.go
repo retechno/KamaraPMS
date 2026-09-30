@@ -69,6 +69,7 @@ var constraintErrors = map[string]mapped{
 	"folio_items_payment_uk":              {apperr.KindConflict, "PAYMENT_ALREADY_POSTED", "the payment is already posted to the ledger"},
 	"folio_items_reverses_uk":             {apperr.KindConflict, "ALREADY_REVERSED", "the item has already been reversed"},
 	"folio_items_idempotency_uk":          {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was already processed"},
+	"reservations_idempotency_uk":         {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was already processed"},
 	"payments_idempotency_uk":             {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was already processed"},
 	"stay_charge_postings_once_uk":        {apperr.KindConflict, "ROOM_CHARGE_ALREADY_POSTED", "the room charge for this night is already posted"},
 	"folio_items_totals_match_components": {apperr.KindInternal, "LEDGER_INCONSISTENT", "the ledger entry is inconsistent"},

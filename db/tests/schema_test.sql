@@ -340,6 +340,10 @@ SELECT expect_ok('same-day turnover: departure does not block the next arrival',
 SELECT expect_ok('DRAFT lines hold no room',
     $q$INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, status)
        VALUES (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rm('201'), rp('BAR'), '2026-10-02', '2026-10-03', 2, 'DRAFT')$q$);
+SELECT expect_ok('a reservation can carry an idempotency key with its request hash',
+    $q$UPDATE reservations SET idempotency_key = 'k-1', idempotency_hash = repeat('a', 64) WHERE confirmation_number = 'R1'$q$);
+SELECT expect_error('the idempotency key and its hash come together', '23514',
+    $q$UPDATE reservations SET idempotency_key = 'k-2', idempotency_hash = NULL WHERE confirmation_number = 'R1'$q$);
 SELECT expect_error('departure after arrival (no day-use)', '23514',
     $q$INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, rate_plan_id, arrival_date, departure_date, adult_count)
        VALUES (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rp('BAR'), '2026-10-05', '2026-10-05', 2)$q$);
