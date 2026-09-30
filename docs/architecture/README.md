@@ -23,4 +23,11 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - Authorization is per property: 404 without access, 403 without the permission. Users, roles and property creation are for tenant administrators.
   - The M1 development header login was removed.
 
+- **M3** (rooms, blocks, housekeeping) is complete. No migration: the tables already exist in 00004.
+  - `internal/rooms` owns room types, rooms and OOO/OOS blocks. `internal/housekeeping` owns the current status, its append-only log and the board; `housekeeping.Service.MarkDirty` is the entry point M10/M12/M13 use for system-driven changes (source CHECK_OUT, ROOM_MOVE, NIGHT_AUDIT, CHECK_IN_REVERSAL).
+  - Conflict checks already read the M8/M10 tables: a block, a room type change or a room deactivation is rejected (409 `ROOM_BLOCK_CONFLICT` / `ROOM_IN_USE`, with `context.conflicts`) while an open stay segment or a CONFIRMED assigned line holds the room. An overstay holds the room through tonight (`GREATEST(departure, BD + 1)`).
+  - Deferred to M8, where the availability engine lives: the type-level `available ≥ 0` check (`INVENTORY_OVERSOLD`) on blocks, type changes and deactivation. Room type deactivation only checks active rooms and future CONFIRMED lines of the type, as specified.
+  - Room type codes are immutable (PATCH rejects `code`). `GET {P}/room-status` (the full derived board) stays in M10; the housekeeping board already carries derived occupancy and the active block.
+  - The housekeeping board is not paginated (one row per active room, capped at 2,000).
+
 Earlier revisions are in [archive/](archive/).

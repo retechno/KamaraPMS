@@ -330,6 +330,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/room-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List room types */
+        get: operations["listRoomTypes"];
+        put?: never;
+        /** Create a room type (room.manage) */
+        post: operations["createRoomType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/room-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Room type details */
+        get: operations["getRoomType"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a room type or deactivate it (room.manage). The code cannot change.
+         * @description Deactivation is rejected with 409 `ROOM_TYPE_IN_USE` while active rooms of the type exist
+         *     or future CONFIRMED reservation lines hold it.
+         */
+        patch: operations["updateRoomType"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List rooms */
+        get: operations["listRooms"];
+        put?: never;
+        /**
+         * Create a room and its housekeeping state (room.manage)
+         * @description The housekeeping status starts as `initial_housekeeping_status` (default DIRTY); no log entry is written.
+         */
+        post: operations["createRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rooms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Room details */
+        get: operations["getRoom"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a room, change its type or deactivate it (room.manage)
+         * @description Changing the type or deactivating is rejected with 409 `ROOM_IN_USE` (with `context.conflicts`)
+         *     while a stay occupies the room or a CONFIRMED reservation line is assigned to it from the business date on.
+         */
+        patch: operations["updateRoom"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/room-blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List OOO/OOS blocks, newest first */
+        get: operations["listRoomBlocks"];
+        put?: never;
+        /**
+         * Take a room out of order (OOO) or out of service (OOS) (room_block.manage)
+         * @description Both types make the room unsellable for the half-open range [start_date, end_date).
+         *     Rejected with 409 `ROOM_BLOCK_CONFLICT` when an active block overlaps, or (with `context.conflicts`)
+         *     when a stay or a CONFIRMED assigned reservation line holds the room in the range.
+         */
+        post: operations["createRoomBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/room-blocks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Block details */
+        get: operations["getRoomBlock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the dates or reason of an active block, or release it early (room_block.manage)
+         * @description The new end_date must not be before the business date. Added nights are re-checked for conflicts.
+         */
+        patch: operations["updateRoomBlock"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/room-blocks/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a block (room_block.manage) */
+        post: operations["cancelRoomBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Housekeeping board with derived occupancy (all active rooms, not paginated) */
+        get: operations["getHousekeepingBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rooms/{id}/housekeeping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a room's housekeeping status (housekeeping.update; INSPECTED needs housekeeping.inspect)
+         * @description Legal transitions: DIRTY→CLEANING→CLEAN→INSPECTED, DIRTY→CLEAN and any→DIRTY.
+         *     Anything else is 409 `INVALID_HK_TRANSITION` with `context.allowed`. Every change writes a log entry.
+         */
+        post: operations["setRoomHousekeeping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A room's housekeeping history, newest first */
+        get: operations["listRoomHousekeepingLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -558,6 +783,199 @@ export interface components {
             data: components["schemas"]["BusinessDay"][];
             next_cursor?: string;
         };
+        RoomType: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description?: string;
+            max_adult: number;
+            max_child: number;
+            /** @description At most max_adult + max_child. */
+            max_occupancy: number;
+            /** @description At most max_occupancy. */
+            base_occupancy: number;
+            sort_order: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RoomTypePage: {
+            data: components["schemas"]["RoomType"][];
+            next_cursor?: string;
+        };
+        CreateRoomTypeRequest: {
+            /** @description 1-20 characters, A-Z 0-9 - _ (upper-cased). */
+            code: string;
+            name: string;
+            description?: string;
+            max_adult: number;
+            max_child: number;
+            max_occupancy: number;
+            base_occupancy: number;
+            sort_order?: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchRoomTypeRequest: {
+            name?: string;
+            description?: string;
+            max_adult?: number;
+            max_child?: number;
+            max_occupancy?: number;
+            base_occupancy?: number;
+            sort_order?: number;
+            is_active?: boolean;
+        };
+        Room: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_type_id: number;
+            room_number: string;
+            floor?: string;
+            building?: string;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RoomPage: {
+            data: components["schemas"]["Room"][];
+            next_cursor?: string;
+        };
+        CreateRoomRequest: {
+            room_number: string;
+            /** Format: int64 */
+            room_type_id: number;
+            floor?: string;
+            building?: string;
+            /** @default true */
+            is_active: boolean;
+            initial_housekeeping_status?: components["schemas"]["HousekeepingStatus"];
+        };
+        PatchRoomRequest: {
+            room_number?: string;
+            /** Format: int64 */
+            room_type_id?: number;
+            floor?: string;
+            building?: string;
+            is_active?: boolean;
+        };
+        /**
+         * @description Out of order or out of service. Both make the room unsellable.
+         * @enum {string}
+         */
+        BlockType: "OOO" | "OOS";
+        RoomBlock: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            block_type: components["schemas"]["BlockType"];
+            start_date: components["schemas"]["Date"];
+            /** @description Exclusive. */
+            end_date: components["schemas"]["Date"];
+            reason: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "CANCELLED";
+            /** Format: date-time */
+            cancelled_at?: string;
+            /** Format: int64 */
+            cancelled_by?: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RoomBlockPage: {
+            data: components["schemas"]["RoomBlock"][];
+            next_cursor?: string;
+        };
+        CreateRoomBlockRequest: {
+            /** Format: int64 */
+            room_id: number;
+            block_type: components["schemas"]["BlockType"];
+            /** @description Not before the business date. */
+            start_date: components["schemas"]["Date"];
+            /** @description Exclusive; after start_date. */
+            end_date: components["schemas"]["Date"];
+            reason: string;
+        };
+        PatchRoomBlockRequest: {
+            start_date?: components["schemas"]["Date"];
+            end_date?: components["schemas"]["Date"];
+            reason?: string;
+        };
+        CancelRoomBlockRequest: {
+            reason: string;
+        };
+        /** @enum {string} */
+        HousekeepingStatus: "DIRTY" | "CLEANING" | "CLEAN" | "INSPECTED";
+        /**
+         * @description Derived from stays and reservations; never stored.
+         * @enum {string}
+         */
+        Occupancy: "OCCUPIED" | "RESERVED" | "VACANT";
+        HousekeepingBoardRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            floor?: string;
+            building?: string;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            room_type_name: string;
+            status: components["schemas"]["HousekeepingStatus"];
+            /** Format: date-time */
+            status_updated_at: string;
+            occupancy: components["schemas"]["Occupancy"];
+            /** @description The active block covering the business date. */
+            block?: {
+                type: components["schemas"]["BlockType"];
+                end_date: components["schemas"]["Date"];
+            };
+            /** @description Statuses reachable from the current one (INSPECTED additionally needs housekeeping.inspect). */
+            allowed_next: components["schemas"]["HousekeepingStatus"][];
+        };
+        HousekeepingBoard: {
+            data: components["schemas"]["HousekeepingBoardRoom"][];
+        };
+        SetHousekeepingRequest: {
+            status: components["schemas"]["HousekeepingStatus"];
+            notes?: string;
+        };
+        HousekeepingState: {
+            /** Format: int64 */
+            room_id: number;
+            status: components["schemas"]["HousekeepingStatus"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HousekeepingLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            from_status: components["schemas"]["HousekeepingStatus"];
+            to_status: components["schemas"]["HousekeepingStatus"];
+            /** @enum {string} */
+            source: "MANUAL" | "CHECK_OUT" | "ROOM_MOVE" | "NIGHT_AUDIT" | "CHECK_IN_REVERSAL";
+            business_date: components["schemas"]["Date"];
+            notes?: string;
+            /** Format: date-time */
+            changed_at: string;
+            /** Format: int64 */
+            changed_by?: number;
+        };
+        HousekeepingLogPage: {
+            data: components["schemas"]["HousekeepingLog"][];
+            next_cursor?: string;
+        };
         HealthStatus: {
             /**
              * @example ok
@@ -605,6 +1023,7 @@ export interface components {
     };
     parameters: {
         PropertyId: number;
+        Id: number;
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
@@ -1200,6 +1619,473 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    listRoomTypes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Only active or only inactive room types. */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomTypePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createRoomType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoomTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description The created room type. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRoomType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The room type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomType"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRoomType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRoomTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated room type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRooms: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                room_type_id?: number;
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The created room. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The room. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated room. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRoomBlocks: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                room_id?: number;
+                status?: "ACTIVE" | "CANCELLED";
+                /** @description Blocks that end after this date. */
+                from?: components["schemas"]["Date"];
+                /** @description Blocks that start before this date. */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomBlockPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createRoomBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoomBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description The block. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomBlock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRoomBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The block. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomBlock"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRoomBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRoomBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated block. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomBlock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelRoomBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelRoomBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description The cancelled block. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomBlock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHousekeepingBoard: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["HousekeepingStatus"];
+                floor?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active rooms ordered by floor and number. `next_cursor` is never set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingBoard"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setRoomHousekeeping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetHousekeepingRequest"];
+            };
+        };
+        responses: {
+            /** @description The new state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingState"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRoomHousekeepingLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingLogPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -13,6 +14,7 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/health"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
 
@@ -33,11 +35,15 @@ func NewHandler(d Deps) http.Handler {
 	iamSvc := iam.NewService(d.TxManager, d.Clock, auditWriter, d.Tokens)
 	iamHTTP := iam.NewHandler(iamSvc, d.Tokens.CookieSecure)
 	tenancySvc := tenancy.NewService(d.TxManager, d.Clock, auditWriter, authz)
+	hkSvc := housekeeping.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
 	iamHTTP.Register(api)
 	tenancy.NewHandler(tenancySvc).Register(api)
+	rooms.NewHandler(roomsSvc).Register(api)
+	housekeeping.NewHandler(hkSvc).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))

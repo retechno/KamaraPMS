@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -396,6 +396,324 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BusinessDayPage" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/room-types:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listRoomTypes
+      summary: List room types
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean }, description: Only active or only inactive room types. }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomTypePage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createRoomType
+      summary: Create a room type (room.manage)
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoomTypeRequest" }
+      responses:
+        "201":
+          description: The created room type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/room-types/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getRoomType
+      summary: Room type details
+      tags: [rooms]
+      responses:
+        "200":
+          description: The room type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomType" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateRoomType
+      summary: Edit a room type or deactivate it (room.manage). The code cannot change.
+      description: |
+        Deactivation is rejected with 409 `ROOM_TYPE_IN_USE` while active rooms of the type exist
+        or future CONFIRMED reservation lines hold it.
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchRoomTypeRequest" }
+      responses:
+        "200":
+          description: The updated room type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rooms:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listRooms
+      summary: List rooms
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomPage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createRoom
+      summary: Create a room and its housekeeping state (room.manage)
+      description: The housekeeping status starts as `initial_housekeeping_status` (default DIRTY); no log entry is written.
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoomRequest" }
+      responses:
+        "201":
+          description: The created room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rooms/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getRoom
+      summary: Room details
+      tags: [rooms]
+      responses:
+        "200":
+          description: The room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateRoom
+      summary: Edit a room, change its type or deactivate it (room.manage)
+      description: |
+        Changing the type or deactivating is rejected with 409 `ROOM_IN_USE` (with `context.conflicts`)
+        while a stay occupies the room or a CONFIRMED reservation line is assigned to it from the business date on.
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchRoomRequest" }
+      responses:
+        "200":
+          description: The updated room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/room-blocks:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listRoomBlocks
+      summary: List OOO/OOS blocks, newest first
+      tags: [room-blocks]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: room_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, CANCELLED] } }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Blocks that end after this date. }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Blocks that start before this date. }
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomBlockPage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createRoomBlock
+      summary: Take a room out of order (OOO) or out of service (OOS) (room_block.manage)
+      description: |
+        Both types make the room unsellable for the half-open range [start_date, end_date).
+        Rejected with 409 `ROOM_BLOCK_CONFLICT` when an active block overlaps, or (with `context.conflicts`)
+        when a stay or a CONFIRMED assigned reservation line holds the room in the range.
+      tags: [room-blocks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoomBlockRequest" }
+      responses:
+        "201":
+          description: The block.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomBlock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/room-blocks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getRoomBlock
+      summary: Block details
+      tags: [room-blocks]
+      responses:
+        "200":
+          description: The block.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomBlock" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateRoomBlock
+      summary: Change the dates or reason of an active block, or release it early (room_block.manage)
+      description: The new end_date must not be before the business date. Added nights are re-checked for conflicts.
+      tags: [room-blocks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchRoomBlockRequest" }
+      responses:
+        "200":
+          description: The updated block.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomBlock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/room-blocks/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelRoomBlock
+      summary: Cancel a block (room_block.manage)
+      tags: [room-blocks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelRoomBlockRequest" }
+      responses:
+        "200":
+          description: The cancelled block.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomBlock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getHousekeepingBoard
+      summary: Housekeeping board with derived occupancy (all active rooms, not paginated)
+      tags: [housekeeping]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/HousekeepingStatus" } }
+        - { name: floor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Active rooms ordered by floor and number. `next_cursor` is never set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingBoard" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rooms/{id}/housekeeping:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: setRoomHousekeeping
+      summary: Change a room's housekeeping status (housekeeping.update; INSPECTED needs housekeeping.inspect)
+      description: |
+        Legal transitions: DIRTY→CLEANING→CLEAN→INSPECTED, DIRTY→CLEAN and any→DIRTY.
+        Anything else is 409 `INVALID_HK_TRANSITION` with `context.allowed`. Every change writes a log entry.
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetHousekeepingRequest" }
+      responses:
+        "200":
+          description: The new state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingState" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rooms/{id}/housekeeping/logs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listRoomHousekeepingLogs
+      summary: A room's housekeeping history, newest first
+      tags: [housekeeping]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingLogPage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -406,6 +724,11 @@ components:
   parameters:
     PropertyId:
       name: propertyId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Id:
+      name: id
       in: path
       required: true
       schema: { type: integer, format: int64 }
@@ -680,6 +1003,220 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/BusinessDay" }
+        next_cursor: { type: string }
+    RoomType:
+      type: object
+      required: [id, code, name, max_adult, max_child, max_occupancy, base_occupancy, sort_order, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        max_adult: { type: integer }
+        max_child: { type: integer }
+        max_occupancy: { type: integer, description: At most max_adult + max_child. }
+        base_occupancy: { type: integer, description: At most max_occupancy. }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RoomTypePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/RoomType" }
+        next_cursor: { type: string }
+    CreateRoomTypeRequest:
+      type: object
+      required: [code, name, max_adult, max_child, max_occupancy, base_occupancy]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: "1-20 characters, A-Z 0-9 - _ (upper-cased)." }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+        max_adult: { type: integer, minimum: 1, maximum: 20 }
+        max_child: { type: integer, minimum: 0, maximum: 20 }
+        max_occupancy: { type: integer, minimum: 1, maximum: 40 }
+        base_occupancy: { type: integer, minimum: 1, maximum: 40 }
+        sort_order: { type: integer }
+        is_active: { type: boolean, default: true }
+    PatchRoomTypeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+        max_adult: { type: integer, minimum: 1, maximum: 20 }
+        max_child: { type: integer, minimum: 0, maximum: 20 }
+        max_occupancy: { type: integer, minimum: 1, maximum: 40 }
+        base_occupancy: { type: integer, minimum: 1, maximum: 40 }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+    Room:
+      type: object
+      required: [id, room_type_id, room_number, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        room_type_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        floor: { type: string }
+        building: { type: string }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RoomPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Room" }
+        next_cursor: { type: string }
+    CreateRoomRequest:
+      type: object
+      required: [room_number, room_type_id]
+      additionalProperties: false
+      properties:
+        room_number: { type: string, maxLength: 20 }
+        room_type_id: { type: integer, format: int64 }
+        floor: { type: string, maxLength: 10 }
+        building: { type: string, maxLength: 50 }
+        is_active: { type: boolean, default: true }
+        initial_housekeeping_status: { $ref: "#/components/schemas/HousekeepingStatus" }
+    PatchRoomRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        room_number: { type: string, maxLength: 20 }
+        room_type_id: { type: integer, format: int64 }
+        floor: { type: string, maxLength: 10 }
+        building: { type: string, maxLength: 50 }
+        is_active: { type: boolean }
+    BlockType:
+      type: string
+      enum: [OOO, OOS]
+      description: Out of order or out of service. Both make the room unsellable.
+    RoomBlock:
+      type: object
+      required: [id, room_id, block_type, start_date, end_date, reason, status, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        room_id: { type: integer, format: int64 }
+        block_type: { $ref: "#/components/schemas/BlockType" }
+        start_date: { $ref: "#/components/schemas/Date" }
+        end_date: { $ref: "#/components/schemas/Date", description: Exclusive. }
+        reason: { type: string }
+        status: { type: string, enum: [ACTIVE, CANCELLED] }
+        cancelled_at: { type: string, format: date-time }
+        cancelled_by: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RoomBlockPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/RoomBlock" }
+        next_cursor: { type: string }
+    CreateRoomBlockRequest:
+      type: object
+      required: [room_id, block_type, start_date, end_date, reason]
+      additionalProperties: false
+      properties:
+        room_id: { type: integer, format: int64 }
+        block_type: { $ref: "#/components/schemas/BlockType" }
+        start_date: { $ref: "#/components/schemas/Date", description: Not before the business date. }
+        end_date: { $ref: "#/components/schemas/Date", description: Exclusive; after start_date. }
+        reason: { type: string, maxLength: 500 }
+    PatchRoomBlockRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        start_date: { $ref: "#/components/schemas/Date" }
+        end_date: { $ref: "#/components/schemas/Date" }
+        reason: { type: string, maxLength: 500 }
+    CancelRoomBlockRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, maxLength: 500 }
+    HousekeepingStatus:
+      type: string
+      enum: [DIRTY, CLEANING, CLEAN, INSPECTED]
+    Occupancy:
+      type: string
+      enum: [OCCUPIED, RESERVED, VACANT]
+      description: Derived from stays and reservations; never stored.
+    HousekeepingBoardRoom:
+      type: object
+      required: [room_id, room_number, room_type_id, room_type_code, room_type_name, status, status_updated_at, occupancy, allowed_next]
+      properties:
+        room_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        floor: { type: string }
+        building: { type: string }
+        room_type_id: { type: integer, format: int64 }
+        room_type_code: { type: string }
+        room_type_name: { type: string }
+        status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        status_updated_at: { type: string, format: date-time }
+        occupancy: { $ref: "#/components/schemas/Occupancy" }
+        block:
+          type: object
+          description: The active block covering the business date.
+          required: [type, end_date]
+          properties:
+            type: { $ref: "#/components/schemas/BlockType" }
+            end_date: { $ref: "#/components/schemas/Date" }
+        allowed_next:
+          type: array
+          description: Statuses reachable from the current one (INSPECTED additionally needs housekeeping.inspect).
+          items: { $ref: "#/components/schemas/HousekeepingStatus" }
+    HousekeepingBoard:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/HousekeepingBoardRoom" }
+    SetHousekeepingRequest:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        notes: { type: string, maxLength: 500 }
+    HousekeepingState:
+      type: object
+      required: [room_id, status, updated_at]
+      properties:
+        room_id: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        updated_at: { type: string, format: date-time }
+    HousekeepingLog:
+      type: object
+      required: [id, room_id, from_status, to_status, source, business_date, changed_at]
+      properties:
+        id: { type: integer, format: int64 }
+        room_id: { type: integer, format: int64 }
+        from_status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        to_status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        source: { type: string, enum: [MANUAL, CHECK_OUT, ROOM_MOVE, NIGHT_AUDIT, CHECK_IN_REVERSAL] }
+        business_date: { $ref: "#/components/schemas/Date" }
+        notes: { type: string }
+        changed_at: { type: string, format: date-time }
+        changed_by: { type: integer, format: int64 }
+    HousekeepingLogPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/HousekeepingLog" }
         next_cursor: { type: string }
     HealthStatus:
       type: object
