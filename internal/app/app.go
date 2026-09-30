@@ -8,6 +8,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/guests"
@@ -21,6 +22,7 @@ import (
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/reservations"
+	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
@@ -55,6 +57,8 @@ func NewHandler(d Deps) http.Handler {
 
 	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc)
 
+	roomChargeSvc := roomcharge.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, expected.NewLoader(d.TxManager), billingSvc, foliosSvc.RoomPoster())
+
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
 	iamHTTP.Register(api)
@@ -67,6 +71,7 @@ func NewHandler(d Deps) http.Handler {
 	reservations.NewHandler(reservationsSvc).Register(api)
 	folios.NewHandler(foliosSvc).Register(api)
 	frontdesk.NewHandler(frontdeskSvc).Register(api)
+	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))

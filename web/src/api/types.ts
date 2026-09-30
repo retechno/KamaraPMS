@@ -89,3 +89,7 @@ export type Arrival = Schemas['Arrival']
 export type CheckInResult = Schemas['CheckInResult']
 export type CheckInRequest = Schemas['CheckInRequest']
 export type WalkInRequest = Schemas['WalkInRequest']
+
+export type RoomChargePreview = Schemas['RoomChargePreview']
+export type RoomChargeItem = Schemas['RoomChargeItem']
+export type RoomChargePostResponse = Schemas['RoomChargePostResponse']

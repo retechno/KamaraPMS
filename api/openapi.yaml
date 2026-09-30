@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2004,6 +2004,57 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/room-charges/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: previewRoomCharges
+      summary: Preview the room charges that are due (nightaudit.run or folio.post_charge)
+      description: |
+        A dry run of the room charge posting: which nights of which stays are READY, already posted, not applicable or in ERROR, with the service charge, tax and total the engine calculates. It modifies nothing. `business_date` must be the open business date (409 `BUSINESS_DATE_MISMATCH`). Without `stay_ids` every in-house stay is considered.
+      tags: [billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoomChargeRequest" }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomChargePreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/room-charges:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: postRoomCharges
+      summary: Post the room charges that are due (nightaudit.run or folio.post_charge)
+      description: |
+        Posts every READY night (earlier nights that were never posted and tonight's) through the folio posting service, in the order of stay and night, and records each in the posting register. The stays are locked first, so concurrent runs cannot charge a night twice; a second run answers `ALREADY_POSTED`. ERROR nights (no open folio, no nightly rate, no room for the night, an invalid charge code) are reported and never posted. `revalidation` re-reads the scope after the commit.
+      tags: [billing]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoomChargeRequest" }
+      responses:
+        "200":
+          description: The results and the revalidation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomChargePostResponse" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3711,6 +3762,91 @@ components:
         folios:
           type: array
           items: { $ref: "#/components/schemas/StayFolio" }
+    RoomChargeRequest:
+      type: object
+      required: [business_date]
+      additionalProperties: false
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        stay_ids:
+          type: array
+          items: { type: integer, format: int64 }
+    RoomChargeStatus:
+      type: string
+      enum: [READY, POSTED, ALREADY_POSTED, NOT_APPLICABLE, ERROR]
+    RoomChargeItem:
+      type: object
+      required: [stay_id, stay_number, guest, folio_id, service_date, room_rate, service_charge, tax, rounding_adjustment, total, status, folio_item_id]
+      properties:
+        stay_id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        guest: { type: string }
+        room_number: { type: string }
+        folio_id: { type: [integer, "null"], format: int64 }
+        service_date: { $ref: "#/components/schemas/Date" }
+        charge_code: { type: string }
+        room_rate: { type: string, description: The agreed nightly amount from the stay's price snapshot. }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        service_charge: { type: string }
+        tax: { type: string }
+        rounding_adjustment: { type: string }
+        total: { type: string }
+        status: { $ref: "#/components/schemas/RoomChargeStatus" }
+        reason: { type: string, description: "For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE or NO_OPEN_FOLIO." }
+        folio_item_id: { type: [integer, "null"], format: int64 }
+    RoomChargePreview:
+      type: object
+      required: [business_date, items, totals]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RoomChargeItem" }
+        totals:
+          type: object
+          required: [ready_count, ready_total]
+          properties:
+            ready_count: { type: integer }
+            ready_total: { type: string }
+    RoomChargePosted:
+      type: object
+      required: [stay_id, service_date, status]
+      properties:
+        stay_id: { type: integer, format: int64 }
+        service_date: { $ref: "#/components/schemas/Date" }
+        status: { $ref: "#/components/schemas/RoomChargeStatus" }
+        folio_item_id: { type: integer, format: int64 }
+        total: { type: string }
+        reason: { type: string }
+    InvalidPosting:
+      type: object
+      required: [stay_id, stay_number, service_date, folio_item_id, reason]
+      description: A posted room night that should not exist (outside the stay's nights, or the stay was cancelled).
+      properties:
+        stay_id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        service_date: { $ref: "#/components/schemas/Date" }
+        folio_item_id: { type: integer, format: int64 }
+        reason: { type: string, enum: [OUTSIDE_STAY, STAY_CANCELLED] }
+    RoomChargeRevalidation:
+      type: object
+      required: [ready, errors, invalid]
+      properties:
+        ready: { type: integer }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/RoomChargeItem" }
+        invalid:
+          type: array
+          items: { $ref: "#/components/schemas/InvalidPosting" }
+    RoomChargePostResponse:
+      type: object
+      required: [results, revalidation]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/RoomChargePosted" }
+        revalidation: { $ref: "#/components/schemas/RoomChargeRevalidation" }
     FieldError:
       type: object
       required: [field, code]

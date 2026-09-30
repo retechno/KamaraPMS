@@ -42,6 +42,7 @@ export const navigation: NavSection[] = [
     items: [
       { label: 'Folios', to: '/folios', milestone: 'M9' },
       { label: 'Cashier', to: '/cashier', milestone: 'M9' },
+      { label: 'Room charges', to: '/room-charges', milestone: 'M11' },
     ],
   },
   {

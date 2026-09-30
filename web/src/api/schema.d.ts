@@ -1617,6 +1617,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview the room charges that are due (nightaudit.run or folio.post_charge)
+         * @description A dry run of the room charge posting: which nights of which stays are READY, already posted, not applicable or in ERROR, with the service charge, tax and total the engine calculates. It modifies nothing. `business_date` must be the open business date (409 `BUSINESS_DATE_MISMATCH`). Without `stay_ids` every in-house stay is considered.
+         */
+        post: operations["previewRoomCharges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/room-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post the room charges that are due (nightaudit.run or folio.post_charge)
+         * @description Posts every READY night (earlier nights that were never posted and tonight's) through the folio posting service, in the order of stay and night, and records each in the posting register. The stays are locked first, so concurrent runs cannot charge a night twice; a second run answers `ALREADY_POSTED`. ERROR nights (no open folio, no nightly rate, no room for the night, an invalid charge code) are reported and never posted. `revalidation` re-reads the scope after the commit.
+         */
+        post: operations["postRoomCharges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3126,6 +3170,73 @@ export interface components {
             line: components["schemas"]["StayLine"];
             nightly_rates: components["schemas"]["StayNight"][];
             folios: components["schemas"]["StayFolio"][];
+        };
+        RoomChargeRequest: {
+            business_date: components["schemas"]["Date"];
+            stay_ids?: number[];
+        };
+        /** @enum {string} */
+        RoomChargeStatus: "READY" | "POSTED" | "ALREADY_POSTED" | "NOT_APPLICABLE" | "ERROR";
+        RoomChargeItem: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            guest: string;
+            room_number?: string;
+            /** Format: int64 */
+            folio_id: number | null;
+            service_date: components["schemas"]["Date"];
+            charge_code?: string;
+            /** @description The agreed nightly amount from the stay's price snapshot. */
+            room_rate: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            service_charge: string;
+            tax: string;
+            rounding_adjustment: string;
+            total: string;
+            status: components["schemas"]["RoomChargeStatus"];
+            /** @description For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE or NO_OPEN_FOLIO. */
+            reason?: string;
+            /** Format: int64 */
+            folio_item_id: number | null;
+        };
+        RoomChargePreview: {
+            business_date: components["schemas"]["Date"];
+            items: components["schemas"]["RoomChargeItem"][];
+            totals: {
+                ready_count: number;
+                ready_total: string;
+            };
+        };
+        RoomChargePosted: {
+            /** Format: int64 */
+            stay_id: number;
+            service_date: components["schemas"]["Date"];
+            status: components["schemas"]["RoomChargeStatus"];
+            /** Format: int64 */
+            folio_item_id?: number;
+            total?: string;
+            reason?: string;
+        };
+        /** @description A posted room night that should not exist (outside the stay's nights, or the stay was cancelled). */
+        InvalidPosting: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            service_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            folio_item_id: number;
+            /** @enum {string} */
+            reason: "OUTSIDE_STAY" | "STAY_CANCELLED";
+        };
+        RoomChargeRevalidation: {
+            ready: number;
+            errors: components["schemas"]["RoomChargeItem"][];
+            invalid: components["schemas"]["InvalidPosting"][];
+        };
+        RoomChargePostResponse: {
+            results: components["schemas"]["RoomChargePosted"][];
+            revalidation: components["schemas"]["RoomChargeRevalidation"];
         };
         FieldError: {
             field: string;
@@ -5906,6 +6017,69 @@ export interface operations {
                     "application/json": components["schemas"]["ReverseResult"];
                 };
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewRoomCharges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomChargePreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postRoomCharges: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The results and the revalidation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomChargePostResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

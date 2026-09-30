@@ -92,4 +92,15 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
     - Move, extend, shorten, add guest and check-out are M12.
   - The frontend has the arrivals list with the check-in panel (free rooms with housekeeping status, upgrade note, not-ready override), the walk-in screen, the in-house list, the stay detail with reverse check-in, and the room status board.
 
+- **M11** (expected charges and room charge posting) is complete. No migration: `stay_charge_postings` and its partial unique index exist in 00010.
+  - `internal/expected` is the Expected Charge Engine: a `Loader` (read-only SQL snapshot of stays, segments, the nightly price snapshot, POSTED register rows and open folios) and a pure `Evaluate(Snapshot, Scope)` applying the eight rules of §8.3 in order, plus `FindInvalid` (posted nights outside the stay's nights, or of a cancelled stay). The evaluator has unit tests for every rule, the rule order, room moves (on the business date and on the arrival day) and the scope.
+  - `internal/roomcharge` is `RoomChargePostingService`. A real run takes the business day share lock, locks the stays FOR UPDATE in id order, evaluates after the locks, locks the folios in id order, then posts each READY night in order of stay and night and writes its register row; it audits one summary entry. A dry run (the preview) only reads and calls the charge calculation service. A second run answers ALREADY_POSTED; after a reversal flips the register row to REVERSED the night is READY again. `Post` is the method night audit (M13) and check-out (M12) will call, with their own trigger.
+  - **Only one code path posts room revenue:** `folios.RoomPoster` is a capability object (`Service.RoomPoster()`), handed only to the room charge service in `internal/app`. It posts a CHARGE on a ROOM charge code, stamped with the stay segment of the night and source `ROOM_POSTING`; manual charges still refuse ROOM codes, and the poster refuses non-ROOM codes.
+  - **Decisions and deviations from 06-api.md §15:**
+    - The two endpoints are `POST {P}/night-audit/room-charges/preview` and `POST {P}/night-audit/room-charges`; either `nightaudit.run` or `folio.post_charge` is enough. The `Idempotency-Key` header is required on posting for the contract, but the run is idempotent by itself (the register), so the key is not stored.
+    - The business date in the request must equal the open one (409 `BUSINESS_DATE_MISMATCH`). An explicit `stay_ids` that does not exist is 404 `STAY_NOT_FOUND`.
+    - The night's ledger item carries the service date of the night and the business date of the posting, so a night caught up later keeps its own service date.
+    - The `revalidation` of a posting answer is read after the commit: `ready`, `errors` (ERROR nights as items) and `invalid` (posted nights that should not exist).
+  - The frontend has the "Room charges" screen: the preview table (missing nights marked), totals, problems, and "Post room charges".
+
 Earlier revisions are in [archive/](archive/).

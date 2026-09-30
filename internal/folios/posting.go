@@ -62,6 +62,8 @@ type itemSpec struct {
 	chargeCodeID    *int64
 	paymentID       *int64
 	reversesItemID  *int64
+	stayRoomID      *int64
+	source          string // MANUAL when empty
 	referenceType   *string
 	referenceID     *string
 	serviceDate     civil.Date
@@ -81,10 +83,10 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 	item, err := q.InsertFolioItem(ctx, foliosdb.InsertFolioItemParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, FolioID: ps.folio.ID, BusinessDate: ps.bd, TransactionAt: ps.at,
 		ServiceDate: spec.serviceDate, TransactionType: spec.transactionType, ChargeCodeID: spec.chargeCodeID, PaymentID: spec.paymentID,
-		ReversesItemID: spec.reversesItemID, StayID: ps.folio.StayID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
+		ReversesItemID: spec.reversesItemID, StayID: ps.folio.StayID, StayRoomID: spec.stayRoomID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
 		Description: spec.description, Quantity: a.quantity, UnitPrice: a.unitPrice, PriceMode: a.priceMode, BaseAmount: a.base,
 		DiscountAmount: a.discount, NetAmount: a.net, RoundingAdjustment: a.rounding, ServiceChargeTotal: a.service, TaxTotal: a.tax,
-		Debit: a.debit, Credit: a.credit, Source: "MANUAL", Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
+		Debit: a.debit, Credit: a.credit, Source: sourceOf(spec.source), Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
 		ApprovedBy: spec.approvedBy,
 	})
 	if err != nil {
@@ -98,6 +100,13 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 	}
 	err = q.BumpFolio(ctx, foliosdb.BumpFolioParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, ID: ps.folio.ID, ActorID: ps.p.ActorID()})
 	return item, err
+}
+
+func sourceOf(s string) string {
+	if s == "" {
+		return "MANUAL"
+	}
+	return s
 }
 
 func componentsOf(b chargecalc.Breakdown) []foliosdb.InsertFolioItemComponentParams {
@@ -129,6 +138,7 @@ type chargeCmd struct {
 	serviceDate  civil.Date
 	description  string
 	key          string
+	room         *int64 // set only by RoomPoster: the stay segment of the night, which makes it a room charge
 }
 
 // postCharge posts a manual charge. Its breakdown comes only from the charge calculation service. A ROOM
@@ -138,7 +148,10 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 	if err != nil {
 		return foliosdb.FolioItem{}, err
 	}
-	if rules.ChargeType == "ROOM" {
+	if cmd.room != nil && rules.ChargeType != "ROOM" {
+		return foliosdb.FolioItem{}, apperr.Conflict("NOT_A_ROOM_CHARGE_CODE", "a room night is posted through a charge code of type ROOM").WithContext("charge_code", rules.Code)
+	}
+	if cmd.room == nil && rules.ChargeType == "ROOM" {
 		return foliosdb.FolioItem{}, apperr.Conflict("ROOM_CHARGE_REQUIRES_ROOM_POSTING", "room revenue is posted by the room charge posting, not manually").
 			WithContext("charge_code", rules.Code)
 	}
@@ -163,6 +176,9 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 	spec := itemSpec{
 		transactionType: TypeCharge, chargeCodeID: &id, serviceDate: cmd.serviceDate, description: desc, amounts: amountsOf(b),
 		key: nullable(cmd.key), components: componentsOf(b),
+	}
+	if cmd.room != nil {
+		spec.stayRoomID, spec.source = cmd.room, "ROOM_POSTING"
 	}
 	return ps.insert(ctx, spec)
 }

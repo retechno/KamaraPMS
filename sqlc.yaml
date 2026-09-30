@@ -174,3 +174,25 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/expected/queries.sql
+    gen:
+      go:
+        package: expecteddb
+        out: internal/expected/expecteddb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/roomcharge/queries.sql
+    gen:
+      go:
+        package: roomchargedb
+        out: internal/roomcharge/roomchargedb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true

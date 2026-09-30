@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/guests"
@@ -27,6 +28,7 @@ import (
 	"kamarapms/internal/platform/dbtest"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/reservations"
+	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
@@ -53,6 +55,7 @@ type Env struct {
 	IAM     *iam.Service
 	Folios  *folios.Service
 	Front   *frontdesk.Service
+	Charges *roomcharge.Service
 
 	seq int
 }
@@ -76,7 +79,7 @@ func Setup(t *testing.T) *Env {
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
-	return &Env{IAM: ia, Folios: fo, Front: frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+	return &Env{IAM: ia, Folios: fo, Front: frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo), Charges: roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster()), Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs}
 }
 

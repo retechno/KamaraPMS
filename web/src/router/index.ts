@@ -64,6 +64,7 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Folio' },
     },
+    { path: '/room-charges', name: 'room-charges', component: () => import('@/views/billing/RoomChargesView.vue'), meta: { title: 'Room charges' } },
     { path: '/cashier', name: 'cashier', component: () => import('@/views/billing/CashierView.vue'), meta: { title: 'Cashier' } },
     { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/ArrivalsView.vue'), meta: { title: 'Arrivals' } },
     { path: '/walk-in', name: 'walk-in', component: () => import('@/views/frontdesk/WalkInView.vue'), meta: { title: 'Walk-in' } },
