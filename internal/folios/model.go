@@ -40,6 +40,9 @@ const (
 	maxQuantityScale  = 3
 )
 
+// MethodCityLedger is the payment method of a transfer to a company account; it is not offered as a way to pay.
+const MethodCityLedger = "CITY_LEDGER"
+
 var paymentMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
 
 func fieldErr(field, code, msg string) apperr.FieldError {
@@ -77,6 +80,16 @@ type CorrectionInput struct {
 type PaymentInput struct {
 	Amount          string `json:"amount"`
 	PaymentMethod   string `json:"payment_method"`
+	ReferenceNumber string `json:"reference_number"`
+	Remarks         string `json:"remarks"`
+
+	companyID *int64 // set by Transfer only: a city ledger transfer is not a payment a client may post
+}
+
+// TransferInput moves part of a folio's balance to a company's city ledger account.
+type TransferInput struct {
+	CompanyID       int64  `json:"company_id"`
+	Amount          string `json:"amount"`
 	ReferenceNumber string `json:"reference_number"`
 	Remarks         string `json:"remarks"`
 }
@@ -243,6 +256,7 @@ type Payment struct {
 	FolioID           int64      `json:"folio_id"`
 	PaymentType       string     `json:"payment_type"`
 	PaymentMethod     string     `json:"payment_method"`
+	CompanyID         *int64     `json:"company_id"`
 	Amount            string     `json:"amount"`
 	PaidAt            time.Time  `json:"paid_at"`
 	BusinessDate      civil.Date `json:"business_date"`

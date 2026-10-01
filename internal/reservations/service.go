@@ -475,3 +475,59 @@ func (s *Service) requireGuest(ctx context.Context, id *int64) error {
 	}
 	return s.guests.RequireVisible(ctx, *id)
 }
+
+// resolveLinks checks the company and booking group of a reservation. A group fixes the company when it has one,
+// and every line must fall inside the group's dates. A link below 1 is no link.
+func (s *Service) resolveLinks(ctx context.Context, tenantID, propertyID int64, company, group *int64, lines []LineInput) (*int64, *int64, error) {
+	if company != nil && *company < 1 {
+		company = nil
+	}
+	if group != nil && *group < 1 {
+		group = nil
+	}
+	q := s.q(ctx)
+	if group != nil {
+		// L4: a share lock keeps the group's dates, company and active flag as read until this transaction ends.
+		if err := db.LockRows(ctx, db.Groups, db.ForShare, propertyID, []int64{*group}); err != nil {
+			return nil, nil, mapNotFound(err, apperr.NotFound("GROUP_NOT_FOUND", "the group does not exist in this property"))
+		}
+		g, err := q.GroupRef(ctx, reservationsdb.GroupRefParams{TenantID: tenantID, PropertyID: propertyID, ID: *group})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, apperr.NotFound("GROUP_NOT_FOUND", "the group does not exist in this property")
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if !g.IsActive {
+			return nil, nil, apperr.Conflict("GROUP_INACTIVE", "the group is inactive")
+		}
+		var fields []apperr.FieldError
+		for i, l := range lines {
+			if l.Arrival.Before(g.ArrivalDate) || l.Departure.After(g.DepartureDate) {
+				fields = append(fields, fieldErr(fmt.Sprintf("rooms[%d].arrival_date", i), "OUTSIDE_GROUP_DATES", "the stay must be within the group's dates"))
+			}
+		}
+		if len(fields) > 0 {
+			return nil, nil, apperr.Invalid("the reservation is invalid", fields...)
+		}
+		switch {
+		case company == nil:
+			company = g.CompanyID
+		case g.CompanyID != nil && *g.CompanyID != *company:
+			return nil, nil, apperr.Invalid("the reservation is invalid", fieldErr("company_id", "GROUP_COMPANY_MISMATCH", "the group belongs to another company"))
+		}
+	}
+	if company != nil {
+		c, err := q.CompanyRef(ctx, reservationsdb.CompanyRefParams{TenantID: tenantID, PropertyID: propertyID, ID: *company})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, apperr.NotFound("COMPANY_NOT_FOUND", "the company does not exist in this property")
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if !c.IsActive {
+			return nil, nil, apperr.Conflict("COMPANY_INACTIVE", "the company is inactive")
+		}
+	}
+	return company, group, nil
+}

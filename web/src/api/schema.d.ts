@@ -2150,6 +2150,309 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List companies (reservation.read or cityledger.read) */
+        get: operations["listCompanies"];
+        put?: never;
+        /**
+         * Create a company (company.manage)
+         * @description A company is a corporate account the hotel bills instead of the guest. `credit_limit` empty means no limit, `0` means no credit. The code is unique per property (409 `CODE_TAKEN`).
+         */
+        post: operations["createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/companies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One company (reservation.read or cityledger.read) */
+        get: operations["getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a company (company.manage); the code cannot change
+         * @description A company that still owes money cannot be deactivated (409 `COMPANY_HAS_BALANCE`). Lowering the limit below the balance is allowed; it only stops new transfers. An empty `credit_limit` removes the limit.
+         */
+        patch: operations["updateCompany"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/companies/{id}/statement.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Statement of account of a company (cityledger.read)
+         * @description Transfers (debit), receipts (credit) and the balance after each line for the period, then the aging of what is still open. A voided receipt is listed and marked, and does not count. File name `statement-<company code>.pdf`.
+         */
+        get: operations["getCompanyStatementPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List booking groups, newest first (reservation.read) */
+        get: operations["listGroups"];
+        put?: never;
+        /**
+         * Create a booking group (group.manage)
+         * @description A group is a block of reservations that share dates and optionally a company that is billed. Rooms are booked as ordinary reservations that name the group (`booking_group_id` on the reservation); the stay must lie within the group's dates and the reservation inherits the group's company.
+         */
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One booking group (reservation.read) */
+        get: operations["getGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a booking group (group.manage); the code cannot change
+         * @description The dates cannot shrink past a booked room (409 `GROUP_HAS_ROOMS_OUTSIDE_DATES`) and the company cannot change while reservations bill another one (409 `GROUP_HAS_RESERVATIONS`). `company_id` below 1 removes the company. An inactive group takes no more rooms.
+         */
+        patch: operations["updateGroup"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The reservations of a group, by id (reservation.read)
+         * @description Not paginated.
+         */
+        get: operations["listGroupReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move part of an open folio's balance to a company's city ledger account (cityledger.transfer)
+         * @description Posts a payment with method `CITY_LEDGER` that credits the folio and adds to what the company owes.
+         *     The amount cannot exceed the folio's balance (409 `TRANSFER_EXCEEDS_BALANCE`). The company must be active
+         *     (409 `COMPANY_INACTIVE`) and stay within its credit limit (409 `CREDIT_LIMIT_EXCEEDED`, with
+         *     `context.credit_limit` and `context.balance`); the company row is locked, so the limit holds when several
+         *     folios transfer at once. A transfer is not refunded; it can be voided on the same business date unless
+         *     receipts already settled it (409 `COMPANY_BALANCE_SETTLED`).
+         */
+        post: operations["transferFolioToCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Companies with what they owe (cityledger.read)
+         * @description The balance is derived (transfers minus receipts), never stored.
+         */
+        get: operations["listCityLedgerAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One company's account (cityledger.read) */
+        get: operations["getCityLedgerAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's movements with the running balance (cityledger.read)
+         * @description `from` and `to` are optional business dates (inclusive). A period that starts after earlier movements opens with their balance. Lines are ordered by date, transfers before receipts; a voided line is listed but does not move the balance.
+         */
+        get: operations["getCityLedgerStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/aging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a company owes by age of the transfer (cityledger.read)
+         * @description As of the current business date, in the buckets 0-30, 31-60, 61-90 and 90+ days. Receipts settle the oldest transfers first.
+         */
+        get: operations["getCityLedgerAging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's receipts, oldest first (cityledger.read)
+         * @description Not paginated.
+         */
+        get: operations["listCityLedgerReceipts"];
+        put?: never;
+        /**
+         * Record money a company paid against its account (cityledger.receive)
+         * @description The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the CITY_LEDGER_RECEIPT series.
+         */
+        post: operations["receiveCityLedgerPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a receipt taken on the current business date (cityledger.receive, needs approval) */
+        post: operations["voidCityLedgerReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3100,6 +3403,16 @@ export interface components {
             market?: string;
             special_request?: string;
             remarks?: string;
+            /**
+             * Format: int64
+             * @description The company that is billed; a group's company is inherited.
+             */
+            company_id?: number | null;
+            /**
+             * Format: int64
+             * @description The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room)
+             */
+            booking_group_id?: number | null;
             /** @default false */
             confirm: boolean;
             rooms: components["schemas"]["RoomInput"][];
@@ -3115,6 +3428,16 @@ export interface components {
             market?: string;
             special_request?: string;
             remarks?: string;
+            /**
+             * Format: int64
+             * @description Below 1 clears the company.
+             */
+            company_id?: number;
+            /**
+             * Format: int64
+             * @description Below 1 clears the group.
+             */
+            booking_group_id?: number;
         };
         VersionRequest: {
             /** Format: int32 */
@@ -3221,6 +3544,12 @@ export interface components {
             /** Format: int64 */
             guest_id: number | null;
             guest?: components["schemas"]["GuestName"];
+            /** Format: int64 */
+            company_id?: number | null;
+            company_name?: string;
+            /** Format: int64 */
+            booking_group_id?: number | null;
+            group_code?: string;
             reservation_date: components["schemas"]["Date"];
             source: components["schemas"]["ReservationSource"];
             market?: string;
@@ -3251,6 +3580,12 @@ export interface components {
             /** Format: int64 */
             guest_id: number | null;
             guest_name?: string;
+            /** Format: int64 */
+            company_id?: number | null;
+            company_name?: string;
+            /** Format: int64 */
+            booking_group_id?: number | null;
+            group_code?: string;
             source: components["schemas"]["ReservationSource"];
             /** @enum {string} */
             status: "DRAFT" | "CONFIRMED" | "CANCELLED";
@@ -3471,7 +3806,16 @@ export interface components {
             folio_id: number;
             /** @enum {string} */
             payment_type: "PAYMENT" | "REFUND";
-            payment_method: components["schemas"]["PaymentMethod"];
+            /**
+             * @description CITY_LEDGER is a transfer to a company account
+             * @enum {string}
+             */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "CITY_LEDGER";
+            /**
+             * Format: int64
+             * @description The company of a CITY_LEDGER transfer.
+             */
+            company_id: number | null;
             amount: string;
             /** Format: date-time */
             paid_at: string;
@@ -3940,12 +4284,19 @@ export interface components {
             revenue_by_charge_type: (components["schemas"]["NightAuditMoney"] & {
                 charge_type: string;
             })[];
+            /** @description The till: folio payments (not transfers to a company) and city ledger receipts. */
             payments_by_method: {
                 method: string;
                 payments: components["schemas"]["Amount"];
                 refunds: components["schemas"]["Amount"];
                 net: components["schemas"]["Amount"];
             }[];
+            city_ledger: {
+                transferred: components["schemas"]["Amount"];
+                received: components["schemas"]["Amount"];
+                /** @description What companies owe at the end of the day. */
+                outstanding: components["schemas"]["Amount"];
+            };
             /** @description Occupied rooms over rooms that are not out of order. */
             occupancy_percent: string;
             adr: components["schemas"]["Amount"];
@@ -4172,6 +4523,237 @@ export interface components {
             /** @description The same request may succeed if retried (temporary contention). */
             retryable?: boolean;
             request_id?: string;
+        };
+        Company: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description null: no limit; "0": no credit. */
+            credit_limit: string | null;
+            payment_terms_days: number;
+            notes?: string;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CompanyPage: {
+            data: components["schemas"]["Company"][];
+            next_cursor?: string;
+        };
+        CreateCompanyRequest: {
+            /** @description 1-20 characters: A-Z, 0-9, - or _ (upper-cased). */
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description Empty for no limit. At most the currency's decimals. */
+            credit_limit?: string;
+            /** @default 30 */
+            payment_terms_days: number;
+            notes?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchCompanyRequest: {
+            name?: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description Empty removes the limit. */
+            credit_limit?: string;
+            payment_terms_days?: number;
+            notes?: string;
+            is_active?: boolean;
+        };
+        Group: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            company_id: number | null;
+            company_name?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            notes?: string;
+            is_active: boolean;
+            /** @description Reservations that are not cancelled. */
+            reservation_count: number;
+            /** @description Rooms that are not cancelled. */
+            room_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GroupPage: {
+            data: components["schemas"]["Group"][];
+            next_cursor?: string;
+        };
+        CreateGroupRequest: {
+            code: string;
+            name: string;
+            /** Format: int64 */
+            company_id?: number | null;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            notes?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchGroupRequest: {
+            name?: string;
+            /**
+             * Format: int64
+             * @description Below 1 removes the company.
+             */
+            company_id?: number;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date?: components["schemas"]["Date"];
+            departure_date?: components["schemas"]["Date"];
+            notes?: string;
+            is_active?: boolean;
+        };
+        GroupMember: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            guest_name?: string;
+            /** Format: int64 */
+            company_id: number | null;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            room_count: number;
+        };
+        GroupMemberList: {
+            data: components["schemas"]["GroupMember"][];
+        };
+        TransferRequest: {
+            /** Format: int64 */
+            company_id: number;
+            amount: string;
+            reference_number?: string;
+            remarks?: string;
+        };
+        ReceiveRequest: {
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+        };
+        CityLedgerAccount: {
+            /** Format: int64 */
+            company_id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+            credit_limit: string | null;
+            payment_terms_days: number;
+            /** @description Posted transfers from folios. */
+            transferred: string;
+            /** @description Posted receipts. */
+            received: string;
+            /** @description transferred minus received. */
+            balance: string;
+            /** @description What can still be transferred within the limit; null without a limit. */
+            available: string | null;
+        };
+        CityLedgerAccountPage: {
+            data: components["schemas"]["CityLedgerAccount"][];
+            next_cursor?: string;
+        };
+        CityLedgerReceipt: {
+            /** Format: int64 */
+            id: number;
+            receipt_number: string;
+            /** Format: int64 */
+            company_id: number;
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            business_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            paid_at: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+        };
+        CityLedgerReceiptResult: {
+            receipt: components["schemas"]["CityLedgerReceipt"];
+            /** @description The company's balance after the receipt or void. */
+            balance: string;
+        };
+        CityLedgerReceiptList: {
+            data: components["schemas"]["CityLedgerReceipt"][];
+        };
+        CityLedgerStatementLine: {
+            date: components["schemas"]["Date"];
+            /** @enum {string} */
+            kind: "TRANSFER" | "RECEIPT";
+            number: string;
+            description: string;
+            reference?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            debit: string;
+            credit: string;
+            /** @description The running balance of the posted lines. */
+            balance: string;
+            folio_number?: string;
+            confirmation_number?: string;
+            guest_name?: string;
+        };
+        CityLedgerStatement: {
+            company: components["schemas"]["CityLedgerAccount"];
+            from: components["schemas"]["Date"] | null;
+            to: components["schemas"]["Date"] | null;
+            opening_balance: string;
+            total_debit: string;
+            total_credit: string;
+            closing_balance: string;
+            lines: components["schemas"]["CityLedgerStatementLine"][];
+        };
+        CityLedgerAging: {
+            as_of: components["schemas"]["Date"];
+            total: string;
+            buckets: {
+                /** @enum {string} */
+                label: "0-30" | "31-60" | "61-90" | "90+";
+                amount: string;
+            }[];
         };
     };
     responses: {
@@ -5961,6 +6543,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 arrival_from?: components["schemas"]["Date"];
                 arrival_to?: components["schemas"]["Date"];
+                company_id?: number;
+                booking_group_id?: number;
                 status?: "DRAFT" | "CONFIRMED" | "CANCELLED";
                 q?: string;
             };
@@ -7675,6 +8259,535 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listCompanies: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of companies, by id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The created company. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The company. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated company. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCompanyStatementPdf: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGroups: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                company_id?: number;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of groups with their reservation and room counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The created group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGroupReservations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMemberList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    transferFolioToCompany: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer (a payment), its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerAccounts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Only companies with a balance above zero. */
+                owing?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of accounts, by company id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAccountPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerStatement: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The statement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerStatement"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerAging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The aging. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAging"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerReceipts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The receipts, voided ones included. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    receiveCityLedgerPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiveRequest"];
+            };
+        };
+        responses: {
+            /** @description The receipt and the account's balance after it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidCityLedgerReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided receipt and the account's balance after it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
 }

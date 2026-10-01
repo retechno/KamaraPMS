@@ -190,7 +190,9 @@ func (s *Service) Cashier(ctx context.Context, propertyID int64, from, to civil.
 			order = append(order, r.PaymentMethod)
 		}
 		a.pay, a.ref = a.pay.Add(r.Payments), a.ref.Add(r.Refunds)
-		net = net.Add(n)
+		if r.PaymentMethod != methodCityLedger { // a transfer to a company is not money received
+			net = net.Add(n)
+		}
 	}
 	for _, m := range order {
 		a := by[m]
@@ -199,6 +201,9 @@ func (s *Service) Cashier(ctx context.Context, propertyID int64, from, to civil.
 	out.Net = fx(net, decimals)
 	return out, nil
 }
+
+// methodCityLedger is the payment method of a transfer to a company account.
+const methodCityLedger = "CITY_LEDGER"
 
 // Statistics is the occupancy and statistics report over the closed days of a range (the stored summaries).
 func (s *Service) Statistics(ctx context.Context, propertyID int64, from, to civil.Date) (Statistics, error) {

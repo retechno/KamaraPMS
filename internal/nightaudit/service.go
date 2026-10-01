@@ -333,6 +333,11 @@ func (s *Service) Summarize(ctx context.Context, p auth.Principal, propertyID in
 			Method: m.PaymentMethod, Payments: fixed(m.Payments, decimals), Refunds: fixed(m.Refunds, decimals), Net: fixed(m.Payments.Sub(m.Refunds), decimals),
 		})
 	}
+	cl, err := q.SummaryCityLedger(ctx, nightauditdb.SummaryCityLedgerParams{PropertyID: propertyID, Bd: bd})
+	if err != nil {
+		return sum, err
+	}
+	sum.CityLedger = CityLedger{Transferred: fixed(cl.Transferred, decimals), Received: fixed(cl.Received, decimals), Outstanding: fixed(cl.Outstanding, decimals)}
 	sort.Slice(sum.PaymentsByMethod, func(i, j int) bool { return sum.PaymentsByMethod[i].Method < sum.PaymentsByMethod[j].Method })
 	available := decimal.NewFromInt(int64(rooms.Total - rooms.OutOfOrder))
 	zero := fixed(decimal.Zero, decimals)

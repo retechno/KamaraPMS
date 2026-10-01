@@ -102,6 +102,7 @@ watch(() => property.currentId, () => {
           <tr>
             <th>Confirmation</th>
             <th>Booker</th>
+            <th>Company / group</th>
             <th>Arrival</th>
             <th>Departure</th>
             <th>Rooms</th>
@@ -112,6 +113,7 @@ watch(() => property.currentId, () => {
           <tr v-for="r in rows" :key="r.id" :data-testid="`res-${r.confirmation_number}`">
             <td><RouterLink :to="`/reservations/${r.id}`">{{ r.confirmation_number }}</RouterLink></td>
             <td>{{ r.guest_name || '—' }}</td>
+            <td>{{ [r.company_name, r.group_code].filter(Boolean).join(' · ') || '—' }}</td>
             <td>{{ r.arrival_date }}</td>
             <td>{{ r.departure_date }}</td>
             <td>{{ r.room_count }}</td>

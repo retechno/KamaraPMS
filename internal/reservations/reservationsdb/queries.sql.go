@@ -16,7 +16,7 @@ import (
 const bumpReservation = `-- name: BumpReservation :one
 UPDATE reservations SET version = version + 1, updated_by = $1
 WHERE tenant_id = $2 AND property_id = $3 AND id = $4
-RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash
+RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id
 `
 
 type BumpReservationParams struct {
@@ -59,6 +59,8 @@ func (q *Queries) BumpReservation(ctx context.Context, arg BumpReservationParams
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }
@@ -68,7 +70,7 @@ UPDATE reservations SET
     status = 'CANCELLED', cancelled_at = $1::timestamptz, cancelled_by = $2, cancellation_reason = $3,
     version = version + 1, updated_by = $2
 WHERE tenant_id = $4 AND property_id = $5 AND id = $6
-RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash
+RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id
 `
 
 type CancelReservationParams struct {
@@ -114,6 +116,37 @@ func (q *Queries) CancelReservation(ctx context.Context, arg CancelReservationPa
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
+	)
+	return i, err
+}
+
+const companyRef = `-- name: CompanyRef :one
+SELECT id, code, name, is_active FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type CompanyRefParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type CompanyRefRow struct {
+	ID       int64
+	Code     string
+	Name     string
+	IsActive bool
+}
+
+func (q *Queries) CompanyRef(ctx context.Context, arg CompanyRefParams) (CompanyRefRow, error) {
+	row := q.db.QueryRow(ctx, companyRef, arg.TenantID, arg.PropertyID, arg.ID)
+	var i CompanyRefRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -123,7 +156,7 @@ UPDATE reservations SET
     status = 'CONFIRMED', confirmed_at = COALESCE(confirmed_at, $1::timestamptz), confirmed_by = COALESCE(confirmed_by, $2),
     cancelled_at = NULL, cancelled_by = NULL, cancellation_reason = NULL, version = version + 1, updated_by = $2
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5
-RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash
+RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id
 `
 
 type ConfirmReservationParams struct {
@@ -167,6 +200,8 @@ func (q *Queries) ConfirmReservation(ctx context.Context, arg ConfirmReservation
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }
@@ -263,7 +298,7 @@ func (q *Queries) GetLine(ctx context.Context, arg GetLineParams) (ReservationRo
 }
 
 const getReservation = `-- name: GetReservation :one
-SELECT id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetReservationParams struct {
@@ -299,12 +334,14 @@ func (q *Queries) GetReservation(ctx context.Context, arg GetReservationParams) 
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }
 
 const getReservationByKey = `-- name: GetReservationByKey :one
-SELECT id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+SELECT id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
 
 type GetReservationByKeyParams struct {
@@ -340,6 +377,8 @@ func (q *Queries) GetReservationByKey(ctx context.Context, arg GetReservationByK
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }
@@ -426,6 +465,42 @@ func (q *Queries) GetRoomTypesForBooking(ctx context.Context, arg GetRoomTypesFo
 		return nil, err
 	}
 	return items, nil
+}
+
+const groupRef = `-- name: GroupRef :one
+SELECT id, code, name, is_active, company_id, arrival_date, departure_date FROM booking_groups
+WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GroupRefParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GroupRefRow struct {
+	ID            int64
+	Code          string
+	Name          string
+	IsActive      bool
+	CompanyID     *int64
+	ArrivalDate   civil.Date
+	DepartureDate civil.Date
+}
+
+func (q *Queries) GroupRef(ctx context.Context, arg GroupRefParams) (GroupRefRow, error) {
+	row := q.db.QueryRow(ctx, groupRef, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GroupRefRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.IsActive,
+		&i.CompanyID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+	)
+	return i, err
 }
 
 const guestBrief = `-- name: GuestBrief :one
@@ -574,13 +649,13 @@ const insertReservation = `-- name: InsertReservation :one
 
 INSERT INTO reservations (
     tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, special_request, remarks,
-    idempotency_key, idempotency_hash, created_by, updated_by
+    idempotency_key, idempotency_hash, created_by, updated_by, company_id, booking_group_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11,
-    $12, $12
+    $12, $12, $13, $14
 )
-RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash
+RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id
 `
 
 type InsertReservationParams struct {
@@ -596,6 +671,8 @@ type InsertReservationParams struct {
 	IdempotencyKey     *string
 	IdempotencyHash    *string
 	ActorID            *int64
+	CompanyID          *int64
+	BookingGroupID     *int64
 }
 
 // Reservations module queries (sqlc). Scoped by tenant_id and property_id.
@@ -613,6 +690,8 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		arg.IdempotencyKey,
 		arg.IdempotencyHash,
 		arg.ActorID,
+		arg.CompanyID,
+		arg.BookingGroupID,
 	)
 	var i Reservation
 	err := row.Scan(
@@ -639,6 +718,8 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }
@@ -1335,9 +1416,9 @@ func (q *Queries) ListTapeSegments(ctx context.Context, arg ListTapeSegmentsPara
 }
 
 const searchReservations = `-- name: SearchReservations :many
-SELECT r.id, r.tenant_id, r.property_id, r.confirmation_number, r.guest_id, r.reservation_date, r.source, r.market, r.status, r.special_request, r.remarks, r.confirmed_at, r.confirmed_by, r.cancelled_at, r.cancelled_by, r.cancellation_reason, r.version, r.created_at, r.created_by, r.updated_at, r.updated_by, r.idempotency_key, r.idempotency_hash,
+SELECT r.id, r.tenant_id, r.property_id, r.confirmation_number, r.guest_id, r.reservation_date, r.source, r.market, r.status, r.special_request, r.remarks, r.confirmed_at, r.confirmed_by, r.cancelled_at, r.cancelled_by, r.cancellation_reason, r.version, r.created_at, r.created_by, r.updated_at, r.updated_by, r.idempotency_key, r.idempotency_hash, r.company_id, r.booking_group_id,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
-       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code
 FROM reservations r
 CROSS JOIN LATERAL (
     SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
@@ -1346,26 +1427,32 @@ CROSS JOIN LATERAL (
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
 LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
+LEFT JOIN companies co ON co.property_id = r.property_id AND co.id = r.company_id
+LEFT JOIN booking_groups bg ON bg.property_id = r.property_id AND bg.id = r.booking_group_id
 WHERE r.tenant_id = $1 AND r.property_id = $2
-  AND ($3::bigint = 0 OR r.id < $3::bigint)
-  AND ($4::text IS NULL OR r.status = $4::text)
-  AND ($5::date IS NULL OR agg.arrival_date >= $5::date)
-  AND ($6::date IS NULL OR agg.arrival_date <= $6::date)
-  AND ($7::text IS NULL OR r.confirmation_number ILIKE '%' || $7::text || '%'
-       OR g.last_name ILIKE '%' || $7::text || '%' OR g.first_name ILIKE '%' || $7::text || '%')
+  AND ($3::bigint IS NULL OR r.company_id = $3::bigint)
+  AND ($4::bigint IS NULL OR r.booking_group_id = $4::bigint)
+  AND ($5::bigint = 0 OR r.id < $5::bigint)
+  AND ($6::text IS NULL OR r.status = $6::text)
+  AND ($7::date IS NULL OR agg.arrival_date >= $7::date)
+  AND ($8::date IS NULL OR agg.arrival_date <= $8::date)
+  AND ($9::text IS NULL OR r.confirmation_number ILIKE '%' || $9::text || '%'
+       OR g.last_name ILIKE '%' || $9::text || '%' OR g.first_name ILIKE '%' || $9::text || '%')
 ORDER BY r.id DESC
-LIMIT $8
+LIMIT $10
 `
 
 type SearchReservationsParams struct {
-	TenantID    int64
-	PropertyID  int64
-	BeforeID    int64
-	Status      *string
-	ArrivalFrom *civil.Date
-	ArrivalTo   *civil.Date
-	Q           *string
-	RowLimit    int32
+	TenantID       int64
+	PropertyID     int64
+	CompanyID      *int64
+	BookingGroupID *int64
+	BeforeID       int64
+	Status         *string
+	ArrivalFrom    *civil.Date
+	ArrivalTo      *civil.Date
+	Q              *string
+	RowLimit       int32
 }
 
 type SearchReservationsRow struct {
@@ -1392,11 +1479,15 @@ type SearchReservationsRow struct {
 	UpdatedBy          *int64
 	IdempotencyKey     *string
 	IdempotencyHash    *string
+	CompanyID          *int64
+	BookingGroupID     *int64
 	ArrivalDate        civil.Date
 	DepartureDate      civil.Date
 	RoomCount          int32
 	GuestFirstName     *string
 	GuestLastName      *string
+	CompanyName        *string
+	GroupCode          *string
 }
 
 // Search: the header with dates and lines derived from the active (non-cancelled) lines, falling back to
@@ -1405,6 +1496,8 @@ func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservations
 	rows, err := q.db.Query(ctx, searchReservations,
 		arg.TenantID,
 		arg.PropertyID,
+		arg.CompanyID,
+		arg.BookingGroupID,
 		arg.BeforeID,
 		arg.Status,
 		arg.ArrivalFrom,
@@ -1443,11 +1536,15 @@ func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservations
 			&i.UpdatedBy,
 			&i.IdempotencyKey,
 			&i.IdempotencyHash,
+			&i.CompanyID,
+			&i.BookingGroupID,
 			&i.ArrivalDate,
 			&i.DepartureDate,
 			&i.RoomCount,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.CompanyName,
+			&i.GroupCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1544,9 +1641,10 @@ func (q *Queries) UpdateLine(ctx context.Context, arg UpdateLineParams) (Reserva
 const updateReservationHeader = `-- name: UpdateReservationHeader :one
 UPDATE reservations SET
     guest_id = $1, source = $2, market = $3, special_request = $4,
-    remarks = $5, version = version + 1, updated_by = $6
-WHERE tenant_id = $7 AND property_id = $8 AND id = $9
-RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash
+    remarks = $5, company_id = $6, booking_group_id = $7,
+    version = version + 1, updated_by = $8
+WHERE tenant_id = $9 AND property_id = $10 AND id = $11
+RETURNING id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id
 `
 
 type UpdateReservationHeaderParams struct {
@@ -1555,6 +1653,8 @@ type UpdateReservationHeaderParams struct {
 	Market         *string
 	SpecialRequest *string
 	Remarks        *string
+	CompanyID      *int64
+	BookingGroupID *int64
 	ActorID        *int64
 	TenantID       int64
 	PropertyID     int64
@@ -1569,6 +1669,8 @@ func (q *Queries) UpdateReservationHeader(ctx context.Context, arg UpdateReserva
 		arg.Market,
 		arg.SpecialRequest,
 		arg.Remarks,
+		arg.CompanyID,
+		arg.BookingGroupID,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -1599,6 +1701,8 @@ func (q *Queries) UpdateReservationHeader(ctx context.Context, arg UpdateReserva
 		&i.UpdatedBy,
 		&i.IdempotencyKey,
 		&i.IdempotencyHash,
+		&i.CompanyID,
+		&i.BookingGroupID,
 	)
 	return i, err
 }

@@ -3,11 +3,11 @@
 -- name: InsertReservation :one
 INSERT INTO reservations (
     tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, special_request, remarks,
-    idempotency_key, idempotency_hash, created_by, updated_by
+    idempotency_key, idempotency_hash, created_by, updated_by, company_id, booking_group_id
 ) VALUES (
     @tenant_id, @property_id, @confirmation_number, sqlc.narg(guest_id), @reservation_date, @source, sqlc.narg(market),
     sqlc.narg(special_request), sqlc.narg(remarks), sqlc.narg(idempotency_key), sqlc.narg(idempotency_hash),
-    sqlc.narg(actor_id), sqlc.narg(actor_id)
+    sqlc.narg(actor_id), sqlc.narg(actor_id), sqlc.narg(company_id), sqlc.narg(booking_group_id)
 )
 RETURNING *;
 
@@ -21,7 +21,8 @@ SELECT * FROM reservations WHERE tenant_id = @tenant_id AND property_id = @prope
 -- name: UpdateReservationHeader :one
 UPDATE reservations SET
     guest_id = sqlc.narg(guest_id), source = @source, market = sqlc.narg(market), special_request = sqlc.narg(special_request),
-    remarks = sqlc.narg(remarks), version = version + 1, updated_by = sqlc.narg(actor_id)
+    remarks = sqlc.narg(remarks), company_id = sqlc.narg(company_id), booking_group_id = sqlc.narg(booking_group_id),
+    version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 
@@ -105,7 +106,7 @@ ORDER BY reservation_room_id, stay_date;
 -- name: SearchReservations :many
 SELECT r.*,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
-       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code
 FROM reservations r
 CROSS JOIN LATERAL (
     SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
@@ -114,7 +115,11 @@ CROSS JOIN LATERAL (
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
 LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
+LEFT JOIN companies co ON co.property_id = r.property_id AND co.id = r.company_id
+LEFT JOIN booking_groups bg ON bg.property_id = r.property_id AND bg.id = r.booking_group_id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id
+  AND (sqlc.narg(company_id)::bigint IS NULL OR r.company_id = sqlc.narg(company_id)::bigint)
+  AND (sqlc.narg(booking_group_id)::bigint IS NULL OR r.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (@before_id::bigint = 0 OR r.id < @before_id::bigint)
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status)::text)
   AND (sqlc.narg(arrival_from)::date IS NULL OR agg.arrival_date >= sqlc.narg(arrival_from)::date)
@@ -123,6 +128,13 @@ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id
        OR g.last_name ILIKE '%' || sqlc.narg(q)::text || '%' OR g.first_name ILIKE '%' || sqlc.narg(q)::text || '%')
 ORDER BY r.id DESC
 LIMIT @row_limit;
+
+-- name: CompanyRef :one
+SELECT id, code, name, is_active FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GroupRef :one
+SELECT id, code, name, is_active, company_id, arrival_date, departure_date FROM booking_groups
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: GuestBrief :one
 SELECT id, code, first_name, last_name FROM guests WHERE tenant_id = @tenant_id AND id = @id;

@@ -206,6 +206,17 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <span v-else class="muted" data-testid="no-booker">not set</span>
         · Source {{ res.source }} · Booked on {{ res.reservation_date }}
       </p>
+      <p v-if="res.company_id || res.booking_group_id" data-testid="billing-links">
+        <template v-if="res.company_id">
+          Company:
+          <RouterLink v-if="can('cityledger.read')" :to="`/city-ledger/${res.company_id}`" data-testid="company-link">{{ res.company_name }}</RouterLink>
+          <span v-else data-testid="company-link">{{ res.company_name }}</span>
+        </template>
+        <template v-if="res.booking_group_id">
+          <template v-if="res.company_id"> · </template>Group:
+          <RouterLink :to="`/groups/${res.booking_group_id}`" data-testid="group-link">{{ res.group_code }}</RouterLink>
+        </template>
+      </p>
       <p v-if="res.cancellation_reason" class="muted">Cancelled: {{ res.cancellation_reason }}</p>
       <p>Estimated total (active rooms): <strong data-testid="estimate">{{ estimateTotal }}</strong></p>
 

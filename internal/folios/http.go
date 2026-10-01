@@ -25,6 +25,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/folios/{id}/charges", httpx.HandlerFunc(h.charge))
 	mux.Handle("POST "+p+"/folios/{id}/adjustments", httpx.HandlerFunc(h.adjust))
 	mux.Handle("POST "+p+"/folios/{id}/payments", httpx.HandlerFunc(h.pay))
+	mux.Handle("POST "+p+"/folios/{id}/city-ledger-transfers", httpx.HandlerFunc(h.transfer))
 	mux.Handle("POST "+p+"/folios/{id}/close", httpx.HandlerFunc(h.closeFolio))
 	mux.Handle("POST "+p+"/folio-items/{id}/reverse", httpx.HandlerFunc(h.reverse))
 	mux.Handle("GET "+p+"/payments", httpx.HandlerFunc(h.listPayments))
@@ -322,4 +323,24 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) transfer(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in TransferInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.Transfer(r.Context(), pid, id, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
 }

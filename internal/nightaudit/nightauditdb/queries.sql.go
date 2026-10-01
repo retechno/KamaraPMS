@@ -320,6 +320,33 @@ func (q *Queries) SummaryArrivals(ctx context.Context, arg SummaryArrivalsParams
 	return column_1, err
 }
 
+const summaryCityLedger = `-- name: SummaryCityLedger :one
+SELECT
+    COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date = $2::date), 0)::numeric AS transferred,
+    COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.status = 'POSTED' AND r.business_date = $2::date), 0)::numeric AS received,
+    (COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date <= $2::date), 0)
+   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.status = 'POSTED' AND r.business_date <= $2::date), 0))::numeric AS outstanding
+`
+
+type SummaryCityLedgerParams struct {
+	PropertyID int64
+	Bd         civil.Date
+}
+
+type SummaryCityLedgerRow struct {
+	Transferred decimal.Decimal
+	Received    decimal.Decimal
+	Outstanding decimal.Decimal
+}
+
+// Receivables of the day: moved to company accounts, paid back, and what is owed at the end of the day.
+func (q *Queries) SummaryCityLedger(ctx context.Context, arg SummaryCityLedgerParams) (SummaryCityLedgerRow, error) {
+	row := q.db.QueryRow(ctx, summaryCityLedger, arg.PropertyID, arg.Bd)
+	var i SummaryCityLedgerRow
+	err := row.Scan(&i.Transferred, &i.Received, &i.Outstanding)
+	return i, err
+}
+
 const summaryDepartures = `-- name: SummaryDepartures :one
 SELECT count(*)::int FROM stays s
 WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status = 'CHECKED_OUT'
@@ -362,8 +389,14 @@ const summaryPaymentsByMethod = `-- name: SummaryPaymentsByMethod :many
 SELECT payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT'), 0)::numeric AS payments,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'REFUND'), 0)::numeric AS refunds
-FROM payments
-WHERE tenant_id = $1 AND property_id = $2 AND business_date = $3::date AND status = 'POSTED'
+FROM (
+    -- Money in the till: folio payments (not transfers to a company) and city ledger receipts.
+    SELECT p.payment_method, p.payment_type, p.amount FROM payments p
+    WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.business_date = $3::date AND p.status = 'POSTED' AND p.payment_method <> 'CITY_LEDGER'
+    UNION ALL
+    SELECT r.payment_method, 'PAYMENT'::varchar, r.amount FROM city_ledger_receipts r
+    WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3::date AND r.status = 'POSTED'
+) x
 GROUP BY payment_method
 ORDER BY payment_method
 `

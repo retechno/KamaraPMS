@@ -19,8 +19,13 @@ SELECT business_date, payment_method,
        count(*) FILTER (WHERE status = 'POSTED')::int AS count,
        COALESCE(sum(amount) FILTER (WHERE status = 'VOIDED'), 0)::numeric AS voided,
        count(*) FILTER (WHERE status = 'VOIDED')::int AS voided_count
-FROM payments
-WHERE tenant_id = $1 AND property_id = $2 AND business_date BETWEEN $3::date AND $4::date
+FROM (
+    SELECT p.business_date, p.payment_method, p.payment_type, p.status, p.amount FROM payments p
+    WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.business_date BETWEEN $3::date AND $4::date
+    UNION ALL
+    SELECT r.business_date, r.payment_method, 'PAYMENT'::varchar, r.status, r.amount FROM city_ledger_receipts r
+    WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date BETWEEN $3::date AND $4::date
+) x
 GROUP BY business_date, payment_method
 ORDER BY business_date, payment_method
 `
@@ -42,6 +47,7 @@ type CashierByMethodRow struct {
 	VoidedCount   int32
 }
 
+// Folio payments plus the money companies paid against their city ledger account (receipts count as payments).
 func (q *Queries) CashierByMethod(ctx context.Context, arg CashierByMethodParams) ([]CashierByMethodRow, error) {
 	rows, err := q.db.Query(ctx, cashierByMethod,
 		arg.TenantID,

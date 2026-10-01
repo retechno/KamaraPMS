@@ -130,6 +130,10 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		if err := s.requireGuest(ctx, in.GuestID); err != nil {
 			return err
 		}
+		companyID, groupID, err := s.resolveLinks(ctx, p.TenantID, propertyID, in.CompanyID, in.BookingGroupID, in.Rooms)
+		if err != nil {
+			return err
+		}
 		decimals, err := s.decimals(ctx, propertyID)
 		if err != nil {
 			return err
@@ -174,7 +178,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		params := reservationsdb.InsertReservationParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ConfirmationNumber: number, GuestID: in.GuestID, ReservationDate: bd,
 			Source: in.Source, Market: nullable(in.Market), SpecialRequest: nullable(in.SpecialRequest), Remarks: nullable(in.Remarks),
-			ActorID: p.ActorID(),
+			ActorID: p.ActorID(), CompanyID: companyID, BookingGroupID: groupID,
 		}
 		if key != "" {
 			params.IdempotencyKey, params.IdempotencyHash = &key, &hash

@@ -8,7 +8,7 @@ project: do not borrow conventions from other PMS products.
 - `docs/architecture/`: the approved design. **Read it before changing behaviour.** Start with `README.md`
   (status). Key files: `02-database-schema.md`, `03-financial-engines.md`, `04-operations.md`,
   `05-transactions-locking.md`, `06-api.md`, `07-milestones.md`.
-- Status: **M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 done: the MVP in 07-milestones.md is complete.**
+- Status: **M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 done: the MVP in 07-milestones.md is complete.** Since then: PDF documents and confirmation e-mail, corporate accounts, groups and the city ledger (see `docs/architecture/README.md`).
   New work starts from a request, not from the milestone list; keep the same rules (DB, backend, API, frontend and
   tests together; see 07-milestones.md for how each area was built).
 - Rejected decisions must not come back: `rooms.status`, `taxes.is_inclusive`, `payments.currency_code`,
@@ -49,7 +49,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
   `numeric(18,3)` in SQL, rounded half away from zero at `properties.currency_decimals` (0 to 3).
 - **Transactions:** a use case opens `TxManager.WithinTx`; services join the ambient transaction and never
   commit. Row locks only via `db.LockRows` / `db.EnterLockLevel` (global lock order is enforced at runtime:
-  business day → room types → rooms → reservations → stays → folios → payments → sequences).
+  business day → room types → rooms → reservations → stays → folios → payments → companies → groups → sequences).
 - **Every business-dated write** first calls `RequireOpenBusinessDay(ctx, propertyID, db.ForShare, …)`.
 - **Errors:** return `*apperr.Error` with a stable code. DB constraint names map to codes in
   `internal/platform/db/errors.go` (a test verifies every name exists). New constraint → add a mapping.

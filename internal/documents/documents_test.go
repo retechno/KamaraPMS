@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
@@ -192,4 +194,39 @@ func TestDocumentsNeedThePermissionsOfWhatTheyShow(t *testing.T) {
 	other := f.Tenant(t, "XYZ")
 	_, err = f.Docs.Invoice(roomstest.Admin(other.ID), f.propID, f.stay.Folio.ID)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
+}
+
+func TestCompanyStatement(t *testing.T) {
+	f := setup(t)
+	co, err := f.Companies.Create(f.admin, f.propID, companies.Input{Code: "ACME", Name: "Acme Corp", Address: "Jl. Bisnis 9", City: "Jakarta", TaxID: "99.888.777.6", PaymentTermsDays: 45, IsActive: true})
+	must(t, err)
+	_, err = f.Folios.Transfer(f.admin, f.propID, f.stay.Folio.ID, "t1", folios.TransferInput{CompanyID: co.ID, Amount: "50000", ReferenceNumber: "PO-77"})
+	must(t, err)
+	r, err := f.CityLedger.Receive(f.admin, f.propID, co.ID, "r1", cityledger.ReceiptInput{Amount: "20000", PaymentMethod: "BANK_TRANSFER", ReferenceNumber: "TRX-1"})
+	must(t, err)
+	doc, err := f.Docs.CompanyStatement(f.admin, f.propID, co.ID, nil, nil)
+	must(t, err)
+	s := pdfText(t, doc)
+	for _, want := range []string{"STATEMENT OF ACCOUNT", "Acme Corp", "Jl. Bisnis 9", "99.888.777.6", "45 days", "PO-77", "TRX-1", "Siti", "IDR 30,000", "0-30 days", r.Receipt.ReceiptNumber} {
+		if !strings.Contains(s, want) {
+			t.Errorf("statement lacks %q", want)
+		}
+	}
+	if doc.Filename != "statement-ACME.pdf" {
+		t.Errorf("filename %q", doc.Filename)
+	}
+	// a receipt that was voided is listed and marked, and the balance is back to the transfer
+	_, err = f.CityLedger.VoidReceipt(f.admin, f.propID, r.Receipt.ID, cityledger.VoidInput{Reason: "bounced", Approval: &iam.ApprovalInput{Email: f.adminEmail, Password: roomstest.Password}})
+	must(t, err)
+	doc, err = f.Docs.CompanyStatement(f.admin, f.propID, co.ID, nil, nil)
+	must(t, err)
+	if s := pdfText(t, doc); !strings.Contains(s, `(voided\)`) || !strings.Contains(s, "IDR 50,000") {
+		t.Error("voided receipt and balance")
+	}
+	// needs cityledger.read; unknown company
+	desk := f.User(t, f.tenantID, f.propID, auth.PermReservationRead)
+	_, err = f.Docs.CompanyStatement(desk, f.propID, co.ID, nil, nil)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = f.Docs.CompanyStatement(f.admin, f.propID, 99999, nil, nil)
+	wantCode(t, err, "COMPANY_NOT_FOUND")
 }

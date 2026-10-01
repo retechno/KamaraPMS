@@ -31,6 +31,7 @@ WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_d
 GROUP BY k.component_type, k.code, k.name, k.rate, k.gl_account_code
 ORDER BY k.component_type DESC, k.code, k.rate, k.gl_account_code NULLS FIRST;
 
+-- Folio payments plus the money companies paid against their city ledger account (receipts count as payments).
 -- name: CashierByMethod :many
 SELECT business_date, payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT' AND status = 'POSTED'), 0)::numeric AS payments,
@@ -38,8 +39,13 @@ SELECT business_date, payment_method,
        count(*) FILTER (WHERE status = 'POSTED')::int AS count,
        COALESCE(sum(amount) FILTER (WHERE status = 'VOIDED'), 0)::numeric AS voided,
        count(*) FILTER (WHERE status = 'VOIDED')::int AS voided_count
-FROM payments
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date BETWEEN @from_date::date AND @to_date::date
+FROM (
+    SELECT p.business_date, p.payment_method, p.payment_type, p.status, p.amount FROM payments p
+    WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date BETWEEN @from_date::date AND @to_date::date
+    UNION ALL
+    SELECT r.business_date, r.payment_method, 'PAYMENT'::varchar, r.status, r.amount FROM city_ledger_receipts r
+    WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date BETWEEN @from_date::date AND @to_date::date
+) x
 GROUP BY business_date, payment_method
 ORDER BY business_date, payment_method;
 

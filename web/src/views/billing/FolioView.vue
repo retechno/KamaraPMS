@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, ChargeCode, Folio, FolioItem, PaymentMethod } from '@/api/types'
+import type { Approval, ChargeCode, Company, Folio, FolioItem, PaymentMethod } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -16,6 +16,8 @@ const property = usePropertyStore()
 
 const folio = ref<Folio | null>(null)
 const codes = ref<ChargeCode[]>([])
+const companies = ref<Company[]>([])
+const companiesDenied = ref(false)
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
@@ -26,6 +28,7 @@ const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']
 const charge = reactive({ codeId: 0, quantity: '1', unitPrice: '', description: '' })
 const payment = reactive({ amount: '', method: 'CASH' as PaymentMethod, reference: '' })
 const adjust = reactive({ codeId: 0, amount: '', reason: '' })
+const transfer = reactive({ companyId: 0, amount: '', reference: '' })
 // A correction waiting for its reason and its approval.
 type Pending =
   | { kind: 'adjust' }
@@ -61,8 +64,24 @@ async function load(): Promise<void> {
     codes.value = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/charge-codes', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))
     charge.codeId ||= chargeCodes.value[0]?.id ?? 0
     adjust.codeId ||= adjustCodes.value[0]?.id ?? 0
+    await loadCompanies(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+// The companies a folio can be transferred to. Picking one needs reservation.read or cityledger.read; a role that
+// has only cityledger.transfer is told so instead of seeing an empty list.
+async function loadCompanies(propertyId: number): Promise<void> {
+  if (!can('cityledger.transfer') || folio.value?.status !== 'OPEN') return
+  try {
+    const all = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/companies', { params: { path: { propertyId }, query: { limit: 200, cursor, active: true } } }))
+    companies.value = all
+    companiesDenied.value = false
+    transfer.companyId ||= all[0]?.id ?? 0
+  } catch (e) {
+    companies.value = []
+    companiesDenied.value = e instanceof ApiError && e.status === 403
   }
 }
 
@@ -102,6 +121,16 @@ const postPayment = () => run('payment', async () => {
   payment.amount = ''
   payment.reference = ''
   notice.value = 'Payment posted.'
+})
+
+const postTransfer = () => run('transfer', async () => {
+  await api.POST('/api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers', {
+    params: { ...base(), header: { 'Idempotency-Key': keyFor('transfer') } },
+    body: { company_id: transfer.companyId, amount: transfer.amount, reference_number: transfer.reference || undefined },
+  })
+  transfer.amount = ''
+  transfer.reference = ''
+  notice.value = 'Transferred to the company\'s city ledger account.'
 })
 
 const closeFolio = () => run('close', async () => {
@@ -174,7 +203,9 @@ async function approve(approval: Approval): Promise<void> {
 
 const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id
 const voidable = (i: FolioItem) => isOpen.value && can('payment.void') && i.transaction_type === 'PAYMENT' && i.business_date === businessDate.value && !i.reversed_by_item_id
-const refundable = (i: FolioItem) => isOpen.value && can('payment.refund') && i.transaction_type === 'PAYMENT' && !i.reversed_by_item_id
+// A transfer to a company is settled by the company's receipt, never refunded (its description names the method).
+const isTransfer = (i: FolioItem) => i.description.includes('(CITY_LEDGER)')
+const refundable = (i: FolioItem) => isOpen.value && can('payment.refund') && i.transaction_type === 'PAYMENT' && !i.reversed_by_item_id && !isTransfer(i)
 const dialogTitle = computed(() => {
   switch (pending.value?.kind) {
     case 'adjust': return 'Approve adjustment'
@@ -327,6 +358,31 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           </label>
         </div>
         <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Post payment</button></div>
+      </form>
+
+      <form v-if="can('cityledger.transfer') && isOpen" class="card" novalidate data-testid="transfer-form" @submit.prevent="postTransfer">
+        <h2>Transfer to a company (city ledger)</h2>
+        <p v-if="companiesDenied" class="muted" data-testid="transfer-denied">Choosing a company needs the <code>cityledger.read</code> or <code>reservation.read</code> permission too.</p>
+        <p v-else-if="!companies.length" class="muted" data-testid="transfer-none">There is no active company: add one under Setup → Companies.</p>
+        <div v-else class="form-grid">
+          <label class="field">
+            <span>Company</span>
+            <select v-model.number="transfer.companyId" name="transfer_company">
+              <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+            </select>
+            <small v-if="fieldError('company_id')" class="error-text">{{ fieldError('company_id') }}</small>
+          </label>
+          <label class="field">
+            <span>Amount (folio balance {{ folio?.balance }})</span>
+            <input v-model="transfer.amount" name="transfer_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
+            <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
+          </label>
+          <label class="field">
+            <span>Reference (PO, voucher)</span>
+            <input v-model="transfer.reference" name="transfer_reference" />
+          </label>
+        </div>
+        <div v-if="companies.length" class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Transfer</button></div>
       </form>
 
       <form v-if="can('folio.adjust')" class="card" novalidate data-testid="adjust-form" @submit.prevent="startAdjust">

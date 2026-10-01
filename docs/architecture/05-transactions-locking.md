@@ -18,7 +18,7 @@
 | L1 | `business_days` OPEN row | `FOR SHARE` (writers) / `FOR UPDATE` (night audit) | Every business-dated write |
 | L2 | `room_types` rows, sorted by id | `FOR UPDATE` | Anything that changes type inventory |
 | L3 | `rooms` rows, sorted by id | `FOR UPDATE` | Anything that allocates or blocks a specific room |
-| L4 | Aggregate roots, sorted by id: `reservations` → `stays` → `folios` → `payments` | `FOR UPDATE` + `version` check | The aggregates being modified |
+| L4 | Aggregate roots, sorted by id: `reservations` → `stays` → `folios` → `payments` → `companies` (44) → `booking_groups` (45) | `FOR UPDATE` + `version` check (a booking joining a group takes `FOR SHARE`) | The aggregates being modified. A city ledger transfer, receipt or void locks the company; a booking or an edit of a group locks the group |
 | L5 | `document_sequences` row | `UPDATE … RETURNING` | Number allocation (last, and held briefly) |
 
 A transaction may skip levels, but it may **never take a lower-numbered lock after a higher-numbered one**.

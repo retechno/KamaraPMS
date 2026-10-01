@@ -569,3 +569,19 @@ Applies to: `POST {P}/folios/{id}/adjustments`, `POST {P}/folio-items/{id}/rever
 - **Recorded:** `approved_by` (NOT NULL, added by the M9 migration) on the correcting row: REVERSAL and ADJUSTMENT `folio_items`, VOIDED payments and REFUND payments. The audit entry carries `actor` and `approved_by` (equal when self-approved).
 - **Replays:** an `Idempotency-Key` replay returns the stored result and does not ask for approval again.
 - **Correction routes by date:** same business date → void (payments) or reversal (charges); an earlier date → an ADJUSTMENT or a REFUND posted on the current business date. A void or reversal of an earlier date is 409 `CORRECTION_REQUIRES_ADJUSTMENT`. Nothing is ever back-posted.
+
+## 17. Companies, groups and the city ledger (after M15)
+Errors and conventions are as everywhere. Permissions: `company.manage`, `group.manage`, `cityledger.read`, `cityledger.transfer`, `cityledger.receive`.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/companies`, `GET/PATCH {P}/companies/{id}` | read: `reservation.read` or `cityledger.read`; write: `company.manage` | `credit_limit` `null`/empty = no limit, `0` = no credit. Code unique (409 `CODE_TAKEN`). Deactivating a company that owes: 409 `COMPANY_HAS_BALANCE` |
+| `GET/POST {P}/groups`, `GET/PATCH {P}/groups/{id}`, `GET {P}/groups/{id}/reservations` | read: `reservation.read`; write: `group.manage` | Dates and company are guarded by the group's reservations: 409 `GROUP_HAS_ROOMS_OUTSIDE_DATES`, `GROUP_HAS_RESERVATIONS` |
+| `POST {P}/reservations` and `PATCH {P}/reservations/{id}` | as before | New fields `company_id` and `booking_group_id` (a value below 1 clears them on PATCH). 404 `COMPANY_NOT_FOUND`/`GROUP_NOT_FOUND`, 409 `COMPANY_INACTIVE`/`GROUP_INACTIVE`, 422 for a stay outside the group's dates or a company other than the group's. `GET {P}/reservations` filters by `company_id` and `booking_group_id` |
+| `POST {P}/folios/{id}/city-ledger-transfers` | `cityledger.transfer` | Idempotency-Key. 409 `TRANSFER_EXCEEDS_BALANCE`, `CREDIT_LIMIT_EXCEEDED`, `COMPANY_INACTIVE`; returns a payment with method `CITY_LEDGER` |
+| `GET {P}/city-ledger/accounts`, `.../accounts/{id}`, `/statement`, `/aging`, `/receipts` | `cityledger.read` | The balance is derived: transfers minus receipts |
+| `POST {P}/city-ledger/accounts/{id}/receipts` | `cityledger.receive` | Idempotency-Key. 409 `RECEIPT_EXCEEDS_BALANCE` |
+| `POST {P}/city-ledger/receipts/{id}/void` | `cityledger.receive` + approval | Current business date only (409 `CORRECTION_REQUIRES_ADJUSTMENT`), 409 `RECEIPT_ALREADY_VOIDED` |
+| `GET {P}/companies/{id}/statement.pdf` | `cityledger.read` | `from`, `to` optional |
+
+`CITY_LEDGER` appears as a payment method on payments (with `company_id`) but is refused by the payment, deposit and refund endpoints; a transfer is not refunded (409 `PAYMENT_NOT_REFUNDABLE`), and voiding one after receipts settled it is 409 `COMPANY_BALANCE_SETTLED`.

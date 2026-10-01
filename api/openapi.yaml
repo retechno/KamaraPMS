@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.18.0
+  version: 0.19.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1261,6 +1261,8 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - { name: arrival_from, in: query, schema: { $ref: "#/components/schemas/Date" } }
         - { name: arrival_to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: company_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: booking_group_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] } }
         - { name: q, in: query, schema: { type: string } }
       responses:
@@ -2548,6 +2550,373 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/companies:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listCompanies
+      summary: List companies (reservation.read or cityledger.read)
+      tags: [companies]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+        - { name: q, in: query, description: Matches the code or the name., schema: { type: string } }
+      responses:
+        "200":
+          description: A page of companies, by id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCompany
+      summary: Create a company (company.manage)
+      description: "A company is a corporate account the hotel bills instead of the guest. `credit_limit` empty means no limit, `0` means no credit. The code is unique per property (409 `CODE_TAKEN`)."
+      tags: [companies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCompanyRequest" }
+      responses:
+        "201":
+          description: The created company.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/companies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCompany
+      summary: One company (reservation.read or cityledger.read)
+      tags: [companies]
+      responses:
+        "200":
+          description: The company.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateCompany
+      summary: Edit a company (company.manage); the code cannot change
+      description: A company that still owes money cannot be deactivated (409 `COMPANY_HAS_BALANCE`). Lowering the limit below the balance is allowed; it only stops new transfers. An empty `credit_limit` removes the limit.
+      tags: [companies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchCompanyRequest" }
+      responses:
+        "200":
+          description: The updated company.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/companies/{id}/statement.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCompanyStatementPdf
+      summary: Statement of account of a company (cityledger.read)
+      description: "Transfers (debit), receipts (credit) and the balance after each line for the period, then the aging of what is still open. A voided receipt is listed and marked, and does not count. File name `statement-<company code>.pdf`."
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The document as a PDF (never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listGroups
+      summary: List booking groups, newest first (reservation.read)
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: active, in: query, schema: { type: boolean } }
+        - { name: company_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: q, in: query, description: Matches the code or the name., schema: { type: string } }
+      responses:
+        "200":
+          description: A page of groups with their reservation and room counts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createGroup
+      summary: Create a booking group (group.manage)
+      description: "A group is a block of reservations that share dates and optionally a company that is billed. Rooms are booked as ordinary reservations that name the group (`booking_group_id` on the reservation); the stay must lie within the group's dates and the reservation inherits the group's company."
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGroupRequest" }
+      responses:
+        "201":
+          description: The created group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Group" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getGroup
+      summary: One booking group (reservation.read)
+      tags: [groups]
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Group" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateGroup
+      summary: Edit a booking group (group.manage); the code cannot change
+      description: "The dates cannot shrink past a booked room (409 `GROUP_HAS_ROOMS_OUTSIDE_DATES`) and the company cannot change while reservations bill another one (409 `GROUP_HAS_RESERVATIONS`). `company_id` below 1 removes the company. An inactive group takes no more rooms."
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchGroupRequest" }
+      responses:
+        "200":
+          description: The updated group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Group" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/reservations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listGroupReservations
+      summary: The reservations of a group, by id (reservation.read)
+      description: Not paginated.
+      tags: [groups]
+      responses:
+        "200":
+          description: The members.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupMemberList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: transferFolioToCompany
+      summary: Move part of an open folio's balance to a company's city ledger account (cityledger.transfer)
+      description: |
+        Posts a payment with method `CITY_LEDGER` that credits the folio and adds to what the company owes.
+        The amount cannot exceed the folio's balance (409 `TRANSFER_EXCEEDS_BALANCE`). The company must be active
+        (409 `COMPANY_INACTIVE`) and stay within its credit limit (409 `CREDIT_LIMIT_EXCEEDED`, with
+        `context.credit_limit` and `context.balance`); the company row is locked, so the limit holds when several
+        folios transfer at once. A transfer is not refunded; it can be voided on the same business date unless
+        receipts already settled it (409 `COMPANY_BALANCE_SETTLED`).
+      tags: [city-ledger]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferRequest" }
+      responses:
+        "201":
+          description: The transfer (a payment), its ledger entry and the folio's balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listCityLedgerAccounts
+      summary: Companies with what they owe (cityledger.read)
+      description: The balance is derived (transfers minus receipts), never stored.
+      tags: [city-ledger]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: owing, in: query, description: Only companies with a balance above zero., schema: { type: boolean } }
+        - { name: q, in: query, description: Matches the code or the name., schema: { type: string } }
+      responses:
+        "200":
+          description: A page of accounts, by company id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAccountPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerAccount
+      summary: One company's account (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAccount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}/statement:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerStatement
+      summary: A company's movements with the running balance (cityledger.read)
+      description: "`from` and `to` are optional business dates (inclusive). A period that starts after earlier movements opens with their balance. Lines are ordered by date, transfers before receipts; a voided line is listed but does not move the balance."
+      tags: [city-ledger]
+      parameters:
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The statement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerStatement" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}/aging:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerAging
+      summary: What a company owes by age of the transfer (cityledger.read)
+      description: As of the current business date, in the buckets 0-30, 31-60, 61-90 and 90+ days. Receipts settle the oldest transfers first.
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The aging.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAging" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listCityLedgerReceipts
+      summary: A company's receipts, oldest first (cityledger.read)
+      description: Not paginated.
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The receipts, voided ones included.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReceiptList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: receiveCityLedgerPayment
+      summary: Record money a company paid against its account (cityledger.receive)
+      description: "The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the CITY_LEDGER_RECEIPT series."
+      tags: [city-ledger]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReceiveRequest" }
+      responses:
+        "201":
+          description: The receipt and the account's balance after it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReceiptResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidCityLedgerReceipt
+      summary: Void a receipt taken on the current business date (cityledger.receive, needs approval)
+      tags: [city-ledger]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The voided receipt and the account's balance after it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReceiptResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3639,6 +4008,8 @@ components:
         market: { type: string }
         special_request: { type: string }
         remarks: { type: string }
+        company_id: { type: [integer, "null"], format: int64, description: The company that is billed; a group's company is inherited. }
+        booking_group_id: { type: [integer, "null"], format: int64, description: The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room), the group must be active (409 `GROUP_INACTIVE`). }
         confirm: { type: boolean, default: false }
         rooms:
           type: array
@@ -3659,6 +4030,8 @@ components:
         market: { type: string }
         special_request: { type: string }
         remarks: { type: string }
+        company_id: { type: integer, format: int64, description: Below 1 clears the company. }
+        booking_group_id: { type: integer, format: int64, description: Below 1 clears the group. }
     VersionRequest:
       type: object
       required: [version]
@@ -3770,6 +4143,10 @@ components:
         confirmation_number: { type: string }
         guest_id: { type: [integer, "null"], format: int64 }
         guest: { $ref: "#/components/schemas/GuestName" }
+        company_id: { type: [integer, "null"], format: int64 }
+        company_name: { type: string }
+        booking_group_id: { type: [integer, "null"], format: int64 }
+        group_code: { type: string }
         reservation_date: { $ref: "#/components/schemas/Date" }
         source: { $ref: "#/components/schemas/ReservationSource" }
         market: { type: string }
@@ -3798,6 +4175,10 @@ components:
         confirmation_number: { type: string }
         guest_id: { type: [integer, "null"], format: int64 }
         guest_name: { type: string }
+        company_id: { type: [integer, "null"], format: int64 }
+        company_name: { type: string }
+        booking_group_id: { type: [integer, "null"], format: int64 }
+        group_code: { type: string }
         source: { $ref: "#/components/schemas/ReservationSource" }
         status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] }
         arrival_date: { $ref: "#/components/schemas/Date" }
@@ -4033,13 +4414,14 @@ components:
         folio_balance: { type: string }
     Payment:
       type: object
-      required: [id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, refund_of_payment_id, status, voided_at, created_by, approved_by]
+      required: [id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, refund_of_payment_id, status, voided_at, created_by, approved_by, company_id]
       properties:
         id: { type: integer, format: int64 }
         payment_number: { type: string }
         folio_id: { type: integer, format: int64 }
         payment_type: { type: string, enum: [PAYMENT, REFUND] }
-        payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, CITY_LEDGER], description: CITY_LEDGER is a transfer to a company account, not money received. }
+        company_id: { type: [integer, "null"], format: int64, description: The company of a CITY_LEDGER transfer. }
         amount: { type: string }
         paid_at: { type: string, format: date-time }
         business_date: { $ref: "#/components/schemas/Date" }
@@ -4566,7 +4948,7 @@ components:
         tax: { $ref: "#/components/schemas/Amount" }
     NightAuditSummary:
       type: object
-      required: [business_date, rooms, arrivals, departures, no_shows, room_revenue, revenue_by_charge_type, payments_by_method, occupancy_percent, adr, revpar, room_charges_posted]
+      required: [business_date, rooms, arrivals, departures, no_shows, room_revenue, revenue_by_charge_type, payments_by_method, city_ledger, occupancy_percent, adr, revpar, room_charges_posted]
       properties:
         business_date: { $ref: "#/components/schemas/Date" }
         rooms:
@@ -4602,6 +4984,14 @@ components:
               payments: { $ref: "#/components/schemas/Amount" }
               refunds: { $ref: "#/components/schemas/Amount" }
               net: { $ref: "#/components/schemas/Amount" }
+          description: "The till: folio payments (not transfers to a company) and city ledger receipts."
+        city_ledger:
+          type: object
+          required: [transferred, received, outstanding]
+          properties:
+            transferred: { $ref: "#/components/schemas/Amount" }
+            received: { $ref: "#/components/schemas/Amount" }
+            outstanding: { $ref: "#/components/schemas/Amount", description: What companies owe at the end of the day. }
         occupancy_percent: { type: string, description: Occupied rooms over rooms that are not out of order. }
         adr: { $ref: "#/components/schemas/Amount" }
         revpar: { $ref: "#/components/schemas/Amount" }
@@ -4888,3 +5278,251 @@ components:
           type: boolean
           description: The same request may succeed if retried (temporary contention).
         request_id: { type: string }
+    Company:
+      type: object
+      required: [id, code, name, credit_limit, payment_terms_days, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        contact_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        city: { type: string }
+        tax_id: { type: string }
+        credit_limit: { type: [string, "null"], description: "null: no limit; \"0\": no credit." }
+        payment_terms_days: { type: integer }
+        notes: { type: string }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CompanyPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Company" }
+        next_cursor: { type: string }
+    CreateCompanyRequest:
+      type: object
+      required: [code, name]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: "1-20 characters: A-Z, 0-9, - or _ (upper-cased)." }
+        name: { type: string, maxLength: 150 }
+        contact_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        city: { type: string }
+        tax_id: { type: string }
+        credit_limit: { type: string, description: Empty for no limit. At most the currency's decimals. }
+        payment_terms_days: { type: integer, minimum: 0, maximum: 365, default: 30 }
+        notes: { type: string }
+        is_active: { type: boolean, default: true }
+    PatchCompanyRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        contact_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        city: { type: string }
+        tax_id: { type: string }
+        credit_limit: { type: string, description: Empty removes the limit. }
+        payment_terms_days: { type: integer, minimum: 0, maximum: 365 }
+        notes: { type: string }
+        is_active: { type: boolean }
+    Group:
+      type: object
+      required: [id, code, name, company_id, arrival_date, departure_date, is_active, reservation_count, room_count, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        company_id: { type: [integer, "null"], format: int64 }
+        company_name: { type: string }
+        contact_name: { type: string }
+        contact_email: { type: string }
+        contact_phone: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        notes: { type: string }
+        is_active: { type: boolean }
+        reservation_count: { type: integer, description: Reservations that are not cancelled. }
+        room_count: { type: integer, description: Rooms that are not cancelled. }
+        created_at: { type: string, format: date-time }
+    GroupPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Group" }
+        next_cursor: { type: string }
+    CreateGroupRequest:
+      type: object
+      required: [code, name, arrival_date, departure_date]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string, maxLength: 150 }
+        company_id: { type: [integer, "null"], format: int64 }
+        contact_name: { type: string }
+        contact_email: { type: string }
+        contact_phone: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        notes: { type: string }
+        is_active: { type: boolean, default: true }
+    PatchGroupRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        company_id: { type: integer, format: int64, description: Below 1 removes the company. }
+        contact_name: { type: string }
+        contact_email: { type: string }
+        contact_phone: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        notes: { type: string }
+        is_active: { type: boolean }
+    GroupMember:
+      type: object
+      required: [reservation_id, confirmation_number, status, company_id, arrival_date, departure_date, room_count]
+      properties:
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] }
+        guest_name: { type: string }
+        company_id: { type: [integer, "null"], format: int64 }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        room_count: { type: integer }
+    GroupMemberList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/GroupMember" }
+    TransferRequest:
+      type: object
+      required: [company_id, amount]
+      additionalProperties: false
+      properties:
+        company_id: { type: integer, format: int64 }
+        amount: { type: string }
+        reference_number: { type: string, maxLength: 100 }
+        remarks: { type: string, maxLength: 500 }
+    ReceiveRequest:
+      type: object
+      required: [amount, payment_method]
+      additionalProperties: false
+      properties:
+        amount: { type: string }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+        reference_number: { type: string, maxLength: 100 }
+        remarks: { type: string, maxLength: 500 }
+    CityLedgerAccount:
+      type: object
+      required: [company_id, code, name, is_active, credit_limit, payment_terms_days, transferred, received, balance, available]
+      properties:
+        company_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+        credit_limit: { type: [string, "null"] }
+        payment_terms_days: { type: integer }
+        transferred: { type: string, description: Posted transfers from folios. }
+        received: { type: string, description: Posted receipts. }
+        balance: { type: string, description: transferred minus received. }
+        available: { type: [string, "null"], description: What can still be transferred within the limit; null without a limit. }
+    CityLedgerAccountPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/CityLedgerAccount" }
+        next_cursor: { type: string }
+    CityLedgerReceipt:
+      type: object
+      required: [id, receipt_number, company_id, amount, payment_method, business_date, paid_at, status, voided_at, created_by, approved_by]
+      properties:
+        id: { type: integer, format: int64 }
+        receipt_number: { type: string }
+        company_id: { type: integer, format: int64 }
+        amount: { type: string }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+        reference_number: { type: string }
+        remarks: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        paid_at: { type: string, format: date-time }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        voided_at: { type: [string, "null"], format: date-time }
+        void_reason: { type: string }
+        created_by: { type: [integer, "null"], format: int64 }
+        approved_by: { type: [integer, "null"], format: int64 }
+    CityLedgerReceiptResult:
+      type: object
+      required: [receipt, balance]
+      properties:
+        receipt: { $ref: "#/components/schemas/CityLedgerReceipt" }
+        balance: { type: string, description: The company's balance after the receipt or void. }
+    CityLedgerReceiptList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/CityLedgerReceipt" }
+    CityLedgerStatementLine:
+      type: object
+      required: [date, kind, number, description, status, debit, credit, balance]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        kind: { type: string, enum: [TRANSFER, RECEIPT] }
+        number: { type: string }
+        description: { type: string }
+        reference: { type: string }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        debit: { type: string }
+        credit: { type: string }
+        balance: { type: string, description: The running balance of the posted lines. }
+        folio_number: { type: string }
+        confirmation_number: { type: string }
+        guest_name: { type: string }
+    CityLedgerStatement:
+      type: object
+      required: [company, from, to, opening_balance, total_debit, total_credit, closing_balance, lines]
+      properties:
+        company: { $ref: "#/components/schemas/CityLedgerAccount" }
+        from: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        to: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        opening_balance: { type: string }
+        total_debit: { type: string }
+        total_credit: { type: string }
+        closing_balance: { type: string }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/CityLedgerStatementLine" }
+    CityLedgerAging:
+      type: object
+      required: [as_of, total, buckets]
+      properties:
+        as_of: { $ref: "#/components/schemas/Date" }
+        total: { type: string }
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [label, amount]
+            properties:
+              label: { type: string, enum: ["0-30", "31-60", "61-90", "90+"] }
+              amount: { type: string }

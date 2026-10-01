@@ -62,6 +62,12 @@ const (
 
 	PermReportView Permission = "report.view"
 
+	PermCompanyManage      Permission = "company.manage"
+	PermGroupManage        Permission = "group.manage"
+	PermCityLedgerRead     Permission = "cityledger.read"
+	PermCityLedgerTransfer Permission = "cityledger.transfer"
+	PermCityLedgerReceive  Permission = "cityledger.receive"
+
 	PermAuditRead Permission = "audit.read"
 )
 
@@ -113,6 +119,12 @@ var Catalogue = []PermissionInfo{
 	{PermNightAuditNoShow, "End of day", "Mark arrivals as no-show", "M13"},
 
 	{PermReportView, "Reports", "View and export reports", "M14"},
+
+	{PermCompanyManage, "Accounts", "Create and edit companies (corporate accounts) and their credit terms", "S1"},
+	{PermGroupManage, "Accounts", "Create and edit group bookings and add their rooms", "S1"},
+	{PermCityLedgerRead, "Accounts", "View city ledger accounts, statements and ageing", "S1"},
+	{PermCityLedgerTransfer, "Accounts", "Transfer a guest folio balance to a company's city ledger account", "S1"},
+	{PermCityLedgerReceive, "Accounts", "Record and void what a company pays against its account", "S1"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

@@ -229,6 +229,8 @@ const (
 	SeqStay        SequenceType = "STAY"
 	SeqFolio       SequenceType = "FOLIO"
 	SeqPayment     SequenceType = "PAYMENT"
+	// SeqCityLedgerReceipt numbers what a company pays against its city ledger account.
+	SeqCityLedgerReceipt SequenceType = "CITY_LEDGER_RECEIPT"
 )
 
 // defaultSequences are created with every property.
@@ -240,4 +242,5 @@ var defaultSequences = []struct {
 	{SeqStay, "STY"},
 	{SeqFolio, "FOL"},
 	{SeqPayment, "PAY"},
+	{SeqCityLedgerReceipt, "CLR"},
 }

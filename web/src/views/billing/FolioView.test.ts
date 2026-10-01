@@ -31,16 +31,20 @@ const codes = [
   { id: 1, code: 'ROOM', name: 'Room', charge_type: 'ROOM', is_active: true },
   { id: 2, code: 'MINIBAR', name: 'Minibar', charge_type: 'FOOD_BEVERAGE', is_active: true },
 ]
+const companies = [{ id: 21, code: 'ACME', name: 'Acme Corp', is_active: true }]
 const ALL = ['folio.read', 'folio.post_charge', 'folio.adjust', 'folio.reverse', 'payment.post', 'payment.void', 'payment.refund']
 
-function mountView(f: object = folio(), permissions = ALL) {
+function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiError) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.com', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
-  GET = vi.fn(async (path: string) => ({ data: path.endsWith('/charge-codes') ? { data: codes } : f }))
+  GET = vi.fn(async (path: string) => {
+    if (path.endsWith('/companies') && companiesError) throw companiesError
+    return { data: path.endsWith('/charge-codes') ? { data: codes } : path.endsWith('/companies') ? { data: companies } : f }
+  })
   POST = vi.fn().mockResolvedValue({ data: {} })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(FolioView, { props: { id: '3' }, global: { plugins: [pinia, router] }, attachTo: document.body })
@@ -221,6 +225,45 @@ describe('FolioView', () => {
     await p.get('[data-testid=print-invoice]').trigger('click')
     await flushPromises()
     expect(p.get('[data-testid=form-error]').text()).toContain('PERMISSION_DENIED')
+  })
+
+  it('transfers part of the balance to a company with an Idempotency-Key', async () => {
+    const w = mountView(folio(), [...ALL, 'cityledger.transfer'])
+    await flushPromises()
+    expect(w.findAll('select[name=transfer_company] option').map((o) => o.text())).toEqual(['ACME · Acme Corp'])
+    await w.get('input[name=transfer_amount]').setValue('15000')
+    await w.get('input[name=transfer_reference]').setValue('PO-7')
+    await w.get('[data-testid=transfer-form]').trigger('submit')
+    await flushPromises()
+    const [path, opts] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: unknown }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers')
+    expect(opts.params.header['Idempotency-Key']).toBeTruthy()
+    expect(opts.body).toEqual({ company_id: 21, amount: '15000', reference_number: 'PO-7' })
+    expect(w.get('[data-testid=notice]').text()).toContain('city ledger')
+  })
+
+  it('shows a refused transfer and hides the form from other roles and closed folios', async () => {
+    const w = mountView(folio(), [...ALL, 'cityledger.transfer'])
+    await flushPromises()
+    POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'CREDIT_LIMIT_EXCEEDED', detail: 'the transfer would take the company above its credit limit' }))
+    await w.get('input[name=transfer_amount]').setValue('15000')
+    await w.get('[data-testid=transfer-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=form-error]').text()).toContain('CREDIT_LIMIT_EXCEEDED')
+    expect(mountView().find('[data-testid=transfer-form]').exists()).toBe(false)
+    const closed = mountView(folio({ status: 'CLOSED' }), [...ALL, 'cityledger.transfer'])
+    await flushPromises()
+    expect(closed.find('[data-testid=transfer-form]').exists()).toBe(false)
+  })
+
+  it('explains when the role cannot pick a company, and offers no refund of a transfer', async () => {
+    const denied = mountView(folio(), [...ALL, 'cityledger.transfer'], new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'no' }))
+    await flushPromises()
+    expect(denied.get('[data-testid=transfer-denied]').text()).toContain('cityledger.read')
+    const transferred = mountView(folio({ items: [item({ id: 2, transaction_type: 'PAYMENT', description: 'Payment PAY000002 (CITY_LEDGER)', debit: '0', credit: '5000', payment_id: 8, components: [] })] }))
+    await flushPromises()
+    expect(transferred.find('[data-testid=refund-2]').exists()).toBe(false) // the company's receipt settles it
+    expect(transferred.find('[data-testid=void-2]').exists()).toBe(true)
   })
 
   it('needs folio.read', async () => {

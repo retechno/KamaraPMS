@@ -7,9 +7,12 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/guests"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/tenancy"
@@ -31,11 +34,13 @@ type Service struct {
 	front  *frontdesk.Service
 	res    *reservations.Service
 	guests *guests.Service
+	ledger *cityledger.Service
+	cos    *companies.Service
 }
 
 // NewService wires the service.
-func NewService(c clock.Clock, days *tenancy.Service, f *folios.Service, fd *frontdesk.Service, r *reservations.Service, g *guests.Service) *Service {
-	return &Service{clock: c, days: days, folios: f, front: fd, res: r, guests: g}
+func NewService(c clock.Clock, days *tenancy.Service, f *folios.Service, fd *frontdesk.Service, r *reservations.Service, g *guests.Service, l *cityledger.Service, co *companies.Service) *Service {
+	return &Service{clock: c, days: days, folios: f, front: fd, res: r, guests: g, ledger: l, cos: co}
 }
 
 const registrationTerms = "I confirm that the details above are correct and that I will settle my account in full on departure. " +
@@ -308,6 +313,8 @@ func methodLabel(m string) string {
 		return "Card"
 	case "CASH":
 		return "Cash"
+	case "CITY_LEDGER":
+		return "City ledger"
 	}
 	return "Other"
 }
@@ -360,4 +367,65 @@ func trimRate(r string) string {
 		r = strings.TrimRight(strings.TrimRight(r, "0"), ".")
 	}
 	return r
+}
+
+// CompanyStatement renders a company's statement of account for the period (cityledger.read). The dates are
+// business dates; both are optional.
+func (s *Service) CompanyStatement(ctx context.Context, propertyID, companyID int64, from, to *civil.Date) (Document, error) {
+	dc, err := s.context(ctx, propertyID)
+	if err != nil {
+		return Document{}, err
+	}
+	st, err := s.ledger.Statement(ctx, propertyID, companyID, from, to)
+	if err != nil {
+		return Document{}, err
+	}
+	ag, err := s.ledger.Aging(ctx, propertyID, companyID)
+	if err != nil {
+		return Document{}, err
+	}
+	co, err := s.cos.Get(ctx, propertyID, companyID)
+	if err != nil {
+		return Document{}, err
+	}
+	period := "All movements"
+	switch {
+	case from != nil && to != nil:
+		period = fmtDate(*from) + " to " + fmtDate(*to)
+	case from != nil:
+		period = "From " + fmtDate(*from)
+	case to != nil:
+		period = "Up to " + fmtDate(*to)
+	}
+	zero := dec("0")
+	side := func(v string) string {
+		if d := dec(v); d.Equal(zero) {
+			return ""
+		}
+		return money(dec(v), dc.decimals)
+	}
+	d := StatementData{
+		Hotel: dc.hotel, Printed: dc.printed, Company: Party{Name: co.Name, Address: co.Address, City: co.City}, Code: co.Code, TaxID: co.TaxID,
+		Period: period, Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode,
+		Opening: money(dec(st.OpeningBalance), dc.decimals), Debit: money(dec(st.TotalDebit), dc.decimals), Credit: money(dec(st.TotalCredit), dc.decimals),
+		Closing: money(dec(st.ClosingBalance), dc.decimals), AgingAsOf: fmtDate(ag.AsOf),
+	}
+	for _, l := range st.Lines {
+		desc := l.Description
+		if l.GuestName != "" {
+			desc += " - " + l.GuestName
+		}
+		d.Lines = append(d.Lines, StatementLine{
+			Date: l.Date, Number: l.Number, Description: desc, Reference: l.Reference, Status: l.Status,
+			Debit: side(l.Debit), Credit: side(l.Credit), Balance: money(dec(l.Balance), dc.decimals),
+		})
+	}
+	for _, b := range ag.Buckets {
+		d.Aging = append(d.Aging, [2]string{b.Label + " days", money(dec(b.Amount), dc.decimals)})
+	}
+	pdf, err := RenderStatement(d)
+	if err != nil {
+		return Document{}, err
+	}
+	return Document{Filename: "statement-" + co.Code + ".pdf", PDF: pdf}, nil
 }

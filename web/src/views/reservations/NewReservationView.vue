@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
+import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { AvailabilitySearch, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import type { AvailabilitySearch, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -12,6 +13,7 @@ import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
 const auth = useAuthStore()
 const property = usePropertyStore()
 const router = useRouter()
+const route = useRoute()
 
 const SOURCES: ReservationSource[] = ['PHONE', 'EMAIL', 'WALK_IN', 'WEBSITE', 'OTA', 'AGENT', 'OTHER']
 
@@ -22,7 +24,10 @@ const picked = ref<{ type: TypeOffer; plan: PlanOffer } | null>(null)
 const guestQuery = ref('')
 const guestResults = ref<Guest[]>([])
 const guest = ref<Guest | null>(null)
-const form = reactive({ source: 'PHONE' as ReservationSource, confirm: true, remarks: '' })
+const form = reactive({ source: 'PHONE' as ReservationSource, confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
+const companies = ref<Company[]>([])
+const groups = ref<Group[]>([])
+const chosenGroup = computed(() => groups.value.find((g) => g.id === form.groupId))
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
 // One key per booking attempt: submitting twice (a double click, a retry) returns the same reservation.
@@ -51,6 +56,22 @@ watch(() => property.currentId, () => {
   picked.value = null
 })
 
+// Coming from a group ("Add rooms"): start the search on the group's dates.
+async function presetFromGroup(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || !form.groupId) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/groups/{id}', { params: { path: { propertyId, id: form.groupId } } })
+    if (data) {
+      search.arrival = data.arrival_date < businessDate.value ? businessDate.value : data.arrival_date
+      search.departure = data.departure_date
+    }
+  } catch {
+    // the group is shown in the form anyway; the dates stay at the defaults
+  }
+}
+void presetFromGroup()
+
 async function runSearch(): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null) return
@@ -70,10 +91,27 @@ async function runSearch(): Promise<void> {
   }
 }
 
+// Companies and groups are optional: a role that cannot list them books without.
+async function loadLinks(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || companies.value.length || groups.value.length) return
+  try {
+    const path = { path: { propertyId } }
+    ;[companies.value, groups.value] = await Promise.all([
+      fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/companies', { params: { ...path, query: { limit: 200, cursor, active: true } } })),
+      fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/groups', { params: { ...path, query: { limit: 100, cursor, active: true } } })),
+    ])
+  } catch {
+    companies.value = []
+    groups.value = []
+  }
+}
+
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
   idempotencyKey = newIdempotencyKey()
   error.value = null
+  void loadLinks()
 }
 
 async function findGuests(): Promise<void> {
@@ -100,6 +138,8 @@ async function book(): Promise<void> {
         source: form.source,
         remarks: form.remarks || undefined,
         confirm: form.confirm,
+        company_id: form.groupId ? undefined : form.companyId || undefined, // a group brings its own company
+        booking_group_id: form.groupId || undefined,
         rooms: [{
           room_type_id: picked.value.type.room_type_id,
           rate_plan_id: picked.value.plan.id,
@@ -221,6 +261,21 @@ async function book(): Promise<void> {
         <label class="field">
           <span>Remarks</span>
           <input v-model="form.remarks" name="remarks" />
+        </label>
+        <label v-if="groups.length || form.groupId" class="field">
+          <span>Group</span>
+          <select v-model.number="form.groupId" name="booking_group_id" :aria-invalid="!!fieldError('booking_group_id')">
+            <option :value="0">None</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ g.arrival_date }} to {{ g.departure_date }})</option>
+          </select>
+          <small v-if="chosenGroup" class="hint" data-testid="group-hint">The stay must lie within {{ chosenGroup.arrival_date }} to {{ chosenGroup.departure_date }}<template v-if="chosenGroup.company_name">; {{ chosenGroup.company_name }} is billed</template>.</small>
+        </label>
+        <label v-if="companies.length && !form.groupId" class="field">
+          <span>Company that is billed</span>
+          <select v-model.number="form.companyId" name="company_id" :aria-invalid="!!fieldError('company_id')">
+            <option :value="0">None (the guest pays)</option>
+            <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+          </select>
         </label>
       </div>
       <label class="check">

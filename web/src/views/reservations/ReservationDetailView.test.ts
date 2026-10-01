@@ -66,6 +66,20 @@ describe('ReservationDetailView', () => {
     expect(w.get('[data-testid=room-4]').text()).toContain('no room assigned')
   })
 
+  it('links the company and the group, the company only to roles that can see the city ledger', async () => {
+    const corporate = reservation({ company_id: 21, company_name: 'Acme Corp', booking_group_id: 4, group_code: 'CONF' })
+    const w = mountView(corporate, [...ALL, 'cityledger.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=company-link]').attributes('href')).toBe('/city-ledger/21')
+    expect(w.get('[data-testid=company-link]').text()).toBe('Acme Corp')
+    expect(w.get('[data-testid=group-link]').attributes('href')).toBe('/groups/4')
+    expect(w.get('[data-testid=group-link]').text()).toBe('CONF')
+    const desk = mountView(corporate)
+    await flushPromises()
+    expect(desk.get('[data-testid=company-link]').element.tagName).toBe('SPAN')
+    expect(mountView().find('[data-testid=billing-links]').exists()).toBe(false)
+  })
+
   it('confirms a draft with the loaded version and shows the answer', async () => {
     const w = mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT', version: 1, rooms: [line({ status: 'DRAFT' })] }))
     await flushPromises()

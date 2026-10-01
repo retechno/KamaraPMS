@@ -263,3 +263,76 @@ func RenderConfirmation(d ConfirmationData) ([]byte, error) {
 	g.note("Please quote the confirmation number when you contact us. The estimate is calculated from the rates booked; the final amount is the invoice issued at check-out.", "I", 8.5)
 	return g.bytes()
 }
+
+// StatementLine is a movement on a company's statement.
+type StatementLine struct {
+	Date        civil.Date
+	Number      string
+	Description string
+	Reference   string
+	Status      string
+	Debit       string
+	Credit      string
+	Balance     string
+}
+
+// StatementData is a company's city ledger statement for a period.
+type StatementData struct {
+	Hotel     Hotel
+	Printed   string
+	Company   Party
+	Code      string
+	TaxID     string
+	Period    string
+	Terms     string
+	Currency  string
+	Opening   string
+	Lines     []StatementLine
+	Debit     string
+	Credit    string
+	Closing   string
+	AgingAsOf string
+	Aging     [][2]string
+}
+
+// RenderStatement draws the statement of account of a company: transfers owed (debit), receipts (credit) and the
+// balance after each, with the aging of what is still open. Voided lines are listed and marked, and do not count.
+func RenderStatement(d StatementData) ([]byte, error) {
+	g := newPage(d.Hotel, "STATEMENT OF ACCOUNT", d.Printed)
+	g.title("STATEMENT OF ACCOUNT", d.Code)
+	g.pairs([][2]string{
+		{"Company", d.Company.Name}, {"Period", d.Period},
+		{"Address", d.Company.addressLine()}, {"Payment terms", d.Terms},
+		{"Tax ID", d.TaxID}, {"Currency", d.Currency},
+	})
+	g.p.Ln(3)
+	rows := [][]string{{"", "", "Opening balance", "", "", "", d.Opening}}
+	for _, l := range d.Lines {
+		desc := l.Description
+		if l.Status == "VOIDED" {
+			desc += " (voided)"
+		}
+		rows = append(rows, []string{fmtDate(l.Date), l.Number, desc, l.Reference, l.Debit, l.Credit, l.Balance})
+	}
+	g.table([]col{
+		{23, "Date", "L"}, {25, "Number", "L"}, {42, "Description", "L"}, {30, "Reference", "L"},
+		{20, "Debit", "R"}, {20, "Credit", "R"}, {20, "Balance", "R"},
+	}, rows)
+	g.totals([][2]string{{"Total debit", d.Debit}, {"Total credit", d.Credit}, {"Balance due", d.Currency + " " + d.Closing}})
+	if len(d.Aging) > 0 {
+		g.p.Ln(4)
+		g.section("Aging as of " + d.AgingAsOf + " (days since the folio was transferred)")
+		g.pairs(pairUp(d.Aging))
+	}
+	return g.bytes()
+}
+
+// pairUp lays label/value items out two to a row for pairs().
+func pairUp(items [][2]string) [][2]string {
+	out := make([][2]string, 0, len(items)+1)
+	out = append(out, items...)
+	if len(out)%2 == 1 {
+		out = append(out, [2]string{"", ""})
+	}
+	return out
+}

@@ -11,10 +11,13 @@ import (
 	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/groups"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
@@ -82,9 +85,13 @@ func New(d Deps) *App {
 	nightAuditSvc := nightaudit.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomChargeSvc, reservationsSvc, hkSvc)
 	reportsSvc := reports.NewService(d.TxManager, authz, tenancySvc, nightAuditSvc)
 	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc, roomChargeSvc)
-	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc)
+	companiesSvc := companies.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	foliosSvc.SetCompanyGate(companiesSvc)
+	cityLedgerSvc := cityledger.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, companiesSvc)
+	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc)
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
+	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
@@ -103,6 +110,9 @@ func New(d Deps) *App {
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)
+	companies.NewHandler(companiesSvc).Register(api)
+	cityledger.NewHandler(cityLedgerSvc).Register(api)
+	groups.NewHandler(groupsSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)

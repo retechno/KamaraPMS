@@ -20,7 +20,7 @@ import (
 
 func (s *Service) paymentView(ctx context.Context, propertyID int64, pay foliosdb.Payment, decimals int32) (Payment, error) {
 	v := Payment{
-		ID: pay.ID, PaymentNumber: pay.PaymentNumber, FolioID: pay.FolioID, PaymentType: pay.PaymentType, PaymentMethod: pay.PaymentMethod,
+		ID: pay.ID, PaymentNumber: pay.PaymentNumber, FolioID: pay.FolioID, PaymentType: pay.PaymentType, PaymentMethod: pay.PaymentMethod, CompanyID: pay.CompanyID,
 		Amount: fixed(pay.Amount, decimals), PaidAt: pay.PaidAt, BusinessDate: pay.BusinessDate, ReferenceNumber: deref(pay.ReferenceNumber),
 		RefundOfPaymentID: pay.RefundOfPaymentID, Status: pay.Status, VoidedAt: pay.VoidedAt, VoidReason: deref(pay.VoidReason),
 		Remarks: deref(pay.Remarks), CreatedBy: pay.CreatedBy, ApprovedBy: pay.ApprovedBy,
@@ -86,7 +86,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 	pay, err := ps.s.q(ctx).InsertPayment(ctx, foliosdb.InsertPaymentParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentNumber: number, FolioID: ps.folio.ID, PaymentType: payType, PaymentMethod: method,
 		Amount: amount, PaidAt: ps.at, BusinessDate: ps.bd, ReferenceNumber: nullable(in.ReferenceNumber), RefundOfPaymentID: refundOf,
-		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy,
+		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID,
 	})
 	if err != nil {
 		return foliosdb.Payment{}, err
@@ -284,6 +284,12 @@ func (s *Service) Void(ctx context.Context, propertyID, paymentID int64, in Corr
 		if err := requireOpen(folio); err != nil {
 			return err
 		}
+		if pay.CompanyID != nil && pay.Status == PaymentPosted && pay.PaymentType == PaymentTypePayment {
+			// L7: the company account, after the payment. Voiding must not leave receipts above what is owed.
+			if err := s.gate.LockForVoid(ctx, propertyID, *pay.CompanyID, pay.Amount); err != nil {
+				return err
+			}
+		}
 		switch {
 		case pay.PaymentType != PaymentTypePayment:
 			return apperr.Conflict("PAYMENT_NOT_VOIDABLE", "only a payment can be voided")
@@ -411,6 +417,9 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 				if orig.PaymentType != PaymentTypePayment || orig.Status != PaymentPosted {
 					return apperr.Conflict("PAYMENT_NOT_REFUNDABLE", "only a posted payment can be refunded").WithContext("status", orig.Status)
 				}
+				if orig.CompanyID != nil {
+					return apperr.Conflict("PAYMENT_NOT_REFUNDABLE", "a city ledger transfer is not refunded: the company's receipt settles it")
+				}
 				sum, err := q.SumRefundsOf(ctx, foliosdb.SumRefundsOfParams{PropertyID: propertyID, PaymentID: &paymentID})
 				if err != nil {
 					return err
@@ -501,4 +510,78 @@ func (s *Service) GetPayment(ctx context.Context, propertyID, id int64) (Payment
 		return Payment{}, orNotFound(err, errPaymentNotFound())
 	}
 	return s.paymentView(ctx, propertyID, pay, decimals)
+}
+
+// Transfer moves part of an open folio's balance to a company's city ledger account (cityledger.transfer): a
+// CITY_LEDGER payment that credits the folio and adds to what the company owes. The company row is locked
+// (L6, after the folio) so the credit limit holds when two folios transfer at once.
+func (s *Service) Transfer(ctx context.Context, propertyID, folioID int64, key string, in TransferInput) (PaymentResult, error) {
+	p, err := s.actor(ctx, propertyID, auth.PermCityLedgerTransfer)
+	if err != nil {
+		return PaymentResult{}, err
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return PaymentResult{}, err
+	}
+	amount, fe := parsePositive("amount", in.Amount, decimals)
+	var fields []apperr.FieldError
+	if fe != nil {
+		fields = append(fields, *fe)
+	}
+	if in.CompanyID < 1 {
+		fields = append(fields, fieldErr("company_id", "REQUIRED", "a company is required"))
+	}
+	fields = append(fields, validateText("reference_number", in.ReferenceNumber, maxReferenceLen)...)
+	fields = append(fields, validateText("remarks", in.Remarks, maxRemarksLen)...)
+	fields = append(fields, checkKey(key)...)
+	if len(fields) > 0 {
+		return PaymentResult{}, apperr.Invalid("the transfer is invalid", fields...)
+	}
+	return replayLoop(key,
+		func() (PaymentResult, bool, error) {
+			return s.paymentReplay(ctx, p.TenantID, propertyID, key, folioID, func(pay foliosdb.Payment) bool {
+				return pay.PaymentType == PaymentTypePayment && pay.CompanyID != nil && *pay.CompanyID == in.CompanyID
+			})
+		},
+		func() (PaymentResult, error) {
+			var out PaymentResult
+			err := s.txm.WithinTx(ctx, func(ctx context.Context) error {
+				day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+				if err != nil {
+					return err
+				}
+				folio, err := s.lockFolio(ctx, p.TenantID, propertyID, folioID)
+				if err != nil {
+					return err
+				}
+				if err := requireOpen(folio); err != nil {
+					return err
+				}
+				balance, _, err := s.balanceOf(ctx, propertyID, folioID)
+				if err != nil {
+					return err
+				}
+				if amount.GreaterThan(balance) {
+					return apperr.Conflict("TRANSFER_EXCEEDS_BALANCE", "the transfer is more than the folio's balance").WithContext("balance", fixed(balance, decimals))
+				}
+				if err := s.gate.LockForTransfer(ctx, propertyID, in.CompanyID, amount); err != nil {
+					return err
+				}
+				cid := in.CompanyID
+				pay, err := s.posting(p, propertyID, day.BusinessDate, folio).createPayment(ctx, PaymentTypePayment, MethodCityLedger, amount,
+					PaymentInput{ReferenceNumber: in.ReferenceNumber, Remarks: in.Remarks, companyID: &cid}, nil, key, nil, "")
+				if err != nil {
+					return err
+				}
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.transferred", "payment", pay.ID, nil, map[string]any{
+					"payment_number": pay.PaymentNumber, "folio_id": folioID, "company_id": cid, "amount": pay.Amount.String(),
+				})); err != nil {
+					return err
+				}
+				out, err = s.paymentResult(ctx, p.TenantID, propertyID, pay)
+				return err
+			})
+			return out, err
+		})
 }

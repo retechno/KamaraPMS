@@ -149,7 +149,8 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	}
 	var errs []apperr.FieldError
 	f := ListFilter{ArrivalFrom: queryDate(r, "arrival_from", &errs, false), ArrivalTo: queryDate(r, "arrival_to", &errs, false),
-		Status: r.URL.Query().Get("status"), Query: strings.TrimSpace(r.URL.Query().Get("q"))}
+		Status: r.URL.Query().Get("status"), Query: strings.TrimSpace(r.URL.Query().Get("q")),
+		CompanyID: queryID(r, "company_id", &errs), GroupID: queryID(r, "booking_group_id", &errs)}
 	if f.Status != "" && f.Status != StatusDraft && f.Status != StatusConfirmed && f.Status != StatusCancelled {
 		errs = append(errs, fieldErr("status", "INVALID_VALUE", "DRAFT, CONFIRMED or CANCELLED"))
 	}
@@ -202,6 +203,8 @@ type patchRequest struct {
 	Market         *string `json:"market"`
 	SpecialRequest *string `json:"special_request"`
 	Remarks        *string `json:"remarks"`
+	CompanyID      *int64  `json:"company_id"`
+	BookingGroupID *int64  `json:"booking_group_id"`
 }
 
 func (h *Handler) patch(w http.ResponseWriter, r *http.Request) error {
@@ -426,4 +429,17 @@ func (h *Handler) tape(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func queryID(r *http.Request, name string, errs *[]apperr.FieldError) *int64 {
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		return nil
+	}
+	id, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || id < 1 {
+		*errs = append(*errs, fieldErr(name, "INVALID_VALUE", "a positive integer"))
+		return nil
+	}
+	return &id
 }

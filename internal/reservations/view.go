@@ -107,6 +107,21 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	if res.GuestID != nil {
 		out.Guest = guestBy[*res.GuestID]
 	}
+	out.CompanyID, out.BookingGroupID = res.CompanyID, res.BookingGroupID
+	if res.CompanyID != nil {
+		c, err := q.CompanyRef(ctx, reservationsdb.CompanyRefParams{TenantID: tenantID, PropertyID: propertyID, ID: *res.CompanyID})
+		if err != nil {
+			return Reservation{}, err
+		}
+		out.CompanyName = c.Name
+	}
+	if res.BookingGroupID != nil {
+		g, err := q.GroupRef(ctx, reservationsdb.GroupRefParams{TenantID: tenantID, PropertyID: propertyID, ID: *res.BookingGroupID})
+		if err != nil {
+			return Reservation{}, err
+		}
+		out.GroupCode = g.Code
+	}
 	statuses := make([]string, 0, len(lines))
 	var arrival, departure, allArrival, allDeparture civil.Date
 	for i, l := range lines {
@@ -183,7 +198,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 	}
 	rows, err := s.q(ctx).SearchReservations(ctx, reservationsdb.SearchReservationsParams{
 		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), ArrivalFrom: f.ArrivalFrom,
-		ArrivalTo: f.ArrivalTo, Q: nullable(f.Query), RowLimit: rowLimit(limit),
+		ArrivalTo: f.ArrivalTo, Q: nullable(f.Query), CompanyID: f.CompanyID, BookingGroupID: f.GroupID, RowLimit: rowLimit(limit),
 	})
 	if err != nil {
 		return nil, err
@@ -197,6 +212,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 		out[i] = Summary{
 			ID: r.ID, ConfirmationNumber: r.ConfirmationNumber, GuestID: r.GuestID, GuestName: name, Source: r.Source, Status: r.Status,
 			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, RoomCount: int(r.RoomCount), Version: r.Version, CreatedAt: r.CreatedAt,
+			CompanyID: r.CompanyID, CompanyName: deref(r.CompanyName), BookingGroupID: r.BookingGroupID, GroupCode: deref(r.GroupCode),
 		}
 	}
 	return out, nil

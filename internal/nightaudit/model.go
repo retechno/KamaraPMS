@@ -132,6 +132,14 @@ type MethodTotal struct {
 	Net      string `json:"net"`
 }
 
+// CityLedger is the day's movement of the company accounts: transfers from folios, receipts, and the balance owed
+// at the end of the day. Transfers are not in PaymentsByMethod (they are not money received).
+type CityLedger struct {
+	Transferred string `json:"transferred"`
+	Received    string `json:"received"`
+	Outstanding string `json:"outstanding"`
+}
+
 // Summary is the daily closing summary stored in business_days.summary.
 type Summary struct {
 	BusinessDate        civil.Date    `json:"business_date"`
@@ -142,6 +150,7 @@ type Summary struct {
 	RoomRevenue         Money         `json:"room_revenue"`
 	RevenueByChargeType []TypeRevenue `json:"revenue_by_charge_type"`
 	PaymentsByMethod    []MethodTotal `json:"payments_by_method"`
+	CityLedger          CityLedger    `json:"city_ledger"`
 	OccupancyPercent    string        `json:"occupancy_percent"`
 	ADR                 string        `json:"adr"`
 	RevPAR              string        `json:"revpar"`

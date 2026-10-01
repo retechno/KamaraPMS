@@ -678,6 +678,75 @@ SELECT expect_ok('a message is marked sent with its time',
     $q$UPDATE email_outbox SET status = 'SENT', sent_at = now()$q$);
 
 ------------------------------------------------------------------------------------------
+-- Companies, booking groups and the city ledger
+------------------------------------------------------------------------------------------
+INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES (tn('ABC'), pr('BALI'), 'ACME', 'Acme Corp', 1000000);
+INSERT INTO companies (tenant_id, property_id, code, name) VALUES (tn('XYZ'), pr('SG'), 'ACME', 'Acme SG');
+SELECT expect_error('a company code is unique per property', '23505',
+    $q$INSERT INTO companies (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'ACME', 'Again')$q$);
+SELECT expect_error('a credit limit is not negative', '23514',
+    $q$INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES (tn('ABC'), pr('BALI'), 'NEG', 'x', -1)$q$);
+SELECT expect_error('a company belongs to a property of its own tenant', '23503',
+    $q$INSERT INTO companies (tenant_id, property_id, code, name) VALUES (tn('XYZ'), pr('BALI'), 'X', 'x')$q$);
+
+INSERT INTO booking_groups (tenant_id, property_id, code, name, company_id, arrival_date, departure_date)
+VALUES (tn('ABC'), pr('BALI'), 'CONF', 'Conference', (SELECT id FROM companies WHERE code = 'ACME' AND property_id = pr('BALI')), '2026-10-01', '2026-10-05');
+SELECT expect_error('a group ends after it starts', '23514',
+    $q$INSERT INTO booking_groups (tenant_id, property_id, code, name, arrival_date, departure_date)
+       VALUES (tn('ABC'), pr('BALI'), 'BAD', 'x', '2026-10-05', '2026-10-05')$q$);
+SELECT expect_error('a group code is unique per property', '23505',
+    $q$INSERT INTO booking_groups (tenant_id, property_id, code, name, arrival_date, departure_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CONF', 'x', '2026-10-01', '2026-10-02')$q$);
+SELECT expect_error('a group cannot name another property''s company', '23503',
+    $q$INSERT INTO booking_groups (tenant_id, property_id, code, name, company_id, arrival_date, departure_date)
+       VALUES (tn('ABC'), pr('BALI'), 'XC', 'x', (SELECT id FROM companies WHERE property_id = pr('SG')), '2026-10-01', '2026-10-02')$q$);
+SELECT expect_ok('a reservation names a company and a group of its property',
+    $q$UPDATE reservations SET company_id = (SELECT id FROM companies WHERE property_id = pr('BALI')),
+                               booking_group_id = (SELECT id FROM booking_groups WHERE code = 'CONF') WHERE id = rs('R1')$q$);
+SELECT expect_error('a reservation cannot name another property''s company', '23503',
+    $q$UPDATE reservations SET company_id = (SELECT id FROM companies WHERE property_id = pr('SG')) WHERE id = rs('R1')$q$);
+
+SELECT expect_error('a CITY_LEDGER payment needs a company', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL0', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01')$q$);
+SELECT expect_error('only a CITY_LEDGER payment has a company', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL1', fo('F1'), 'PAYMENT', 'CASH', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$);
+SELECT expect_error('a transfer cannot name another property''s company', '23503',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL2', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('SG')))$q$);
+SELECT expect_ok('a transfer to a company of the property is a payment',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL3', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$);
+
+INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+VALUES (tn('ABC'), pr('BALI'), 'CLR1', (SELECT id FROM companies WHERE property_id = pr('BALI')), 50, 'CASH', '2026-10-01');
+SELECT expect_error('a receipt amount is positive', '23514',
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CLR2', (SELECT id FROM companies WHERE property_id = pr('BALI')), 0, 'CASH', '2026-10-01')$q$);
+SELECT expect_error('a receipt is not paid by CITY_LEDGER', '23514',
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CLR3', (SELECT id FROM companies WHERE property_id = pr('BALI')), 5, 'CITY_LEDGER', '2026-10-01')$q$);
+SELECT expect_error('a receipt number is unique per property', '23505',
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CLR1', (SELECT id FROM companies WHERE property_id = pr('BALI')), 5, 'CASH', '2026-10-01')$q$);
+SELECT expect_error('a receipt needs a business day of its property', '23503',
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CLR4', (SELECT id FROM companies WHERE property_id = pr('BALI')), 5, 'CASH', '2030-01-01')$q$);
+SELECT expect_error('a receipt cannot name another property''s company', '23503',
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CLR5', (SELECT id FROM companies WHERE property_id = pr('SG')), 5, 'CASH', '2026-10-01')$q$);
+SELECT expect_error('a receipt amount is immutable', '23001', $q$UPDATE city_ledger_receipts SET amount = 1$q$);
+SELECT expect_error('a receipt is never deleted', '23001', $q$DELETE FROM city_ledger_receipts$q$);
+SELECT expect_error('a voided receipt needs its reason', '23514',
+    $q$UPDATE city_ledger_receipts SET status = 'VOIDED', voided_at = now()$q$);
+SELECT expect_ok('a receipt can be voided',
+    $q$UPDATE city_ledger_receipts SET status = 'VOIDED', voided_at = now(), void_reason = 'wrong', approved_by = us('ABC', 'admin@hotel.com')$q$);
+SELECT expect_error('a voided receipt cannot change again', '23001', $q$UPDATE city_ledger_receipts SET status = 'POSTED', voided_at = NULL, void_reason = NULL$q$);
+SELECT expect_error('receipts cannot be truncated', '23001', $q$TRUNCATE city_ledger_receipts CASCADE$q$);
+
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

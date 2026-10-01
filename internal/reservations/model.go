@@ -82,6 +82,8 @@ type CreateInput struct {
 	Market         string      `json:"market,omitempty"`
 	SpecialRequest string      `json:"special_request,omitempty"`
 	Remarks        string      `json:"remarks,omitempty"`
+	CompanyID      *int64      `json:"company_id,omitempty"`
+	BookingGroupID *int64      `json:"booking_group_id,omitempty"`
 	Rooms          []LineInput `json:"rooms"`
 	Confirm        bool        `json:"confirm"`
 }
@@ -101,6 +103,9 @@ type HeaderPatch struct {
 	Market         *string
 	SpecialRequest *string
 	Remarks        *string
+	// CompanyID and BookingGroupID: nil leaves the link, a value below 1 clears it.
+	CompanyID      *int64
+	BookingGroupID *int64
 }
 
 // LinePatch amends a line. Nil leaves a field unchanged; Overrides replace the price of the listed nights.
@@ -121,6 +126,8 @@ type ListFilter struct {
 	ArrivalTo   *civil.Date
 	Status      string
 	Query       string
+	CompanyID   *int64
+	GroupID     *int64
 }
 
 func (in CreateInput) validateHeader() []apperr.FieldError {
@@ -252,6 +259,10 @@ type Reservation struct {
 	ConfirmationNumber string       `json:"confirmation_number"`
 	GuestID            *int64       `json:"guest_id"`
 	Guest              *GuestName   `json:"guest,omitempty"`
+	CompanyID          *int64       `json:"company_id"`
+	CompanyName        string       `json:"company_name,omitempty"`
+	BookingGroupID     *int64       `json:"booking_group_id"`
+	GroupCode          string       `json:"group_code,omitempty"`
 	ReservationDate    civil.Date   `json:"reservation_date"`
 	Source             string       `json:"source"`
 	Market             string       `json:"market,omitempty"`
@@ -276,6 +287,10 @@ type Summary struct {
 	ConfirmationNumber string     `json:"confirmation_number"`
 	GuestID            *int64     `json:"guest_id"`
 	GuestName          string     `json:"guest_name,omitempty"`
+	CompanyID          *int64     `json:"company_id"`
+	CompanyName        string     `json:"company_name,omitempty"`
+	BookingGroupID     *int64     `json:"booking_group_id"`
+	GroupCode          string     `json:"group_code,omitempty"`
 	Source             string     `json:"source"`
 	Status             string     `json:"status"`
 	ArrivalDate        civil.Date `json:"arrival_date"`

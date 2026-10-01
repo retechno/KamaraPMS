@@ -108,3 +108,62 @@ describe('NewReservationView', () => {
     expect(w.find('form[data-testid=book-form]').exists()).toBe(true)
   })
 })
+
+describe('NewReservationView: company and group', () => {
+  const acme = { id: 1, code: 'ACME', name: 'Acme Corp' }
+  const conf = { id: 4, code: 'CONF', name: 'Conference', company_id: 1, company_name: 'Acme Corp', arrival_date: '2026-10-02', departure_date: '2026-10-05' }
+
+  async function bookable(permissions?: string[]) {
+    const m = mountView(permissions)
+    const base = GET.getMockImplementation() as (path: string) => Promise<unknown>
+    GET = vi.fn(async (path: string) => {
+      if (path.endsWith('/companies')) return { data: { data: [acme] } }
+      if (path.endsWith('/groups')) return { data: { data: [conf] } }
+      return base(path)
+    })
+    await flushPromises()
+    await m.w.get('[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await m.w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    return m
+  }
+
+  it('books for a company that is billed', async () => {
+    const { w } = await bookable()
+    expect(w.findAll('select[name=company_id] option').map((o) => o.text())).toEqual(['None (the guest pays)', 'ACME · Acme Corp'])
+    await w.get('select[name=company_id]').setValue(1)
+    await w.get('[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ company_id: 1 })
+    expect(POST.mock.calls[0]?.[1].body.booking_group_id).toBeUndefined()
+  })
+
+  it('books into a group, which brings its company and its dates', async () => {
+    const { w } = await bookable()
+    await w.get('select[name=booking_group_id]').setValue(4)
+    expect(w.get('[data-testid=group-hint]').text()).toContain('2026-10-02 to 2026-10-05')
+    expect(w.get('[data-testid=group-hint]').text()).toContain('Acme Corp is billed')
+    expect(w.find('select[name=company_id]').exists()).toBe(false) // the group decides
+    await w.get('[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ booking_group_id: 4 })
+    expect(POST.mock.calls[0]?.[1].body.company_id).toBeUndefined()
+  })
+
+  it('books without company or group when the role cannot list them', async () => {
+    const m = mountView()
+    const base = GET.getMockImplementation() as (path: string) => Promise<unknown>
+    GET = vi.fn(async (path: string) => {
+      if (path.endsWith('/companies') || path.endsWith('/groups')) throw new Error('forbidden')
+      return base(path)
+    })
+    await flushPromises()
+    await m.w.get('[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await m.w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    expect(m.w.find('select[name=company_id]').exists()).toBe(false)
+    expect(m.w.find('select[name=booking_group_id]').exists()).toBe(false)
+  })
+})

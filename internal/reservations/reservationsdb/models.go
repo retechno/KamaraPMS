@@ -35,6 +35,8 @@ type Reservation struct {
 	UpdatedBy          *int64
 	IdempotencyKey     *string
 	IdempotencyHash    *string
+	CompanyID          *int64
+	BookingGroupID     *int64
 }
 
 type ReservationRoom struct {

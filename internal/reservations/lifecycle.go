@@ -76,16 +76,39 @@ func (s *Service) UpdateHeader(ctx context.Context, propertyID, id int64, patch 
 			}
 			next.GuestID = patch.GuestID
 		}
+		next.CompanyID, next.BookingGroupID = st.res.CompanyID, st.res.BookingGroupID
+		if patch.CompanyID != nil || patch.BookingGroupID != nil {
+			company, group := next.CompanyID, next.BookingGroupID
+			if patch.CompanyID != nil {
+				company = patch.CompanyID
+			}
+			if patch.BookingGroupID != nil {
+				group = patch.BookingGroupID
+			}
+			rows, err := s.q(ctx).ListLines(ctx, reservationsdb.ListLinesParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: id})
+			if err != nil {
+				return err
+			}
+			var lines []LineInput
+			for _, r := range rows {
+				if r.Status != LineCancelled {
+					lines = append(lines, LineInput{Arrival: r.ArrivalDate, Departure: r.DepartureDate})
+				}
+			}
+			if next.CompanyID, next.BookingGroupID, err = s.resolveLinks(ctx, p.TenantID, propertyID, company, group, lines); err != nil {
+				return err
+			}
+		}
 		res, err := s.q(ctx).UpdateReservationHeader(ctx, reservationsdb.UpdateReservationHeaderParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, GuestID: next.GuestID, Source: next.Source, Market: next.Market,
-			SpecialRequest: next.SpecialRequest, Remarks: next.Remarks, ActorID: p.ActorID(),
+			SpecialRequest: next.SpecialRequest, Remarks: next.Remarks, CompanyID: next.CompanyID, BookingGroupID: next.BookingGroupID, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.updated", id,
-			map[string]any{"guest_id": st.res.GuestID, "source": st.res.Source, "market": deref(st.res.Market)},
-			map[string]any{"guest_id": res.GuestID, "source": res.Source, "market": deref(res.Market)})); err != nil {
+			map[string]any{"guest_id": st.res.GuestID, "source": st.res.Source, "market": deref(st.res.Market), "company_id": st.res.CompanyID, "booking_group_id": st.res.BookingGroupID},
+			map[string]any{"guest_id": res.GuestID, "source": res.Source, "market": deref(res.Market), "company_id": res.CompanyID, "booking_group_id": res.BookingGroupID})); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)

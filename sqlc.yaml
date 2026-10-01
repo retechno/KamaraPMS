@@ -210,6 +210,39 @@ sql:
 
   - engine: postgresql
     schema: migrations
+    queries: internal/cityledger/queries.sql
+    gen:
+      go:
+        package: cityledgerdb
+        out: internal/cityledger/cityledgerdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/groups/queries.sql
+    gen:
+      go:
+        package: groupsdb
+        out: internal/groups/groupsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/companies/queries.sql
+    gen:
+      go:
+        package: companiesdb
+        out: internal/companies/companiesdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
     queries: internal/expected/queries.sql
     gen:
       go:

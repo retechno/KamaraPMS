@@ -30,7 +30,20 @@ type Service struct {
 	days    *tenancy.Service
 	billing *billingconfig.Service
 	iam     *iam.Service
+	gate    CompanyGate
 }
+
+// CompanyGate guards a company's city ledger account. Implementations lock the company row (lock level 44) and
+// are called inside the caller's transaction.
+type CompanyGate interface {
+	// LockForTransfer refuses an unknown, inactive or over-limit company: owed + amount must stay within its credit limit.
+	LockForTransfer(ctx context.Context, propertyID, companyID int64, amount decimal.Decimal) error
+	// LockForVoid refuses taking amount back when receipts would then exceed what the company is owed.
+	LockForVoid(ctx context.Context, propertyID, companyID int64, amount decimal.Decimal) error
+}
+
+// SetCompanyGate wires the city ledger; without it transfers are refused.
+func (s *Service) SetCompanyGate(g CompanyGate) { s.gate = g }
 
 // NewService wires the folio service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, b *billingconfig.Service, i *iam.Service) *Service {

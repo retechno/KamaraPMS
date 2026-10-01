@@ -14,10 +14,13 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/groups"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
@@ -63,6 +66,10 @@ type Env struct {
 	Reports *reports.Service
 	Docs    *documents.Service
 
+	Companies  *companies.Service
+	CityLedger *cityledger.Service
+	Groups     *groups.Service
+
 	seq int
 }
 
@@ -84,12 +91,16 @@ func Setup(t *testing.T) *Env {
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
+	co := companies.NewService(txm, c, aw, authz, ten)
+	fo.SetCompanyGate(co)
+	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co)
 	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
 	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)
 	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)
-	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
-		Avail: avail, Res: rs}
+	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk, avail), Guests: gs, Billing: billing, Rates: rt,
+		Avail: avail, Res: rs,
+		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten)}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

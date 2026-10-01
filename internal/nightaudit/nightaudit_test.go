@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
@@ -438,5 +440,32 @@ func TestWritersWaitWhileTheAuditHoldsTheDay(t *testing.T) {
 	n := f.Count(t, `SELECT count(*) FROM payments WHERE business_date = '2026-09-30'`) + f.Count(t, `SELECT count(*) FROM payments WHERE business_date = '2026-10-01'`)
 	if n != 1 {
 		t.Fatalf("the payment belongs to exactly one business day, got %d", n)
+	}
+}
+
+func TestSummaryCarriesTheCityLedgerAndKeepsTransfersOutOfTheTill(t *testing.T) {
+	f := setup(t)
+	st := f.stay(t, f.r101, "2026-10-03")
+	var minibar int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'MINIBAR'`, f.propID).Scan(&minibar))
+	unit := "500000"
+	_, err := f.Folios.PostCharge(f.admin, f.propID, st.Folio.ID, "c1", folios.ChargeInput{ChargeCodeID: minibar, Quantity: "1", UnitPrice: &unit})
+	must(t, err)
+	co, err := f.Companies.Create(f.admin, f.propID, companies.Input{Code: "ACME", Name: "Acme Corp", PaymentTermsDays: 30, IsActive: true})
+	must(t, err)
+	_, err = f.Folios.Transfer(f.admin, f.propID, st.Folio.ID, "t1", folios.TransferInput{CompanyID: co.ID, Amount: "200000"})
+	must(t, err)
+	_, err = f.CityLedger.Receive(f.admin, f.propID, co.ID, "r1", cityledger.ReceiptInput{Amount: "50000", PaymentMethod: "BANK_TRANSFER"})
+	must(t, err)
+	f.Clock.Set(roomstest.T0.Add(4 * time.Hour))
+	res, err := f.run(t)
+	must(t, err)
+	s := res.Summary
+	if s.CityLedger.Transferred != "200000" || s.CityLedger.Received != "50000" || s.CityLedger.Outstanding != "150000" {
+		t.Fatalf("city ledger: %+v", s.CityLedger)
+	}
+	// the till holds the receipt, not the transfer
+	if len(s.PaymentsByMethod) != 1 || s.PaymentsByMethod[0].Method != "BANK_TRANSFER" || s.PaymentsByMethod[0].Net != "50000" {
+		t.Fatalf("by method: %+v", s.PaymentsByMethod)
 	}
 }

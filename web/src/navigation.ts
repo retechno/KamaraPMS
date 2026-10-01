@@ -22,6 +22,7 @@ export const navigation: NavSection[] = [
       { label: 'Dashboard', to: '/', milestone: 'M0' },
       { label: 'Guests', to: '/guests', milestone: 'M4' },
       { label: 'Reservations', to: '/reservations', milestone: 'M8' },
+      { label: 'Groups', to: '/groups', milestone: 'S1' },
       { label: 'Tape chart', to: '/reservations/tape', milestone: 'M8' },
       { label: 'Arrivals', to: '/arrivals', milestone: 'M10' },
       { label: 'Walk-in', to: '/walk-in', milestone: 'M10' },
@@ -43,6 +44,7 @@ export const navigation: NavSection[] = [
       { label: 'Folios', to: '/folios', milestone: 'M9' },
       { label: 'Cashier', to: '/cashier', milestone: 'M9' },
       { label: 'Room charges', to: '/room-charges', milestone: 'M11' },
+      { label: 'City ledger', to: '/city-ledger', milestone: 'S1' },
     ],
   },
   {
@@ -62,6 +64,7 @@ export const navigation: NavSection[] = [
       { label: 'Rooms', to: '/setup/rooms', milestone: 'M3' },
       { label: 'Taxes & service charges', to: '/setup/taxes', milestone: 'M5' },
       { label: 'Charge codes', to: '/setup/charge-codes', milestone: 'M5' },
+      { label: 'Companies', to: '/setup/companies', milestone: 'S1' },
       { label: 'Rate plans', to: '/setup/rate-plans', milestone: 'M7' },
       { label: 'Rate grid', to: '/setup/rates', milestone: 'M7' },
       { label: 'Audit trail', to: '/audit', milestone: 'M15' },

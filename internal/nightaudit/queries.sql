@@ -106,7 +106,21 @@ ORDER BY c.charge_type;
 SELECT payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT'), 0)::numeric AS payments,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'REFUND'), 0)::numeric AS refunds
-FROM payments
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date = @bd::date AND status = 'POSTED'
+FROM (
+    -- Money in the till: folio payments (not transfers to a company) and city ledger receipts.
+    SELECT p.payment_method, p.payment_type, p.amount FROM payments p
+    WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date = @bd::date AND p.status = 'POSTED' AND p.payment_method <> 'CITY_LEDGER'
+    UNION ALL
+    SELECT r.payment_method, 'PAYMENT'::varchar, r.amount FROM city_ledger_receipts r
+    WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @bd::date AND r.status = 'POSTED'
+) x
 GROUP BY payment_method
 ORDER BY payment_method;
+
+-- Receivables of the day: moved to company accounts, paid back, and what is owed at the end of the day.
+-- name: SummaryCityLedger :one
+SELECT
+    COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = @property_id AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date = @bd::date), 0)::numeric AS transferred,
+    COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date = @bd::date), 0)::numeric AS received,
+    (COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = @property_id AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date <= @bd::date), 0)
+   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @bd::date), 0))::numeric AS outstanding;
