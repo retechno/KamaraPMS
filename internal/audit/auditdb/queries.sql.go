@@ -108,3 +108,93 @@ func (q *Queries) ListAuditLogsForEntity(ctx context.Context, arg ListAuditLogsF
 	}
 	return items, nil
 }
+
+const searchAuditLogs = `-- name: SearchAuditLogs :many
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id,
+       a.old_data, a.new_data, a.request_id, a.ip_address
+FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
+WHERE a.tenant_id = $1
+  AND (CASE WHEN $2::bigint IS NULL THEN a.property_id IS NULL ELSE a.property_id = $2::bigint END)
+  AND ($3::text IS NULL OR a.entity_type = $3::text)
+  AND ($4::bigint IS NULL OR a.entity_id = $4::bigint)
+  AND ($5::bigint IS NULL OR a.user_id = $5::bigint)
+  AND ($6::text IS NULL OR a.action = $6::text)
+  AND ($7::date IS NULL OR a.business_date >= $7::date)
+  AND ($8::date IS NULL OR a.business_date <= $8::date)
+  AND ($9::bigint IS NULL OR a.id < $9::bigint)
+ORDER BY a.id DESC
+LIMIT $10
+`
+
+type SearchAuditLogsParams struct {
+	TenantID   int64
+	PropertyID *int64
+	EntityType *string
+	EntityID   *int64
+	UserID     *int64
+	Action     *string
+	FromDate   *civil.Date
+	ToDate     *civil.Date
+	BeforeID   *int64
+	RowLimit   int32
+}
+
+type SearchAuditLogsRow struct {
+	ID           int64
+	CreatedAt    time.Time
+	BusinessDate *civil.Date
+	UserID       *int64
+	UserName     *string
+	Action       string
+	EntityType   string
+	EntityID     int64
+	OldData      []byte
+	NewData      []byte
+	RequestID    *string
+	IpAddress    *netip.Addr
+}
+
+// The audit trail of a property, newest first, with the user's name. Keyset paging on the id (ids grow with time).
+func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams) ([]SearchAuditLogsRow, error) {
+	rows, err := q.db.Query(ctx, searchAuditLogs,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.EntityType,
+		arg.EntityID,
+		arg.UserID,
+		arg.Action,
+		arg.FromDate,
+		arg.ToDate,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchAuditLogsRow{}
+	for rows.Next() {
+		var i SearchAuditLogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.BusinessDate,
+			&i.UserID,
+			&i.UserName,
+			&i.Action,
+			&i.EntityType,
+			&i.EntityID,
+			&i.OldData,
+			&i.NewData,
+			&i.RequestID,
+			&i.IpAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

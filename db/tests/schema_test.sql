@@ -645,6 +645,17 @@ SELECT expect_error('an account code is at most 30 characters', '22001',
     $q$UPDATE taxes SET gl_account_code = repeat('A', 31)$q$);
 
 ------------------------------------------------------------------------------------------
+-- TRUNCATE is refused on the ledger and the logs (row triggers do not fire for it)
+------------------------------------------------------------------------------------------
+SELECT expect_error('folio_items cannot be truncated', '23001', $q$TRUNCATE folio_items CASCADE$q$);
+SELECT expect_error('folio_item_components cannot be truncated', '23001', $q$TRUNCATE folio_item_components CASCADE$q$);
+SELECT expect_error('payments cannot be truncated', '23001', $q$TRUNCATE payments CASCADE$q$);
+SELECT expect_error('the room charge register cannot be truncated', '23001', $q$TRUNCATE stay_charge_postings CASCADE$q$);
+SELECT expect_error('audit_logs cannot be truncated', '23001', $q$TRUNCATE audit_logs CASCADE$q$);
+SELECT expect_error('housekeeping_logs cannot be truncated', '23001', $q$TRUNCATE housekeeping_logs CASCADE$q$);
+SELECT expect_error('cascading from a parent table does not get around it', '23001', $q$TRUNCATE folios CASCADE$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

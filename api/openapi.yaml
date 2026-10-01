@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.16.0
+  version: 0.17.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -9,6 +9,10 @@ info:
 
     Conventions: errors are RFC 9457 `application/problem+json` with a stable `code`;
     money is a decimal string; business dates are `YYYY-MM-DD`; instants are RFC 3339 UTC.
+
+    Any request can be answered with 429 `TOO_MANY_REQUESTS` and a `Retry-After` header when a client address
+    exceeds the request limit (the health probes are exempt); sign-in and approval attempts have stricter limits
+    of their own (429 `TOO_MANY_ATTEMPTS`).
 servers:
   - url: /
 security:
@@ -2281,6 +2285,54 @@ paths:
               schema: { type: string }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/audit-logs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAuditLogs
+      summary: The audit trail of a property, newest first (audit.read)
+      description: Every state change writes an entry in its own transaction. Secrets are never shown (fields named like a password, secret or token are blanked). `from` and `to` are business dates, so entries without one are excluded when they are used.
+      tags: [audit]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: entity_type, in: query, schema: { type: string, maxLength: 50 } }
+        - { name: entity_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: user_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: action, in: query, schema: { type: string, maxLength: 100 }, description: "An exact action such as `stay.checked_in`." }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditLogPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/audit-logs:
+    get:
+      operationId: listTenantAuditLogs
+      summary: The tenant-level audit trail (users, roles, guests), newest first (tenant administrators)
+      tags: [audit]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: entity_type, in: query, schema: { type: string, maxLength: 50 } }
+        - { name: entity_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: user_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: action, in: query, schema: { type: string, maxLength: 100 }, description: "An exact action such as `stay.checked_in`." }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditLogPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -4643,6 +4695,39 @@ components:
               departure_date: { $ref: "#/components/schemas/Date" }
               adult_count: { type: integer }
               child_count: { type: integer }
+    AuditLog:
+      type: object
+      required: [id, created_at, business_date, user, action, entity_type, entity_id, old_data, new_data]
+      properties:
+        id: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        business_date:
+          oneOf:
+            - { $ref: "#/components/schemas/Date" }
+            - { type: "null" }
+        user:
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: integer, format: int64 }
+                name: { type: string }
+            - { type: "null" }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: integer, format: int64 }
+        old_data: { description: The state before (null for a creation). }
+        new_data: { description: The state after. }
+        request_id: { type: string }
+        ip_address: { type: string }
+    AuditLogPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/AuditLog" }
+        next_cursor: { type: string }
     FieldError:
       type: object
       required: [field, code]

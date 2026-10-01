@@ -60,10 +60,11 @@ func run() error {
 	}
 
 	handler := app.NewHandler(app.Deps{
-		Logger:    logger,
-		DB:        pool,
-		TxManager: db.NewTxManager(pool, cfg.DBLockTimeout),
-		Clock:     clock.System{},
+		Logger:             logger,
+		DB:                 pool,
+		TxManager:          db.NewTxManager(pool, cfg.DBLockTimeout),
+		Clock:              clock.System{},
+		RateLimitPerMinute: cfg.RateLimit,
 		Tokens: iam.TokenConfig{
 			Secret:       cfg.JWTSecret,
 			AccessTTL:    cfg.AccessTokenTTL,

@@ -110,3 +110,5 @@ export type CashierReport = Schemas['CashierReport']
 export type StatisticsReport = Schemas['StatisticsReport']
 export type StayListReport = Schemas['StayListReport']
 export type ArrivalsReport = Schemas['ArrivalsReport']
+
+export type AuditLog = Schemas['AuditLog']

@@ -64,6 +64,7 @@ export const navigation: NavSection[] = [
       { label: 'Charge codes', to: '/setup/charge-codes', milestone: 'M5' },
       { label: 'Rate plans', to: '/setup/rate-plans', milestone: 'M7' },
       { label: 'Rate grid', to: '/setup/rates', milestone: 'M7' },
+      { label: 'Audit trail', to: '/audit', milestone: 'M15' },
     ],
   },
 ]

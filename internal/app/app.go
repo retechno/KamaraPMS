@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/expected"
@@ -36,6 +37,8 @@ type Deps struct {
 	TxManager *db.TxManager
 	Clock     clock.Clock
 	Tokens    iam.TokenConfig
+	// RateLimitPerMinute limits requests per client address (0 = off).
+	RateLimitPerMinute int
 }
 
 // NewHandler builds the API handler with the standard middleware chain:
@@ -77,6 +80,7 @@ func NewHandler(d Deps) http.Handler {
 	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
+	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))
@@ -91,5 +95,6 @@ func NewHandler(d Deps) http.Handler {
 		httpx.RequestID(d.Logger),
 		httpx.AccessLog,
 		httpx.Recover,
+		httpx.RateLimit(d.RateLimitPerMinute, d.Clock.Now),
 	)
 }

@@ -550,7 +550,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Rules:** Step 12 §12.5. It never changes guest, reservation or stay status.
 - **TX:** a single `T[L0 advisory, L1 UPDATE, L4 stays → folios]`. Any blocker rolls back everything.
 
-## 16. Audit
+## 16. Audit (implemented in M15: `internal/auditlog`; the tenant-level trail is `GET /api/v1/audit-logs`)
 
 **GET `{P}/audit-logs?entity_type&entity_id&user_id&from&to`** (`audit.read`)
 - **Response:** `[{ created_at, business_date, user, action, entity_type, entity_id, old_data, new_data }]`

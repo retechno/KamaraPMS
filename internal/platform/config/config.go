@@ -36,6 +36,7 @@ type Config struct {
 	AccessTokenTTL  time.Duration // PMS_ACCESS_TOKEN_TTL, default 15m
 	RefreshTokenTTL time.Duration // PMS_REFRESH_TOKEN_TTL, default 720h (30 days)
 	CookieSecure    bool          // PMS_COOKIE_SECURE: refresh cookie over HTTPS only; default true except in development
+	RateLimit       int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
 }
 
 // Load reads the configuration from the process environment.
@@ -120,6 +121,12 @@ func LoadFrom(lookup func(string) (string, bool)) (Config, error) {
 		errs = append(errs, errors.New("PMS_COOKIE_SECURE: must be true in production"))
 	}
 	cfg.CookieSecure = secure
+
+	if n, err := strconv.Atoi(get("PMS_RATE_LIMIT_PER_MINUTE", "600")); err != nil || n < 0 {
+		errs = append(errs, errors.New("PMS_RATE_LIMIT_PER_MINUTE: must be a non-negative integer (0 disables the limit)"))
+	} else {
+		cfg.RateLimit = n
+	}
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))

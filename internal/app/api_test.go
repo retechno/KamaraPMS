@@ -31,6 +31,7 @@ type apiEnv struct {
 	t       *testing.T
 	handler http.Handler
 	clock   *clock.Fake
+	build   func(perMinute int) http.Handler
 }
 
 func newAPI(t *testing.T) *apiEnv {
@@ -51,8 +52,28 @@ func newAPI(t *testing.T) *apiEnv {
 			t.Fatal(err)
 		}
 	}
-	h := NewHandler(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens})
-	return &apiEnv{t: t, handler: h, clock: c}
+	env := &apiEnv{t: t, clock: c}
+	env.build = func(perMinute int) http.Handler {
+		return NewHandler(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute})
+	}
+	env.handler = env.build(0)
+	return env
+}
+
+// rateLimited rebuilds the handler with a request limit per minute per client address.
+func (e *apiEnv) rateLimited(perMinute int) {
+	e.t.Helper()
+	e.handler = e.build(perMinute)
+}
+
+func (e *apiEnv) get(path string) int { return e.getRec(path).Code }
+
+func (e *apiEnv) getRec(path string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.RemoteAddr = "192.0.2.10:4000"
+	rec := httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, r)
+	return rec
 }
 
 type response struct {

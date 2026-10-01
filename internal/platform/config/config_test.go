@@ -113,3 +113,31 @@ func TestAuthSettings(t *testing.T) {
 		t.Fatalf("weak secret / long access TTL must be refused: %v", err)
 	}
 }
+
+func TestRateLimitSetting(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://pms:secret@localhost:5432/pms", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(v string) (Config, error) {
+		m := map[string]string{}
+		for k, x := range base {
+			m[k] = x
+		}
+		if v != "" {
+			m["PMS_RATE_LIMIT_PER_MINUTE"] = v
+		}
+		return LoadFrom(env(m))
+	}
+	if cfg, err := with(""); err != nil || cfg.RateLimit != 600 {
+		t.Fatalf("default: %v %d", err, cfg.RateLimit)
+	}
+	if cfg, err := with("120"); err != nil || cfg.RateLimit != 120 {
+		t.Fatalf("120: %v %d", err, cfg.RateLimit)
+	}
+	if cfg, err := with("0"); err != nil || cfg.RateLimit != 0 {
+		t.Fatalf("0 disables: %v %d", err, cfg.RateLimit)
+	}
+	for _, bad := range []string{"-1", "many", "1.5"} {
+		if _, err := with(bad); err == nil || !strings.Contains(err.Error(), "PMS_RATE_LIMIT_PER_MINUTE") {
+			t.Fatalf("%q: %v", bad, err)
+		}
+	}
+}

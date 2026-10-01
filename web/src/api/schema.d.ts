@@ -1885,6 +1885,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The audit trail of a property, newest first (audit.read)
+         * @description Every state change writes an entry in its own transaction. Secrets are never shown (fields named like a password, secret or token are blanked). `from` and `to` are business dates, so entries without one are excluded when they are used.
+         */
+        get: operations["listAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant-level audit trail (users, roles, guests), newest first (tenant administrators) */
+        get: operations["listTenantAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/preview": {
         parameters: {
             query?: never;
@@ -3918,6 +3957,32 @@ export interface components {
                 adult_count: number;
                 child_count: number;
             }[];
+        };
+        AuditLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            business_date: components["schemas"]["Date"] | null;
+            user: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+            } | null;
+            action: string;
+            entity_type: string;
+            /** Format: int64 */
+            entity_id: number;
+            /** @description The state before (null for a creation). */
+            old_data: unknown;
+            /** @description The state after. */
+            new_data: unknown;
+            request_id?: string;
+            ip_address?: string;
+        };
+        AuditLogPage: {
+            data: components["schemas"]["AuditLog"][];
+            next_cursor?: string;
         };
         FieldError: {
             field: string;
@@ -7076,6 +7141,79 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listAuditLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                entity_type?: string;
+                entity_id?: number;
+                user_id?: number;
+                /** @description An exact action such as `stay.checked_in`. */
+                action?: string;
+                /** @description First business date. */
+                from?: components["schemas"]["Date"];
+                /** @description Last business date. */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTenantAuditLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                entity_type?: string;
+                entity_id?: number;
+                user_id?: number;
+                /** @description An exact action such as `stay.checked_in`. */
+                action?: string;
+                /** @description First business date. */
+                from?: components["schemas"]["Date"];
+                /** @description Last business date. */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     previewNightAudit: {
