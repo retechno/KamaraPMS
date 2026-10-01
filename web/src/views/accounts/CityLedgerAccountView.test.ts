@@ -37,8 +37,9 @@ const candidates = [
   { payment_id: 43, payment_number: 'PAY000043', business_date: '2026-09-30', folio_number: 'FOL000043', confirmation_number: 'RES3', guest_name: 'Budi', room_numbers: '103', checked_out_at: '2026-09-30T06:00:00Z', amount: '200000', stay_status: 'CHECKED_OUT', invoiceable: true },
 ]
 const invoices = [
-  { id: 51, invoice_number: 'CINV000001', company_id: 1, invoice_date: '2026-09-30', due_date: '2026-10-30', total: '500000', status: 'ISSUED' },
-  { id: 50, invoice_number: 'CINV000000', company_id: 1, invoice_date: '2026-09-20', due_date: '2026-10-20', total: '10', status: 'VOIDED' },
+  { id: 51, invoice_number: 'CINV000001', company_id: 1, invoice_date: '2026-09-30', due_date: '2026-10-30', total: '500000', paid: '100000', outstanding: '400000', payment_status: 'PARTIAL', status: 'ISSUED' },
+  { id: 50, invoice_number: 'CINV000000', company_id: 1, invoice_date: '2026-09-20', due_date: '2026-10-20', total: '10', paid: '0', outstanding: '0', payment_status: 'VOID', status: 'VOIDED' },
+  { id: 49, invoice_number: 'CINV-PAID', company_id: 1, invoice_date: '2026-09-10', due_date: '2026-10-10', total: '7', paid: '7', outstanding: '0', payment_status: 'PAID', status: 'ISSUED' },
 ]
 
 function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
@@ -182,6 +183,52 @@ describe('CityLedgerAccountView', () => {
       params: { path: { propertyId: 7, id: 51 } }, body: { reason: 'wrong company', approval: { email: 'clerk@hotel.com', password: 'secret' } },
     })
     expect(w.get('[data-testid=notice]').text()).toContain('Invoice voided')
+  })
+
+  it('shows what each invoice has been paid', async () => {
+    const w = mountView()
+    await flushPromises()
+    const row = w.get('[data-testid=invoice-CINV000001]').text()
+    expect(row).toContain('100000')
+    expect(row).toContain('400000')
+    expect(row).toContain('Part paid')
+    expect(w.get('[data-testid=invoice-CINV-PAID]').text()).toContain('Paid')
+    expect(w.find('[data-testid=pay-CINV-PAID]').exists()).toBe(false) // nothing outstanding
+    expect(w.find('[data-testid=pay-CINV000000]').exists()).toBe(false) // voided
+  })
+
+  it('pays an invoice with a receipt allocated to it', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=pay-CINV000001]').trigger('click')
+    expect((w.get('input[name=pay_amount]').element as HTMLInputElement).value).toBe('400000') // the outstanding amount
+    await w.get('input[name=pay_amount]').setValue('150000')
+    await w.get('input[name=pay_reference]').setValue('TRX-5')
+    await w.get('[data-testid=pay-form]').trigger('submit')
+    await flushPromises()
+    const [path, opts] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: unknown }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts')
+    expect(opts.params.header['Idempotency-Key']).toBeTruthy()
+    expect(opts.body).toEqual({ amount: '150000', payment_method: 'BANK_TRANSFER', reference_number: 'TRX-5', allocations: [{ invoice_id: 51, amount: '150000' }] })
+    expect(w.get('[data-testid=notice]').text()).toContain('CINV000001')
+    expect(w.find('[data-testid=pay-form]').exists()).toBe(false)
+  })
+
+  it('shows a refused payment and keeps the form open', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=pay-CINV000001]').trigger('click')
+    POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ALLOCATION_EXCEEDS_INVOICE', detail: 'more than the invoice still owes' }))
+    await w.get('[data-testid=pay-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=form-error]').text()).toContain('ALLOCATION_EXCEEDS_INVOICE')
+    expect(w.find('[data-testid=pay-form]').exists()).toBe(true)
+  })
+
+  it('needs cityledger.receive to pay an invoice', async () => {
+    const w = mountView(['cityledger.read'])
+    await flushPromises()
+    expect(w.find('[data-testid=pay-CINV000001]').exists()).toBe(false)
   })
 
   it('offers no invoicing without cityledger.invoice', async () => {

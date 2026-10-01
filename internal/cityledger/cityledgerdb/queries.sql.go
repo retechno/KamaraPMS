@@ -206,6 +206,32 @@ func (q *Queries) GetReceiptByKey(ctx context.Context, arg GetReceiptByKeyParams
 	return i, err
 }
 
+const insertAllocation = `-- name: InsertAllocation :exec
+INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertAllocationParams struct {
+	TenantID   int64
+	PropertyID int64
+	ReceiptID  int64
+	InvoiceID  int64
+	CompanyID  int64
+	Amount     decimal.Decimal
+}
+
+func (q *Queries) InsertAllocation(ctx context.Context, arg InsertAllocationParams) error {
+	_, err := q.db.Exec(ctx, insertAllocation,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReceiptID,
+		arg.InvoiceID,
+		arg.CompanyID,
+		arg.Amount,
+	)
+	return err
+}
+
 const insertInvoice = `-- name: InsertInvoice :one
 INSERT INTO city_ledger_invoices (
     tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, idempotency_key, created_by
@@ -354,6 +380,45 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 	return i, err
 }
 
+const invoicePaid = `-- name: InvoicePaid :many
+SELECT a.invoice_id, sum(a.amount)::numeric AS paid
+FROM city_ledger_receipt_allocations a
+JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
+WHERE a.property_id = $1 AND a.invoice_id = ANY($2::bigint[])
+GROUP BY a.invoice_id
+`
+
+type InvoicePaidParams struct {
+	PropertyID int64
+	InvoiceIds []int64
+}
+
+type InvoicePaidRow struct {
+	InvoiceID int64
+	Paid      decimal.Decimal
+}
+
+// What invoices have been paid: the allocations of receipts that are still posted.
+func (q *Queries) InvoicePaid(ctx context.Context, arg InvoicePaidParams) ([]InvoicePaidRow, error) {
+	rows, err := q.db.Query(ctx, invoicePaid, arg.PropertyID, arg.InvoiceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvoicePaidRow{}
+	for rows.Next() {
+		var i InvoicePaidRow
+		if err := rows.Scan(&i.InvoiceID, &i.Paid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAccounts = `-- name: ListAccounts :many
 SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received
 FROM (
@@ -415,6 +480,52 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]L
 			&i.IsActive,
 			&i.Transferred,
 			&i.Received,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCompanyAllocations = `-- name: ListCompanyAllocations :many
+SELECT a.receipt_id, a.invoice_id, i.invoice_number, a.amount
+FROM city_ledger_receipt_allocations a
+JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
+WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.company_id = $3
+ORDER BY a.receipt_id, a.invoice_id
+`
+
+type ListCompanyAllocationsParams struct {
+	TenantID   int64
+	PropertyID int64
+	CompanyID  int64
+}
+
+type ListCompanyAllocationsRow struct {
+	ReceiptID     int64
+	InvoiceID     int64
+	InvoiceNumber string
+	Amount        decimal.Decimal
+}
+
+func (q *Queries) ListCompanyAllocations(ctx context.Context, arg ListCompanyAllocationsParams) ([]ListCompanyAllocationsRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyAllocations, arg.TenantID, arg.PropertyID, arg.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyAllocationsRow{}
+	for rows.Next() {
+		var i ListCompanyAllocationsRow
+		if err := rows.Scan(
+			&i.ReceiptID,
+			&i.InvoiceID,
+			&i.InvoiceNumber,
+			&i.Amount,
 		); err != nil {
 			return nil, err
 		}

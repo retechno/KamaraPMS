@@ -131,3 +131,22 @@ LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
 LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.invoice_id = @invoice_id
 ORDER BY p.business_date, p.id;
+
+-- name: InsertAllocation :exec
+INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+VALUES (@tenant_id, @property_id, @receipt_id, @invoice_id, @company_id, @amount);
+
+-- What invoices have been paid: the allocations of receipts that are still posted.
+-- name: InvoicePaid :many
+SELECT a.invoice_id, sum(a.amount)::numeric AS paid
+FROM city_ledger_receipt_allocations a
+JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
+WHERE a.property_id = @property_id AND a.invoice_id = ANY(@invoice_ids::bigint[])
+GROUP BY a.invoice_id;
+
+-- name: ListCompanyAllocations :many
+SELECT a.receipt_id, a.invoice_id, i.invoice_number, a.amount
+FROM city_ledger_receipt_allocations a
+JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.company_id = @company_id
+ORDER BY a.receipt_id, a.invoice_id;

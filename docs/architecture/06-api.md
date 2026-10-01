@@ -580,7 +580,7 @@ Errors and conventions are as everywhere. Permissions: `company.manage`, `group.
 | `POST {P}/reservations` and `PATCH {P}/reservations/{id}` | as before | New fields `company_id` and `booking_group_id` (a value below 1 clears them on PATCH). 404 `COMPANY_NOT_FOUND`/`GROUP_NOT_FOUND`, 409 `COMPANY_INACTIVE`/`GROUP_INACTIVE`, 422 for a stay outside the group's dates or a company other than the group's. `GET {P}/reservations` filters by `company_id` and `booking_group_id` |
 | `POST {P}/folios/{id}/city-ledger-transfers` | `cityledger.transfer` | Idempotency-Key. 409 `TRANSFER_EXCEEDS_BALANCE`, `CREDIT_LIMIT_EXCEEDED`, `COMPANY_INACTIVE`; returns a payment with method `CITY_LEDGER` |
 | `GET {P}/city-ledger/accounts`, `.../accounts/{id}`, `/statement`, `/aging`, `/receipts` | `cityledger.read` | The balance is derived: transfers minus receipts |
-| `POST {P}/city-ledger/accounts/{id}/receipts` | `cityledger.receive` | Idempotency-Key. 409 `RECEIPT_EXCEEDS_BALANCE` |
+| `POST {P}/city-ledger/accounts/{id}/receipts` | `cityledger.receive` | Idempotency-Key. 409 `RECEIPT_EXCEEDS_BALANCE`. Optional `allocations` `[{invoice_id, amount}]` pay invoices of the company: 404 `INVOICE_NOT_FOUND`, 409 `INVOICE_NOT_PAYABLE`, `ALLOCATION_EXCEEDS_INVOICE` |
 | `POST {P}/city-ledger/receipts/{id}/void` | `cityledger.receive` + approval | Current business date only (409 `CORRECTION_REQUIRES_ADJUSTMENT`), 409 `RECEIPT_ALREADY_VOIDED` |
 | `GET {P}/companies/{id}/statement.pdf` | `cityledger.read` | `from`, `to` optional |
 | `GET {P}/city-ledger/accounts/{id}/invoice-candidates` | `cityledger.read` | Transfers not on a live invoice; `invoiceable` is true once the guest has checked out |

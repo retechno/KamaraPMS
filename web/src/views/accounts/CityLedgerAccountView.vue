@@ -33,6 +33,9 @@ const voiding = ref<{ kind: 'receipt' | 'invoice'; id: number; label: string; re
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
 let receiptKey = newIdempotencyKey()
 let invoiceKey = newIdempotencyKey()
+let payKey = newIdempotencyKey()
+// Paying an invoice: a receipt that is allocated to it.
+const paying = ref<{ invoice: CityLedgerInvoice; amount: string; method: CityLedgerReceipt['payment_method']; reference: string } | null>(null)
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -147,6 +150,39 @@ async function createInvoice(): Promise<void> {
     const failure = e instanceof ApiError ? e : null
     if (failure) invoiceKey = newIdempotencyKey() // the server answered: the next submit is a new attempt
     await load() // another user may have invoiced or voided in the meantime
+    error.value = failure
+  } finally {
+    busy.value = false
+  }
+}
+
+function startPay(inv: CityLedgerInvoice): void {
+  paying.value = { invoice: inv, amount: inv.outstanding, method: 'BANK_TRANSFER', reference: '' }
+  payKey = newIdempotencyKey()
+  error.value = null
+}
+
+async function payInvoice(): Promise<void> {
+  const v = paying.value
+  if (!v) return
+  busy.value = true
+  error.value = null
+  notice.value = ''
+  try {
+    await api.POST('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts', {
+      params: { ...base(), header: { 'Idempotency-Key': payKey } },
+      body: {
+        amount: v.amount, payment_method: v.method, reference_number: v.reference || undefined,
+        allocations: [{ invoice_id: v.invoice.id, amount: v.amount }],
+      },
+    })
+    notice.value = `Payment recorded for invoice ${v.invoice.invoice_number}.`
+    paying.value = null
+    await load()
+  } catch (e) {
+    const failure = e instanceof ApiError ? e : null
+    if (failure) payKey = newIdempotencyKey() // the server answered: the next submit is a new attempt
+    await load() // another user may have paid or voided in the meantime
     error.value = failure
   } finally {
     busy.value = false
@@ -272,19 +308,49 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </form>
     </section>
 
+    <form v-if="paying" class="card" novalidate data-testid="pay-form" @submit.prevent="payInvoice">
+      <h2>Payment for invoice {{ paying.invoice.invoice_number }}</h2>
+      <p class="muted">Outstanding {{ paying.invoice.outstanding }}. A smaller amount pays the invoice in part.</p>
+      <div class="form-grid">
+        <label class="field">
+          <span>Amount</span>
+          <input v-model="paying.amount" name="pay_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount') || !!fieldError('allocations')" />
+          <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
+          <small v-if="fieldError('allocations')" class="error-text">{{ fieldError('allocations') }}</small>
+        </label>
+        <label class="field">
+          <span>Method</span>
+          <select v-model="paying.method" name="pay_method">
+            <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Reference</span>
+          <input v-model="paying.reference" name="pay_reference" />
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="button" @click="paying = null">Cancel</button>
+        <button type="submit" class="btn-primary" :disabled="busy || !paying.amount" data-testid="pay-submit">Record payment</button>
+      </div>
+    </form>
+
     <section class="card" data-testid="invoices">
       <h2>Invoices</h2>
       <p v-if="!invoices.length" class="muted" data-testid="no-invoices">No invoice has been issued to this company.</p>
       <table v-else class="list">
-        <thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th>Status</th><th /></tr></thead>
+        <thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Outstanding</th><th>Status</th><th /></tr></thead>
         <tbody>
           <tr v-for="i in invoices" :key="i.id" :class="{ voided: i.status === 'VOIDED' }" :data-testid="`invoice-${i.invoice_number}`">
             <td>{{ i.invoice_number }}</td>
             <td>{{ i.invoice_date }}</td>
             <td>{{ i.due_date }}</td>
             <td class="num">{{ i.total }}</td>
-            <td>{{ i.status === 'VOIDED' ? 'Voided' : 'Issued' }}</td>
+            <td class="num">{{ i.paid }}</td>
+            <td class="num">{{ i.outstanding }}</td>
+            <td>{{ { UNPAID: 'Unpaid', PARTIAL: 'Part paid', PAID: 'Paid', VOID: 'Voided' }[i.payment_status] }}</td>
             <td class="row-actions">
+              <button v-if="i.status === 'ISSUED' && Number(i.outstanding) > 0 && can('cityledger.receive')" type="button" :data-testid="`pay-${i.invoice_number}`" @click="startPay(i)">Pay</button>
               <button type="button" :data-testid="`print-${i.invoice_number}`" @click="printInvoice(i)">Print</button>
               <button v-if="i.status === 'ISSUED' && can('cityledger.invoice')" type="button" :data-testid="`void-${i.invoice_number}`" @click="startVoidInvoice(i)">Void</button>
             </td>

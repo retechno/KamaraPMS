@@ -856,6 +856,33 @@ SELECT expect_error('a voided invoice cannot change again', '23001',
 SELECT expect_error('invoices cannot be truncated', '23001',
     $q$TRUNCATE city_ledger_invoices CASCADE$q$);
 
+-- Receipt allocations (a receipt pays invoices of its own company)
+INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+VALUES (tn('ABC'), pr('BALI'), 'CINVA', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100);
+SELECT expect_ok('a receipt pays an invoice of its company',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$);
+SELECT expect_error('a receipt pays an invoice once', '23505',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 10)$q$);
+SELECT expect_error('an allocation is positive', '23514',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 0)$q$);
+SELECT expect_error('a receipt cannot pay another company''s invoice', '23503',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('SG')), 5)$q$);
+SELECT expect_error('an allocation cannot change', '23001',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET amount = 1$q$);
+SELECT expect_error('an allocation is never deleted', '23001',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
+    $q$DELETE FROM city_ledger_receipt_allocations$q$);
+SELECT expect_error('allocations cannot be truncated', '23001', $q$TRUNCATE city_ledger_receipt_allocations CASCADE$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

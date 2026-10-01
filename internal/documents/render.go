@@ -363,6 +363,8 @@ type CompanyInvoiceData struct {
 	Currency string
 	Lines    []CompanyInvoiceLine
 	Total    string
+	Paid     string
+	Balance  string
 	Notes    string
 }
 
@@ -393,7 +395,7 @@ func RenderCompanyInvoice(d CompanyInvoiceData) ([]byte, error) {
 		{22, "Check-out", "L"}, {38, "Guest", "L"}, {16, "Room", "L"}, {34, "Stay", "L"},
 		{24, "Folio", "L"}, {22, "Reference", "L"}, {24, "Amount", "R"},
 	}, rows)
-	g.totals([][2]string{{"Total due", d.Currency + " " + d.Total}})
+	g.totals([][2]string{{"Total", d.Total}, {"Paid", d.Paid}, {"Balance due", d.Currency + " " + d.Balance}})
 	if d.Notes != "" {
 		g.p.Ln(3)
 		g.note("Note: "+d.Notes, "", 9)

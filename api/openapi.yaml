@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.20.0
+  version: 0.21.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2872,7 +2872,13 @@ paths:
     post:
       operationId: receiveCityLedgerPayment
       summary: Record money a company paid against its account (cityledger.receive)
-      description: "The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the CITY_LEDGER_RECEIPT series."
+      description: |
+        The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the
+        company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the
+        CITY_LEDGER_RECEIPT series. `allocations` pay invoices of the company with this receipt (the sum is at most the
+        amount; what is left stays on account): each invoice must be an issued invoice of the company (404
+        `INVOICE_NOT_FOUND`, 409 `INVOICE_NOT_PAYABLE`) and may not be paid more than it still owes (409
+        `ALLOCATION_EXCEEDS_INVOICE`, with `context.invoice_id` and `context.outstanding`).
       tags: [city-ledger]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
@@ -3002,7 +3008,7 @@ paths:
     post:
       operationId: voidCityLedgerInvoice
       summary: Void an invoice (cityledger.invoice, needs approval)
-      description: Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice.
+      description: Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice, 409 `INVOICE_HAS_PAYMENTS` while posted receipts have paid it (void them first).
       tags: [city-ledger]
       requestBody:
         required: true
@@ -5550,6 +5556,24 @@ components:
         payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
         reference_number: { type: string, maxLength: 100 }
         remarks: { type: string, maxLength: 500 }
+        allocations:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/ReceiptAllocationRequest" }
+    ReceiptAllocationRequest:
+      type: object
+      required: [invoice_id, amount]
+      additionalProperties: false
+      properties:
+        invoice_id: { type: integer, format: int64 }
+        amount: { type: string }
+    ReceiptAllocation:
+      type: object
+      required: [invoice_id, invoice_number, amount]
+      properties:
+        invoice_id: { type: integer, format: int64 }
+        invoice_number: { type: string }
+        amount: { type: string }
     CityLedgerAccount:
       type: object
       required: [company_id, code, name, is_active, credit_limit, payment_terms_days, transferred, received, balance, available]
@@ -5574,7 +5598,7 @@ components:
         next_cursor: { type: string }
     CityLedgerReceipt:
       type: object
-      required: [id, receipt_number, company_id, amount, payment_method, business_date, paid_at, status, voided_at, created_by, approved_by]
+      required: [id, receipt_number, company_id, amount, payment_method, business_date, paid_at, status, voided_at, created_by, approved_by, allocations]
       properties:
         id: { type: integer, format: int64 }
         receipt_number: { type: string }
@@ -5590,6 +5614,10 @@ components:
         void_reason: { type: string }
         created_by: { type: [integer, "null"], format: int64 }
         approved_by: { type: [integer, "null"], format: int64 }
+        allocations:
+          type: array
+          description: The invoices this receipt pays (also on a voided receipt, where they no longer count).
+          items: { $ref: "#/components/schemas/ReceiptAllocation" }
     CityLedgerReceiptResult:
       type: object
       required: [receipt, balance]
@@ -5681,7 +5709,7 @@ components:
           items: { $ref: "#/components/schemas/CityLedgerCandidate" }
     CityLedgerInvoice:
       type: object
-      required: [id, invoice_number, company_id, invoice_date, due_date, total, status, voided_at, created_by, approved_by]
+      required: [id, invoice_number, company_id, invoice_date, due_date, total, status, voided_at, created_by, approved_by, paid, outstanding, payment_status]
       properties:
         id: { type: integer, format: int64 }
         invoice_number: { type: string }
@@ -5689,6 +5717,9 @@ components:
         invoice_date: { $ref: "#/components/schemas/Date" }
         due_date: { $ref: "#/components/schemas/Date" }
         total: { type: string }
+        paid: { type: string, description: What posted receipts have allocated to the invoice. }
+        outstanding: { type: string, description: Total less paid; 0 once voided. }
+        payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, VOID] }
         notes: { type: string }
         status: { type: string, enum: [ISSUED, VOIDED] }
         voided_at: { type: [string, "null"], format: date-time }

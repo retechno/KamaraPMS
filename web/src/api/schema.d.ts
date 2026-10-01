@@ -2424,7 +2424,12 @@ export interface paths {
         put?: never;
         /**
          * Record money a company paid against its account (cityledger.receive)
-         * @description The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the CITY_LEDGER_RECEIPT series.
+         * @description The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the
+         *     company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the
+         *     CITY_LEDGER_RECEIPT series. `allocations` pay invoices of the company with this receipt (the sum is at most the
+         *     amount; what is left stays on account): each invoice must be an issued invoice of the company (404
+         *     `INVOICE_NOT_FOUND`, 409 `INVOICE_NOT_PAYABLE`) and may not be paid more than it still owes (409
+         *     `ALLOCATION_EXCEEDS_INVOICE`, with `context.invoice_id` and `context.outstanding`).
          */
         post: operations["receiveCityLedgerPayment"];
         delete?: never;
@@ -2541,7 +2546,7 @@ export interface paths {
         put?: never;
         /**
          * Void an invoice (cityledger.invoice, needs approval)
-         * @description Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice.
+         * @description Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice, 409 `INVOICE_HAS_PAYMENTS` while posted receipts have paid it (void them first).
          */
         post: operations["voidCityLedgerInvoice"];
         delete?: never;
@@ -4785,6 +4790,18 @@ export interface components {
             payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
             reference_number?: string;
             remarks?: string;
+            allocations?: components["schemas"]["ReceiptAllocationRequest"][];
+        };
+        ReceiptAllocationRequest: {
+            /** Format: int64 */
+            invoice_id: number;
+            amount: string;
+        };
+        ReceiptAllocation: {
+            /** Format: int64 */
+            invoice_id: number;
+            invoice_number: string;
+            amount: string;
         };
         CityLedgerAccount: {
             /** Format: int64 */
@@ -4830,6 +4847,8 @@ export interface components {
             created_by: number | null;
             /** Format: int64 */
             approved_by: number | null;
+            /** @description The invoices this receipt pays (also on a voided receipt, where they no longer count). */
+            allocations: components["schemas"]["ReceiptAllocation"][];
         };
         CityLedgerReceiptResult: {
             receipt: components["schemas"]["CityLedgerReceipt"];
@@ -4914,6 +4933,12 @@ export interface components {
             invoice_date: components["schemas"]["Date"];
             due_date: components["schemas"]["Date"];
             total: string;
+            /** @description What posted receipts have allocated to the invoice. */
+            paid: string;
+            /** @description Total less paid; 0 once voided. */
+            outstanding: string;
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOID";
             notes?: string;
             /** @enum {string} */
             status: "ISSUED" | "VOIDED";

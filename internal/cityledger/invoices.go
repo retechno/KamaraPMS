@@ -55,18 +55,22 @@ type Candidate struct {
 
 // Invoice is an invoice to a company; Lines is filled on the detail view only.
 type Invoice struct {
-	ID            int64         `json:"id"`
-	InvoiceNumber string        `json:"invoice_number"`
-	CompanyID     int64         `json:"company_id"`
-	InvoiceDate   civil.Date    `json:"invoice_date"`
-	DueDate       civil.Date    `json:"due_date"`
-	Total         string        `json:"total"`
-	Notes         string        `json:"notes,omitempty"`
-	Status        string        `json:"status"`
-	VoidedAt      *time.Time    `json:"voided_at"`
-	VoidReason    string        `json:"void_reason,omitempty"`
-	CreatedBy     *int64        `json:"created_by"`
-	ApprovedBy    *int64        `json:"approved_by"`
+	ID            int64      `json:"id"`
+	InvoiceNumber string     `json:"invoice_number"`
+	CompanyID     int64      `json:"company_id"`
+	InvoiceDate   civil.Date `json:"invoice_date"`
+	DueDate       civil.Date `json:"due_date"`
+	Total         string     `json:"total"`
+	Notes         string     `json:"notes,omitempty"`
+	Status        string     `json:"status"`
+	VoidedAt      *time.Time `json:"voided_at"`
+	VoidReason    string     `json:"void_reason,omitempty"`
+	CreatedBy     *int64     `json:"created_by"`
+	ApprovedBy    *int64     `json:"approved_by"`
+	// Paid is what posted receipts have allocated to the invoice; Outstanding is Total less Paid (0 once voided).
+	Paid          string        `json:"paid"`
+	Outstanding   string        `json:"outstanding"`
+	PaymentStatus string        `json:"payment_status"` // UNPAID, PARTIAL, PAID or VOID
 	Lines         []InvoiceLine `json:"lines,omitempty"`
 }
 
@@ -84,11 +88,44 @@ func errInvoiceNotFound() *apperr.Error {
 	return apperr.NotFound("INVOICE_NOT_FOUND", "the invoice does not exist in this property")
 }
 
-func invoiceView(i cityledgerdb.CityLedgerInvoice, decimals int32) Invoice {
-	return Invoice{
+func invoiceView(i cityledgerdb.CityLedgerInvoice, paid decimal.Decimal, decimals int32) Invoice {
+	out := Invoice{
 		ID: i.ID, InvoiceNumber: i.InvoiceNumber, CompanyID: i.CompanyID, InvoiceDate: i.InvoiceDate, DueDate: i.DueDate, Total: i.Total.StringFixed(decimals),
 		Notes: deref(i.Notes), Status: i.Status, VoidedAt: i.VoidedAt, VoidReason: deref(i.VoidReason), CreatedBy: i.CreatedBy, ApprovedBy: i.ApprovedBy,
 	}
+	switch {
+	case i.Status == InvoiceVoided:
+		out.PaymentStatus, paid = "VOID", decimal.Zero
+	case paid.GreaterThanOrEqual(i.Total):
+		out.PaymentStatus = "PAID"
+	case paid.IsPositive():
+		out.PaymentStatus = "PARTIAL"
+	default:
+		out.PaymentStatus = "UNPAID"
+	}
+	out.Paid = paid.StringFixed(decimals)
+	if i.Status == InvoiceIssued {
+		out.Outstanding = decimal.Max(i.Total.Sub(paid), decimal.Zero).StringFixed(decimals)
+	} else {
+		out.Outstanding = decimal.Zero.StringFixed(decimals)
+	}
+	return out
+}
+
+// paidOf returns what posted receipts have allocated to each of the invoices.
+func (s *Service) paidOf(ctx context.Context, propertyID int64, ids []int64) (map[int64]decimal.Decimal, error) {
+	out := map[int64]decimal.Decimal{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).InvoicePaid(ctx, cityledgerdb.InvoicePaidParams{PropertyID: propertyID, InvoiceIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.InvoiceID] = r.Paid
+	}
+	return out, nil
 }
 
 func candidate(r cityledgerdb.ListInvoiceCandidatesRow, decimals int32) Candidate {
@@ -144,9 +181,17 @@ func (s *Service) Invoices(ctx context.Context, propertyID, companyID int64) ([]
 	if err != nil {
 		return nil, err
 	}
+	invoiceIDs := make([]int64, len(rows))
+	for i, r := range rows {
+		invoiceIDs[i] = r.ID
+	}
+	paid, err := s.paidOf(ctx, propertyID, invoiceIDs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Invoice, len(rows))
 	for i, r := range rows {
-		out[i] = invoiceView(r, decimals)
+		out[i] = invoiceView(r, paid[r.ID], decimals)
 	}
 	return out, nil
 }
@@ -164,7 +209,11 @@ func (s *Service) loadInvoice(ctx context.Context, tenantID, propertyID, id int6
 	if err != nil {
 		return Invoice{}, err
 	}
-	out := invoiceView(row, decimals)
+	paid, err := s.paidOf(ctx, propertyID, []int64{id})
+	if err != nil {
+		return Invoice{}, err
+	}
+	out := invoiceView(row, paid[id], decimals)
 	out.Lines = make([]InvoiceLine, len(lines))
 	for i, l := range lines {
 		out.Lines[i] = InvoiceLine{
@@ -352,6 +401,13 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 		}
 		if cur.Status != InvoiceIssued {
 			return apperr.Conflict("INVOICE_ALREADY_VOIDED", "the invoice is already voided")
+		}
+		paid, err := s.paidOf(ctx, propertyID, []int64{id})
+		if err != nil {
+			return err
+		}
+		if paid[id].IsPositive() {
+			return apperr.Conflict("INVOICE_HAS_PAYMENTS", "receipts have paid this invoice: void them first").WithContext("paid", paid[id].StringFixed(decimals))
 		}
 		by := approval.UserID()
 		now := s.clock.Now()

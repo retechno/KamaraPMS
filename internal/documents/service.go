@@ -448,7 +448,7 @@ func (s *Service) CompanyInvoice(ctx context.Context, propertyID, invoiceID int6
 	d := CompanyInvoiceData{
 		Hotel: dc.hotel, Printed: dc.printed, Number: inv.InvoiceNumber, Voided: inv.Status == cityledger.InvoiceVoided,
 		Company: Party{Name: co.Name, Address: co.Address, City: co.City}, TaxID: co.TaxID, Date: inv.InvoiceDate, Due: inv.DueDate,
-		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: money(dec(inv.Total), dc.decimals), Notes: inv.Notes,
+		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: money(dec(inv.Total), dc.decimals), Paid: money(dec(inv.Paid), dc.decimals), Balance: money(dec(inv.Outstanding), dc.decimals), Notes: inv.Notes,
 	}
 	if inv.VoidedAt != nil {
 		d.VoidNote = "Cancelled on " + fmtTime(*inv.VoidedAt, dc.prop.Location())

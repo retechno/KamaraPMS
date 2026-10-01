@@ -54,6 +54,21 @@ type Receipt struct {
 	VoidReason      string     `json:"void_reason,omitempty"`
 	CreatedBy       *int64     `json:"created_by"`
 	ApprovedBy      *int64     `json:"approved_by"`
+	// Allocations are the invoices this receipt pays; what is left of the amount is on account.
+	Allocations []ReceiptAllocation `json:"allocations"`
+}
+
+// ReceiptAllocation is the part of a receipt that pays one invoice.
+type ReceiptAllocation struct {
+	InvoiceID     int64  `json:"invoice_id"`
+	InvoiceNumber string `json:"invoice_number"`
+	Amount        string `json:"amount"`
+}
+
+// AllocationInput asks for part of a receipt to pay an invoice.
+type AllocationInput struct {
+	InvoiceID int64  `json:"invoice_id"`
+	Amount    string `json:"amount"`
 }
 
 // ReceiptResult is a receipt with the account's balance after it.
@@ -68,6 +83,8 @@ type ReceiptInput struct {
 	PaymentMethod   string `json:"payment_method"`
 	ReferenceNumber string `json:"reference_number"`
 	Remarks         string `json:"remarks"`
+	// Allocations pay invoices of the company with this receipt (their sum is at most the amount).
+	Allocations []AllocationInput `json:"allocations"`
 }
 
 // VoidInput voids a receipt of the current business date.
