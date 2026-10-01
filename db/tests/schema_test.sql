@@ -656,6 +656,28 @@ SELECT expect_error('housekeeping_logs cannot be truncated', '23001', $q$TRUNCAT
 SELECT expect_error('cascading from a parent table does not get around it', '23001', $q$TRUNCATE folios CASCADE$q$);
 
 ------------------------------------------------------------------------------------------
+-- E-mail outbox and property contact details
+------------------------------------------------------------------------------------------
+SELECT expect_ok('a property keeps contact details for its documents',
+    $q$UPDATE properties SET phone = '+62 361 1', email = 'info@bali.test', tax_id = '01.234', document_footer = 'Thank you' WHERE code = 'BALI'$q$);
+INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address)
+VALUES (tn('ABC'), pr('BALI'), 'RESERVATION_CONFIRMATION', rs('R1'), 'siti@example.test');
+SELECT expect_error('an unknown e-mail kind is refused', '23514',
+    $q$INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address)
+       VALUES (tn('ABC'), pr('BALI'), 'NEWSLETTER', rs('R1'), 'a@b.test')$q$);
+SELECT expect_error('an e-mail needs a real reservation of its own property', '23503',
+    $q$INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address)
+       VALUES (tn('ABC'), pr('BALI'), 'RESERVATION_CONFIRMATION', 999999, 'a@b.test')$q$);
+SELECT expect_error('an unknown e-mail status is refused', '23514',
+    $q$UPDATE email_outbox SET status = 'MAYBE'$q$);
+SELECT expect_error('SENT needs a sent time', '23514',
+    $q$UPDATE email_outbox SET status = 'SENT'$q$);
+SELECT expect_error('a sent time without SENT is refused', '23514',
+    $q$UPDATE email_outbox SET sent_at = now()$q$);
+SELECT expect_ok('a message is marked sent with its time',
+    $q$UPDATE email_outbox SET status = 'SENT', sent_at = now()$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

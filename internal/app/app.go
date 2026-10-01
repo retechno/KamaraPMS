@@ -2,13 +2,16 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/documents"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
@@ -16,6 +19,7 @@ import (
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/nightaudit"
+	"kamarapms/internal/notifications"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/clock"
@@ -37,13 +41,27 @@ type Deps struct {
 	TxManager *db.TxManager
 	Clock     clock.Clock
 	Tokens    iam.TokenConfig
+	// Mail delivers e-mail; nil turns e-mail off (nothing is queued).
+	Mail notifications.Sender
 	// RateLimitPerMinute limits requests per client address (0 = off).
 	RateLimitPerMinute int
 }
 
-// NewHandler builds the API handler with the standard middleware chain:
+// App is the assembled application: the API handler and the background work that goes with it.
+type App struct {
+	Handler  http.Handler
+	notifier *notifications.Service
+}
+
+// Background runs the e-mail worker until ctx ends. It returns at once when e-mail is off.
+func (a *App) Background(ctx context.Context) { a.notifier.Run(ctx, 15*time.Second) }
+
+// NewHandler builds only the API handler (tests that need no background work).
+func NewHandler(d Deps) http.Handler { return New(d).Handler }
+
+// New builds the API handler with the standard middleware chain:
 // request id (outermost, so every log line is correlated) -> access log -> panic recovery.
-func NewHandler(d Deps) http.Handler {
+func New(d Deps) *App {
 	auditWriter := audit.NewWriter(d.Clock)
 	authz := iam.NewAuthorizer(d.TxManager)
 	iamSvc := iam.NewService(d.TxManager, d.Clock, auditWriter, d.Tokens)
@@ -64,6 +82,9 @@ func NewHandler(d Deps) http.Handler {
 	nightAuditSvc := nightaudit.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomChargeSvc, reservationsSvc, hkSvc)
 	reportsSvc := reports.NewService(d.TxManager, authz, tenancySvc, nightAuditSvc)
 	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc, roomChargeSvc)
+	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc)
+	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
+	reservationsSvc.SetConfirmedHook(notifierSvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
@@ -80,6 +101,8 @@ func NewHandler(d Deps) http.Handler {
 	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
+	documents.NewHandler(documentsSvc).Register(api)
+	notifications.NewHandler(notifierSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
@@ -91,10 +114,10 @@ func NewHandler(d Deps) http.Handler {
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
 	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(api)))
 
-	return httpx.Chain(mux,
+	return &App{notifier: notifierSvc, Handler: httpx.Chain(mux,
 		httpx.RequestID(d.Logger),
 		httpx.AccessLog,
 		httpx.Recover,
 		httpx.RateLimit(d.RateLimitPerMinute, d.Clock.Now),
-	)
+	)}
 }

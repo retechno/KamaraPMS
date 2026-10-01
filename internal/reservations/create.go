@@ -212,6 +212,11 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		})); err != nil {
 			return err
 		}
+		if in.Confirm {
+			if err := s.confirmed(ctx, p, propertyID, res.ID, bd); err != nil {
+				return err
+			}
+		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
 		return err
 	})

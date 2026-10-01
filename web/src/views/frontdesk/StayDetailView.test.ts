@@ -9,6 +9,8 @@ import StayDetailView from './StayDetailView.vue'
 
 let GET = vi.fn()
 let POST = vi.fn()
+let openPdf = vi.fn()
+vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
 const detail = (over: object = {}) => ({
@@ -37,6 +39,7 @@ describe('StayDetailView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+    openPdf = vi.fn().mockResolvedValue(undefined)
   })
 
   it('shows the stay, companions, segments, nights and the folio link', async () => {
@@ -97,5 +100,16 @@ describe('StayDetailView', () => {
     const plain = mountView()
     await flushPromises()
     expect(plain.find('[data-testid=checkout]').exists()).toBe(false)
+  })
+
+  it('prints the registration card of the stay', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=print-card]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/stays/5/registration-card.pdf')
+    openPdf.mockRejectedValue(new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'no' }))
+    await w.get('[data-testid=print-card]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=form-error]').text()).toContain('PERMISSION_DENIED')
   })
 })

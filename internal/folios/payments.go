@@ -485,3 +485,20 @@ func (s *Service) ListPayments(ctx context.Context, propertyID int64, f PaymentF
 	}
 	return out, nil
 }
+
+// GetPayment returns one payment or refund (folio.read).
+func (s *Service) GetPayment(ctx context.Context, propertyID, id int64) (Payment, error) {
+	p, err := s.actor(ctx, propertyID, auth.PermFolioRead)
+	if err != nil {
+		return Payment{}, err
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return Payment{}, err
+	}
+	pay, err := s.q(ctx).GetPayment(ctx, foliosdb.GetPaymentParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
+	if err != nil {
+		return Payment{}, orNotFound(err, errPaymentNotFound())
+	}
+	return s.paymentView(ctx, propertyID, pay, decimals)
+}

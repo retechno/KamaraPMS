@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.17.0
+  version: 0.18.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2333,6 +2333,105 @@ paths:
               schema: { $ref: "#/components/schemas/AuditLogPage" }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/invoice.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInvoicePdf
+      summary: Invoice of a folio, or a guest bill while it is open (folio.read and reservation.read)
+      description: "A closed folio prints as an INVOICE with the file name `invoice-<folio number>.pdf`; an open one as a GUEST BILL that says it is not final (`bill-<folio number>.pdf`). It lists every ledger line, the charges net of service and tax, each service charge and tax by name and rate (from the posted components), the payments and the balance. The guest profile (address) is shown only to callers with guest.read."
+      tags: [documents]
+      responses:
+        "200":
+          description: The document as a PDF (never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/registration-card.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getRegistrationCardPdf
+      summary: Registration card of a stay (reservation.read)
+      description: "Stay, room, dates, guests and rate, the guest's details (profile fields need guest.read; missing ones print as a dash to be written in), the terms, and signature lines."
+      tags: [documents]
+      responses:
+        "200":
+          description: The document as a PDF (never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payments/{id}/receipt.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getReceiptPdf
+      summary: Receipt of a payment or refund (folio.read)
+      description: "A voided payment is stamped VOID with the reason, so a cancelled receipt cannot pass for a valid one."
+      tags: [documents]
+      responses:
+        "200":
+          description: The document as a PDF (never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/confirmation.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getConfirmationPdf
+      summary: Confirmation letter of a reservation (reservation.read)
+      description: "The rooms booked with their estimates, the check-in and check-out times and the guest's request. This is the PDF attached to the confirmation e-mail."
+      tags: [documents]
+      responses:
+        "200":
+          description: The document as a PDF (never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/emails:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listReservationEmails
+      summary: The e-mails of a reservation and whether e-mail is on (reservation.read)
+      tags: [documents]
+      responses:
+        "200":
+          description: The e-mails, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationEmails" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: resendConfirmationEmail
+      summary: Queue the confirmation e-mail again (reservation.update)
+      description: |
+        The e-mail goes through an outbox and a background worker (the answer is 202 with the queued entry). Confirming a reservation queues the first one automatically when the booker has an address. 409 `EMAIL_NOT_CONFIGURED` without a mail server, `RESERVATION_NOT_CONFIRMED`, `GUEST_HAS_NO_EMAIL`, `EMAIL_ALREADY_QUEUED`.
+      tags: [documents]
+      responses:
+        "202":
+          description: The queued e-mail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailEntry" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -2642,6 +2741,10 @@ components:
         address: { type: string }
         city: { type: string }
         country_code: { type: string, description: ISO 3166-1 alpha-2 }
+        phone: { type: string, maxLength: 40, description: Printed on documents. }
+        email: { type: string, maxLength: 254, description: Printed on documents. }
+        tax_id: { type: string, maxLength: 40, description: "Tax registration number printed on invoices (for example NPWP)." }
+        document_footer: { type: string, maxLength: 500, description: A line printed at the foot of every document. }
         timezone: { type: string, description: IANA time zone, examples: [Asia/Jakarta] }
         currency_code: { type: string, description: ISO 4217, examples: [IDR] }
         currency_decimals: { type: integer, minimum: 0, maximum: 3 }
@@ -2686,6 +2789,10 @@ components:
         address: { type: string }
         city: { type: string }
         country_code: { type: string }
+        phone: { type: string, maxLength: 40, description: Printed on documents. }
+        email: { type: string, maxLength: 254, description: Printed on documents. }
+        tax_id: { type: string, maxLength: 40, description: "Tax registration number printed on invoices (for example NPWP)." }
+        document_footer: { type: string, maxLength: 500, description: A line printed at the foot of every document. }
         timezone: { type: string }
         currency_code: { type: string }
         currency_decimals: { type: integer, minimum: 0, maximum: 3 }
@@ -2705,6 +2812,10 @@ components:
         address: { type: string }
         city: { type: string }
         country_code: { type: string }
+        phone: { type: string, maxLength: 40, description: Printed on documents. }
+        email: { type: string, maxLength: 254, description: Printed on documents. }
+        tax_id: { type: string, maxLength: 40, description: "Tax registration number printed on invoices (for example NPWP)." }
+        document_footer: { type: string, maxLength: 500, description: A line printed at the foot of every document. }
         timezone: { type: string }
         currency_code: { type: string }
         currency_decimals: { type: integer, minimum: 0, maximum: 3 }
@@ -4728,6 +4839,26 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AuditLog" }
         next_cursor: { type: string }
+    EmailEntry:
+      type: object
+      required: [id, kind, to, status, attempts, sent_at, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [RESERVATION_CONFIRMATION] }
+        to: { type: string }
+        status: { type: string, enum: [QUEUED, SENT, FAILED, SKIPPED], description: "QUEUED: waiting or being retried; FAILED: given up after five attempts or refused; SKIPPED: the reservation was no longer confirmed." }
+        attempts: { type: integer }
+        last_error: { type: string }
+        sent_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    ReservationEmails:
+      type: object
+      required: [enabled, data]
+      properties:
+        enabled: { type: boolean, description: False when the server has no mail server configured. }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/EmailEntry" }
     FieldError:
       type: object
       required: [field, code]

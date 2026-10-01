@@ -16,6 +16,7 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/notifications"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
@@ -31,7 +32,9 @@ type apiEnv struct {
 	t       *testing.T
 	handler http.Handler
 	clock   *clock.Fake
-	build   func(perMinute int) http.Handler
+	build   func(perMinute int) *App
+	app     *App
+	mail    notifications.Sender
 }
 
 func newAPI(t *testing.T) *apiEnv {
@@ -53,17 +56,19 @@ func newAPI(t *testing.T) *apiEnv {
 		}
 	}
 	env := &apiEnv{t: t, clock: c}
-	env.build = func(perMinute int) http.Handler {
-		return NewHandler(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute})
+	env.build = func(perMinute int) *App {
+		return New(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute, Mail: env.mail})
 	}
-	env.handler = env.build(0)
+	env.app = env.build(0)
+	env.handler = env.app.Handler
 	return env
 }
 
 // rateLimited rebuilds the handler with a request limit per minute per client address.
 func (e *apiEnv) rateLimited(perMinute int) {
 	e.t.Helper()
-	e.handler = e.build(perMinute)
+	e.app = e.build(perMinute)
+	e.handler = e.app.Handler
 }
 
 func (e *apiEnv) get(path string) int { return e.getRec(path).Code }

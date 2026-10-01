@@ -199,6 +199,17 @@ sql:
 
   - engine: postgresql
     schema: migrations
+    queries: internal/notifications/queries.sql
+    gen:
+      go:
+        package: notificationsdb
+        out: internal/notifications/notificationsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
     queries: internal/expected/queries.sql
     gen:
       go:

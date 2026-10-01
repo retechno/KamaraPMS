@@ -58,6 +58,10 @@ type PropertySettings struct {
 	Address                         string          `json:"address,omitempty"`
 	City                            string          `json:"city,omitempty"`
 	CountryCode                     string          `json:"country_code,omitempty"`
+	Phone                           string          `json:"phone,omitempty"`
+	Email                           string          `json:"email,omitempty"`
+	TaxID                           string          `json:"tax_id,omitempty"`
+	DocumentFooter                  string          `json:"document_footer,omitempty"`
 	Timezone                        string          `json:"timezone"`
 	CurrencyCode                    string          `json:"currency_code"`
 	CurrencyDecimals                int32           `json:"currency_decimals"`
@@ -101,6 +105,10 @@ func (s *PropertySettings) Normalize() {
 	s.Name = strings.TrimSpace(s.Name)
 	s.Address = strings.TrimSpace(s.Address)
 	s.City = strings.TrimSpace(s.City)
+	s.Phone = strings.TrimSpace(s.Phone)
+	s.Email = strings.TrimSpace(s.Email)
+	s.TaxID = strings.TrimSpace(s.TaxID)
+	s.DocumentFooter = strings.TrimSpace(s.DocumentFooter)
 	s.CountryCode = strings.ToUpper(strings.TrimSpace(s.CountryCode))
 	s.Timezone = strings.TrimSpace(s.Timezone)
 	s.CurrencyCode = strings.ToUpper(strings.TrimSpace(s.CurrencyCode))
@@ -121,6 +129,18 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 	}
 	if len(s.City) > 100 {
 		add("city", "TOO_LONG", "at most 100 characters")
+	}
+	if len(s.Phone) > 40 {
+		add("phone", "TOO_LONG", "at most 40 characters")
+	}
+	if s.Email != "" && (len(s.Email) > 254 || !strings.Contains(s.Email, "@") || strings.ContainsAny(s.Email, " \r\n<>,;")) {
+		add("email", "INVALID_FORMAT", "an e-mail address")
+	}
+	if len(s.TaxID) > 40 {
+		add("tax_id", "TOO_LONG", "at most 40 characters")
+	}
+	if len(s.DocumentFooter) > 500 {
+		add("document_footer", "TOO_LONG", "at most 500 characters")
 	}
 	if s.CountryCode != "" && !countryPattern.MatchString(s.CountryCode) {
 		add("country_code", "INVALID_FORMAT", "ISO 3166-1 alpha-2, e.g. ID")

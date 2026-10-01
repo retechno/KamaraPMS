@@ -1924,6 +1924,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/folios/{id}/invoice.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Invoice of a folio, or a guest bill while it is open (folio.read and reservation.read)
+         * @description A closed folio prints as an INVOICE with the file name `invoice-<folio number>.pdf`; an open one as a GUEST BILL that says it is not final (`bill-<folio number>.pdf`). It lists every ledger line, the charges net of service and tax, each service charge and tax by name and rate (from the posted components), the payments and the balance. The guest profile (address) is shown only to callers with guest.read.
+         */
+        get: operations["getInvoicePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/registration-card.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Registration card of a stay (reservation.read)
+         * @description Stay, room, dates, guests and rate, the guest's details (profile fields need guest.read; missing ones print as a dash to be written in), the terms, and signature lines.
+         */
+        get: operations["getRegistrationCardPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/receipt.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Receipt of a payment or refund (folio.read)
+         * @description A voided payment is stamped VOID with the reason, so a cancelled receipt cannot pass for a valid one.
+         */
+        get: operations["getReceiptPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/confirmation.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Confirmation letter of a reservation (reservation.read)
+         * @description The rooms booked with their estimates, the check-in and check-out times and the guest's request. This is the PDF attached to the confirmation e-mail.
+         */
+        get: operations["getConfirmationPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The e-mails of a reservation and whether e-mail is on (reservation.read) */
+        get: operations["listReservationEmails"];
+        put?: never;
+        /**
+         * Queue the confirmation e-mail again (reservation.update)
+         * @description The e-mail goes through an outbox and a background worker (the answer is 202 with the queued entry). Confirming a reservation queues the first one automatically when the booker has an address. 409 `EMAIL_NOT_CONFIGURED` without a mail server, `RESERVATION_NOT_CONFIRMED`, `GUEST_HAS_NO_EMAIL`, `EMAIL_ALREADY_QUEUED`.
+         */
+        post: operations["resendConfirmationEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/preview": {
         parameters: {
             query?: never;
@@ -2156,6 +2272,14 @@ export interface components {
             city?: string;
             /** @description ISO 3166-1 alpha-2 */
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             /**
              * @description IANA time zone
              * @example Asia/Jakarta
@@ -2197,6 +2321,14 @@ export interface components {
             address?: string;
             city?: string;
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             timezone: string;
             currency_code: string;
             currency_decimals: number;
@@ -2215,6 +2347,14 @@ export interface components {
             address?: string;
             city?: string;
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             timezone?: string;
             currency_code?: string;
             currency_decimals?: number;
@@ -3983,6 +4123,29 @@ export interface components {
         AuditLogPage: {
             data: components["schemas"]["AuditLog"][];
             next_cursor?: string;
+        };
+        EmailEntry: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "RESERVATION_CONFIRMATION";
+            to: string;
+            /**
+             * @description QUEUED: waiting or being retried; FAILED: given up after five attempts or refused; SKIPPED: the reservation was no longer confirmed.
+             * @enum {string}
+             */
+            status: "QUEUED" | "SENT" | "FAILED" | "SKIPPED";
+            attempts: number;
+            last_error?: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationEmails: {
+            /** @description False when the server has no mail server configured. */
+            enabled: boolean;
+            data: components["schemas"]["EmailEntry"][];
         };
         FieldError: {
             field: string;
@@ -7214,6 +7377,157 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getInvoicePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRegistrationCardPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getReceiptPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getConfirmationPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listReservationEmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The e-mails, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationEmails"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    resendConfirmationEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The queued e-mail. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailEntry"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     previewNightAudit: {

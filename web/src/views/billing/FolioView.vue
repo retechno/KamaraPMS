@@ -7,6 +7,7 @@ import type { Approval, ChargeCode, Folio, FolioItem, PaymentMethod } from '@/ap
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 
 const props = defineProps<{ id: string }>()
@@ -184,6 +185,17 @@ const dialogTitle = computed(() => {
   }
 })
 
+const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
+
+async function print(path: string): Promise<void> {
+  error.value = null
+  try {
+    await openPdf(path)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
@@ -208,6 +220,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <span>Credit <strong data-testid="credit">{{ folio.totals.credit }}</strong></span>
       <span>Balance <strong data-testid="balance" class="balance">{{ folio.balance }}</strong></span>
       <button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" type="button" :disabled="busy" data-testid="close" @click="closeFolio">Close folio</button>
+      <button v-if="canPrint && pid !== null" type="button" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id))">{{ isOpen ? 'Print bill' : 'Print invoice' }}</button>
     </section>
 
     <section class="card">
@@ -228,6 +241,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                 <button v-if="reversible(i)" type="button" :data-testid="`reverse-${i.id}`" @click="startCorrection('reverse', i)">Reverse</button>
                 <button v-if="voidable(i)" type="button" :data-testid="`void-${i.id}`" @click="startCorrection('void', i)">Void</button>
                 <button v-if="refundable(i)" type="button" :data-testid="`refund-${i.id}`" @click="startCorrection('refund', i)">Refund</button>
+                <button v-if="i.payment_id && canPrint && pid !== null" type="button" :data-testid="`receipt-${i.id}`" @click="print(documentPath.receipt(pid, i.payment_id))">Receipt</button>
               </td>
             </tr>
             <tr v-if="open === i.id" class="detail" :data-testid="`detail-${i.id}`">

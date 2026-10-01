@@ -27,15 +27,32 @@ import (
 // docs/architecture/05-transactions-locking.md: business day (L1), room types (L2), rooms (L3), the
 // reservation and its lines (L4), sequences (L5).
 type Service struct {
-	txm     *db.TxManager
-	clock   clock.Clock
-	audit   *audit.Writer
-	authz   auth.Authorizer
-	days    *tenancy.Service
-	avail   *availability.Service
-	rates   *rates.Service
-	billing *billingconfig.Service
-	guests  *guests.Service
+	txm         *db.TxManager
+	clock       clock.Clock
+	audit       *audit.Writer
+	authz       auth.Authorizer
+	days        *tenancy.Service
+	avail       *availability.Service
+	rates       *rates.Service
+	billing     *billingconfig.Service
+	guests      *guests.Service
+	onConfirmed ConfirmedHook
+}
+
+// ConfirmedHook is told, inside the confirming transaction, that a reservation has been confirmed. The e-mail
+// outbox uses it to queue the confirmation; an error rolls the confirmation back, so a hook must only write.
+type ConfirmedHook interface {
+	ReservationConfirmed(ctx context.Context, tenantID, propertyID, reservationID int64, bd civil.Date, actorID *int64) error
+}
+
+// SetConfirmedHook installs the hook (nil removes it). Call it once while wiring.
+func (s *Service) SetConfirmedHook(h ConfirmedHook) { s.onConfirmed = h }
+
+func (s *Service) confirmed(ctx context.Context, p auth.Principal, propertyID, reservationID int64, bd civil.Date) error {
+	if s.onConfirmed == nil {
+		return nil
+	}
+	return s.onConfirmed.ReservationConfirmed(ctx, p.TenantID, propertyID, reservationID, bd, p.ActorID())
 }
 
 // NewService wires the reservations service.

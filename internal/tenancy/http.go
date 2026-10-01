@@ -81,6 +81,10 @@ type createPropertyRequest struct {
 	Address                         string  `json:"address"`
 	City                            string  `json:"city"`
 	CountryCode                     string  `json:"country_code"`
+	Phone                           string  `json:"phone"`
+	Email                           string  `json:"email"`
+	TaxID                           string  `json:"tax_id"`
+	DocumentFooter                  string  `json:"document_footer"`
 	Timezone                        string  `json:"timezone"`
 	CurrencyCode                    string  `json:"currency_code"`
 	CurrencyDecimals                *int32  `json:"currency_decimals"`
@@ -101,6 +105,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 		Code: req.Code,
 		Settings: PropertySettings{
 			Name: req.Name, Address: req.Address, City: req.City, CountryCode: req.CountryCode,
+			Phone: req.Phone, Email: req.Email, TaxID: req.TaxID, DocumentFooter: req.DocumentFooter,
 			Timezone: req.Timezone, CurrencyCode: req.CurrencyCode,
 			RequireRoomInspectionForCheckin: req.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    true,
@@ -177,6 +182,10 @@ type patchPropertyRequest struct {
 	Address                         *string `json:"address"`
 	City                            *string `json:"city"`
 	CountryCode                     *string `json:"country_code"`
+	Phone                           *string `json:"phone"`
+	Email                           *string `json:"email"`
+	TaxID                           *string `json:"tax_id"`
+	DocumentFooter                  *string `json:"document_footer"`
 	Timezone                        *string `json:"timezone"`
 	CurrencyCode                    *string `json:"currency_code"`
 	CurrencyDecimals                *int32  `json:"currency_decimals"`
@@ -199,6 +208,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
 	}
 	patch := PropertyPatch{
 		Name: req.Name, Address: req.Address, City: req.City, CountryCode: req.CountryCode,
+		Phone: req.Phone, Email: req.Email, TaxID: req.TaxID, DocumentFooter: req.DocumentFooter,
 		Timezone: req.Timezone, CurrencyCode: req.CurrencyCode, CurrencyDecimals: req.CurrencyDecimals,
 		RequireRoomInspectionForCheckin: req.RequireRoomInspectionForCheckin,
 		NightAuditMarksOccupiedDirty:    req.NightAuditMarksOccupiedDirty,

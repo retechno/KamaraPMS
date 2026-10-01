@@ -142,6 +142,9 @@ func (s *Service) Confirm(ctx context.Context, propertyID, id int64, version int
 			map[string]any{"status": st.res.Status}, map[string]any{"status": res.Status, "rooms": len(drafts)})); err != nil {
 			return err
 		}
+		if err := s.confirmed(ctx, p, propertyID, id, st.bd); err != nil {
+			return err
+		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
 		return err
 	})

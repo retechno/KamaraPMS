@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
 import StayActions from '@/components/StayActions.vue'
 import type { CheckOutResult, StayDetail } from '@/api/types'
+import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -60,6 +61,17 @@ async function reverse(): Promise<void> {
   }
 }
 
+async function printCard(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  error.value = null
+  try {
+    await openPdf(documentPath.registrationCard(propertyId, Number(props.id)))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 async function changed(message: string): Promise<void> {
   if (message) notice.value = message
   await load()
@@ -96,6 +108,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <template v-for="f in detail.folios" :key="f.id"> · Folio <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> (balance {{ f.balance }})</template>
       </p>
       <p v-if="detail.guests.length" class="muted" data-testid="companions">With {{ detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }}</p>
+      <div class="form-actions">
+        <button type="button" data-testid="print-card" @click="printCard">Registration card</button>
+      </div>
       <div v-if="canCheckOut && !checkingOut" class="form-actions">
         <button type="button" class="btn-primary" data-testid="checkout" @click="checkingOut = true">Check out</button>
       </div>

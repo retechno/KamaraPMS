@@ -112,3 +112,6 @@ export type StayListReport = Schemas['StayListReport']
 export type ArrivalsReport = Schemas['ArrivalsReport']
 
 export type AuditLog = Schemas['AuditLog']
+
+export type ReservationEmails = Schemas['ReservationEmails']
+export type EmailEntry = Schemas['EmailEntry']

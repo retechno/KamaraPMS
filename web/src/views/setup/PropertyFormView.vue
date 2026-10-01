@@ -20,6 +20,10 @@ const form = reactive({
   address: '',
   city: '',
   country_code: '',
+  phone: '',
+  email: '',
+  tax_id: '',
+  document_footer: '',
   timezone: 'Asia/Jakarta',
   currency_code: 'IDR',
   currency_decimals: 0,
@@ -64,6 +68,10 @@ onMounted(async () => {
         address: data.address ?? '',
         city: data.city ?? '',
         country_code: data.country_code ?? '',
+        phone: data.phone ?? '',
+        email: data.email ?? '',
+        tax_id: data.tax_id ?? '',
+        document_footer: data.document_footer ?? '',
         timezone: data.timezone,
         currency_code: data.currency_code,
         currency_decimals: data.currency_decimals,
@@ -94,6 +102,10 @@ async function submit(): Promise<void> {
         address: form.address || undefined,
         city: form.city || undefined,
         country_code: form.country_code || undefined,
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+        tax_id: form.tax_id || undefined,
+        document_footer: form.document_footer || undefined,
         timezone: form.timezone,
         currency_code: form.currency_code,
         currency_decimals: Number(form.currency_decimals),
@@ -128,7 +140,7 @@ function changedFields(): PatchPropertyRequest {
   const patch: Record<string, unknown> = {}
   if (!original) return patch
   const keys = [
-    'name', 'address', 'city', 'country_code', 'timezone', 'currency_code', 'currency_decimals', 'check_in_time',
+    'name', 'address', 'city', 'country_code', 'phone', 'email', 'tax_id', 'document_footer', 'timezone', 'currency_code', 'currency_decimals', 'check_in_time',
     'check_out_time', 'night_audit_earliest_time', 'require_room_inspection_for_checkin',
     'night_audit_marks_occupied_dirty', 'status',
   ] as const
@@ -174,6 +186,25 @@ function changedFields(): PatchPropertyRequest {
         <span>Country</span>
         <input v-model="form.country_code" name="country_code" maxlength="2" placeholder="ID" :aria-invalid="!!fieldError('country_code')" />
         <small v-if="fieldError('country_code')" class="error-text">{{ fieldError('country_code') }}</small>
+      </label>
+      <label class="field">
+        <span>Phone</span>
+        <input v-model="form.phone" name="phone" maxlength="40" />
+        <small class="hint">Printed on invoices, receipts and confirmations.</small>
+      </label>
+      <label class="field">
+        <span>E-mail</span>
+        <input v-model="form.email" name="email" type="email" maxlength="254" :aria-invalid="!!fieldError('email')" />
+        <small v-if="fieldError('email')" class="error-text">{{ fieldError('email') }}</small>
+      </label>
+      <label class="field">
+        <span>Tax registration number</span>
+        <input v-model="form.tax_id" name="tax_id" maxlength="40" />
+        <small class="hint">Printed on invoices (for example the NPWP).</small>
+      </label>
+      <label class="field">
+        <span>Document footer</span>
+        <input v-model="form.document_footer" name="document_footer" maxlength="500" placeholder="Thank you for staying with us" />
       </label>
       <label v-if="!isNew" class="field">
         <span>Status</span>

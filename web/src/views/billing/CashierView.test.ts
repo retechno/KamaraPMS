@@ -8,6 +8,8 @@ import CashierView from './CashierView.vue'
 
 let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
+let openPdf = vi.fn()
+vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 
 const page = {
   data: [
@@ -31,6 +33,7 @@ function mountView(permissions = ['folio.read']) {
 
 describe('CashierView', () => {
   beforeEach(() => {
+    openPdf = vi.fn().mockResolvedValue(undefined)
     GET = vi.fn()
   })
 
@@ -58,5 +61,16 @@ describe('CashierView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('prints the receipt of a payment, for roles that can read reservations', async () => {
+    const w = mountView(['folio.read', 'reservation.read'])
+    await flushPromises()
+    const button = w.get('[data-testid^=receipt-]')
+    await button.trigger('click')
+    expect(openPdf.mock.calls[0]?.[0]).toMatch(/^\/api\/v1\/properties\/7\/payments\/\d+\/receipt\.pdf$/)
+    const plain = mountView()
+    await flushPromises()
+    expect(plain.find('[data-testid^=receipt-]').exists()).toBe(false)
   })
 })

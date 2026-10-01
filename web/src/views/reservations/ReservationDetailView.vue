@@ -4,6 +4,8 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import ReservationEmails from '@/components/ReservationEmails.vue'
+import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { guestLabel, newIdempotencyKey, statusLabel } from '@/utils/reservations'
@@ -29,6 +31,17 @@ const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const status = computed(() => res.value?.status ?? '')
+
+async function printConfirmation(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || !res.value) return
+  error.value = null
+  try {
+    await openPdf(documentPath.confirmation(propertyId, res.value.id))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 const estimateTotal = computed(() => (res.value?.rooms ?? []).filter((r) => r.status !== 'CANCELLED').reduce((sum, r) => sum + Number(r.estimate.total), 0))
 
@@ -200,6 +213,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <button v-if="status === 'DRAFT' && can('reservation.create')" type="button" class="btn-primary" :disabled="busy" data-testid="confirm" @click="confirm">Confirm</button>
         <button v-if="status !== 'CANCELLED' && can('reservation.cancel')" type="button" :disabled="busy" data-testid="cancel" @click="ask('cancel')">Cancel reservation</button>
         <button v-if="status === 'CANCELLED' && can('reservation.reinstate')" type="button" class="btn-primary" :disabled="busy" data-testid="reinstate" @click="reinstate">Reinstate</button>
+        <button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" type="button" data-testid="print-confirmation" @click="printConfirmation">Confirmation (PDF)</button>
       </div>
 
       <form v-if="asking" class="reason" novalidate data-testid="reason-form" @submit.prevent="submitReason">
@@ -212,6 +226,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <button type="button" @click="asking = null">Keep</button>
       </form>
     </section>
+
+    <ReservationEmails v-if="status !== 'DRAFT'" :reservation-id="res.id" :confirmed="status === 'CONFIRMED'" />
 
     <form v-if="status !== 'CANCELLED' && can('reservation.update')" class="card header-form" novalidate data-testid="header-form" @submit.prevent="saveHeader">
       <h2>Details</h2>

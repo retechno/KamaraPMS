@@ -9,6 +9,8 @@ import FolioView from './FolioView.vue'
 
 let GET = vi.fn()
 let POST = vi.fn()
+let openPdf = vi.fn()
+vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
 const item = (over: object = {}) => ({
@@ -48,6 +50,7 @@ describe('FolioView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+    openPdf = vi.fn().mockResolvedValue(undefined)
     document.body.innerHTML = ''
   })
 
@@ -192,6 +195,32 @@ describe('FolioView', () => {
     const linked = mountView(folio({ stay_id: 12 }))
     await flushPromises()
     expect(linked.find('[data-testid=close]').exists()).toBe(false)
+  })
+
+  it('prints the bill of an open folio and the invoice of a closed one, and a receipt per payment', async () => {
+    const w = mountView(folio(), [...ALL, 'reservation.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=print-invoice]').text()).toBe('Print bill')
+    await w.get('[data-testid=print-invoice]').trigger('click')
+    expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/folios/3/invoice.pdf')
+    expect(w.find('[data-testid=receipt-1]').exists()).toBe(false) // a charge has no receipt
+    await w.get('[data-testid=receipt-2]').trigger('click')
+    expect(openPdf.mock.calls.at(-1)?.[0]).toMatch(/^\/api\/v1\/properties\/7\/payments\/\d+\/receipt\.pdf$/)
+    const closed = mountView(folio({ status: 'CLOSED' }), [...ALL, 'reservation.read'])
+    await flushPromises()
+    expect(closed.get('[data-testid=print-invoice]').text()).toBe('Print invoice')
+  })
+
+  it('needs reservation.read to print, and shows a refusal', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=print-invoice]').exists()).toBe(false) // the document names the reservation and the guest
+    const p = mountView(folio(), [...ALL, 'reservation.read'])
+    await flushPromises()
+    openPdf.mockRejectedValue(new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'no' }))
+    await p.get('[data-testid=print-invoice]').trigger('click')
+    await flushPromises()
+    expect(p.get('[data-testid=form-error]').text()).toContain('PERMISSION_DENIED')
   })
 
   it('needs folio.read', async () => {

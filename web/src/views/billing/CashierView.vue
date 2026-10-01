@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { MethodTotal, Payment } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { documentPath, openPdf } from '@/utils/documents'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -19,6 +20,18 @@ const loading = ref(false)
 const searched = ref(false)
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
+const canPrint = computed(() => auth.can('reservation.read', property.currentId)) // a receipt names the guest and the reservation
+
+async function print(paymentId: number): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null) return
+  error.value = null
+  try {
+    await openPdf(documentPath.receipt(propertyId, paymentId))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
 const businessDate = computed(() => property.clock?.business_date ?? '')
 
 async function load(more = false): Promise<void> {
@@ -100,7 +113,7 @@ watch(businessDate, () => {
     <section class="card">
       <p v-if="searched && !rows.length" class="muted" data-testid="empty">No payments found.</p>
       <table v-else-if="rows.length" class="list">
-        <thead><tr><th>Number</th><th>Type</th><th>Method</th><th class="num">Amount</th><th>Status</th><th>Folio</th></tr></thead>
+        <thead><tr><th>Number</th><th>Type</th><th>Method</th><th class="num">Amount</th><th>Status</th><th>Folio</th><th v-if="canPrint" /></tr></thead>
         <tbody>
           <tr v-for="p in rows" :key="p.id" :data-testid="`payment-${p.payment_number}`" :class="{ struck: p.status === 'VOIDED' }">
             <td>{{ p.payment_number }}</td>
@@ -109,6 +122,7 @@ watch(businessDate, () => {
             <td class="num">{{ p.amount }}</td>
             <td>{{ p.status }}</td>
             <td><RouterLink :to="`/folios/${p.folio_id}`">#{{ p.folio_id }}</RouterLink></td>
+            <td v-if="canPrint"><button type="button" :data-testid="`receipt-${p.payment_number}`" @click="print(p.id)">Receipt</button></td>
           </tr>
         </tbody>
       </table>

@@ -101,3 +101,13 @@ func (e *apiEnv) raw(c *client, method, path string) rawResponse {
 	e.handler.ServeHTTP(rec, r)
 	return rawResponse{status: rec.Code, contentType: rec.Header().Get("Content-Type"), body: rec.Body.String()}
 }
+
+// header is the response headers of a GET.
+func (e *apiEnv) header(c *client, path string) http.Header {
+	e.t.Helper()
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("Authorization", "Bearer "+c.token)
+	rec := httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, r)
+	return rec.Header()
+}

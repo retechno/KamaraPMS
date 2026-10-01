@@ -128,6 +128,10 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			Address:                         nullable(st.Address),
 			City:                            nullable(st.City),
 			CountryCode:                     nullable(st.CountryCode),
+			Phone:                           nullable(st.Phone),
+			Email:                           nullable(st.Email),
+			TaxID:                           nullable(st.TaxID),
+			DocumentFooter:                  nullable(st.DocumentFooter),
 			Timezone:                        st.Timezone,
 			CurrencyCode:                    st.CurrencyCode,
 			CurrencyDecimals:                decimals16(st.CurrencyDecimals),
@@ -236,6 +240,10 @@ type PropertyPatch struct {
 	Address                         *string
 	City                            *string
 	CountryCode                     *string
+	Phone                           *string
+	Email                           *string
+	TaxID                           *string
+	DocumentFooter                  *string
 	Timezone                        *string
 	CurrencyCode                    *string
 	CurrencyDecimals                *int32
@@ -272,6 +280,10 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.Address, patch.Address)
 		apply(&st.City, patch.City)
 		apply(&st.CountryCode, patch.CountryCode)
+		apply(&st.Phone, patch.Phone)
+		apply(&st.Email, patch.Email)
+		apply(&st.TaxID, patch.TaxID)
+		apply(&st.DocumentFooter, patch.DocumentFooter)
 		apply(&st.Timezone, patch.Timezone)
 		apply(&st.CurrencyCode, patch.CurrencyCode)
 		apply(&st.CurrencyDecimals, patch.CurrencyDecimals)
@@ -308,6 +320,10 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			Address:                         nullable(st.Address),
 			City:                            nullable(st.City),
 			CountryCode:                     nullable(st.CountryCode),
+			Phone:                           nullable(st.Phone),
+			Email:                           nullable(st.Email),
+			TaxID:                           nullable(st.TaxID),
+			DocumentFooter:                  nullable(st.DocumentFooter),
 			Timezone:                        st.Timezone,
 			CurrencyCode:                    st.CurrencyCode,
 			CurrencyDecimals:                decimals16(st.CurrencyDecimals),
