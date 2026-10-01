@@ -104,6 +104,9 @@ watch(() => property.currentId, load, { immediate: true })
     <span v-if="error.code === 'RATE_PLAN_PRICE_MODE_MISMATCH'"> Create a new plan for the other price mode instead.</span>
   </p>
   <p v-if="property.currentId === null" class="muted">Select a property first.</p>
+  <p v-else-if="!canManage" class="muted" data-testid="read-only">
+    Your role at this property can view rate plans but not create or edit them: the <code>rate.manage</code> permission is needed (ask an administrator, or change the role under Setup → Roles).
+  </p>
   <p v-else-if="loaded && !roomCodes.length" class="muted">Rate plans sell through a room charge code; there is none yet.</p>
 
   <form v-if="editing" class="card" novalidate data-testid="plan-form" @submit.prevent="save">

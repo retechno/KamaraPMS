@@ -92,6 +92,7 @@ describe('RatePlansView', () => {
     const w = mountView([])
     await flushPromises()
     expect(w.find('button.btn-primary').exists()).toBe(false)
+    expect(w.get('[data-testid=read-only]').text()).toContain('rate.manage')
     expect(w.find('[data-testid=plan-BAR] button').exists()).toBe(false)
   })
 })
