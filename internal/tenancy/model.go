@@ -231,6 +231,8 @@ const (
 	SeqPayment     SequenceType = "PAYMENT"
 	// SeqCityLedgerReceipt numbers what a company pays against its city ledger account.
 	SeqCityLedgerReceipt SequenceType = "CITY_LEDGER_RECEIPT"
+	// SeqCityLedgerInvoice numbers the invoices sent to companies.
+	SeqCityLedgerInvoice SequenceType = "CITY_LEDGER_INVOICE"
 )
 
 // defaultSequences are created with every property.
@@ -243,4 +245,5 @@ var defaultSequences = []struct {
 	{SeqFolio, "FOL"},
 	{SeqPayment, "PAY"},
 	{SeqCityLedgerReceipt, "CLR"},
+	{SeqCityLedgerInvoice, "CINV"},
 }

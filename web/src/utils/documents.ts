@@ -39,6 +39,7 @@ export const documentPath = {
   registrationCard: (propertyId: number, stayId: number) => `/api/v1/properties/${propertyId}/stays/${stayId}/registration-card.pdf`,
   receipt: (propertyId: number, paymentId: number) => `/api/v1/properties/${propertyId}/payments/${paymentId}/receipt.pdf`,
   confirmation: (propertyId: number, reservationId: number) => `/api/v1/properties/${propertyId}/reservations/${reservationId}/confirmation.pdf`,
+  companyInvoice: (propertyId: number, invoiceId: number) => `/api/v1/properties/${propertyId}/city-ledger/invoices/${invoiceId}/invoice.pdf`,
   companyStatement: (propertyId: number, companyId: number, from?: string, to?: string) => {
     const q = new URLSearchParams()
     if (from) q.set('from', from)

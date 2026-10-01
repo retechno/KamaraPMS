@@ -67,6 +67,7 @@ const (
 	PermCityLedgerRead     Permission = "cityledger.read"
 	PermCityLedgerTransfer Permission = "cityledger.transfer"
 	PermCityLedgerReceive  Permission = "cityledger.receive"
+	PermCityLedgerInvoice  Permission = "cityledger.invoice"
 
 	PermAuditRead Permission = "audit.read"
 )
@@ -125,6 +126,7 @@ var Catalogue = []PermissionInfo{
 	{PermCityLedgerRead, "Accounts", "View city ledger accounts, statements and ageing", "S1"},
 	{PermCityLedgerTransfer, "Accounts", "Transfer a guest folio balance to a company's city ledger account", "S1"},
 	{PermCityLedgerReceive, "Accounts", "Record and void what a company pays against its account", "S1"},
+	{PermCityLedgerInvoice, "Accounts", "Issue and void invoices to a company for checked-out transfers", "S1"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

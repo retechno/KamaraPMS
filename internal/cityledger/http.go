@@ -27,6 +27,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/accounts/{id}/receipts", httpx.HandlerFunc(h.receipts))
 	mux.Handle("POST "+p+"/accounts/{id}/receipts", httpx.HandlerFunc(h.receive))
 	mux.Handle("POST "+p+"/receipts/{id}/void", httpx.HandlerFunc(h.void))
+	mux.Handle("GET "+p+"/accounts/{id}/invoice-candidates", httpx.HandlerFunc(h.candidates))
+	mux.Handle("GET "+p+"/accounts/{id}/invoices", httpx.HandlerFunc(h.invoices))
+	mux.Handle("POST "+p+"/accounts/{id}/invoices", httpx.HandlerFunc(h.createInvoice))
+	mux.Handle("GET "+p+"/invoices/{id}", httpx.HandlerFunc(h.invoice))
+	mux.Handle("POST "+p+"/invoices/{id}/void", httpx.HandlerFunc(h.voidInvoice))
 }
 
 func ids(r *http.Request) (propertyID, id int64, err error) {
@@ -190,4 +195,76 @@ func (h *Handler) void(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) candidates(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Candidates(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Candidate]{Data: list})
+}
+
+func (h *Handler) invoices(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Invoices(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Invoice]{Data: list})
+}
+
+func (h *Handler) createInvoice(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return apperr.BadRequest("IDEMPOTENCY_KEY_REQUIRED", "the Idempotency-Key header is required")
+	}
+	var in InvoiceInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	inv, err := h.svc.CreateInvoice(r.Context(), pid, id, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, inv)
+}
+
+func (h *Handler) invoice(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	inv, err := h.svc.GetInvoice(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, inv)
+}
+
+func (h *Handler) voidInvoice(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in VoidInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	inv, err := h.svc.VoidInvoice(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, inv)
 }

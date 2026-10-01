@@ -58,3 +58,76 @@ UPDATE city_ledger_receipts
 SET status = 'VOIDED', voided_at = @now::timestamptz, voided_by = sqlc.narg(actor_id), void_reason = @reason, approved_by = @approved_by
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
+
+-- Transfers of a company that are not on a live invoice, with the state of the stay behind them. Only a transfer
+-- whose guest has checked out can be invoiced. ids narrows the list to the transfers an invoice asks for.
+-- name: ListInvoiceCandidates :many
+SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
+       f.folio_number, r.confirmation_number,
+       COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
+       s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
+       COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)
+                 FROM stay_rooms sr JOIN rooms ro ON ro.property_id = sr.property_id AND ro.id = sr.room_id
+                 WHERE sr.property_id = s.property_id AND sr.stay_id = s.id), '')::text AS room_numbers
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
+LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.company_id = @company_id
+  AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+  AND (sqlc.narg(ids)::bigint[] IS NULL OR p.id = ANY(sqlc.narg(ids)::bigint[]))
+  AND NOT EXISTS (SELECT 1 FROM city_ledger_invoice_lines l WHERE l.property_id = p.property_id AND l.payment_id = p.id AND l.released_at IS NULL)
+ORDER BY p.business_date, p.id;
+
+-- name: InsertInvoice :one
+INSERT INTO city_ledger_invoices (
+    tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, idempotency_key, created_by
+) VALUES (
+    @tenant_id, @property_id, @invoice_number, @company_id, @invoice_date, @due_date, @total, sqlc.narg(notes), sqlc.narg(idempotency_key), sqlc.narg(actor_id)
+)
+RETURNING *;
+
+-- name: InsertInvoiceLine :exec
+INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+VALUES (@tenant_id, @property_id, @invoice_id, @payment_id, @amount);
+
+-- name: ReleaseInvoiceLines :exec
+UPDATE city_ledger_invoice_lines SET released_at = @now::timestamptz
+WHERE property_id = @property_id AND invoice_id = @invoice_id AND released_at IS NULL;
+
+-- name: GetInvoice :one
+SELECT * FROM city_ledger_invoices WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetInvoiceByKey :one
+SELECT * FROM city_ledger_invoices WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListInvoices :many
+SELECT * FROM city_ledger_invoices
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND company_id = @company_id
+ORDER BY invoice_date DESC, id DESC;
+
+-- name: VoidInvoice :one
+UPDATE city_ledger_invoices
+SET status = 'VOIDED', voided_at = @now::timestamptz, voided_by = sqlc.narg(actor_id), void_reason = @reason, approved_by = @approved_by
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: ListInvoiceLines :many
+SELECT p.id AS payment_id, p.payment_number, p.business_date, l.amount, p.reference_number,
+       f.folio_number, r.confirmation_number,
+       COALESCE(s.stay_number, '')::text AS stay_number,
+       s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
+       COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)
+                 FROM stay_rooms sr JOIN rooms ro ON ro.property_id = sr.property_id AND ro.id = sr.room_id
+                 WHERE sr.property_id = s.property_id AND sr.stay_id = s.id), '')::text AS room_numbers
+FROM city_ledger_invoice_lines l
+JOIN payments p ON p.property_id = l.property_id AND p.id = l.payment_id
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
+LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.invoice_id = @invoice_id
+ORDER BY p.business_date, p.id;

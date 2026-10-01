@@ -746,6 +746,116 @@ SELECT expect_error('a voided receipt cannot change again', '23001', $q$UPDATE c
 SELECT expect_error('receipts cannot be truncated', '23001', $q$TRUNCATE city_ledger_receipts CASCADE$q$);
 
 
+-- Invoices to a company (every case builds its own rows: a CITY_LEDGER payment would block the down migration)
+SELECT expect_error('an invoice total is positive', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV2', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 0)$q$);
+SELECT expect_error('an invoice is not due before its date', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV3', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-09-30', 100)$q$);
+SELECT expect_error('an invoice number is unique per property', '23505',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$);
+SELECT expect_error('an invoice cannot name another propertys company', '23503',
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV4', (SELECT id FROM companies WHERE property_id = pr('SG')), '2026-10-01', '2026-10-31', 5)$q$);
+SELECT expect_error('a transfer is on one live invoice only', '23505',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV6', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV6'), pm('PCL9'), 100)$q$);
+SELECT expect_error('an invoice total is immutable', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoices SET total = 1$q$);
+SELECT expect_error('an invoice is never deleted', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$DELETE FROM city_ledger_invoices$q$);
+SELECT expect_error('an invoice line amount is immutable', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoice_lines SET amount = 1$q$);
+SELECT expect_error('an invoice line is never deleted', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$DELETE FROM city_ledger_invoice_lines$q$);
+SELECT expect_error('a voided invoice needs its reason', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoices SET status = 'VOIDED', voided_at = now()$q$);
+SELECT expect_ok('a voided invoice releases its line and the transfer can be invoiced again',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoices SET status = 'VOIDED', voided_at = now(), void_reason = 'wrong'$q$,
+    $q$UPDATE city_ledger_invoice_lines SET released_at = now()$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV5', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV5'), pm('PCL9'), 100)$q$);
+SELECT expect_error('a released line cannot change again', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoices SET status = 'VOIDED', voided_at = now(), void_reason = 'wrong'$q$,
+    $q$UPDATE city_ledger_invoice_lines SET released_at = now()$q$,
+    $q$UPDATE city_ledger_invoice_lines SET released_at = now() WHERE released_at IS NOT NULL$q$);
+SELECT expect_error('a voided invoice cannot change again', '23001',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, company_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCL9', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01', (SELECT id FROM companies WHERE property_id = pr('BALI')))$q$,
+    $q$INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
+       VALUES (tn('ABC'), pr('BALI'), 'CINV1', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100)$q$,
+    $q$INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINV1'), pm('PCL9'), 100)$q$,
+    $q$UPDATE city_ledger_invoices SET status = 'VOIDED', voided_at = now(), void_reason = 'wrong'$q$,
+    $q$UPDATE city_ledger_invoice_lines SET released_at = now()$q$,
+    $q$UPDATE city_ledger_invoices SET status = 'ISSUED', voided_at = NULL, void_reason = NULL$q$);
+SELECT expect_error('invoices cannot be truncated', '23001',
+    $q$TRUNCATE city_ledger_invoices CASCADE$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

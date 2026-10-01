@@ -2453,6 +2453,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoice-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Transfers of a company that are not on an invoice yet (cityledger.read)
+         * @description Oldest first. `invoiceable` is true once the guest of the folio has checked out; transfers of guests still in house are listed but cannot be invoiced. Not paginated.
+         */
+        get: operations["listCityLedgerInvoiceCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's invoices, newest first, without their lines (cityledger.read)
+         * @description Not paginated. Voided invoices are listed.
+         */
+        get: operations["listCityLedgerInvoices"];
+        put?: never;
+        /**
+         * Issue one invoice over several transfers of a company (cityledger.invoice)
+         * @description Combines the given transfers (at most 200) into one invoice. Every transfer must belong to the company, be
+         *     posted, not be on another live invoice (409 `TRANSFER_NOT_AVAILABLE`) and belong to a guest who has checked out
+         *     (409 `STAY_NOT_CHECKED_OUT`); both carry `context.payment_ids`. The due date is the invoice date plus the
+         *     company's payment terms. The company row is locked, so two invoices cannot claim the same transfer. An invoice
+         *     is a billing document: it does not change what the company owes.
+         */
+        post: operations["createCityLedgerInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One invoice with its lines (cityledger.read) */
+        get: operations["getCityLedgerInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void an invoice (cityledger.invoice, needs approval)
+         * @description Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice.
+         */
+        post: operations["voidCityLedgerInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/invoice.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Invoice to a company as a PDF (cityledger.read)
+         * @description One line per checked-out stay (check-out date, guest, room, stay dates, folio, reference, amount), the total and the due date. A voided invoice is stamped VOID. File name `invoice-<invoice number>.pdf`.
+         */
+        get: operations["getCityLedgerInvoicePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4754,6 +4874,65 @@ export interface components {
                 label: "0-30" | "31-60" | "61-90" | "90+";
                 amount: string;
             }[];
+        };
+        CityLedgerInvoiceLine: {
+            /**
+             * Format: int64
+             * @description The transfer.
+             */
+            payment_id: number;
+            payment_number: string;
+            business_date: components["schemas"]["Date"];
+            folio_number: string;
+            confirmation_number: string;
+            stay_number?: string;
+            guest_name?: string;
+            /** @description The rooms of the stay */
+            room_numbers?: string;
+            arrival_date: components["schemas"]["Date"] | null;
+            departure_date: components["schemas"]["Date"] | null;
+            /** Format: date-time */
+            checked_out_at: string | null;
+            reference_number?: string;
+            amount: string;
+        };
+        CityLedgerCandidate: components["schemas"]["CityLedgerInvoiceLine"] & {
+            /** @description The state of the stay behind the folio; empty when the folio has no stay. */
+            stay_status: string;
+            /** @description True when the guest has checked out. */
+            invoiceable: boolean;
+        };
+        CityLedgerCandidateList: {
+            data: components["schemas"]["CityLedgerCandidate"][];
+        };
+        CityLedgerInvoice: {
+            /** Format: int64 */
+            id: number;
+            invoice_number: string;
+            /** Format: int64 */
+            company_id: number;
+            invoice_date: components["schemas"]["Date"];
+            due_date: components["schemas"]["Date"];
+            total: string;
+            notes?: string;
+            /** @enum {string} */
+            status: "ISSUED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** @description Only on the detail and on creation. */
+            lines?: components["schemas"]["CityLedgerInvoiceLine"][];
+        };
+        CityLedgerInvoiceList: {
+            data: components["schemas"]["CityLedgerInvoice"][];
+        };
+        CreateCityLedgerInvoiceRequest: {
+            payment_ids: number[];
+            notes?: string;
         };
     };
     responses: {
@@ -8788,6 +8967,173 @@ export interface operations {
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerInvoiceCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerCandidateList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerInvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoiceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCityLedgerInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description The invoice with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerInvoicePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

@@ -338,3 +338,9 @@ func orNF(err error) error {
 	}
 	return err
 }
+
+// Lock locks a company (level 44) for a caller that changes what is billed to it, such as an invoice.
+func (s *Service) Lock(ctx context.Context, propertyID, companyID int64) error {
+	_, _, err := s.lockWithBalance(ctx, propertyID, companyID)
+	return err
+}

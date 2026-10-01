@@ -336,3 +336,67 @@ func pairUp(items [][2]string) [][2]string {
 	}
 	return out
 }
+
+// CompanyInvoiceLine is a checked-out stay billed to a company.
+type CompanyInvoiceLine struct {
+	CheckedOut string
+	Guest      string
+	Rooms      string
+	Stay       string
+	Folio      string
+	Reference  string
+	Amount     string
+}
+
+// CompanyInvoiceData is an invoice to a company for the stays it is billed.
+type CompanyInvoiceData struct {
+	Hotel    Hotel
+	Printed  string
+	Number   string
+	Voided   bool
+	VoidNote string
+	Company  Party
+	TaxID    string
+	Date     civil.Date
+	Due      civil.Date
+	Terms    string
+	Currency string
+	Lines    []CompanyInvoiceLine
+	Total    string
+	Notes    string
+}
+
+// RenderCompanyInvoice draws an invoice to a company. A voided invoice is stamped, so it cannot pass for a valid one.
+func RenderCompanyInvoice(d CompanyInvoiceData) ([]byte, error) {
+	g := newPage(d.Hotel, "INVOICE", d.Printed)
+	g.title("INVOICE", d.Number)
+	if d.Voided {
+		g.stamp("VOID - this invoice was cancelled")
+		if d.VoidNote != "" {
+			g.color(muted)
+			g.note(d.VoidNote, "I", 9)
+			g.color(ink)
+		}
+		g.p.Ln(2)
+	}
+	g.pairs([][2]string{
+		{"Bill to", d.Company.Name}, {"Invoice date", fmtDate(d.Date)},
+		{"Address", d.Company.addressLine()}, {"Due date", fmtDate(d.Due)},
+		{"Tax ID", d.TaxID}, {"Payment terms", d.Terms},
+	})
+	g.p.Ln(3)
+	rows := make([][]string, 0, len(d.Lines))
+	for _, l := range d.Lines {
+		rows = append(rows, []string{l.CheckedOut, l.Guest, l.Rooms, l.Stay, l.Folio, l.Reference, l.Amount})
+	}
+	g.table([]col{
+		{22, "Check-out", "L"}, {38, "Guest", "L"}, {16, "Room", "L"}, {34, "Stay", "L"},
+		{24, "Folio", "L"}, {22, "Reference", "L"}, {24, "Amount", "R"},
+	}, rows)
+	g.totals([][2]string{{"Total due", d.Currency + " " + d.Total}})
+	if d.Notes != "" {
+		g.p.Ln(3)
+		g.note("Note: "+d.Notes, "", 9)
+	}
+	return g.bytes()
+}

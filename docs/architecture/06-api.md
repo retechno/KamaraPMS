@@ -583,5 +583,10 @@ Errors and conventions are as everywhere. Permissions: `company.manage`, `group.
 | `POST {P}/city-ledger/accounts/{id}/receipts` | `cityledger.receive` | Idempotency-Key. 409 `RECEIPT_EXCEEDS_BALANCE` |
 | `POST {P}/city-ledger/receipts/{id}/void` | `cityledger.receive` + approval | Current business date only (409 `CORRECTION_REQUIRES_ADJUSTMENT`), 409 `RECEIPT_ALREADY_VOIDED` |
 | `GET {P}/companies/{id}/statement.pdf` | `cityledger.read` | `from`, `to` optional |
+| `GET {P}/city-ledger/accounts/{id}/invoice-candidates` | `cityledger.read` | Transfers not on a live invoice; `invoiceable` is true once the guest has checked out |
+| `GET/POST {P}/city-ledger/accounts/{id}/invoices` | read: `cityledger.read`; issue: `cityledger.invoice` | POST `{payment_ids, notes}` with Idempotency-Key combines the transfers into one invoice. 409 `TRANSFER_NOT_AVAILABLE`, `STAY_NOT_CHECKED_OUT` (`context.payment_ids`) |
+| `GET {P}/city-ledger/invoices/{id}` | `cityledger.read` | With its lines |
+| `POST {P}/city-ledger/invoices/{id}/void` | `cityledger.invoice` + approval | Releases the transfers; 409 `INVOICE_ALREADY_VOIDED` |
+| `GET {P}/city-ledger/invoices/{id}/invoice.pdf` | `cityledger.read` | A voided invoice is stamped VOID |
 
 `CITY_LEDGER` appears as a payment method on payments (with `company_id`) but is refused by the payment, deposit and refund endpoints; a transfer is not refunded (409 `PAYMENT_NOT_REFUNDABLE`), and voiding one after receipts settled it is 409 `COMPANY_BALANCE_SETTLED`.

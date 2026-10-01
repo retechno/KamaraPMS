@@ -429,3 +429,46 @@ func (s *Service) CompanyStatement(ctx context.Context, propertyID, companyID in
 	}
 	return Document{Filename: "statement-" + co.Code + ".pdf", PDF: pdf}, nil
 }
+
+// CompanyInvoice renders an invoice to a company (cityledger.read): one line per checked-out stay, the total and
+// the due date. A voided invoice is stamped VOID.
+func (s *Service) CompanyInvoice(ctx context.Context, propertyID, invoiceID int64) (Document, error) {
+	dc, err := s.context(ctx, propertyID)
+	if err != nil {
+		return Document{}, err
+	}
+	inv, err := s.ledger.GetInvoice(ctx, propertyID, invoiceID)
+	if err != nil {
+		return Document{}, err
+	}
+	co, err := s.cos.Get(ctx, propertyID, inv.CompanyID)
+	if err != nil {
+		return Document{}, err
+	}
+	d := CompanyInvoiceData{
+		Hotel: dc.hotel, Printed: dc.printed, Number: inv.InvoiceNumber, Voided: inv.Status == cityledger.InvoiceVoided,
+		Company: Party{Name: co.Name, Address: co.Address, City: co.City}, TaxID: co.TaxID, Date: inv.InvoiceDate, Due: inv.DueDate,
+		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: money(dec(inv.Total), dc.decimals), Notes: inv.Notes,
+	}
+	if inv.VoidedAt != nil {
+		d.VoidNote = "Cancelled on " + fmtTime(*inv.VoidedAt, dc.prop.Location())
+		if inv.VoidReason != "" {
+			d.VoidNote += ": " + inv.VoidReason
+		}
+	}
+	for _, l := range inv.Lines {
+		line := CompanyInvoiceLine{Guest: l.GuestName, Rooms: l.RoomNumbers, Folio: l.FolioNumber, Reference: l.Reference, Amount: money(dec(l.Amount), dc.decimals)}
+		if l.CheckedOutAt != nil {
+			line.CheckedOut = fmtDate(civil.DateOf(l.CheckedOutAt.In(dc.prop.Location())))
+		}
+		if l.ArrivalDate != nil && l.DepartureDate != nil {
+			line.Stay = fmtDate(*l.ArrivalDate) + " - " + fmtDate(*l.DepartureDate)
+		}
+		d.Lines = append(d.Lines, line)
+	}
+	pdf, err := RenderCompanyInvoice(d)
+	if err != nil {
+		return Document{}, err
+	}
+	return Document{Filename: "invoice-" + inv.InvoiceNumber + ".pdf", PDF: pdf}, nil
+}

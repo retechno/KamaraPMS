@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, CityLedgerAccount, CityLedgerAging, CityLedgerReceipt, CityLedgerStatement } from '@/api/types'
+import type { Approval, CityLedgerAccount, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerStatement } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -17,6 +17,10 @@ const account = ref<CityLedgerAccount | null>(null)
 const aging = ref<CityLedgerAging | null>(null)
 const statement = ref<CityLedgerStatement | null>(null)
 const receipts = ref<CityLedgerReceipt[]>([])
+const candidates = ref<CityLedgerCandidate[]>([])
+const invoices = ref<CityLedgerInvoice[]>([])
+const picked = ref<number[]>([])
+const invoiceNotes = ref('')
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
@@ -24,9 +28,11 @@ const busy = ref(false)
 const period = reactive({ from: '', to: '' })
 const receipt = reactive({ amount: '', method: 'BANK_TRANSFER' as CityLedgerReceipt['payment_method'], reference: '', remarks: '' })
 const METHODS: CityLedgerReceipt['payment_method'][] = ['BANK_TRANSFER', 'CASH', 'CARD', 'OTHER']
-const voiding = ref<{ receipt: CityLedgerReceipt; reason: string; asking: boolean } | null>(null)
+// A void waiting for its reason and its approval: a receipt or an invoice.
+const voiding = ref<{ kind: 'receipt' | 'invoice'; id: number; label: string; reason: string; asking: boolean } | null>(null)
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
 let receiptKey = newIdempotencyKey()
+let invoiceKey = newIdempotencyKey()
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -44,16 +50,21 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const query = { from: period.from || undefined, to: period.to || undefined }
-    const [a, g, s, r] = await Promise.all([
+    const [a, g, s, r, c, v] = await Promise.all([
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/aging', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/statement', { params: { ...base(), query } }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts', { params: base() }),
+      api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoice-candidates', { params: base() }),
+      api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices', { params: base() }),
     ])
     account.value = a.data ?? null
     aging.value = g.data ?? null
     statement.value = s.data ?? null
     receipts.value = r.data?.data ?? []
+    candidates.value = c.data?.data ?? []
+    invoices.value = v.data?.data ?? []
+    picked.value = picked.value.filter((id) => candidates.value.some((x) => x.payment_id === id && x.invoiceable))
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -85,7 +96,7 @@ async function receive(): Promise<void> {
 function startVoid(number: string): void {
   const r = receiptOf(number)
   if (!r) return
-  voiding.value = { receipt: r, reason: '', asking: false }
+  voiding.value = { kind: 'receipt', id: r.id, label: `receipt ${r.receipt_number}`, reason: '', asking: false }
   dialogError.value = null
   error.value = null
 }
@@ -96,17 +107,65 @@ async function approveVoid(approval: Approval): Promise<void> {
   busy.value = true
   dialogError.value = null
   try {
-    await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void', {
-      params: { path: { propertyId: pid.value, id: v.receipt.id } },
-      body: { reason: v.reason, approval },
-    })
+    const params = { path: { propertyId: pid.value, id: v.id } }
+    const body = { reason: v.reason, approval }
+    if (v.kind === 'receipt') await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void', { params, body })
+    else await api.POST('/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void', { params, body })
     voiding.value = null
-    notice.value = 'Receipt voided.'
+    notice.value = v.kind === 'receipt' ? 'Receipt voided.' : 'Invoice voided.'
     await load()
   } catch (e) {
     dialogError.value = e instanceof ApiError ? e : null
   } finally {
     busy.value = false
+  }
+}
+
+const invoiceable = computed(() => candidates.value.filter((c) => c.invoiceable))
+const waiting = computed(() => candidates.value.filter((c) => !c.invoiceable))
+const pickedTotal = computed(() => candidates.value.filter((c) => picked.value.includes(c.payment_id)).reduce((sum, c) => sum + Number(c.amount), 0))
+
+function toggleAll(on: boolean): void {
+  picked.value = on ? invoiceable.value.map((c) => c.payment_id) : []
+}
+
+async function createInvoice(): Promise<void> {
+  busy.value = true
+  error.value = null
+  notice.value = ''
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices', {
+      params: { ...base(), header: { 'Idempotency-Key': invoiceKey } },
+      body: { payment_ids: picked.value, notes: invoiceNotes.value.trim() || undefined },
+    })
+    invoiceKey = newIdempotencyKey()
+    picked.value = []
+    invoiceNotes.value = ''
+    notice.value = `Invoice ${data?.invoice_number ?? ''} issued.`
+    await load()
+  } catch (e) {
+    const failure = e instanceof ApiError ? e : null
+    if (failure) invoiceKey = newIdempotencyKey() // the server answered: the next submit is a new attempt
+    await load() // another user may have invoiced or voided in the meantime
+    error.value = failure
+  } finally {
+    busy.value = false
+  }
+}
+
+function startVoidInvoice(inv: CityLedgerInvoice): void {
+  voiding.value = { kind: 'invoice', id: inv.id, label: `invoice ${inv.invoice_number}`, reason: '', asking: false }
+  dialogError.value = null
+  error.value = null
+}
+
+async function printInvoice(inv: CityLedgerInvoice): Promise<void> {
+  if (pid.value === null) return
+  error.value = null
+  try {
+    await openPdf(documentPath.companyInvoice(pid.value, inv.id))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
   }
 }
 
@@ -180,6 +239,60 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Record receipt</button></div>
     </form>
 
+    <section v-if="can('cityledger.invoice') && (invoiceable.length || waiting.length)" class="card" data-testid="invoice-builder">
+      <h2>New invoice</h2>
+      <p class="muted">Pick the transfers to bill together. Only guests who have checked out can be invoiced.</p>
+      <table class="list">
+        <thead>
+          <tr>
+            <th><input type="checkbox" aria-label="Select all checked-out transfers" data-testid="pick-all" :checked="invoiceable.length > 0 && picked.length === invoiceable.length" :disabled="!invoiceable.length" @change="toggleAll(($event.target as HTMLInputElement).checked)" /></th>
+            <th>Check-out</th><th>Guest</th><th>Room</th><th>Folio</th><th>Reference</th><th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in candidates" :key="c.payment_id" :class="{ waiting: !c.invoiceable }" :data-testid="`candidate-${c.payment_number}`">
+            <td><input v-model="picked" type="checkbox" :value="c.payment_id" :disabled="!c.invoiceable" :aria-label="`Invoice ${c.payment_number}`" /></td>
+            <td>{{ c.checked_out_at ? c.checked_out_at.slice(0, 10) : '' }}<small v-if="!c.invoiceable" class="muted">in house</small></td>
+            <td>{{ c.guest_name }}</td>
+            <td>{{ c.room_numbers }}</td>
+            <td>{{ c.folio_number }}</td>
+            <td>{{ c.reference_number }}</td>
+            <td class="num">{{ c.amount }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <form class="filters" novalidate @submit.prevent="createInvoice">
+        <label class="field">
+          <span>Note on the invoice</span>
+          <input v-model="invoiceNotes" name="invoice_notes" maxlength="500" />
+        </label>
+        <button type="submit" class="btn-primary" :disabled="busy || !picked.length" data-testid="create-invoice">
+          Create invoice ({{ picked.length }} selected, {{ pickedTotal }})
+        </button>
+      </form>
+    </section>
+
+    <section class="card" data-testid="invoices">
+      <h2>Invoices</h2>
+      <p v-if="!invoices.length" class="muted" data-testid="no-invoices">No invoice has been issued to this company.</p>
+      <table v-else class="list">
+        <thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th>Status</th><th /></tr></thead>
+        <tbody>
+          <tr v-for="i in invoices" :key="i.id" :class="{ voided: i.status === 'VOIDED' }" :data-testid="`invoice-${i.invoice_number}`">
+            <td>{{ i.invoice_number }}</td>
+            <td>{{ i.invoice_date }}</td>
+            <td>{{ i.due_date }}</td>
+            <td class="num">{{ i.total }}</td>
+            <td>{{ i.status === 'VOIDED' ? 'Voided' : 'Issued' }}</td>
+            <td class="row-actions">
+              <button type="button" :data-testid="`print-${i.invoice_number}`" @click="printInvoice(i)">Print</button>
+              <button v-if="i.status === 'ISSUED' && can('cityledger.invoice')" type="button" :data-testid="`void-${i.invoice_number}`" @click="startVoidInvoice(i)">Void</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <section class="card" data-testid="statement">
       <h2>Statement</h2>
       <form class="filters" novalidate @submit.prevent="load()">
@@ -218,7 +331,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </template>
 
   <section v-if="voiding && !voiding.asking" class="card" data-testid="void-form">
-    <h2>Void receipt {{ voiding.receipt.receipt_number }}</h2>
+    <h2>Void {{ voiding.label }}</h2>
     <label class="field">
       <span>Reason</span>
       <input v-model="voiding.reason" name="void_reason" />
@@ -235,6 +348,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 .voided td {
   color: var(--muted, #6b7280);
   text-decoration: line-through;
+}
+.waiting td {
+  color: var(--muted, #6b7280);
 }
 .total td {
   font-weight: 600;

@@ -31,7 +31,17 @@ const receipts = [
   { id: 30, receipt_number: 'CLR000000', company_id: 1, amount: '5', payment_method: 'CASH', business_date: '2026-09-29', status: 'VOIDED' },
 ]
 
-function mountView(permissions = ['cityledger.read', 'cityledger.receive']) {
+const candidates = [
+  { payment_id: 41, payment_number: 'PAY000041', business_date: '2026-09-29', folio_number: 'FOL000041', confirmation_number: 'RES1', guest_name: 'Siti', room_numbers: '101', checked_out_at: '2026-09-30T05:00:00Z', amount: '300000', stay_status: 'CHECKED_OUT', invoiceable: true },
+  { payment_id: 42, payment_number: 'PAY000042', business_date: '2026-09-30', folio_number: 'FOL000042', confirmation_number: 'RES2', guest_name: 'Andi', room_numbers: '102', checked_out_at: null, amount: '50000', stay_status: 'OPEN', invoiceable: false },
+  { payment_id: 43, payment_number: 'PAY000043', business_date: '2026-09-30', folio_number: 'FOL000043', confirmation_number: 'RES3', guest_name: 'Budi', room_numbers: '103', checked_out_at: '2026-09-30T06:00:00Z', amount: '200000', stay_status: 'CHECKED_OUT', invoiceable: true },
+]
+const invoices = [
+  { id: 51, invoice_number: 'CINV000001', company_id: 1, invoice_date: '2026-09-30', due_date: '2026-10-30', total: '500000', status: 'ISSUED' },
+  { id: 50, invoice_number: 'CINV000000', company_id: 1, invoice_date: '2026-09-20', due_date: '2026-10-20', total: '10', status: 'VOIDED' },
+]
+
+function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.com', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -42,6 +52,8 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive']) {
     if (path.endsWith('/aging')) return { data: aging }
     if (path.endsWith('/statement')) return { data: statement }
     if (path.endsWith('/receipts')) return { data: { data: receipts } }
+    if (path.endsWith('/invoice-candidates')) return { data: { data: candidates } }
+    if (path.endsWith('/invoices')) return { data: { data: invoices } }
     return { data: account }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
@@ -118,6 +130,66 @@ describe('CityLedgerAccountView', () => {
     await flushPromises()
     const calls = GET.mock.calls.filter(([p]) => (p as string).endsWith('/statement'))
     expect(calls.at(-1)?.[1].params.query).toEqual({ from: '2026-09-01', to: '2026-09-30' })
+  })
+
+  it('lists what can be invoiced, with guests still in house disabled', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect((w.get('[data-testid=candidate-PAY000041] input').element as HTMLInputElement).disabled).toBe(false)
+    expect((w.get('[data-testid=candidate-PAY000042] input').element as HTMLInputElement).disabled).toBe(true)
+    expect(w.get('[data-testid=candidate-PAY000042]').text()).toContain('in house')
+    expect((w.get('[data-testid=create-invoice]').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('combines the picked transfers into one invoice with an Idempotency-Key', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=pick-all]').setValue(true)
+    expect(w.get('[data-testid=create-invoice]').text()).toContain('2 selected, 500000')
+    await w.get('input[name=invoice_notes]').setValue('September')
+    await w.get('[data-testid=invoice-builder] form').trigger('submit')
+    await flushPromises()
+    const [path, opts] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: unknown }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices')
+    expect(opts.params.header['Idempotency-Key']).toBeTruthy()
+    expect(opts.body).toEqual({ payment_ids: [41, 43], notes: 'September' })
+    expect(w.get('[data-testid=notice]').text()).toContain('issued')
+  })
+
+  it('shows a refused invoice', async () => {
+    const w = mountView()
+    await flushPromises()
+    POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'TRANSFER_NOT_AVAILABLE', detail: 'already on an invoice' }))
+    await w.get('[data-testid=candidate-PAY000041] input').setValue(true)
+    await w.get('[data-testid=invoice-builder] form').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=form-error]').text()).toContain('TRANSFER_NOT_AVAILABLE')
+  })
+
+  it('prints an invoice and voids an issued one with a reason and an approval', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=print-CINV000001]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/city-ledger/invoices/51/invoice.pdf')
+    expect(w.find('[data-testid=void-CINV000000]').exists()).toBe(false) // already voided
+    await w.get('[data-testid=void-CINV000001]').trigger('click')
+    await w.get('input[name=void_reason]').setValue('wrong company')
+    await w.get('[data-testid=void-continue]').trigger('click')
+    await w.get('input[name=approval_password]').setValue('secret')
+    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void', {
+      params: { path: { propertyId: 7, id: 51 } }, body: { reason: 'wrong company', approval: { email: 'clerk@hotel.com', password: 'secret' } },
+    })
+    expect(w.get('[data-testid=notice]').text()).toContain('Invoice voided')
+  })
+
+  it('offers no invoicing without cityledger.invoice', async () => {
+    const w = mountView(['cityledger.read'])
+    await flushPromises()
+    expect(w.find('[data-testid=invoice-builder]').exists()).toBe(false)
+    expect(w.find('[data-testid=void-CINV000001]').exists()).toBe(false)
+    expect(w.find('[data-testid=print-CINV000001]').exists()).toBe(true)
   })
 
   it('hides the receipt form without cityledger.receive, and everything without cityledger.read', async () => {

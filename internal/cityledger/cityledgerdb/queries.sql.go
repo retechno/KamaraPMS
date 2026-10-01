@@ -62,6 +62,76 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (GetAcco
 	return i, err
 }
 
+const getInvoice = `-- name: GetInvoice :one
+SELECT id, tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, status, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by FROM city_ledger_invoices WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetInvoiceParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetInvoice(ctx context.Context, arg GetInvoiceParams) (CityLedgerInvoice, error) {
+	row := q.db.QueryRow(ctx, getInvoice, arg.TenantID, arg.PropertyID, arg.ID)
+	var i CityLedgerInvoice
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.InvoiceNumber,
+		&i.CompanyID,
+		&i.InvoiceDate,
+		&i.DueDate,
+		&i.Total,
+		&i.Notes,
+		&i.Status,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getInvoiceByKey = `-- name: GetInvoiceByKey :one
+SELECT id, tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, status, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by FROM city_ledger_invoices WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetInvoiceByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetInvoiceByKey(ctx context.Context, arg GetInvoiceByKeyParams) (CityLedgerInvoice, error) {
+	row := q.db.QueryRow(ctx, getInvoiceByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i CityLedgerInvoice
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.InvoiceNumber,
+		&i.CompanyID,
+		&i.InvoiceDate,
+		&i.DueDate,
+		&i.Total,
+		&i.Notes,
+		&i.Status,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const getReceipt = `-- name: GetReceipt :one
 SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -134,6 +204,88 @@ func (q *Queries) GetReceiptByKey(ctx context.Context, arg GetReceiptByKeyParams
 		&i.ApprovedBy,
 	)
 	return i, err
+}
+
+const insertInvoice = `-- name: InsertInvoice :one
+INSERT INTO city_ledger_invoices (
+    tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, idempotency_key, created_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+)
+RETURNING id, tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, status, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by
+`
+
+type InsertInvoiceParams struct {
+	TenantID       int64
+	PropertyID     int64
+	InvoiceNumber  string
+	CompanyID      int64
+	InvoiceDate    civil.Date
+	DueDate        civil.Date
+	Total          decimal.Decimal
+	Notes          *string
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertInvoice(ctx context.Context, arg InsertInvoiceParams) (CityLedgerInvoice, error) {
+	row := q.db.QueryRow(ctx, insertInvoice,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.InvoiceNumber,
+		arg.CompanyID,
+		arg.InvoiceDate,
+		arg.DueDate,
+		arg.Total,
+		arg.Notes,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var i CityLedgerInvoice
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.InvoiceNumber,
+		&i.CompanyID,
+		&i.InvoiceDate,
+		&i.DueDate,
+		&i.Total,
+		&i.Notes,
+		&i.Status,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const insertInvoiceLine = `-- name: InsertInvoiceLine :exec
+INSERT INTO city_ledger_invoice_lines (tenant_id, property_id, invoice_id, payment_id, amount)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertInvoiceLineParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  int64
+	PaymentID  int64
+	Amount     decimal.Decimal
+}
+
+func (q *Queries) InsertInvoiceLine(ctx context.Context, arg InsertInvoiceLineParams) error {
+	_, err := q.db.Exec(ctx, insertInvoiceLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.InvoiceID,
+		arg.PaymentID,
+		arg.Amount,
+	)
+	return err
 }
 
 const insertReceipt = `-- name: InsertReceipt :one
@@ -274,6 +426,218 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]L
 	return items, nil
 }
 
+const listInvoiceCandidates = `-- name: ListInvoiceCandidates :many
+SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
+       f.folio_number, r.confirmation_number,
+       COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
+       s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
+       COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)
+                 FROM stay_rooms sr JOIN rooms ro ON ro.property_id = sr.property_id AND ro.id = sr.room_id
+                 WHERE sr.property_id = s.property_id AND sr.stay_id = s.id), '')::text AS room_numbers
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
+LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.company_id = $3
+  AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+  AND ($4::bigint[] IS NULL OR p.id = ANY($4::bigint[]))
+  AND NOT EXISTS (SELECT 1 FROM city_ledger_invoice_lines l WHERE l.property_id = p.property_id AND l.payment_id = p.id AND l.released_at IS NULL)
+ORDER BY p.business_date, p.id
+`
+
+type ListInvoiceCandidatesParams struct {
+	TenantID   int64
+	PropertyID int64
+	CompanyID  *int64
+	Ids        []int64
+}
+
+type ListInvoiceCandidatesRow struct {
+	ID                 int64
+	PaymentNumber      string
+	BusinessDate       civil.Date
+	Amount             decimal.Decimal
+	ReferenceNumber    *string
+	FolioNumber        string
+	ConfirmationNumber string
+	StayNumber         string
+	StayStatus         string
+	ArrivalDate        *civil.Date
+	DepartureDate      *civil.Date
+	CheckedOutAt       *time.Time
+	GuestName          string
+	RoomNumbers        string
+}
+
+// Transfers of a company that are not on a live invoice, with the state of the stay behind them. Only a transfer
+// whose guest has checked out can be invoiced. ids narrows the list to the transfers an invoice asks for.
+func (q *Queries) ListInvoiceCandidates(ctx context.Context, arg ListInvoiceCandidatesParams) ([]ListInvoiceCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listInvoiceCandidates,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.CompanyID,
+		arg.Ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInvoiceCandidatesRow{}
+	for rows.Next() {
+		var i ListInvoiceCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PaymentNumber,
+			&i.BusinessDate,
+			&i.Amount,
+			&i.ReferenceNumber,
+			&i.FolioNumber,
+			&i.ConfirmationNumber,
+			&i.StayNumber,
+			&i.StayStatus,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.CheckedOutAt,
+			&i.GuestName,
+			&i.RoomNumbers,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvoiceLines = `-- name: ListInvoiceLines :many
+SELECT p.id AS payment_id, p.payment_number, p.business_date, l.amount, p.reference_number,
+       f.folio_number, r.confirmation_number,
+       COALESCE(s.stay_number, '')::text AS stay_number,
+       s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
+       COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)
+                 FROM stay_rooms sr JOIN rooms ro ON ro.property_id = sr.property_id AND ro.id = sr.room_id
+                 WHERE sr.property_id = s.property_id AND sr.stay_id = s.id), '')::text AS room_numbers
+FROM city_ledger_invoice_lines l
+JOIN payments p ON p.property_id = l.property_id AND p.id = l.payment_id
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
+LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.invoice_id = $3
+ORDER BY p.business_date, p.id
+`
+
+type ListInvoiceLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  int64
+}
+
+type ListInvoiceLinesRow struct {
+	PaymentID          int64
+	PaymentNumber      string
+	BusinessDate       civil.Date
+	Amount             decimal.Decimal
+	ReferenceNumber    *string
+	FolioNumber        string
+	ConfirmationNumber string
+	StayNumber         string
+	ArrivalDate        *civil.Date
+	DepartureDate      *civil.Date
+	CheckedOutAt       *time.Time
+	GuestName          string
+	RoomNumbers        string
+}
+
+func (q *Queries) ListInvoiceLines(ctx context.Context, arg ListInvoiceLinesParams) ([]ListInvoiceLinesRow, error) {
+	rows, err := q.db.Query(ctx, listInvoiceLines, arg.TenantID, arg.PropertyID, arg.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInvoiceLinesRow{}
+	for rows.Next() {
+		var i ListInvoiceLinesRow
+		if err := rows.Scan(
+			&i.PaymentID,
+			&i.PaymentNumber,
+			&i.BusinessDate,
+			&i.Amount,
+			&i.ReferenceNumber,
+			&i.FolioNumber,
+			&i.ConfirmationNumber,
+			&i.StayNumber,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.CheckedOutAt,
+			&i.GuestName,
+			&i.RoomNumbers,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvoices = `-- name: ListInvoices :many
+SELECT id, tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, status, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by FROM city_ledger_invoices
+WHERE tenant_id = $1 AND property_id = $2 AND company_id = $3
+ORDER BY invoice_date DESC, id DESC
+`
+
+type ListInvoicesParams struct {
+	TenantID   int64
+	PropertyID int64
+	CompanyID  int64
+}
+
+func (q *Queries) ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]CityLedgerInvoice, error) {
+	rows, err := q.db.Query(ctx, listInvoices, arg.TenantID, arg.PropertyID, arg.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CityLedgerInvoice{}
+	for rows.Next() {
+		var i CityLedgerInvoice
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.InvoiceNumber,
+			&i.CompanyID,
+			&i.InvoiceDate,
+			&i.DueDate,
+			&i.Total,
+			&i.Notes,
+			&i.Status,
+			&i.VoidedAt,
+			&i.VoidedBy,
+			&i.VoidReason,
+			&i.ApprovedBy,
+			&i.IdempotencyKey,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReceipts = `-- name: ListReceipts :many
 SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by FROM city_ledger_receipts
 WHERE tenant_id = $1 AND property_id = $2 AND company_id = $3
@@ -385,6 +749,72 @@ func (q *Queries) ListTransfers(ctx context.Context, arg ListTransfersParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseInvoiceLines = `-- name: ReleaseInvoiceLines :exec
+UPDATE city_ledger_invoice_lines SET released_at = $1::timestamptz
+WHERE property_id = $2 AND invoice_id = $3 AND released_at IS NULL
+`
+
+type ReleaseInvoiceLinesParams struct {
+	Now        time.Time
+	PropertyID int64
+	InvoiceID  int64
+}
+
+func (q *Queries) ReleaseInvoiceLines(ctx context.Context, arg ReleaseInvoiceLinesParams) error {
+	_, err := q.db.Exec(ctx, releaseInvoiceLines, arg.Now, arg.PropertyID, arg.InvoiceID)
+	return err
+}
+
+const voidInvoice = `-- name: VoidInvoice :one
+UPDATE city_ledger_invoices
+SET status = 'VOIDED', voided_at = $1::timestamptz, voided_by = $2, void_reason = $3, approved_by = $4
+WHERE tenant_id = $5 AND property_id = $6 AND id = $7
+RETURNING id, tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total, notes, status, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by
+`
+
+type VoidInvoiceParams struct {
+	Now        time.Time
+	ActorID    *int64
+	Reason     *string
+	ApprovedBy *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (CityLedgerInvoice, error) {
+	row := q.db.QueryRow(ctx, voidInvoice,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.ApprovedBy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i CityLedgerInvoice
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.InvoiceNumber,
+		&i.CompanyID,
+		&i.InvoiceDate,
+		&i.DueDate,
+		&i.Total,
+		&i.Notes,
+		&i.Status,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
 }
 
 const voidReceipt = `-- name: VoidReceipt :one
