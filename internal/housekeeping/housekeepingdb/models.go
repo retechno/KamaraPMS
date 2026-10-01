@@ -24,6 +24,40 @@ type HousekeepingLog struct {
 	ChangedBy    *int64
 }
 
+type HousekeepingTask struct {
+	ID          int64
+	TenantID    int64
+	PropertyID  int64
+	RoomID      int64
+	TaskDate    civil.Date
+	TaskType    string
+	Status      string
+	Priority    string
+	Source      string
+	AssignedTo  *int64
+	AssignedAt  *time.Time
+	Notes       *string
+	StartedAt   *time.Time
+	CompletedAt *time.Time
+	CompletedBy *int64
+	CreatedAt   time.Time
+	CreatedBy   *int64
+	UpdatedAt   time.Time
+}
+
+type RoomHkFlag struct {
+	ID              int64
+	TenantID        int64
+	PropertyID      int64
+	RoomID          int64
+	Priority        string
+	Dnd             bool
+	MakeUpRequested bool
+	Note            *string
+	UpdatedAt       time.Time
+	UpdatedBy       *int64
+}
+
 type RoomHousekeeping struct {
 	ID         int64
 	TenantID   int64

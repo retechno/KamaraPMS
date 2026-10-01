@@ -883,6 +883,46 @@ SELECT expect_error('an allocation is never deleted', '23001',
     $q$DELETE FROM city_ledger_receipt_allocations$q$);
 SELECT expect_error('allocations cannot be truncated', '23001', $q$TRUNCATE city_ledger_receipt_allocations CASCADE$q$);
 
+-- Housekeeping flags and the cleaning list
+INSERT INTO room_hk_flags (tenant_id, property_id, room_id, priority, dnd) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), 'HIGH', true);
+SELECT expect_error('a room has one set of flags', '23505',
+    $q$INSERT INTO room_hk_flags (tenant_id, property_id, room_id) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1))$q$);
+SELECT expect_error('a flag priority is NORMAL or HIGH', '23514',
+    $q$UPDATE room_hk_flags SET priority = 'URGENT'$q$);
+SELECT expect_ok('a task is generated for a room and a date', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
+SELECT expect_error('one AUTO task per room, date and type', '23505', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
+SELECT expect_ok('a MANUAL task of the same kind can be added', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, source)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY', 'MANUAL')$q$);
+SELECT expect_error('a task has a known type', '23514', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'NAP')$q$);
+SELECT expect_error('a task is on a business day of its property', '23503', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2030-01-01', 'DIRTY')$q$);
+SELECT expect_error('a task cannot name a room of another property', '23503', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('XYZ'), pr('SG'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
+SELECT expect_error('an assignee is a user of the tenant', '23503', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, assigned_to, assigned_at)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY', 999999, now())$q$);
+SELECT expect_error('an assignee has an assignment time', '23514', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, assigned_to)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_error('a finished task has its completion time', '23514', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$UPDATE housekeeping_tasks SET status = 'DONE', started_at = now()$q$);
+SELECT expect_error('a skipped task has its reason', '23514', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$UPDATE housekeeping_tasks SET status = 'SKIPPED', completed_at = now()$q$);
+SELECT expect_error('a task in progress has its start time', '23514', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$UPDATE housekeeping_tasks SET status = 'IN_PROGRESS'$q$);
+SELECT expect_ok('a task can be started, finished and skipped with their times', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
+    $q$UPDATE housekeeping_tasks SET status = 'IN_PROGRESS', started_at = now()$q$,
+    $q$UPDATE housekeeping_tasks SET status = 'DONE', completed_at = now()$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

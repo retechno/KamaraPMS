@@ -8,7 +8,8 @@ import HousekeepingView from './HousekeepingView.vue'
 
 let GET = vi.fn()
 let POST = vi.fn()
-vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
+let PUT = vi.fn()
+vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PUT: (...a: unknown[]) => PUT(...a) } }))
 
 const room = (over: Record<string, unknown>) => ({
   room_id: 1, room_number: '201', floor: '2', room_type_id: 1, room_type_code: 'DLX', room_type_name: 'Deluxe',
@@ -26,6 +27,7 @@ function mountBoard(permissions: string[], board: object[]) {
   usePropertyStore().currentId = 7
   GET = vi.fn().mockResolvedValue({ data: { data: board } })
   POST = vi.fn().mockResolvedValue({ data: {} })
+  PUT = vi.fn().mockResolvedValue({ data: {} })
   return mount(HousekeepingView, { global: { plugins: [pinia] } })
 }
 
@@ -99,5 +101,46 @@ describe('HousekeepingView', () => {
     await w.get('[data-testid=filter-CLEAN]').trigger('click')
     expect(w.find('[data-testid=room-201]').exists()).toBe(false)
     expect(w.find('[data-testid=room-202]').exists()).toBe(true)
+  })
+
+  it('shows the flags of a room and filters by occupancy and flags', async () => {
+    const w = mountBoard(['housekeeping.update'], [
+      room({ priority: 'HIGH', dnd: true, make_up_requested: true, flag_note: 'allergic to feathers', occupancy: 'OCCUPIED' }),
+      room({ room_id: 2, room_number: '202', priority: 'NORMAL', dnd: false, make_up_requested: false }),
+    ])
+    await flushPromises()
+    const flags = w.get('[data-testid=room-201] [data-testid=flags]').text()
+    expect(flags).toContain('High')
+    expect(flags).toContain('DND')
+    expect(flags).toContain('Make-up')
+    expect(flags).toContain('allergic to feathers')
+    expect(w.get('[data-testid=filter-flagged]').text()).toContain('1')
+    await w.get('[data-testid=filter-flagged]').trigger('click')
+    expect(w.find('[data-testid=room-202]').exists()).toBe(false)
+    await w.get('[data-testid=filter-flagged]').trigger('click')
+    await w.get('select[name=occupancy]').setValue('VACANT')
+    expect(w.find('[data-testid=room-201]').exists()).toBe(false)
+    expect(w.find('[data-testid=room-202]').exists()).toBe(true)
+  })
+
+  it('edits the flags of a room', async () => {
+    const w = mountBoard(['housekeeping.update'], [room({ priority: 'NORMAL', dnd: false, make_up_requested: false })])
+    await flushPromises()
+    await w.get('[data-testid=flags-201]').trigger('click')
+    await w.get('select[name=priority]').setValue('HIGH')
+    await w.get('input[name=dnd]').setValue(true)
+    await w.get('input[name=note]').setValue('VIP')
+    await w.get('[data-testid=flag-form]').trigger('submit')
+    await flushPromises()
+    expect(PUT).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags', {
+      params: { path: { propertyId: 7, id: 1 } }, body: { priority: 'HIGH', dnd: true, make_up_requested: false, note: 'VIP' },
+    })
+    expect(w.find('[data-testid=flag-form]').exists()).toBe(false)
+  })
+
+  it('offers no flag editing to read-only users', async () => {
+    const w = mountBoard([], [room({})])
+    await flushPromises()
+    expect(w.find('[data-testid=flags-201]').exists()).toBe(false)
   })
 })

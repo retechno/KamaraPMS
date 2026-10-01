@@ -2578,6 +2578,190 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a room's housekeeping flags (housekeeping.update)
+         * @description Priority (HIGH rooms come first on the cleaning list), do not disturb, a make-up request and a note. A flag change is not a status change: the time the room has been in its status does not restart.
+         */
+        put: operations["setRoomHousekeepingFlags"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Who can be given cleaning work (housekeeping.assign)
+         * @description Active users whose role holds housekeeping.update at the property, and tenant administrators. Not paginated.
+         */
+        get: operations["listHousekeepingStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The cleaning list of a business date with the workload per person
+         * @description Ordered with high priority first, then by floor and room. `date` defaults to the current business date. Not paginated. The workload has one line per housekeeper and one for tasks not assigned yet (`user_id` null).
+         */
+        get: operations["listHousekeepingTasks"];
+        put?: never;
+        /** Add a task by hand for the current business date (housekeeping.assign) */
+        post: operations["createHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the cleaning list of the current business date (housekeeping.assign)
+         * @description Occupied rooms get a CHECKOUT task (the guest leaves today or is overdue) or a STAYOVER task; a vacant room that
+         *     is not clean gets an ARRIVAL task when a guest is assigned to it today, otherwise a DIRTY task. Arrivals and rooms
+         *     flagged HIGH get high priority. A room that already has a task that day gets no second kind, and a room under a
+         *     block gets none. Running it again only adds what is new, so it can be run through the day, also by two people at once.
+         */
+        post: operations["generateHousekeepingTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give tasks to a housekeeper, or take them back with a null user (housekeeping.assign)
+         * @description Only open tasks can be assigned; if any is not (or does not exist) nothing changes (409 `TASK_NOT_ASSIGNABLE`, `context.task_ids`). The assignee must be staff (422 `ASSIGNEE_INVALID`).
+         */
+        post: operations["assignHousekeepingTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a pending task (housekeeping.update)
+         * @description An unassigned task goes to the person who starts it and a DIRTY room becomes CLEANING. 409 `TASK_NOT_PENDING` otherwise.
+         */
+        post: operations["startHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a task (housekeeping.update)
+         * @description A DIRTY or CLEANING room becomes CLEAN; a room that is already CLEAN or INSPECTED keeps its status. Finishing a task never inspects the room. 409 `TASK_ALREADY_CLOSED` when it is already finished (also when two people finish it at once).
+         */
+        post: operations["completeHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a task without cleaning (housekeeping.update)
+         * @description A reason is required (for example that the guest asked not to be disturbed). The room's status does not change.
+         */
+        post: operations["skipHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2988,7 +3172,15 @@ export interface components {
             };
             /** @description Statuses reachable from the current one (INSPECTED additionally needs housekeeping.inspect). */
             allowed_next: components["schemas"]["HousekeepingStatus"][];
+            priority: components["schemas"]["HousekeepingPriority"];
+            /** @description Do not disturb. */
+            dnd: boolean;
+            /** @description The guest asked for the room to be made up. */
+            make_up_requested: boolean;
+            flag_note?: string;
         };
+        /** @enum {string} */
+        HousekeepingPriority: "NORMAL" | "HIGH";
         HousekeepingBoard: {
             data: components["schemas"]["HousekeepingBoardRoom"][];
         };
@@ -4959,6 +5151,104 @@ export interface components {
             payment_ids: number[];
             notes?: string;
         };
+        HousekeepingFlags: {
+            /** Format: int64 */
+            room_id: number;
+            priority: components["schemas"]["HousekeepingPriority"];
+            dnd: boolean;
+            make_up_requested: boolean;
+            note?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HousekeepingFlagsRequest: {
+            priority?: components["schemas"]["HousekeepingPriority"];
+            dnd?: boolean;
+            make_up_requested?: boolean;
+            note?: string;
+        };
+        HousekeepingStaffMember: {
+            /** Format: int64 */
+            id: number;
+            full_name: string;
+            email: string;
+        };
+        HousekeepingStaffList: {
+            data: components["schemas"]["HousekeepingStaffMember"][];
+        };
+        /** @enum {string} */
+        HousekeepingTaskStatus: "PENDING" | "IN_PROGRESS" | "DONE" | "SKIPPED";
+        /** @enum {string} */
+        HousekeepingTaskType: "CHECKOUT" | "STAYOVER" | "ARRIVAL" | "DIRTY" | "DEEP" | "OTHER";
+        HousekeepingTask: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            floor?: string;
+            room_type_code: string;
+            task_date: components["schemas"]["Date"];
+            task_type: components["schemas"]["HousekeepingTaskType"];
+            status: components["schemas"]["HousekeepingTaskStatus"];
+            priority: components["schemas"]["HousekeepingPriority"];
+            /** @enum {string} */
+            source: "AUTO" | "MANUAL";
+            /** Format: int64 */
+            assigned_to: number | null;
+            assignee_name?: string;
+            /** @description The note of the task */
+            notes?: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            room_status: components["schemas"]["HousekeepingStatus"];
+            /** Format: date-time */
+            room_status_since: string;
+            dnd: boolean;
+            make_up_requested: boolean;
+            flag_note?: string;
+        };
+        HousekeepingWorkload: {
+            /**
+             * Format: int64
+             * @description Null for the tasks that are not assigned yet.
+             */
+            user_id: number | null;
+            name: string;
+            total: number;
+            pending: number;
+            in_progress: number;
+            done: number;
+            skipped: number;
+        };
+        HousekeepingTaskList: {
+            date: components["schemas"]["Date"];
+            data: components["schemas"]["HousekeepingTask"][];
+            workload: components["schemas"]["HousekeepingWorkload"][];
+        };
+        GenerateHousekeepingResult: {
+            date: components["schemas"]["Date"];
+            created: number;
+        };
+        CreateHousekeepingTaskRequest: {
+            /** Format: int64 */
+            room_id: number;
+            task_type: components["schemas"]["HousekeepingTaskType"];
+            priority?: components["schemas"]["HousekeepingPriority"];
+            /** Format: int64 */
+            assigned_to?: number | null;
+            notes?: string;
+        };
+        AssignHousekeepingRequest: {
+            task_ids: number[];
+            /**
+             * Format: int64
+             * @description Null takes the tasks back.
+             */
+            user_id?: number | null;
+        };
     };
     responses: {
         /** @description An error, described as RFC 9457 problem details. */
@@ -5957,6 +6247,9 @@ export interface operations {
             query?: {
                 status?: components["schemas"]["HousekeepingStatus"];
                 floor?: string;
+                occupancy?: components["schemas"]["Occupancy"];
+                /** @description Only rooms with a flag: high priority, do not disturb, a make-up request or a note. */
+                flagged?: boolean;
             };
             header?: never;
             path: {
@@ -9159,6 +9452,270 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    setRoomHousekeepingFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HousekeepingFlagsRequest"];
+            };
+        };
+        responses: {
+            /** @description The flags. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingFlags"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listHousekeepingStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The staff. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingStaffList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listHousekeepingTasks: {
+        parameters: {
+            query?: {
+                date?: components["schemas"]["Date"];
+                status?: components["schemas"]["HousekeepingTaskStatus"];
+                assigned_to?: number;
+                unassigned?: boolean;
+                floor?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTaskList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHousekeepingTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The task. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    generateHousekeepingTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many tasks this run added. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateHousekeepingResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    assignHousekeepingTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignHousekeepingRequest"];
+            };
+        };
+        responses: {
+            /** @description How many tasks were assigned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        assigned: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    completeHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    skipHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

@@ -590,3 +590,17 @@ Errors and conventions are as everywhere. Permissions: `company.manage`, `group.
 | `GET {P}/city-ledger/invoices/{id}/invoice.pdf` | `cityledger.read` | A voided invoice is stamped VOID |
 
 `CITY_LEDGER` appears as a payment method on payments (with `company_id`) but is refused by the payment, deposit and refund endpoints; a transfer is not refunded (409 `PAYMENT_NOT_REFUNDABLE`), and voiding one after receipts settled it is 409 `COMPANY_BALANCE_SETTLED`.
+
+## 18. Housekeeping, continued (after M15)
+Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.assign` (generate, assign, add a task, staff list), reads need access to the property.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `PUT {P}/rooms/{id}/housekeeping/flags` | `housekeeping.update` | `{priority, dnd, make_up_requested, note}` replaces the flags; does not change the status or its clock |
+| `GET {P}/housekeeping?occupancy&flagged` | access | The board now carries `priority`, `dnd`, `make_up_requested`, `flag_note` |
+| `GET {P}/housekeeping/staff` | `housekeeping.assign` | Who can be assigned |
+| `GET {P}/housekeeping/tasks?date&status&assigned_to&unassigned&floor` | access | `{date, data, workload}`; high priority first |
+| `POST {P}/housekeeping/tasks/generate` | `housekeeping.assign` | Adds the day's list; `{date, created}`; idempotent |
+| `POST {P}/housekeeping/tasks` | `housekeeping.assign` | A manual task for the current business date |
+| `POST {P}/housekeeping/tasks/assign` | `housekeeping.assign` | `{task_ids, user_id\|null}`; 409 `TASK_NOT_ASSIGNABLE` (`context.task_ids`), field error `ASSIGNEE_INVALID` |
+| `POST {P}/housekeeping/tasks/{id}/start`, `/complete`, `/skip` | `housekeeping.update` | 409 `TASK_NOT_PENDING`, `TASK_ALREADY_CLOSED`; skip needs `{reason}` |

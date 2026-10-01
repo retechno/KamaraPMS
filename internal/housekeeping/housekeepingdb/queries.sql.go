@@ -12,6 +12,99 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const assignHousekeepingTasks = `-- name: AssignHousekeepingTasks :many
+UPDATE housekeeping_tasks
+SET assigned_to = $1, assigned_at = CASE WHEN $1::bigint IS NULL THEN NULL ELSE $2::timestamptz END
+WHERE tenant_id = $3 AND property_id = $4 AND id = ANY($5::bigint[]) AND status IN ('PENDING', 'IN_PROGRESS')
+RETURNING id
+`
+
+type AssignHousekeepingTasksParams struct {
+	AssignedTo *int64
+	Now        time.Time
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+func (q *Queries) AssignHousekeepingTasks(ctx context.Context, arg AssignHousekeepingTasksParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, assignHousekeepingTasks,
+		arg.AssignedTo,
+		arg.Now,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const completeHousekeepingTask = `-- name: CompleteHousekeepingTask :one
+UPDATE housekeeping_tasks
+SET status = 'DONE', started_at = COALESCE(started_at, $1::timestamptz), completed_at = $1::timestamptz, completed_by = $2,
+    assigned_to = COALESCE(assigned_to, $2::bigint),
+    assigned_at = CASE WHEN assigned_to IS NULL AND $2::bigint IS NOT NULL THEN $1::timestamptz ELSE assigned_at END,
+    notes = COALESCE($3, notes)
+WHERE tenant_id = $4 AND property_id = $5 AND id = $6 AND status IN ('PENDING', 'IN_PROGRESS')
+RETURNING id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at
+`
+
+type CompleteHousekeepingTaskParams struct {
+	Now        time.Time
+	ActorID    *int64
+	Notes      *string
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) CompleteHousekeepingTask(ctx context.Context, arg CompleteHousekeepingTaskParams) (HousekeepingTask, error) {
+	row := q.db.QueryRow(ctx, completeHousekeepingTask,
+		arg.Now,
+		arg.ActorID,
+		arg.Notes,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i HousekeepingTask
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.TaskDate,
+		&i.TaskType,
+		&i.Status,
+		&i.Priority,
+		&i.Source,
+		&i.AssignedTo,
+		&i.AssignedAt,
+		&i.Notes,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CompletedBy,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createRoomHousekeeping = `-- name: CreateRoomHousekeeping :exec
 
 INSERT INTO room_housekeeping (tenant_id, property_id, room_id, status, updated_by)
@@ -36,6 +129,129 @@ func (q *Queries) CreateRoomHousekeeping(ctx context.Context, arg CreateRoomHous
 		arg.ActorID,
 	)
 	return err
+}
+
+const generateHousekeepingTasks = `-- name: GenerateHousekeepingTasks :execrows
+INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, created_by)
+SELECT $1, $2, c.room_id, $3::date, c.task_type,
+       CASE WHEN COALESCE(f.priority, 'NORMAL') = 'HIGH' OR EXISTS (
+                SELECT 1 FROM reservation_rooms a
+                WHERE a.property_id = $2 AND a.room_id = c.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $3::date)
+            THEN 'HIGH' ELSE 'NORMAL' END,
+       'AUTO', $4
+FROM (
+    SELECT sr.room_id, CASE WHEN s.departure_date <= $3::date THEN 'CHECKOUT' ELSE 'STAYOVER' END AS task_type
+    FROM stay_rooms sr
+    JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+    WHERE sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+    UNION ALL
+    SELECT h.room_id,
+           CASE WHEN EXISTS (
+                SELECT 1 FROM reservation_rooms a
+                WHERE a.property_id = $2 AND a.room_id = h.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $3::date)
+                THEN 'ARRIVAL' ELSE 'DIRTY' END
+    FROM room_housekeeping h
+    WHERE h.property_id = $2 AND h.status IN ('DIRTY', 'CLEANING')
+      AND NOT EXISTS (SELECT 1 FROM stay_rooms o JOIN stays os ON os.property_id = o.property_id AND os.id = o.stay_id
+                      WHERE o.property_id = $2 AND o.room_id = h.room_id AND o.check_out_at IS NULL AND os.status = 'OPEN')
+      AND NOT EXISTS (SELECT 1 FROM housekeeping_tasks t
+                      WHERE t.property_id = $2 AND t.room_id = h.room_id AND t.task_date = $3::date AND t.status <> 'SKIPPED')
+) c
+JOIN rooms ro ON ro.property_id = $2 AND ro.id = c.room_id AND ro.is_active
+LEFT JOIN room_hk_flags f ON f.property_id = $2 AND f.room_id = c.room_id
+WHERE ro.tenant_id = $1
+  AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                  WHERE b.property_id = $2 AND b.room_id = c.room_id AND b.status = 'ACTIVE'
+                    AND b.start_date <= $3::date AND $3::date < b.end_date)
+ON CONFLICT (property_id, room_id, task_date, task_type) WHERE source = 'AUTO' DO NOTHING
+`
+
+type GenerateHousekeepingTasksParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaskDate   civil.Date
+	ActorID    *int64
+}
+
+// The generated list for a business date: occupied rooms (CHECKOUT when the guest leaves today or is overdue,
+// STAYOVER otherwise), rooms a guest arrives into that are not ready, and other vacant rooms that are not clean. A room
+// that already has a task that day gets no second kind, and a room under a block gets none. Running it again only adds
+// what is new (the unique index on AUTO tasks is the backstop).
+func (q *Queries) GenerateHousekeepingTasks(ctx context.Context, arg GenerateHousekeepingTasksParams) (int64, error) {
+	result, err := q.db.Exec(ctx, generateHousekeepingTasks,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaskDate,
+		arg.ActorID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getHousekeepingTask = `-- name: GetHousekeepingTask :one
+SELECT id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at FROM housekeeping_tasks WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetHousekeepingTaskParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetHousekeepingTask(ctx context.Context, arg GetHousekeepingTaskParams) (HousekeepingTask, error) {
+	row := q.db.QueryRow(ctx, getHousekeepingTask, arg.TenantID, arg.PropertyID, arg.ID)
+	var i HousekeepingTask
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.TaskDate,
+		&i.TaskType,
+		&i.Status,
+		&i.Priority,
+		&i.Source,
+		&i.AssignedTo,
+		&i.AssignedAt,
+		&i.Notes,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CompletedBy,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRoomFlags = `-- name: GetRoomFlags :one
+SELECT id, tenant_id, property_id, room_id, priority, dnd, make_up_requested, note, updated_at, updated_by FROM room_hk_flags WHERE tenant_id = $1 AND property_id = $2 AND room_id = $3
+`
+
+type GetRoomFlagsParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoomID     int64
+}
+
+func (q *Queries) GetRoomFlags(ctx context.Context, arg GetRoomFlagsParams) (RoomHkFlag, error) {
+	row := q.db.QueryRow(ctx, getRoomFlags, arg.TenantID, arg.PropertyID, arg.RoomID)
+	var i RoomHkFlag
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.Priority,
+		&i.Dnd,
+		&i.MakeUpRequested,
+		&i.Note,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
 }
 
 const getRoomHousekeepingForUpdate = `-- name: GetRoomHousekeepingForUpdate :one
@@ -119,6 +335,63 @@ func (q *Queries) InsertHousekeepingLog(ctx context.Context, arg InsertHousekeep
 	return i, err
 }
 
+const insertManualTask = `-- name: InsertManualTask :one
+INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, assigned_to, assigned_at, notes, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL', $7,
+        CASE WHEN $7::bigint IS NULL THEN NULL ELSE $8::timestamptz END, $9, $10)
+RETURNING id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at
+`
+
+type InsertManualTaskParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoomID     int64
+	TaskDate   civil.Date
+	TaskType   string
+	Priority   string
+	AssignedTo *int64
+	Now        time.Time
+	Notes      *string
+	ActorID    *int64
+}
+
+func (q *Queries) InsertManualTask(ctx context.Context, arg InsertManualTaskParams) (HousekeepingTask, error) {
+	row := q.db.QueryRow(ctx, insertManualTask,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomID,
+		arg.TaskDate,
+		arg.TaskType,
+		arg.Priority,
+		arg.AssignedTo,
+		arg.Now,
+		arg.Notes,
+		arg.ActorID,
+	)
+	var i HousekeepingTask
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.TaskDate,
+		&i.TaskType,
+		&i.Status,
+		&i.Priority,
+		&i.Source,
+		&i.AssignedTo,
+		&i.AssignedAt,
+		&i.Notes,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CompletedBy,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listHousekeepingBoard = `-- name: ListHousekeepingBoard :many
 SELECT
     r.id AS room_id,
@@ -144,10 +417,15 @@ SELECT
         ELSE 'VACANT'
     END::text AS occupancy,
     b.block_type AS block_type,
-    b.end_date AS block_end_date
+    b.end_date AS block_end_date,
+    COALESCE(f.priority, 'NORMAL')::text AS priority,
+    COALESCE(f.dnd, false)::boolean AS dnd,
+    COALESCE(f.make_up_requested, false)::boolean AS make_up_requested,
+    f.note AS flag_note
 FROM rooms r
 JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id
 JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
+LEFT JOIN room_hk_flags f ON f.property_id = r.property_id AND f.room_id = r.id
 LEFT JOIN room_blocks b ON b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
     AND b.start_date <= $1::date AND $1::date < b.end_date
 WHERE r.tenant_id = $2 AND r.property_id = $3 AND r.is_active
@@ -179,6 +457,10 @@ type ListHousekeepingBoardRow struct {
 	Occupancy             string
 	BlockType             *string
 	BlockEndDate          *civil.Date
+	Priority              string
+	Dnd                   bool
+	MakeUpRequested       bool
+	FlagNote              *string
 }
 
 // The board: active rooms with their housekeeping status and derived occupancy for the business date.
@@ -213,6 +495,10 @@ func (q *Queries) ListHousekeepingBoard(ctx context.Context, arg ListHousekeepin
 			&i.Occupancy,
 			&i.BlockType,
 			&i.BlockEndDate,
+			&i.Priority,
+			&i.Dnd,
+			&i.MakeUpRequested,
+			&i.FlagNote,
 		); err != nil {
 			return nil, err
 		}
@@ -278,6 +564,156 @@ func (q *Queries) ListHousekeepingLogs(ctx context.Context, arg ListHousekeeping
 	return items, nil
 }
 
+const listHousekeepingStaff = `-- name: ListHousekeepingStaff :many
+SELECT u.id, u.full_name, u.email
+FROM users u
+WHERE u.tenant_id = $1 AND u.is_active
+  AND ($2::bigint IS NULL OR u.id = $2::bigint)
+  AND (u.is_tenant_admin OR EXISTS (
+        SELECT 1 FROM user_properties up
+        JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = 'housekeeping.update'
+        WHERE up.user_id = u.id AND up.property_id = $3))
+ORDER BY u.full_name, u.id
+`
+
+type ListHousekeepingStaffParams struct {
+	TenantID   int64
+	UserID     *int64
+	PropertyID int64
+}
+
+type ListHousekeepingStaffRow struct {
+	ID       int64
+	FullName string
+	Email    string
+}
+
+// Users who can be given cleaning work at a property: an active user with a role that holds housekeeping.update there,
+// or a tenant administrator. user_id narrows the list to one user (to check an assignee).
+func (q *Queries) ListHousekeepingStaff(ctx context.Context, arg ListHousekeepingStaffParams) ([]ListHousekeepingStaffRow, error) {
+	rows, err := q.db.Query(ctx, listHousekeepingStaff, arg.TenantID, arg.UserID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHousekeepingStaffRow{}
+	for rows.Next() {
+		var i ListHousekeepingStaffRow
+		if err := rows.Scan(&i.ID, &i.FullName, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHousekeepingTasks = `-- name: ListHousekeepingTasks :many
+SELECT t.id, t.room_id, r.room_number, r.floor, rt.code AS room_type_code, t.task_date, t.task_type, t.status, t.priority, t.source,
+       t.assigned_to, u.full_name AS assignee_name, t.notes, t.started_at, t.completed_at,
+       h.status AS room_status, h.updated_at AS room_status_since,
+       COALESCE(f.dnd, false)::boolean AS dnd, COALESCE(f.make_up_requested, false)::boolean AS make_up_requested, f.note AS flag_note
+FROM housekeeping_tasks t
+JOIN rooms r ON r.property_id = t.property_id AND r.id = t.room_id
+JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id
+JOIN room_housekeeping h ON h.property_id = t.property_id AND h.room_id = t.room_id
+LEFT JOIN room_hk_flags f ON f.property_id = t.property_id AND f.room_id = t.room_id
+LEFT JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.assigned_to
+WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.task_date = $3
+  AND ($4::text IS NULL OR t.status = $4::text)
+  AND ($5::bigint IS NULL OR t.assigned_to = $5::bigint)
+  AND (NOT $6::boolean OR t.assigned_to IS NULL)
+  AND ($7::text IS NULL OR r.floor = $7::text)
+ORDER BY (t.priority = 'HIGH') DESC, r.floor NULLS LAST, r.room_number, t.id
+LIMIT $8
+`
+
+type ListHousekeepingTasksParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaskDate   civil.Date
+	Status     *string
+	AssignedTo *int64
+	Unassigned bool
+	Floor      *string
+	RowLimit   int32
+}
+
+type ListHousekeepingTasksRow struct {
+	ID              int64
+	RoomID          int64
+	RoomNumber      string
+	Floor           *string
+	RoomTypeCode    string
+	TaskDate        civil.Date
+	TaskType        string
+	Status          string
+	Priority        string
+	Source          string
+	AssignedTo      *int64
+	AssigneeName    *string
+	Notes           *string
+	StartedAt       *time.Time
+	CompletedAt     *time.Time
+	RoomStatus      string
+	RoomStatusSince time.Time
+	Dnd             bool
+	MakeUpRequested bool
+	FlagNote        *string
+}
+
+func (q *Queries) ListHousekeepingTasks(ctx context.Context, arg ListHousekeepingTasksParams) ([]ListHousekeepingTasksRow, error) {
+	rows, err := q.db.Query(ctx, listHousekeepingTasks,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaskDate,
+		arg.Status,
+		arg.AssignedTo,
+		arg.Unassigned,
+		arg.Floor,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHousekeepingTasksRow{}
+	for rows.Next() {
+		var i ListHousekeepingTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.RoomNumber,
+			&i.Floor,
+			&i.RoomTypeCode,
+			&i.TaskDate,
+			&i.TaskType,
+			&i.Status,
+			&i.Priority,
+			&i.Source,
+			&i.AssignedTo,
+			&i.AssigneeName,
+			&i.Notes,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.RoomStatus,
+			&i.RoomStatusSince,
+			&i.Dnd,
+			&i.MakeUpRequested,
+			&i.FlagNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const roomExists = `-- name: RoomExists :one
 SELECT EXISTS (SELECT 1 FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3)
 `
@@ -325,6 +761,152 @@ func (q *Queries) SetRoomHousekeeping(ctx context.Context, arg SetRoomHousekeepi
 		&i.RoomID,
 		&i.Status,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const skipHousekeepingTask = `-- name: SkipHousekeepingTask :one
+UPDATE housekeeping_tasks
+SET status = 'SKIPPED', completed_at = $1::timestamptz, completed_by = $2, notes = $3,
+    assigned_to = COALESCE(assigned_to, $2::bigint),
+    assigned_at = CASE WHEN assigned_to IS NULL AND $2::bigint IS NOT NULL THEN $1::timestamptz ELSE assigned_at END
+WHERE tenant_id = $4 AND property_id = $5 AND id = $6 AND status IN ('PENDING', 'IN_PROGRESS')
+RETURNING id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at
+`
+
+type SkipHousekeepingTaskParams struct {
+	Now        time.Time
+	ActorID    *int64
+	Reason     *string
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SkipHousekeepingTask(ctx context.Context, arg SkipHousekeepingTaskParams) (HousekeepingTask, error) {
+	row := q.db.QueryRow(ctx, skipHousekeepingTask,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i HousekeepingTask
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.TaskDate,
+		&i.TaskType,
+		&i.Status,
+		&i.Priority,
+		&i.Source,
+		&i.AssignedTo,
+		&i.AssignedAt,
+		&i.Notes,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CompletedBy,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const startHousekeepingTask = `-- name: StartHousekeepingTask :one
+UPDATE housekeeping_tasks
+SET status = 'IN_PROGRESS', started_at = $1::timestamptz,
+    assigned_to = COALESCE(assigned_to, $2::bigint),
+    assigned_at = CASE WHEN assigned_to IS NULL AND $2::bigint IS NOT NULL THEN $1::timestamptz ELSE assigned_at END
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'PENDING'
+RETURNING id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at
+`
+
+type StartHousekeepingTaskParams struct {
+	Now        time.Time
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) StartHousekeepingTask(ctx context.Context, arg StartHousekeepingTaskParams) (HousekeepingTask, error) {
+	row := q.db.QueryRow(ctx, startHousekeepingTask,
+		arg.Now,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i HousekeepingTask
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.TaskDate,
+		&i.TaskType,
+		&i.Status,
+		&i.Priority,
+		&i.Source,
+		&i.AssignedTo,
+		&i.AssignedAt,
+		&i.Notes,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.CompletedBy,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertRoomFlags = `-- name: UpsertRoomFlags :one
+INSERT INTO room_hk_flags (tenant_id, property_id, room_id, priority, dnd, make_up_requested, note, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (room_id) DO UPDATE SET priority = EXCLUDED.priority, dnd = EXCLUDED.dnd, make_up_requested = EXCLUDED.make_up_requested,
+    note = EXCLUDED.note, updated_by = EXCLUDED.updated_by
+RETURNING id, tenant_id, property_id, room_id, priority, dnd, make_up_requested, note, updated_at, updated_by
+`
+
+type UpsertRoomFlagsParams struct {
+	TenantID        int64
+	PropertyID      int64
+	RoomID          int64
+	Priority        string
+	Dnd             bool
+	MakeUpRequested bool
+	Note            *string
+	ActorID         *int64
+}
+
+func (q *Queries) UpsertRoomFlags(ctx context.Context, arg UpsertRoomFlagsParams) (RoomHkFlag, error) {
+	row := q.db.QueryRow(ctx, upsertRoomFlags,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomID,
+		arg.Priority,
+		arg.Dnd,
+		arg.MakeUpRequested,
+		arg.Note,
+		arg.ActorID,
+	)
+	var i RoomHkFlag
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RoomID,
+		&i.Priority,
+		&i.Dnd,
+		&i.MakeUpRequested,
+		&i.Note,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 	)

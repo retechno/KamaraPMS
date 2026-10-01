@@ -209,8 +209,11 @@ func (s *Service) apply(ctx context.Context, c change) (State, error) {
 
 // BoardFilter narrows the housekeeping board.
 type BoardFilter struct {
-	Status *Status
-	Floor  *string
+	Status    *Status
+	Floor     *string
+	Occupancy *Occupancy
+	// Flagged keeps rooms that have a flag set (high priority, do not disturb, make-up request or a note).
+	Flagged bool
 }
 
 // Board lists the active rooms with housekeeping status and derived occupancy
@@ -225,6 +228,9 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 	}
 	if f.Status != nil && !f.Status.Valid() {
 		return nil, apperr.Invalid("the filter is invalid", apperr.FieldError{Field: "status", Code: "INVALID_VALUE"})
+	}
+	if f.Occupancy != nil && *f.Occupancy != Occupied && *f.Occupancy != Reserved && *f.Occupancy != Vacant {
+		return nil, apperr.Invalid("the filter is invalid", apperr.FieldError{Field: "occupancy", Code: "INVALID_VALUE", Message: "OCCUPIED, RESERVED or VACANT"})
 	}
 	day, err := s.days.CurrentBusinessDay(ctx, propertyID)
 	if err != nil {
@@ -241,18 +247,25 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 	if err != nil {
 		return nil, err
 	}
-	out := make([]BoardRoom, len(rows))
-	for i, r := range rows {
+	out := make([]BoardRoom, 0, len(rows))
+	for _, r := range rows {
 		b := BoardRoom{
 			RoomID: r.RoomID, RoomNumber: r.RoomNumber, Floor: deref(r.Floor), Building: deref(r.Building),
 			RoomTypeID: r.RoomTypeID, RoomTypeCode: r.RoomTypeCode, RoomTypeName: r.RoomTypeName,
 			Status: Status(r.HousekeepingStatus), StatusUpdatedAt: r.HousekeepingUpdatedAt,
 			Occupancy: Occupancy(r.Occupancy), AllowedNextState: NextStatuses(Status(r.HousekeepingStatus)),
+			Priority: r.Priority, DND: r.Dnd, MakeUpRequested: r.MakeUpRequested, FlagNote: deref(r.FlagNote),
 		}
 		if r.BlockType != nil && r.BlockEndDate != nil {
 			b.Block = &BoardBlock{Type: *r.BlockType, EndDate: *r.BlockEndDate}
 		}
-		out[i] = b
+		if f.Occupancy != nil && b.Occupancy != *f.Occupancy {
+			continue
+		}
+		if f.Flagged && b.Priority != PriorityHigh && !b.DND && !b.MakeUpRequested && b.FlagNote == "" {
+			continue
+		}
+		out = append(out, b)
 	}
 	return out, nil
 }

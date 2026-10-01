@@ -35,6 +35,7 @@ export const navigation: NavSection[] = [
     items: [
       { label: 'Room status', to: '/room-status', milestone: 'M10' },
       { label: 'Housekeeping', to: '/housekeeping', milestone: 'M3' },
+      { label: 'Cleaning list', to: '/housekeeping/tasks', milestone: 'S2' },
       { label: 'Room blocks', to: '/room-blocks', milestone: 'M3' },
     ],
   },

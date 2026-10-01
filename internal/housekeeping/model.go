@@ -114,4 +114,9 @@ type BoardRoom struct {
 	Occupancy        Occupancy   `json:"occupancy"`
 	Block            *BoardBlock `json:"block,omitempty"`
 	AllowedNextState []Status    `json:"allowed_next"`
+	// Flags (see SetFlags).
+	Priority        string `json:"priority"`
+	DND             bool   `json:"dnd"`
+	MakeUpRequested bool   `json:"make_up_requested"`
+	FlagNote        string `json:"flag_note,omitempty"`
 }

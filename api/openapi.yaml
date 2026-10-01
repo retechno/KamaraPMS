@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.21.0
+  version: 0.22.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -665,6 +665,8 @@ paths:
       parameters:
         - { name: status, in: query, schema: { $ref: "#/components/schemas/HousekeepingStatus" } }
         - { name: floor, in: query, schema: { type: string } }
+        - { name: occupancy, in: query, schema: { $ref: "#/components/schemas/Occupancy" } }
+        - { name: flagged, in: query, description: "Only rooms with a flag: high priority, do not disturb, a make-up request or a note.", schema: { type: boolean } }
       responses:
         "200":
           description: Active rooms ordered by floor and number. `next_cursor` is never set.
@@ -3044,6 +3046,210 @@ paths:
               schema: { type: string, format: binary }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setRoomHousekeepingFlags
+      summary: Replace a room's housekeeping flags (housekeeping.update)
+      description: "Priority (HIGH rooms come first on the cleaning list), do not disturb, a make-up request and a note. A flag change is not a status change: the time the room has been in its status does not restart."
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HousekeepingFlagsRequest" }
+      responses:
+        "200":
+          description: The flags.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingFlags" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/staff:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listHousekeepingStaff
+      summary: Who can be given cleaning work (housekeeping.assign)
+      description: Active users whose role holds housekeeping.update at the property, and tenant administrators. Not paginated.
+      tags: [housekeeping]
+      responses:
+        "200":
+          description: The staff.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingStaffList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listHousekeepingTasks
+      summary: The cleaning list of a business date with the workload per person
+      description: "Ordered with high priority first, then by floor and room. `date` defaults to the current business date. Not paginated. The workload has one line per housekeeper and one for tasks not assigned yet (`user_id` null)."
+      tags: [housekeeping]
+      parameters:
+        - { name: date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/HousekeepingTaskStatus" } }
+        - { name: assigned_to, in: query, schema: { type: integer, format: int64 } }
+        - { name: unassigned, in: query, schema: { type: boolean } }
+        - { name: floor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingTaskList" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createHousekeepingTask
+      summary: Add a task by hand for the current business date (housekeeping.assign)
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateHousekeepingTaskRequest" }
+      responses:
+        "201":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingTask" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks/generate:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: generateHousekeepingTasks
+      summary: Generate the cleaning list of the current business date (housekeeping.assign)
+      description: |
+        Occupied rooms get a CHECKOUT task (the guest leaves today or is overdue) or a STAYOVER task; a vacant room that
+        is not clean gets an ARRIVAL task when a guest is assigned to it today, otherwise a DIRTY task. Arrivals and rooms
+        flagged HIGH get high priority. A room that already has a task that day gets no second kind, and a room under a
+        block gets none. Running it again only adds what is new, so it can be run through the day, also by two people at once.
+      tags: [housekeeping]
+      responses:
+        "200":
+          description: How many tasks this run added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerateHousekeepingResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks/assign:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: assignHousekeepingTasks
+      summary: Give tasks to a housekeeper, or take them back with a null user (housekeeping.assign)
+      description: Only open tasks can be assigned; if any is not (or does not exist) nothing changes (409 `TASK_NOT_ASSIGNABLE`, `context.task_ids`). The assignee must be staff (422 `ASSIGNEE_INVALID`).
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignHousekeepingRequest" }
+      responses:
+        "200":
+          description: How many tasks were assigned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assigned]
+                properties:
+                  assigned: { type: integer }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/start:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: startHousekeepingTask
+      summary: Start a pending task (housekeeping.update)
+      description: An unassigned task goes to the person who starts it and a DIRTY room becomes CLEANING. 409 `TASK_NOT_PENDING` otherwise.
+      tags: [housekeeping]
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingTask" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: completeHousekeepingTask
+      summary: Finish a task (housekeeping.update)
+      description: A DIRTY or CLEANING room becomes CLEAN; a room that is already CLEAN or INSPECTED keeps its status. Finishing a task never inspects the room. 409 `TASK_ALREADY_CLOSED` when it is already finished (also when two people finish it at once).
+      tags: [housekeeping]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingTask" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/skip:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: skipHousekeepingTask
+      summary: Close a task without cleaning (housekeeping.update)
+      description: A reason is required (for example that the guest asked not to be disturbed). The room's status does not change.
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingTask" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -3500,7 +3706,7 @@ components:
       description: Derived from stays and reservations; never stored.
     HousekeepingBoardRoom:
       type: object
-      required: [room_id, room_number, room_type_id, room_type_code, room_type_name, status, status_updated_at, occupancy, allowed_next]
+      required: [room_id, room_number, room_type_id, room_type_code, room_type_name, status, status_updated_at, occupancy, allowed_next, priority, dnd, make_up_requested]
       properties:
         room_id: { type: integer, format: int64 }
         room_number: { type: string }
@@ -3523,6 +3729,13 @@ components:
           type: array
           description: Statuses reachable from the current one (INSPECTED additionally needs housekeeping.inspect).
           items: { $ref: "#/components/schemas/HousekeepingStatus" }
+        priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+        dnd: { type: boolean, description: Do not disturb. }
+        make_up_requested: { type: boolean, description: The guest asked for the room to be made up. }
+        flag_note: { type: string }
+    HousekeepingPriority:
+      type: string
+      enum: [NORMAL, HIGH]
     HousekeepingBoard:
       type: object
       required: [data]
@@ -5748,3 +5961,114 @@ components:
           maxItems: 200
           items: { type: integer, format: int64 }
         notes: { type: string, maxLength: 500 }
+    HousekeepingFlags:
+      type: object
+      required: [room_id, priority, dnd, make_up_requested, updated_at]
+      properties:
+        room_id: { type: integer, format: int64 }
+        priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+        dnd: { type: boolean }
+        make_up_requested: { type: boolean }
+        note: { type: string }
+        updated_at: { type: string, format: date-time }
+    HousekeepingFlagsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+        dnd: { type: boolean }
+        make_up_requested: { type: boolean }
+        note: { type: string, maxLength: 500 }
+    HousekeepingStaffMember:
+      type: object
+      required: [id, full_name, email]
+      properties:
+        id: { type: integer, format: int64 }
+        full_name: { type: string }
+        email: { type: string }
+    HousekeepingStaffList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/HousekeepingStaffMember" }
+    HousekeepingTaskStatus:
+      type: string
+      enum: [PENDING, IN_PROGRESS, DONE, SKIPPED]
+    HousekeepingTaskType:
+      type: string
+      enum: [CHECKOUT, STAYOVER, ARRIVAL, DIRTY, DEEP, OTHER]
+    HousekeepingTask:
+      type: object
+      required: [id, room_id, room_number, room_type_code, task_date, task_type, status, priority, source, assigned_to, started_at, completed_at, room_status, room_status_since, dnd, make_up_requested]
+      properties:
+        id: { type: integer, format: int64 }
+        room_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        floor: { type: string }
+        room_type_code: { type: string }
+        task_date: { $ref: "#/components/schemas/Date" }
+        task_type: { $ref: "#/components/schemas/HousekeepingTaskType" }
+        status: { $ref: "#/components/schemas/HousekeepingTaskStatus" }
+        priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+        source: { type: string, enum: [AUTO, MANUAL] }
+        assigned_to: { type: [integer, "null"], format: int64 }
+        assignee_name: { type: string }
+        notes: { type: string, description: The note of the task, or why it was skipped. }
+        started_at: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        room_status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        room_status_since: { type: string, format: date-time }
+        dnd: { type: boolean }
+        make_up_requested: { type: boolean }
+        flag_note: { type: string }
+    HousekeepingWorkload:
+      type: object
+      required: [user_id, name, total, pending, in_progress, done, skipped]
+      properties:
+        user_id: { type: [integer, "null"], format: int64, description: Null for the tasks that are not assigned yet. }
+        name: { type: string }
+        total: { type: integer }
+        pending: { type: integer }
+        in_progress: { type: integer }
+        done: { type: integer }
+        skipped: { type: integer }
+    HousekeepingTaskList:
+      type: object
+      required: [date, data, workload]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/HousekeepingTask" }
+        workload:
+          type: array
+          items: { $ref: "#/components/schemas/HousekeepingWorkload" }
+    GenerateHousekeepingResult:
+      type: object
+      required: [date, created]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        created: { type: integer }
+    CreateHousekeepingTaskRequest:
+      type: object
+      required: [room_id, task_type]
+      additionalProperties: false
+      properties:
+        room_id: { type: integer, format: int64 }
+        task_type: { $ref: "#/components/schemas/HousekeepingTaskType" }
+        priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+        assigned_to: { type: [integer, "null"], format: int64 }
+        notes: { type: string, maxLength: 500 }
+    AssignHousekeepingRequest:
+      type: object
+      required: [task_ids]
+      additionalProperties: false
+      properties:
+        task_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: integer, format: int64 }
+        user_id: { type: [integer, "null"], format: int64, description: Null takes the tasks back. }

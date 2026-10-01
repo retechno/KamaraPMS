@@ -22,6 +22,12 @@ export const router = createRouter({
       meta: { title: 'Housekeeping' },
     },
     {
+      path: '/housekeeping/tasks',
+      name: 'housekeeping-tasks',
+      component: () => import('@/views/rooms/HousekeepingTasksView.vue'),
+      meta: { title: 'Cleaning list' },
+    },
+    {
       path: '/room-blocks',
       name: 'room-blocks',
       component: () => import('@/views/rooms/RoomBlocksView.vue'),

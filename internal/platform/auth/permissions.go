@@ -20,6 +20,7 @@ const (
 	PermRoomBlockManage     Permission = "room_block.manage"
 	PermHousekeepingUpdate  Permission = "housekeeping.update"
 	PermHousekeepingInspect Permission = "housekeeping.inspect"
+	PermHousekeepingAssign  Permission = "housekeeping.assign"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -80,6 +81,7 @@ var Catalogue = []PermissionInfo{
 	{PermRoomBlockManage, "Rooms", "Create and release OOO/OOS blocks", "M3"},
 	{PermHousekeepingUpdate, "Rooms", "Change housekeeping status", "M3"},
 	{PermHousekeepingInspect, "Rooms", "Mark rooms INSPECTED (supervisor)", "M3"},
+	{PermHousekeepingAssign, "Rooms", "Generate the daily cleaning list and assign it to housekeepers", "S2"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},
 	{PermGuestWrite, "Guests", "Create and edit guest profiles", "M4"},
