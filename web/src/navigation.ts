@@ -51,6 +51,13 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Accounting',
+    items: [
+      { label: 'Chart of accounts', to: '/accounting/accounts', milestone: 'S3' },
+      { label: 'System accounts', to: '/accounting/mapping', milestone: 'S3' },
+    ],
+  },
+  {
     title: 'End of day',
     items: [
       { label: 'Night audit', to: '/night-audit', milestone: 'M13' },

@@ -25,6 +25,10 @@ const (
 	PermMaintenanceManage   Permission = "maintenance.manage"
 	PermLostFoundReport     Permission = "lostfound.report"
 	PermLostFoundManage     Permission = "lostfound.manage"
+	PermAccountingView      Permission = "accounting.view"
+	PermAccountingManage    Permission = "accounting.manage"
+	PermAccountingPost      Permission = "accounting.post"
+	PermAccountingClose     Permission = "accounting.close"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -90,6 +94,10 @@ var Catalogue = []PermissionInfo{
 	{PermMaintenanceManage, "Rooms", "Assign, work on, resolve and cancel maintenance requests, and take the room out of sale", "S2"},
 	{PermLostFoundReport, "Rooms", "Record items found and see the lost and found list", "S2"},
 	{PermLostFoundManage, "Rooms", "Edit items, hand them back to their owners and dispose of them", "S2"},
+	{PermAccountingView, "Accounting", "View the chart of accounts, journals, ledgers and financial statements", "S3"},
+	{PermAccountingManage, "Accounting", "Edit the chart of accounts and the accounts the system posts to", "S3"},
+	{PermAccountingPost, "Accounting", "Post manual journals and reverse journals (a reversal needs an approval)", "S3"},
+	{PermAccountingClose, "Accounting", "Close and reopen accounting periods and post missing day-close journals", "S3"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},
 	{PermGuestWrite, "Guests", "Create and edit guest profiles", "M4"},

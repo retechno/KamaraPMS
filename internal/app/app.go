@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
@@ -75,6 +76,8 @@ func New(d Deps) *App {
 	hkSvc := housekeeping.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	billingSvc := billingconfig.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
+	accountingSvc := accounting.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	tenancySvc.OnPropertyCreated(accountingSvc.SeedProperty) // the standard chart of accounts, after the charge codes it maps
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	availSvc := availability.NewService(d.TxManager)
@@ -118,6 +121,7 @@ func New(d Deps) *App {
 	cityledger.NewHandler(cityLedgerSvc).Register(api)
 	groups.NewHandler(groupsSvc).Register(api)
 	maintenance.NewHandler(maintenanceSvc).Register(api)
+	accounting.NewHandler(accountingSvc).Register(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/billingconfig"
@@ -72,6 +73,7 @@ type Env struct {
 	CityLedger  *cityledger.Service
 	Groups      *groups.Service
 	Maintenance *maintenance.Service
+	Accounting  *accounting.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -91,6 +93,8 @@ func Setup(t *testing.T) *Env {
 	avail := availability.NewService(txm)
 	billing := billingconfig.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
+	acct := accounting.NewService(txm, c, aw, authz, ten)
+	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
 	rt := rates.NewService(txm, c, aw, authz, ten)
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
@@ -105,7 +109,7 @@ func Setup(t *testing.T) *Env {
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
 	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
-		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten)}
+		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

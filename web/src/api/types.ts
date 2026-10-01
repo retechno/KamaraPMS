@@ -147,3 +147,8 @@ export type MaintenanceBlock = Schemas['MaintenanceBlock']
 
 export type LostFoundItem = Schemas['LostFoundItem']
 export type LostFoundOwner = Schemas['LostFoundOwner']
+
+export type GlAccount = Schemas['GlAccount']
+export type GlAccountMapEntry = Schemas['GlAccountMapEntry']
+export type GlCodeReport = Schemas['GlCodeReport']
+export type GlCodeIssue = Schemas['GlCodeIssue']

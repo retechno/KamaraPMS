@@ -3151,6 +3151,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chart of accounts, by code (accounting.view)
+         * @description Not paginated (a chart is a few hundred rows). With `format=csv` the whole chart is exported in the layout the import reads: code, name, type, parent_code, postable, group, active, description.
+         */
+        get: operations["listGlAccounts"];
+        put?: never;
+        /**
+         * Add an account (accounting.manage)
+         * @description The code is upper-cased and unique per property (409 `CODE_TAKEN`). A postable account needs a statement group of its type; the parent must be a header account of the same type. The code, type and normal side never change afterwards.
+         */
+        post: operations["createGlAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add and update accounts from CSV (accounting.manage)
+         * @description A row whose code exists updates that account (its type cannot change); other rows create one. The parent codes may appear anywhere in the file. Everything is checked and applied in one transaction: a file with a mistake changes nothing (422 with one field error per row, `rows[N].field`; 409 `ACCOUNT_IN_USE` when it would switch off an account the system posts to). `dry_run` checks and applies it without keeping it.
+         */
+        post: operations["importGlAccounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One account (accounting.view) */
+        get: operations["getGlAccount"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an account nobody uses (accounting.manage)
+         * @description 409 `ACCOUNT_IN_USE` while it has accounts under it, is used by the system, a charge code, a tax or a service charge, or has journal lines.
+         */
+        delete: operations["deleteGlAccount"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an account (accounting.manage)
+         * @description The name, parent, group, description and the postable and active flags. An account the system posts to cannot be deactivated or turned into a header (409 `ACCOUNT_IN_USE`); an account with accounts under it cannot take postings (409 `ACCOUNT_HAS_CHILDREN`). `parent_id` below 1 removes the parent.
+         */
+        patch: operations["updateGlAccount"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/account-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The accounts the system posts to (accounting.view)
+         * @description Ten keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT (what a payment method is received into), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
+         */
+        get: operations["getGlAccountMap"];
+        /**
+         * Point system keys at accounts (accounting.manage)
+         * @description Each account must be active, take postings and be of the right type (cash and receivables are assets, deposits and payables liabilities; suspense may be anything). All or nothing.
+         */
+        put: operations["setGlAccountMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/unmapped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Charge codes, taxes and service charges whose account code the journals cannot use (accounting.view)
+         * @description No code, a code that is not in the chart, an inactive account, a header account, or an account of a type that does not fit. Their amounts are posted to the fallback account of the kind (`posted_to`): tax to TAX_PAYABLE, service charge to SERVICE_PAYABLE, everything else to SUSPENSE. Only active items are checked.
+         */
+        get: operations["listUnmappedGlCodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5856,6 +5980,114 @@ export interface components {
                 high_priority: number;
                 oldest_hours: number;
             };
+        };
+        /** @enum {string} */
+        GlAccountType: "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
+        GlAccount: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            /**
+             * @description The side the account normally carries; a contra account (accumulated depreciation
+             * @enum {string}
+             */
+            normal_side: "DEBIT" | "CREDIT";
+            /** Format: int64 */
+            parent_id: number | null;
+            parent_code?: string;
+            /** @description A header account only groups. */
+            is_postable: boolean;
+            is_active: boolean;
+            /** @description What the balance sheet and the income statement add up (USALI sections such as REV_ROOMS */
+            statement_group?: string;
+            description?: string;
+            /** @description Something refers to the account: children, the system map, a charge code, tax or service charge. */
+            in_use: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GlAccountList: {
+            data: components["schemas"]["GlAccount"][];
+        };
+        CreateGlAccount: {
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            /**
+             * @description Defaults to the side of the type.
+             * @enum {string}
+             */
+            normal_side?: "DEBIT" | "CREDIT";
+            /** Format: int64 */
+            parent_id?: number | null;
+            /** @default true */
+            is_postable: boolean;
+            /** @default true */
+            is_active: boolean;
+            statement_group?: string;
+            description?: string;
+        };
+        PatchGlAccount: {
+            name?: string;
+            /**
+             * Format: int64
+             * @description Below 1 removes the parent.
+             */
+            parent_id?: number;
+            is_postable?: boolean;
+            is_active?: boolean;
+            statement_group?: string;
+            description?: string;
+        };
+        ImportGlAccounts: {
+            /** @description CSV text with a header row; needs the columns code, name and type, and may have parent_code, postable, group, active and description in any order. */
+            csv: string;
+            /** @default false */
+            dry_run: boolean;
+        };
+        ImportGlAccountsResult: {
+            dry_run: boolean;
+            created: number;
+            updated: number;
+        };
+        GlAccountMapEntry: {
+            /** @enum {string} */
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE";
+            meaning: string;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            account_type: components["schemas"]["GlAccountType"];
+        };
+        GlAccountMapList: {
+            data: components["schemas"]["GlAccountMapEntry"][];
+        };
+        SetGlAccountMap: {
+            entries: {
+                map_key: string;
+                /** Format: int64 */
+                account_id: number;
+            }[];
+        };
+        GlCodeIssue: {
+            /** @enum {string} */
+            kind: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE";
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            gl_account_code?: string;
+            /** @enum {string} */
+            problem: "NO_CODE" | "UNKNOWN_ACCOUNT" | "INACTIVE_ACCOUNT" | "HEADER_ACCOUNT" | "WRONG_TYPE";
+            /** @description The fallback account its amounts go to. */
+            posted_to: string;
+        };
+        GlCodeReport: {
+            checked: number;
+            issues: components["schemas"]["GlCodeIssue"][];
         };
     };
     responses: {
@@ -10951,6 +11183,257 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listGlAccounts: {
+        parameters: {
+            query?: {
+                account_type?: components["schemas"]["GlAccountType"];
+                statement_group?: string;
+                active?: boolean;
+                postable?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGlAccount"];
+            };
+        };
+        responses: {
+            /** @description The account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importGlAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportGlAccounts"];
+            };
+        };
+        responses: {
+            /** @description What the import did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportGlAccountsResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGlAccount"];
+            };
+        };
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGlAccountMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The keys with their accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountMapList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setGlAccountMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetGlAccountMap"];
+            };
+        };
+        responses: {
+            /** @description The keys with their accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountMapList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listUnmappedGlCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlCodeReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

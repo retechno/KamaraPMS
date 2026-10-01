@@ -612,3 +612,15 @@ Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.a
 | `GET {P}/lost-found/{id}/possible-owners` | `lostfound.report` + `reservation.read` | Guests of the room around the day it was found |
 | `POST {P}/lost-found/{id}/return`, `/dispose` | `lostfound.manage` | Final; 409 `ITEM_NOT_STORED`; return needs `claimant_name`, dispose needs `reason` |
 | `GET {P}/reports/housekeeping-productivity`, `/housekeeping-dirty-rooms`, `/maintenance` | `report.view` | JSON or `?format=csv`; the first and the last take `from` and `to`, the second `min_hours` |
+
+## 19. Accounting (after M15)
+Permissions: `accounting.view` (read), `accounting.manage` (chart and system accounts), `accounting.post` (manual journals), `accounting.close` (periods).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/accounts` | `accounting.view` | Filters `account_type`, `statement_group`, `active`, `postable`, `q`; `format=csv` exports the chart |
+| `POST {P}/accounting/accounts` | `accounting.manage` | 409 `CODE_TAKEN`; field errors for the group, parent and code |
+| `GET/PATCH/DELETE {P}/accounting/accounts/{id}` | read: `accounting.view`; write: `accounting.manage` | 409 `ACCOUNT_IN_USE`, `ACCOUNT_HAS_CHILDREN` |
+| `POST {P}/accounting/accounts/import` | `accounting.manage` | `{csv, dry_run}`; all or nothing; row errors as `rows[N].field` |
+| `GET/PUT {P}/accounting/account-map` | read: `accounting.view`; write: `accounting.manage` | The ten system keys; PUT `{entries: [{map_key, account_id}]}` is all or nothing |
+| `GET {P}/accounting/unmapped` | `accounting.view` | Charge codes, taxes and service charges whose account code the journals cannot use, and where they are posted instead |

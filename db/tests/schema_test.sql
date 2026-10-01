@@ -1023,6 +1023,52 @@ SELECT expect_ok('an item is handed back',
        VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
     $q$UPDATE lost_found_items SET status = 'RETURNED', closed_at = now(), closed_on = '2026-10-01', claimant_name = 'Siti'$q$);
 
+-- Chart of accounts and the system account map
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('ABC'), pr('BALI'), '1110', 'Cash', 'ASSET', 'DEBIT', 'CASH');
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), pr('SG'), '1110', 'Cash SG', 'ASSET', 'DEBIT', 'CASH');
+SELECT expect_ok('the same code in another property',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('XYZ'), pr('SG'), '4110', 'x', 'REVENUE', 'CREDIT', 'REV_ROOMS')$q$);
+SELECT expect_error('an account code is unique per property', '23505',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), '1110', 'x', 'ASSET', 'DEBIT', 'CASH')$q$);
+SELECT expect_error('a code of the right form', '23514',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), 'bad code', 'x', 'ASSET', 'DEBIT', 'CASH')$q$);
+SELECT expect_error('a known type', '23514',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), '1111', 'x', 'MAGIC', 'DEBIT', 'CASH')$q$);
+SELECT expect_error('a known side', '23514',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), '1111', 'x', 'ASSET', 'UP', 'CASH')$q$);
+SELECT expect_error('a known statement group', '23514',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), '1111', 'x', 'ASSET', 'DEBIT', 'NOPE')$q$);
+SELECT expect_error('an account belongs to a property of its own tenant', '23503',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('XYZ'), pr('BALI'), '1111', 'x', 'ASSET', 'DEBIT', 'CASH')$q$);
+SELECT expect_error('an account is not its own parent', '23514',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+       VALUES (tn('ABC'), pr('BALI'), '1112', 'x', 'ASSET', 'DEBIT', 'CASH')$q$,
+    $q$UPDATE gl_accounts SET parent_id = id WHERE code = '1112'$q$);
+SELECT expect_error('a parent of another property', '23503',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group, parent_id)
+       VALUES (tn('ABC'), pr('BALI'), '1113', 'x', 'ASSET', 'DEBIT', 'CASH', (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1110'))$q$);
+INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'CASH', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'));
+SELECT expect_error('a known system key', '23514',
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'PETTY', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_error('a system key is mapped once', '23505',
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'CASH', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_error('the map names an account of its property', '23503',
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'CARD', (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1110'))$q$);
+SELECT expect_error('an account in the map cannot be deleted', '23503',
+    $q$DELETE FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'$q$);
+INSERT INTO accounting_settings (tenant_id, property_id, start_date) VALUES (tn('ABC'), pr('BALI'), '2026-10-01');
+SELECT expect_error('one settings row per property', '23505',
+    $q$INSERT INTO accounting_settings (tenant_id, property_id, start_date) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$);
+SELECT expect_error('a fiscal year starts in a month of the year', '23514',
+    $q$UPDATE accounting_settings SET fiscal_year_start_month = 13$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

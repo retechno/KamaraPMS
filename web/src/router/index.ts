@@ -39,6 +39,8 @@ export const router = createRouter({
       component: () => import('@/views/rooms/LostFoundView.vue'),
       meta: { title: 'Lost and found' },
     },
+    { path: '/accounting/accounts', name: 'accounting-accounts', component: () => import('@/views/accounting/ChartOfAccountsView.vue'), meta: { title: 'Chart of accounts' } },
+    { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
     {
       path: '/room-blocks',
       name: 'room-blocks',

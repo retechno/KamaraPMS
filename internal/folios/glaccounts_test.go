@@ -42,10 +42,10 @@ func accounts(it folios.Item) (revenue string, service string, tax string) {
 
 func TestPostedItemsCarryTheAccountCodesInForceWhenPosted(t *testing.T) {
 	f := setup(t)
-	// unmapped: nothing to carry
+	// the minibar carries the revenue account of the standard chart; no tax or service charge account is set yet
 	before := f.charge(t, "c0").Item
-	if r, s, x := accounts(before); r != "<nil>" || s != "<nil>" || x != "<nil>" {
-		t.Fatalf("unmapped: %s %s %s", r, s, x)
+	if r, s, x := accounts(before); r != "4230" || s != "<nil>" || x != "<nil>" {
+		t.Fatalf("standard chart: %s %s %s", r, s, x)
 	}
 	f.mapAccounts(t, "4-1300", "2-2100", "2.1.05")
 	mapped := f.charge(t, "c1").Item
@@ -69,11 +69,11 @@ func TestPostedItemsCarryTheAccountCodesInForceWhenPosted(t *testing.T) {
 	if r, s, x := accounts(rev.Item); r != "4-1300" || s != "2-2100" || x != "2.1.05" {
 		t.Fatalf("reversal must mirror the original: %s %s %s", r, s, x)
 	}
-	// reversing the unmapped item after the mapping exists keeps it unmapped
+	// reversing the first item after the mapping changed keeps the codes it was posted with
 	rev0, err := f.Folios.Reverse(f.admin, f.propID, before.ID, folios.CorrectionInput{Reason: "twice", Approval: f.approval()})
 	must(t, err)
-	if r, s, x := accounts(rev0.Item); r != "<nil>" || s != "<nil>" || x != "<nil>" {
-		t.Fatalf("an unmapped item is reversed unmapped: %s %s %s", r, s, x)
+	if r, s, x := accounts(rev0.Item); r != "4230" || s != "<nil>" || x != "<nil>" {
+		t.Fatalf("a reversal keeps the codes of the original: %s %s %s", r, s, x)
 	}
 	// payments are not revenue
 	pay := f.payment(t, "p1", "1000")

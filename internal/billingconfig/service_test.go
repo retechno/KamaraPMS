@@ -591,8 +591,8 @@ func TestGLAccountCodesOnChargeCodesTaxesAndServiceCharges(t *testing.T) {
 		}
 	}
 	room := f.codeByName(t, "ROOM")
-	if room.GLAccountCode != nil {
-		t.Fatalf("seeded codes start unmapped: %v", room.GLAccountCode)
+	if val(room.GLAccountCode) != "4110" { // the standard chart of accounts maps the standard charge codes
+		t.Fatalf("seeded codes start mapped to the chart: %v", room.GLAccountCode)
 	}
 	// patch: set, keep (nil), clear (empty)
 	room, err = f.Billing.UpdateChargeCode(f.admin, f.bali, room.ID, billingconfig.ChargeCodePatch{GLAccountCode: str("4-1100")})
