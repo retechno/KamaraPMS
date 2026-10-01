@@ -41,10 +41,10 @@ async function loadRooms(): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/rooms', {
       params: { path: { propertyId }, query: { room_type_id: typeId.value, arrival: props.arrival.arrival_date, departure: props.arrival.departure_date } },
     })
-    const free = data?.data ?? []
+    const free = [...(data?.data ?? [])]
     // A room already assigned to this line is not "free" (the line holds it), so it is offered explicitly.
     if (props.arrival.room_id && typeId.value === props.arrival.room_type_id && !free.some((r) => r.room_id === props.arrival.room_id)) {
-      free.unshift({ room_id: props.arrival.room_id, room_number: props.arrival.room_number ?? String(props.arrival.room_id), housekeeping_status: 'DIRTY' })
+      free.unshift({ room_id: props.arrival.room_id, room_number: props.arrival.room_number ?? String(props.arrival.room_id), housekeeping_status: props.arrival.housekeeping_status ?? 'DIRTY' })
     }
     rooms.value = free
     if (!free.some((r) => r.room_id === roomId.value)) roomId.value = free[0]?.room_id ?? null

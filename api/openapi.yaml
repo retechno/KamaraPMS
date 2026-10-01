@@ -3961,6 +3961,7 @@ components:
         room_type_code: { type: string }
         room_id: { type: [integer, "null"], format: int64 }
         room_number: { type: string }
+        housekeeping_status: { type: string, description: The current housekeeping status of the assigned room (absent when no room is assigned). }
         arrival_date: { $ref: "#/components/schemas/Date" }
         departure_date: { $ref: "#/components/schemas/Date" }
         adult_count: { type: integer }

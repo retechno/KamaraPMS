@@ -3376,6 +3376,8 @@ export interface components {
             /** Format: int64 */
             room_id: number | null;
             room_number?: string;
+            /** @description The current housekeeping status of the assigned room (absent when no room is assigned). */
+            housekeeping_status?: string;
             arrival_date: components["schemas"]["Date"];
             departure_date: components["schemas"]["Date"];
             adult_count: number;

@@ -57,6 +57,16 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(empty.w.get('[data-testid=empty]').text()).toContain('No one')
   })
 
+  it('shows the real housekeeping status of a room already assigned to the reservation', async () => {
+    const assigned = arrival({ room_id: 30, room_number: '301', housekeeping_status: 'INSPECTED' })
+    const { w } = mountView(['reservation.read', 'frontdesk.checkin'], [assigned])
+    await flushPromises()
+    await w.get('[data-testid=open-4]').trigger('click')
+    await flushPromises()
+    expect(w.get('select[name=room]').findAll('option')[0]?.text()).toBe('301 · INSPECTED')
+    expect(w.find('[data-testid=not-ready]').exists()).toBe(false)
+  })
+
   it('needs read permission and hides check-in without frontdesk.checkin', async () => {
     const none = mountView(['guest.read'])
     await flushPromises()

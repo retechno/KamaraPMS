@@ -88,12 +88,13 @@ LIMIT @row_limit;
 -- CONFIRMED rooms arriving on a date (the arrivals list).
 -- name: ListArrivals :many
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
-       l.room_id, r.room_number, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
+       l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
 LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
+LEFT JOIN room_housekeeping hk ON hk.property_id = l.property_id AND hk.room_id = l.room_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.arrival_date = @arrival
 ORDER BY t.sort_order, l.id;

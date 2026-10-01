@@ -540,6 +540,26 @@ func TestReverseNeedsTheSameBusinessDay(t *testing.T) {
 	wantCode(t, err, "CHECK_IN_NOT_REVERSIBLE")
 }
 
+func TestArrivalsShowTheStatusOfTheAssignedRoom(t *testing.T) {
+	f := setup(t)
+	res := f.book(t, f.dlx, "2026-09-30", "2026-10-02")
+	_, err := f.Res.AssignRoom(f.admin, f.propID, res.ID, res.Rooms[0].ID, res.Version, f.r101.ID, false)
+	must(t, err)
+	must(t, f.Exec(t, `UPDATE room_housekeeping SET status = 'INSPECTED' WHERE room_id = $1`, f.r101.ID))
+	arr, err := f.Front.Arrivals(f.admin, f.propID, nil)
+	must(t, err)
+	if len(arr) != 1 || arr[0].RoomNumber != "101" || arr[0].HousekeepingStatus != "INSPECTED" {
+		t.Fatalf("arrivals: %+v", arr)
+	}
+	f.book(t, f.std, "2026-09-30", "2026-10-01")
+	arr, _ = f.Front.Arrivals(f.admin, f.propID, nil)
+	for _, a := range arr {
+		if a.RoomID == nil && a.HousekeepingStatus != "" {
+			t.Fatalf("no room, no status: %+v", a)
+		}
+	}
+}
+
 func TestStayReads(t *testing.T) {
 	f := setup(t)
 	a := f.book(t, f.dlx, "2026-09-30", "2026-10-02")

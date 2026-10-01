@@ -143,16 +143,18 @@ type StaySummary struct {
 
 // Arrival is a CONFIRMED room due on a date.
 type Arrival struct {
-	ReservationID      int64      `json:"reservation_id"`
-	ConfirmationNumber string     `json:"confirmation_number"`
-	ReservationRoomID  int64      `json:"reservation_room_id"`
-	ReservationVersion int32      `json:"reservation_version"`
-	GuestID            *int64     `json:"guest_id"`
-	GuestName          string     `json:"guest_name,omitempty"`
-	RoomTypeID         int64      `json:"room_type_id"`
-	RoomTypeCode       string     `json:"room_type_code"`
-	RoomID             *int64     `json:"room_id"`
-	RoomNumber         string     `json:"room_number,omitempty"`
+	ReservationID      int64  `json:"reservation_id"`
+	ConfirmationNumber string `json:"confirmation_number"`
+	ReservationRoomID  int64  `json:"reservation_room_id"`
+	ReservationVersion int32  `json:"reservation_version"`
+	GuestID            *int64 `json:"guest_id"`
+	GuestName          string `json:"guest_name,omitempty"`
+	RoomTypeID         int64  `json:"room_type_id"`
+	RoomTypeCode       string `json:"room_type_code"`
+	RoomID             *int64 `json:"room_id"`
+	RoomNumber         string `json:"room_number,omitempty"`
+	// HousekeepingStatus is the current status of the assigned room (empty when no room is assigned).
+	HousekeepingStatus string     `json:"housekeeping_status,omitempty"`
 	ArrivalDate        civil.Date `json:"arrival_date"`
 	DepartureDate      civil.Date `json:"departure_date"`
 	AdultCount         int        `json:"adult_count"`
