@@ -62,6 +62,10 @@ describe('GroupsView', () => {
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toMatchObject({ code: 'WED', name: 'Wedding', company_id: 1, arrival_date: '2026-10-01', departure_date: '2026-10-03', is_active: true })
     await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=group-form]').trigger('submit')
+    expect(w.find('[data-testid=dates-required]').exists()).toBe(true) // an empty date is never sent
+    expect(POST).toHaveBeenCalledTimes(1)
+    await w.get('input[name=departure_date]').setValue('2026-10-01')
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'the group is invalid', errors: [{ field: 'departure_date', code: 'INVALID_RANGE', message: 'after the arrival date' }] } as never))
     await w.get('[data-testid=group-form]').trigger('submit')
     await flushPromises()

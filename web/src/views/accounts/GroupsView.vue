@@ -18,6 +18,7 @@ const error = ref<ApiError | null>(null)
 const saving = ref(false)
 const creating = ref(false)
 const activeOnly = ref(true)
+const missingDates = ref(false)
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canManage = computed(() => auth.can('group.manage', property.currentId))
@@ -56,6 +57,7 @@ async function loadCompanies(): Promise<void> {
 function startNew(): void {
   Object.assign(form, blank())
   error.value = null
+  missingDates.value = false
   creating.value = true
   void loadCompanies()
 }
@@ -63,8 +65,14 @@ function startNew(): void {
 async function save(): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null) return
-  saving.value = true
   error.value = null
+  // An empty date cannot be sent (the server cannot read "" as a date): ask for it here.
+  if (!form.arrival_date || !form.departure_date) {
+    missingDates.value = true
+    return
+  }
+  missingDates.value = false
+  saving.value = true
   try {
     await api.POST('/api/v1/properties/{propertyId}/groups', {
       params: { path: { propertyId } },
@@ -148,6 +156,7 @@ watch(activeOnly, () => void load())
         <input v-model="form.notes" name="notes" />
       </label>
     </div>
+    <p v-if="missingDates" class="error-text" role="alert" data-testid="dates-required">Arrival and departure dates are required.</p>
     <div class="form-actions">
       <button type="button" @click="creating = false">Cancel</button>
       <button type="submit" class="btn-primary" :disabled="saving">Save</button>
