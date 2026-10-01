@@ -28,6 +28,18 @@ export const router = createRouter({
       meta: { title: 'Cleaning list' },
     },
     {
+      path: '/maintenance',
+      name: 'maintenance',
+      component: () => import('@/views/rooms/MaintenanceView.vue'),
+      meta: { title: 'Maintenance' },
+    },
+    {
+      path: '/lost-found',
+      name: 'lost-found',
+      component: () => import('@/views/rooms/LostFoundView.vue'),
+      meta: { title: 'Lost and found' },
+    },
+    {
       path: '/room-blocks',
       name: 'room-blocks',
       component: () => import('@/views/rooms/RoomBlocksView.vue'),

@@ -2762,6 +2762,395 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/maintenance-staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Who can take maintenance work (maintenance.manage)
+         * @description Active users whose role holds maintenance.report or maintenance.manage at the property, and tenant administrators. Not paginated.
+         */
+        get: operations["listMaintenanceStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List maintenance requests, newest first (maintenance.report) */
+        get: operations["listMaintenanceRequests"];
+        put?: never;
+        /**
+         * Report a problem (maintenance.report)
+         * @description Against a room (`room_id`) or a place (`location`, for example Lobby); at least one is required. The request starts OPEN with the number MNT….
+         */
+        post: operations["createMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One maintenance request (maintenance.report) */
+        get: operations["getMaintenanceRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the details of an open request (maintenance.manage)
+         * @description 409 `REQUEST_NOT_OPEN` once it is resolved or cancelled.
+         */
+        patch: operations["updateMaintenanceRequest"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give an open request to a technician, or take it back (maintenance.manage)
+         * @description A null user takes it back. The technician must be staff (field error `ASSIGNEE_INVALID`).
+         */
+        post: operations["assignMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start work on an OPEN request (maintenance.manage)
+         * @description An unassigned request goes to the person who starts it. 409 `REQUEST_NOT_OPEN` otherwise.
+         */
+        post: operations["startMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an open request as repaired (maintenance.manage)
+         * @description With `release_block` the room block taken for the request is cancelled too (needs room_block.manage). Two people closing a request at once: one wins, the other gets 409 `REQUEST_NOT_OPEN`.
+         */
+        post: operations["resolveMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an open request (maintenance.manage)
+         * @description A reason (`note`) is required; `release_block` works as for resolve.
+         */
+        post: operations["cancelMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a resolved request back to OPEN (maintenance.manage)
+         * @description For a repair that did not hold. 409 `REQUEST_NOT_RESOLVED` otherwise.
+         */
+        post: operations["reopenMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the request's room out of sale (maintenance.manage and room_block.manage)
+         * @description Creates an OOO or OOS room block from the start date (default today) to the end date (exclusive) with the request as its reason, and links it. 409 `REQUEST_HAS_NO_ROOM`, `REQUEST_ALREADY_BLOCKED` (one live block per request), and the usual `ROOM_BLOCK_CONFLICT` when a stay or reservation holds the room; a failed block changes nothing.
+         */
+        post: operations["blockRoomForMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List lost and found items, newest first (lostfound.report) */
+        get: operations["listLostFoundItems"];
+        put?: never;
+        /**
+         * Record an item that was found (lostfound.report)
+         * @description In a room (`room_id`) or at a place (`location`, for example Pool); at least one is required. Dated with the current business date and numbered LF….
+         */
+        post: operations["createLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One item (lostfound.report) */
+        get: operations["getLostFoundItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the details of a stored item (lostfound.manage)
+         * @description 409 `ITEM_NOT_STORED` once it has been handed back or disposed of.
+         */
+        patch: operations["updateLostFoundItem"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/possible-owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Guests who had the item's room around the day it was found (lostfound.report and reservation.read)
+         * @description A hint, not a match: the guests of stays whose room segment covered the day the item was found or ended in the three days before. Empty for an item found at a place. Not paginated.
+         */
+        get: operations["listLostFoundPossibleOwners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand a stored item back to its owner (lostfound.manage)
+         * @description Records who took it and what was checked; final. 409 `ITEM_NOT_STORED` when it was already closed (also when two desks close it at once).
+         */
+        post: operations["returnLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/dispose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a stored item that nobody claimed (lostfound.manage)
+         * @description A reason is required; final.
+         */
+        post: operations["disposeLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/housekeeping-productivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What each housekeeper did (report.view)
+         * @description Per person and business date: rooms taken to CLEAN and to INSPECTED by hand (from the status log, a room cleaned twice counts twice), tasks finished and skipped on the cleaning list, and the average minutes between starting and finishing the tasks that were started. `people` totals each person over the range.
+         */
+        get: operations["getHousekeepingProductivityReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/housekeeping-dirty-rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms that are not clean yet and for how long (report.view)
+         * @description Rooms that are DIRTY or CLEANING, longest first, with the derived occupancy, the priority and do-not-disturb flags and any active block. `min_hours` keeps the rooms that have been in this state at least that long. The age is measured in database time.
+         */
+        get: operations["getHousekeepingDirtyRoomsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Maintenance requests reported in a range, by category (report.view)
+         * @description How the requests of the range ended (resolved, cancelled, still open) and the average hours to resolve, per category and in total, plus the backlog of today (what is open now, how many are high priority, how old the oldest is).
+         */
+        get: operations["getMaintenanceReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5248,6 +5637,225 @@ export interface components {
              * @description Null takes the tasks back.
              */
             user_id?: number | null;
+        };
+        /** @enum {string} */
+        MaintenanceStatus: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+        /** @enum {string} */
+        MaintenanceCategory: "PLUMBING" | "ELECTRICAL" | "AC" | "FURNITURE" | "APPLIANCE" | "OTHER";
+        /** @enum {string} */
+        MaintenancePriority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+        MaintenanceBlock: {
+            /** Format: int64 */
+            id: number;
+            block_type: components["schemas"]["BlockType"];
+            start_date: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "ACTIVE" | "CANCELLED";
+        };
+        MaintenanceRequest: {
+            /** Format: int64 */
+            id: number;
+            request_number: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            location?: string;
+            category: components["schemas"]["MaintenanceCategory"];
+            description: string;
+            priority: components["schemas"]["MaintenancePriority"];
+            status: components["schemas"]["MaintenanceStatus"];
+            business_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            reported_by: number | null;
+            reporter_name?: string;
+            /** Format: date-time */
+            reported_at: string;
+            /** Format: int64 */
+            assigned_to: number | null;
+            assignee_name?: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** @description The repair note */
+            resolution_note?: string;
+            block: components["schemas"]["MaintenanceBlock"] | null;
+        };
+        MaintenanceRequestPage: {
+            data: components["schemas"]["MaintenanceRequest"][];
+            next_cursor?: string;
+        };
+        CreateMaintenanceRequest: {
+            /** Format: int64 */
+            room_id?: number | null;
+            location?: string;
+            category: components["schemas"]["MaintenanceCategory"];
+            description: string;
+            priority?: components["schemas"]["MaintenancePriority"];
+        };
+        PatchMaintenanceRequest: {
+            location?: string;
+            category?: components["schemas"]["MaintenanceCategory"];
+            description?: string;
+            priority?: components["schemas"]["MaintenancePriority"];
+        };
+        AssignMaintenanceRequest: {
+            /** Format: int64 */
+            user_id?: number | null;
+        };
+        CloseMaintenanceRequest: {
+            note?: string;
+            /** @default false */
+            release_block: boolean;
+        };
+        BlockMaintenanceRequest: {
+            block_type: components["schemas"]["BlockType"];
+            start_date?: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+        };
+        /** @enum {string} */
+        LostFoundStatus: "STORED" | "RETURNED" | "DISPOSED";
+        /** @enum {string} */
+        LostFoundCategory: "ELECTRONICS" | "CLOTHING" | "DOCUMENTS" | "JEWELRY" | "BAGS" | "OTHER";
+        LostFoundItem: {
+            /** Format: int64 */
+            id: number;
+            item_number: string;
+            description: string;
+            category: components["schemas"]["LostFoundCategory"];
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            location?: string;
+            found_on: components["schemas"]["Date"];
+            /** Format: date-time */
+            found_at: string;
+            /** Format: int64 */
+            found_by: number | null;
+            finder_name?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+            status: components["schemas"]["LostFoundStatus"];
+            closed_on: components["schemas"]["Date"] | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            closer_name?: string;
+            claimant_name?: string;
+            claimant_proof?: string;
+            /** @description The hand-over note */
+            close_note?: string;
+        };
+        LostFoundPage: {
+            data: components["schemas"]["LostFoundItem"][];
+            next_cursor?: string;
+        };
+        CreateLostFoundItem: {
+            description: string;
+            category: components["schemas"]["LostFoundCategory"];
+            /** Format: int64 */
+            room_id?: number | null;
+            location?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+        };
+        PatchLostFoundItem: {
+            description?: string;
+            category?: components["schemas"]["LostFoundCategory"];
+            location?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+        };
+        ReturnLostFoundItem: {
+            claimant_name: string;
+            /** @description What was checked: an ID card, a booking number, the contents. */
+            claimant_proof?: string;
+            note?: string;
+        };
+        DisposeLostFoundItem: {
+            reason: string;
+        };
+        LostFoundOwner: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            guest_name: string;
+            phone?: string;
+            email?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            stay_status: string;
+        };
+        LostFoundOwnerList: {
+            data: components["schemas"]["LostFoundOwner"][];
+        };
+        HousekeepingProductivityReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: {
+                business_date: components["schemas"]["Date"];
+                /** Format: int64 */
+                user_id: number;
+                user: string;
+                rooms_cleaned: number;
+                rooms_inspected: number;
+                tasks_done: number;
+                tasks_skipped: number;
+                /** @description One decimal; empty when no finished task was started. */
+                avg_task_minutes: string;
+            }[];
+            people: {
+                /** Format: int64 */
+                user_id: number;
+                user: string;
+                days_worked: number;
+                rooms_cleaned: number;
+                rooms_inspected: number;
+                tasks_done: number;
+                tasks_skipped: number;
+                avg_task_minutes: string;
+            }[];
+        };
+        HousekeepingDirtyRoomsReport: {
+            min_hours: number;
+            rows: {
+                room_number: string;
+                floor?: string;
+                room_type: string;
+                status: components["schemas"]["HousekeepingStatus"];
+                /** @description When the room entered this status (UTC). */
+                since: string;
+                hours: number;
+                occupancy: components["schemas"]["Occupancy"];
+                priority: components["schemas"]["HousekeepingPriority"];
+                dnd: boolean;
+                /** @description The active block type (OOO or OOS) when the room is blocked. */
+                block?: string;
+            }[];
+        };
+        MaintenanceReportLine: {
+            category: string;
+            reported: number;
+            resolved: number;
+            cancelled: number;
+            still_open: number;
+            /** @description One decimal; empty when nothing was resolved. */
+            avg_hours_to_resolve: string;
+        };
+        MaintenanceReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: components["schemas"]["MaintenanceReportLine"][];
+            totals: components["schemas"]["MaintenanceReportLine"];
+            backlog: {
+                open_now: number;
+                /** @description Open requests of priority HIGH or URGENT. */
+                high_priority: number;
+                oldest_hours: number;
+            };
         };
     };
     responses: {
@@ -9715,6 +10323,633 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listMaintenanceStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The staff. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingStaffList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMaintenanceRequests: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: components["schemas"]["MaintenanceStatus"];
+                /** @description Only OPEN and IN_PROGRESS requests. */
+                open?: boolean;
+                room_id?: number;
+                assigned_to?: number;
+                category?: components["schemas"]["MaintenanceCategory"];
+                priority?: components["schemas"]["MaintenancePriority"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequestPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    assignMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    resolveMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CloseMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reopenMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    blockRoomForMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listLostFoundItems: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: components["schemas"]["LostFoundStatus"];
+                category?: components["schemas"]["LostFoundCategory"];
+                room_id?: number;
+                found_from?: components["schemas"]["Date"];
+                found_to?: components["schemas"]["Date"];
+                /** @description Matches the item number, description, storage place, possible owner or who took it. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listLostFoundPossibleOwners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guests, most recent stay first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundOwnerList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    returnLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    disposeLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisposeLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHousekeepingProductivityReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingProductivityReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHousekeepingDirtyRoomsReport: {
+        parameters: {
+            query?: {
+                min_hours?: number;
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingDirtyRoomsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getMaintenanceReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

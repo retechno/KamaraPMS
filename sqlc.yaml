@@ -221,6 +221,28 @@ sql:
 
   - engine: postgresql
     schema: migrations
+    queries: internal/maintenance/queries.sql
+    gen:
+      go:
+        package: maintenancedb
+        out: internal/maintenance/maintenancedb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/lostfound/queries.sql
+    gen:
+      go:
+        package: lostfounddb
+        out: internal/lostfound/lostfounddb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
     queries: internal/groups/queries.sql
     gen:
       go:

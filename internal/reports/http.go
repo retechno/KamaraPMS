@@ -3,6 +3,7 @@ package reports
 import (
 	"encoding/csv"
 	"net/http"
+	"strconv"
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
@@ -42,6 +43,23 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		return h.svc.Departures(r.Context(), pid, d)
 	})))
 	mux.Handle("GET "+p+"/in-house", httpx.HandlerFunc(h.plain(func(r *http.Request, pid int64) (any, error) { return h.svc.InHouse(r.Context(), pid) })))
+	mux.Handle("GET "+p+"/housekeeping-productivity", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
+		return h.svc.HousekeepingProductivity(r.Context(), pid, f, t)
+	})))
+	mux.Handle("GET "+p+"/housekeeping-dirty-rooms", httpx.HandlerFunc(h.plain(func(r *http.Request, pid int64) (any, error) {
+		hours := 0
+		if v := r.URL.Query().Get("min_hours"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, apperr.Invalid("the query is invalid", apperr.FieldError{Field: "min_hours", Code: "INVALID_VALUE", Message: "a whole number of hours"})
+			}
+			hours = n
+		}
+		return h.svc.HousekeepingDirty(r.Context(), pid, hours)
+	})))
+	mux.Handle("GET "+p+"/maintenance", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
+		return h.svc.Maintenance(r.Context(), pid, f, t)
+	})))
 }
 
 func dateParam(r *http.Request, name string, errs *[]apperr.FieldError) civil.Date {

@@ -21,6 +21,10 @@ const (
 	PermHousekeepingUpdate  Permission = "housekeeping.update"
 	PermHousekeepingInspect Permission = "housekeeping.inspect"
 	PermHousekeepingAssign  Permission = "housekeeping.assign"
+	PermMaintenanceReport   Permission = "maintenance.report"
+	PermMaintenanceManage   Permission = "maintenance.manage"
+	PermLostFoundReport     Permission = "lostfound.report"
+	PermLostFoundManage     Permission = "lostfound.manage"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -82,6 +86,10 @@ var Catalogue = []PermissionInfo{
 	{PermHousekeepingUpdate, "Rooms", "Change housekeeping status", "M3"},
 	{PermHousekeepingInspect, "Rooms", "Mark rooms INSPECTED (supervisor)", "M3"},
 	{PermHousekeepingAssign, "Rooms", "Generate the daily cleaning list and assign it to housekeepers", "S2"},
+	{PermMaintenanceReport, "Rooms", "Report maintenance problems and see the requests", "S2"},
+	{PermMaintenanceManage, "Rooms", "Assign, work on, resolve and cancel maintenance requests, and take the room out of sale", "S2"},
+	{PermLostFoundReport, "Rooms", "Record items found and see the lost and found list", "S2"},
+	{PermLostFoundManage, "Rooms", "Edit items, hand them back to their owners and dispose of them", "S2"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},
 	{PermGuestWrite, "Guests", "Create and edit guest profiles", "M4"},

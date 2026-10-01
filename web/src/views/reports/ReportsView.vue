@@ -11,7 +11,7 @@ const auth = useAuthStore()
 const property = usePropertyStore()
 
 const key = ref<ReportKey>('revenue')
-const range = reactive({ from: '', to: '', date: '' })
+const range = reactive({ from: '', to: '', date: '', minHours: 0 })
 const table = ref<Table | null>(null)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
@@ -32,6 +32,7 @@ function query(format?: 'csv'): Record<string, string | undefined> {
   const q: Record<string, string | undefined> = {}
   if (def.value.input === 'range') Object.assign(q, { from: range.from, to: range.to })
   if (def.value.input === 'date') q.date = range.date
+  if (def.value.input === 'hours') q.min_hours = String(Math.max(0, Math.trunc(Number(range.minHours) || 0)))
   if (format) q.format = format
   return q
 }
@@ -106,6 +107,7 @@ watch([key, pid], () => {
         <label class="field"><span>To</span><input v-model="range.to" name="to" type="date" /></label>
       </template>
       <label v-else-if="def.input === 'date'" class="field"><span>Date</span><input v-model="range.date" name="date" type="date" /></label>
+      <label v-else-if="def.input === 'hours'" class="field"><span>Not clean for at least (hours)</span><input v-model.number="range.minHours" name="min_hours" type="number" min="0" /></label>
       <button type="submit" class="btn-primary" :disabled="busy" data-testid="run">Run</button>
       <button type="button" :disabled="busy || !table" data-testid="csv" @click="download">Download CSV</button>
       <small class="muted hint">{{ def.hint }} Business dates, not calendar dates.</small>

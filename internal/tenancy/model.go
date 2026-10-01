@@ -233,6 +233,10 @@ const (
 	SeqCityLedgerReceipt SequenceType = "CITY_LEDGER_RECEIPT"
 	// SeqCityLedgerInvoice numbers the invoices sent to companies.
 	SeqCityLedgerInvoice SequenceType = "CITY_LEDGER_INVOICE"
+	// SeqMaintenance numbers maintenance requests.
+	SeqMaintenance SequenceType = "MAINTENANCE"
+	// SeqLostFound numbers lost and found items.
+	SeqLostFound SequenceType = "LOST_FOUND"
 )
 
 // defaultSequences are created with every property.
@@ -246,4 +250,6 @@ var defaultSequences = []struct {
 	{SeqPayment, "PAY"},
 	{SeqCityLedgerReceipt, "CLR"},
 	{SeqCityLedgerInvoice, "CINV"},
+	{SeqMaintenance, "MNT"},
+	{SeqLostFound, "LF"},
 }

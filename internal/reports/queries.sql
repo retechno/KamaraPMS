@@ -88,3 +88,73 @@ JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservat
 JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.departure_date = @on_date::date AND s.status <> 'CANCELLED'
 ORDER BY s.status, s.id;
+
+-- Housekeeping work per person and business date. Rooms taken to CLEAN or INSPECTED by hand come from the status log
+-- (a room cleaned twice counts twice); finished and skipped tasks come from the cleaning list, with the minutes
+-- between starting and finishing the tasks that were started.
+-- name: ReportHousekeepingCleaned :many
+SELECT l.business_date, l.changed_by AS user_id, u.full_name,
+       count(*) FILTER (WHERE l.to_status = 'CLEAN')::int AS cleaned,
+       count(*) FILTER (WHERE l.to_status = 'INSPECTED')::int AS inspected
+FROM housekeeping_logs l
+JOIN users u ON u.tenant_id = l.tenant_id AND u.id = l.changed_by
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.business_date BETWEEN @from_date::date AND @to_date::date
+  AND l.source = 'MANUAL' AND l.to_status IN ('CLEAN', 'INSPECTED')
+GROUP BY l.business_date, l.changed_by, u.full_name;
+
+-- name: ReportHousekeepingTasks :many
+SELECT t.task_date, t.completed_by AS user_id, u.full_name,
+       count(*) FILTER (WHERE t.status = 'DONE')::int AS done,
+       count(*) FILTER (WHERE t.status = 'SKIPPED')::int AS skipped,
+       count(*) FILTER (WHERE t.status = 'DONE' AND t.started_at IS NOT NULL)::int AS timed,
+       COALESCE(sum(extract(epoch FROM (t.completed_at - t.started_at)) / 60) FILTER (WHERE t.status = 'DONE' AND t.started_at IS NOT NULL), 0)::numeric AS minutes
+FROM housekeeping_tasks t
+JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.completed_by
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.task_date BETWEEN @from_date::date AND @to_date::date
+  AND t.status IN ('DONE', 'SKIPPED')
+GROUP BY t.task_date, t.completed_by, u.full_name;
+
+-- Rooms that are not clean yet and for how long (database time, so the age does not depend on the application clock).
+-- name: ReportHousekeepingDirty :many
+SELECT r.room_number, r.floor, rt.code AS room_type_code, h.status, h.updated_at AS since,
+       floor(extract(epoch FROM (now() - h.updated_at)) / 3600)::int AS hours,
+       CASE
+           WHEN EXISTS (SELECT 1 FROM stay_rooms sr JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+                        WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN') THEN 'OCCUPIED'
+           WHEN EXISTS (SELECT 1 FROM reservation_rooms rr
+                        WHERE rr.property_id = r.property_id AND rr.room_id = r.id AND rr.status = 'CONFIRMED'
+                          AND rr.arrival_date <= @business_date::date AND @business_date::date < rr.departure_date) THEN 'RESERVED'
+           ELSE 'VACANT'
+       END::text AS occupancy,
+       COALESCE(f.priority, 'NORMAL')::text AS priority, COALESCE(f.dnd, false)::boolean AS dnd,
+       b.block_type
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id AND r.is_active
+JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id
+LEFT JOIN room_hk_flags f ON f.property_id = r.property_id AND f.room_id = r.id
+LEFT JOIN room_blocks b ON b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+    AND b.start_date <= @business_date::date AND @business_date::date < b.end_date
+WHERE h.tenant_id = @tenant_id AND h.property_id = @property_id AND h.status IN ('DIRTY', 'CLEANING')
+  AND floor(extract(epoch FROM (now() - h.updated_at)) / 3600) >= @min_hours::int
+ORDER BY h.updated_at, r.room_number;
+
+-- Maintenance requests reported in the range, by category, with how they ended.
+-- name: ReportMaintenanceByCategory :many
+SELECT category,
+       count(*)::int AS reported,
+       count(*) FILTER (WHERE status = 'RESOLVED')::int AS resolved,
+       count(*) FILTER (WHERE status = 'CANCELLED')::int AS cancelled,
+       count(*) FILTER (WHERE status IN ('OPEN', 'IN_PROGRESS'))::int AS still_open,
+       COALESCE(sum(extract(epoch FROM (closed_at - reported_at)) / 3600) FILTER (WHERE status = 'RESOLVED'), 0)::numeric AS resolve_hours
+FROM maintenance_requests
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date BETWEEN @from_date::date AND @to_date::date
+GROUP BY category
+ORDER BY category;
+
+-- What is open now, whatever its age.
+-- name: ReportMaintenanceBacklog :one
+SELECT count(*)::int AS open_now,
+       count(*) FILTER (WHERE priority IN ('HIGH', 'URGENT'))::int AS high_priority,
+       COALESCE(floor(max(extract(epoch FROM (now() - reported_at))) / 3600), 0)::int AS oldest_hours
+FROM maintenance_requests
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND status IN ('OPEN', 'IN_PROGRESS');

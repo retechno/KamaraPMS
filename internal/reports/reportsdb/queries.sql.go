@@ -7,6 +7,7 @@ package reportsdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
@@ -275,6 +276,210 @@ func (q *Queries) ReportDepartures(ctx context.Context, arg ReportDeparturesPara
 	return items, nil
 }
 
+const reportHousekeepingCleaned = `-- name: ReportHousekeepingCleaned :many
+SELECT l.business_date, l.changed_by AS user_id, u.full_name,
+       count(*) FILTER (WHERE l.to_status = 'CLEAN')::int AS cleaned,
+       count(*) FILTER (WHERE l.to_status = 'INSPECTED')::int AS inspected
+FROM housekeeping_logs l
+JOIN users u ON u.tenant_id = l.tenant_id AND u.id = l.changed_by
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.business_date BETWEEN $3::date AND $4::date
+  AND l.source = 'MANUAL' AND l.to_status IN ('CLEAN', 'INSPECTED')
+GROUP BY l.business_date, l.changed_by, u.full_name
+`
+
+type ReportHousekeepingCleanedParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportHousekeepingCleanedRow struct {
+	BusinessDate civil.Date
+	UserID       *int64
+	FullName     string
+	Cleaned      int32
+	Inspected    int32
+}
+
+// Housekeeping work per person and business date. Rooms taken to CLEAN or INSPECTED by hand come from the status log
+// (a room cleaned twice counts twice); finished and skipped tasks come from the cleaning list, with the minutes
+// between starting and finishing the tasks that were started.
+func (q *Queries) ReportHousekeepingCleaned(ctx context.Context, arg ReportHousekeepingCleanedParams) ([]ReportHousekeepingCleanedRow, error) {
+	rows, err := q.db.Query(ctx, reportHousekeepingCleaned,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportHousekeepingCleanedRow{}
+	for rows.Next() {
+		var i ReportHousekeepingCleanedRow
+		if err := rows.Scan(
+			&i.BusinessDate,
+			&i.UserID,
+			&i.FullName,
+			&i.Cleaned,
+			&i.Inspected,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportHousekeepingDirty = `-- name: ReportHousekeepingDirty :many
+SELECT r.room_number, r.floor, rt.code AS room_type_code, h.status, h.updated_at AS since,
+       floor(extract(epoch FROM (now() - h.updated_at)) / 3600)::int AS hours,
+       CASE
+           WHEN EXISTS (SELECT 1 FROM stay_rooms sr JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+                        WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN') THEN 'OCCUPIED'
+           WHEN EXISTS (SELECT 1 FROM reservation_rooms rr
+                        WHERE rr.property_id = r.property_id AND rr.room_id = r.id AND rr.status = 'CONFIRMED'
+                          AND rr.arrival_date <= $1::date AND $1::date < rr.departure_date) THEN 'RESERVED'
+           ELSE 'VACANT'
+       END::text AS occupancy,
+       COALESCE(f.priority, 'NORMAL')::text AS priority, COALESCE(f.dnd, false)::boolean AS dnd,
+       b.block_type
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id AND r.is_active
+JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id
+LEFT JOIN room_hk_flags f ON f.property_id = r.property_id AND f.room_id = r.id
+LEFT JOIN room_blocks b ON b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+    AND b.start_date <= $1::date AND $1::date < b.end_date
+WHERE h.tenant_id = $2 AND h.property_id = $3 AND h.status IN ('DIRTY', 'CLEANING')
+  AND floor(extract(epoch FROM (now() - h.updated_at)) / 3600) >= $4::int
+ORDER BY h.updated_at, r.room_number
+`
+
+type ReportHousekeepingDirtyParams struct {
+	BusinessDate civil.Date
+	TenantID     int64
+	PropertyID   int64
+	MinHours     int32
+}
+
+type ReportHousekeepingDirtyRow struct {
+	RoomNumber   string
+	Floor        *string
+	RoomTypeCode string
+	Status       string
+	Since        time.Time
+	Hours        int32
+	Occupancy    string
+	Priority     string
+	Dnd          bool
+	BlockType    *string
+}
+
+// Rooms that are not clean yet and for how long (database time, so the age does not depend on the application clock).
+func (q *Queries) ReportHousekeepingDirty(ctx context.Context, arg ReportHousekeepingDirtyParams) ([]ReportHousekeepingDirtyRow, error) {
+	rows, err := q.db.Query(ctx, reportHousekeepingDirty,
+		arg.BusinessDate,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.MinHours,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportHousekeepingDirtyRow{}
+	for rows.Next() {
+		var i ReportHousekeepingDirtyRow
+		if err := rows.Scan(
+			&i.RoomNumber,
+			&i.Floor,
+			&i.RoomTypeCode,
+			&i.Status,
+			&i.Since,
+			&i.Hours,
+			&i.Occupancy,
+			&i.Priority,
+			&i.Dnd,
+			&i.BlockType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportHousekeepingTasks = `-- name: ReportHousekeepingTasks :many
+SELECT t.task_date, t.completed_by AS user_id, u.full_name,
+       count(*) FILTER (WHERE t.status = 'DONE')::int AS done,
+       count(*) FILTER (WHERE t.status = 'SKIPPED')::int AS skipped,
+       count(*) FILTER (WHERE t.status = 'DONE' AND t.started_at IS NOT NULL)::int AS timed,
+       COALESCE(sum(extract(epoch FROM (t.completed_at - t.started_at)) / 60) FILTER (WHERE t.status = 'DONE' AND t.started_at IS NOT NULL), 0)::numeric AS minutes
+FROM housekeeping_tasks t
+JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.completed_by
+WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.task_date BETWEEN $3::date AND $4::date
+  AND t.status IN ('DONE', 'SKIPPED')
+GROUP BY t.task_date, t.completed_by, u.full_name
+`
+
+type ReportHousekeepingTasksParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportHousekeepingTasksRow struct {
+	TaskDate civil.Date
+	UserID   *int64
+	FullName string
+	Done     int32
+	Skipped  int32
+	Timed    int32
+	Minutes  decimal.Decimal
+}
+
+func (q *Queries) ReportHousekeepingTasks(ctx context.Context, arg ReportHousekeepingTasksParams) ([]ReportHousekeepingTasksRow, error) {
+	rows, err := q.db.Query(ctx, reportHousekeepingTasks,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportHousekeepingTasksRow{}
+	for rows.Next() {
+		var i ReportHousekeepingTasksRow
+		if err := rows.Scan(
+			&i.TaskDate,
+			&i.UserID,
+			&i.FullName,
+			&i.Done,
+			&i.Skipped,
+			&i.Timed,
+			&i.Minutes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reportInHouse = `-- name: ReportInHouse :many
 SELECT s.id AS stay_id, s.stay_number, res.confirmation_number, s.arrival_date, s.departure_date, s.adult_count, s.child_count,
        r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name,
@@ -330,6 +535,95 @@ func (q *Queries) ReportInHouse(ctx context.Context, arg ReportInHouseParams) ([
 			&i.GuestFirstName,
 			&i.GuestLastName,
 			&i.Balance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportMaintenanceBacklog = `-- name: ReportMaintenanceBacklog :one
+SELECT count(*)::int AS open_now,
+       count(*) FILTER (WHERE priority IN ('HIGH', 'URGENT'))::int AS high_priority,
+       COALESCE(floor(max(extract(epoch FROM (now() - reported_at))) / 3600), 0)::int AS oldest_hours
+FROM maintenance_requests
+WHERE tenant_id = $1 AND property_id = $2 AND status IN ('OPEN', 'IN_PROGRESS')
+`
+
+type ReportMaintenanceBacklogParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ReportMaintenanceBacklogRow struct {
+	OpenNow      int32
+	HighPriority int32
+	OldestHours  int32
+}
+
+// What is open now, whatever its age.
+func (q *Queries) ReportMaintenanceBacklog(ctx context.Context, arg ReportMaintenanceBacklogParams) (ReportMaintenanceBacklogRow, error) {
+	row := q.db.QueryRow(ctx, reportMaintenanceBacklog, arg.TenantID, arg.PropertyID)
+	var i ReportMaintenanceBacklogRow
+	err := row.Scan(&i.OpenNow, &i.HighPriority, &i.OldestHours)
+	return i, err
+}
+
+const reportMaintenanceByCategory = `-- name: ReportMaintenanceByCategory :many
+SELECT category,
+       count(*)::int AS reported,
+       count(*) FILTER (WHERE status = 'RESOLVED')::int AS resolved,
+       count(*) FILTER (WHERE status = 'CANCELLED')::int AS cancelled,
+       count(*) FILTER (WHERE status IN ('OPEN', 'IN_PROGRESS'))::int AS still_open,
+       COALESCE(sum(extract(epoch FROM (closed_at - reported_at)) / 3600) FILTER (WHERE status = 'RESOLVED'), 0)::numeric AS resolve_hours
+FROM maintenance_requests
+WHERE tenant_id = $1 AND property_id = $2 AND business_date BETWEEN $3::date AND $4::date
+GROUP BY category
+ORDER BY category
+`
+
+type ReportMaintenanceByCategoryParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportMaintenanceByCategoryRow struct {
+	Category     string
+	Reported     int32
+	Resolved     int32
+	Cancelled    int32
+	StillOpen    int32
+	ResolveHours decimal.Decimal
+}
+
+// Maintenance requests reported in the range, by category, with how they ended.
+func (q *Queries) ReportMaintenanceByCategory(ctx context.Context, arg ReportMaintenanceByCategoryParams) ([]ReportMaintenanceByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, reportMaintenanceByCategory,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportMaintenanceByCategoryRow{}
+	for rows.Next() {
+		var i ReportMaintenanceByCategoryRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Reported,
+			&i.Resolved,
+			&i.Cancelled,
+			&i.StillOpen,
+			&i.ResolveHours,
 		); err != nil {
 			return nil, err
 		}

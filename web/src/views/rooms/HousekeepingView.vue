@@ -33,6 +33,7 @@ const verbs: Record<HousekeepingStatus, string> = {
 
 const canUpdate = computed(() => auth.can('housekeeping.update', property.currentId))
 const canInspect = computed(() => auth.can('housekeeping.inspect', property.currentId))
+const canReport = computed(() => auth.can('maintenance.report', property.currentId))
 
 // The board is small by nature (one row per active room), so it is loaded whole and filtered here.
 const floors = computed(() => [...new Set(rooms.value.map((r) => r.floor ?? '').filter(Boolean))].sort())
@@ -206,7 +207,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
             <th>Occupancy</th>
             <th>Block</th>
             <th>Flags</th>
-            <th v-if="canUpdate"><span class="sr-only">Actions</span></th>
+            <th v-if="canUpdate || canReport"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -231,10 +232,11 @@ watch(() => property.currentId, () => load(), { immediate: true })
               <span v-if="r.make_up_requested" class="pill makeup">Make-up</span>
               <small v-if="r.flag_note" class="muted"> {{ r.flag_note }}</small>
             </td>
-            <td v-if="canUpdate" class="actions">
-              <button type="button" :data-testid="`flags-${r.room_number}`" @click="startFlags(r)">Flags</button>
+            <td v-if="canUpdate || canReport" class="actions">
+              <RouterLink v-if="canReport" :to="{ path: '/maintenance', query: { room: r.room_id } }" :data-testid="`report-${r.room_number}`">Report a problem</RouterLink>
+              <button v-if="canUpdate" type="button" :data-testid="`flags-${r.room_number}`" @click="startFlags(r)">Flags</button>
               <button
-                v-for="s in actionsFor(r)"
+                v-for="s in (canUpdate ? actionsFor(r) : [])"
                 :key="s"
                 type="button"
                 :disabled="busyRoom === r.room_id"

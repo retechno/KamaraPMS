@@ -1,9 +1,10 @@
 import type {
-  ArrivalsReport, CashierReport, DailySummaryReport, RevenueReport, StatisticsReport, StayListReport, TaxReport,
+  ArrivalsReport, CashierReport, DailySummaryReport, HousekeepingDirtyRoomsReport, HousekeepingProductivityReport, MaintenanceReport, RevenueReport,
+  StatisticsReport, StayListReport, TaxReport,
 } from '@/api/types'
 
 /** A report as the screen shows it: a title, the inputs it needs, and how its answer becomes a table. */
-export type ReportKey = 'revenue' | 'tax' | 'cashier' | 'statistics' | 'daily-summary' | 'arrivals' | 'departures' | 'in-house'
+export type ReportKey = 'revenue' | 'tax' | 'cashier' | 'statistics' | 'daily-summary' | 'arrivals' | 'departures' | 'in-house' | 'housekeeping-productivity' | 'housekeeping-dirty-rooms' | 'maintenance'
 
 export interface Table {
   columns: string[]
@@ -17,7 +18,7 @@ export interface Table {
 export interface ReportDef {
   key: ReportKey
   title: string
-  input: 'range' | 'date' | 'none'
+  input: 'range' | 'date' | 'hours' | 'none'
   hint: string
   table: (data: never) => Table
 }
@@ -96,6 +97,31 @@ export const reports: ReportDef[] = [
     table: (d: StayListReport) => ({
       columns: ['Stay', 'Guest', 'Room', 'Arrival', 'Departure', 'Party', 'Balance'], numeric: [6],
       rows: d.rows.map((x) => [x.stay_number, x.guest, s(x.room), x.arrival_date, x.departure_date, `${x.adult_count}+${x.child_count}`, x.balance]),
+    }),
+  },
+  {
+    key: 'housekeeping-productivity', title: 'Housekeeping productivity', input: 'range',
+    hint: 'Rooms taken to clean or inspected by hand, and tasks finished, per person. A room cleaned twice counts twice.',
+    table: (d: HousekeepingProductivityReport) => ({
+      columns: ['Business date', 'Housekeeper', 'Cleaned', 'Inspected', 'Tasks done', 'Tasks skipped', 'Avg minutes per task'], numeric: [2, 3, 4, 5, 6],
+      rows: d.lines.map((l) => [l.business_date, l.user, s(l.rooms_cleaned), s(l.rooms_inspected), s(l.tasks_done), s(l.tasks_skipped), l.avg_task_minutes]),
+      note: d.people.length ? `Over the range: ${d.people.map((p) => `${p.user} cleaned ${p.rooms_cleaned}, finished ${p.tasks_done} task(s) on ${p.days_worked} day(s)`).join('; ')}.` : undefined,
+    }),
+  },
+  {
+    key: 'housekeeping-dirty-rooms', title: 'Rooms not clean yet', input: 'hours', hint: 'Dirty or being cleaned, longest first.',
+    table: (d: HousekeepingDirtyRoomsReport) => ({
+      columns: ['Room', 'Floor', 'Type', 'Status', 'Since (UTC)', 'Hours', 'Occupancy', 'Priority', 'DND', 'Block'], numeric: [5],
+      rows: d.rows.map((r) => [r.room_number, s(r.floor), r.room_type, r.status, r.since, s(r.hours), r.occupancy, r.priority, r.dnd ? 'yes' : '', s(r.block)]),
+    }),
+  },
+  {
+    key: 'maintenance', title: 'Maintenance', input: 'range', hint: 'Requests reported in the range, by category, and how they ended.',
+    table: (d: MaintenanceReport) => ({
+      columns: ['Category', 'Reported', 'Resolved', 'Cancelled', 'Still open', 'Avg hours to resolve'], numeric: [1, 2, 3, 4, 5],
+      rows: d.lines.map((l) => [l.category, s(l.reported), s(l.resolved), s(l.cancelled), s(l.still_open), l.avg_hours_to_resolve]),
+      footer: ['Total', s(d.totals.reported), s(d.totals.resolved), s(d.totals.cancelled), s(d.totals.still_open), d.totals.avg_hours_to_resolve],
+      note: `Open now: ${d.backlog.open_now} (${d.backlog.high_priority} high priority); the oldest has waited ${d.backlog.oldest_hours} hour(s).`,
     }),
   },
 ]

@@ -21,6 +21,8 @@ import (
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/lostfound"
+	"kamarapms/internal/maintenance"
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/notifications"
 	"kamarapms/internal/platform/apperr"
@@ -91,6 +93,8 @@ func New(d Deps) *App {
 	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc)
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
+	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)
+	lostFoundSvc := lostfound.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
 
 	// Business API: every route requires an authenticated principal.
@@ -113,6 +117,8 @@ func New(d Deps) *App {
 	companies.NewHandler(companiesSvc).Register(api)
 	cityledger.NewHandler(cityLedgerSvc).Register(api)
 	groups.NewHandler(groupsSvc).Register(api)
+	maintenance.NewHandler(maintenanceSvc).Register(api)
+	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)

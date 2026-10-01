@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.22.0
+  version: 0.25.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -3250,6 +3250,451 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-staff:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listMaintenanceStaff
+      summary: Who can take maintenance work (maintenance.manage)
+      description: Active users whose role holds maintenance.report or maintenance.manage at the property, and tenant administrators. Not paginated.
+      tags: [maintenance]
+      responses:
+        "200":
+          description: The staff.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingStaffList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listMaintenanceRequests
+      summary: List maintenance requests, newest first (maintenance.report)
+      tags: [maintenance]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/MaintenanceStatus" } }
+        - { name: open, in: query, description: Only OPEN and IN_PROGRESS requests., schema: { type: boolean } }
+        - { name: room_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: assigned_to, in: query, schema: { type: integer, format: int64 } }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/MaintenanceCategory" } }
+        - { name: priority, in: query, schema: { $ref: "#/components/schemas/MaintenancePriority" } }
+      responses:
+        "200":
+          description: A page of requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequestPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createMaintenanceRequest
+      summary: Report a problem (maintenance.report)
+      description: "Against a room (`room_id`) or a place (`location`, for example Lobby); at least one is required. The request starts OPEN with the number MNT…."
+      tags: [maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMaintenanceRequest" }
+      responses:
+        "201":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getMaintenanceRequest
+      summary: One maintenance request (maintenance.report)
+      tags: [maintenance]
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateMaintenanceRequest
+      summary: Change the details of an open request (maintenance.manage)
+      description: 409 `REQUEST_NOT_OPEN` once it is resolved or cancelled.
+      tags: [maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchMaintenanceRequest" }
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/assign:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: assignMaintenanceRequest
+      summary: Give an open request to a technician, or take it back (maintenance.manage)
+      description: "A null user takes it back. The technician must be staff (field error `ASSIGNEE_INVALID`)."
+      tags: [maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignMaintenanceRequest" }
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/start:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: startMaintenanceRequest
+      summary: Start work on an OPEN request (maintenance.manage)
+      description: "An unassigned request goes to the person who starts it. 409 `REQUEST_NOT_OPEN` otherwise."
+      tags: [maintenance]
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: resolveMaintenanceRequest
+      summary: Mark an open request as repaired (maintenance.manage)
+      description: "With `release_block` the room block taken for the request is cancelled too (needs room_block.manage). Two people closing a request at once: one wins, the other gets 409 `REQUEST_NOT_OPEN`."
+      tags: [maintenance]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloseMaintenanceRequest" }
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelMaintenanceRequest
+      summary: Cancel an open request (maintenance.manage)
+      description: "A reason (`note`) is required; `release_block` works as for resolve."
+      tags: [maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloseMaintenanceRequest" }
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/reopen:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reopenMaintenanceRequest
+      summary: Put a resolved request back to OPEN (maintenance.manage)
+      description: "For a repair that did not hold. 409 `REQUEST_NOT_RESOLVED` otherwise."
+      tags: [maintenance]
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/maintenance-requests/{id}/block:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: blockRoomForMaintenanceRequest
+      summary: Take the request's room out of sale (maintenance.manage and room_block.manage)
+      description: "Creates an OOO or OOS room block from the start date (default today) to the end date (exclusive) with the request as its reason, and links it. 409 `REQUEST_HAS_NO_ROOM`, `REQUEST_ALREADY_BLOCKED` (one live block per request), and the usual `ROOM_BLOCK_CONFLICT` when a stay or reservation holds the room; a failed block changes nothing."
+      tags: [maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlockMaintenanceRequest" }
+      responses:
+        "200":
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/lost-found:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listLostFoundItems
+      summary: List lost and found items, newest first (lostfound.report)
+      tags: [lost-found]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/LostFoundStatus" } }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/LostFoundCategory" } }
+        - { name: room_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: found_from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: found_to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: q, in: query, description: "Matches the item number, description, storage place, possible owner or who took it.", schema: { type: string } }
+      responses:
+        "200":
+          description: A page of items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createLostFoundItem
+      summary: Record an item that was found (lostfound.report)
+      description: "In a room (`room_id`) or at a place (`location`, for example Pool); at least one is required. Dated with the current business date and numbered LF…."
+      tags: [lost-found]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateLostFoundItem" }
+      responses:
+        "201":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/lost-found/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getLostFoundItem
+      summary: One item (lostfound.report)
+      tags: [lost-found]
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateLostFoundItem
+      summary: Change the details of a stored item (lostfound.manage)
+      description: 409 `ITEM_NOT_STORED` once it has been handed back or disposed of.
+      tags: [lost-found]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchLostFoundItem" }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/lost-found/{id}/possible-owners:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listLostFoundPossibleOwners
+      summary: Guests who had the item's room around the day it was found (lostfound.report and reservation.read)
+      description: "A hint, not a match: the guests of stays whose room segment covered the day the item was found or ended in the three days before. Empty for an item found at a place. Not paginated."
+      tags: [lost-found]
+      responses:
+        "200":
+          description: The guests, most recent stay first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundOwnerList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/lost-found/{id}/return:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: returnLostFoundItem
+      summary: Hand a stored item back to its owner (lostfound.manage)
+      description: "Records who took it and what was checked; final. 409 `ITEM_NOT_STORED` when it was already closed (also when two desks close it at once)."
+      tags: [lost-found]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReturnLostFoundItem" }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/lost-found/{id}/dispose:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: disposeLostFoundItem
+      summary: Close a stored item that nobody claimed (lostfound.manage)
+      description: "A reason is required; final."
+      tags: [lost-found]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisposeLostFoundItem" }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LostFoundItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/housekeeping-productivity:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getHousekeepingProductivityReport
+      summary: What each housekeeper did (report.view)
+      description: "Per person and business date: rooms taken to CLEAN and to INSPECTED by hand (from the status log, a room cleaned twice counts twice), tasks finished and skipped on the cleaning list, and the average minutes between starting and finishing the tasks that were started. `people` totals each person over the range."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingProductivityReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/housekeeping-dirty-rooms:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getHousekeepingDirtyRoomsReport
+      summary: Rooms that are not clean yet and for how long (report.view)
+      description: "Rooms that are DIRTY or CLEANING, longest first, with the derived occupancy, the priority and do-not-disturb flags and any active block. `min_hours` keeps the rooms that have been in this state at least that long. The age is measured in database time."
+      tags: [reports]
+      parameters:
+        - { name: min_hours, in: query, schema: { type: integer, minimum: 0, maximum: 8760, default: 0 } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingDirtyRoomsReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getMaintenanceReport
+      summary: Maintenance requests reported in a range, by category (report.view)
+      description: "How the requests of the range ended (resolved, cancelled, still open) and the average hours to resolve, per category and in total, plus the backlog of today (what is open now, how many are high priority, how old the oldest is)."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -6072,3 +6517,268 @@ components:
           maxItems: 500
           items: { type: integer, format: int64 }
         user_id: { type: [integer, "null"], format: int64, description: Null takes the tasks back. }
+    MaintenanceStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED, CANCELLED]
+    MaintenanceCategory:
+      type: string
+      enum: [PLUMBING, ELECTRICAL, AC, FURNITURE, APPLIANCE, OTHER]
+    MaintenancePriority:
+      type: string
+      enum: [LOW, NORMAL, HIGH, URGENT]
+    MaintenanceBlock:
+      type: object
+      required: [id, block_type, start_date, end_date, status]
+      properties:
+        id: { type: integer, format: int64 }
+        block_type: { $ref: "#/components/schemas/BlockType" }
+        start_date: { $ref: "#/components/schemas/Date" }
+        end_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string, enum: [ACTIVE, CANCELLED] }
+    MaintenanceRequest:
+      type: object
+      required: [id, request_number, room_id, category, description, priority, status, business_date, reported_by, reported_at, assigned_to, started_at, closed_at, block]
+      properties:
+        id: { type: integer, format: int64 }
+        request_number: { type: string }
+        room_id: { type: [integer, "null"], format: int64 }
+        room_number: { type: string }
+        location: { type: string }
+        category: { $ref: "#/components/schemas/MaintenanceCategory" }
+        description: { type: string }
+        priority: { $ref: "#/components/schemas/MaintenancePriority" }
+        status: { $ref: "#/components/schemas/MaintenanceStatus" }
+        business_date: { $ref: "#/components/schemas/Date" }
+        reported_by: { type: [integer, "null"], format: int64 }
+        reporter_name: { type: string }
+        reported_at: { type: string, format: date-time }
+        assigned_to: { type: [integer, "null"], format: int64 }
+        assignee_name: { type: string }
+        started_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        resolution_note: { type: string, description: The repair note, or why the request was cancelled. }
+        block:
+          oneOf:
+            - { $ref: "#/components/schemas/MaintenanceBlock" }
+            - { type: "null" }
+    MaintenanceRequestPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/MaintenanceRequest" }
+        next_cursor: { type: string }
+    CreateMaintenanceRequest:
+      type: object
+      required: [category, description]
+      additionalProperties: false
+      properties:
+        room_id: { type: [integer, "null"], format: int64 }
+        location: { type: string, maxLength: 150 }
+        category: { $ref: "#/components/schemas/MaintenanceCategory" }
+        description: { type: string, maxLength: 1000 }
+        priority: { $ref: "#/components/schemas/MaintenancePriority" }
+    PatchMaintenanceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        location: { type: string, maxLength: 150 }
+        category: { $ref: "#/components/schemas/MaintenanceCategory" }
+        description: { type: string, maxLength: 1000 }
+        priority: { $ref: "#/components/schemas/MaintenancePriority" }
+    AssignMaintenanceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        user_id: { type: [integer, "null"], format: int64 }
+    CloseMaintenanceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note: { type: string, maxLength: 1000 }
+        release_block: { type: boolean, default: false }
+    BlockMaintenanceRequest:
+      type: object
+      required: [block_type, end_date]
+      additionalProperties: false
+      properties:
+        block_type: { $ref: "#/components/schemas/BlockType" }
+        start_date: { $ref: "#/components/schemas/Date" }
+        end_date: { $ref: "#/components/schemas/Date" }
+    LostFoundStatus:
+      type: string
+      enum: [STORED, RETURNED, DISPOSED]
+    LostFoundCategory:
+      type: string
+      enum: [ELECTRONICS, CLOTHING, DOCUMENTS, JEWELRY, BAGS, OTHER]
+    LostFoundItem:
+      type: object
+      required: [id, item_number, description, category, room_id, found_on, found_at, found_by, status, closed_on, closed_at]
+      properties:
+        id: { type: integer, format: int64 }
+        item_number: { type: string }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/LostFoundCategory" }
+        room_id: { type: [integer, "null"], format: int64 }
+        room_number: { type: string }
+        location: { type: string }
+        found_on: { $ref: "#/components/schemas/Date" }
+        found_at: { type: string, format: date-time }
+        found_by: { type: [integer, "null"], format: int64 }
+        finder_name: { type: string }
+        storage_location: { type: string }
+        possible_owner: { type: string }
+        notes: { type: string }
+        status: { $ref: "#/components/schemas/LostFoundStatus" }
+        closed_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        closed_at: { type: [string, "null"], format: date-time }
+        closer_name: { type: string }
+        claimant_name: { type: string }
+        claimant_proof: { type: string }
+        close_note: { type: string, description: The hand-over note, or why the item was disposed of. }
+    LostFoundPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/LostFoundItem" }
+        next_cursor: { type: string }
+    CreateLostFoundItem:
+      type: object
+      required: [description, category]
+      additionalProperties: false
+      properties:
+        description: { type: string, maxLength: 500 }
+        category: { $ref: "#/components/schemas/LostFoundCategory" }
+        room_id: { type: [integer, "null"], format: int64 }
+        location: { type: string, maxLength: 150 }
+        storage_location: { type: string, maxLength: 100 }
+        possible_owner: { type: string, maxLength: 150 }
+        notes: { type: string, maxLength: 500 }
+    PatchLostFoundItem:
+      type: object
+      additionalProperties: false
+      properties:
+        description: { type: string, maxLength: 500 }
+        category: { $ref: "#/components/schemas/LostFoundCategory" }
+        location: { type: string, maxLength: 150 }
+        storage_location: { type: string, maxLength: 100 }
+        possible_owner: { type: string, maxLength: 150 }
+        notes: { type: string, maxLength: 500 }
+    ReturnLostFoundItem:
+      type: object
+      required: [claimant_name]
+      additionalProperties: false
+      properties:
+        claimant_name: { type: string, maxLength: 150 }
+        claimant_proof: { type: string, maxLength: 150, description: "What was checked: an ID card, a booking number, the contents." }
+        note: { type: string, maxLength: 500 }
+    DisposeLostFoundItem:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, maxLength: 500 }
+    LostFoundOwner:
+      type: object
+      required: [stay_id, stay_number, guest_name, arrival_date, departure_date, stay_status]
+      properties:
+        stay_id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        guest_name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        stay_status: { type: string }
+    LostFoundOwnerList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/LostFoundOwner" }
+    HousekeepingProductivityReport:
+      type: object
+      required: [from, to, lines, people]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [business_date, user_id, user, rooms_cleaned, rooms_inspected, tasks_done, tasks_skipped, avg_task_minutes]
+            properties:
+              business_date: { $ref: "#/components/schemas/Date" }
+              user_id: { type: integer, format: int64 }
+              user: { type: string }
+              rooms_cleaned: { type: integer }
+              rooms_inspected: { type: integer }
+              tasks_done: { type: integer }
+              tasks_skipped: { type: integer }
+              avg_task_minutes: { type: string, description: One decimal; empty when no finished task was started. }
+        people:
+          type: array
+          items:
+            type: object
+            required: [user_id, user, days_worked, rooms_cleaned, rooms_inspected, tasks_done, tasks_skipped, avg_task_minutes]
+            properties:
+              user_id: { type: integer, format: int64 }
+              user: { type: string }
+              days_worked: { type: integer }
+              rooms_cleaned: { type: integer }
+              rooms_inspected: { type: integer }
+              tasks_done: { type: integer }
+              tasks_skipped: { type: integer }
+              avg_task_minutes: { type: string }
+    HousekeepingDirtyRoomsReport:
+      type: object
+      required: [min_hours, rows]
+      properties:
+        min_hours: { type: integer }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [room_number, room_type, status, since, hours, occupancy, priority, dnd]
+            properties:
+              room_number: { type: string }
+              floor: { type: string }
+              room_type: { type: string }
+              status: { $ref: "#/components/schemas/HousekeepingStatus" }
+              since: { type: string, description: When the room entered this status (UTC). }
+              hours: { type: integer }
+              occupancy: { $ref: "#/components/schemas/Occupancy" }
+              priority: { $ref: "#/components/schemas/HousekeepingPriority" }
+              dnd: { type: boolean }
+              block: { type: string, description: The active block type (OOO or OOS) when the room is blocked. }
+    MaintenanceReportLine:
+      type: object
+      required: [category, reported, resolved, cancelled, still_open, avg_hours_to_resolve]
+      properties:
+        category: { type: string }
+        reported: { type: integer }
+        resolved: { type: integer }
+        cancelled: { type: integer }
+        still_open: { type: integer }
+        avg_hours_to_resolve: { type: string, description: One decimal; empty when nothing was resolved. }
+    MaintenanceReport:
+      type: object
+      required: [from, to, lines, totals, backlog]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/MaintenanceReportLine" }
+        totals: { $ref: "#/components/schemas/MaintenanceReportLine" }
+        backlog:
+          type: object
+          required: [open_now, high_priority, oldest_hours]
+          properties:
+            open_now: { type: integer }
+            high_priority: { type: integer, description: Open requests of priority HIGH or URGENT. }
+            oldest_hours: { type: integer }

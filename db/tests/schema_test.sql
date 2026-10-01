@@ -923,6 +923,106 @@ SELECT expect_ok('a task can be started, finished and skipped with their times',
     $q$UPDATE housekeeping_tasks SET status = 'IN_PROGRESS', started_at = now()$q$,
     $q$UPDATE housekeeping_tasks SET status = 'DONE', completed_at = now()$q$);
 
+-- Maintenance requests
+SELECT expect_ok('a request about a room',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_ok('a request about a place',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', NULL, 'Lobby', 'AC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_error('a request is about a room or a place', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', NULL, NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_error('a request number is unique per property', '23505',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$,
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_error('a known category', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'MAGIC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_error('a known priority', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'URGE', '2026-10-01')$q$);
+SELECT expect_error('a request is on a business day of its property', '23503',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2030-01-01')$q$);
+SELECT expect_error('a request cannot name a room of another property', '23503',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('XYZ'), pr('SG'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$);
+SELECT expect_error('an assignee has an assignment time', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, assigned_to)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_error('a block needs a room', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, room_block_id)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', NULL, 'Lobby', 'AC', 'x', 'NORMAL', '2026-10-01', 1)$q$);
+SELECT expect_error('a resolved request has its closing time', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$,
+    $q$UPDATE maintenance_requests SET status = 'RESOLVED'$q$);
+SELECT expect_error('a cancelled request has its reason', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$,
+    $q$UPDATE maintenance_requests SET status = 'CANCELLED', closed_at = now()$q$);
+SELECT expect_error('a request in progress has its start time', '23514',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$,
+    $q$UPDATE maintenance_requests SET status = 'IN_PROGRESS'$q$);
+SELECT expect_ok('a request is worked on and resolved',
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT1', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, 'AC', 'x', 'NORMAL', '2026-10-01')$q$,
+    $q$UPDATE maintenance_requests SET status = 'IN_PROGRESS', started_at = now()$q$,
+    $q$UPDATE maintenance_requests SET status = 'RESOLVED', closed_at = now(), resolution_note = 'fixed'$q$);
+
+-- Lost and found
+SELECT expect_ok('an item found in a room',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$);
+SELECT expect_ok('an item found at a place',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', NULL, 'Pool', '2026-10-01')$q$);
+SELECT expect_error('an item is from a room or a place', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', NULL, NULL, '2026-10-01')$q$);
+SELECT expect_error('an item number is unique per property', '23505',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$);
+SELECT expect_error('a known category', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'MAGIC', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$);
+SELECT expect_error('an item is found on a business day of its property', '23503',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2030-01-01')$q$);
+SELECT expect_error('an item cannot name a room of another property', '23503',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('XYZ'), pr('SG'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$);
+SELECT expect_error('a known status', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET status = 'LOST'$q$);
+SELECT expect_error('a stored item is not closed', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET closed_at = now(), closed_on = '2026-10-01'$q$);
+SELECT expect_error('a closed item has its time', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET status = 'DISPOSED', close_note = 'x'$q$);
+SELECT expect_error('a returned item has its claimant', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET status = 'RETURNED', closed_at = now(), closed_on = '2026-10-01'$q$);
+SELECT expect_error('a disposed item has its reason', '23514',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET status = 'DISPOSED', closed_at = now(), closed_on = '2026-10-01'$q$);
+SELECT expect_ok('an item is handed back',
+    $q$INSERT INTO lost_found_items (tenant_id, property_id, item_number, description, category, room_id, location, found_on)
+       VALUES (tn('ABC'), pr('BALI'), 'LF1', 'x', 'BAGS', (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), NULL, '2026-10-01')$q$,
+    $q$UPDATE lost_found_items SET status = 'RETURNED', closed_at = now(), closed_on = '2026-10-01', claimant_name = 'Siti'$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

@@ -604,3 +604,11 @@ Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.a
 | `POST {P}/housekeeping/tasks` | `housekeeping.assign` | A manual task for the current business date |
 | `POST {P}/housekeeping/tasks/assign` | `housekeeping.assign` | `{task_ids, user_id\|null}`; 409 `TASK_NOT_ASSIGNABLE` (`context.task_ids`), field error `ASSIGNEE_INVALID` |
 | `POST {P}/housekeeping/tasks/{id}/start`, `/complete`, `/skip` | `housekeeping.update` | 409 `TASK_NOT_PENDING`, `TASK_ALREADY_CLOSED`; skip needs `{reason}` |
+| `GET/POST {P}/maintenance-requests`, `GET/PATCH {P}/maintenance-requests/{id}` | read and report: `maintenance.report`; PATCH: `maintenance.manage` | Filters `status`, `open`, `room_id`, `assigned_to`, `category`, `priority`; cursor paging |
+| `POST {P}/maintenance-requests/{id}/assign`, `/start`, `/resolve`, `/cancel`, `/reopen` | `maintenance.manage` | 409 `REQUEST_NOT_OPEN`, `REQUEST_NOT_RESOLVED`; cancel needs `note`; resolve and cancel take `release_block` |
+| `POST {P}/maintenance-requests/{id}/block` | `maintenance.manage` + `room_block.manage` | `{block_type, start_date?, end_date}`; 409 `REQUEST_HAS_NO_ROOM`, `REQUEST_ALREADY_BLOCKED`, `ROOM_BLOCK_CONFLICT` |
+| `GET {P}/maintenance-staff` | `maintenance.manage` | Who can take work |
+| `GET/POST {P}/lost-found`, `GET/PATCH {P}/lost-found/{id}` | read and record: `lostfound.report`; PATCH: `lostfound.manage` | Filters `status`, `category`, `room_id`, `found_from`, `found_to`, `q` |
+| `GET {P}/lost-found/{id}/possible-owners` | `lostfound.report` + `reservation.read` | Guests of the room around the day it was found |
+| `POST {P}/lost-found/{id}/return`, `/dispose` | `lostfound.manage` | Final; 409 `ITEM_NOT_STORED`; return needs `claimant_name`, dispose needs `reason` |
+| `GET {P}/reports/housekeeping-productivity`, `/housekeeping-dirty-rooms`, `/maintenance` | `report.view` | JSON or `?format=csv`; the first and the last take `from` and `to`, the second `min_hours` |
