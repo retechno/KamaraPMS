@@ -43,6 +43,11 @@ export const router = createRouter({
     { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
     { path: '/accounting/journals', name: 'accounting-journals', component: () => import('@/views/accounting/JournalsView.vue'), meta: { title: 'Journals' } },
     { path: '/accounting/periods', name: 'accounting-periods', component: () => import('@/views/accounting/PeriodsView.vue'), meta: { title: 'Accounting periods' } },
+    { path: '/accounting/trial-balance', name: 'accounting-trial-balance', component: () => import('@/views/accounting/TrialBalanceView.vue'), meta: { title: 'Trial balance' } },
+    { path: '/accounting/ledger', name: 'accounting-ledger', component: () => import('@/views/accounting/GeneralLedgerView.vue'), meta: { title: 'General ledger' } },
+    { path: '/accounting/income-statement', name: 'accounting-income-statement', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Income statement' } },
+    { path: '/accounting/balance-sheet', name: 'accounting-balance-sheet', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Balance sheet' } },
+    { path: '/accounting/reconciliation', name: 'accounting-reconciliation', component: () => import('@/views/accounting/ReconciliationView.vue'), meta: { title: 'Control accounts' } },
     {
       path: '/room-blocks',
       name: 'room-blocks',

@@ -636,3 +636,14 @@ Permissions: `accounting.view` (read), `accounting.manage` (chart and system acc
 | `GET {P}/accounting/periods` | `accounting.view` | Months from the start date to today, newest first, with `posted_days`, `closable`, `reopenable` |
 | `POST {P}/accounting/periods/{start}/close` | `accounting.close` | `{start}` is the first day of the month; 409 `PERIOD_NOT_READY` (context `days`, `posted_days`), `PERIOD_ALREADY_CLOSED` |
 | `POST {P}/accounting/periods/{start}/reopen` | `accounting.close` | `{reason}`; only the latest closed month: 409 `PERIOD_NOT_LATEST`, `PERIOD_NOT_CLOSED` |
+
+### 19.2 Reports
+All need `accounting.view`; `from` and `to` default to the current business month so far and the current business date, `as_of` to the current business date (not later: 422). A range is at most 5 years.
+
+| Method and path | Notes |
+|---|---|
+| `GET {P}/accounting/trial-balance` | `from`, `to`; rows per account with opening, movement and closing on their sides, and totals; `format=csv` |
+| `GET {P}/accounting/accounts/{id}/ledger` | `from`, `to`; opening balance, lines with running balance on the normal side, totals, `truncated`; `format=csv` |
+| `GET {P}/accounting/income-statement` | `from`, `to`; lines of kind HEADING, GROUP (with its accounts), SUBTOTAL and TOTAL in USALI order (keys include TOTAL_REVENUE, DEPT_PROFIT, GOP, EBITDA, EBIT, NET_INCOME), `net_income`; `format=csv` |
+| `GET {P}/accounting/balance-sheet` | `as_of`; the same line structure, totals and `difference`; `format=csv` |
+| `GET {P}/accounting/reconciliation` | `as_of`; `controls` (ledger, source, difference), `pending_days`, `includes_open_day`, `reconciled` |

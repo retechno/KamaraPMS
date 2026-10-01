@@ -243,3 +243,71 @@ SELECT count(*)::int FROM business_days b
 JOIN gl_day_posts d ON d.property_id = b.property_id AND d.business_date = b.business_date
 WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'CLOSED'
   AND b.business_date BETWEEN @first_day::date AND @last_day::date;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Reports (read-only)
+
+-- Per account with entries up to the end date: the balance before the start, and the movement within the range.
+-- name: TrialBalanceRows :many
+SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.statement_group,
+       COALESCE(sum(l.debit - l.credit) FILTER (WHERE j.journal_date < @from_date::date), 0)::numeric AS opening,
+       COALESCE(sum(l.debit) FILTER (WHERE j.journal_date >= @from_date::date), 0)::numeric AS debit,
+       COALESCE(sum(l.credit) FILTER (WHERE j.journal_date >= @from_date::date), 0)::numeric AS credit
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND j.journal_date <= @to_date::date
+GROUP BY a.id
+ORDER BY a.code;
+
+-- Debit minus credit per account over a range (an open start means from the beginning).
+-- name: AccountBalances :many
+SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.statement_group,
+       sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND j.journal_date <= @to_date::date
+  AND (sqlc.narg(from_date)::date IS NULL OR j.journal_date >= sqlc.narg(from_date)::date)
+  AND (sqlc.narg(account_types)::text[] IS NULL OR a.account_type = ANY(sqlc.narg(account_types)::text[]))
+GROUP BY a.id
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY a.code;
+
+-- name: LedgerOpening :one
+SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS opening
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date < @from_date::date;
+
+-- name: LedgerLines :many
+SELECT j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.line_no, l.debit, l.credit,
+       l.description, l.source_type, l.source_ref
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id
+  AND j.journal_date >= @from_date::date AND j.journal_date <= @to_date::date
+ORDER BY j.journal_date, j.id, l.line_no
+LIMIT @row_limit;
+
+-- What the folios and the city ledger say as of a business date, to compare with the control accounts.
+-- name: ControlSources :one
+SELECT
+    (SELECT COALESCE(sum(i.debit - i.credit), 0) FROM folio_items i
+      WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_date <= @as_of::date)::numeric AS folio_balance,
+    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
+       JOIN folios f ON f.property_id = g.property_id AND f.id = g.folio_id
+      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @as_of::date
+        AND (f.closed_on IS NULL OR f.closed_on > @as_of::date))::numeric AS deposits_held,
+    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
+      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
+        AND g.business_date <= @as_of::date)::numeric AS city_transferred,
+    (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @as_of::date)::numeric AS city_received;
+
+-- Closed days from the start date up to a date that have no journal run yet.
+-- name: CountPendingDays :one
+SELECT count(*)::int FROM business_days b
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'CLOSED'
+  AND b.business_date >= @start_date::date AND b.business_date <= @as_of::date
+  AND NOT EXISTS (SELECT 1 FROM gl_day_posts d WHERE d.property_id = b.property_id AND d.business_date = b.business_date);

@@ -125,6 +125,7 @@ func New(d Deps) *App {
 	accountingHTTP := accounting.NewHandler(accountingSvc)
 	accountingHTTP.Register(api)
 	accountingHTTP.RegisterJournals(api)
+	accountingHTTP.RegisterReports(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

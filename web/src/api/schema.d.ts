@@ -3430,6 +3430,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/trial-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Trial balance (accounting.view)
+         * @description Every account with entries up to the end date: the balance before the start, the movement of the range and the closing balance, each on the side it falls on. Debits equal credits in each column.
+         */
+        get: operations["getTrialBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * General ledger of one account (accounting.view)
+         * @description The entries of the account in the range with a running balance on the account's normal side (a credit account shows credit balances as positive). At most 5000 lines (`truncated`).
+         */
+        get: operations["getGeneralLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/income-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Income statement after USALI (accounting.view)
+         * @description Operating revenue by department, departmental expenses and profit, undistributed expenses, gross operating profit (GOP), management fees, non-operating expenses (EBITDA), depreciation, interest and income taxes down to net income. Lines of kind GROUP list their accounts; HEADING, SUBTOTAL and TOTAL are structure and results.
+         */
+        get: operations["getIncomeStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/balance-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Balance sheet (accounting.view)
+         * @description Assets, liabilities and equity as of a business date. Equity includes the earnings of all periods to date (there is no year-end closing entry). `difference` is zero when the books balance.
+         */
+        get: operations["getBalanceSheet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Control accounts against the folios (accounting.view)
+         * @description The guest ledger, advance deposits and city ledger accounts compared with what the folios and the city ledger say as of a date. Closed days without a journal (`pending_days`) and the open business day (`includes_open_day`) make the ledger fall behind. `reconciled` is true when nothing is pending and every difference is zero.
+         */
+        get: operations["getReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6336,6 +6447,106 @@ export interface components {
         };
         GlPeriodList: {
             data: components["schemas"]["GlPeriod"][];
+        };
+        TrialRow: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            opening_debit: string;
+            opening_credit: string;
+            debit: string;
+            credit: string;
+            closing_debit: string;
+            closing_credit: string;
+        };
+        TrialBalance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["TrialRow"][];
+            totals: components["schemas"]["TrialRow"];
+        };
+        LedgerLine: {
+            /** Format: date */
+            journal_date: string;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description: string;
+            source_type?: string;
+            source_ref?: string;
+            debit: string;
+            credit: string;
+            balance: string;
+        };
+        GeneralLedger: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            account: components["schemas"]["GlAccount"];
+            opening_balance: string;
+            lines: components["schemas"]["LedgerLine"][];
+            total_debit: string;
+            total_credit: string;
+            closing_balance: string;
+            truncated: boolean;
+        };
+        StatementAccount: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            amount: string;
+        };
+        StatementLine: {
+            key: string;
+            title: string;
+            /** @enum {string} */
+            kind: "HEADING" | "GROUP" | "SUBTOTAL" | "TOTAL";
+            amount: string;
+            accounts: components["schemas"]["StatementAccount"][];
+        };
+        IncomeStatement: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            lines: components["schemas"]["StatementLine"][];
+            net_income: string;
+        };
+        BalanceSheet: {
+            /** Format: date */
+            as_of: string;
+            lines: components["schemas"]["StatementLine"][];
+            total_assets: string;
+            total_liabilities: string;
+            total_equity: string;
+            difference: string;
+        };
+        ReconciliationControl: {
+            /** @enum {string} */
+            key: "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "CITY_LEDGER";
+            title: string;
+            account: string;
+            ledger: string;
+            source: string;
+            difference: string;
+            basis: string;
+        };
+        Reconciliation: {
+            /** Format: date */
+            as_of: string;
+            /** Format: date */
+            start_date: string;
+            controls: components["schemas"]["ReconciliationControl"][];
+            pending_days: number;
+            includes_open_day: boolean;
+            reconciled: boolean;
         };
     };
     responses: {
@@ -11916,6 +12127,161 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTrialBalance: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialBalance"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGeneralLedger: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneralLedger"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getIncomeStatement: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeStatement"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBalanceSheet: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceSheet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getReconciliation: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reconciliation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

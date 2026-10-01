@@ -13,6 +13,73 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const accountBalances = `-- name: AccountBalances :many
+SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.statement_group,
+       sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND j.journal_date <= $3::date
+  AND ($4::date IS NULL OR j.journal_date >= $4::date)
+  AND ($5::text[] IS NULL OR a.account_type = ANY($5::text[]))
+GROUP BY a.id
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY a.code
+`
+
+type AccountBalancesParams struct {
+	TenantID     int64
+	PropertyID   int64
+	ToDate       civil.Date
+	FromDate     *civil.Date
+	AccountTypes []string
+}
+
+type AccountBalancesRow struct {
+	ID             int64
+	Code           string
+	Name           string
+	AccountType    string
+	NormalSide     string
+	StatementGroup *string
+	Balance        decimal.Decimal
+}
+
+// Debit minus credit per account over a range (an open start means from the beginning).
+func (q *Queries) AccountBalances(ctx context.Context, arg AccountBalancesParams) ([]AccountBalancesRow, error) {
+	rows, err := q.db.Query(ctx, accountBalances,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ToDate,
+		arg.FromDate,
+		arg.AccountTypes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountBalancesRow{}
+	for rows.Next() {
+		var i AccountBalancesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.NormalSide,
+			&i.StatementGroup,
+			&i.Balance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ancestorIDs = `-- name: AncestorIDs :many
 WITH RECURSIVE up AS (
     SELECT g.id, g.parent_id, 1 AS depth FROM gl_accounts g WHERE g.property_id = $1 AND g.id = $2
@@ -74,6 +141,47 @@ func (q *Queries) ClosePeriod(ctx context.Context, arg ClosePeriodParams) error 
 	return err
 }
 
+const controlSources = `-- name: ControlSources :one
+SELECT
+    (SELECT COALESCE(sum(i.debit - i.credit), 0) FROM folio_items i
+      WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.business_date <= $3::date)::numeric AS folio_balance,
+    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
+       JOIN folios f ON f.property_id = g.property_id AND f.id = g.folio_id
+      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3::date
+        AND (f.closed_on IS NULL OR f.closed_on > $3::date))::numeric AS deposits_held,
+    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
+      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
+        AND g.business_date <= $3::date)::numeric AS city_transferred,
+    (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.status = 'POSTED' AND r.business_date <= $3::date)::numeric AS city_received
+`
+
+type ControlSourcesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+type ControlSourcesRow struct {
+	FolioBalance    decimal.Decimal
+	DepositsHeld    decimal.Decimal
+	CityTransferred decimal.Decimal
+	CityReceived    decimal.Decimal
+}
+
+// What the folios and the city ledger say as of a business date, to compare with the control accounts.
+func (q *Queries) ControlSources(ctx context.Context, arg ControlSourcesParams) (ControlSourcesRow, error) {
+	row := q.db.QueryRow(ctx, controlSources, arg.TenantID, arg.PropertyID, arg.AsOf)
+	var i ControlSourcesRow
+	err := row.Scan(
+		&i.FolioBalance,
+		&i.DepositsHeld,
+		&i.CityTransferred,
+		&i.CityReceived,
+	)
+	return i, err
+}
+
 const countAccountLines = `-- name: CountAccountLines :one
 SELECT count(*)::int FROM gl_journal_lines WHERE tenant_id = $1 AND property_id = $2 AND account_id = $3
 `
@@ -122,6 +230,33 @@ type CountChildrenParams struct {
 
 func (q *Queries) CountChildren(ctx context.Context, arg CountChildrenParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countChildren, arg.PropertyID, arg.ID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countPendingDays = `-- name: CountPendingDays :one
+SELECT count(*)::int FROM business_days b
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'CLOSED'
+  AND b.business_date >= $3::date AND b.business_date <= $4::date
+  AND NOT EXISTS (SELECT 1 FROM gl_day_posts d WHERE d.property_id = b.property_id AND d.business_date = b.business_date)
+`
+
+type CountPendingDaysParams struct {
+	TenantID   int64
+	PropertyID int64
+	StartDate  civil.Date
+	AsOf       civil.Date
+}
+
+// Closed days from the start date up to a date that have no journal run yet.
+func (q *Queries) CountPendingDays(ctx context.Context, arg CountPendingDaysParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPendingDays,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StartDate,
+		arg.AsOf,
+	)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -580,6 +715,105 @@ func (q *Queries) LatestClosedPeriod(ctx context.Context, arg LatestClosedPeriod
 	var period_start civil.Date
 	err := row.Scan(&period_start)
 	return period_start, err
+}
+
+const ledgerLines = `-- name: LedgerLines :many
+SELECT j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.line_no, l.debit, l.credit,
+       l.description, l.source_type, l.source_ref
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3
+  AND j.journal_date >= $4::date AND j.journal_date <= $5::date
+ORDER BY j.journal_date, j.id, l.line_no
+LIMIT $6
+`
+
+type LedgerLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+	RowLimit   int32
+}
+
+type LedgerLinesRow struct {
+	JournalDate        civil.Date
+	JournalID          int64
+	JournalNumber      string
+	JournalType        string
+	JournalDescription string
+	LineNo             int32
+	Debit              decimal.Decimal
+	Credit             decimal.Decimal
+	Description        *string
+	SourceType         *string
+	SourceRef          *string
+}
+
+func (q *Queries) LedgerLines(ctx context.Context, arg LedgerLinesParams) ([]LedgerLinesRow, error) {
+	rows, err := q.db.Query(ctx, ledgerLines,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AccountID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LedgerLinesRow{}
+	for rows.Next() {
+		var i LedgerLinesRow
+		if err := rows.Scan(
+			&i.JournalDate,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.JournalType,
+			&i.JournalDescription,
+			&i.LineNo,
+			&i.Debit,
+			&i.Credit,
+			&i.Description,
+			&i.SourceType,
+			&i.SourceRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ledgerOpening = `-- name: LedgerOpening :one
+SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS opening
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date < $4::date
+`
+
+type LedgerOpeningParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+	FromDate   civil.Date
+}
+
+func (q *Queries) LedgerOpening(ctx context.Context, arg LedgerOpeningParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, ledgerOpening,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AccountID,
+		arg.FromDate,
+	)
+	var opening decimal.Decimal
+	err := row.Scan(&opening)
+	return opening, err
 }
 
 const listAccountMap = `-- name: ListAccountMap :many
@@ -1113,6 +1347,77 @@ func (q *Queries) SetAccountMap(ctx context.Context, arg SetAccountMapParams) er
 		arg.ActorID,
 	)
 	return err
+}
+
+const trialBalanceRows = `-- name: TrialBalanceRows :many
+
+SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.statement_group,
+       COALESCE(sum(l.debit - l.credit) FILTER (WHERE j.journal_date < $1::date), 0)::numeric AS opening,
+       COALESCE(sum(l.debit) FILTER (WHERE j.journal_date >= $1::date), 0)::numeric AS debit,
+       COALESCE(sum(l.credit) FILTER (WHERE j.journal_date >= $1::date), 0)::numeric AS credit
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND j.journal_date <= $4::date
+GROUP BY a.id
+ORDER BY a.code
+`
+
+type TrialBalanceRowsParams struct {
+	FromDate   civil.Date
+	TenantID   int64
+	PropertyID int64
+	ToDate     civil.Date
+}
+
+type TrialBalanceRowsRow struct {
+	ID             int64
+	Code           string
+	Name           string
+	AccountType    string
+	NormalSide     string
+	StatementGroup *string
+	Opening        decimal.Decimal
+	Debit          decimal.Decimal
+	Credit         decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Reports (read-only)
+// Per account with entries up to the end date: the balance before the start, and the movement within the range.
+func (q *Queries) TrialBalanceRows(ctx context.Context, arg TrialBalanceRowsParams) ([]TrialBalanceRowsRow, error) {
+	rows, err := q.db.Query(ctx, trialBalanceRows,
+		arg.FromDate,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TrialBalanceRowsRow{}
+	for rows.Next() {
+		var i TrialBalanceRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.NormalSide,
+			&i.StatementGroup,
+			&i.Opening,
+			&i.Debit,
+			&i.Credit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateAccount = `-- name: UpdateAccount :exec
