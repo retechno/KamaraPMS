@@ -30,6 +30,13 @@ let idempotencyKey = newIdempotencyKey()
 
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
+/** Why a Book button is disabled (empty when it is enabled). */
+function whyNot(t: { available_min: number; fits_occupancy: boolean }, p: { estimate?: unknown; missing_nights?: number }): string {
+  if (t.available_min < 1) return 'No room of this type is left for these dates (add rooms under Setup → Rooms, or change the dates).'
+  if (!t.fits_occupancy) return 'The room type is too small for this party.'
+  if (!p.estimate) return `${p.missing_nights ?? 'Some'} night(s) have no rate: fill them in the Rate grid first.`
+  return ''
+}
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
@@ -176,7 +183,7 @@ async function book(): Promise<void> {
                 <small v-else class="muted" data-testid="missing">{{ p.missing_nights }} night(s) without a rate</small>
               </td>
               <td>
-                <button type="button" :disabled="t.available_min < 1 || !t.fits_occupancy || !p.estimate" :data-testid="`pick-${t.code}-${p.code}`" @click="pick(t, p)">Book</button>
+                <button type="button" :disabled="t.available_min < 1 || !t.fits_occupancy || !p.estimate" :title="whyNot(t, p)" :data-testid="`pick-${t.code}-${p.code}`" @click="pick(t, p)">Book</button>
               </td>
             </tr>
           </template>
