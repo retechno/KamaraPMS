@@ -39,6 +39,19 @@ export const documentPath = {
   registrationCard: (propertyId: number, stayId: number) => `/api/v1/properties/${propertyId}/stays/${stayId}/registration-card.pdf`,
   receipt: (propertyId: number, paymentId: number) => `/api/v1/properties/${propertyId}/payments/${paymentId}/receipt.pdf`,
   confirmation: (propertyId: number, reservationId: number) => `/api/v1/properties/${propertyId}/reservations/${reservationId}/confirmation.pdf`,
+  /** The accounting reports as PDF: the same parameters as the JSON reports (`from`, `to`, `as_of`). */
+  accounting: (propertyId: number, report: 'trial-balance' | 'income-statement' | 'balance-sheet', query: Record<string, string | undefined> = {}) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(query)) if (v) q.set(k, v)
+    const qs = q.toString()
+    return `/api/v1/properties/${propertyId}/accounting/${report}.pdf${qs ? `?${qs}` : ''}`
+  },
+  ledger: (propertyId: number, accountId: number, query: Record<string, string | undefined> = {}) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(query)) if (v) q.set(k, v)
+    const qs = q.toString()
+    return `/api/v1/properties/${propertyId}/accounting/accounts/${accountId}/ledger.pdf${qs ? `?${qs}` : ''}`
+  },
   companyInvoice: (propertyId: number, invoiceId: number) => `/api/v1/properties/${propertyId}/city-ledger/invoices/${invoiceId}/invoice.pdf`,
   companyStatement: (propertyId: number, companyId: number, from?: string, to?: string) => {
     const q = new URLSearchParams()

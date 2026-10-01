@@ -257,7 +257,10 @@ func (g *page) section(s string) {
 
 // table prints rows under a header, wrapping long cells and repeating the header on a new page. The columns are
 // stretched to the body width when they are narrower in total.
-func (g *page) table(cols []col, rows [][]string) {
+func (g *page) table(cols []col, rows [][]string) { g.tableB(cols, rows, nil) }
+
+// tableB is table with some rows in bold (totals and subtotals of a statement).
+func (g *page) tableB(cols []col, rows [][]string, bold func(row int) bool) {
 	head := func() {
 		g.p.SetFillColor(band[0], band[1], band[2])
 		g.font("B", 8.5)
@@ -267,7 +270,7 @@ func (g *page) table(cols []col, rows [][]string) {
 	}
 	head()
 	g.font("", 9)
-	for _, r := range rows {
+	for ri, r := range rows {
 		lines := 1
 		wrapped := make([][]string, len(cols))
 		for i, c := range cols {
@@ -290,6 +293,9 @@ func (g *page) table(cols []col, rows [][]string) {
 			g.font("", 9)
 		}
 		y := g.p.GetY()
+		if bold != nil && bold(ri) {
+			g.font("B", 9)
+		}
 		for i, c := range cols {
 			x := margin
 			for _, p := range cols[:i] {
@@ -300,6 +306,7 @@ func (g *page) table(cols []col, rows [][]string) {
 				g.p.CellFormat(c.w-1, 4.4, l, "", 2, c.align, false, 0, "")
 			}
 		}
+		g.font("", 9)
 		g.p.SetDrawColor(220, 224, 229)
 		g.p.SetLineWidth(0.15)
 		g.p.Line(margin, y+h, margin+sum(cols), y+h)

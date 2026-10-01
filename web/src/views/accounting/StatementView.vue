@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { StatementLine } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { documentPath, openPdf } from '@/utils/documents'
 import { downloadCsv } from './reportApi'
 import StatementTable from './StatementTable.vue'
 
@@ -68,6 +69,17 @@ async function exportCsv(): Promise<void> {
   }
 }
 
+async function showPdf(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    if (income.value) await openPdf(documentPath.accounting(propertyId, 'income-statement', { from: form.from, to: form.to }))
+    else await openPdf(documentPath.accounting(propertyId, 'balance-sheet', { as_of: form.as_of }))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 watch([() => pid.value, income], () => {
   lines.value = []
   loaded.value = false
@@ -78,7 +90,10 @@ watch([() => pid.value, income], () => {
 <template>
   <div class="page-head">
     <h1 class="page-title">{{ title }}</h1>
-    <button v-if="loaded && lines.length" type="button" data-testid="export" @click="exportCsv">Export CSV</button>
+    <div v-if="loaded && lines.length" class="head-actions">
+      <button type="button" data-testid="pdf" @click="showPdf">PDF</button>
+      <button type="button" data-testid="export" @click="exportCsv">Export CSV</button>
+    </div>
   </div>
   <p v-if="error" class="alert" role="alert" data-testid="report-error">
     {{ error.message }} <code>{{ error.code }}</code>
@@ -104,3 +119,10 @@ watch([() => pid.value, income], () => {
     </section>
   </template>
 </template>
+
+<style scoped>
+.head-actions {
+  display: flex;
+  gap: 8px;
+}
+</style>

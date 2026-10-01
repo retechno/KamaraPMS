@@ -647,3 +647,5 @@ All need `accounting.view`; `from` and `to` default to the current business mont
 | `GET {P}/accounting/income-statement` | `from`, `to`; lines of kind HEADING, GROUP (with its accounts), SUBTOTAL and TOTAL in USALI order (keys include TOTAL_REVENUE, DEPT_PROFIT, GOP, EBITDA, EBIT, NET_INCOME), `net_income`; `format=csv` |
 | `GET {P}/accounting/balance-sheet` | `as_of`; the same line structure, totals and `difference`; `format=csv` |
 | `GET {P}/accounting/reconciliation` | `as_of`; `controls` (ledger, source, difference), `pending_days`, `includes_open_day`, `reconciled` |
+
+PDF versions (the documents of §15, `accounting.view`, inline and never cached): `GET {P}/accounting/trial-balance.pdf`, `GET {P}/accounting/accounts/{id}/ledger.pdf` and `GET {P}/accounting/income-statement.pdf` take `from` and `to`; `GET {P}/accounting/balance-sheet.pdf` takes `as_of`.

@@ -202,6 +202,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - **Balance sheet** (as of a date): assets, liabilities and equity by group; equity includes the earnings of all periods to date (there is no year-end closing entry), and `difference` shows if the books ever fail to balance.
   - **Control accounts**: the guest ledger, advance deposits and city ledger accounts against what the folios and the city ledger say as of a date: folio items to the date plus the deposits held on folios not closed by then; deposits held; transfers to companies less receipts. Closed days without a journal (`pending_days`) and the open business day (`includes_open_day`) are reported, since they make the books fall behind. Folio activity from before the accounting start date is not in the books.
   - Trial balance, ledger, income statement and balance sheet export as CSV (`format=csv`).
+  - **PDF:** the trial balance, a general ledger, the income statement (USALI) and the balance sheet are also documents (`.../accounting/trial-balance.pdf`, `accounts/{id}/ledger.pdf`, `income-statement.pdf`, `balance-sheet.pdf`) with the hotel letterhead, the same parameters as the reports and the permission `accounting.view`; a balance sheet that does not balance prints a warning. Buttons on each report screen.
   - **Frontend:** Accounting → Trial balance, General ledger, Income statement, Balance sheet, Control accounts.
 
 Earlier revisions are in [archive/](archive/).

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.28.0
+  version: 0.29.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -4131,6 +4131,82 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Reconciliation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/trial-balance.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTrialBalancePdf
+      summary: Trial balance as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getGeneralLedgerPdf
+      summary: General ledger of an account as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/income-statement.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getIncomeStatementPdf
+      summary: Income statement (USALI) as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/balance-sheet.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBalanceSheetPdf
+      summary: Balance sheet as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: as_of, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }

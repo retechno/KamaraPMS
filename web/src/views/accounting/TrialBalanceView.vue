@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { TrialBalance } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { documentPath, openPdf } from '@/utils/documents'
 import { downloadCsv, money } from './reportApi'
 
 const auth = useAuthStore()
@@ -44,6 +45,16 @@ async function exportCsv(): Promise<void> {
   }
 }
 
+async function showPdf(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    await openPdf(documentPath.accounting(propertyId, 'trial-balance', query()))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 watch(() => pid.value, () => {
   report.value = null
   void load()
@@ -53,7 +64,10 @@ watch(() => pid.value, () => {
 <template>
   <div class="page-head">
     <h1 class="page-title">Trial balance</h1>
-    <button v-if="report" type="button" data-testid="export" @click="exportCsv">Export CSV</button>
+    <div v-if="report" class="head-actions">
+      <button type="button" data-testid="pdf" @click="showPdf">PDF</button>
+      <button type="button" data-testid="export" @click="exportCsv">Export CSV</button>
+    </div>
   </div>
   <p v-if="error" class="alert" role="alert" data-testid="report-error">
     {{ error.message }} <code>{{ error.code }}</code>
@@ -97,6 +111,10 @@ watch(() => pid.value, () => {
 </template>
 
 <style scoped>
+.head-actions {
+  display: flex;
+  gap: 8px;
+}
 .num {
   text-align: right;
   white-space: nowrap;

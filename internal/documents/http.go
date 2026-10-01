@@ -26,6 +26,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/reservations/{id}/confirmation.pdf", httpx.HandlerFunc(h.serve(h.svc.Confirmation)))
 	mux.Handle("GET "+p+"/companies/{id}/statement.pdf", httpx.HandlerFunc(h.statement))
 	mux.Handle("GET "+p+"/city-ledger/invoices/{id}/invoice.pdf", httpx.HandlerFunc(h.serve(h.svc.CompanyInvoice)))
+	h.registerAccounting(mux)
 }
 
 func (h *Handler) serve(render func(ctx context.Context, propertyID, id int64) (Document, error)) func(http.ResponseWriter, *http.Request) error {

@@ -3541,6 +3541,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/trial-balance.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Trial balance as PDF (accounting.view) */
+        get: operations["getTrialBalancePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** General ledger of an account as PDF (accounting.view) */
+        get: operations["getGeneralLedgerPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/income-statement.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Income statement (USALI) as PDF (accounting.view) */
+        get: operations["getIncomeStatementPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/balance-sheet.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Balance sheet as PDF (accounting.view) */
+        get: operations["getBalanceSheetPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -12278,6 +12355,118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Reconciliation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTrialBalancePdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGeneralLedgerPdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getIncomeStatementPdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBalanceSheetPdf: {
+        parameters: {
+            query?: {
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             403: components["responses"]["Problem"];

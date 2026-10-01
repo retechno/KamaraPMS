@@ -14,6 +14,8 @@ let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
 
 const download = vi.fn()
+const openPdf = vi.fn()
+vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 vi.mock('./reportApi', async (orig) => ({ ...(await orig<typeof import('./reportApi')>()), downloadCsv: (...a: unknown[]) => download(...a) }))
 
 const acc = { id: 1, code: '1110', name: 'Cash on hand', account_type: 'ASSET', normal_side: 'DEBIT', is_postable: true, is_active: true }
@@ -68,6 +70,7 @@ describe('report views', () => {
   beforeEach(() => {
     GET = vi.fn()
     download.mockReset()
+    openPdf.mockReset()
   })
 
   it('shows the trial balance with its totals and exports it', async () => {
@@ -82,6 +85,8 @@ describe('report views', () => {
     await w.get('[data-testid=export]').trigger('click')
     expect(download.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/accounting/trial-balance')
     expect(download.mock.calls[0]?.[2]).toBe('trial-balance-2026-09-30.csv')
+    await w.get('[data-testid=pdf]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/trial-balance.pdf?from=2026-09-01')
   })
 
   it('shows what the server refuses in a range', async () => {
@@ -105,6 +110,8 @@ describe('report views', () => {
     expect(w.get('[data-testid=closing]').text()).toContain('240000')
     await w.get('[data-testid=export]').trigger('click')
     expect(download.mock.calls[0]?.[2]).toBe('ledger-1110.csv')
+    await w.get('[data-testid=pdf]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/accounts/1/ledger.pdf')
   })
 
   it('lays the income statement out by group and total', async () => {
@@ -119,6 +126,8 @@ describe('report views', () => {
     await w.get('[data-testid=apply]').trigger('submit')
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ from: undefined, to: '2026-09-15' })
+    await w.get('[data-testid=pdf]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/income-statement.pdf?to=2026-09-15')
   })
 
   it('warns when the balance sheet does not balance', async () => {
@@ -130,6 +139,8 @@ describe('report views', () => {
     await w.get('[data-testid=apply]').trigger('submit')
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-09-30' })
+    await w.get('[data-testid=pdf]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/balance-sheet.pdf?as_of=2026-09-30')
   })
 
   it('reports whether the books agree with the folios', async () => {

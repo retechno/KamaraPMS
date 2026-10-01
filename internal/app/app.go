@@ -94,7 +94,7 @@ func New(d Deps) *App {
 	companiesSvc := companies.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	foliosSvc.SetCompanyGate(companiesSvc)
 	cityLedgerSvc := cityledger.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, companiesSvc)
-	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc)
+	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc, accountingSvc)
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
 	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)

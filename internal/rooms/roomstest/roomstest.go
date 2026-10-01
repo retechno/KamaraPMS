@@ -108,7 +108,7 @@ func Setup(t *testing.T) *Env {
 	na.SetJournaler(acct)
 	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
-	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct}
 }
