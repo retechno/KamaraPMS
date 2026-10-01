@@ -35,7 +35,7 @@ const hint = computed(() => {
   if (!a.is_active) return { ok: false, text: `${a.code} ${a.name} is inactive: amounts go to ${FALLBACK[props.kind]}.` }
   if (!a.is_postable) return { ok: false, text: `${a.code} ${a.name} is a header account and takes no postings: amounts go to ${FALLBACK[props.kind]}.` }
   if (!fits(a)) return { ok: false, text: `${a.code} ${a.name} is a ${a.account_type.toLowerCase()} account, which does not fit here: amounts go to ${FALLBACK[props.kind]}.` }
-  return { ok: true, text: `${a.code} · ${a.name}` }
+  return { ok: true, text: `${a.code} - ${a.name}` }
 })
 
 watch(() => property.currentId, async (id) => {

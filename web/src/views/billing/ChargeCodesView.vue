@@ -5,11 +5,13 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { ChargeCode, ChargeType, PriceMode, ServiceCharge, Tax } from '@/api/types'
 import ChargeCalculator from '@/components/ChargeCalculator.vue'
+import { useAccountNames } from './accountNames'
 import GlAccountInput from './GlAccountInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
 const auth = useAuthStore()
+const { label: accountLabel } = useAccountNames()
 const property = usePropertyStore()
 
 const codes = ref<ChargeCode[]>([])
@@ -336,7 +338,7 @@ watch(() => property.currentId, load, { immediate: true })
             <td>{{ typeLabel[c.charge_type] }}</td>
             <td>{{ c.price_mode === 'INCLUSIVE' ? 'Inclusive' : 'Exclusive' }}</td>
             <td data-testid="summary">{{ summary(c) }}</td>
-            <td data-testid="account">{{ c.gl_account_code ?? '—' }}</td>
+            <td data-testid="account">{{ accountLabel(c.gl_account_code) }}</td>
             <td>{{ c.is_active ? 'Active' : 'Inactive' }}</td>
             <td v-if="canManage"><button type="button" @click="startEdit(c)">Edit</button></td>
           </tr>

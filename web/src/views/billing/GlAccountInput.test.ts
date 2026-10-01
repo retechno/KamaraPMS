@@ -44,7 +44,7 @@ describe('GlAccountInput', () => {
   it('says what the typed code is, or where the amounts go instead', async () => {
     w = mountInput('CHARGE_CODE', '4110')
     await flushPromises()
-    expect(w.get('[data-testid=account-hint]').text()).toBe('4110 · Room revenue')
+    expect(w.get('[data-testid=account-hint]').text()).toBe('4110 - Room revenue')
     expect(w.get('[data-testid=account-hint]').classes()).not.toContain('error-text')
     for (const [code, text] of [
       ['', 'No account'], ['9999', 'not in the chart'], ['4199', 'inactive'], ['4100', 'header account'], ['1110', 'does not fit'],

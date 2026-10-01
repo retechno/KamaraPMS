@@ -5,6 +5,7 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { useAccountNames } from './accountNames'
 import GlAccountInput from './GlAccountInput.vue'
 
 /** Taxes and service charges differ only in `tax_on_service`; one section edits either list. */
@@ -21,6 +22,7 @@ interface Item {
 }
 
 const auth = useAuthStore()
+const { label: accountLabel } = useAccountNames()
 const property = usePropertyStore()
 
 const items = ref<Item[]>([])
@@ -177,7 +179,7 @@ watch(() => property.currentId, load, { immediate: true })
           <td><b>{{ i.code }}</b></td>
           <td>{{ i.name }}</td>
           <td>{{ Number(i.rate) }}%</td>
-          <td data-testid="account">{{ i.gl_account_code ?? '—' }}</td>
+          <td data-testid="account">{{ accountLabel(i.gl_account_code) }}</td>
           <td v-if="isTax">{{ i.tax_on_service ? 'Yes' : 'No' }}</td>
           <td>{{ i.is_active ? 'Active' : 'Inactive' }}</td>
           <td v-if="canManage"><button type="button" @click="startEdit(i)">Edit</button></td>
