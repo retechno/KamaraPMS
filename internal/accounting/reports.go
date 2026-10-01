@@ -294,7 +294,7 @@ func (s *Service) IncomeStatement(ctx context.Context, propertyID int64, from, t
 		return IncomeStatement{}, err
 	}
 	rows, err := s.q(ctx).AccountBalances(ctx, accountingdb.AccountBalancesParams{
-		TenantID: p.TenantID, PropertyID: propertyID, FromDate: &r.From, ToDate: r.To, AccountTypes: []string{TypeRevenue, TypeExpense},
+		TenantID: p.TenantID, PropertyID: propertyID, FromDate: &r.From, ToDate: r.To, AccountTypes: []string{TypeRevenue, TypeExpense}, ExcludeClosing: true,
 	})
 	if err != nil {
 		return IncomeStatement{}, err

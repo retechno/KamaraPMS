@@ -3618,6 +3618,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fiscal years of the books, newest first (accounting.view)
+         * @description From the year of the accounting start date to the year of the current business date. Years start on the first day of `fiscal_year_start_month`. Each carries the result of the year (net income, without any closing journal), how many of its months are closed and whether it can be closed or reopened.
+         */
+        get: operations["listFiscalYears"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a fiscal year (accounting.close)
+         * @description Posts the closing journal on the last day of the year: every revenue and expense balance of the year is closed to the RETAINED_EARNINGS account (a year without result closes without a journal). Needs the year ended, the year before it closed and all its months closed (409 `FISCAL_YEAR_NOT_READY`); 409 `FISCAL_YEAR_ALREADY_CLOSED`. The income statement leaves closing journals out; the balance sheet and ledgers keep them. A month of a closed year cannot be reopened (409 `PERIOD_IN_CLOSED_YEAR`).
+         */
+        post: operations["closeFiscalYear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen the latest closed fiscal year (accounting.close, needs approval)
+         * @description Reverses the closing journal and sets the year open again; closing it again makes a new journal. Only the latest closed year (409 `FISCAL_YEAR_NOT_LATEST`, `FISCAL_YEAR_NOT_CLOSED`).
+         */
+        post: operations["reopenFiscalYear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6397,7 +6467,7 @@ export interface components {
         };
         GlAccountMapEntry: {
             /** @enum {string} */
-            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE";
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS";
             meaning: string;
             /** Format: int64 */
             account_id: number;
@@ -6433,7 +6503,7 @@ export interface components {
             issues: components["schemas"]["GlCodeIssue"][];
         };
         /** @enum {string} */
-        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL";
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING";
         JournalLine: {
             line_no: number;
             /** Format: int64 */
@@ -6624,6 +6694,34 @@ export interface components {
             pending_days: number;
             includes_open_day: boolean;
             reconciled: boolean;
+        };
+        FiscalYear: {
+            /** Format: date */
+            year_start: string;
+            /** Format: date */
+            year_end: string;
+            /** @description FY plus the year the fiscal year ends in. */
+            label: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Months of the year from the accounting start date. */
+            months: number;
+            closed_months: number;
+            /** @description The result of the year from the journals, closing journals left out. */
+            net_income: string;
+            closable: boolean;
+            reopenable: boolean;
+            /** Format: int64 */
+            closing_journal_id: number | null;
+            closing_journal_number?: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            reopen_reason?: string;
+        };
+        FiscalYearList: {
+            data: components["schemas"]["FiscalYear"][];
         };
     };
     responses: {
@@ -12471,6 +12569,90 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFiscalYears: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fiscal years. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYearList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    closeFiscalYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fiscal year, now closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYear"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenFiscalYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The fiscal year, open again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYear"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

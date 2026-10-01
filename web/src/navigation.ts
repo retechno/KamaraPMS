@@ -57,6 +57,7 @@ export const navigation: NavSection[] = [
       { label: 'System accounts', to: '/accounting/mapping', milestone: 'S3' },
       { label: 'Journals', to: '/accounting/journals', milestone: 'S3' },
       { label: 'Periods', to: '/accounting/periods', milestone: 'S3' },
+      { label: 'Fiscal years', to: '/accounting/fiscal-years', milestone: 'S3' },
       { label: 'Trial balance', to: '/accounting/trial-balance', milestone: 'S3' },
       { label: 'General ledger', to: '/accounting/ledger', milestone: 'S3' },
       { label: 'Income statement', to: '/accounting/income-statement', milestone: 'S3' },

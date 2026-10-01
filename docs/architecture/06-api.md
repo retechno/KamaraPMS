@@ -649,3 +649,12 @@ All need `accounting.view`; `from` and `to` default to the current business mont
 | `GET {P}/accounting/reconciliation` | `as_of`; `controls` (ledger, source, difference), `pending_days`, `includes_open_day`, `reconciled` |
 
 PDF versions (the documents of §15, `accounting.view`, inline and never cached): `GET {P}/accounting/trial-balance.pdf`, `GET {P}/accounting/accounts/{id}/ledger.pdf` and `GET {P}/accounting/income-statement.pdf` take `from` and `to`; `GET {P}/accounting/balance-sheet.pdf` takes `as_of`.
+
+### 19.3 Fiscal years
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/fiscal-years` | `accounting.view` | Newest first; `net_income` (closing journals left out), `months`, `closed_months`, `closable`, `reopenable`, `closing_journal_number` |
+| `POST {P}/accounting/fiscal-years/{start}/close` | `accounting.close` | `{start}` is the first day of the year; 409 `FISCAL_YEAR_NOT_READY` (context `months`, `closed_months`), `FISCAL_YEAR_ALREADY_CLOSED`, `ACCOUNT_MAP_INCOMPLETE`; 404 `FISCAL_YEAR_NOT_FOUND` |
+| `POST {P}/accounting/fiscal-years/{start}/reopen` | `accounting.close` + approval | `{reason, approval}`; 409 `FISCAL_YEAR_NOT_LATEST`, `FISCAL_YEAR_NOT_CLOSED`. Reopening a month of a closed year: 409 `PERIOD_IN_CLOSED_YEAR` |
+
+The journal type `CLOSING` appears in the journal list; the system account map has 11 keys (`RETAINED_EARNINGS` is the new one).

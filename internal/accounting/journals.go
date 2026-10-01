@@ -25,6 +25,7 @@ const (
 	JournalDayClose = "DAY_CLOSE"
 	JournalManual   = "MANUAL"
 	JournalReversal = "REVERSAL"
+	JournalClosing  = "CLOSING"
 )
 
 const (

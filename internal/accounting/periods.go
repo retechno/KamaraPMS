@@ -180,6 +180,9 @@ func (s *Service) ReopenPeriod(ctx context.Context, propertyID int64, start civi
 		case !per.Reopenable:
 			return apperr.Conflict("PERIOD_NOT_LATEST", "only the latest closed period can be reopened")
 		}
+		if err := s.requirePeriodNotInClosedYear(ctx, p.TenantID, propertyID, cfg, start); err != nil {
+			return err
+		}
 		if err := s.q(ctx).ReopenPeriod(ctx, accountingdb.ReopenPeriodParams{TenantID: p.TenantID, PropertyID: propertyID, PeriodStart: start, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason}); err != nil {
 			return err
 		}

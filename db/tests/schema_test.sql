@@ -1148,6 +1148,25 @@ SELECT expect_error('a period exists once', '23505',
     $q$INSERT INTO gl_periods (tenant_id, property_id, period_start) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$);
 SELECT expect_error('a period has a known status', '23514', $q$INSERT INTO gl_periods (tenant_id, property_id, period_start, status) VALUES (tn('ABC'), pr('BALI'), '2026-11-01', 'LOCKED')$q$);
 
+-- Year-end closing
+SELECT expect_ok('a closing journal is flagged', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, is_closing)
+       VALUES (tn('ABC'), pr('BALI'), 'JV900001', 'CLOSING', '2026-10-01', 'x', true) RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a closing journal must be flagged', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV900002', 'CLOSING', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_ok('a fiscal year', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end) VALUES (tn('ABC'), pr('BALI'), '2025-10-01', '2026-09-30')$q$);
+SELECT expect_error('a fiscal year starts on the first of a month', '23514', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end) VALUES (tn('ABC'), pr('BALI'), '2025-10-02', '2026-09-30')$q$);
+SELECT expect_error('a fiscal year ends after it starts', '23514', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end) VALUES (tn('ABC'), pr('BALI'), '2025-10-01', '2025-10-01')$q$);
+SELECT expect_error('a fiscal year exists once', '23505',
+    $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end) VALUES (tn('ABC'), pr('BALI'), '2025-10-01', '2026-09-30')$q$,
+    $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end) VALUES (tn('ABC'), pr('BALI'), '2025-10-01', '2026-09-30')$q$);
+SELECT expect_error('a fiscal year has a known status', '23514', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end, status) VALUES (tn('ABC'), pr('BALI'), '2026-10-01', '2027-09-30', 'LOCKED')$q$);
+SELECT expect_error('a fiscal year names a journal of its property', '23503', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end, closing_journal_id) VALUES (tn('ABC'), pr('BALI'), '2026-10-01', '2027-09-30', 999999)$q$);
+SELECT expect_error('retained earnings is a known system key', '23514', $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'RETAINED', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

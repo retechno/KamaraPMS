@@ -39,16 +39,17 @@ func defaultSide(accountType string) string {
 
 // Keys of the accounts the system posts to (gl_account_map).
 const (
-	KeyCash            = "CASH"
-	KeyCard            = "CARD"
-	KeyBankTransfer    = "BANK_TRANSFER"
-	KeyOtherPayment    = "OTHER_PAYMENT"
-	KeyCityLedger      = "CITY_LEDGER"
-	KeyGuestLedger     = "GUEST_LEDGER"
-	KeyAdvanceDeposits = "ADVANCE_DEPOSITS"
-	KeyTaxPayable      = "TAX_PAYABLE"
-	KeyServicePayable  = "SERVICE_PAYABLE"
-	KeySuspense        = "SUSPENSE"
+	KeyCash             = "CASH"
+	KeyCard             = "CARD"
+	KeyBankTransfer     = "BANK_TRANSFER"
+	KeyOtherPayment     = "OTHER_PAYMENT"
+	KeyCityLedger       = "CITY_LEDGER"
+	KeyGuestLedger      = "GUEST_LEDGER"
+	KeyAdvanceDeposits  = "ADVANCE_DEPOSITS"
+	KeyTaxPayable       = "TAX_PAYABLE"
+	KeyServicePayable   = "SERVICE_PAYABLE"
+	KeySuspense         = "SUSPENSE"
+	KeyRetainedEarnings = "RETAINED_EARNINGS"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -63,6 +64,7 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyTaxPayable, TypeLiability, "Tax with no account of its own"},
 	{KeyServicePayable, TypeLiability, "Service charge with no account of its own"},
 	{KeySuspense, "", "Anything that cannot be placed: look here after each day close"},
+	{KeyRetainedEarnings, TypeEquity, "Where the result of a fiscal year is closed to"},
 }
 
 // Account is an account of the chart.

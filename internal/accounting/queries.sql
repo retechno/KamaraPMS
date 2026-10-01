@@ -159,9 +159,9 @@ WHERE x.amount <> 0;
 
 -- name: InsertJournal :one
 INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reference, reverses_journal_id, reason,
-                         idempotency_key, posted_at, posted_by, approved_by)
+                         idempotency_key, posted_at, posted_by, approved_by, is_closing)
 VALUES (@tenant_id, @property_id, @journal_number, @journal_type, @journal_date, @description, sqlc.narg(reference), sqlc.narg(reverses_journal_id),
-        sqlc.narg(reason), sqlc.narg(idempotency_key), @posted_at, sqlc.narg(actor_id), sqlc.narg(approved_by))
+        sqlc.narg(reason), sqlc.narg(idempotency_key), @posted_at, sqlc.narg(actor_id), sqlc.narg(approved_by), @is_closing::boolean)
 RETURNING id;
 
 -- name: InsertJournalLine :exec
@@ -270,6 +270,7 @@ JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND j.journal_date <= @to_date::date
   AND (sqlc.narg(from_date)::date IS NULL OR j.journal_date >= sqlc.narg(from_date)::date)
   AND (sqlc.narg(account_types)::text[] IS NULL OR a.account_type = ANY(sqlc.narg(account_types)::text[]))
+  AND (NOT @exclude_closing::boolean OR NOT j.is_closing)
 GROUP BY a.id
 HAVING sum(l.debit - l.credit) <> 0
 ORDER BY a.code;
@@ -311,3 +312,35 @@ SELECT count(*)::int FROM business_days b
 WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'CLOSED'
   AND b.business_date >= @start_date::date AND b.business_date <= @as_of::date
   AND NOT EXISTS (SELECT 1 FROM gl_day_posts d WHERE d.property_id = b.property_id AND d.business_date = b.business_date);
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Fiscal years
+
+-- name: ListFiscalYears :many
+SELECT f.year_start, f.year_end, f.status, f.closing_journal_id, cj.journal_number AS closing_number, f.closed_at, f.closed_by, f.reopened_at, f.reopen_reason
+FROM gl_fiscal_years f
+LEFT JOIN gl_journals cj ON cj.property_id = f.property_id AND cj.id = f.closing_journal_id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
+ORDER BY f.year_start DESC;
+
+-- name: UpsertFiscalYearClosed :exec
+INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end, status, closing_journal_id, closed_at, closed_by)
+VALUES (@tenant_id, @property_id, @year_start, @year_end, 'CLOSED', sqlc.narg(closing_journal_id), @now, sqlc.narg(actor_id))
+ON CONFLICT (property_id, year_start) DO UPDATE
+   SET status = 'CLOSED', closing_journal_id = EXCLUDED.closing_journal_id, closed_at = EXCLUDED.closed_at, closed_by = EXCLUDED.closed_by,
+       reversal_journal_id = NULL, reopened_at = NULL, reopened_by = NULL, reopen_reason = NULL, approved_by = NULL;
+
+-- name: MarkFiscalYearReopened :exec
+UPDATE gl_fiscal_years SET status = 'OPEN', reversal_journal_id = sqlc.narg(reversal_journal_id), reopened_at = @now, reopened_by = sqlc.narg(actor_id),
+       reopen_reason = @reason, approved_by = sqlc.narg(approved_by)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND year_start = @year_start;
+
+-- name: CountClosedPeriodsBetween :one
+SELECT count(*)::int FROM gl_periods
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED' AND period_start BETWEEN @first_day::date AND @last_day::date;
+
+-- name: SeedRetainedEarningsMap :exec
+INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
+SELECT a.tenant_id, a.property_id, 'RETAINED_EARNINGS', a.id, sqlc.narg(actor_id)
+  FROM gl_accounts a WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.code = '3200'
+ON CONFLICT (property_id, map_key) DO NOTHING;

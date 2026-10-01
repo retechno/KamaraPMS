@@ -22,6 +22,9 @@ func (h *Handler) RegisterJournals(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/periods", httpx.HandlerFunc(h.periods))
 	mux.Handle("POST "+p+"/periods/{start}/close", httpx.HandlerFunc(h.closePeriod))
 	mux.Handle("POST "+p+"/periods/{start}/reopen", httpx.HandlerFunc(h.reopenPeriod))
+	mux.Handle("GET "+p+"/fiscal-years", httpx.HandlerFunc(h.fiscalYears))
+	mux.Handle("POST "+p+"/fiscal-years/{start}/close", httpx.HandlerFunc(h.closeFiscalYear))
+	mux.Handle("POST "+p+"/fiscal-years/{start}/reopen", httpx.HandlerFunc(h.reopenFiscalYear))
 }
 
 func journalID(r *http.Request) (int64, int64, error) {

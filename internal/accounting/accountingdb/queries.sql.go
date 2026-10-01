@@ -22,17 +22,19 @@ JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND j.journal_date <= $3::date
   AND ($4::date IS NULL OR j.journal_date >= $4::date)
   AND ($5::text[] IS NULL OR a.account_type = ANY($5::text[]))
+  AND (NOT $6::boolean OR NOT j.is_closing)
 GROUP BY a.id
 HAVING sum(l.debit - l.credit) <> 0
 ORDER BY a.code
 `
 
 type AccountBalancesParams struct {
-	TenantID     int64
-	PropertyID   int64
-	ToDate       civil.Date
-	FromDate     *civil.Date
-	AccountTypes []string
+	TenantID       int64
+	PropertyID     int64
+	ToDate         civil.Date
+	FromDate       *civil.Date
+	AccountTypes   []string
+	ExcludeClosing bool
 }
 
 type AccountBalancesRow struct {
@@ -53,6 +55,7 @@ func (q *Queries) AccountBalances(ctx context.Context, arg AccountBalancesParams
 		arg.ToDate,
 		arg.FromDate,
 		arg.AccountTypes,
+		arg.ExcludeClosing,
 	)
 	if err != nil {
 		return nil, err
@@ -230,6 +233,30 @@ type CountChildrenParams struct {
 
 func (q *Queries) CountChildren(ctx context.Context, arg CountChildrenParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countChildren, arg.PropertyID, arg.ID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countClosedPeriodsBetween = `-- name: CountClosedPeriodsBetween :one
+SELECT count(*)::int FROM gl_periods
+WHERE tenant_id = $1 AND property_id = $2 AND status = 'CLOSED' AND period_start BETWEEN $3::date AND $4::date
+`
+
+type CountClosedPeriodsBetweenParams struct {
+	TenantID   int64
+	PropertyID int64
+	FirstDay   civil.Date
+	LastDay    civil.Date
+}
+
+func (q *Queries) CountClosedPeriodsBetween(ctx context.Context, arg CountClosedPeriodsBetweenParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countClosedPeriodsBetween,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FirstDay,
+		arg.LastDay,
+	)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -624,9 +651,9 @@ func (q *Queries) InsertDayPost(ctx context.Context, arg InsertDayPostParams) er
 
 const insertJournal = `-- name: InsertJournal :one
 INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reference, reverses_journal_id, reason,
-                         idempotency_key, posted_at, posted_by, approved_by)
+                         idempotency_key, posted_at, posted_by, approved_by, is_closing)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13)
+        $9, $10, $11, $12, $13, $14::boolean)
 RETURNING id
 `
 
@@ -644,6 +671,7 @@ type InsertJournalParams struct {
 	PostedAt          time.Time
 	ActorID           *int64
 	ApprovedBy        *int64
+	IsClosing         bool
 }
 
 func (q *Queries) InsertJournal(ctx context.Context, arg InsertJournalParams) (int64, error) {
@@ -661,6 +689,7 @@ func (q *Queries) InsertJournal(ctx context.Context, arg InsertJournalParams) (i
 		arg.PostedAt,
 		arg.ActorID,
 		arg.ApprovedBy,
+		arg.IsClosing,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -1028,6 +1057,64 @@ func (q *Queries) ListCodeUsage(ctx context.Context, arg ListCodeUsageParams) ([
 	return items, nil
 }
 
+const listFiscalYears = `-- name: ListFiscalYears :many
+
+SELECT f.year_start, f.year_end, f.status, f.closing_journal_id, cj.journal_number AS closing_number, f.closed_at, f.closed_by, f.reopened_at, f.reopen_reason
+FROM gl_fiscal_years f
+LEFT JOIN gl_journals cj ON cj.property_id = f.property_id AND cj.id = f.closing_journal_id
+WHERE f.tenant_id = $1 AND f.property_id = $2
+ORDER BY f.year_start DESC
+`
+
+type ListFiscalYearsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListFiscalYearsRow struct {
+	YearStart        civil.Date
+	YearEnd          civil.Date
+	Status           string
+	ClosingJournalID *int64
+	ClosingNumber    *string
+	ClosedAt         *time.Time
+	ClosedBy         *int64
+	ReopenedAt       *time.Time
+	ReopenReason     *string
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Fiscal years
+func (q *Queries) ListFiscalYears(ctx context.Context, arg ListFiscalYearsParams) ([]ListFiscalYearsRow, error) {
+	rows, err := q.db.Query(ctx, listFiscalYears, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFiscalYearsRow{}
+	for rows.Next() {
+		var i ListFiscalYearsRow
+		if err := rows.Scan(
+			&i.YearStart,
+			&i.YearEnd,
+			&i.Status,
+			&i.ClosingJournalID,
+			&i.ClosingNumber,
+			&i.ClosedAt,
+			&i.ClosedBy,
+			&i.ReopenedAt,
+			&i.ReopenReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJournalLines = `-- name: ListJournalLines :many
 SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref
 FROM gl_journal_lines l
@@ -1232,6 +1319,37 @@ func (q *Queries) ListPeriods(ctx context.Context, arg ListPeriodsParams) ([]Lis
 	return items, nil
 }
 
+const markFiscalYearReopened = `-- name: MarkFiscalYearReopened :exec
+UPDATE gl_fiscal_years SET status = 'OPEN', reversal_journal_id = $1, reopened_at = $2, reopened_by = $3,
+       reopen_reason = $4, approved_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND year_start = $8
+`
+
+type MarkFiscalYearReopenedParams struct {
+	ReversalJournalID *int64
+	Now               *time.Time
+	ActorID           *int64
+	Reason            *string
+	ApprovedBy        *int64
+	TenantID          int64
+	PropertyID        int64
+	YearStart         civil.Date
+}
+
+func (q *Queries) MarkFiscalYearReopened(ctx context.Context, arg MarkFiscalYearReopenedParams) error {
+	_, err := q.db.Exec(ctx, markFiscalYearReopened,
+		arg.ReversalJournalID,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.ApprovedBy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.YearStart,
+	)
+	return err
+}
+
 const pendingDays = `-- name: PendingDays :many
 SELECT b.business_date FROM business_days b
 WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'CLOSED' AND b.business_date >= $3::date
@@ -1322,6 +1440,24 @@ func (q *Queries) SeedChart(ctx context.Context, arg SeedChartParams) (int32, er
 	var created int32
 	err := row.Scan(&created)
 	return created, err
+}
+
+const seedRetainedEarningsMap = `-- name: SeedRetainedEarningsMap :exec
+INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
+SELECT a.tenant_id, a.property_id, 'RETAINED_EARNINGS', a.id, $1
+  FROM gl_accounts a WHERE a.tenant_id = $2 AND a.property_id = $3 AND a.code = '3200'
+ON CONFLICT (property_id, map_key) DO NOTHING
+`
+
+type SeedRetainedEarningsMapParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) SeedRetainedEarningsMap(ctx context.Context, arg SeedRetainedEarningsMapParams) error {
+	_, err := q.db.Exec(ctx, seedRetainedEarningsMap, arg.ActorID, arg.TenantID, arg.PropertyID)
+	return err
 }
 
 const setAccountMap = `-- name: SetAccountMap :exec
@@ -1452,6 +1588,37 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) er
 		arg.TenantID,
 		arg.PropertyID,
 		arg.ID,
+	)
+	return err
+}
+
+const upsertFiscalYearClosed = `-- name: UpsertFiscalYearClosed :exec
+INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end, status, closing_journal_id, closed_at, closed_by)
+VALUES ($1, $2, $3, $4, 'CLOSED', $5, $6, $7)
+ON CONFLICT (property_id, year_start) DO UPDATE
+   SET status = 'CLOSED', closing_journal_id = EXCLUDED.closing_journal_id, closed_at = EXCLUDED.closed_at, closed_by = EXCLUDED.closed_by,
+       reversal_journal_id = NULL, reopened_at = NULL, reopened_by = NULL, reopen_reason = NULL, approved_by = NULL
+`
+
+type UpsertFiscalYearClosedParams struct {
+	TenantID         int64
+	PropertyID       int64
+	YearStart        civil.Date
+	YearEnd          civil.Date
+	ClosingJournalID *int64
+	Now              *time.Time
+	ActorID          *int64
+}
+
+func (q *Queries) UpsertFiscalYearClosed(ctx context.Context, arg UpsertFiscalYearClosedParams) error {
+	_, err := q.db.Exec(ctx, upsertFiscalYearClosed,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.YearStart,
+		arg.YearEnd,
+		arg.ClosingJournalID,
+		arg.Now,
+		arg.ActorID,
 	)
 	return err
 }

@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 
@@ -54,7 +55,7 @@ func (s *Service) SetAccountMap(ctx context.Context, propertyID int64, in []MapI
 		return nil, err
 	}
 	if len(in) == 0 || len(in) > len(mapKeys) {
-		return nil, apperr.Invalid("the mapping is invalid", fieldErr("entries", "OUT_OF_RANGE", "between 1 and 10 entries"))
+		return nil, apperr.Invalid("the mapping is invalid", fieldErr("entries", "OUT_OF_RANGE", fmt.Sprintf("between 1 and %d entries", len(mapKeys))))
 	}
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		if _, err := s.lock(ctx, p.TenantID, propertyID, db.ForUpdate); err != nil {
