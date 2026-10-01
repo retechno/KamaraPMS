@@ -33,6 +33,7 @@ const (
 	LineCancelled  = "CANCELLED"
 	LineNoShow     = "NO_SHOW"
 	maxReasonLen   = 500
+	maxBulkNoShow  = 500
 	maxTextLen     = 2000
 	maxLinesPerRes = 50
 )

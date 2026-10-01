@@ -1709,6 +1709,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/night-audit/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The full night audit pre-check (nightaudit.run)
+         * @description Runs every check and a dry run of the room charges; it writes nothing. `blockers` stop the run: unresolved arrivals (CONFIRMED rooms due to arrive), unresolved departures (OPEN stays due out), room charges in ERROR and posted nights that should not exist. `missing_charges` are READY nights before the business date (the run posts them), `tonight_charges` the READY nights of the business date. `can_run` is true when the time guard passes and nothing blocks.
+         */
+        get: operations["previewNightAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/no-shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark exactly the listed unresolved arrivals as no-show (nightaudit.no_show)
+         * @description One transaction. The request carries the exact `reservation_room_ids` the staff saw and `confirm: true`; the server never expands the set. If any line is no longer CONFIRMED with an arrival date up to the business date, nothing changes and the answer is 409 `NO_SHOW_SET_CHANGED` with the changed lines in `context.changed`. A no-show releases the inventory; no fee is posted.
+         */
+        post: operations["markNoShows"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close the business day (nightaudit.run)
+         * @description One transaction: advisory lock (409 `NIGHT_AUDIT_IN_PROGRESS`), the open day locked for update (409 `BUSINESS_DATE_MISMATCH`), the time guard (409 `NIGHT_AUDIT_TOO_EARLY`), the checks (409 `NIGHT_AUDIT_BLOCKED`, `context.blockers` has the shape of the preview's), housekeeping (rooms with an open segment become DIRTY when the property is configured so), the room charges (trigger NIGHT_AUDIT), a revalidation, the closing summary, and the move to the next business date. Any blocker rolls back everything, including the charges posted. It never changes a guest, reservation or stay status.
+         */
+        post: operations["runNightAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
         parameters: {
             query?: never;
@@ -3406,6 +3472,134 @@ export interface components {
         RoomChargePostResponse: {
             results: components["schemas"]["RoomChargePosted"][];
             revalidation: components["schemas"]["RoomChargeRevalidation"];
+        };
+        UnresolvedArrival: {
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            guest: string;
+            room_type: string;
+            room?: string;
+            arrival_date: components["schemas"]["Date"];
+        };
+        UnresolvedDeparture: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            room?: string;
+            guest: string;
+            departure_date: components["schemas"]["Date"];
+        };
+        NightAuditBlockers: {
+            unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
+            unresolved_departures: components["schemas"]["UnresolvedDeparture"][];
+            charge_errors: components["schemas"]["RoomChargeItem"][];
+            invalid_charges: components["schemas"]["InvalidPosting"][];
+        };
+        NightAuditWarnings: {
+            stale_drafts: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+                arrival_date: components["schemas"]["Date"];
+            }[];
+            open_folios_of_cancelled_reservations: {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+                confirmation_number: string;
+                balance: components["schemas"]["Amount"];
+            }[];
+            blocks_ending: {
+                /** Format: int64 */
+                block_id: number;
+                block_type: string;
+                room: string;
+                end_date: components["schemas"]["Date"];
+            }[];
+        };
+        NightAuditPreview: {
+            business_date: components["schemas"]["Date"];
+            property_local_time: string;
+            time_guard_ok: boolean;
+            /** Format: date-time */
+            night_audit_allowed_from: string;
+            can_run: boolean;
+            blockers: components["schemas"]["NightAuditBlockers"];
+            missing_charges: {
+                count: number;
+                items: components["schemas"]["RoomChargeItem"][];
+            };
+            tonight_charges: {
+                count: number;
+                total: components["schemas"]["Amount"];
+            };
+            warnings: components["schemas"]["NightAuditWarnings"];
+        };
+        NoShowsRequest: {
+            business_date: components["schemas"]["Date"];
+            reservation_room_ids: number[];
+            /** @description Must be true. */
+            confirm: boolean;
+            reason?: string;
+        };
+        NoShowsResult: {
+            marked: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+            }[];
+            remaining_blockers: components["schemas"]["NightAuditBlockers"];
+        };
+        RunNightAuditRequest: {
+            business_date: components["schemas"]["Date"];
+        };
+        NightAuditMoney: {
+            net: components["schemas"]["Amount"];
+            service: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+        };
+        NightAuditSummary: {
+            business_date: components["schemas"]["Date"];
+            rooms: {
+                total: number;
+                out_of_order: number;
+                out_of_service: number;
+                sellable: number;
+                occupied: number;
+                /** @description Room nights charged for the business date. */
+                sold: number;
+            };
+            arrivals: number;
+            departures: number;
+            no_shows: number;
+            room_revenue: components["schemas"]["NightAuditMoney"];
+            revenue_by_charge_type: (components["schemas"]["NightAuditMoney"] & {
+                charge_type: string;
+            })[];
+            payments_by_method: {
+                method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+            }[];
+            /** @description Occupied rooms over rooms that are not out of order. */
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+            room_charges_posted: number;
+        };
+        NightAuditResult: {
+            closed_business_date: components["schemas"]["Date"];
+            new_business_date: components["schemas"]["Date"];
+            room_charges_posted: number;
+            summary: components["schemas"]["NightAuditSummary"];
         };
         FieldError: {
             field: string;
@@ -6312,6 +6506,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckOutResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewNightAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pre-check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    markNoShows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoShowsRequest"];
+            };
+        };
+        responses: {
+            /** @description The lines that were marked and what still blocks the run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoShowsResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    runNightAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunNightAuditRequest"];
+            };
+        };
+        responses: {
+            /** @description The day is closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditResult"];
                 };
             };
             403: components["responses"]["Problem"];

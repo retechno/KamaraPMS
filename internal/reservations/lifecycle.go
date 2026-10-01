@@ -2,9 +2,12 @@ package reservations
 
 import (
 	"context"
+	"slices"
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/db"
 	"kamarapms/internal/reservations/reservationsdb"
 )
 
@@ -417,4 +420,122 @@ func (s *Service) NoShow(ctx context.Context, propertyID, id, lineID int64, vers
 		return err
 	})
 	return out, err
+}
+
+// ChangedLine is a line of a bulk no-show that is no longer eligible.
+type ChangedLine struct {
+	ReservationRoomID int64  `json:"reservation_room_id"`
+	Status            string `json:"status,omitempty"`
+	Reason            string `json:"reason"`
+}
+
+// NoShowMarked is a line a bulk no-show marked.
+type NoShowMarked struct {
+	ReservationRoomID  int64  `json:"reservation_room_id"`
+	ReservationID      int64  `json:"reservation_id"`
+	ConfirmationNumber string `json:"confirmation_number"`
+}
+
+// BulkNoShow marks exactly the given CONFIRMED lines whose arrival is due as NO_SHOW, in one transaction
+// (nightaudit.no_show). It never expands the set: if any id is missing, no longer CONFIRMED or not due, nothing
+// changes and the answer is 409 NO_SHOW_SET_CHANGED listing those lines. Lock order: business day (share),
+// reservations, lines, both ascending. A fee, if any, is posted explicitly through the folio.
+func (s *Service) BulkNoShow(ctx context.Context, propertyID int64, bd civil.Date, lineIDs []int64, reason string) ([]NoShowMarked, error) {
+	p, err := s.writer(ctx, propertyID, auth.PermNightAuditNoShow)
+	if err != nil {
+		return nil, err
+	}
+	ids := uniqueSorted(lineIDs)
+	var fields []apperr.FieldError
+	if len(ids) == 0 {
+		fields = append(fields, fieldErr("reservation_room_ids", "REQUIRED", "at least one room line"))
+	}
+	if len(ids) > maxBulkNoShow {
+		fields = append(fields, fieldErr("reservation_room_ids", "TOO_MANY", "at most 500 lines"))
+	}
+	if len([]rune(reason)) > maxReasonLen {
+		fields = append(fields, fieldErr("reason", "TOO_LONG", "at most 500 characters"))
+	}
+	if len(fields) > 0 {
+		return nil, apperr.Invalid("the no-show request is invalid", fields...)
+	}
+	var out []NoShowMarked
+	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, &bd) // L1, and the date the staff saw
+		if err != nil {
+			return err
+		}
+		q := s.q(ctx)
+		pre, err := q.ListLinesByIDs(ctx, reservationsdb.ListLinesByIDsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: ids})
+		if err != nil {
+			return err
+		}
+		var headers, lines []int64
+		for _, l := range pre {
+			headers = append(headers, l.ReservationID)
+			lines = append(lines, l.ID)
+		}
+		headers = uniqueSorted(headers)
+		if err := db.LockRows(ctx, db.Reservations, db.ForUpdate, propertyID, headers); err != nil { // L4
+			return mapNotFound(err, errNotFound())
+		}
+		if err := db.LockRows(ctx, db.ReservationRooms, db.ForUpdate, propertyID, lines); err != nil {
+			return mapNotFound(err, errLineNotFound())
+		}
+		cur, err := q.ListLinesByIDs(ctx, reservationsdb.ListLinesByIDsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: ids})
+		if err != nil {
+			return err
+		}
+		byID := map[int64]reservationsdb.ReservationRoom{}
+		for _, l := range cur {
+			byID[l.ID] = l
+		}
+		var changed []ChangedLine
+		for _, id := range ids {
+			l, ok := byID[id]
+			switch {
+			case !ok:
+				changed = append(changed, ChangedLine{ReservationRoomID: id, Reason: "NOT_FOUND"})
+			case l.Status != LineConfirmed:
+				changed = append(changed, ChangedLine{ReservationRoomID: id, Status: l.Status, Reason: "NOT_CONFIRMED"})
+			case l.ArrivalDate.After(day.BusinessDate):
+				changed = append(changed, ChangedLine{ReservationRoomID: id, Status: l.Status, Reason: "ARRIVAL_NOT_DUE"})
+			}
+		}
+		if len(changed) > 0 {
+			return apperr.Conflict("NO_SHOW_SET_CHANGED", "some of the rooms are no longer unresolved arrivals; refresh the list").WithContext("changed", changed)
+		}
+		now := s.clock.Now()
+		bumped := map[int64]bool{}
+		for _, id := range ids {
+			l := byID[id]
+			l.Status, l.NoShowAt, l.NoShowBy = LineNoShow, &now, p.ActorID()
+			if _, err := s.saveLine(ctx, p, propertyID, l); err != nil {
+				return err
+			}
+			res, err := s.q(ctx).GetReservation(ctx, reservationsdb.GetReservationParams{TenantID: p.TenantID, PropertyID: propertyID, ID: l.ReservationID})
+			if err != nil {
+				return err
+			}
+			if !bumped[l.ReservationID] {
+				if _, err := s.bump(ctx, p, propertyID, l.ReservationID); err != nil {
+					return err
+				}
+				bumped[l.ReservationID] = true
+			}
+			if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "reservation.no_show", l.ReservationID,
+				map[string]any{"reservation_room_id": id, "status": LineConfirmed}, map[string]any{"status": LineNoShow, "reason": reason, "bulk": true})); err != nil {
+				return err
+			}
+			out = append(out, NoShowMarked{ReservationRoomID: id, ReservationID: l.ReservationID, ConfirmationNumber: res.ConfirmationNumber})
+		}
+		return nil
+	})
+	return out, err
+}
+
+func uniqueSorted(in []int64) []int64 {
+	out := slices.Clone(in)
+	slices.Sort(out)
+	return slices.Compact(out)
 }

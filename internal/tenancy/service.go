@@ -427,6 +427,12 @@ func (s *Service) CloseAndOpenNext(ctx context.Context, prop Property, expected 
 	if err != nil {
 		return BusinessDay{}, BusinessDay{}, err
 	}
+	return s.CloseAndOpenNextLocked(ctx, prop, day, closedBy, summary)
+}
+
+// CloseAndOpenNextLocked is CloseAndOpenNext for a caller that already holds the OPEN day FOR UPDATE (day is
+// that row) and has gone past lock level L1, as night audit has after posting: the day is not locked again.
+func (s *Service) CloseAndOpenNextLocked(ctx context.Context, prop Property, day BusinessDay, closedBy *int64, summary json.RawMessage) (closed, opened BusinessDay, err error) {
 	now := s.clock.Now()
 	if c := EvaluateDay(day.BusinessDate, now, prop.Location(), prop.NightAuditEarliestTime); !c.NightAuditAllowed {
 		return BusinessDay{}, BusinessDay{}, apperr.Conflict("NIGHT_AUDIT_TOO_EARLY",

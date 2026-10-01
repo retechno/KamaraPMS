@@ -205,3 +205,9 @@ SELECT id, room_id, block_type, start_date, end_date FROM room_blocks
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'ACTIVE'
   AND start_date < @window_end::date AND end_date > @window_start::date
 ORDER BY start_date, id;
+
+-- Room lines by id (the bulk no-show reads them before and after locking).
+-- name: ListLinesByIDs :many
+SELECT * FROM reservation_rooms
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[])
+ORDER BY id;

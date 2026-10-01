@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2103,6 +2103,71 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: previewNightAudit
+      summary: The full night audit pre-check (nightaudit.run)
+      description: |
+        Runs every check and a dry run of the room charges; it writes nothing. `blockers` stop the run: unresolved arrivals (CONFIRMED rooms due to arrive), unresolved departures (OPEN stays due out), room charges in ERROR and posted nights that should not exist. `missing_charges` are READY nights before the business date (the run posts them), `tonight_charges` the READY nights of the business date. `can_run` is true when the time guard passes and nothing blocks.
+      tags: [nightaudit]
+      responses:
+        "200":
+          description: The pre-check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/no-shows:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: markNoShows
+      summary: Mark exactly the listed unresolved arrivals as no-show (nightaudit.no_show)
+      description: |
+        One transaction. The request carries the exact `reservation_room_ids` the staff saw and `confirm: true`; the server never expands the set. If any line is no longer CONFIRMED with an arrival date up to the business date, nothing changes and the answer is 409 `NO_SHOW_SET_CHANGED` with the changed lines in `context.changed`. A no-show releases the inventory; no fee is posted.
+      tags: [nightaudit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NoShowsRequest" }
+      responses:
+        "200":
+          description: The lines that were marked and what still blocks the run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NoShowsResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/run:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: runNightAudit
+      summary: Close the business day (nightaudit.run)
+      description: |
+        One transaction: advisory lock (409 `NIGHT_AUDIT_IN_PROGRESS`), the open day locked for update (409 `BUSINESS_DATE_MISMATCH`), the time guard (409 `NIGHT_AUDIT_TOO_EARLY`), the checks (409 `NIGHT_AUDIT_BLOCKED`, `context.blockers` has the shape of the preview's), housekeeping (rooms with an open segment become DIRTY when the property is configured so), the room charges (trigger NIGHT_AUDIT), a revalidation, the closing summary, and the move to the next business date. Any blocker rolls back everything, including the charges posted. It never changes a guest, reservation or stay status.
+      tags: [nightaudit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunNightAuditRequest" }
+      responses:
+        "200":
+          description: The day is closed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/room-charges/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -4022,6 +4087,191 @@ components:
           type: array
           items: { $ref: "#/components/schemas/RoomChargePosted" }
         revalidation: { $ref: "#/components/schemas/RoomChargeRevalidation" }
+    UnresolvedArrival:
+      type: object
+      required: [reservation_room_id, reservation_id, confirmation_number, guest, room_type, arrival_date]
+      properties:
+        reservation_room_id: { type: integer, format: int64 }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        guest: { type: string }
+        room_type: { type: string }
+        room: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+    UnresolvedDeparture:
+      type: object
+      required: [stay_id, stay_number, guest, departure_date]
+      properties:
+        stay_id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        room: { type: string }
+        guest: { type: string }
+        departure_date: { $ref: "#/components/schemas/Date" }
+    NightAuditBlockers:
+      type: object
+      required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges]
+      properties:
+        unresolved_arrivals:
+          type: array
+          items: { $ref: "#/components/schemas/UnresolvedArrival" }
+        unresolved_departures:
+          type: array
+          items: { $ref: "#/components/schemas/UnresolvedDeparture" }
+        charge_errors:
+          type: array
+          items: { $ref: "#/components/schemas/RoomChargeItem" }
+        invalid_charges:
+          type: array
+          items: { $ref: "#/components/schemas/InvalidPosting" }
+    NightAuditWarnings:
+      type: object
+      required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending]
+      properties:
+        stale_drafts:
+          type: array
+          items:
+            type: object
+            required: [reservation_room_id, reservation_id, confirmation_number, arrival_date]
+            properties:
+              reservation_room_id: { type: integer, format: int64 }
+              reservation_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+              arrival_date: { $ref: "#/components/schemas/Date" }
+        open_folios_of_cancelled_reservations:
+          type: array
+          items:
+            type: object
+            required: [folio_id, folio_number, confirmation_number, balance]
+            properties:
+              folio_id: { type: integer, format: int64 }
+              folio_number: { type: string }
+              confirmation_number: { type: string }
+              balance: { $ref: "#/components/schemas/Amount" }
+        blocks_ending:
+          type: array
+          items:
+            type: object
+            required: [block_id, block_type, room, end_date]
+            properties:
+              block_id: { type: integer, format: int64 }
+              block_type: { type: string }
+              room: { type: string }
+              end_date: { $ref: "#/components/schemas/Date" }
+    NightAuditPreview:
+      type: object
+      required: [business_date, property_local_time, time_guard_ok, night_audit_allowed_from, can_run, blockers, missing_charges, tonight_charges, warnings]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        property_local_time: { type: string }
+        time_guard_ok: { type: boolean }
+        night_audit_allowed_from: { type: string, format: date-time }
+        can_run: { type: boolean }
+        blockers: { $ref: "#/components/schemas/NightAuditBlockers" }
+        missing_charges:
+          type: object
+          required: [count, items]
+          properties:
+            count: { type: integer }
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/RoomChargeItem" }
+        tonight_charges:
+          type: object
+          required: [count, total]
+          properties:
+            count: { type: integer }
+            total: { $ref: "#/components/schemas/Amount" }
+        warnings: { $ref: "#/components/schemas/NightAuditWarnings" }
+    NoShowsRequest:
+      type: object
+      required: [business_date, reservation_room_ids, confirm]
+      additionalProperties: false
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        reservation_room_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: integer, format: int64 }
+        confirm: { type: boolean, description: Must be true. }
+        reason: { type: string, maxLength: 500 }
+    NoShowsResult:
+      type: object
+      required: [marked, remaining_blockers]
+      properties:
+        marked:
+          type: array
+          items:
+            type: object
+            required: [reservation_room_id, reservation_id, confirmation_number]
+            properties:
+              reservation_room_id: { type: integer, format: int64 }
+              reservation_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+        remaining_blockers: { $ref: "#/components/schemas/NightAuditBlockers" }
+    RunNightAuditRequest:
+      type: object
+      required: [business_date]
+      additionalProperties: false
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+    NightAuditMoney:
+      type: object
+      required: [net, service, tax]
+      properties:
+        net: { $ref: "#/components/schemas/Amount" }
+        service: { $ref: "#/components/schemas/Amount" }
+        tax: { $ref: "#/components/schemas/Amount" }
+    NightAuditSummary:
+      type: object
+      required: [business_date, rooms, arrivals, departures, no_shows, room_revenue, revenue_by_charge_type, payments_by_method, occupancy_percent, adr, revpar, room_charges_posted]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        rooms:
+          type: object
+          required: [total, out_of_order, out_of_service, sellable, occupied, sold]
+          properties:
+            total: { type: integer }
+            out_of_order: { type: integer }
+            out_of_service: { type: integer }
+            sellable: { type: integer }
+            occupied: { type: integer }
+            sold: { type: integer, description: Room nights charged for the business date. }
+        arrivals: { type: integer }
+        departures: { type: integer }
+        no_shows: { type: integer }
+        room_revenue: { $ref: "#/components/schemas/NightAuditMoney" }
+        revenue_by_charge_type:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/NightAuditMoney"
+              - type: object
+                required: [charge_type]
+                properties:
+                  charge_type: { type: string }
+        payments_by_method:
+          type: array
+          items:
+            type: object
+            required: [method, payments, refunds, net]
+            properties:
+              method: { type: string }
+              payments: { $ref: "#/components/schemas/Amount" }
+              refunds: { $ref: "#/components/schemas/Amount" }
+              net: { $ref: "#/components/schemas/Amount" }
+        occupancy_percent: { type: string, description: Occupied rooms over rooms that are not out of order. }
+        adr: { $ref: "#/components/schemas/Amount" }
+        revpar: { $ref: "#/components/schemas/Amount" }
+        room_charges_posted: { type: integer }
+    NightAuditResult:
+      type: object
+      required: [closed_business_date, new_business_date, room_charges_posted, summary]
+      properties:
+        closed_business_date: { $ref: "#/components/schemas/Date" }
+        new_business_date: { $ref: "#/components/schemas/Date" }
+        room_charges_posted: { type: integer }
+        summary: { $ref: "#/components/schemas/NightAuditSummary" }
     FieldError:
       type: object
       required: [field, code]

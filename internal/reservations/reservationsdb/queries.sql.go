@@ -739,6 +739,62 @@ func (q *Queries) ListLines(ctx context.Context, arg ListLinesParams) ([]Reserva
 	return items, nil
 }
 
+const listLinesByIDs = `-- name: ListLinesByIDs :many
+SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by FROM reservation_rooms
+WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+ORDER BY id
+`
+
+type ListLinesByIDsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+// Room lines by id (the bulk no-show reads them before and after locking).
+func (q *Queries) ListLinesByIDs(ctx context.Context, arg ListLinesByIDsParams) ([]ReservationRoom, error) {
+	rows, err := q.db.Query(ctx, listLinesByIDs, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReservationRoom{}
+	for rows.Next() {
+		var i ReservationRoom
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.ReservationID,
+			&i.GuestID,
+			&i.RoomTypeID,
+			&i.RoomID,
+			&i.RatePlanID,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.AdultCount,
+			&i.ChildCount,
+			&i.Status,
+			&i.CancelledAt,
+			&i.CancelledBy,
+			&i.CancellationReason,
+			&i.NoShowAt,
+			&i.NoShowBy,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLinesOfReservations = `-- name: ListLinesOfReservations :many
 SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by FROM reservation_rooms
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = ANY($3::bigint[])

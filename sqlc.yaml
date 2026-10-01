@@ -177,6 +177,17 @@ sql:
 
   - engine: postgresql
     schema: migrations
+    queries: internal/nightaudit/queries.sql
+    gen:
+      go:
+        package: nightauditdb
+        out: internal/nightaudit/nightauditdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
     queries: internal/expected/queries.sql
     gen:
       go:
