@@ -3688,6 +3688,224 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/payables/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Suppliers by name, with what is owed to each (payables.view) */
+        get: operations["listSuppliers"];
+        put?: never;
+        /** Add a supplier (payables.manage) */
+        post: operations["createSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/suppliers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One supplier (payables.view) */
+        get: operations["getSupplier"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a supplier (payables.manage)
+         * @description The code never changes. A default account below 1 removes it.
+         */
+        patch: operations["updateSupplier"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/suppliers/{id}/open-bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** What is still owed on the bills of a supplier, oldest due date first (payables.view) */
+        get: operations["listOpenBills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Supplier bills, newest first (payables.view) */
+        get: operations["listBills"];
+        put?: never;
+        /**
+         * Enter a supplier bill (payables.post)
+         * @description The `Idempotency-Key` header is required. The journal debits each line's account against ACCOUNTS PAYABLE on the bill date; the date is not after the current business date nor before the accounting start date, and its month is open (409 `PERIOD_CLOSED`). The due date defaults to the bill date plus the supplier's payment terms. The same invoice of a supplier is entered once (409 `DUPLICATE_INVOICE`; a voided one may be entered again). 409 `SUPPLIER_INACTIVE`.
+         */
+        post: operations["postBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One bill with its lines (payables.view) */
+        get: operations["getBill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a bill without payments (payables.post, needs approval)
+         * @description The journal of the bill is reversed on the current business date. 409 `BILL_HAS_PAYMENTS` (void the payments first), `BILL_ALREADY_VOIDED`.
+         */
+        post: operations["voidBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments to suppliers, newest first (payables.view) */
+        get: operations["listSupplierPayments"];
+        put?: never;
+        /**
+         * Pay a supplier (payables.post)
+         * @description The `Idempotency-Key` header is required. A payment is the sum of what it settles: each allocation names an open bill of the supplier and an amount up to what is still owed (409 `ALLOCATION_EXCEEDS_OUTSTANDING`, one field error per allocation, checked under the supplier's row lock so two payments cannot overpay a bill). The journal debits ACCOUNTS PAYABLE against the cash, bank or other payment account of the method.
+         */
+        post: operations["postSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One payment with the bills it settles (payables.view) */
+        get: operations["getSupplierPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment (payables.post, needs approval)
+         * @description The journal of the payment is reversed on the current business date and the bills it settled are open again. 409 `PAYMENT_ALREADY_VOIDED`.
+         */
+        post: operations["voidSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/aging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What is owed to suppliers by days overdue (payables.view)
+         * @description Open bills as of a business date, by supplier and bucket: not yet due, 1-30, 31-60, 61-90 and over 90 days past the due date. A past date reproduces what was owed then: payments and voids after it are ignored.
+         */
+        get: operations["getPayablesAging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6467,7 +6685,7 @@ export interface components {
         };
         GlAccountMapEntry: {
             /** @enum {string} */
-            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS";
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE";
             meaning: string;
             /** Format: int64 */
             account_id: number;
@@ -6503,7 +6721,7 @@ export interface components {
             issues: components["schemas"]["GlCodeIssue"][];
         };
         /** @enum {string} */
-        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING";
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES";
         JournalLine: {
             line_no: number;
             /** Format: int64 */
@@ -6677,7 +6895,7 @@ export interface components {
         };
         ReconciliationControl: {
             /** @enum {string} */
-            key: "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "CITY_LEDGER";
+            key: "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "CITY_LEDGER" | "ACCOUNTS_PAYABLE";
             title: string;
             account: string;
             ledger: string;
@@ -6722,6 +6940,235 @@ export interface components {
         };
         FiscalYearList: {
             data: components["schemas"]["FiscalYear"][];
+        };
+        Supplier: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days: number;
+            /** Format: int64 */
+            default_account_id: number | null;
+            default_account_code?: string;
+            default_account_name?: string;
+            bank_details?: string;
+            notes?: string;
+            is_active: boolean;
+            /** @description What is owed to the supplier now (bills not voided less payments not voided). */
+            outstanding: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SupplierList: {
+            data: components["schemas"]["Supplier"][];
+        };
+        CreateSupplierRequest: {
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days?: number | null;
+            /** Format: int64 */
+            default_account_id?: number | null;
+            bank_details?: string;
+            notes?: string;
+            is_active?: boolean | null;
+        };
+        UpdateSupplierRequest: {
+            name?: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days?: number;
+            /**
+             * Format: int64
+             * @description A value below 1 removes the default account.
+             */
+            default_account_id?: number;
+            bank_details?: string;
+            notes?: string;
+            is_active?: boolean;
+        };
+        BillLine: {
+            line_no: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            description?: string;
+            amount: string;
+        };
+        Bill: {
+            /** Format: int64 */
+            id: number;
+            bill_number: string;
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            description?: string;
+            total: string;
+            paid: string;
+            outstanding: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one bill is read or created. */
+            lines?: components["schemas"]["BillLine"][];
+        };
+        BillList: {
+            data: components["schemas"]["Bill"][];
+        };
+        PostBillRequest: {
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date?: string | null;
+            description?: string;
+            lines: {
+                /** Format: int64 */
+                account_id: number;
+                description?: string;
+                /** @description Above zero, at the property's decimals. */
+                amount: string;
+            }[];
+        };
+        OpenBill: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            total: string;
+            outstanding: string;
+        };
+        OpenBillList: {
+            data: components["schemas"]["OpenBill"][];
+        };
+        Allocation: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            amount: string;
+        };
+        SupplierPayment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one payment is read or created. */
+            allocations?: components["schemas"]["Allocation"][];
+        };
+        SupplierPaymentList: {
+            data: components["schemas"]["SupplierPayment"][];
+        };
+        PostSupplierPaymentRequest: {
+            /** Format: int64 */
+            supplier_id: number;
+            /** Format: date */
+            payment_date: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            allocations: {
+                /** Format: int64 */
+                bill_id: number;
+                amount: string;
+            }[];
+        };
+        AgingBucket: {
+            CURRENT: string;
+            DAYS_1_30: string;
+            DAYS_31_60: string;
+            DAYS_61_90: string;
+            DAYS_OVER_90: string;
+        };
+        AgingBill: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            days_overdue: number;
+            outstanding: string;
+        };
+        AgingSupplier: {
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            buckets: components["schemas"]["AgingBucket"];
+            total: string;
+            bills: components["schemas"]["AgingBill"][];
+        };
+        PayablesAging: {
+            /** Format: date */
+            as_of: string;
+            suppliers: components["schemas"]["AgingSupplier"][];
+            buckets: components["schemas"]["AgingBucket"];
+            total: string;
         };
     };
     responses: {
@@ -12653,6 +13100,419 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSuppliers: {
+        parameters: {
+            query?: {
+                active?: boolean;
+                /** @description Text in the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description The supplier. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listOpenBills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBillList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBills: {
+        parameters: {
+            query?: {
+                supplier_id?: number;
+                status?: "POSTED" | "VOIDED";
+                from?: string;
+                to?: string;
+                /** @description Text in the bill number */
+                q?: string;
+                /** @description Only bills with something still owed. */
+                open_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postBill: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostBillRequest"];
+            };
+        };
+        responses: {
+            /** @description The bill with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSupplierPayments: {
+        parameters: {
+            query?: {
+                supplier_id?: number;
+                status?: "POSTED" | "VOIDED";
+                from?: string;
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPaymentList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postSupplierPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostSupplierPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment with what it settles. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPayablesAging: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayablesAging"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

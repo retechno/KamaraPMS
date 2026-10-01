@@ -40,7 +40,7 @@ function ledgerLink(accountId: number, date: string): { path: string; query: Rec
   const mm = String(m).padStart(2, '0')
   return { path: '/accounting/ledger', query: { account: String(accountId), from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, '0')}` } }
 }
-const TYPE_LABEL: Record<string, string> = { DAY_CLOSE: 'Day close', MANUAL: 'Manual', REVERSAL: 'Reversal', CLOSING: 'Year-end closing' }
+const TYPE_LABEL: Record<string, string> = { DAY_CLOSE: 'Day close', MANUAL: 'Manual', REVERSAL: 'Reversal', CLOSING: 'Year-end closing', PAYABLES: 'Payables' }
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -244,6 +244,7 @@ watch(() => pid.value, () => {
             <option value="MANUAL">Manual</option>
             <option value="REVERSAL">Reversal</option>
             <option value="CLOSING">Year-end closing</option>
+            <option value="PAYABLES">Payables</option>
           </select>
         </label>
         <label class="field"><span>Search</span><input v-model="filter.q" name="q" type="search" placeholder="Number, text or reference" /></label>

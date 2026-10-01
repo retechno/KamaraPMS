@@ -26,6 +26,7 @@ import (
 	"kamarapms/internal/maintenance"
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/notifications"
+	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/clock"
@@ -98,6 +99,7 @@ func New(d Deps) *App {
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
 	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)
+	payablesSvc := payables.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
 	lostFoundSvc := lostfound.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
 
@@ -126,6 +128,7 @@ func New(d Deps) *App {
 	accountingHTTP.Register(api)
 	accountingHTTP.RegisterJournals(api)
 	accountingHTTP.RegisterReports(api)
+	payables.NewHandler(payablesSvc).Register(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

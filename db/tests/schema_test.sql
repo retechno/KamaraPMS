@@ -1167,6 +1167,75 @@ SELECT expect_error('a fiscal year has a known status', '23514', $q$INSERT INTO 
 SELECT expect_error('a fiscal year names a journal of its property', '23503', $q$INSERT INTO gl_fiscal_years (tenant_id, property_id, year_start, year_end, closing_journal_id) VALUES (tn('ABC'), pr('BALI'), '2026-10-01', '2027-09-30', 999999)$q$);
 SELECT expect_error('retained earnings is a known system key', '23514', $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'RETAINED', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
 
+-- Payables: suppliers, bills, payments
+INSERT INTO suppliers (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'S1', 'Supplier one');
+INSERT INTO suppliers (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'S2', 'Supplier two');
+SELECT expect_error('a supplier code is unique per property', '23505', $q$INSERT INTO suppliers (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'S1', 'x')$q$);
+INSERT INTO suppliers (tenant_id, property_id, code, name) VALUES (tn('XYZ'), pr('SG'), 'S1', 'Supplier one of SG');
+SELECT expect_error('a supplier code of the right form', '23514', $q$INSERT INTO suppliers (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'bad code', 'x')$q$);
+SELECT expect_error('payment terms of a year at most', '23514', $q$INSERT INTO suppliers (tenant_id, property_id, code, name, payment_terms_days) VALUES (tn('ABC'), pr('BALI'), 'S3', 'x', 400)$q$);
+SELECT expect_error('a default account of the property', '23503', $q$INSERT INTO suppliers (tenant_id, property_id, code, name, default_account_id) VALUES (tn('ABC'), pr('BALI'), 'S3', 'x', (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1110'))$q$);
+WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL1', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-1', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b;
+SELECT expect_error('a bill number is unique per property', '23505', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL1', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-2', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_error('a supplier invoice is entered once', '23505', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL2', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-1', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_ok('the same invoice number of another supplier', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL2', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S2'), 'INV-1', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_ok('a voided invoice may be entered again', $q$UPDATE supplier_bills SET status = 'VOIDED', voided_at = now(), void_reason = 'x' WHERE bill_number = 'BL1'$q$, $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL3', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-1', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_error('the lines of a bill add up to its total', '23514', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL4', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-4', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 900 FROM b$q$);
+SELECT expect_error('a bill has a positive total', '23514', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL4', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-4', '2026-10-01', '2026-10-31', 0, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 0 FROM b$q$);
+SELECT expect_error('a due date is not before the bill date', '23514', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL4', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-4', '2026-10-01', '2026-09-01', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_error('a bill has lines', '23514', $q$INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id) VALUES (tn('ABC'), pr('BALI'), 'BL5', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), 'INV-5', '2026-10-01', '2026-10-31', 100, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a bill is for a supplier of its property', '23503', $q$WITH b AS (INSERT INTO supplier_bills (tenant_id, property_id, bill_number, supplier_id, supplier_invoice_number, bill_date, due_date, total, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'BL6', (SELECT id FROM suppliers WHERE property_id = pr('SG') AND code = 'S1'), 'INV-6', '2026-10-01', '2026-10-31', 1000, (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, amount) SELECT tn('ABC'), pr('BALI'), b.id, 1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 1000 FROM b$q$);
+SELECT expect_error('a voided bill needs a reason', '23514', $q$UPDATE supplier_bills SET status = 'VOIDED', voided_at = now() WHERE bill_number = 'BL1'$q$);
+SELECT expect_error('a bill only goes from posted to voided', '23001', $q$UPDATE supplier_bills SET total = 1 WHERE bill_number = 'BL1'$q$);
+SELECT expect_error('bills are not deleted', '23001', $q$DELETE FROM supplier_bills$q$);
+SELECT expect_error('bill lines are append-only', '23001', $q$UPDATE supplier_bill_lines SET amount = 1$q$);
+SELECT expect_error('bills cannot be truncated', '23001', $q$TRUNCATE supplier_bills CASCADE$q$);
+WITH x AS (INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'SP1', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), '2026-10-01', 400, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id, supplier_id)
+INSERT INTO supplier_payment_allocations (tenant_id, property_id, supplier_id, payment_id, bill_id, amount)
+SELECT tn('ABC'), pr('BALI'), x.supplier_id, x.id, (SELECT id FROM supplier_bills WHERE bill_number = 'BL1'), 400 FROM x;
+SELECT expect_error('a payment settles bills for its whole amount', '23514', $q$WITH x AS (INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'SP2', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), '2026-10-01', 400, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id, supplier_id)
+INSERT INTO supplier_payment_allocations (tenant_id, property_id, supplier_id, payment_id, bill_id, amount)
+SELECT tn('ABC'), pr('BALI'), x.supplier_id, x.id, (SELECT id FROM supplier_bills WHERE bill_number = 'BL1'), 300 FROM x$q$);
+SELECT expect_error('a payment settles bills of its own supplier', '23503', $q$WITH x AS (INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'SP2', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S2'), '2026-10-01', 400, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id, supplier_id)
+INSERT INTO supplier_payment_allocations (tenant_id, property_id, supplier_id, payment_id, bill_id, amount)
+SELECT tn('ABC'), pr('BALI'), x.supplier_id, x.id, (SELECT id FROM supplier_bills WHERE bill_number = 'BL1'), 400 FROM x$q$);
+SELECT expect_error('a payment is a positive amount', '23514', $q$INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'SP3', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), '2026-10-01', 0, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a payment method of the list', '23514', $q$WITH x AS (INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'SP3', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), '2026-10-01', 400, 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id, supplier_id)
+INSERT INTO supplier_payment_allocations (tenant_id, property_id, supplier_id, payment_id, bill_id, amount)
+SELECT tn('ABC'), pr('BALI'), x.supplier_id, x.id, (SELECT id FROM supplier_bills WHERE bill_number = 'BL1'), 400 FROM x$q$);
+SELECT expect_error('payment numbers are unique', '23505', $q$WITH x AS (INSERT INTO supplier_payments (tenant_id, property_id, payment_number, supplier_id, payment_date, amount, payment_method, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'SP1', (SELECT id FROM suppliers WHERE property_id = pr('BALI') AND code = 'S1'), '2026-10-01', 400, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id, supplier_id)
+INSERT INTO supplier_payment_allocations (tenant_id, property_id, supplier_id, payment_id, bill_id, amount)
+SELECT tn('ABC'), pr('BALI'), x.supplier_id, x.id, (SELECT id FROM supplier_bills WHERE bill_number = 'BL1'), 400 FROM x$q$);
+SELECT expect_error('a payment only goes from posted to voided', '23001', $q$UPDATE supplier_payments SET amount = 1$q$);
+SELECT expect_error('payments are not deleted', '23001', $q$DELETE FROM supplier_payments$q$);
+SELECT expect_error('allocations are append-only', '23001', $q$UPDATE supplier_payment_allocations SET amount = 1$q$);
+SELECT expect_error('allocations are not deleted', '23001', $q$DELETE FROM supplier_payment_allocations$q$);
+SELECT expect_error('accounts payable is a known system key', '23505', $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'ACCOUNTS_PAYABLE', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110')), (tn('ABC'), pr('BALI'), 'ACCOUNTS_PAYABLE', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_error('a payables journal type exists, an unknown one does not', '23514', $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JVX', 'PAYMENTS', '2026-10-01', 'x')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

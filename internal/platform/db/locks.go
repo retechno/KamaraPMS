@@ -30,6 +30,7 @@ const (
 	LevelCompanies    LockLevel = 44 // L4: a city ledger account (serialises its credit limit checks and receipts)
 	LevelGroups       LockLevel = 45 // L4: a booking group (its dates and company are stable while a reservation joins it)
 	LevelAccounting   LockLevel = 46 // L4: a property's accounting settings row (the chart, the system accounts and the periods are edited under it)
+	LevelPayables     LockLevel = 47 // L4: a supplier (serialises its bills, payments and what they settle; taken after the accounting settings)
 	LevelSequences    LockLevel = 50 // L5: document_sequences (short, last)
 )
 
@@ -67,6 +68,7 @@ var (
 	Companies        = LockTable{"companies", LevelCompanies}
 	Groups           = LockTable{"booking_groups", LevelGroups}
 	Accounting       = LockTable{"accounting_settings", LevelAccounting}
+	Suppliers        = LockTable{"suppliers", LevelPayables}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with

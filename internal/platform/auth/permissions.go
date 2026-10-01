@@ -29,6 +29,9 @@ const (
 	PermAccountingManage    Permission = "accounting.manage"
 	PermAccountingPost      Permission = "accounting.post"
 	PermAccountingClose     Permission = "accounting.close"
+	PermPayablesView        Permission = "payables.view"
+	PermPayablesManage      Permission = "payables.manage"
+	PermPayablesPost        Permission = "payables.post"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -98,6 +101,9 @@ var Catalogue = []PermissionInfo{
 	{PermAccountingManage, "Accounting", "Edit the chart of accounts and the accounts the system posts to", "S3"},
 	{PermAccountingPost, "Accounting", "Post manual journals and reverse journals (a reversal needs an approval)", "S3"},
 	{PermAccountingClose, "Accounting", "Close and reopen accounting periods and post missing day-close journals", "S3"},
+	{PermPayablesView, "Payables", "View suppliers, supplier bills, payments and the aging of what is owed", "S3"},
+	{PermPayablesManage, "Payables", "Add and edit suppliers", "S3"},
+	{PermPayablesPost, "Payables", "Enter supplier bills and payments; voiding one needs an approval", "S3"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},
 	{PermGuestWrite, "Guests", "Create and edit guest profiles", "M4"},

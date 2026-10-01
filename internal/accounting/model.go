@@ -50,6 +50,7 @@ const (
 	KeyServicePayable   = "SERVICE_PAYABLE"
 	KeySuspense         = "SUSPENSE"
 	KeyRetainedEarnings = "RETAINED_EARNINGS"
+	KeyAccountsPayable  = "ACCOUNTS_PAYABLE"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -65,6 +66,7 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyServicePayable, TypeLiability, "Service charge with no account of its own"},
 	{KeySuspense, "", "Anything that cannot be placed: look here after each day close"},
 	{KeyRetainedEarnings, TypeEquity, "Where the result of a fiscal year is closed to"},
+	{KeyAccountsPayable, TypeLiability, "What the hotel owes its suppliers (payables)"},
 }
 
 // Account is an account of the chart.

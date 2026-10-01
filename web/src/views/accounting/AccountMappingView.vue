@@ -23,7 +23,7 @@ const can = (p: string) => auth.can(p, pid.value)
 // What each key may point at: an account that takes postings, is active, and is of the type the key needs.
 const NEEDS: Record<string, string> = {
   CASH: 'ASSET', CARD: 'ASSET', BANK_TRANSFER: 'ASSET', OTHER_PAYMENT: 'ASSET', CITY_LEDGER: 'ASSET', GUEST_LEDGER: 'ASSET',
-  ADVANCE_DEPOSITS: 'LIABILITY', TAX_PAYABLE: 'LIABILITY', SERVICE_PAYABLE: 'LIABILITY', RETAINED_EARNINGS: 'EQUITY',
+  ADVANCE_DEPOSITS: 'LIABILITY', TAX_PAYABLE: 'LIABILITY', SERVICE_PAYABLE: 'LIABILITY', RETAINED_EARNINGS: 'EQUITY', ACCOUNTS_PAYABLE: 'LIABILITY',
 }
 const options = (key: string) => accounts.value.filter((a) => a.is_postable && a.is_active && (!NEEDS[key] || a.account_type === NEEDS[key]))
 const changed = computed(() => entries.value.filter((e) => choice[e.map_key] !== e.account_id))

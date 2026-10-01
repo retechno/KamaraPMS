@@ -66,6 +66,15 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Payables',
+    items: [
+      { label: 'Suppliers', to: '/payables/suppliers', milestone: 'S3' },
+      { label: 'Supplier bills', to: '/payables/bills', milestone: 'S3' },
+      { label: 'Supplier payments', to: '/payables/payments', milestone: 'S3' },
+      { label: 'Payables aging', to: '/payables/aging', milestone: 'S3' },
+    ],
+  },
+  {
     title: 'End of day',
     items: [
       { label: 'Night audit', to: '/night-audit', milestone: 'M13' },

@@ -26,6 +26,7 @@ const (
 	JournalManual   = "MANUAL"
 	JournalReversal = "REVERSAL"
 	JournalClosing  = "CLOSING"
+	JournalPayables = "PAYABLES"
 )
 
 const (
@@ -418,7 +419,7 @@ func (s *Service) requireOpenPeriod(ctx context.Context, tenantID, propertyID in
 }
 
 // controlKeys are the accounts that only the day close writes, so that they always agree with the folios.
-var controlKeys = []string{"GUEST_LEDGER", "CITY_LEDGER", "ADVANCE_DEPOSITS"}
+var controlKeys = []string{"GUEST_LEDGER", "CITY_LEDGER", "ADVANCE_DEPOSITS", KeyAccountsPayable}
 
 // PostManual posts a manual journal (accounting.post). The Idempotency-Key makes a retry return the first journal.
 func (s *Service) PostManual(ctx context.Context, propertyID int64, in ManualInput, key string) (Journal, error) {

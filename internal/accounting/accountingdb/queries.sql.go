@@ -156,7 +156,14 @@ SELECT
       WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
         AND g.business_date <= $3::date)::numeric AS city_transferred,
     (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
-      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.status = 'POSTED' AND r.business_date <= $3::date)::numeric AS city_received
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.status = 'POSTED' AND r.business_date <= $3::date)::numeric AS city_received,
+    -- Payables: bills entered by the date less payments made by the date; a bill or payment voided after the date still counts.
+    (SELECT COALESCE(sum(b.total), 0) FROM supplier_bills b LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
+      WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.bill_date <= $3::date
+        AND (b.status = 'POSTED' OR vj.journal_date > $3::date))::numeric AS bills_entered,
+    (SELECT COALESCE(sum(x.amount), 0) FROM supplier_payments x LEFT JOIN gl_journals vj ON vj.property_id = x.property_id AND vj.id = x.void_journal_id
+      WHERE x.tenant_id = $1 AND x.property_id = $2 AND x.payment_date <= $3::date
+        AND (x.status = 'POSTED' OR vj.journal_date > $3::date))::numeric AS payments_made
 `
 
 type ControlSourcesParams struct {
@@ -170,6 +177,8 @@ type ControlSourcesRow struct {
 	DepositsHeld    decimal.Decimal
 	CityTransferred decimal.Decimal
 	CityReceived    decimal.Decimal
+	BillsEntered    decimal.Decimal
+	PaymentsMade    decimal.Decimal
 }
 
 // What the folios and the city ledger say as of a business date, to compare with the control accounts.
@@ -181,6 +190,8 @@ func (q *Queries) ControlSources(ctx context.Context, arg ControlSourcesParams) 
 		&i.DepositsHeld,
 		&i.CityTransferred,
 		&i.CityReceived,
+		&i.BillsEntered,
+		&i.PaymentsMade,
 	)
 	return i, err
 }
@@ -1444,8 +1455,10 @@ func (q *Queries) SeedChart(ctx context.Context, arg SeedChartParams) (int32, er
 
 const seedRetainedEarningsMap = `-- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
-SELECT a.tenant_id, a.property_id, 'RETAINED_EARNINGS', a.id, $1
-  FROM gl_accounts a WHERE a.tenant_id = $2 AND a.property_id = $3 AND a.code = '3200'
+SELECT a.tenant_id, a.property_id, m.map_key, a.id, $1
+  FROM gl_accounts a
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110')) AS m (map_key, code) ON m.code = a.code
+ WHERE a.tenant_id = $2 AND a.property_id = $3
 ON CONFLICT (property_id, map_key) DO NOTHING
 `
 
@@ -1455,6 +1468,7 @@ type SeedRetainedEarningsMapParams struct {
 	PropertyID int64
 }
 
+// The system accounts added after the first chart (retained earnings, accounts payable) for a new property.
 func (q *Queries) SeedRetainedEarningsMap(ctx context.Context, arg SeedRetainedEarningsMapParams) error {
 	_, err := q.db.Exec(ctx, seedRetainedEarningsMap, arg.ActorID, arg.TenantID, arg.PropertyID)
 	return err

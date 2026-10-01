@@ -304,7 +304,14 @@ SELECT
       WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
         AND g.business_date <= @as_of::date)::numeric AS city_transferred,
     (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
-      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @as_of::date)::numeric AS city_received;
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @as_of::date)::numeric AS city_received,
+    -- Payables: bills entered by the date less payments made by the date; a bill or payment voided after the date still counts.
+    (SELECT COALESCE(sum(b.total), 0) FROM supplier_bills b LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
+      WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.bill_date <= @as_of::date
+        AND (b.status = 'POSTED' OR vj.journal_date > @as_of::date))::numeric AS bills_entered,
+    (SELECT COALESCE(sum(x.amount), 0) FROM supplier_payments x LEFT JOIN gl_journals vj ON vj.property_id = x.property_id AND vj.id = x.void_journal_id
+      WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.payment_date <= @as_of::date
+        AND (x.status = 'POSTED' OR vj.journal_date > @as_of::date))::numeric AS payments_made;
 
 -- Closed days from the start date up to a date that have no journal run yet.
 -- name: CountPendingDays :one
@@ -339,8 +346,11 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND year_start = @ye
 SELECT count(*)::int FROM gl_periods
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED' AND period_start BETWEEN @first_day::date AND @last_day::date;
 
+-- The system accounts added after the first chart (retained earnings, accounts payable) for a new property.
 -- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
-SELECT a.tenant_id, a.property_id, 'RETAINED_EARNINGS', a.id, sqlc.narg(actor_id)
-  FROM gl_accounts a WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.code = '3200'
+SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
+  FROM gl_accounts a
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110')) AS m (map_key, code) ON m.code = a.code
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;

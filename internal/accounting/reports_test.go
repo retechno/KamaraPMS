@@ -211,7 +211,7 @@ func TestReconciliationAgainstTheFolios(t *testing.T) {
 	h, folioID := busyHotel(t)
 	rec, err := h.Accounting.Reconciliation(h.admin, h.propID, nil)
 	must(t, err)
-	if !rec.Reconciled || rec.PendingDays != 0 || len(rec.Controls) != 3 {
+	if !rec.Reconciled || rec.PendingDays != 0 || len(rec.Controls) != 4 {
 		t.Fatalf("reconciled after a day close: %+v", rec)
 	}
 	for _, c := range rec.Controls {

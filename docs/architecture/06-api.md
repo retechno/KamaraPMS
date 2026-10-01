@@ -658,3 +658,23 @@ PDF versions (the documents of §15, `accounting.view`, inline and never cached)
 | `POST {P}/accounting/fiscal-years/{start}/reopen` | `accounting.close` + approval | `{reason, approval}`; 409 `FISCAL_YEAR_NOT_LATEST`, `FISCAL_YEAR_NOT_CLOSED`. Reopening a month of a closed year: 409 `PERIOD_IN_CLOSED_YEAR` |
 
 The journal type `CLOSING` appears in the journal list; the system account map has 11 keys (`RETAINED_EARNINGS` is the new one).
+
+## 20. Payables (after M15)
+Permissions: `payables.view` (read), `payables.manage` (suppliers), `payables.post` (bills and payments; a void also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/payables/suppliers` | `payables.view` | Filters `active`, `q`; each supplier carries `outstanding` |
+| `POST {P}/payables/suppliers` | `payables.manage` | 409 `CODE_TAKEN`; field errors `code`, `name`, `email`, `payment_terms_days`, `default_account_id` |
+| `GET/PATCH {P}/payables/suppliers/{id}` | read: `payables.view`; write: `payables.manage` | The code never changes |
+| `GET {P}/payables/suppliers/{id}/open-bills` | `payables.view` | What is still owed on each bill, oldest due date first |
+| `GET {P}/payables/bills` | `payables.view` | Filters `supplier_id`, `status`, `from`, `to`, `q`, `open_only`, `limit` |
+| `POST {P}/payables/bills` | `payables.post` | `Idempotency-Key` required; 409 `DUPLICATE_INVOICE`, `SUPPLIER_INACTIVE`, `PERIOD_CLOSED`; field errors per line (`lines[N].account_id`: NOT_FOUND, NOT_POSTABLE, INACTIVE, CONTROL_ACCOUNT; `lines[N].amount`) |
+| `GET {P}/payables/bills/{id}` | `payables.view` | With its lines |
+| `POST {P}/payables/bills/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `BILL_HAS_PAYMENTS`, `BILL_ALREADY_VOIDED` |
+| `GET/POST {P}/payables/payments` | read: `payables.view`; post: `payables.post` | POST needs `Idempotency-Key`; body `{supplier_id, payment_date, payment_method (CASH, BANK_TRANSFER, OTHER), allocations: [{bill_id, amount}]}`; 409 `ALLOCATION_EXCEEDS_OUTSTANDING` with one field error per allocation |
+| `GET {P}/payables/payments/{id}` | `payables.view` | With the bills it settles |
+| `POST {P}/payables/payments/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `PAYMENT_ALREADY_VOIDED` |
+| `GET {P}/payables/aging` | `payables.view` | `as_of` (not after the business date); buckets CURRENT, DAYS_1_30, DAYS_31_60, DAYS_61_90, DAYS_OVER_90 per supplier and in total |
+
+The journal type `PAYABLES` appears in the journal list; the system account map has 12 keys (`ACCOUNTS_PAYABLE` is the new one) and the reconciliation a fourth control.
