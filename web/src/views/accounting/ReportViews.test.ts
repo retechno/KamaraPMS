@@ -114,6 +114,22 @@ describe('report views', () => {
     expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/accounts/1/ledger.pdf')
   })
 
+  it('opens the ledger of the account and the month a journal line sent it to', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['accounting.view'] }] } as never
+    usePropertyStore().currentId = 7
+    GET = vi.fn(async (path: string) => (path.endsWith('/ledger') ? { data: answers['/ledger'] } : { data: { data: [acc] } }))
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    await router.push('/accounting/ledger?account=1&from=2026-09-01&to=2026-09-30')
+    const w = mount(GeneralLedgerView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect((w.get('select[name=account]').element as HTMLSelectElement).value).toBe('1')
+    expect((w.get('input[name=from]').element as HTMLInputElement).value).toBe('2026-09-01')
+    expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ from: '2026-09-01', to: '2026-09-30' })
+    expect(w.find('[data-testid=ledger]').exists()).toBe(true)
+  })
+
   it('lays the income statement out by group and total', async () => {
     const w = await mountView(StatementView, ['accounting.view'], 'accounting-income-statement')
     await flushPromises()

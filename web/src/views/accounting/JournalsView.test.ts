@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { fromMilli, toMilli, totals } from './accountMeta'
 import JournalsView from './JournalsView.vue'
 
@@ -41,7 +42,8 @@ function mountView(permissions = ['accounting.view', 'accounting.post', 'account
     return { data: { data: accounts } }
   })
   POST = vi.fn().mockResolvedValue({ data: journal({ id: 4, journal_number: 'JV000004' }) })
-  return mount(JournalsView, { global: { plugins: [pinia], stubs: { ApprovalDialog: { name: 'ApprovalDialog', emits: ['approve', 'cancel'], template: '<div data-testid="approval" />' } } } })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+  return mount(JournalsView, { global: { plugins: [pinia, router], stubs: { ApprovalDialog: { name: 'ApprovalDialog', emits: ['approve', 'cancel'], template: '<div data-testid="approval" />' } } } })
 }
 
 describe('decimal helpers', () => {
@@ -74,6 +76,8 @@ describe('JournalsView', () => {
     await flushPromises()
     expect(w.get('[data-testid=journal-detail]').text()).toContain('4110 · Room revenue')
     expect(GET.mock.calls.at(-1)?.[1].params.path).toEqual({ propertyId: 7, id: 1 })
+    // each line links to the ledger of its account for the month of the journal
+    expect(w.get('[data-testid=ledger-link-2]').attributes('href')).toBe('/accounting/ledger?account=2&from=2026-09-01&to=2026-09-30')
     await w.get('[data-testid=journal-JV000001]').trigger('click')
     expect(w.find('[data-testid=journal-detail]').exists()).toBe(false)
   })

@@ -33,6 +33,13 @@ const fieldError = (field: string) => error.value?.fieldMessage(field)
 const postable = computed(() => accounts.value.filter((a) => a.is_postable && a.is_active))
 const sums = computed(() => totals(form.lines))
 const balanced = computed(() => sums.value.valid && sums.value.debit === sums.value.credit && sums.value.debit > 0n)
+/** The ledger of an account for the month of the journal, so the line can be seen among its neighbours. */
+function ledgerLink(accountId: number, date: string): { path: string; query: Record<string, string> } {
+  const [y, m] = date.split('-').map(Number) as [number, number]
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const mm = String(m).padStart(2, '0')
+  return { path: '/accounting/ledger', query: { account: String(accountId), from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, '0')}` } }
+}
 const TYPE_LABEL: Record<string, string> = { DAY_CLOSE: 'Day close', MANUAL: 'Manual', REVERSAL: 'Reversal' }
 
 async function load(): Promise<void> {
@@ -261,7 +268,7 @@ watch(() => pid.value, () => {
                   <tbody>
                     <tr v-for="l in opened.lines" :key="l.line_no">
                       <td>{{ l.line_no }}</td>
-                      <td>{{ l.account_code }} · {{ l.account_name }}</td>
+                      <td><RouterLink :to="ledgerLink(l.account_id, j.journal_date)" :data-testid="`ledger-link-${l.line_no}`">{{ l.account_code }} · {{ l.account_name }}</RouterLink></td>
                       <td><small class="muted">{{ l.description }}</small></td>
                       <td class="num">{{ Number(l.debit) ? l.debit : '' }}</td>
                       <td class="num">{{ Number(l.credit) ? l.credit : '' }}</td>
