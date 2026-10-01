@@ -1709,6 +1709,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reports/daily-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Closing summary of a business date (report.view)
+         * @description The stored summary of a closed day, or a live computation for the open day (`live: true`). A closed day without a stored summary has `summary: null`. 404 `BUSINESS_DAY_NOT_FOUND` for a date that was never a business day.
+         */
+        get: operations["getDailySummaryReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Revenue by charge code and charge type (report.view)
+         * @description Ledger items (charges, adjustments, reversals) by business date, signed so corrections net out. Rows carry the revenue account code the items were posted with.
+         */
+        get: operations["getRevenueReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/tax": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Taxes and service charges collected (report.view)
+         * @description Read from the component snapshots, so the code, name, rate and account are the ones in force when each item was posted: a rate edited in the range gives two lines.
+         */
+        get: operations["getTaxReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/cashier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Payments by business date and method (report.view)
+         * @description Posted payments and refunds netted; voided payments are shown apart.
+         */
+        get: operations["getCashierReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Occupancy, ADR and RevPAR over closed days (report.view)
+         * @description From the stored closing summaries. Totals use occupied over available (total less out-of-order) room nights, ADR per room night charged and RevPAR per available room night.
+         */
+        get: operations["getStatisticsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/arrivals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms arriving on a date, whatever became of them (report.view)
+         * @description Drafts are excluded.
+         */
+        get: operations["getArrivalsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/departures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Stays leaving on a date (report.view)
+         * @description Open or already checked out; cancelled stays are excluded.
+         */
+        get: operations["getDeparturesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/in-house": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Stays in house now, with their folio balance (report.view)
+         * @description Open stays with the room of their open segment.
+         */
+        get: operations["getInHouseReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/preview": {
         parameters: {
             query?: never;
@@ -3602,6 +3778,146 @@ export interface components {
             new_business_date: components["schemas"]["Date"];
             room_charges_posted: number;
             summary: components["schemas"]["NightAuditSummary"];
+        };
+        DailySummaryReport: {
+            business_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            live: boolean;
+            summary: components["schemas"]["NightAuditSummary"] | null;
+        };
+        RevenueTotals: {
+            items: number;
+            net_amount: components["schemas"]["Amount"];
+            service_charge: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+            total: components["schemas"]["Amount"];
+        };
+        RevenueLine: {
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            name: string;
+            charge_type: string;
+            revenue_account_code: components["schemas"]["GlAccountCode"];
+            items: number;
+            base_amount: components["schemas"]["Amount"];
+            discount_amount: components["schemas"]["Amount"];
+            net_amount: components["schemas"]["Amount"];
+            service_charge: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+            total: components["schemas"]["Amount"];
+        };
+        RevenueReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            by_charge_code: components["schemas"]["RevenueLine"][];
+            by_charge_type: (components["schemas"]["RevenueTotals"] & {
+                charge_type: string;
+            })[];
+            totals: components["schemas"]["RevenueTotals"];
+        };
+        TaxReportLine: {
+            /** @enum {string} */
+            component_type: "TAX" | "SERVICE_CHARGE";
+            code: string;
+            name: string;
+            rate: string;
+            gl_account_code: components["schemas"]["GlAccountCode"];
+            items: number;
+            base_amount: components["schemas"]["Amount"];
+            amount: components["schemas"]["Amount"];
+        };
+        TaxReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            taxes: components["schemas"]["TaxReportLine"][];
+            service_charges: components["schemas"]["TaxReportLine"][];
+            tax_total: components["schemas"]["Amount"];
+            service_charge_total: components["schemas"]["Amount"];
+        };
+        CashierReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: {
+                business_date: components["schemas"]["Date"];
+                payment_method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+                count: number;
+                voided: components["schemas"]["Amount"];
+                voided_count: number;
+            }[];
+            by_method: {
+                payment_method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+            }[];
+            net: components["schemas"]["Amount"];
+        };
+        StatisticsReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            days: {
+                business_date: components["schemas"]["Date"];
+                rooms_total: number;
+                rooms_out_of_order: number;
+                rooms_sellable: number;
+                rooms_occupied: number;
+                room_nights_sold: number;
+                arrivals: number;
+                departures: number;
+                no_shows: number;
+                room_revenue: components["schemas"]["Amount"];
+                occupancy_percent: string;
+                adr: components["schemas"]["Amount"];
+                revpar: components["schemas"]["Amount"];
+            }[];
+            totals: {
+                days: number;
+                available_room_nights: number;
+                occupied_room_nights: number;
+                room_nights_sold: number;
+                room_revenue: components["schemas"]["Amount"];
+                occupancy_percent: string;
+                adr: components["schemas"]["Amount"];
+                revpar: components["schemas"]["Amount"];
+            };
+        };
+        StayListReport: {
+            date?: components["schemas"]["Date"];
+            rows: {
+                /** Format: int64 */
+                stay_id: number;
+                stay_number: string;
+                status?: string;
+                confirmation_number: string;
+                guest: string;
+                room?: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                adult_count: number;
+                child_count: number;
+                balance: components["schemas"]["Amount"];
+            }[];
+        };
+        ArrivalsReport: {
+            date: components["schemas"]["Date"];
+            rows: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                confirmation_number: string;
+                status: string;
+                guest: string;
+                room_type: string;
+                room?: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                adult_count: number;
+                child_count: number;
+            }[];
         };
         FieldError: {
             field: string;
@@ -6514,6 +6830,252 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getDailySummaryReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailySummaryReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRevenueReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevenueReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCashierReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getStatisticsReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatisticsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getArrivalsReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrivalsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDeparturesReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayListReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInHouseReport: {
+        parameters: {
+            query?: {
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayListReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     previewNightAudit: {

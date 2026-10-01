@@ -47,7 +47,10 @@ export const navigation: NavSection[] = [
   },
   {
     title: 'End of day',
-    items: [{ label: 'Night audit', to: '/night-audit', milestone: 'M13' }],
+    items: [
+      { label: 'Night audit', to: '/night-audit', milestone: 'M13' },
+      { label: 'Reports', to: '/reports', milestone: 'M14' },
+    ],
   },
   {
     title: 'Setup',

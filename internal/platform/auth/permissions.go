@@ -60,6 +60,8 @@ const (
 	PermNightAuditRun    Permission = "nightaudit.run"
 	PermNightAuditNoShow Permission = "nightaudit.no_show"
 
+	PermReportView Permission = "report.view"
+
 	PermAuditRead Permission = "audit.read"
 )
 
@@ -109,6 +111,8 @@ var Catalogue = []PermissionInfo{
 
 	{PermNightAuditRun, "End of day", "Run night audit and post room charges", "M13"},
 	{PermNightAuditNoShow, "End of day", "Mark arrivals as no-show", "M13"},
+
+	{PermReportView, "Reports", "View and export reports", "M14"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

@@ -261,7 +261,7 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 			}
 			return blocked(b)
 		}
-		summary, err := s.summarize(ctx, p, propertyID, bd, prop.CurrencyDecimals, rep.Posted)
+		summary, err := s.Summarize(ctx, p, propertyID, bd, prop.CurrencyDecimals, rep.Posted)
 		if err != nil {
 			return err
 		}
@@ -283,10 +283,10 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 	return out, err
 }
 
-// summarize computes the daily closing summary (§12.5 step 9) from rows of the transaction. Occupancy is occupied
+// Summarize computes the daily closing summary (§12.5 step 9) from rows of the transaction. Occupancy is occupied
 // rooms over rooms that are not out of order; ADR is room revenue per room night charged; RevPAR is room revenue
 // per room that is not out of order. Money uses the property's decimals.
-func (s *Service) summarize(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, decimals int32, posted int) (Summary, error) {
+func (s *Service) Summarize(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, decimals int32, posted int) (Summary, error) {
 	q := s.q(ctx)
 	sum := Summary{BusinessDate: bd, RoomChargesPosted: posted, RevenueByChargeType: []TypeRevenue{}, PaymentsByMethod: []MethodTotal{}}
 	rooms, err := q.SummaryRooms(ctx, nightauditdb.SummaryRoomsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})

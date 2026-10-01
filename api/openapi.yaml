@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.15.0
+  version: 0.16.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2103,6 +2103,184 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/daily-summary:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getDailySummaryReport
+      summary: Closing summary of a business date (report.view)
+      description: "The stored summary of a closed day, or a live computation for the open day (`live: true`). A closed day without a stored summary has `summary: null`. 404 `BUSINESS_DAY_NOT_FOUND` for a date that was never a business day."
+      tags: [reports]
+      parameters:
+        - { name: date, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailySummaryReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/revenue:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getRevenueReport
+      summary: Revenue by charge code and charge type (report.view)
+      description: "Ledger items (charges, adjustments, reversals) by business date, signed so corrections net out. Rows carry the revenue account code the items were posted with."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RevenueReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/tax:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTaxReport
+      summary: Taxes and service charges collected (report.view)
+      description: "Read from the component snapshots, so the code, name, rate and account are the ones in force when each item was posted: a rate edited in the range gives two lines."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/cashier:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getCashierReport
+      summary: Payments by business date and method (report.view)
+      description: "Posted payments and refunds netted; voided payments are shown apart."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/statistics:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getStatisticsReport
+      summary: Occupancy, ADR and RevPAR over closed days (report.view)
+      description: "From the stored closing summaries. Totals use occupied over available (total less out-of-order) room nights, ADR per room night charged and RevPAR per available room night."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatisticsReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/arrivals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getArrivalsReport
+      summary: Rooms arriving on a date, whatever became of them (report.view)
+      description: "Drafts are excluded."
+      tags: [reports]
+      parameters:
+        - { name: date, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrivalsReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/departures:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getDeparturesReport
+      summary: Stays leaving on a date (report.view)
+      description: "Open or already checked out; cancelled stays are excluded."
+      tags: [reports]
+      parameters:
+        - { name: date, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayListReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/in-house:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getInHouseReport
+      summary: Stays in house now, with their folio balance (report.view)
+      description: "Open stays with the room of their open segment."
+      tags: [reports]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StayListReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -4273,6 +4451,198 @@ components:
         new_business_date: { $ref: "#/components/schemas/Date" }
         room_charges_posted: { type: integer }
         summary: { $ref: "#/components/schemas/NightAuditSummary" }
+    DailySummaryReport:
+      type: object
+      required: [business_date, status, live, summary]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        live: { type: boolean }
+        summary:
+          oneOf:
+            - { $ref: "#/components/schemas/NightAuditSummary" }
+            - { type: "null" }
+    RevenueTotals:
+      type: object
+      required: [items, net_amount, service_charge, tax, total]
+      properties:
+        items: { type: integer }
+        net_amount: { $ref: "#/components/schemas/Amount" }
+        service_charge: { $ref: "#/components/schemas/Amount" }
+        tax: { $ref: "#/components/schemas/Amount" }
+        total: { $ref: "#/components/schemas/Amount" }
+    RevenueLine:
+      type: object
+      required: [charge_code_id, charge_code, name, charge_type, revenue_account_code, items, base_amount, discount_amount, net_amount, service_charge, tax, total]
+      properties:
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        name: { type: string }
+        charge_type: { type: string }
+        revenue_account_code: { $ref: "#/components/schemas/GlAccountCode" }
+        items: { type: integer }
+        base_amount: { $ref: "#/components/schemas/Amount" }
+        discount_amount: { $ref: "#/components/schemas/Amount" }
+        net_amount: { $ref: "#/components/schemas/Amount" }
+        service_charge: { $ref: "#/components/schemas/Amount" }
+        tax: { $ref: "#/components/schemas/Amount" }
+        total: { $ref: "#/components/schemas/Amount" }
+    RevenueReport:
+      type: object
+      required: [from, to, by_charge_code, by_charge_type, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        by_charge_code:
+          type: array
+          items: { $ref: "#/components/schemas/RevenueLine" }
+        by_charge_type:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/RevenueTotals"
+              - type: object
+                required: [charge_type]
+                properties:
+                  charge_type: { type: string }
+        totals: { $ref: "#/components/schemas/RevenueTotals" }
+    TaxReportLine:
+      type: object
+      required: [component_type, code, name, rate, gl_account_code, items, base_amount, amount]
+      properties:
+        component_type: { type: string, enum: [TAX, SERVICE_CHARGE] }
+        code: { type: string }
+        name: { type: string }
+        rate: { type: string }
+        gl_account_code: { $ref: "#/components/schemas/GlAccountCode" }
+        items: { type: integer }
+        base_amount: { $ref: "#/components/schemas/Amount" }
+        amount: { $ref: "#/components/schemas/Amount" }
+    TaxReport:
+      type: object
+      required: [from, to, taxes, service_charges, tax_total, service_charge_total]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        taxes:
+          type: array
+          items: { $ref: "#/components/schemas/TaxReportLine" }
+        service_charges:
+          type: array
+          items: { $ref: "#/components/schemas/TaxReportLine" }
+        tax_total: { $ref: "#/components/schemas/Amount" }
+        service_charge_total: { $ref: "#/components/schemas/Amount" }
+    CashierReport:
+      type: object
+      required: [from, to, lines, by_method, net]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [business_date, payment_method, payments, refunds, net, count, voided, voided_count]
+            properties:
+              business_date: { $ref: "#/components/schemas/Date" }
+              payment_method: { type: string }
+              payments: { $ref: "#/components/schemas/Amount" }
+              refunds: { $ref: "#/components/schemas/Amount" }
+              net: { $ref: "#/components/schemas/Amount" }
+              count: { type: integer }
+              voided: { $ref: "#/components/schemas/Amount" }
+              voided_count: { type: integer }
+        by_method:
+          type: array
+          items:
+            type: object
+            required: [payment_method, payments, refunds, net]
+            properties:
+              payment_method: { type: string }
+              payments: { $ref: "#/components/schemas/Amount" }
+              refunds: { $ref: "#/components/schemas/Amount" }
+              net: { $ref: "#/components/schemas/Amount" }
+        net: { $ref: "#/components/schemas/Amount" }
+    StatisticsReport:
+      type: object
+      required: [from, to, days, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        days:
+          type: array
+          items:
+            type: object
+            required: [business_date, rooms_total, rooms_out_of_order, rooms_sellable, rooms_occupied, room_nights_sold, arrivals, departures, no_shows, room_revenue, occupancy_percent, adr, revpar]
+            properties:
+              business_date: { $ref: "#/components/schemas/Date" }
+              rooms_total: { type: integer }
+              rooms_out_of_order: { type: integer }
+              rooms_sellable: { type: integer }
+              rooms_occupied: { type: integer }
+              room_nights_sold: { type: integer }
+              arrivals: { type: integer }
+              departures: { type: integer }
+              no_shows: { type: integer }
+              room_revenue: { $ref: "#/components/schemas/Amount" }
+              occupancy_percent: { type: string }
+              adr: { $ref: "#/components/schemas/Amount" }
+              revpar: { $ref: "#/components/schemas/Amount" }
+        totals:
+          type: object
+          required: [days, available_room_nights, occupied_room_nights, room_nights_sold, room_revenue, occupancy_percent, adr, revpar]
+          properties:
+            days: { type: integer }
+            available_room_nights: { type: integer }
+            occupied_room_nights: { type: integer }
+            room_nights_sold: { type: integer }
+            room_revenue: { $ref: "#/components/schemas/Amount" }
+            occupancy_percent: { type: string }
+            adr: { $ref: "#/components/schemas/Amount" }
+            revpar: { $ref: "#/components/schemas/Amount" }
+    StayListReport:
+      type: object
+      required: [rows]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [stay_id, stay_number, confirmation_number, guest, arrival_date, departure_date, adult_count, child_count, balance]
+            properties:
+              stay_id: { type: integer, format: int64 }
+              stay_number: { type: string }
+              status: { type: string }
+              confirmation_number: { type: string }
+              guest: { type: string }
+              room: { type: string }
+              arrival_date: { $ref: "#/components/schemas/Date" }
+              departure_date: { $ref: "#/components/schemas/Date" }
+              adult_count: { type: integer }
+              child_count: { type: integer }
+              balance: { $ref: "#/components/schemas/Amount" }
+    ArrivalsReport:
+      type: object
+      required: [date, rows]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [reservation_room_id, confirmation_number, status, guest, room_type, arrival_date, departure_date, adult_count, child_count]
+            properties:
+              reservation_room_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+              status: { type: string }
+              guest: { type: string }
+              room_type: { type: string }
+              room: { type: string }
+              arrival_date: { $ref: "#/components/schemas/Date" }
+              departure_date: { $ref: "#/components/schemas/Date" }
+              adult_count: { type: integer }
+              child_count: { type: integer }
     FieldError:
       type: object
       required: [field, code]
