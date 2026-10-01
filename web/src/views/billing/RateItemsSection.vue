@@ -5,6 +5,7 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import GlAccountInput from './GlAccountInput.vue'
 
 /** Taxes and service charges differ only in `tax_on_service`; one section edits either list. */
 const props = defineProps<{ kind: 'tax' | 'service' }>()
@@ -139,7 +140,7 @@ watch(() => property.currentId, load, { immediate: true })
         </label>
         <label class="field">
           <span>{{ isTax ? 'Tax payable account' : 'Service payable account' }}</span>
-          <input v-model="form.gl_account_code" name="gl_account_code" placeholder="e.g. 2.1.05" maxlength="30" :aria-invalid="!!fieldError('gl_account_code')" />
+          <GlAccountInput v-model="form.gl_account_code" :kind="isTax ? 'TAX' : 'SERVICE_CHARGE'" :invalid="!!fieldError('gl_account_code')" />
           <small class="hint">Account code in the chart of accounts. Optional; a posted item keeps the code it had when it was posted.</small>
           <small v-if="fieldError('gl_account_code')" class="error-text">{{ fieldError('gl_account_code') }}</small>
         </label>

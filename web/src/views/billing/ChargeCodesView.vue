@@ -5,6 +5,7 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { ChargeCode, ChargeType, PriceMode, ServiceCharge, Tax } from '@/api/types'
 import ChargeCalculator from '@/components/ChargeCalculator.vue'
+import GlAccountInput from './GlAccountInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -228,7 +229,7 @@ watch(() => property.currentId, load, { immediate: true })
         </label>
         <label class="field">
           <span>Revenue account</span>
-          <input v-model="form.gl_account_code" name="gl_account_code" placeholder="e.g. 4-1100" maxlength="30" :aria-invalid="!!fieldError('gl_account_code')" />
+          <GlAccountInput v-model="form.gl_account_code" kind="CHARGE_CODE" :invalid="!!fieldError('gl_account_code')" />
           <small class="hint">Account code in the chart of accounts. Optional; a posted item keeps the code it had when it was posted.</small>
           <small v-if="fieldError('gl_account_code')" class="error-text">{{ fieldError('gl_account_code') }}</small>
         </label>
