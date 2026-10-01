@@ -26,7 +26,7 @@ const typeLabel: Record<ChargeType, string> = { ROOM: 'Room', FOOD_BEVERAGE: 'Fo
 const visible = computed(() => codes.value.filter((c) => !typeFilter.value || c.charge_type === typeFilter.value))
 
 const blank = () => ({
-  code: '', name: '', charge_type: 'OTHER' as ChargeType, price_mode: 'EXCLUSIVE' as PriceMode, default_unit_price: '', is_active: true,
+  code: '', name: '', charge_type: 'OTHER' as ChargeType, price_mode: 'EXCLUSIVE' as PriceMode, default_unit_price: '', gl_account_code: '', is_active: true,
 })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -90,7 +90,7 @@ function startNew(): void {
 
 function startEdit(c: ChargeCode): void {
   Object.assign(form, blank(), {
-    code: c.code, name: c.name, charge_type: c.charge_type, price_mode: c.price_mode, default_unit_price: c.default_unit_price ?? '', is_active: c.is_active,
+    code: c.code, name: c.name, charge_type: c.charge_type, price_mode: c.price_mode, default_unit_price: c.default_unit_price ?? '', gl_account_code: c.gl_account_code ?? '', is_active: c.is_active,
   })
   loadRules(c)
   error.value = null
@@ -129,7 +129,7 @@ async function save(): Promise<void> {
         params: { path: { propertyId } },
         body: {
           code: form.code, name: form.name, charge_type: form.charge_type, price_mode: form.price_mode,
-          default_unit_price: form.default_unit_price || undefined, is_active: form.is_active,
+          default_unit_price: form.default_unit_price || undefined, gl_account_code: form.gl_account_code || undefined, is_active: form.is_active,
         },
       })
     } else {
@@ -137,7 +137,7 @@ async function save(): Promise<void> {
         params: { path: { propertyId, id: editing.value.id } },
         body: {
           name: form.name, charge_type: form.charge_type, price_mode: form.price_mode,
-          default_unit_price: form.default_unit_price, is_active: form.is_active,
+          default_unit_price: form.default_unit_price, gl_account_code: form.gl_account_code, is_active: form.is_active,
         },
       })
     }
@@ -225,6 +225,12 @@ watch(() => property.currentId, load, { immediate: true })
           <span>Default unit price</span>
           <input v-model="form.default_unit_price" name="default_unit_price" inputmode="decimal" :aria-invalid="!!fieldError('default_unit_price')" />
           <small v-if="fieldError('default_unit_price')" class="error-text">{{ fieldError('default_unit_price') }}</small>
+        </label>
+        <label class="field">
+          <span>Revenue account</span>
+          <input v-model="form.gl_account_code" name="gl_account_code" placeholder="e.g. 4-1100" maxlength="30" :aria-invalid="!!fieldError('gl_account_code')" />
+          <small class="hint">Account code in the chart of accounts. Optional; a posted item keeps the code it had when it was posted.</small>
+          <small v-if="fieldError('gl_account_code')" class="error-text">{{ fieldError('gl_account_code') }}</small>
         </label>
         <label class="check">
           <input v-model="form.is_active" name="is_active" type="checkbox" />
@@ -314,6 +320,7 @@ watch(() => property.currentId, load, { immediate: true })
             <th>Type</th>
             <th>Prices</th>
             <th>Rules (in order)</th>
+            <th>Account</th>
             <th>Status</th>
             <th v-if="canManage" />
           </tr>
@@ -328,6 +335,7 @@ watch(() => property.currentId, load, { immediate: true })
             <td>{{ typeLabel[c.charge_type] }}</td>
             <td>{{ c.price_mode === 'INCLUSIVE' ? 'Inclusive' : 'Exclusive' }}</td>
             <td data-testid="summary">{{ summary(c) }}</td>
+            <td data-testid="account">{{ c.gl_account_code ?? '—' }}</td>
             <td>{{ c.is_active ? 'Active' : 'Inactive' }}</td>
             <td v-if="canManage"><button type="button" @click="startEdit(c)">Edit</button></td>
           </tr>

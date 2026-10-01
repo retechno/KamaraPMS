@@ -2296,6 +2296,8 @@ export interface components {
          * @enum {string}
          */
         PriceMode: "EXCLUSIVE" | "INCLUSIVE";
+        /** @description An account code of the chart of accounts the accounting module will own (text, never an id), for example `4-1100` or `2.1.05`. Optional until accounting exists; the PMS only checks its shape. */
+        GlAccountCode: string | null;
         Tax: {
             /** Format: int64 */
             id: number;
@@ -2304,6 +2306,8 @@ export interface components {
             rate: components["schemas"]["Percent"];
             /** @description The tax is also levied on the service charges. */
             tax_on_service: boolean;
+            /** @description Tax payable account of the chart of accounts, copied onto the ledger when an item is posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -2323,6 +2327,8 @@ export interface components {
             rate: components["schemas"]["Percent"];
             /** @default false */
             tax_on_service: boolean;
+            /** @description Account code (A-Z 0-9 . - _ : /, at most 30 characters, upper-cased). Optional. */
+            gl_account_code?: string;
             /** @default true */
             is_active: boolean;
         };
@@ -2330,6 +2336,8 @@ export interface components {
             name?: string;
             rate?: components["schemas"]["Percent"];
             tax_on_service?: boolean;
+            /** @description An account code, or an empty string to clear it. */
+            gl_account_code?: string;
             is_active?: boolean;
         };
         ServiceCharge: {
@@ -2338,6 +2346,8 @@ export interface components {
             code: string;
             name: string;
             rate: components["schemas"]["Percent"];
+            /** @description Service charge payable account (optional). */
+            gl_account_code: components["schemas"]["GlAccountCode"];
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -2354,6 +2364,8 @@ export interface components {
             code: string;
             name: string;
             rate: components["schemas"]["Percent"];
+            /** @description Account code, optional. */
+            gl_account_code?: string;
             /** @default true */
             is_active: boolean;
         };
@@ -2388,6 +2400,8 @@ export interface components {
             charge_type: components["schemas"]["ChargeType"];
             price_mode: components["schemas"]["PriceMode"];
             default_unit_price?: components["schemas"]["Amount"];
+            /** @description Revenue account of this charge (optional). Copied onto the ledger when an item is posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
             is_system: boolean;
             is_active: boolean;
             /** @description Active tax rules in calculation order. */
@@ -2409,6 +2423,8 @@ export interface components {
             charge_type: components["schemas"]["ChargeType"];
             price_mode: components["schemas"]["PriceMode"];
             default_unit_price?: components["schemas"]["Amount"];
+            /** @description Revenue account code, optional. */
+            gl_account_code?: string;
             /** @default true */
             is_active: boolean;
         };
@@ -2418,6 +2434,8 @@ export interface components {
             price_mode?: components["schemas"]["PriceMode"];
             /** @description An amount */
             default_unit_price?: string;
+            /** @description An account code, or an empty string to clear it. */
+            gl_account_code?: string;
             is_active?: boolean;
         };
         ReplaceRulesRequest: {
@@ -2930,6 +2948,8 @@ export interface components {
             base_amount: string;
             amount: string;
             sequence: number;
+            /** @description The account the tax or service charge was mapped to when the item was posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
         };
         FolioItem: {
             /** Format: int64 */
@@ -2946,6 +2966,8 @@ export interface components {
             charge_code?: string;
             /** Format: int64 */
             charge_code_id?: number | null;
+            /** @description The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. */
+            revenue_account_code: components["schemas"]["GlAccountCode"];
             quantity: string;
             unit_price: string;
             price_mode: components["schemas"]["PriceMode"];

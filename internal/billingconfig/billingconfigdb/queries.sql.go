@@ -109,9 +109,9 @@ func (q *Queries) CountOpenStaysAffectedByTax(ctx context.Context, arg CountOpen
 
 const createChargeCode = `-- name: CreateChargeCode :one
 
-INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $9)
-RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by
+INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, is_system, is_active, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $10)
+RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type CreateChargeCodeParams struct {
@@ -122,6 +122,7 @@ type CreateChargeCodeParams struct {
 	ChargeType       string
 	PriceMode        string
 	DefaultUnitPrice *decimal.Decimal
+	GlAccountCode    *string
 	IsActive         bool
 	ActorID          *int64
 }
@@ -136,6 +137,7 @@ func (q *Queries) CreateChargeCode(ctx context.Context, arg CreateChargeCodePara
 		arg.ChargeType,
 		arg.PriceMode,
 		arg.DefaultUnitPrice,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 	)
@@ -155,25 +157,27 @@ func (q *Queries) CreateChargeCode(ctx context.Context, arg CreateChargeCodePara
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const createServiceCharge = `-- name: CreateServiceCharge :one
 
-INSERT INTO service_charges (tenant_id, property_id, code, name, rate, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-RETURNING id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by
+INSERT INTO service_charges (tenant_id, property_id, code, name, rate, gl_account_code, is_active, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+RETURNING id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type CreateServiceChargeParams struct {
-	TenantID   int64
-	PropertyID int64
-	Code       string
-	Name       string
-	Rate       decimal.Decimal
-	IsActive   bool
-	ActorID    *int64
+	TenantID      int64
+	PropertyID    int64
+	Code          string
+	Name          string
+	Rate          decimal.Decimal
+	GlAccountCode *string
+	IsActive      bool
+	ActorID       *int64
 }
 
 // ---------------------------------------------------------------- service charges
@@ -184,6 +188,7 @@ func (q *Queries) CreateServiceCharge(ctx context.Context, arg CreateServiceChar
 		arg.Code,
 		arg.Name,
 		arg.Rate,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 	)
@@ -200,26 +205,28 @@ func (q *Queries) CreateServiceCharge(ctx context.Context, arg CreateServiceChar
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const createTax = `-- name: CreateTax :one
 
-INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-RETURNING id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by
+INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, gl_account_code, is_active, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+RETURNING id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type CreateTaxParams struct {
-	TenantID     int64
-	PropertyID   int64
-	Code         string
-	Name         string
-	Rate         decimal.Decimal
-	TaxOnService bool
-	IsActive     bool
-	ActorID      *int64
+	TenantID      int64
+	PropertyID    int64
+	Code          string
+	Name          string
+	Rate          decimal.Decimal
+	TaxOnService  bool
+	GlAccountCode *string
+	IsActive      bool
+	ActorID       *int64
 }
 
 // ---------------------------------------------------------------- taxes
@@ -231,6 +238,7 @@ func (q *Queries) CreateTax(ctx context.Context, arg CreateTaxParams) (Tax, erro
 		arg.Name,
 		arg.Rate,
 		arg.TaxOnService,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 	)
@@ -248,6 +256,7 @@ func (q *Queries) CreateTax(ctx context.Context, arg CreateTaxParams) (Tax, erro
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
@@ -287,7 +296,7 @@ func (q *Queries) DeactivateChargeCodeTaxes(ctx context.Context, arg DeactivateC
 }
 
 const getChargeCode = `-- name: GetChargeCode :one
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetChargeCodeParams struct {
@@ -314,12 +323,13 @@ func (q *Queries) GetChargeCode(ctx context.Context, arg GetChargeCodeParams) (C
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const getChargeCodeForUpdate = `-- name: GetChargeCodeForUpdate :one
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetChargeCodeForUpdateParams struct {
@@ -346,12 +356,13 @@ func (q *Queries) GetChargeCodeForUpdate(ctx context.Context, arg GetChargeCodeF
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const getServiceCharge = `-- name: GetServiceCharge :one
-SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by FROM service_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM service_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetServiceChargeParams struct {
@@ -375,12 +386,13 @@ func (q *Queries) GetServiceCharge(ctx context.Context, arg GetServiceChargePara
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const getServiceChargeForUpdate = `-- name: GetServiceChargeForUpdate :one
-SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by FROM service_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM service_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetServiceChargeForUpdateParams struct {
@@ -404,12 +416,13 @@ func (q *Queries) GetServiceChargeForUpdate(ctx context.Context, arg GetServiceC
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const getTax = `-- name: GetTax :one
-SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetTaxParams struct {
@@ -434,12 +447,13 @@ func (q *Queries) GetTax(ctx context.Context, arg GetTaxParams) (Tax, error) {
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const getTaxForUpdate = `-- name: GetTaxForUpdate :one
-SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetTaxForUpdateParams struct {
@@ -464,6 +478,7 @@ func (q *Queries) GetTaxForUpdate(ctx context.Context, arg GetTaxForUpdateParams
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
@@ -578,7 +593,7 @@ func (q *Queries) ListActiveTaxRules(ctx context.Context, arg ListActiveTaxRules
 }
 
 const listChargeCodes = `-- name: ListChargeCodes :many
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by FROM charge_codes
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
   AND ($5::text IS NULL OR charge_type = $5::text)
@@ -626,6 +641,7 @@ func (q *Queries) ListChargeCodes(ctx context.Context, arg ListChargeCodesParams
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.GlAccountCode,
 		); err != nil {
 			return nil, err
 		}
@@ -638,7 +654,7 @@ func (q *Queries) ListChargeCodes(ctx context.Context, arg ListChargeCodesParams
 }
 
 const listServiceCharges = `-- name: ListServiceCharges :many
-SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by FROM service_charges
+SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM service_charges
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
 ORDER BY id
@@ -680,6 +696,7 @@ func (q *Queries) ListServiceCharges(ctx context.Context, arg ListServiceCharges
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.GlAccountCode,
 		); err != nil {
 			return nil, err
 		}
@@ -692,7 +709,7 @@ func (q *Queries) ListServiceCharges(ctx context.Context, arg ListServiceCharges
 }
 
 const listTaxes = `-- name: ListTaxes :many
-SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by FROM taxes
+SELECT id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM taxes
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
 ORDER BY id
@@ -735,6 +752,7 @@ func (q *Queries) ListTaxes(ctx context.Context, arg ListTaxesParams) ([]Tax, er
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.GlAccountCode,
 		); err != nil {
 			return nil, err
 		}
@@ -847,9 +865,9 @@ func (q *Queries) SeedChargeCodes(ctx context.Context, arg SeedChargeCodesParams
 const updateChargeCode = `-- name: UpdateChargeCode :one
 UPDATE charge_codes SET
     name = $1, charge_type = $2, price_mode = $3,
-    default_unit_price = $4, is_active = $5, updated_by = $6
-WHERE tenant_id = $7 AND property_id = $8 AND id = $9
-RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by
+    default_unit_price = $4, gl_account_code = $5, is_active = $6, updated_by = $7
+WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type UpdateChargeCodeParams struct {
@@ -857,6 +875,7 @@ type UpdateChargeCodeParams struct {
 	ChargeType       string
 	PriceMode        string
 	DefaultUnitPrice *decimal.Decimal
+	GlAccountCode    *string
 	IsActive         bool
 	ActorID          *int64
 	TenantID         int64
@@ -870,6 +889,7 @@ func (q *Queries) UpdateChargeCode(ctx context.Context, arg UpdateChargeCodePara
 		arg.ChargeType,
 		arg.PriceMode,
 		arg.DefaultUnitPrice,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,
@@ -892,30 +912,33 @@ func (q *Queries) UpdateChargeCode(ctx context.Context, arg UpdateChargeCodePara
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const updateServiceCharge = `-- name: UpdateServiceCharge :one
-UPDATE service_charges SET name = $1, rate = $2, is_active = $3, updated_by = $4
-WHERE tenant_id = $5 AND property_id = $6 AND id = $7
-RETURNING id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by
+UPDATE service_charges SET name = $1, rate = $2, gl_account_code = $3, is_active = $4, updated_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
+RETURNING id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type UpdateServiceChargeParams struct {
-	Name       string
-	Rate       decimal.Decimal
-	IsActive   bool
-	ActorID    *int64
-	TenantID   int64
-	PropertyID int64
-	ID         int64
+	Name          string
+	Rate          decimal.Decimal
+	GlAccountCode *string
+	IsActive      bool
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
 }
 
 func (q *Queries) UpdateServiceCharge(ctx context.Context, arg UpdateServiceChargeParams) (ServiceCharge, error) {
 	row := q.db.QueryRow(ctx, updateServiceCharge,
 		arg.Name,
 		arg.Rate,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,
@@ -935,25 +958,27 @@ func (q *Queries) UpdateServiceCharge(ctx context.Context, arg UpdateServiceChar
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }
 
 const updateTax = `-- name: UpdateTax :one
-UPDATE taxes SET name = $1, rate = $2, tax_on_service = $3, is_active = $4, updated_by = $5
-WHERE tenant_id = $6 AND property_id = $7 AND id = $8
-RETURNING id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by
+UPDATE taxes SET name = $1, rate = $2, tax_on_service = $3, gl_account_code = $4, is_active = $5, updated_by = $6
+WHERE tenant_id = $7 AND property_id = $8 AND id = $9
+RETURNING id, tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
 `
 
 type UpdateTaxParams struct {
-	Name         string
-	Rate         decimal.Decimal
-	TaxOnService bool
-	IsActive     bool
-	ActorID      *int64
-	TenantID     int64
-	PropertyID   int64
-	ID           int64
+	Name          string
+	Rate          decimal.Decimal
+	TaxOnService  bool
+	GlAccountCode *string
+	IsActive      bool
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
 }
 
 func (q *Queries) UpdateTax(ctx context.Context, arg UpdateTaxParams) (Tax, error) {
@@ -961,6 +986,7 @@ func (q *Queries) UpdateTax(ctx context.Context, arg UpdateTaxParams) (Tax, erro
 		arg.Name,
 		arg.Rate,
 		arg.TaxOnService,
+		arg.GlAccountCode,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,
@@ -981,6 +1007,7 @@ func (q *Queries) UpdateTax(ctx context.Context, arg UpdateTaxParams) (Tax, erro
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.GlAccountCode,
 	)
 	return i, err
 }

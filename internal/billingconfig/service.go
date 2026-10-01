@@ -132,7 +132,7 @@ func (s *Service) CreateTax(ctx context.Context, propertyID int64, in TaxInput) 
 		}
 		row, err := s.q(ctx).CreateTax(ctx, billingconfigdb.CreateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, Rate: rate,
-			TaxOnService: in.TaxOnService, IsActive: in.IsActive, ActorID: p.ActorID(),
+			TaxOnService: in.TaxOnService, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -145,10 +145,11 @@ func (s *Service) CreateTax(ctx context.Context, propertyID int64, in TaxInput) 
 
 // TaxPatch changes selected attributes; nil fields stay unchanged.
 type TaxPatch struct {
-	Name         *string
-	Rate         *string
-	TaxOnService *bool
-	IsActive     *bool
+	Name          *string
+	Rate          *string
+	TaxOnService  *bool
+	GLAccountCode *string // "" clears it
+	IsActive      *bool
 }
 
 // UpdateTax edits a tax. A rate change affects future postings only (the result reports the open stays it
@@ -170,10 +171,11 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 			return orNotFound(err, errTaxNotFound())
 		}
 		before := toTax(row)
-		in := TaxInput{Code: before.Code, Name: before.Name, Rate: before.Rate, TaxOnService: before.TaxOnService, IsActive: before.IsActive}
+		in := TaxInput{Code: before.Code, Name: before.Name, Rate: before.Rate, TaxOnService: before.TaxOnService, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
 		apply(&in.Name, patch.Name)
 		apply(&in.Rate, patch.Rate)
 		apply(&in.TaxOnService, patch.TaxOnService)
+		apply(&in.GLAccountCode, patch.GLAccountCode)
 		apply(&in.IsActive, patch.IsActive)
 		in.Normalize()
 		if fields := in.Validate(false); len(fields) > 0 {
@@ -192,7 +194,7 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 		}
 		updated, err := q.UpdateTax(ctx, billingconfigdb.UpdateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate,
-			TaxOnService: in.TaxOnService, IsActive: in.IsActive, ActorID: p.ActorID(),
+			TaxOnService: in.TaxOnService, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -251,7 +253,7 @@ func (s *Service) CreateServiceCharge(ctx context.Context, propertyID int64, in 
 			return err
 		}
 		row, err := s.q(ctx).CreateServiceCharge(ctx, billingconfigdb.CreateServiceChargeParams{
-			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, Rate: rate, IsActive: in.IsActive, ActorID: p.ActorID(),
+			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, Rate: rate, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -264,9 +266,10 @@ func (s *Service) CreateServiceCharge(ctx context.Context, propertyID int64, in 
 
 // ServiceChargePatch changes selected attributes; nil fields stay unchanged.
 type ServiceChargePatch struct {
-	Name     *string
-	Rate     *string
-	IsActive *bool
+	Name          *string
+	Rate          *string
+	GLAccountCode *string // "" clears it
+	IsActive      *bool
 }
 
 // UpdateServiceCharge edits a service charge, with the same rules as UpdateTax.
@@ -287,9 +290,10 @@ func (s *Service) UpdateServiceCharge(ctx context.Context, propertyID, id int64,
 			return orNotFound(err, errServiceChargeNotFound())
 		}
 		before := toServiceCharge(row)
-		in := ServiceChargeInput{Code: before.Code, Name: before.Name, Rate: before.Rate, IsActive: before.IsActive}
+		in := ServiceChargeInput{Code: before.Code, Name: before.Name, Rate: before.Rate, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
 		apply(&in.Name, patch.Name)
 		apply(&in.Rate, patch.Rate)
+		apply(&in.GLAccountCode, patch.GLAccountCode)
 		apply(&in.IsActive, patch.IsActive)
 		in.Normalize()
 		if fields := in.Validate(false); len(fields) > 0 {
@@ -309,7 +313,7 @@ func (s *Service) UpdateServiceCharge(ctx context.Context, propertyID, id int64,
 			}
 		}
 		updated, err := q.UpdateServiceCharge(ctx, billingconfigdb.UpdateServiceChargeParams{
-			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate, IsActive: in.IsActive, ActorID: p.ActorID(),
+			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -439,7 +443,7 @@ func (s *Service) CreateChargeCode(ctx context.Context, propertyID int64, in Cha
 		}
 		row, err := s.q(ctx).CreateChargeCode(ctx, billingconfigdb.CreateChargeCodeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, ChargeType: in.ChargeType, PriceMode: in.PriceMode,
-			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), IsActive: in.IsActive, ActorID: p.ActorID(),
+			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -456,6 +460,7 @@ type ChargeCodePatch struct {
 	ChargeType       *string
 	PriceMode        *string
 	DefaultUnitPrice *string
+	GLAccountCode    *string // "" clears it
 	IsActive         *bool
 }
 
@@ -488,7 +493,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		if err != nil {
 			return err
 		}
-		in := ChargeCodeInput{Code: before.Code, Name: before.Name, ChargeType: before.ChargeType, PriceMode: before.PriceMode, IsActive: before.IsActive}
+		in := ChargeCodeInput{Code: before.Code, Name: before.Name, ChargeType: before.ChargeType, PriceMode: before.PriceMode, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
 		if before.DefaultUnitPrice != nil {
 			in.DefaultUnitPrice = *before.DefaultUnitPrice
 		}
@@ -496,6 +501,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		apply(&in.ChargeType, patch.ChargeType)
 		apply(&in.PriceMode, patch.PriceMode)
 		apply(&in.DefaultUnitPrice, patch.DefaultUnitPrice)
+		apply(&in.GLAccountCode, patch.GLAccountCode)
 		apply(&in.IsActive, patch.IsActive)
 		in.Normalize()
 		if fields := in.Validate(false, decimals); len(fields) > 0 {
@@ -516,7 +522,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		}
 		if _, err := q.UpdateChargeCode(ctx, billingconfigdb.UpdateChargeCodeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, ChargeType: in.ChargeType, PriceMode: in.PriceMode,
-			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), IsActive: in.IsActive, ActorID: p.ActorID(),
+			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		}); err != nil {
 			return err // a locked price mode or charge type is mapped by the database error table
 		}

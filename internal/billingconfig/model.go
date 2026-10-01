@@ -79,6 +79,19 @@ func validateCode(code string) []apperr.FieldError {
 	return nil
 }
 
+// glPattern is the shape of an account code of the chart of accounts the accounting module will own, for
+// example 4-1100, 2.1.05 or REV:ROOM. It is a text code so accounting can adopt it without a migration.
+var glPattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._:/-]{0,29}$`)
+
+func normalizeGL(code string) string { return strings.ToUpper(strings.TrimSpace(code)) }
+
+func validateGL(code string) []apperr.FieldError {
+	if code != "" && !glPattern.MatchString(code) {
+		return []apperr.FieldError{fieldErr("gl_account_code", "INVALID_FORMAT", "1-30 characters: A-Z, 0-9, '.', '-', '_', ':' or '/', starting with a letter or digit")}
+	}
+	return nil
+}
+
 func validateName(name string) []apperr.FieldError {
 	switch {
 	case name == "":
@@ -99,14 +112,16 @@ func validateRate(s string) []apperr.FieldError {
 // Tax is a percentage levied on a charge. Whether a price already contains it is a property of the price
 // (the charge code's price mode), never of the tax.
 type Tax struct {
-	ID           int64     `json:"id"`
-	Code         string    `json:"code"`
-	Name         string    `json:"name"`
-	Rate         string    `json:"rate"`
-	TaxOnService bool      `json:"tax_on_service"`
-	IsActive     bool      `json:"is_active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64  `json:"id"`
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Rate         string `json:"rate"`
+	TaxOnService bool   `json:"tax_on_service"`
+	// GLAccountCode is the tax payable account in the chart of accounts (optional, a code, never an id).
+	GLAccountCode *string   `json:"gl_account_code"`
+	IsActive      bool      `json:"is_active"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 	// AffectedOpenStays is set on an update that changed the rate: open stays whose remaining nights are
 	// charged through a code that maps this tax. They pick up the new rate for postings from now on.
 	AffectedOpenStays *int64 `json:"affected_open_stays,omitempty"`
@@ -114,11 +129,12 @@ type Tax struct {
 
 // TaxInput is the editable part of a tax (the code is fixed at creation).
 type TaxInput struct {
-	Code         string
-	Name         string
-	Rate         string
-	TaxOnService bool
-	IsActive     bool
+	Code          string
+	Name          string
+	Rate          string
+	TaxOnService  bool
+	GLAccountCode string // "" = none
+	IsActive      bool
 }
 
 // Normalize trims text and upper-cases the code.
@@ -126,6 +142,7 @@ func (in *TaxInput) Normalize() {
 	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
 	in.Name = strings.TrimSpace(in.Name)
 	in.Rate = strings.TrimSpace(in.Rate)
+	in.GLAccountCode = normalizeGL(in.GLAccountCode)
 }
 
 // Validate checks the input.
@@ -135,6 +152,7 @@ func (in TaxInput) Validate(checkCode bool) []apperr.FieldError {
 		errs = append(errs, validateCode(in.Code)...)
 	}
 	errs = append(errs, validateName(in.Name)...)
+	errs = append(errs, validateGL(in.GLAccountCode)...)
 	return append(errs, validateRate(in.Rate)...)
 }
 
@@ -144,6 +162,7 @@ type ServiceCharge struct {
 	Code              string    `json:"code"`
 	Name              string    `json:"name"`
 	Rate              string    `json:"rate"`
+	GLAccountCode     *string   `json:"gl_account_code"` // service charge payable account (optional)
 	IsActive          bool      `json:"is_active"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -152,10 +171,11 @@ type ServiceCharge struct {
 
 // ServiceChargeInput is the editable part of a service charge.
 type ServiceChargeInput struct {
-	Code     string
-	Name     string
-	Rate     string
-	IsActive bool
+	Code          string
+	Name          string
+	Rate          string
+	GLAccountCode string // "" = none
+	IsActive      bool
 }
 
 // Normalize trims text and upper-cases the code.
@@ -163,6 +183,7 @@ func (in *ServiceChargeInput) Normalize() {
 	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
 	in.Name = strings.TrimSpace(in.Name)
 	in.Rate = strings.TrimSpace(in.Rate)
+	in.GLAccountCode = normalizeGL(in.GLAccountCode)
 }
 
 // Validate checks the input.
@@ -172,6 +193,7 @@ func (in ServiceChargeInput) Validate(checkCode bool) []apperr.FieldError {
 		errs = append(errs, validateCode(in.Code)...)
 	}
 	errs = append(errs, validateName(in.Name)...)
+	errs = append(errs, validateGL(in.GLAccountCode)...)
 	return append(errs, validateRate(in.Rate)...)
 }
 
@@ -202,6 +224,7 @@ type ChargeCode struct {
 	ChargeType       string        `json:"charge_type"`
 	PriceMode        string        `json:"price_mode"`
 	DefaultUnitPrice *string       `json:"default_unit_price,omitempty"`
+	GLAccountCode    *string       `json:"gl_account_code"` // revenue account of this charge (optional)
 	IsSystem         bool          `json:"is_system"`
 	IsActive         bool          `json:"is_active"`
 	Taxes            []TaxRule     `json:"taxes"`
@@ -217,6 +240,7 @@ type ChargeCodeInput struct {
 	ChargeType       string
 	PriceMode        string
 	DefaultUnitPrice string // "" = none
+	GLAccountCode    string // "" = none
 	IsActive         bool
 }
 
@@ -227,6 +251,7 @@ func (in *ChargeCodeInput) Normalize() {
 	in.ChargeType = strings.ToUpper(strings.TrimSpace(in.ChargeType))
 	in.PriceMode = strings.ToUpper(strings.TrimSpace(in.PriceMode))
 	in.DefaultUnitPrice = strings.TrimSpace(in.DefaultUnitPrice)
+	in.GLAccountCode = normalizeGL(in.GLAccountCode)
 }
 
 // Validate checks the input; currencyDecimals is the property's precision.
@@ -242,6 +267,7 @@ func (in ChargeCodeInput) Validate(checkCode bool, currencyDecimals int32) []app
 	if in.PriceMode != ModeExclusive && in.PriceMode != ModeInclusive {
 		errs = append(errs, fieldErr("price_mode", "INVALID_VALUE", "EXCLUSIVE or INCLUSIVE"))
 	}
+	errs = append(errs, validateGL(in.GLAccountCode)...)
 	if in.DefaultUnitPrice != "" {
 		if _, err := ParseUnitPrice(in.DefaultUnitPrice, currencyDecimals); err != nil {
 			errs = append(errs, fieldErr("default_unit_price", "INVALID_AMOUNT",

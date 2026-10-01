@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2798,15 +2798,20 @@ components:
       type: string
       enum: [EXCLUSIVE, INCLUSIVE]
       description: Whether a price excludes or already contains the mapped service charges and taxes.
+    GlAccountCode:
+      type: [string, "null"]
+      description: |
+        An account code of the chart of accounts the accounting module will own (text, never an id), for example `4-1100` or `2.1.05`. Optional until accounting exists; the PMS only checks its shape.
     Tax:
       type: object
-      required: [id, code, name, rate, tax_on_service, is_active, created_at, updated_at]
+      required: [id, code, name, rate, tax_on_service, gl_account_code, is_active, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
         rate: { $ref: "#/components/schemas/Percent" }
         tax_on_service: { type: boolean, description: The tax is also levied on the service charges. }
+        gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: "Tax payable account of the chart of accounts, copied onto the ledger when an item is posted." }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -2830,6 +2835,7 @@ components:
         name: { type: string, maxLength: 100 }
         rate: { $ref: "#/components/schemas/Percent" }
         tax_on_service: { type: boolean, default: false }
+        gl_account_code: { type: string, description: "Account code (A-Z 0-9 . - _ : /, at most 30 characters, upper-cased). Optional." }
         is_active: { type: boolean, default: true }
     PatchTaxRequest:
       type: object
@@ -2838,15 +2844,17 @@ components:
         name: { type: string, maxLength: 100 }
         rate: { $ref: "#/components/schemas/Percent" }
         tax_on_service: { type: boolean }
+        gl_account_code: { type: string, description: "An account code, or an empty string to clear it." }
         is_active: { type: boolean }
     ServiceCharge:
       type: object
-      required: [id, code, name, rate, is_active, created_at, updated_at]
+      required: [id, code, name, rate, gl_account_code, is_active, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
         rate: { $ref: "#/components/schemas/Percent" }
+        gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: "Service charge payable account (optional)." }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -2867,6 +2875,7 @@ components:
         code: { type: string }
         name: { type: string, maxLength: 100 }
         rate: { $ref: "#/components/schemas/Percent" }
+        gl_account_code: { type: string, description: "Account code, optional." }
         is_active: { type: boolean, default: true }
     PatchServiceChargeRequest:
       type: object
@@ -2896,7 +2905,7 @@ components:
         sequence: { type: integer }
     ChargeCode:
       type: object
-      required: [id, code, name, charge_type, price_mode, is_system, is_active, taxes, service_charges, created_at, updated_at]
+      required: [id, code, name, charge_type, price_mode, gl_account_code, is_system, is_active, taxes, service_charges, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -2904,6 +2913,7 @@ components:
         charge_type: { $ref: "#/components/schemas/ChargeType" }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { $ref: "#/components/schemas/Amount" }
+        gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: "Revenue account of this charge (optional). Copied onto the ledger when an item is posted." }
         is_system: { type: boolean }
         is_active: { type: boolean }
         taxes:
@@ -2934,6 +2944,7 @@ components:
         charge_type: { $ref: "#/components/schemas/ChargeType" }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { $ref: "#/components/schemas/Amount" }
+        gl_account_code: { type: string, description: "Revenue account code, optional." }
         is_active: { type: boolean, default: true }
     PatchChargeCodeRequest:
       type: object
@@ -2943,6 +2954,7 @@ components:
         charge_type: { $ref: "#/components/schemas/ChargeType" }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { type: string, description: An amount, or an empty string to clear it. }
+        gl_account_code: { type: string, description: "An account code, or an empty string to clear it." }
         is_active: { type: boolean }
     ReplaceRulesRequest:
       type: object
@@ -3518,7 +3530,7 @@ components:
         approval: { $ref: "#/components/schemas/Approval" }
     FolioComponent:
       type: object
-      required: [component_type, code, name, rate, base_amount, amount, sequence]
+      required: [component_type, code, name, rate, base_amount, amount, sequence, gl_account_code]
       properties:
         component_type: { type: string, enum: [SERVICE_CHARGE, TAX] }
         code: { type: string }
@@ -3527,9 +3539,10 @@ components:
         base_amount: { type: string }
         amount: { type: string }
         sequence: { type: integer }
+        gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The account the tax or service charge was mapped to when the item was posted. }
     FolioItem:
       type: object
-      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components]
+      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code]
       properties:
         id: { type: integer, format: int64 }
         folio_id: { type: integer, format: int64 }
@@ -3540,6 +3553,7 @@ components:
         description: { type: string }
         charge_code: { type: string }
         charge_code_id: { type: [integer, "null"], format: int64 }
+        revenue_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. }
         quantity: { type: string }
         unit_price: { type: string }
         price_mode: { $ref: "#/components/schemas/PriceMode" }

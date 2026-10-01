@@ -151,7 +151,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 	for _, c := range comps {
 		byItem[c.FolioItemID] = append(byItem[c.FolioItemID], Component{
 			ComponentType: c.ComponentType, Code: c.Code, Name: c.Name, Rate: c.Rate.StringFixed(4),
-			BaseAmount: fixed(c.BaseAmount, decimals), Amount: fixed(c.Amount, decimals), Sequence: int(c.Sequence),
+			BaseAmount: fixed(c.BaseAmount, decimals), Amount: fixed(c.Amount, decimals), Sequence: int(c.Sequence), GLAccountCode: c.GlAccountCode,
 		})
 	}
 	out := make([]Item, len(rows))
@@ -162,7 +162,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 		}
 		out[i] = Item{
 			ID: r.ID, FolioID: r.FolioID, TransactionType: r.TransactionType, BusinessDate: r.BusinessDate, ServiceDate: r.ServiceDate,
-			TransactionAt: r.TransactionAt, Description: r.Description, ChargeCode: deref(r.ChargeCode), ChargeCodeID: r.ChargeCodeID,
+			TransactionAt: r.TransactionAt, Description: r.Description, ChargeCode: deref(r.ChargeCode), ChargeCodeID: r.ChargeCodeID, RevenueAccountCode: r.RevenueAccountCode,
 			Quantity: r.Quantity.String(), UnitPrice: fixed(r.UnitPrice, decimals), PriceMode: r.PriceMode,
 			BaseAmount: fixed(r.BaseAmount, decimals), DiscountAmount: fixed(r.DiscountAmount, decimals), NetAmount: fixed(r.NetAmount, decimals),
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),

@@ -25,33 +25,36 @@ type ChargeCode struct {
 	CreatedBy        *int64
 	UpdatedAt        time.Time
 	UpdatedBy        *int64
+	GlAccountCode    *string
 }
 
 type ServiceCharge struct {
-	ID         int64
-	TenantID   int64
-	PropertyID int64
-	Code       string
-	Name       string
-	Rate       decimal.Decimal
-	IsActive   bool
-	CreatedAt  time.Time
-	CreatedBy  *int64
-	UpdatedAt  time.Time
-	UpdatedBy  *int64
+	ID            int64
+	TenantID      int64
+	PropertyID    int64
+	Code          string
+	Name          string
+	Rate          decimal.Decimal
+	IsActive      bool
+	CreatedAt     time.Time
+	CreatedBy     *int64
+	UpdatedAt     time.Time
+	UpdatedBy     *int64
+	GlAccountCode *string
 }
 
 type Tax struct {
-	ID           int64
-	TenantID     int64
-	PropertyID   int64
-	Code         string
-	Name         string
-	Rate         decimal.Decimal
-	TaxOnService bool
-	IsActive     bool
-	CreatedAt    time.Time
-	CreatedBy    *int64
-	UpdatedAt    time.Time
-	UpdatedBy    *int64
+	ID            int64
+	TenantID      int64
+	PropertyID    int64
+	Code          string
+	Name          string
+	Rate          decimal.Decimal
+	TaxOnService  bool
+	IsActive      bool
+	CreatedAt     time.Time
+	CreatedBy     *int64
+	UpdatedAt     time.Time
+	UpdatedBy     *int64
+	GlAccountCode *string
 }

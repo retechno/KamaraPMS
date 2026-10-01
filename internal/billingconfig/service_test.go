@@ -554,3 +554,73 @@ func TestConcurrentRuleReplacementsSerialise(t *testing.T) {
 		t.Fatalf("distinct sequences: %d", c)
 	}
 }
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGLAccountCodesOnChargeCodesTaxesAndServiceCharges(t *testing.T) {
+	f := newFixture(t)
+	str := func(s string) *string { return &s }
+	val := func(p *string) string {
+		if p == nil {
+			return "<nil>"
+		}
+		return *p
+	}
+	// optional, normalised to upper case, validated as a code
+	tx, err := f.Billing.CreateTax(f.admin, f.bali, billingconfig.TaxInput{Code: "VAT", Name: "VAT", Rate: "11", GLAccountCode: " 2.1.05 ", IsActive: true})
+	must(t, err)
+	sc, err := f.Billing.CreateServiceCharge(f.admin, f.bali, billingconfig.ServiceChargeInput{Code: "SVC", Name: "Service", Rate: "10", GLAccountCode: "svc:payable", IsActive: true})
+	must(t, err)
+	if val(tx.GLAccountCode) != "2.1.05" || val(sc.GLAccountCode) != "SVC:PAYABLE" {
+		t.Fatalf("created: %v %v", val(tx.GLAccountCode), val(sc.GLAccountCode))
+	}
+	plain := f.tax(t, "PB1", "10", false)
+	if plain.GLAccountCode != nil {
+		t.Fatalf("optional: %v", plain.GLAccountCode)
+	}
+	for _, bad := range []string{"4 1100", "-4100", "ACCOUNT-CODE-THAT-IS-FAR-TOO-LONG-1", "4,1"} {
+		_, err := f.Billing.CreateTax(f.admin, f.bali, billingconfig.TaxInput{Code: "X1", Name: "x", Rate: "1", GLAccountCode: bad, IsActive: true})
+		e := code(t, err, "VALIDATION_FAILED")
+		if len(e.Fields) != 1 || e.Fields[0].Field != "gl_account_code" {
+			t.Fatalf("%q: %+v", bad, e.Fields)
+		}
+	}
+	room := f.codeByName(t, "ROOM")
+	if room.GLAccountCode != nil {
+		t.Fatalf("seeded codes start unmapped: %v", room.GLAccountCode)
+	}
+	// patch: set, keep (nil), clear (empty)
+	room, err = f.Billing.UpdateChargeCode(f.admin, f.bali, room.ID, billingconfig.ChargeCodePatch{GLAccountCode: str("4-1100")})
+	must(t, err)
+	if val(room.GLAccountCode) != "4-1100" {
+		t.Fatalf("set: %v", val(room.GLAccountCode))
+	}
+	room, err = f.Billing.UpdateChargeCode(f.admin, f.bali, room.ID, billingconfig.ChargeCodePatch{Name: str("Room revenue")})
+	must(t, err)
+	if val(room.GLAccountCode) != "4-1100" {
+		t.Fatalf("an unrelated patch keeps the account: %v", val(room.GLAccountCode))
+	}
+	room, err = f.Billing.UpdateChargeCode(f.admin, f.bali, room.ID, billingconfig.ChargeCodePatch{GLAccountCode: str("")})
+	must(t, err)
+	if room.GLAccountCode != nil {
+		t.Fatalf("clear: %v", val(room.GLAccountCode))
+	}
+	tx, err = f.Billing.UpdateTax(f.admin, f.bali, tx.ID, billingconfig.TaxPatch{GLAccountCode: str("2.1.06")})
+	must(t, err)
+	sc, err = f.Billing.UpdateServiceCharge(f.admin, f.bali, sc.ID, billingconfig.ServiceChargePatch{GLAccountCode: str("")})
+	must(t, err)
+	if val(tx.GLAccountCode) != "2.1.06" || sc.GLAccountCode != nil {
+		t.Fatalf("patched: %v %v", val(tx.GLAccountCode), val(sc.GLAccountCode))
+	}
+	_, err = f.Billing.UpdateTax(f.admin, f.bali, tx.ID, billingconfig.TaxPatch{GLAccountCode: str("not valid!")})
+	wantCode(t, err, "VALIDATION_FAILED")
+	// the audit trail records the account change
+	if f.Count(t, `SELECT count(*) FROM audit_logs WHERE action = 'tax.updated' AND new_data->>'gl_account_code' = '2.1.06'`) != 1 {
+		t.Fatal("the mapping change is audited")
+	}
+}

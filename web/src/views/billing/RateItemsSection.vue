@@ -16,6 +16,7 @@ interface Item {
   rate: string
   is_active: boolean
   tax_on_service?: boolean
+  gl_account_code: string | null
 }
 
 const auth = useAuthStore()
@@ -31,7 +32,7 @@ const editing = ref<Item | 'new' | null>(null)
 const isTax = computed(() => props.kind === 'tax')
 const title = computed(() => (isTax.value ? 'Taxes' : 'Service charges'))
 const canManage = computed(() => auth.can('billing_config.manage', property.currentId))
-const blank = () => ({ code: '', name: '', rate: '', tax_on_service: false, is_active: true })
+const blank = () => ({ code: '', name: '', rate: '', tax_on_service: false, gl_account_code: '', is_active: true })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
@@ -59,7 +60,7 @@ function startNew(): void {
 }
 
 function startEdit(i: Item): void {
-  Object.assign(form, blank(), { code: i.code, name: i.name, rate: i.rate, tax_on_service: i.tax_on_service ?? false, is_active: i.is_active })
+  Object.assign(form, blank(), { code: i.code, name: i.name, rate: i.rate, tax_on_service: i.tax_on_service ?? false, gl_account_code: i.gl_account_code ?? '', is_active: i.is_active })
   error.value = null
   notice.value = ''
   editing.value = i
@@ -76,22 +77,22 @@ async function save(): Promise<void> {
       saved = isTax.value
         ? (await api.POST('/api/v1/properties/{propertyId}/taxes', {
             params: { path: { propertyId } },
-            body: { code: form.code, name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, is_active: form.is_active },
+            body: { code: form.code, name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, gl_account_code: form.gl_account_code || undefined, is_active: form.is_active },
           })).data
         : (await api.POST('/api/v1/properties/{propertyId}/service-charges', {
             params: { path: { propertyId } },
-            body: { code: form.code, name: form.name, rate: form.rate, is_active: form.is_active },
+            body: { code: form.code, name: form.name, rate: form.rate, gl_account_code: form.gl_account_code || undefined, is_active: form.is_active },
           })).data
     } else {
       const id = editing.value.id
       saved = isTax.value
         ? (await api.PATCH('/api/v1/properties/{propertyId}/taxes/{id}', {
             params: { path: { propertyId, id } },
-            body: { name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, is_active: form.is_active },
+            body: { name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, gl_account_code: form.gl_account_code, is_active: form.is_active },
           })).data
         : (await api.PATCH('/api/v1/properties/{propertyId}/service-charges/{id}', {
             params: { path: { propertyId, id } },
-            body: { name: form.name, rate: form.rate, is_active: form.is_active },
+            body: { name: form.name, rate: form.rate, gl_account_code: form.gl_account_code, is_active: form.is_active },
           })).data
     }
     const affected = (saved as { affected_open_stays?: number } | undefined)?.affected_open_stays
@@ -136,6 +137,12 @@ watch(() => property.currentId, load, { immediate: true })
           <small class="hint">0 to 100, up to 4 decimals.</small>
           <small v-if="fieldError('rate')" class="error-text">{{ fieldError('rate') }}</small>
         </label>
+        <label class="field">
+          <span>{{ isTax ? 'Tax payable account' : 'Service payable account' }}</span>
+          <input v-model="form.gl_account_code" name="gl_account_code" placeholder="e.g. 2.1.05" maxlength="30" :aria-invalid="!!fieldError('gl_account_code')" />
+          <small class="hint">Account code in the chart of accounts. Optional; a posted item keeps the code it had when it was posted.</small>
+          <small v-if="fieldError('gl_account_code')" class="error-text">{{ fieldError('gl_account_code') }}</small>
+        </label>
         <label v-if="isTax" class="check">
           <input v-model="form.tax_on_service" name="tax_on_service" type="checkbox" />
           <span>Also levied on service charges</span>
@@ -158,6 +165,7 @@ watch(() => property.currentId, load, { immediate: true })
           <th>Code</th>
           <th>Name</th>
           <th>Rate</th>
+          <th>Account</th>
           <th v-if="isTax">On service</th>
           <th>Status</th>
           <th v-if="canManage" />
@@ -168,6 +176,7 @@ watch(() => property.currentId, load, { immediate: true })
           <td><b>{{ i.code }}</b></td>
           <td>{{ i.name }}</td>
           <td>{{ Number(i.rate) }}%</td>
+          <td data-testid="account">{{ i.gl_account_code ?? '—' }}</td>
           <td v-if="isTax">{{ i.tax_on_service ? 'Yes' : 'No' }}</td>
           <td>{{ i.is_active ? 'Active' : 'Inactive' }}</td>
           <td v-if="canManage"><button type="button" @click="startEdit(i)">Edit</button></td>

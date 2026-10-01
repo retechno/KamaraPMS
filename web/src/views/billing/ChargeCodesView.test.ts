@@ -119,6 +119,22 @@ describe('ChargeCodesView', () => {
     expect(w.find('[data-testid=rules]').exists()).toBe(false) // rules are edited after the code exists
   })
 
+  it('maps a charge code to a revenue account and can clear the mapping', async () => {
+    const w = mountView(['billing_config.manage'])
+    await flushPromises()
+    expect(w.get('[data-testid=code-SPA] [data-testid=account]').text()).toBe('—')
+    await w.get('[data-testid=code-SPA] button').trigger('click')
+    await w.get('input[name=gl_account_code]').setValue('4-1500')
+    await w.get('[data-testid=code-form]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[0]?.[1]).toMatchObject({ body: { gl_account_code: '4-1500' } })
+    await w.get('[data-testid=code-SPA] button').trigger('click')
+    await w.get('input[name=gl_account_code]').setValue('')
+    await w.get('[data-testid=code-form]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[1]?.[1]).toMatchObject({ body: { gl_account_code: '' } })
+  })
+
   it('explains a locked price mode and keeps the system type fixed', async () => {
     const w = mountView(['billing_config.manage'])
     await flushPromises()

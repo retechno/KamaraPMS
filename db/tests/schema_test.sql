@@ -625,6 +625,26 @@ SELECT expect_error('charge_type of a room revenue code is locked', '23001',
     $q$UPDATE charge_codes SET charge_type = 'OTHER' WHERE id = cc('ROOM')$q$);
 
 ------------------------------------------------------------------------------------------
+-- GL account codes (accounting-ready ledger): optional text codes, shape checked, never an id
+------------------------------------------------------------------------------------------
+SELECT expect_ok('a charge code can be mapped to a revenue account',
+    $q$UPDATE charge_codes SET gl_account_code = '4-1100' WHERE id = cc('ROOM_EXEMPT')$q$);
+SELECT expect_ok('an account code can be cleared',
+    $q$UPDATE charge_codes SET gl_account_code = NULL WHERE id = cc('ROOM_EXEMPT')$q$);
+SELECT expect_error('an account code with a space is refused', '23514',
+    $q$UPDATE charge_codes SET gl_account_code = '4 1100' WHERE id = cc('ROOM_EXEMPT')$q$);
+SELECT expect_error('an account code must start with a letter or digit', '23514',
+    $q$UPDATE charge_codes SET gl_account_code = '-4100' WHERE id = cc('ROOM_EXEMPT')$q$);
+SELECT expect_error('a lower case account code is refused (the service upper-cases it)', '23514',
+    $q$UPDATE charge_codes SET gl_account_code = 'rev' WHERE id = cc('ROOM_EXEMPT')$q$);
+SELECT expect_error('a tax account code is checked', '23514',
+    $q$UPDATE taxes SET gl_account_code = 'a b'$q$);
+SELECT expect_error('a service charge account code is checked', '23514',
+    $q$UPDATE service_charges SET gl_account_code = 'a b'$q$);
+SELECT expect_error('an account code is at most 30 characters', '22001',
+    $q$UPDATE taxes SET gl_account_code = repeat('A', 31)$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

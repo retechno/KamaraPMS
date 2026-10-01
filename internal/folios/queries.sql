@@ -54,22 +54,39 @@ INSERT INTO folio_items (
     tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id,
     reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode,
     base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit,
-    source, reason, idempotency_key, created_by, approved_by
+    source, reason, idempotency_key, created_by, approved_by, revenue_account_code
 ) VALUES (
     @tenant_id, @property_id, @folio_id, @business_date, @transaction_at, @service_date, @transaction_type, sqlc.narg(charge_code_id), sqlc.narg(payment_id),
     sqlc.narg(reverses_item_id), sqlc.narg(stay_id), sqlc.narg(stay_room_id), sqlc.narg(reference_type), sqlc.narg(reference_id), @description, @quantity, @unit_price, @price_mode,
     @base_amount, @discount_amount, @net_amount, @rounding_adjustment, @service_charge_total, @tax_total, @debit, @credit,
-    @source, sqlc.narg(reason), sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(approved_by)
+    @source, sqlc.narg(reason), sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(approved_by),
+    -- The revenue account in force now; a reversal copies the account of the item it reverses.
+    CASE WHEN sqlc.narg(reverses_item_id)::bigint IS NOT NULL
+         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = @property_id AND o.id = sqlc.narg(reverses_item_id)::bigint)
+         ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
+    END
 )
 RETURNING *;
 
 -- name: InsertFolioItemComponent :exec
 INSERT INTO folio_item_components (
     tenant_id, property_id, folio_item_id, component_type, tax_id, service_charge_id, code, name, rate, tax_on_service,
-    base_amount, amount, sequence
+    base_amount, amount, sequence, gl_account_code
 ) VALUES (
-    @tenant_id, @property_id, @folio_item_id, @component_type, sqlc.narg(tax_id), sqlc.narg(service_charge_id), @code, @name, @rate,
-    sqlc.narg(tax_on_service), @base_amount, @amount, @sequence
+    @tenant_id, @property_id, @folio_item_id, @component_type::varchar, sqlc.narg(tax_id), sqlc.narg(service_charge_id), @code, @name, @rate,
+    sqlc.narg(tax_on_service), @base_amount, @amount, @sequence,
+    -- The account in force now; a component of a reversal copies the account of the component it reverses.
+    CASE WHEN (SELECT ni.reverses_item_id FROM folio_items ni WHERE ni.property_id = @property_id AND ni.id = @folio_item_id) IS NOT NULL
+         THEN (SELECT oc.gl_account_code FROM folio_items ni
+               JOIN folio_item_components oc ON oc.property_id = ni.property_id AND oc.folio_item_id = ni.reverses_item_id
+                AND oc.component_type = @component_type::varchar
+                AND oc.tax_id IS NOT DISTINCT FROM sqlc.narg(tax_id)::bigint
+                AND oc.service_charge_id IS NOT DISTINCT FROM sqlc.narg(service_charge_id)::bigint
+               WHERE ni.property_id = @property_id AND ni.id = @folio_item_id)
+         WHEN @component_type::varchar = 'TAX'
+         THEN (SELECT t.gl_account_code FROM taxes t WHERE t.property_id = @property_id AND t.id = sqlc.narg(tax_id)::bigint)
+         ELSE (SELECT sc.gl_account_code FROM service_charges sc WHERE sc.property_id = @property_id AND sc.id = sqlc.narg(service_charge_id)::bigint)
+    END
 );
 
 -- name: GetFolioItem :one

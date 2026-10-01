@@ -111,6 +111,7 @@ type createTaxRequest struct {
 	Name         string `json:"name"`
 	Rate         string `json:"rate"`
 	TaxOnService bool   `json:"tax_on_service"`
+	GLAccount    string `json:"gl_account_code"`
 	IsActive     *bool  `json:"is_active"`
 }
 
@@ -123,7 +124,7 @@ func (h *Handler) createTax(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	in := TaxInput{Code: req.Code, Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, IsActive: req.IsActive == nil || *req.IsActive}
+	in := TaxInput{Code: req.Code, Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive}
 	t, err := h.svc.CreateTax(r.Context(), pid, in)
 	if err != nil {
 		return err
@@ -135,6 +136,7 @@ type patchTaxRequest struct {
 	Name         *string `json:"name"`
 	Rate         *string `json:"rate"`
 	TaxOnService *bool   `json:"tax_on_service"`
+	GLAccount    *string `json:"gl_account_code"`
 	IsActive     *bool   `json:"is_active"`
 }
 
@@ -151,7 +153,7 @@ func (h *Handler) updateTax(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	t, err := h.svc.UpdateTax(r.Context(), pid, id, TaxPatch(req))
+	t, err := h.svc.UpdateTax(r.Context(), pid, id, TaxPatch{Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
 	if err != nil {
 		return err
 	}
@@ -176,10 +178,11 @@ func (h *Handler) listServiceCharges(w http.ResponseWriter, r *http.Request) err
 }
 
 type createServiceChargeRequest struct {
-	Code     string `json:"code"`
-	Name     string `json:"name"`
-	Rate     string `json:"rate"`
-	IsActive *bool  `json:"is_active"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	Rate      string `json:"rate"`
+	GLAccount string `json:"gl_account_code"`
+	IsActive  *bool  `json:"is_active"`
 }
 
 func (h *Handler) createServiceCharge(w http.ResponseWriter, r *http.Request) error {
@@ -191,7 +194,7 @@ func (h *Handler) createServiceCharge(w http.ResponseWriter, r *http.Request) er
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	s, err := h.svc.CreateServiceCharge(r.Context(), pid, ServiceChargeInput{Code: req.Code, Name: req.Name, Rate: req.Rate, IsActive: req.IsActive == nil || *req.IsActive})
+	s, err := h.svc.CreateServiceCharge(r.Context(), pid, ServiceChargeInput{Code: req.Code, Name: req.Name, Rate: req.Rate, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive})
 	if err != nil {
 		return err
 	}
@@ -199,9 +202,10 @@ func (h *Handler) createServiceCharge(w http.ResponseWriter, r *http.Request) er
 }
 
 type patchServiceChargeRequest struct {
-	Name     *string `json:"name"`
-	Rate     *string `json:"rate"`
-	IsActive *bool   `json:"is_active"`
+	Name      *string `json:"name"`
+	Rate      *string `json:"rate"`
+	GLAccount *string `json:"gl_account_code"`
+	IsActive  *bool   `json:"is_active"`
 }
 
 func (h *Handler) updateServiceCharge(w http.ResponseWriter, r *http.Request) error {
@@ -217,7 +221,7 @@ func (h *Handler) updateServiceCharge(w http.ResponseWriter, r *http.Request) er
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	s, err := h.svc.UpdateServiceCharge(r.Context(), pid, id, ServiceChargePatch(req))
+	s, err := h.svc.UpdateServiceCharge(r.Context(), pid, id, ServiceChargePatch{Name: req.Name, Rate: req.Rate, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
 	if err != nil {
 		return err
 	}
@@ -266,6 +270,7 @@ type createChargeCodeRequest struct {
 	ChargeType       string `json:"charge_type"`
 	PriceMode        string `json:"price_mode"`
 	DefaultUnitPrice string `json:"default_unit_price"`
+	GLAccount        string `json:"gl_account_code"`
 	IsActive         *bool  `json:"is_active"`
 }
 
@@ -280,7 +285,7 @@ func (h *Handler) createChargeCode(w http.ResponseWriter, r *http.Request) error
 	}
 	c, err := h.svc.CreateChargeCode(r.Context(), pid, ChargeCodeInput{
 		Code: req.Code, Name: req.Name, ChargeType: req.ChargeType, PriceMode: req.PriceMode,
-		DefaultUnitPrice: req.DefaultUnitPrice, IsActive: req.IsActive == nil || *req.IsActive,
+		DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive,
 	})
 	if err != nil {
 		return err
@@ -293,6 +298,7 @@ type patchChargeCodeRequest struct {
 	ChargeType       *string `json:"charge_type"`
 	PriceMode        *string `json:"price_mode"`
 	DefaultUnitPrice *string `json:"default_unit_price"`
+	GLAccount        *string `json:"gl_account_code"`
 	IsActive         *bool   `json:"is_active"`
 }
 
@@ -309,7 +315,7 @@ func (h *Handler) updateChargeCode(w http.ResponseWriter, r *http.Request) error
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	c, err := h.svc.UpdateChargeCode(r.Context(), pid, id, ChargeCodePatch(req))
+	c, err := h.svc.UpdateChargeCode(r.Context(), pid, id, ChargeCodePatch{Name: req.Name, ChargeType: req.ChargeType, PriceMode: req.PriceMode, DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
 	if err != nil {
 		return err
 	}

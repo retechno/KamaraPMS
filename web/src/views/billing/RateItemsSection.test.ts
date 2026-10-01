@@ -11,8 +11,8 @@ let POST = vi.fn()
 let PATCH = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a) } }))
 
-const vat = { id: 1, code: 'VAT', name: 'VAT', rate: '11.0000', tax_on_service: true, is_active: true }
-const svc = { id: 2, code: 'SVC', name: 'Service', rate: '10.0000', is_active: true }
+const vat = { id: 1, code: 'VAT', name: 'VAT', rate: '11.0000', tax_on_service: true, gl_account_code: '2.1.05', is_active: true }
+const svc = { id: 2, code: 'SVC', name: 'Service', rate: '10.0000', gl_account_code: null, is_active: true }
 
 function mountSection(kind: 'tax' | 'service', permissions: string[] = ['billing_config.manage']) {
   const pinia = createPinia()
@@ -82,9 +82,32 @@ describe('RateItemsSection', () => {
     await flushPromises()
     expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/taxes/{id}', {
       params: { path: { propertyId: 7, id: 1 } },
-      body: { name: 'VAT', rate: '12', tax_on_service: true, is_active: true },
+      body: { name: 'VAT', rate: '12', tax_on_service: true, gl_account_code: '2.1.05', is_active: true },
     })
     expect(w.get('[data-testid=notice]').text()).toContain('3 in-house stay(s)')
+  })
+
+  it('shows the account code and sends it on create, edit and clear', async () => {
+    const w = mountSection('tax')
+    await flushPromises()
+    expect(w.get('[data-testid=tax-VAT] [data-testid=account]').text()).toBe('2.1.05')
+    await w.get('[data-testid=tax-VAT] button').trigger('click')
+    expect((w.get('input[name=gl_account_code]').element as HTMLInputElement).value).toBe('2.1.05')
+    await w.get('input[name=gl_account_code]').setValue('')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[0]?.[1]).toMatchObject({ body: { gl_account_code: '' } }) // an empty string clears the mapping
+    const svcSection = mountSection('service')
+    await flushPromises()
+    expect(svcSection.get('[data-testid=service-SVC] [data-testid=account]').text()).toBe('—')
+    await svcSection.get('button').trigger('click')
+    await svcSection.get('input[name=code]').setValue('SVC2')
+    await svcSection.get('input[name=name]').setValue('Service 2')
+    await svcSection.get('input[name=rate]').setValue('5')
+    await svcSection.get('input[name=gl_account_code]').setValue('2-2100')
+    await svcSection.get('form').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { code: 'SVC2', gl_account_code: '2-2100' } })
   })
 
   it('shows TAX_IN_USE when deactivating a mapped tax', async () => {

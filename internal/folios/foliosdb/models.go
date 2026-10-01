@@ -64,6 +64,7 @@ type FolioItem struct {
 	CreatedAt          time.Time
 	CreatedBy          *int64
 	ApprovedBy         *int64
+	RevenueAccountCode *string
 }
 
 type FolioItemComponent struct {
@@ -82,6 +83,7 @@ type FolioItemComponent struct {
 	Amount          decimal.Decimal
 	Sequence        int16
 	CreatedAt       time.Time
+	GlAccountCode   *string
 }
 
 type Payment struct {

@@ -506,3 +506,19 @@ func TestTapeChartFollowsMovesAndDepartureChanges(t *testing.T) {
 		t.Fatalf("bars: %+v", bars)
 	}
 }
+
+func TestRoomChargesCarryTheRevenueAccountCode(t *testing.T) {
+	f := setup(t)
+	must(t, f.Exec(t, `UPDATE charge_codes SET gl_account_code = '4-1100' WHERE property_id = $1 AND code = 'ROOM'`, f.propID))
+	st := f.stay(t, f.r101.ID, "2026-10-01")
+	f.pay(t, st.Folio.ID, "1000000")
+	_, err := f.Front.CheckOut(f.admin, f.propID, st.Stay.ID, frontdesk.CheckOutInput{Version: st.Stay.Version})
+	must(t, err)
+	if f.Count(t, `SELECT count(*) FROM folio_items WHERE transaction_type = 'CHARGE' AND revenue_account_code = '4-1100'`) != 1 {
+		t.Fatal("the room night carries the account of the ROOM code")
+	}
+	must(t, f.Exec(t, `UPDATE charge_codes SET gl_account_code = '4-2000' WHERE property_id = $1 AND code = 'ROOM'`, f.propID))
+	if f.Count(t, `SELECT count(*) FROM folio_items WHERE revenue_account_code = '4-1100'`) != 1 {
+		t.Fatal("a remapping does not change the posted night")
+	}
+}

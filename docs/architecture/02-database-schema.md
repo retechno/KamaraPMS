@@ -508,6 +508,7 @@ Trigger `properties_currency_lock`: raises an exception on changing `currency_co
 | name | varchar(100) | NO | |
 | rate | numeric(7,4) | NO | A percent. CHECK `BETWEEN 0 AND 100` |
 | tax_on_service | boolean | NO | DEFAULT false |
+| gl_account_code | varchar(30) | YES | Tax payable account code of the future COA (text, no FK). CHECK shape `^[A-Z0-9][A-Z0-9._:/-]{0,29}$`. Migration 00019. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -519,6 +520,7 @@ There is no `is_inclusive` column (rejected).
 | code | varchar(20) | NO | UK `(property_id, code)` |
 | name | varchar(100) | NO | |
 | rate | numeric(7,4) | NO | A percent. CHECK `BETWEEN 0 AND 100` |
+| gl_account_code | varchar(30) | YES | Service charge payable account code. Same rules. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -531,6 +533,7 @@ There is no `is_inclusive` column (rejected).
 | price_mode | varchar(12) | NO | CHECK IN (`EXCLUSIVE`,`INCLUSIVE`). DEFAULT `EXCLUSIVE`. **Immutable once used** (trigger). |
 | default_unit_price | numeric(18,3) | YES | CHECK ≥ 0 |
 | is_system | boolean | NO | |
+| gl_account_code | varchar(30) | YES | Revenue account code. Same rules. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -723,6 +726,7 @@ There is no `is_inclusive` column (rejected).
 | quantity | numeric(10,3) | NO | CHECK ≠ 0 |
 | unit_price | numeric(18,3) | NO | As entered, in `price_mode` terms |
 | price_mode | varchar(12) | NO | CHECK IN (`EXCLUSIVE`,`INCLUSIVE`) |
+| revenue_account_code | varchar(30) | YES | Snapshot of the charge code's account when posted; a reversal copies the original's. NULL for payments and unmapped codes. |
 | base_amount | numeric(18,3) | NO | Signed, revenue perspective |
 | discount_amount | numeric(18,3) | NO | DEFAULT 0 |
 | net_amount | numeric(18,3) | NO | Includes `rounding_adjustment` |
@@ -766,6 +770,7 @@ Triggers:
 | name | varchar(100) | NO | Snapshot |
 | rate | numeric(7,4) | NO | Snapshot (a percent) |
 | tax_on_service | boolean | YES | Snapshot (taxes only). CHECK `(component_type = 'TAX') = (tax_on_service IS NOT NULL)` |
+| gl_account_code | varchar(30) | YES | Snapshot of the tax / service charge account when posted; a reversal copies the original's. |
 | base_amount | numeric(18,3) | NO | The taxable base used |
 | amount | numeric(18,3) | NO | Signed like the item |
 | sequence | smallint | NO | |

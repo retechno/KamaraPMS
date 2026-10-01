@@ -163,19 +163,24 @@ type Component struct {
 	BaseAmount    string `json:"base_amount"`
 	Amount        string `json:"amount"`
 	Sequence      int    `json:"sequence"`
+	// GLAccountCode is the account the tax or service charge was mapped to when the item was posted.
+	GLAccountCode *string `json:"gl_account_code"`
 }
 
 // Item is a ledger line.
 type Item struct {
-	ID                 int64       `json:"id"`
-	FolioID            int64       `json:"folio_id"`
-	TransactionType    string      `json:"transaction_type"`
-	BusinessDate       civil.Date  `json:"business_date"`
-	ServiceDate        civil.Date  `json:"service_date"`
-	TransactionAt      time.Time   `json:"transaction_at"`
-	Description        string      `json:"description"`
-	ChargeCode         string      `json:"charge_code,omitempty"`
-	ChargeCodeID       *int64      `json:"charge_code_id"`
+	ID              int64      `json:"id"`
+	FolioID         int64      `json:"folio_id"`
+	TransactionType string     `json:"transaction_type"`
+	BusinessDate    civil.Date `json:"business_date"`
+	ServiceDate     civil.Date `json:"service_date"`
+	TransactionAt   time.Time  `json:"transaction_at"`
+	Description     string     `json:"description"`
+	ChargeCode      string     `json:"charge_code,omitempty"`
+	ChargeCodeID    *int64     `json:"charge_code_id"`
+	// RevenueAccountCode is the revenue account of the charge code when the item was posted (a reversal
+	// carries the account of the item it reverses).
+	RevenueAccountCode *string     `json:"revenue_account_code"`
 	Quantity           string      `json:"quantity"`
 	UnitPrice          string      `json:"unit_price"`
 	PriceMode          string      `json:"price_mode"`

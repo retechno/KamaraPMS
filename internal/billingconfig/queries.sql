@@ -8,8 +8,8 @@ SELECT seed_charge_codes(@tenant_id::bigint, @property_id::bigint, sqlc.narg(act
 -- ---------------------------------------------------------------- taxes
 
 -- name: CreateTax :one
-INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, @rate, @tax_on_service, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, gl_account_code, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @rate, @tax_on_service, sqlc.narg(gl_account_code), @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetTax :one
@@ -26,7 +26,7 @@ ORDER BY id
 LIMIT @row_limit;
 
 -- name: UpdateTax :one
-UPDATE taxes SET name = @name, rate = @rate, tax_on_service = @tax_on_service, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+UPDATE taxes SET name = @name, rate = @rate, tax_on_service = @tax_on_service, gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 
@@ -51,8 +51,8 @@ FOR SHARE;
 -- ---------------------------------------------------------------- service charges
 
 -- name: CreateServiceCharge :one
-INSERT INTO service_charges (tenant_id, property_id, code, name, rate, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, @rate, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO service_charges (tenant_id, property_id, code, name, rate, gl_account_code, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @rate, sqlc.narg(gl_account_code), @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetServiceCharge :one
@@ -69,7 +69,7 @@ ORDER BY id
 LIMIT @row_limit;
 
 -- name: UpdateServiceCharge :one
-UPDATE service_charges SET name = @name, rate = @rate, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+UPDATE service_charges SET name = @name, rate = @rate, gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 
@@ -92,8 +92,8 @@ FOR SHARE;
 -- ---------------------------------------------------------------- charge codes
 
 -- name: CreateChargeCode :one
-INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, @charge_type, @price_mode, sqlc.narg(default_unit_price), false, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, is_system, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @charge_type, @price_mode, sqlc.narg(default_unit_price), sqlc.narg(gl_account_code), false, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetChargeCode :one
@@ -113,7 +113,7 @@ LIMIT @row_limit;
 -- name: UpdateChargeCode :one
 UPDATE charge_codes SET
     name = @name, charge_type = @charge_type, price_mode = @price_mode,
-    default_unit_price = sqlc.narg(default_unit_price), is_active = @is_active, updated_by = sqlc.narg(actor_id)
+    default_unit_price = sqlc.narg(default_unit_price), gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 
