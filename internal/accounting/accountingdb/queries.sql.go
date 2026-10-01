@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -47,6 +48,49 @@ func (q *Queries) AncestorIDs(ctx context.Context, arg AncestorIDsParams) ([]int
 	return items, nil
 }
 
+const closePeriod = `-- name: ClosePeriod :exec
+INSERT INTO gl_periods (tenant_id, property_id, period_start, status, closed_at, closed_by)
+VALUES ($1, $2, $3, 'CLOSED', $4, $5)
+ON CONFLICT (property_id, period_start) DO UPDATE
+   SET status = 'CLOSED', closed_at = EXCLUDED.closed_at, closed_by = EXCLUDED.closed_by, reopened_at = NULL, reopened_by = NULL, reopen_reason = NULL
+`
+
+type ClosePeriodParams struct {
+	TenantID    int64
+	PropertyID  int64
+	PeriodStart civil.Date
+	Now         *time.Time
+	ActorID     *int64
+}
+
+func (q *Queries) ClosePeriod(ctx context.Context, arg ClosePeriodParams) error {
+	_, err := q.db.Exec(ctx, closePeriod,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PeriodStart,
+		arg.Now,
+		arg.ActorID,
+	)
+	return err
+}
+
+const countAccountLines = `-- name: CountAccountLines :one
+SELECT count(*)::int FROM gl_journal_lines WHERE tenant_id = $1 AND property_id = $2 AND account_id = $3
+`
+
+type CountAccountLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+}
+
+func (q *Queries) CountAccountLines(ctx context.Context, arg CountAccountLinesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countAccountLines, arg.TenantID, arg.PropertyID, arg.AccountID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countAccountReferences = `-- name: CountAccountReferences :one
 SELECT ((SELECT count(*) FROM gl_account_map m WHERE m.property_id = $1 AND m.account_id = $2)
       + (SELECT count(*) FROM charge_codes c WHERE c.property_id = $1 AND c.gl_account_code = $3)
@@ -78,6 +122,33 @@ type CountChildrenParams struct {
 
 func (q *Queries) CountChildren(ctx context.Context, arg CountChildrenParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countChildren, arg.PropertyID, arg.ID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countPostedDays = `-- name: CountPostedDays :one
+SELECT count(*)::int FROM business_days b
+JOIN gl_day_posts d ON d.property_id = b.property_id AND d.business_date = b.business_date
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'CLOSED'
+  AND b.business_date BETWEEN $3::date AND $4::date
+`
+
+type CountPostedDaysParams struct {
+	TenantID   int64
+	PropertyID int64
+	FirstDay   civil.Date
+	LastDay    civil.Date
+}
+
+// How many days of a range are closed business days with their journal run.
+func (q *Queries) CountPostedDays(ctx context.Context, arg CountPostedDaysParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPostedDays,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FirstDay,
+		arg.LastDay,
+	)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -125,6 +196,107 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 	return id, err
 }
 
+const dayActivity = `-- name: DayActivity :many
+
+SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount
+FROM (
+    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount
+      FROM folio_item_gl g
+     WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
+     GROUP BY COALESCE(g.charge_code, 'UNKNOWN')
+    UNION ALL
+    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
+     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN')
+    UNION ALL
+    SELECT CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE' END, COALESCE(c.gl_account_code, ''),
+           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount)
+      FROM folio_item_gl g
+      JOIN folio_item_components c ON c.property_id = g.property_id AND c.folio_item_id = g.item_id
+     WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
+     GROUP BY c.component_type, COALESCE(c.gl_account_code, ''), c.code
+    UNION ALL
+    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
+     GROUP BY g.is_deposit, g.payment_method
+    UNION ALL
+    SELECT 'METHOD', g.payment_method, 'PAYMENT', g.payment_method, -sum(g.signed_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
+     GROUP BY g.payment_method
+    UNION ALL
+    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.payment_method, sum(r.amount)
+      FROM city_ledger_receipts r
+     WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
+     GROUP BY r.payment_method
+    UNION ALL
+    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount)
+      FROM city_ledger_receipts r
+     WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
+     GROUP BY r.payment_method
+    UNION ALL
+    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount)
+      FROM folios f
+      JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
+     WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
+     GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+    UNION ALL
+    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount)
+      FROM folios f
+      JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
+     WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
+     GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+) x
+WHERE x.amount <> 0
+`
+
+type DayActivityParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+}
+
+type DayActivityRow struct {
+	Role       string
+	Key        string
+	SourceType string
+	SourceRef  string
+	Amount     decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Journals
+// What happened on a business date, as signed amounts (debit positive) against a role: GUEST_LEDGER, ADVANCE_DEPOSITS and
+// CITY_LEDGER are system accounts, METHOD is the payment method received into (key), REVENUE the charge code's revenue
+// account (key), TAX and SERVICE the component's account (key). The service resolves roles to accounts.
+func (q *Queries) DayActivity(ctx context.Context, arg DayActivityParams) ([]DayActivityRow, error) {
+	rows, err := q.db.Query(ctx, dayActivity, arg.TenantID, arg.PropertyID, arg.BusinessDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DayActivityRow{}
+	for rows.Next() {
+		var i DayActivityRow
+		if err := rows.Scan(
+			&i.Role,
+			&i.Key,
+			&i.SourceType,
+			&i.SourceRef,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteAccount = `-- name: DeleteAccount :exec
 DELETE FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -138,6 +310,23 @@ type DeleteAccountParams struct {
 func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) error {
 	_, err := q.db.Exec(ctx, deleteAccount, arg.TenantID, arg.PropertyID, arg.ID)
 	return err
+}
+
+const findJournalByKey = `-- name: FindJournalByKey :one
+SELECT id FROM gl_journals WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type FindJournalByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) FindJournalByKey(ctx context.Context, arg FindJournalByKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findJournalByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getAccountByCode = `-- name: GetAccountByCode :one
@@ -208,6 +397,45 @@ func (q *Queries) GetAccountRow(ctx context.Context, arg GetAccountRowParams) (G
 	return i, err
 }
 
+const getDayPost = `-- name: GetDayPost :one
+SELECT id FROM gl_day_posts WHERE tenant_id = $1 AND property_id = $2 AND business_date = $3
+`
+
+type GetDayPostParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+}
+
+func (q *Queries) GetDayPost(ctx context.Context, arg GetDayPostParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getDayPost, arg.TenantID, arg.PropertyID, arg.BusinessDate)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getPeriod = `-- name: GetPeriod :one
+SELECT period_start, status FROM gl_periods WHERE tenant_id = $1 AND property_id = $2 AND period_start = $3
+`
+
+type GetPeriodParams struct {
+	TenantID    int64
+	PropertyID  int64
+	PeriodStart civil.Date
+}
+
+type GetPeriodRow struct {
+	PeriodStart civil.Date
+	Status      string
+}
+
+func (q *Queries) GetPeriod(ctx context.Context, arg GetPeriodParams) (GetPeriodRow, error) {
+	row := q.db.QueryRow(ctx, getPeriod, arg.TenantID, arg.PropertyID, arg.PeriodStart)
+	var i GetPeriodRow
+	err := row.Scan(&i.PeriodStart, &i.Status)
+	return i, err
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT id, tenant_id, property_id, start_date, fiscal_year_start_month, created_at, updated_at, updated_by FROM accounting_settings WHERE tenant_id = $1 AND property_id = $2
 `
@@ -231,6 +459,127 @@ func (q *Queries) GetSettings(ctx context.Context, arg GetSettingsParams) (Accou
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const insertDayPost = `-- name: InsertDayPost :exec
+INSERT INTO gl_day_posts (tenant_id, property_id, business_date, journal_id, posted_at, posted_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertDayPostParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	JournalID    *int64
+	PostedAt     time.Time
+	ActorID      *int64
+}
+
+func (q *Queries) InsertDayPost(ctx context.Context, arg InsertDayPostParams) error {
+	_, err := q.db.Exec(ctx, insertDayPost,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.JournalID,
+		arg.PostedAt,
+		arg.ActorID,
+	)
+	return err
+}
+
+const insertJournal = `-- name: InsertJournal :one
+INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reference, reverses_journal_id, reason,
+                         idempotency_key, posted_at, posted_by, approved_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13)
+RETURNING id
+`
+
+type InsertJournalParams struct {
+	TenantID          int64
+	PropertyID        int64
+	JournalNumber     string
+	JournalType       string
+	JournalDate       civil.Date
+	Description       string
+	Reference         *string
+	ReversesJournalID *int64
+	Reason            *string
+	IdempotencyKey    *string
+	PostedAt          time.Time
+	ActorID           *int64
+	ApprovedBy        *int64
+}
+
+func (q *Queries) InsertJournal(ctx context.Context, arg InsertJournalParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertJournal,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.JournalNumber,
+		arg.JournalType,
+		arg.JournalDate,
+		arg.Description,
+		arg.Reference,
+		arg.ReversesJournalID,
+		arg.Reason,
+		arg.IdempotencyKey,
+		arg.PostedAt,
+		arg.ActorID,
+		arg.ApprovedBy,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertJournalLine = `-- name: InsertJournalLine :exec
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertJournalLineParams struct {
+	TenantID    int64
+	PropertyID  int64
+	JournalID   int64
+	LineNo      int32
+	AccountID   int64
+	Debit       decimal.Decimal
+	Credit      decimal.Decimal
+	Description *string
+	SourceType  *string
+	SourceRef   *string
+}
+
+func (q *Queries) InsertJournalLine(ctx context.Context, arg InsertJournalLineParams) error {
+	_, err := q.db.Exec(ctx, insertJournalLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.JournalID,
+		arg.LineNo,
+		arg.AccountID,
+		arg.Debit,
+		arg.Credit,
+		arg.Description,
+		arg.SourceType,
+		arg.SourceRef,
+	)
+	return err
+}
+
+const latestClosedPeriod = `-- name: LatestClosedPeriod :one
+SELECT period_start FROM gl_periods WHERE tenant_id = $1 AND property_id = $2 AND status = 'CLOSED' ORDER BY period_start DESC LIMIT 1
+`
+
+type LatestClosedPeriodParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) LatestClosedPeriod(ctx context.Context, arg LatestClosedPeriodParams) (civil.Date, error) {
+	row := q.db.QueryRow(ctx, latestClosedPeriod, arg.TenantID, arg.PropertyID)
+	var period_start civil.Date
+	err := row.Scan(&period_start)
+	return period_start, err
 }
 
 const listAccountMap = `-- name: ListAccountMap :many
@@ -443,6 +792,277 @@ func (q *Queries) ListCodeUsage(ctx context.Context, arg ListCodeUsageParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const listJournalLines = `-- name: ListJournalLines :many
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref
+FROM gl_journal_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.journal_id = $3
+ORDER BY l.line_no
+`
+
+type ListJournalLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	JournalID  int64
+}
+
+type ListJournalLinesRow struct {
+	LineNo      int32
+	AccountID   int64
+	AccountCode string
+	AccountName string
+	Debit       decimal.Decimal
+	Credit      decimal.Decimal
+	Description *string
+	SourceType  *string
+	SourceRef   *string
+}
+
+func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesParams) ([]ListJournalLinesRow, error) {
+	rows, err := q.db.Query(ctx, listJournalLines, arg.TenantID, arg.PropertyID, arg.JournalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJournalLinesRow{}
+	for rows.Next() {
+		var i ListJournalLinesRow
+		if err := rows.Scan(
+			&i.LineNo,
+			&i.AccountID,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.Debit,
+			&i.Credit,
+			&i.Description,
+			&i.SourceType,
+			&i.SourceRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJournals = `-- name: ListJournals :many
+SELECT j.id, j.journal_number, j.journal_type, j.journal_date, j.description, j.reference, j.reverses_journal_id, j.reason, j.posted_at, j.posted_by,
+       j.approved_by, rj.journal_number AS reverses_number, rv.id AS reversed_by_id, rv.journal_number AS reversed_by_number,
+       COALESCE((SELECT sum(l.debit) FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id), 0)::numeric AS total,
+       (SELECT count(*) FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id)::int AS line_count
+FROM gl_journals j
+LEFT JOIN gl_journals rj ON rj.property_id = j.property_id AND rj.id = j.reverses_journal_id
+LEFT JOIN gl_journals rv ON rv.property_id = j.property_id AND rv.reverses_journal_id = j.id
+WHERE j.tenant_id = $1 AND j.property_id = $2
+  AND ($3::bigint IS NULL OR j.id = $3::bigint)
+  AND ($4::date IS NULL OR j.journal_date >= $4::date)
+  AND ($5::date IS NULL OR j.journal_date <= $5::date)
+  AND ($6::text IS NULL OR j.journal_type = $6::text)
+  AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id AND l.account_id = $7::bigint))
+  AND ($8::text IS NULL OR j.journal_number ILIKE '%' || $8::text || '%' OR j.description ILIKE '%' || $8::text || '%' OR j.reference ILIKE '%' || $8::text || '%')
+ORDER BY j.journal_date DESC, j.id DESC
+LIMIT $9
+`
+
+type ListJournalsParams struct {
+	TenantID    int64
+	PropertyID  int64
+	ID          *int64
+	FromDate    *civil.Date
+	ToDate      *civil.Date
+	JournalType *string
+	AccountID   *int64
+	Q           *string
+	RowLimit    int32
+}
+
+type ListJournalsRow struct {
+	ID                int64
+	JournalNumber     string
+	JournalType       string
+	JournalDate       civil.Date
+	Description       string
+	Reference         *string
+	ReversesJournalID *int64
+	Reason            *string
+	PostedAt          time.Time
+	PostedBy          *int64
+	ApprovedBy        *int64
+	ReversesNumber    *string
+	ReversedByID      *int64
+	ReversedByNumber  *string
+	Total             decimal.Decimal
+	LineCount         int32
+}
+
+func (q *Queries) ListJournals(ctx context.Context, arg ListJournalsParams) ([]ListJournalsRow, error) {
+	rows, err := q.db.Query(ctx, listJournals,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.JournalType,
+		arg.AccountID,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJournalsRow{}
+	for rows.Next() {
+		var i ListJournalsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JournalNumber,
+			&i.JournalType,
+			&i.JournalDate,
+			&i.Description,
+			&i.Reference,
+			&i.ReversesJournalID,
+			&i.Reason,
+			&i.PostedAt,
+			&i.PostedBy,
+			&i.ApprovedBy,
+			&i.ReversesNumber,
+			&i.ReversedByID,
+			&i.ReversedByNumber,
+			&i.Total,
+			&i.LineCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPeriods = `-- name: ListPeriods :many
+
+SELECT period_start, status, closed_at, closed_by, reopened_at, reopened_by, reopen_reason
+FROM gl_periods WHERE tenant_id = $1 AND property_id = $2 ORDER BY period_start DESC
+`
+
+type ListPeriodsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListPeriodsRow struct {
+	PeriodStart  civil.Date
+	Status       string
+	ClosedAt     *time.Time
+	ClosedBy     *int64
+	ReopenedAt   *time.Time
+	ReopenedBy   *int64
+	ReopenReason *string
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Periods (calendar months)
+func (q *Queries) ListPeriods(ctx context.Context, arg ListPeriodsParams) ([]ListPeriodsRow, error) {
+	rows, err := q.db.Query(ctx, listPeriods, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPeriodsRow{}
+	for rows.Next() {
+		var i ListPeriodsRow
+		if err := rows.Scan(
+			&i.PeriodStart,
+			&i.Status,
+			&i.ClosedAt,
+			&i.ClosedBy,
+			&i.ReopenedAt,
+			&i.ReopenedBy,
+			&i.ReopenReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pendingDays = `-- name: PendingDays :many
+SELECT b.business_date FROM business_days b
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'CLOSED' AND b.business_date >= $3::date
+  AND NOT EXISTS (SELECT 1 FROM gl_day_posts d WHERE d.property_id = b.property_id AND d.business_date = b.business_date)
+ORDER BY b.business_date
+LIMIT $4
+`
+
+type PendingDaysParams struct {
+	TenantID   int64
+	PropertyID int64
+	StartDate  civil.Date
+	RowLimit   int32
+}
+
+// Closed business days from the start date that have no journal run yet, oldest first.
+func (q *Queries) PendingDays(ctx context.Context, arg PendingDaysParams) ([]civil.Date, error) {
+	rows, err := q.db.Query(ctx, pendingDays,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StartDate,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []civil.Date{}
+	for rows.Next() {
+		var business_date civil.Date
+		if err := rows.Scan(&business_date); err != nil {
+			return nil, err
+		}
+		items = append(items, business_date)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reopenPeriod = `-- name: ReopenPeriod :exec
+UPDATE gl_periods SET status = 'OPEN', reopened_at = $1, reopened_by = $2, reopen_reason = $3
+WHERE tenant_id = $4 AND property_id = $5 AND period_start = $6
+`
+
+type ReopenPeriodParams struct {
+	Now         *time.Time
+	ActorID     *int64
+	Reason      *string
+	TenantID    int64
+	PropertyID  int64
+	PeriodStart civil.Date
+}
+
+func (q *Queries) ReopenPeriod(ctx context.Context, arg ReopenPeriodParams) error {
+	_, err := q.db.Exec(ctx, reopenPeriod,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PeriodStart,
+	)
+	return err
 }
 
 const seedChart = `-- name: SeedChart :one

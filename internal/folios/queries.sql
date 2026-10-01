@@ -15,8 +15,9 @@ UPDATE folios SET version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: CloseFolio :one
-UPDATE folios SET status = 'CLOSED', closed_at = @now::timestamptz, closed_by = sqlc.narg(actor_id), version = version + 1, updated_by = sqlc.narg(actor_id)
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+UPDATE folios f SET status = 'CLOSED', closed_at = @now::timestamptz, closed_by = sqlc.narg(actor_id), version = f.version + 1, updated_by = sqlc.narg(actor_id),
+    closed_on = (SELECT b.business_date FROM business_days b WHERE b.property_id = f.property_id AND b.status = 'OPEN')
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id = @id
 RETURNING *;
 
 -- The reservation's open folio that is not linked to a stay yet (deposits go here).

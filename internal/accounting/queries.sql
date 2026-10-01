@@ -96,3 +96,150 @@ FROM (
 ) u
 LEFT JOIN gl_accounts a ON a.property_id = @property_id AND a.code = u.gl_account_code
 ORDER BY u.kind, u.code;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Journals
+
+-- What happened on a business date, as signed amounts (debit positive) against a role: GUEST_LEDGER, ADVANCE_DEPOSITS and
+-- CITY_LEDGER are system accounts, METHOD is the payment method received into (key), REVENUE the charge code's revenue
+-- account (key), TAX and SERVICE the component's account (key). The service resolves roles to accounts.
+-- name: DayActivity :many
+SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount
+FROM (
+    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount
+      FROM folio_item_gl g
+     WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
+     GROUP BY COALESCE(g.charge_code, 'UNKNOWN')
+    UNION ALL
+    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
+     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN')
+    UNION ALL
+    SELECT CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE' END, COALESCE(c.gl_account_code, ''),
+           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount)
+      FROM folio_item_gl g
+      JOIN folio_item_components c ON c.property_id = g.property_id AND c.folio_item_id = g.item_id
+     WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
+     GROUP BY c.component_type, COALESCE(c.gl_account_code, ''), c.code
+    UNION ALL
+    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'PAYMENT'
+     GROUP BY g.is_deposit, g.payment_method
+    UNION ALL
+    SELECT 'METHOD', g.payment_method, 'PAYMENT', g.payment_method, -sum(g.signed_amount)
+      FROM folio_item_gl g
+     WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'PAYMENT'
+     GROUP BY g.payment_method
+    UNION ALL
+    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.payment_method, sum(r.amount)
+      FROM city_ledger_receipts r
+     WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @business_date AND r.status = 'POSTED'
+     GROUP BY r.payment_method
+    UNION ALL
+    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount)
+      FROM city_ledger_receipts r
+     WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @business_date AND r.status = 'POSTED'
+     GROUP BY r.payment_method
+    UNION ALL
+    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount)
+      FROM folios f
+      JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
+     WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
+     GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+    UNION ALL
+    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount)
+      FROM folios f
+      JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
+     WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
+     GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+) x
+WHERE x.amount <> 0;
+
+-- name: InsertJournal :one
+INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reference, reverses_journal_id, reason,
+                         idempotency_key, posted_at, posted_by, approved_by)
+VALUES (@tenant_id, @property_id, @journal_number, @journal_type, @journal_date, @description, sqlc.narg(reference), sqlc.narg(reverses_journal_id),
+        sqlc.narg(reason), sqlc.narg(idempotency_key), @posted_at, sqlc.narg(actor_id), sqlc.narg(approved_by))
+RETURNING id;
+
+-- name: InsertJournalLine :exec
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref)
+VALUES (@tenant_id, @property_id, @journal_id, @line_no, @account_id, @debit, @credit, sqlc.narg(description), sqlc.narg(source_type), sqlc.narg(source_ref));
+
+-- name: ListJournals :many
+SELECT j.id, j.journal_number, j.journal_type, j.journal_date, j.description, j.reference, j.reverses_journal_id, j.reason, j.posted_at, j.posted_by,
+       j.approved_by, rj.journal_number AS reverses_number, rv.id AS reversed_by_id, rv.journal_number AS reversed_by_number,
+       COALESCE((SELECT sum(l.debit) FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id), 0)::numeric AS total,
+       (SELECT count(*) FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id)::int AS line_count
+FROM gl_journals j
+LEFT JOIN gl_journals rj ON rj.property_id = j.property_id AND rj.id = j.reverses_journal_id
+LEFT JOIN gl_journals rv ON rv.property_id = j.property_id AND rv.reverses_journal_id = j.id
+WHERE j.tenant_id = @tenant_id AND j.property_id = @property_id
+  AND (sqlc.narg(id)::bigint IS NULL OR j.id = sqlc.narg(id)::bigint)
+  AND (sqlc.narg(from_date)::date IS NULL OR j.journal_date >= sqlc.narg(from_date)::date)
+  AND (sqlc.narg(to_date)::date IS NULL OR j.journal_date <= sqlc.narg(to_date)::date)
+  AND (sqlc.narg(journal_type)::text IS NULL OR j.journal_type = sqlc.narg(journal_type)::text)
+  AND (sqlc.narg(account_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM gl_journal_lines l WHERE l.property_id = j.property_id AND l.journal_id = j.id AND l.account_id = sqlc.narg(account_id)::bigint))
+  AND (sqlc.narg(q)::text IS NULL OR j.journal_number ILIKE '%' || sqlc.narg(q)::text || '%' OR j.description ILIKE '%' || sqlc.narg(q)::text || '%' OR j.reference ILIKE '%' || sqlc.narg(q)::text || '%')
+ORDER BY j.journal_date DESC, j.id DESC
+LIMIT @row_limit;
+
+-- name: ListJournalLines :many
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref
+FROM gl_journal_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.journal_id = @journal_id
+ORDER BY l.line_no;
+
+-- name: FindJournalByKey :one
+SELECT id FROM gl_journals WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: GetDayPost :one
+SELECT id FROM gl_day_posts WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date = @business_date;
+
+-- name: InsertDayPost :exec
+INSERT INTO gl_day_posts (tenant_id, property_id, business_date, journal_id, posted_at, posted_by)
+VALUES (@tenant_id, @property_id, @business_date, sqlc.narg(journal_id), @posted_at, sqlc.narg(actor_id));
+
+-- Closed business days from the start date that have no journal run yet, oldest first.
+-- name: PendingDays :many
+SELECT b.business_date FROM business_days b
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'CLOSED' AND b.business_date >= @start_date::date
+  AND NOT EXISTS (SELECT 1 FROM gl_day_posts d WHERE d.property_id = b.property_id AND d.business_date = b.business_date)
+ORDER BY b.business_date
+LIMIT @row_limit;
+
+-- name: CountAccountLines :one
+SELECT count(*)::int FROM gl_journal_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND account_id = @account_id;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Periods (calendar months)
+
+-- name: ListPeriods :many
+SELECT period_start, status, closed_at, closed_by, reopened_at, reopened_by, reopen_reason
+FROM gl_periods WHERE tenant_id = @tenant_id AND property_id = @property_id ORDER BY period_start DESC;
+
+-- name: GetPeriod :one
+SELECT period_start, status FROM gl_periods WHERE tenant_id = @tenant_id AND property_id = @property_id AND period_start = @period_start;
+
+-- name: ClosePeriod :exec
+INSERT INTO gl_periods (tenant_id, property_id, period_start, status, closed_at, closed_by)
+VALUES (@tenant_id, @property_id, @period_start, 'CLOSED', @now, sqlc.narg(actor_id))
+ON CONFLICT (property_id, period_start) DO UPDATE
+   SET status = 'CLOSED', closed_at = EXCLUDED.closed_at, closed_by = EXCLUDED.closed_by, reopened_at = NULL, reopened_by = NULL, reopen_reason = NULL;
+
+-- name: ReopenPeriod :exec
+UPDATE gl_periods SET status = 'OPEN', reopened_at = @now, reopened_by = sqlc.narg(actor_id), reopen_reason = @reason
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND period_start = @period_start;
+
+-- name: LatestClosedPeriod :one
+SELECT period_start FROM gl_periods WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED' ORDER BY period_start DESC LIMIT 1;
+
+-- How many days of a range are closed business days with their journal run.
+-- name: CountPostedDays :one
+SELECT count(*)::int FROM business_days b
+JOIN gl_day_posts d ON d.property_id = b.property_id AND d.business_date = b.business_date
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'CLOSED'
+  AND b.business_date BETWEEN @first_day::date AND @last_day::date;

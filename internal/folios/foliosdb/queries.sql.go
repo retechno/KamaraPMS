@@ -37,9 +37,10 @@ func (q *Queries) BumpFolio(ctx context.Context, arg BumpFolioParams) error {
 }
 
 const closeFolio = `-- name: CloseFolio :one
-UPDATE folios SET status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2, version = version + 1, updated_by = $2
-WHERE tenant_id = $3 AND property_id = $4 AND id = $5
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+UPDATE folios f SET status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2, version = f.version + 1, updated_by = $2,
+    closed_on = (SELECT b.business_date FROM business_days b WHERE b.property_id = f.property_id AND b.status = 'OPEN')
+WHERE f.tenant_id = $3 AND f.property_id = $4 AND f.id = $5
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on
 `
 
 type CloseFolioParams struct {
@@ -76,6 +77,7 @@ func (q *Queries) CloseFolio(ctx context.Context, arg CloseFolioParams) (Folio, 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }
@@ -157,7 +159,7 @@ func (q *Queries) FolioTotals(ctx context.Context, arg FolioTotalsParams) (Folio
 
 const getFolio = `-- name: GetFolio :one
 
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by FROM folios WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on FROM folios WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetFolioParams struct {
@@ -188,6 +190,7 @@ func (q *Queries) GetFolio(ctx context.Context, arg GetFolioParams) (Folio, erro
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }
@@ -297,7 +300,7 @@ func (q *Queries) GetFolioItemByKey(ctx context.Context, arg GetFolioItemByKeyPa
 }
 
 const getFolioOfStay = `-- name: GetFolioOfStay :one
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
 `
 
 type GetFolioOfStayParams struct {
@@ -326,6 +329,7 @@ func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }
@@ -514,7 +518,7 @@ func (q *Queries) GetStayStatus(ctx context.Context, arg GetStayStatusParams) (s
 const insertFolio = `-- name: InsertFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $6)
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on
 `
 
 type InsertFolioParams struct {
@@ -553,6 +557,7 @@ func (q *Queries) InsertFolio(ctx context.Context, arg InsertFolioParams) (Folio
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }
@@ -829,7 +834,7 @@ const linkFolioToStay = `-- name: LinkFolioToStay :one
 
 UPDATE folios SET stay_id = $1, version = version + 1, updated_by = $2
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on
 `
 
 type LinkFolioToStayParams struct {
@@ -868,6 +873,7 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }
@@ -990,7 +996,7 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 }
 
 const listFolios = `-- name: ListFolios :many
-SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit
+SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit
 FROM folios f
 LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
 WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id > $3
@@ -1029,6 +1035,7 @@ type ListFoliosRow struct {
 	CreatedBy     *int64
 	UpdatedAt     time.Time
 	UpdatedBy     *int64
+	ClosedOn      *civil.Date
 	Debit         decimal.Decimal
 	Credit        decimal.Decimal
 }
@@ -1067,6 +1074,7 @@ func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListF
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.ClosedOn,
 			&i.Debit,
 			&i.Credit,
 		); err != nil {
@@ -1198,7 +1206,7 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 }
 
 const listStayOpenFolios = `-- name: ListStayOpenFolios :many
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'OPEN' ORDER BY id
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'OPEN' ORDER BY id
 `
 
 type ListStayOpenFoliosParams struct {
@@ -1233,6 +1241,7 @@ func (q *Queries) ListStayOpenFolios(ctx context.Context, arg ListStayOpenFolios
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.ClosedOn,
 		); err != nil {
 			return nil, err
 		}
@@ -1313,7 +1322,7 @@ func (q *Queries) SumRefundsOf(ctx context.Context, arg SumRefundsOfParams) (Sum
 const unlinkFolioFromStay = `-- name: UnlinkFolioFromStay :one
 UPDATE folios SET stay_id = NULL, version = version + 1, updated_by = $1
 WHERE tenant_id = $2 AND property_id = $3 AND id = $4
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on
 `
 
 type UnlinkFolioFromStayParams struct {
@@ -1348,6 +1357,7 @@ func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromSt
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ClosedOn,
 	)
 	return i, err
 }

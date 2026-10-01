@@ -53,3 +53,43 @@ export function toTree(accounts: GlAccount[]): TreeRow[] {
   walk(null, 0)
   return out
 }
+
+const SCALE = 1000n
+
+/** A decimal string as thousandths, or null when it is not a plain decimal: amounts are never floats. */
+export function toMilli(value: string): bigint | null {
+  const m = /^(-?)(\d+)(?:\.(\d{1,3}))?$/.exec(value.trim())
+  if (!m) return null
+  const whole = BigInt(m[2] ?? '0') * SCALE
+  const frac = BigInt((m[3] ?? '').padEnd(3, '0') || '0')
+  return m[1] ? -(whole + frac) : whole + frac
+}
+
+/** Thousandths as a decimal string without trailing zeros. */
+export function fromMilli(n: bigint): string {
+  const neg = n < 0n
+  const abs = neg ? -n : n
+  const whole = abs / SCALE
+  const frac = (abs % SCALE).toString().padStart(3, '0').replace(/0+$/, '')
+  return `${neg ? '-' : ''}${whole}${frac ? `.${frac}` : ''}`
+}
+
+/** Adds the debit and credit columns of journal form lines; an entry that is not an amount counts as zero. */
+export function totals(lines: { debit: string; credit: string }[]): { debit: bigint; credit: bigint; valid: boolean } {
+  let debit = 0n
+  let credit = 0n
+  let valid = true
+  for (const l of lines) {
+    for (const [v, side] of [[l.debit, 'd'], [l.credit, 'c']] as const) {
+      if (v.trim() === '') continue
+      const n = toMilli(v)
+      if (n === null || n < 0n) {
+        valid = false
+        continue
+      }
+      if (side === 'd') debit += n
+      else credit += n
+    }
+  }
+  return { debit, credit, valid }
+}

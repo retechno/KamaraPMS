@@ -3275,6 +3275,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/journals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Journals, newest first (accounting.view) */
+        get: operations["listJournals"];
+        put?: never;
+        /**
+         * Post a manual journal (accounting.post)
+         * @description The `Idempotency-Key` header is required; the same key returns the first journal. The date is not after the current business date nor before the accounting start date, and its month is open (409 `PERIOD_CLOSED`). Each line is a debit or a credit, at the property's decimals; debits equal credits (field `lines`). The accounts the guest ledger, city ledger and advance deposits are controlled by the day close and refused (`CONTROL_ACCOUNT`).
+         */
+        post: operations["postManualJournal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/post-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make the journals of closed business days that have none (accounting.close)
+         * @description The days from before accounting was set up and any the night audit skipped, oldest first, at most 400 a call. Safe to repeat.
+         */
+        post: operations["postPendingJournals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One journal with its lines (accounting.view) */
+        get: operations["getJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a manual journal (accounting.post, needs approval)
+         * @description Posts the mirror image (a REVERSAL journal). Only a manual journal, once (409 `JOURNAL_NOT_REVERSIBLE`, `JOURNAL_ALREADY_REVERSED`); a day close journal follows the folios and is corrected there. The reversal date defaults to the current business date and its month must be open.
+         */
+        post: operations["reverseJournal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The months of the books, newest first (accounting.view)
+         * @description From the month of the accounting start date to the month of the current business date, with how many of their days have a journal and whether each can be closed.
+         */
+        get: operations["listGlPeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods/{start}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a month (accounting.close)
+         * @description A month closes in order, after it has ended, when every business day of it is closed with its journal (409 `PERIOD_NOT_READY`). A closed month takes no journals.
+         */
+        post: operations["closeGlPeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods/{start}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the latest closed month (accounting.close) */
+        post: operations["reopenGlPeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6088,6 +6243,99 @@ export interface components {
         GlCodeReport: {
             checked: number;
             issues: components["schemas"]["GlCodeIssue"][];
+        };
+        /** @enum {string} */
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL";
+        JournalLine: {
+            line_no: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            debit: string;
+            credit: string;
+            description?: string;
+            /**
+             * @description What a day close line adds up.
+             * @enum {string}
+             */
+            source_type?: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE" | "PAYMENT" | "RECEIPT" | "DEPOSIT_RELEASE";
+            /** @description The charge code */
+            source_ref?: string;
+        };
+        Journal: {
+            /** Format: int64 */
+            id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            /** Format: date */
+            journal_date: string;
+            description: string;
+            reference?: string;
+            /** Format: int64 */
+            reverses_journal_id: number | null;
+            reverses_number?: string;
+            /** Format: int64 */
+            reversed_by_journal_id: number | null;
+            reversed_by_number?: string;
+            reason?: string;
+            /** Format: date-time */
+            posted_at: string;
+            /** Format: int64 */
+            posted_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** @description The sum of the debits. */
+            total: string;
+            line_count: number;
+            /** @description Only when one journal is read. */
+            lines?: components["schemas"]["JournalLine"][];
+        };
+        JournalList: {
+            data: components["schemas"]["Journal"][];
+        };
+        ManualJournalRequest: {
+            /** Format: date */
+            journal_date: string;
+            description: string;
+            reference?: string;
+            lines: {
+                /** Format: int64 */
+                account_id: number;
+                debit?: string;
+                credit?: string;
+                description?: string;
+            }[];
+        };
+        ReverseJournalRequest: {
+            /** Format: date */
+            journal_date?: string | null;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        GlPeriod: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Business days of the month from the accounting start date. */
+            days: number;
+            /** @description Of those */
+            posted_days: number;
+            closable: boolean;
+            reopenable: boolean;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: int64 */
+            closed_by: number | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            reopen_reason?: string;
+        };
+        GlPeriodList: {
+            data: components["schemas"]["GlPeriod"][];
         };
     };
     responses: {
@@ -11434,6 +11682,241 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listJournals: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                type?: components["schemas"]["JournalType"];
+                /** @description Only journals with a line on this account. */
+                account_id?: number;
+                /** @description Text in the number */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The journals, without their lines. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postManualJournal: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualJournalRequest"];
+            };
+        };
+        responses: {
+            /** @description The journal with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postPendingJournals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many days were journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        posted: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The journal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseJournalRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal journal. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGlPeriods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The periods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriodList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    closeGlPeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriod"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenGlPeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriod"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

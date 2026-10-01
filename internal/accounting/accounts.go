@@ -14,6 +14,7 @@ import (
 
 	"kamarapms/internal/accounting/accountingdb"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -37,11 +38,12 @@ type Service struct {
 	audit *audit.Writer
 	authz auth.Authorizer
 	days  *tenancy.Service
+	iam   *iam.Service
 }
 
 // NewService wires the service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, iamSvc *iam.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: iamSvc}
 }
 
 func (s *Service) q(ctx context.Context) *accountingdb.Queries {
@@ -99,11 +101,8 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 // or a period, FOR SHARE to post a journal. It is the first lock these use cases take.
 func (s *Service) lock(ctx context.Context, tenantID, propertyID int64, mode db.LockMode) (accountingdb.AccountingSetting, error) {
 	cfg, err := s.q(ctx).GetSettings(ctx, accountingdb.GetSettingsParams{TenantID: tenantID, PropertyID: propertyID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return cfg, apperr.NotFound("ACCOUNTING_NOT_SET_UP", "accounting is not set up for this property")
-	}
 	if err != nil {
-		return cfg, err
+		return cfg, settingsErr(err)
 	}
 	if err := db.LockRows(ctx, db.Accounting, mode, propertyID, []int64{cfg.ID}); err != nil {
 		return cfg, err
@@ -439,9 +438,28 @@ func (s *Service) DeleteAccount(ctx context.Context, propertyID, id int64) error
 	})
 }
 
-// requireNoLines is where journals refuse to lose an account; the journal tables come with the next step.
+// requireNoLines keeps an account that has journal lines from becoming a header (strict): its history would sit on an
+// account that takes no postings. Deleting one is stopped by the foreign key of the lines.
 func (s *Service) requireNoLines(ctx context.Context, propertyID int64, a accountingdb.GlAccount, strict bool) error {
+	if !strict {
+		return nil
+	}
+	n, err := s.q(ctx).CountAccountLines(ctx, accountingdb.CountAccountLinesParams{TenantID: a.TenantID, PropertyID: propertyID, AccountID: a.ID})
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return apperr.Conflict("ACCOUNT_HAS_ENTRIES", "the account has journal entries").WithContext("lines", n)
+	}
 	return nil
+}
+
+// settingsErr turns a missing settings row into the error of a property without accounting.
+func settingsErr(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.NotFound("ACCOUNTING_NOT_SET_UP", "accounting is not set up for this property")
+	}
+	return err
 }
 
 // ---------------------------------------------------------------------------------------------------------------

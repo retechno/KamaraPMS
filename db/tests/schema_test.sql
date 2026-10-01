@@ -1069,6 +1069,85 @@ SELECT expect_error('one settings row per property', '23505',
 SELECT expect_error('a fiscal year starts in a month of the year', '23514',
     $q$UPDATE accounting_settings SET fiscal_year_start_month = 13$q$);
 
+-- General ledger: journals, day posts, periods
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('ABC'), pr('BALI'), '4110', 'Room revenue', 'REVENUE', 'CREDIT', 'REV_ROOMS');
+WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000001', 'DAY_CLOSE', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr);
+SELECT expect_ok('a balanced journal', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000002', 'MANUAL', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a journal number is unique per property', '23505', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000001', 'MANUAL', '2026-10-02', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('one day close journal per date', '23505', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000003', 'DAY_CLOSE', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_ok('a manual journal on a day close date', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000004', 'MANUAL', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('debits equal credits at commit', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000005', 'MANUAL', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 90)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a journal has lines', '23514',
+    $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JV000006', 'MANUAL', '2026-10-01', 'x')$q$);
+SELECT expect_error('a known journal type', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000007', 'OTHER', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a reversal names the journal it reverses', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000008', 'REVERSAL', '2026-10-01', 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('only a reversal names a journal', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reverses_journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000009', 'MANUAL', '2026-10-01', 'x', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a reversal has a reason', '23514', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reverses_journal_id)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000010', 'REVERSAL', '2026-10-01', 'x', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001')) RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_ok('a reversal with its reason', $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reverses_journal_id, reason)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000011', 'REVERSAL', '2026-10-01', 'x', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a journal is reversed once', '23505',
+    $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reverses_journal_id, reason)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000012', 'REVERSAL', '2026-10-01', 'x', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$,
+    $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description, reverses_journal_id, reason)
+       VALUES (tn('ABC'), pr('BALI'), 'JV000013', 'REVERSAL', '2026-10-01', 'x', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 'x') RETURNING id)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit)
+SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('a line is a debit or a credit', '23514',
+    $q$INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit) SELECT tenant_id, property_id, id, 9, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'), 5, 5 FROM gl_journals WHERE journal_number = 'JV000001'$q$);
+SELECT expect_error('a line is not zero', '23514',
+    $q$INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id) SELECT tenant_id, property_id, id, 9, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110') FROM gl_journals WHERE journal_number = 'JV000001'$q$);
+SELECT expect_error('a line names an account of its property', '23503',
+    $q$INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit) SELECT tenant_id, property_id, id, 9, (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1110'), 5 FROM gl_journals WHERE journal_number = 'JV000001'$q$);
+SELECT expect_error('an account with entries cannot be deleted', '23503', $q$DELETE FROM gl_accounts WHERE property_id = pr('BALI') AND code = '4110'$q$);
+SELECT expect_error('journals are append-only (update)', '23001', $q$UPDATE gl_journals SET description = 'y'$q$);
+SELECT expect_error('journals are append-only (delete)', '23001', $q$DELETE FROM gl_journals$q$);
+SELECT expect_error('journal lines are append-only', '23001', $q$UPDATE gl_journal_lines SET debit = debit + 1$q$);
+SELECT expect_error('journals cannot be truncated', '23001', $q$TRUNCATE gl_journals CASCADE$q$);
+INSERT INTO gl_day_posts (tenant_id, property_id, business_date, journal_id) VALUES (tn('ABC'), pr('BALI'), '2026-10-01', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'));
+SELECT expect_error('a day is posted once', '23505', $q$INSERT INTO gl_day_posts (tenant_id, property_id, business_date) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$);
+SELECT expect_error('a day post is for a business day', '23503', $q$INSERT INTO gl_day_posts (tenant_id, property_id, business_date) VALUES (tn('ABC'), pr('BALI'), '2026-12-01')$q$);
+SELECT expect_error('day posts are append-only', '23001', $q$DELETE FROM gl_day_posts$q$);
+SELECT expect_ok('a period starts on the first of a month', $q$INSERT INTO gl_periods (tenant_id, property_id, period_start) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$);
+SELECT expect_error('a period starts on the first of a month (other day)', '23514', $q$INSERT INTO gl_periods (tenant_id, property_id, period_start) VALUES (tn('ABC'), pr('BALI'), '2026-10-02')$q$);
+SELECT expect_error('a period exists once', '23505',
+    $q$INSERT INTO gl_periods (tenant_id, property_id, period_start) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$,
+    $q$INSERT INTO gl_periods (tenant_id, property_id, period_start) VALUES (tn('ABC'), pr('BALI'), '2026-10-01')$q$);
+SELECT expect_error('a period has a known status', '23514', $q$INSERT INTO gl_periods (tenant_id, property_id, period_start, status) VALUES (tn('ABC'), pr('BALI'), '2026-11-01', 'LOCKED')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

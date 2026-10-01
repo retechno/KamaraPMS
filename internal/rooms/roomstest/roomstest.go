@@ -93,11 +93,11 @@ func Setup(t *testing.T) *Env {
 	avail := availability.NewService(txm)
 	billing := billingconfig.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
-	acct := accounting.NewService(txm, c, aw, authz, ten)
-	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
 	rt := rates.NewService(txm, c, aw, authz, ten)
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
+	acct := accounting.NewService(txm, c, aw, authz, ten, ia)
+	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
 	co := companies.NewService(txm, c, aw, authz, ten)
 	fo.SetCompanyGate(co)
@@ -105,6 +105,7 @@ func Setup(t *testing.T) *Env {
 	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
 	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)
+	na.SetJournaler(acct)
 	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
 	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,

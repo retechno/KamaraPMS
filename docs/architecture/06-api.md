@@ -624,3 +624,15 @@ Permissions: `accounting.view` (read), `accounting.manage` (chart and system acc
 | `POST {P}/accounting/accounts/import` | `accounting.manage` | `{csv, dry_run}`; all or nothing; row errors as `rows[N].field` |
 | `GET/PUT {P}/accounting/account-map` | read: `accounting.view`; write: `accounting.manage` | The ten system keys; PUT `{entries: [{map_key, account_id}]}` is all or nothing |
 | `GET {P}/accounting/unmapped` | `accounting.view` | Charge codes, taxes and service charges whose account code the journals cannot use, and where they are posted instead |
+
+### 19.1 Journals and periods
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/journals` | `accounting.view` | Filters `from`, `to`, `type` (DAY_CLOSE, MANUAL, REVERSAL), `account_id`, `q`, `limit` (at most 200); newest first, without lines |
+| `GET {P}/accounting/journals/{id}` | `accounting.view` | With its lines; day close lines carry `source_type` (CHARGE_CODE, TAX, SERVICE_CHARGE, PAYMENT, RECEIPT, DEPOSIT_RELEASE) and `source_ref` |
+| `POST {P}/accounting/journals` | `accounting.post` | Manual journal; `Idempotency-Key` required; 422 field errors per line (`lines[N].account_id`: NOT_FOUND, NOT_POSTABLE, INACTIVE, CONTROL_ACCOUNT; `lines`: UNBALANCED, INVALID_COUNT); 409 `PERIOD_CLOSED` |
+| `POST {P}/accounting/journals/{id}/reverse` | `accounting.post` + approval | `{journal_date?, reason, approval}`; 409 `JOURNAL_NOT_REVERSIBLE` (day close or reversal), `JOURNAL_ALREADY_REVERSED` |
+| `POST {P}/accounting/journals/post-pending` | `accounting.close` | Journals closed days that have none; `{posted}` |
+| `GET {P}/accounting/periods` | `accounting.view` | Months from the start date to today, newest first, with `posted_days`, `closable`, `reopenable` |
+| `POST {P}/accounting/periods/{start}/close` | `accounting.close` | `{start}` is the first day of the month; 409 `PERIOD_NOT_READY` (context `days`, `posted_days`), `PERIOD_ALREADY_CLOSED` |
+| `POST {P}/accounting/periods/{start}/reopen` | `accounting.close` | `{reason}`; only the latest closed month: 409 `PERIOD_NOT_LATEST`, `PERIOD_NOT_CLOSED` |

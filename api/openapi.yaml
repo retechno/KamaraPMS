@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.26.0
+  version: 0.27.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -3862,6 +3862,175 @@ paths:
               schema: { $ref: "#/components/schemas/GlCodeReport" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/journals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listJournals
+      summary: Journals, newest first (accounting.view)
+      tags: [accounting]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/JournalType" } }
+        - { name: account_id, in: query, description: Only journals with a line on this account., schema: { type: integer, format: int64 } }
+        - { name: q, in: query, description: Text in the number, description or reference., schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: The journals, without their lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postManualJournal
+      summary: Post a manual journal (accounting.post)
+      description: "The `Idempotency-Key` header is required; the same key returns the first journal. The date is not after the current business date nor before the accounting start date, and its month is open (409 `PERIOD_CLOSED`). Each line is a debit or a credit, at the property's decimals; debits equal credits (field `lines`). The accounts the guest ledger, city ledger and advance deposits are controlled by the day close and refused (`CONTROL_ACCOUNT`)."
+      tags: [accounting]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualJournalRequest" }
+      responses:
+        "201":
+          description: The journal with its lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Journal" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/journals/post-pending:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: postPendingJournals
+      summary: Make the journals of closed business days that have none (accounting.close)
+      description: "The days from before accounting was set up and any the night audit skipped, oldest first, at most 400 a call. Safe to repeat."
+      tags: [accounting]
+      responses:
+        "200":
+          description: How many days were journaled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posted]
+                properties:
+                  posted: { type: integer }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/journals/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getJournal
+      summary: One journal with its lines (accounting.view)
+      tags: [accounting]
+      responses:
+        "200":
+          description: The journal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Journal" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/journals/{id}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseJournal
+      summary: Reverse a manual journal (accounting.post, needs approval)
+      description: "Posts the mirror image (a REVERSAL journal). Only a manual journal, once (409 `JOURNAL_NOT_REVERSIBLE`, `JOURNAL_ALREADY_REVERSED`); a day close journal follows the folios and is corrected there. The reversal date defaults to the current business date and its month must be open."
+      tags: [accounting]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReverseJournalRequest" }
+      responses:
+        "201":
+          description: The reversal journal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Journal" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/periods:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listGlPeriods
+      summary: The months of the books, newest first (accounting.view)
+      description: From the month of the accounting start date to the month of the current business date, with how many of their days have a journal and whether each can be closed.
+      tags: [accounting]
+      responses:
+        "200":
+          description: The periods.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlPeriodList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/periods/{start}/close:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: start, in: path, required: true, description: The first day of the month., schema: { type: string, format: date } }
+    post:
+      operationId: closeGlPeriod
+      summary: Close a month (accounting.close)
+      description: "A month closes in order, after it has ended, when every business day of it is closed with its journal (409 `PERIOD_NOT_READY`). A closed month takes no journals."
+      tags: [accounting]
+      responses:
+        "200":
+          description: The period.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlPeriod" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/periods/{start}/reopen:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: start, in: path, required: true, description: The first day of the month., schema: { type: string, format: date } }
+    post:
+      operationId: reopenGlPeriod
+      summary: Reopen the latest closed month (accounting.close)
+      tags: [accounting]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The period.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlPeriod" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -7066,3 +7235,96 @@ components:
         issues:
           type: array
           items: { $ref: "#/components/schemas/GlCodeIssue" }
+    JournalType: { type: string, enum: [DAY_CLOSE, MANUAL, REVERSAL] }
+    JournalLine:
+      type: object
+      required: [line_no, account_id, account_code, account_name, debit, credit]
+      properties:
+        line_no: { type: integer }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        debit: { type: string }
+        credit: { type: string }
+        description: { type: string }
+        source_type: { type: string, enum: [CHARGE_CODE, TAX, SERVICE_CHARGE, PAYMENT, RECEIPT, DEPOSIT_RELEASE], description: What a day close line adds up. }
+        source_ref: { type: string, description: The charge code, tax, payment method or folio number. }
+    Journal:
+      type: object
+      required: [id, journal_number, journal_type, journal_date, description, reverses_journal_id, reversed_by_journal_id, posted_at, posted_by, approved_by, total, line_count]
+      properties:
+        id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_type: { $ref: "#/components/schemas/JournalType" }
+        journal_date: { type: string, format: date }
+        description: { type: string }
+        reference: { type: string }
+        reverses_journal_id: { type: integer, format: int64, nullable: true }
+        reverses_number: { type: string }
+        reversed_by_journal_id: { type: integer, format: int64, nullable: true }
+        reversed_by_number: { type: string }
+        reason: { type: string }
+        posted_at: { type: string, format: date-time }
+        posted_by: { type: integer, format: int64, nullable: true }
+        approved_by: { type: integer, format: int64, nullable: true }
+        total: { type: string, description: The sum of the debits. }
+        line_count: { type: integer }
+        lines: { type: array, items: { $ref: "#/components/schemas/JournalLine" }, description: Only when one journal is read. }
+    JournalList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Journal" }
+    ManualJournalRequest:
+      type: object
+      required: [journal_date, description, lines]
+      additionalProperties: false
+      properties:
+        journal_date: { type: string, format: date }
+        description: { type: string, maxLength: 300 }
+        reference: { type: string, maxLength: 100 }
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 200
+          items:
+            type: object
+            required: [account_id]
+            additionalProperties: false
+            properties:
+              account_id: { type: integer, format: int64 }
+              debit: { type: string }
+              credit: { type: string }
+              description: { type: string, maxLength: 300 }
+    ReverseJournalRequest:
+      type: object
+      required: [reason, approval]
+      additionalProperties: false
+      properties:
+        journal_date: { type: string, format: date, nullable: true }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    GlPeriod:
+      type: object
+      required: [period_start, period_end, status, days, posted_days, closable, reopenable, closed_at, closed_by, reopened_at]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        days: { type: integer, description: Business days of the month from the accounting start date. }
+        posted_days: { type: integer, description: Of those, days that are closed and have their journal. }
+        closable: { type: boolean }
+        reopenable: { type: boolean }
+        closed_at: { type: string, format: date-time, nullable: true }
+        closed_by: { type: integer, format: int64, nullable: true }
+        reopened_at: { type: string, format: date-time, nullable: true }
+        reopen_reason: { type: string }
+    GlPeriodList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/GlPeriod" }

@@ -31,7 +31,17 @@ type Service struct {
 	charges *roomcharge.Service
 	res     *reservations.Service
 	hk      *housekeeping.Service
+	journal Journaler
 }
+
+// Journaler makes the general ledger journal of a business date (accounting.Service). It runs inside the night audit's
+// transaction, so a day cannot close without its journal.
+type Journaler interface {
+	PostDay(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error
+}
+
+// SetJournaler wires the general ledger.
+func (s *Service) SetJournaler(j Journaler) { s.journal = j }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service,
@@ -260,6 +270,11 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 				return apperr.Conflict("NIGHT_AUDIT_BLOCKED", "room charges are still due after posting").WithContext("ready", r.Ready)
 			}
 			return blocked(b)
+		}
+		if s.journal != nil {
+			if err := s.journal.PostDay(ctx, p, propertyID, bd); err != nil {
+				return err
+			}
 		}
 		summary, err := s.Summarize(ctx, p, propertyID, bd, prop.CurrencyDecimals, rep.Posted)
 		if err != nil {

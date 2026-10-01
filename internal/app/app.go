@@ -76,7 +76,7 @@ func New(d Deps) *App {
 	hkSvc := housekeeping.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	billingSvc := billingconfig.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
-	accountingSvc := accounting.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	accountingSvc := accounting.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	tenancySvc.OnPropertyCreated(accountingSvc.SeedProperty) // the standard chart of accounts, after the charge codes it maps
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
@@ -88,6 +88,7 @@ func New(d Deps) *App {
 
 	roomChargeSvc := roomcharge.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, expected.NewLoader(d.TxManager), billingSvc, foliosSvc.RoomPoster())
 	nightAuditSvc := nightaudit.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomChargeSvc, reservationsSvc, hkSvc)
+	nightAuditSvc.SetJournaler(accountingSvc) // the journal of the day is made before the day closes
 	reportsSvc := reports.NewService(d.TxManager, authz, tenancySvc, nightAuditSvc)
 	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc, roomChargeSvc)
 	companiesSvc := companies.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
@@ -121,7 +122,9 @@ func New(d Deps) *App {
 	cityledger.NewHandler(cityLedgerSvc).Register(api)
 	groups.NewHandler(groupsSvc).Register(api)
 	maintenance.NewHandler(maintenanceSvc).Register(api)
-	accounting.NewHandler(accountingSvc).Register(api)
+	accountingHTTP := accounting.NewHandler(accountingSvc)
+	accountingHTTP.Register(api)
+	accountingHTTP.RegisterJournals(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

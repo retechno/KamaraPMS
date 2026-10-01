@@ -55,6 +55,8 @@ export const navigation: NavSection[] = [
     items: [
       { label: 'Chart of accounts', to: '/accounting/accounts', milestone: 'S3' },
       { label: 'System accounts', to: '/accounting/mapping', milestone: 'S3' },
+      { label: 'Journals', to: '/accounting/journals', milestone: 'S3' },
+      { label: 'Periods', to: '/accounting/periods', milestone: 'S3' },
     ],
   },
   {

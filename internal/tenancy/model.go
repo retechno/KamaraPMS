@@ -233,6 +233,8 @@ const (
 	SeqCityLedgerReceipt SequenceType = "CITY_LEDGER_RECEIPT"
 	// SeqCityLedgerInvoice numbers the invoices sent to companies.
 	SeqCityLedgerInvoice SequenceType = "CITY_LEDGER_INVOICE"
+	// SeqJournal numbers the general ledger journals.
+	SeqJournal SequenceType = "JOURNAL"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -250,6 +252,7 @@ var defaultSequences = []struct {
 	{SeqPayment, "PAY"},
 	{SeqCityLedgerReceipt, "CLR"},
 	{SeqCityLedgerInvoice, "CINV"},
+	{SeqJournal, "JV"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }

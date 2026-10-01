@@ -28,6 +28,7 @@ type Folio struct {
 	CreatedBy     *int64
 	UpdatedAt     time.Time
 	UpdatedBy     *int64
+	ClosedOn      *civil.Date
 }
 
 type FolioItem struct {

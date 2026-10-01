@@ -41,6 +41,8 @@ export const router = createRouter({
     },
     { path: '/accounting/accounts', name: 'accounting-accounts', component: () => import('@/views/accounting/ChartOfAccountsView.vue'), meta: { title: 'Chart of accounts' } },
     { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
+    { path: '/accounting/journals', name: 'accounting-journals', component: () => import('@/views/accounting/JournalsView.vue'), meta: { title: 'Journals' } },
+    { path: '/accounting/periods', name: 'accounting-periods', component: () => import('@/views/accounting/PeriodsView.vue'), meta: { title: 'Accounting periods' } },
     {
       path: '/room-blocks',
       name: 'room-blocks',
