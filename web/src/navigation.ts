@@ -75,6 +75,14 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Tax',
+    items: [
+      { label: 'Filing profiles', to: '/tax/profiles', milestone: 'S3' },
+      { label: 'Tax returns', to: '/tax/returns', milestone: 'S3' },
+      { label: 'Tax owed', to: '/tax/liability', milestone: 'S3' },
+    ],
+  },
+  {
     title: 'Bank',
     items: [
       { label: 'Bank accounts', to: '/bank/accounts', milestone: 'S3' },

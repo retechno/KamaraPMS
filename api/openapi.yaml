@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.33.0
+  version: 0.34.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -4878,6 +4878,340 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/profiles:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxFilingProfiles
+      summary: How each tax is filed (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfileList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTaxFilingProfile
+      summary: Set up the filing of a tax (tax.manage)
+      description: "The authority the tax is filed with, the registration number of the hotel with it and the day of the next month the return and the payment are due (1 to 28, 15 by default). 409 `TAX_PROFILE_EXISTS`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaxFilingProfileRequest" }
+      responses:
+        "201":
+          description: The profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfile" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/profiles/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxFilingProfile
+      summary: One filing profile (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfile" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateTaxFilingProfile
+      summary: Change the filing of a tax (tax.manage)
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaxFilingProfileRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfile" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/periods:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxPeriods
+      summary: The months of a tax, newest first (tax.view)
+      description: "From the month the books start to the current month: the tax collected, whether each month is still open, ready to file or filed, and what is paid and overdue."
+      tags: [tax]
+      parameters:
+        - { name: tax_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingPeriodList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/worksheet:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTaxWorksheet
+      summary: The worksheet of a month of a tax (tax.view)
+      description: "The tax collected in the month by charge code and rate, read from the tax snapshots of the folio items (a reversal counts negatively), the tax the day close journals credited, and whether the month can be filed (`ready`, `blockers`): it is over, every business day of it is closed with its journal, the tax on the folios equals the books, and the tax is not negative. `return` is the return filed for the month, if there is one."
+      tags: [tax]
+      parameters:
+        - { name: tax_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: period, in: query, required: true, description: The first day of the month., schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingWorksheet" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/returns:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxReturns
+      summary: Tax returns, newest period first (tax.view)
+      tags: [tax]
+      parameters:
+        - { name: tax_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [FILED, VOIDED] } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingReturnList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: fileTaxReturn
+      summary: File the return of a month (tax.file)
+      description: "The `Idempotency-Key` header is required. The worksheet is computed again under the lock of the tax and frozen with its lines. 409 `TAX_MONTH_NOT_READY` (`context.blockers`), `TAX_RETURN_EXISTS`, `TAX_PREVIOUS_NOT_FILED` (the months go in order, the first month of the books excepted), `TAX_PROFILE_INACTIVE`. A voided return makes room for a new one."
+      tags: [tax]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FileTaxReturnRequest" }
+      responses:
+        "201":
+          description: The return with its lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingReturn" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/returns/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxReturn
+      summary: A return with its worksheet lines and payments (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingReturn" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/returns/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidTaxReturn
+      summary: Void a return without payments (tax.file, needs approval)
+      description: "409 `TAX_RETURN_HAS_PAYMENTS` (void its payments first), `TAX_RETURN_ALREADY_VOIDED`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingReturn" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/returns/{id}/payments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: payTaxReturn
+      summary: Pay the tax authority against a return (tax.file)
+      description: "The `Idempotency-Key` header is required. Up to what is still owed on the return (422 `amount: EXCEEDS_OUTSTANDING`); a penalty is paid with it and goes to the expense account given. The journal (type TAX) debits the tax payable account of the tax (the TAX_PAYABLE system account when the tax has none usable) and the penalty account against the cash, bank or other-payment account of the method. The date must be in an open accounting period."
+      tags: [tax]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayTaxRequest" }
+      responses:
+        "201":
+          description: The payment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingPayment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/payments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxPayments
+      summary: Payments to the tax authority, newest first (tax.view)
+      tags: [tax]
+      parameters:
+        - { name: return_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [POSTED, VOIDED] } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingPaymentList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/payments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxPayment
+      summary: One payment to the tax authority (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingPayment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/payments/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidTaxPayment
+      summary: Void a payment to the tax authority (tax.file, needs approval)
+      description: "The journal of the payment is reversed on the current business date and the amount is owed on the return again. 409 `TAX_PAYMENT_ALREADY_VOIDED`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingPayment" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/liability:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTaxLiability
+      summary: What is owed to the tax authority (tax.view)
+      description: "Per tax: collected on folios, filed, not on a return yet, paid, owed, and what is overdue (months not filed after their due date, and unpaid returns past it); per tax payable account of the books, its balance against what the taxes using it say is owed (`difference` should be zero). A past date reproduces what was owed then."
+      tags: [tax]
+      parameters:
+        - { name: as_of, in: query, description: The business date; the current business date by default., schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingLiability" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/returns/{id}/return.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxReturnPdf
+      summary: A tax return as PDF (tax.view)
+      tags: [documents]
+      responses:
+        "200":
+          description: The return as filed, with its payments (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/worksheet.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTaxWorksheetPdf
+      summary: The worksheet of a month of a tax as PDF (tax.view)
+      description: A filed month answers the return.
+      tags: [documents]
+      parameters:
+        - { name: tax_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: period, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The worksheet (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -8082,7 +8416,7 @@ components:
         issues:
           type: array
           items: { $ref: "#/components/schemas/GlCodeIssue" }
-    JournalType: { type: string, enum: [DAY_CLOSE, MANUAL, REVERSAL, CLOSING, PAYABLES, BANK] }
+    JournalType: { type: string, enum: [DAY_CLOSE, MANUAL, REVERSAL, CLOSING, PAYABLES, BANK, TAX] }
     JournalLine:
       type: object
       required: [line_no, account_id, account_code, account_name, debit, credit]
@@ -8720,3 +9054,205 @@ components:
         journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
         fee_account_id: { type: integer, format: int64, description: The account for the commission; needed when the payments add up to more than the line. }
         description: { type: string, maxLength: 300 }
+    TaxFilingProfile:
+      type: object
+      required: [id, tax_id, tax_code, tax_name, tax_rate, authority, due_day, is_active, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        tax_id: { type: integer, format: int64 }
+        tax_code: { type: string }
+        tax_name: { type: string }
+        tax_rate: { type: string }
+        gl_account_code: { type: string, description: The account the tax is owed on, when the tax has one. }
+        authority: { type: string }
+        registration_number: { type: string }
+        due_day: { type: integer, minimum: 1, maximum: 28, description: The day of the next month the return and the payment are due. }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+    TaxFilingProfileList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxFilingProfile" } }
+    CreateTaxFilingProfileRequest:
+      type: object
+      required: [tax_id, authority]
+      additionalProperties: false
+      properties:
+        tax_id: { type: integer, format: int64 }
+        authority: { type: string, maxLength: 150 }
+        registration_number: { type: string, maxLength: 60 }
+        due_day: { type: integer, minimum: 1, maximum: 28, nullable: true }
+        is_active: { type: boolean, nullable: true }
+    UpdateTaxFilingProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        authority: { type: string, maxLength: 150 }
+        registration_number: { type: string, maxLength: 60 }
+        due_day: { type: integer, minimum: 1, maximum: 28 }
+        is_active: { type: boolean }
+    TaxFilingWorksheetLine:
+      type: object
+      required: [charge_code, rate, items, base_amount, tax_amount]
+      properties:
+        charge_code: { type: string }
+        charge_name: { type: string }
+        rate: { type: string }
+        items: { type: integer }
+        base_amount: { type: string, description: The amount the tax was calculated on. }
+        tax_amount: { type: string }
+    TaxFilingWorksheet:
+      type: object
+      required: [profile, period_start, period_end, due_date, lines, base_amount, tax_amount, gl_collected, difference, days, posted_days, ready, blockers, return]
+      properties:
+        profile: { $ref: "#/components/schemas/TaxFilingProfile" }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        due_date: { type: string, format: date }
+        lines: { type: array, items: { $ref: "#/components/schemas/TaxFilingWorksheetLine" } }
+        base_amount: { type: string }
+        tax_amount: { type: string }
+        gl_collected: { type: string, description: What the day close journals credited for the tax in the month. }
+        difference: { type: string, description: The tax on the folios less what the books credited. }
+        days: { type: integer }
+        posted_days: { type: integer }
+        ready: { type: boolean }
+        blockers: { type: array, items: { type: string } }
+        return: { allOf: [{ $ref: "#/components/schemas/TaxFilingReturn" }], nullable: true }
+    TaxFilingPeriod:
+      type: object
+      required: [period_start, period_end, due_date, tax_amount, status, return_id, paid, outstanding, overdue]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        due_date: { type: string, format: date }
+        tax_amount: { type: string }
+        status: { type: string, enum: [OPEN, READY, FILED] }
+        return_id: { type: integer, format: int64, nullable: true }
+        paid: { type: string }
+        outstanding: { type: string }
+        overdue: { type: boolean }
+    TaxFilingPeriodList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxFilingPeriod" } }
+    TaxFilingPayment:
+      type: object
+      required: [id, payment_number, return_id, return_number, tax_code, tax_name, period_start, payment_date, amount, penalty, total, payment_method, status, journal_id, journal_number, void_journal_id, voided_at, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        payment_number: { type: string }
+        return_id: { type: integer, format: int64 }
+        return_number: { type: string }
+        tax_code: { type: string }
+        tax_name: { type: string }
+        period_start: { type: string, format: date }
+        payment_date: { type: string, format: date }
+        amount: { type: string }
+        penalty: { type: string }
+        total: { type: string, description: The amount and the penalty. }
+        payment_method: { type: string, enum: [CASH, BANK_TRANSFER, OTHER] }
+        reference_number: { type: string, description: The billing code or receipt number of the tax authority. }
+        remarks: { type: string }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        void_journal_id: { type: integer, format: int64, nullable: true }
+        voided_at: { type: string, format: date-time, nullable: true }
+        void_reason: { type: string }
+        created_at: { type: string, format: date-time }
+    TaxFilingPaymentList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxFilingPayment" } }
+    TaxFilingReturn:
+      type: object
+      required: [id, return_number, tax_id, tax_code, tax_name, period_start, period_end, due_date, base_amount, tax_amount, status, filed_on, filed_at, voided_at, paid, outstanding, payment_status, overdue]
+      properties:
+        id: { type: integer, format: int64 }
+        return_number: { type: string }
+        tax_id: { type: integer, format: int64 }
+        tax_code: { type: string }
+        tax_name: { type: string }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        due_date: { type: string, format: date }
+        base_amount: { type: string }
+        tax_amount: { type: string }
+        status: { type: string, enum: [FILED, VOIDED] }
+        filed_on: { type: string, format: date }
+        filing_reference: { type: string }
+        notes: { type: string }
+        filed_at: { type: string, format: date-time }
+        voided_at: { type: string, format: date-time, nullable: true }
+        void_reason: { type: string }
+        paid: { type: string }
+        outstanding: { type: string }
+        payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, VOIDED] }
+        overdue: { type: boolean }
+        lines: { type: array, items: { $ref: "#/components/schemas/TaxFilingWorksheetLine" }, description: Only when one return is read. }
+        payments: { type: array, items: { $ref: "#/components/schemas/TaxFilingPayment" }, description: Only when one return is read. }
+    TaxFilingReturnList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxFilingReturn" } }
+    FileTaxReturnRequest:
+      type: object
+      required: [tax_id, period_start]
+      additionalProperties: false
+      properties:
+        tax_id: { type: integer, format: int64 }
+        period_start: { type: string, format: date, description: The first day of the month. }
+        filed_on: { type: string, format: date, nullable: true, description: When the return was filed with the authority; the current business date by default. }
+        filing_reference: { type: string, maxLength: 100, description: The receipt or number of the filing. }
+        notes: { type: string, maxLength: 500 }
+    PayTaxRequest:
+      type: object
+      required: [payment_date, amount, payment_method]
+      additionalProperties: false
+      properties:
+        payment_date: { type: string, format: date }
+        amount: { type: string }
+        penalty: { type: string }
+        penalty_account_id: { type: integer, format: int64, description: "Needed with a penalty: the expense account." }
+        payment_method: { type: string, enum: [CASH, BANK_TRANSFER, OTHER] }
+        reference_number: { type: string, maxLength: 100 }
+        remarks: { type: string, maxLength: 500 }
+    TaxFilingLiabilityLine:
+      type: object
+      required: [tax_id, tax_code, tax_name, account_code, collected, filed, unfiled, paid, owed, overdue_unfiled_months, overdue_unpaid, returns_filed]
+      properties:
+        tax_id: { type: integer, format: int64 }
+        tax_code: { type: string }
+        tax_name: { type: string }
+        authority: { type: string }
+        account_code: { type: string }
+        collected: { type: string }
+        filed: { type: string }
+        unfiled: { type: string }
+        paid: { type: string }
+        owed: { type: string, description: What was collected less what was paid. }
+        overdue_unfiled_months: { type: integer }
+        overdue_unpaid: { type: string }
+        returns_filed: { type: integer }
+        registration_number: { type: string }
+    TaxFilingLiabilityAccount:
+      type: object
+      required: [account_code, books, owed, difference]
+      properties:
+        account_code: { type: string }
+        books: { type: string }
+        owed: { type: string }
+        difference: { type: string }
+    TaxFilingLiability:
+      type: object
+      required: [as_of, taxes, accounts, owed]
+      properties:
+        as_of: { type: string, format: date }
+        taxes: { type: array, items: { $ref: "#/components/schemas/TaxFilingLiabilityLine" } }
+        accounts: { type: array, items: { $ref: "#/components/schemas/TaxFilingLiabilityAccount" } }
+        owed: { type: string }

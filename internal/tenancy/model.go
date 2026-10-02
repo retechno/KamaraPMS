@@ -239,6 +239,10 @@ const (
 	SeqSupplierBill SequenceType = "SUPPLIER_BILL"
 	// SeqSupplierPayment numbers the payments to suppliers.
 	SeqSupplierPayment SequenceType = "SUPPLIER_PAYMENT"
+	// SeqTaxReturn numbers the tax returns filed.
+	SeqTaxReturn SequenceType = "TAX_RETURN"
+	// SeqTaxPayment numbers the payments to the tax authority.
+	SeqTaxPayment SequenceType = "TAX_PAYMENT"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -259,6 +263,8 @@ var defaultSequences = []struct {
 	{SeqJournal, "JV"},
 	{SeqSupplierBill, "BILL"},
 	{SeqSupplierPayment, "SPAY"},
+	{SeqTaxReturn, "TXR"},
+	{SeqTaxPayment, "TXP"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }

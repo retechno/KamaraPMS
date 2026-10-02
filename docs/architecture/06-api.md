@@ -700,3 +700,23 @@ Permissions: `bank.view` (read), `bank.manage` (register bank accounts), `bank.r
 | `POST {P}/bank/statements/{id}/reopen` | `bank.reconcile` + approval | `{reason, approval}`; 409 `STATEMENT_NOT_LATEST`, `STATEMENT_NOT_RECONCILED` |
 
 The journal type `BANK` appears in the journal list.
+
+## 22. Tax filing (after M15)
+Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file returns and pay the authority; voiding one also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/tax/profiles` | read: `tax.view`; write: `tax.manage` | POST `{tax_id, authority, registration_number?, due_day?, is_active?}`; 409 `TAX_PROFILE_EXISTS` |
+| `GET/PATCH {P}/tax/profiles/{id}` | read: `tax.view`; write: `tax.manage` | The tax never changes |
+| `GET {P}/tax/periods?tax_id=` | `tax.view` | The months from the start of the books: `tax_amount`, `status` (OPEN, READY, FILED), `paid`, `outstanding`, `overdue` |
+| `GET {P}/tax/worksheet?tax_id=&period=` | `tax.view` | `period` is the first day of the month; lines, totals, `gl_collected`, `difference`, `ready`, `blockers`, and the `return` filed for it |
+| `GET/POST {P}/tax/returns` | read: `tax.view`; file: `tax.file` | POST `{tax_id, period_start, filed_on?, filing_reference?, notes?}` with `Idempotency-Key`; 409 `TAX_MONTH_NOT_READY` (context `blockers`), `TAX_RETURN_EXISTS`, `TAX_PREVIOUS_NOT_FILED`, `TAX_PROFILE_INACTIVE` |
+| `GET {P}/tax/returns/{id}` | `tax.view` | With worksheet lines and payments |
+| `POST {P}/tax/returns/{id}/void` | `tax.file` + approval | `{reason, approval}`; 409 `TAX_RETURN_HAS_PAYMENTS`, `TAX_RETURN_ALREADY_VOIDED` |
+| `POST {P}/tax/returns/{id}/payments` | `tax.file` | `{payment_date, amount, penalty?, penalty_account_id?, payment_method, reference_number?, remarks?}` with `Idempotency-Key`; 422 `amount: EXCEEDS_OUTSTANDING`, `penalty_account_id: REQUIRED`; 409 `TAX_RETURN_VOIDED`, `PERIOD_CLOSED` |
+| `GET {P}/tax/payments`, `GET {P}/tax/payments/{id}` | `tax.view` | Filters `return_id`, `status` |
+| `POST {P}/tax/payments/{id}/void` | `tax.file` + approval | `{reason, approval}`; 409 `TAX_PAYMENT_ALREADY_VOIDED` |
+| `GET {P}/tax/liability` | `tax.view` | `as_of` (not after the business date); per tax and per tax payable account |
+| `GET {P}/tax/returns/{id}/return.pdf`, `GET {P}/tax/worksheet.pdf?tax_id=&period=` | `tax.view` | PDF documents (§15 style); a filed month answers the return |
+
+The journal type `TAX` appears in the journal list.

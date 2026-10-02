@@ -4195,6 +4195,309 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/tax/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** How each tax is filed (tax.view) */
+        get: operations["listTaxFilingProfiles"];
+        put?: never;
+        /**
+         * Set up the filing of a tax (tax.manage)
+         * @description The authority the tax is filed with, the registration number of the hotel with it and the day of the next month the return and the payment are due (1 to 28, 15 by default). 409 `TAX_PROFILE_EXISTS`.
+         */
+        post: operations["createTaxFilingProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One filing profile (tax.view) */
+        get: operations["getTaxFilingProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the filing of a tax (tax.manage) */
+        patch: operations["updateTaxFilingProfile"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The months of a tax, newest first (tax.view)
+         * @description From the month the books start to the current month: the tax collected, whether each month is still open, ready to file or filed, and what is paid and overdue.
+         */
+        get: operations["listTaxPeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The worksheet of a month of a tax (tax.view)
+         * @description The tax collected in the month by charge code and rate, read from the tax snapshots of the folio items (a reversal counts negatively), the tax the day close journals credited, and whether the month can be filed (`ready`, `blockers`): it is over, every business day of it is closed with its journal, the tax on the folios equals the books, and the tax is not negative. `return` is the return filed for the month, if there is one.
+         */
+        get: operations["getTaxWorksheet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Tax returns, newest period first (tax.view) */
+        get: operations["listTaxReturns"];
+        put?: never;
+        /**
+         * File the return of a month (tax.file)
+         * @description The `Idempotency-Key` header is required. The worksheet is computed again under the lock of the tax and frozen with its lines. 409 `TAX_MONTH_NOT_READY` (`context.blockers`), `TAX_RETURN_EXISTS`, `TAX_PREVIOUS_NOT_FILED` (the months go in order, the first month of the books excepted), `TAX_PROFILE_INACTIVE`. A voided return makes room for a new one.
+         */
+        post: operations["fileTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A return with its worksheet lines and payments (tax.view) */
+        get: operations["getTaxReturn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a return without payments (tax.file, needs approval)
+         * @description 409 `TAX_RETURN_HAS_PAYMENTS` (void its payments first), `TAX_RETURN_ALREADY_VOIDED`.
+         */
+        post: operations["voidTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay the tax authority against a return (tax.file)
+         * @description The `Idempotency-Key` header is required. Up to what is still owed on the return (422 `amount: EXCEEDS_OUTSTANDING`); a penalty is paid with it and goes to the expense account given. The journal (type TAX) debits the tax payable account of the tax (the TAX_PAYABLE system account when the tax has none usable) and the penalty account against the cash, bank or other-payment account of the method. The date must be in an open accounting period.
+         */
+        post: operations["payTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments to the tax authority, newest first (tax.view) */
+        get: operations["listTaxPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One payment to the tax authority (tax.view) */
+        get: operations["getTaxPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment to the tax authority (tax.file, needs approval)
+         * @description The journal of the payment is reversed on the current business date and the amount is owed on the return again. 409 `TAX_PAYMENT_ALREADY_VOIDED`.
+         */
+        post: operations["voidTaxPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/liability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What is owed to the tax authority (tax.view)
+         * @description Per tax: collected on folios, filed, not on a return yet, paid, owed, and what is overdue (months not filed after their due date, and unpaid returns past it); per tax payable account of the books, its balance against what the taxes using it say is owed (`difference` should be zero). A past date reproduces what was owed then.
+         */
+        get: operations["getTaxLiability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/return.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A tax return as PDF (tax.view) */
+        get: operations["getTaxReturnPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/worksheet.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The worksheet of a month of a tax as PDF (tax.view)
+         * @description A filed month answers the return.
+         */
+        get: operations["getTaxWorksheetPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7010,7 +7313,7 @@ export interface components {
             issues: components["schemas"]["GlCodeIssue"][];
         };
         /** @enum {string} */
-        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES" | "BANK";
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES" | "BANK" | "TAX";
         JournalLine: {
             line_no: number;
             /** Format: int64 */
@@ -7646,6 +7949,231 @@ export interface components {
              */
             fee_account_id?: number;
             description?: string;
+        };
+        TaxFilingProfile: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            tax_rate: string;
+            /** @description The account the tax is owed on */
+            gl_account_code?: string;
+            authority: string;
+            registration_number?: string;
+            /** @description The day of the next month the return and the payment are due. */
+            due_day: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxFilingProfileList: {
+            data: components["schemas"]["TaxFilingProfile"][];
+        };
+        CreateTaxFilingProfileRequest: {
+            /** Format: int64 */
+            tax_id: number;
+            authority: string;
+            registration_number?: string;
+            due_day?: number | null;
+            is_active?: boolean | null;
+        };
+        UpdateTaxFilingProfileRequest: {
+            authority?: string;
+            registration_number?: string;
+            due_day?: number;
+            is_active?: boolean;
+        };
+        TaxFilingWorksheetLine: {
+            charge_code: string;
+            charge_name?: string;
+            rate: string;
+            items: number;
+            /** @description The amount the tax was calculated on. */
+            base_amount: string;
+            tax_amount: string;
+        };
+        TaxFilingWorksheet: {
+            profile: components["schemas"]["TaxFilingProfile"];
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            lines: components["schemas"]["TaxFilingWorksheetLine"][];
+            base_amount: string;
+            tax_amount: string;
+            /** @description What the day close journals credited for the tax in the month. */
+            gl_collected: string;
+            /** @description The tax on the folios less what the books credited. */
+            difference: string;
+            days: number;
+            posted_days: number;
+            ready: boolean;
+            blockers: string[];
+            return: components["schemas"]["TaxFilingReturn"] | null;
+        };
+        TaxFilingPeriod: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            tax_amount: string;
+            /** @enum {string} */
+            status: "OPEN" | "READY" | "FILED";
+            /** Format: int64 */
+            return_id: number | null;
+            paid: string;
+            outstanding: string;
+            overdue: boolean;
+        };
+        TaxFilingPeriodList: {
+            data: components["schemas"]["TaxFilingPeriod"][];
+        };
+        TaxFilingPayment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            return_id: number;
+            return_number: string;
+            tax_code: string;
+            tax_name: string;
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            penalty: string;
+            /** @description The amount and the penalty. */
+            total: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            /** @description The billing code or receipt number of the tax authority. */
+            reference_number?: string;
+            remarks?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxFilingPaymentList: {
+            data: components["schemas"]["TaxFilingPayment"][];
+        };
+        TaxFilingReturn: {
+            /** Format: int64 */
+            id: number;
+            return_number: string;
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            base_amount: string;
+            tax_amount: string;
+            /** @enum {string} */
+            status: "FILED" | "VOIDED";
+            /** Format: date */
+            filed_on: string;
+            filing_reference?: string;
+            notes?: string;
+            /** Format: date-time */
+            filed_at: string;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            paid: string;
+            outstanding: string;
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOIDED";
+            overdue: boolean;
+            /** @description Only when one return is read. */
+            lines?: components["schemas"]["TaxFilingWorksheetLine"][];
+            /** @description Only when one return is read. */
+            payments?: components["schemas"]["TaxFilingPayment"][];
+        };
+        TaxFilingReturnList: {
+            data: components["schemas"]["TaxFilingReturn"][];
+        };
+        FileTaxReturnRequest: {
+            /** Format: int64 */
+            tax_id: number;
+            /**
+             * Format: date
+             * @description The first day of the month.
+             */
+            period_start: string;
+            /**
+             * Format: date
+             * @description When the return was filed with the authority; the current business date by default.
+             */
+            filed_on?: string | null;
+            /** @description The receipt or number of the filing. */
+            filing_reference?: string;
+            notes?: string;
+        };
+        PayTaxRequest: {
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            penalty?: string;
+            /**
+             * Format: int64
+             * @description Needed with a penalty: the expense account.
+             */
+            penalty_account_id?: number;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+        };
+        TaxFilingLiabilityLine: {
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            authority?: string;
+            account_code: string;
+            collected: string;
+            filed: string;
+            unfiled: string;
+            paid: string;
+            /** @description What was collected less what was paid. */
+            owed: string;
+            overdue_unfiled_months: number;
+            overdue_unpaid: string;
+            returns_filed: number;
+            registration_number?: string;
+        };
+        TaxFilingLiabilityAccount: {
+            account_code: string;
+            books: string;
+            owed: string;
+            difference: string;
+        };
+        TaxFilingLiability: {
+            /** Format: date */
+            as_of: string;
+            taxes: components["schemas"]["TaxFilingLiabilityLine"][];
+            accounts: components["schemas"]["TaxFilingLiabilityAccount"][];
+            owed: string;
         };
     };
     responses: {
@@ -14470,6 +14998,490 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxFilingProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfileList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxFilingProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The profile. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaxFilingProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxPeriods: {
+        parameters: {
+            query: {
+                tax_id: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPeriodList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxWorksheet: {
+        parameters: {
+            query: {
+                tax_id: number;
+                /** @description The first day of the month. */
+                period: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingWorksheet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxReturns: {
+        parameters: {
+            query?: {
+                tax_id?: number;
+                status?: "FILED" | "VOIDED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturnList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fileTaxReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileTaxReturnRequest"];
+            };
+        };
+        responses: {
+            /** @description The return with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidTaxReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    payTaxReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxPayments: {
+        parameters: {
+            query?: {
+                return_id?: number;
+                status?: "POSTED" | "VOIDED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPaymentList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidTaxPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxLiability: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingLiability"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReturnPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The return as filed, with its payments (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getTaxWorksheetPdf: {
+        parameters: {
+            query: {
+                tax_id: number;
+                period: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The worksheet (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

@@ -26,7 +26,7 @@ type SystemLine struct {
 
 // SystemJournal is a journal of the payables, posted by that module in its own transaction.
 type SystemJournal struct {
-	Type        string // JournalPayables (the default) or JournalBank
+	Type        string // JournalPayables (the default), JournalBank or JournalTax
 	Date        civil.Date
 	Description string
 	Reference   string
@@ -134,7 +134,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	if typ == "" {
 		typ = JournalPayables
 	}
-	if typ != JournalPayables && typ != JournalBank {
+	if typ != JournalPayables && typ != JournalBank && typ != JournalTax {
 		return 0, "", apperr.Internal(fmt.Errorf("a module cannot post a journal of type %s", typ))
 	}
 	if len(in.Lines) < 2 {
@@ -186,7 +186,7 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 		return 0, err
 	}
 	switch {
-	case orig.Type != JournalPayables:
+	case orig.Type != JournalPayables && orig.Type != JournalTax:
 		return 0, apperr.Conflict("JOURNAL_NOT_REVERSIBLE", "only the journal of a bill or a payment is reversed here")
 	case orig.ReversedByID != nil:
 		return 0, apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already")

@@ -35,6 +35,9 @@ const (
 	PermBankView            Permission = "bank.view"
 	PermBankManage          Permission = "bank.manage"
 	PermBankReconcile       Permission = "bank.reconcile"
+	PermTaxView             Permission = "tax.view"
+	PermTaxManage           Permission = "tax.manage"
+	PermTaxFile             Permission = "tax.file"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -109,6 +112,9 @@ var Catalogue = []PermissionInfo{
 	{PermPayablesPost, "Payables", "Enter supplier bills and payments; voiding one needs an approval", "S3"},
 	{PermBankView, "Bank", "View bank accounts, statements and their reconciliation", "S3"},
 	{PermBankManage, "Bank", "Choose which accounts of the books are reconciled with a bank", "S3"},
+	{PermTaxView, "Tax", "View the tax worksheets, the returns filed, the tax payments and what is owed to the tax authority", "S3"},
+	{PermTaxManage, "Tax", "Set up how each tax is filed: the authority, the registration number and the due day", "S3"},
+	{PermTaxFile, "Tax", "File monthly tax returns and record the payments to the tax authority; voiding one needs an approval", "S3"},
 	{PermBankReconcile, "Bank", "Import bank statements, match them with the books, post what the bank shows that the books lack, and reconcile; reopening needs an approval", "S3"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},

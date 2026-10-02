@@ -32,6 +32,7 @@ const (
 	LevelAccounting   LockLevel = 46 // L4: a property's accounting settings row (the chart, the system accounts and the periods are edited under it)
 	LevelPayables     LockLevel = 47 // L4: a supplier (serialises its bills, payments and what they settle; taken after the accounting settings)
 	LevelBank         LockLevel = 48 // L4: a bank account (serialises the matching and reconciling of its statements; taken after the accounting settings)
+	LevelTax          LockLevel = 49 // L4: a tax filing profile (serialises the returns and payments of one tax; taken after the accounting settings and the bank accounts)
 	LevelSequences    LockLevel = 50 // L5: document_sequences (short, last)
 )
 
@@ -71,6 +72,7 @@ var (
 	Accounting       = LockTable{"accounting_settings", LevelAccounting}
 	Suppliers        = LockTable{"suppliers", LevelPayables}
 	BankAccounts     = LockTable{"bank_accounts", LevelBank}
+	TaxProfiles      = LockTable{"tax_filing_profiles", LevelTax}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with

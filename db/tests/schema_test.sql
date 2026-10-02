@@ -1279,6 +1279,58 @@ SELECT expect_ok('a reconciled statement can be reopened', $q$UPDATE bank_statem
 SELECT expect_error('statement tables cannot be truncated', '23001', $q$TRUNCATE bank_statements CASCADE$q$);
 SELECT expect_error('a bank journal type exists, an unknown one does not', '23514', $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JVY', 'BANKING', '2026-10-01', 'x')$q$);
 
+-- Tax filing
+INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), 'Bapenda');
+SELECT expect_error('a tax is filed with one profile', '23505', $q$INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), 'again')$q$);
+SELECT expect_error('a profile is for a tax of its property', '23503', $q$INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('SG') ORDER BY id LIMIT 1), 'x')$q$);
+SELECT expect_error('a due day within the month', '23514', $q$UPDATE tax_filing_profiles SET due_day = 31$q$);
+WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9001', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r;
+SELECT expect_error('a return number is unique per property', '23505', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9001', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-11-01', '2026-11-30', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r$q$);
+SELECT expect_error('a month of a tax is filed once', '23505', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9002', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r$q$);
+SELECT expect_ok('a voided return makes room for a new one', $q$UPDATE tax_returns SET status = 'VOIDED', voided_at = now(), void_reason = 'x'$q$, $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9002', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r$q$);
+SELECT expect_error('the lines of a return add up to its tax', '23514', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9003', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-12-01', '2026-12-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 90 FROM r$q$);
+SELECT expect_error('a return starts on the first of a month', '23514', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9003', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-12-02', '2026-12-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r$q$);
+SELECT expect_error('the tax of a return is not negative', '23514', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9003', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-12-01', '2026-12-31', '2026-11-15', 1000, -5, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, -5 FROM r$q$);
+SELECT expect_error('a return is of a tax of its property', '23503', $q$WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9003', (SELECT id FROM taxes WHERE property_id = pr('SG') ORDER BY id LIMIT 1), '2026-12-01', '2026-12-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
+INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)
+SELECT tn('ABC'), pr('BALI'), r.id, 1, 'ROOM', 10, 3, 1000, 100 FROM r$q$);
+SELECT expect_error('a voided return needs a reason', '23514', $q$UPDATE tax_returns SET status = 'VOIDED', voided_at = now()$q$);
+SELECT expect_error('a return only goes from filed to voided', '23001', $q$UPDATE tax_returns SET tax_amount = 1$q$);
+SELECT expect_error('returns are not deleted', '23001', $q$DELETE FROM tax_returns$q$);
+SELECT expect_error('the worksheet of a return does not change', '23001', $q$UPDATE tax_return_lines SET tax_amount = 1$q$);
+SELECT expect_error('returns cannot be truncated', '23001', $q$TRUNCATE tax_returns CASCADE$q$);
+INSERT INTO tax_payments (tenant_id, property_id, payment_number, return_id, payment_date, amount, penalty, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'TXP9001', (SELECT id FROM tax_returns WHERE return_number = 'TXR9001'), '2026-11-03', 50, 0, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'));
+SELECT expect_error('a payment number is unique per property', '23505', $q$INSERT INTO tax_payments (tenant_id, property_id, payment_number, return_id, payment_date, amount, penalty, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'TXP9001', (SELECT id FROM tax_returns WHERE return_number = 'TXR9001'), '2026-11-03', 50, 0, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a payment is above zero', '23514', $q$INSERT INTO tax_payments (tenant_id, property_id, payment_number, return_id, payment_date, amount, penalty, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'TXP9002', (SELECT id FROM tax_returns WHERE return_number = 'TXR9001'), '2026-11-03', 0, 0, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a penalty is not negative', '23514', $q$INSERT INTO tax_payments (tenant_id, property_id, payment_number, return_id, payment_date, amount, penalty, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'TXP9002', (SELECT id FROM tax_returns WHERE return_number = 'TXR9001'), '2026-11-03', 50, -1, 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a payment method of the list', '23514', $q$INSERT INTO tax_payments (tenant_id, property_id, payment_number, return_id, payment_date, amount, penalty, payment_method, journal_id) VALUES (tn('ABC'), pr('BALI'), 'TXP9002', (SELECT id FROM tax_returns WHERE return_number = 'TXR9001'), '2026-11-03', 50, 0, 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'))$q$);
+SELECT expect_error('a payment only goes from posted to voided', '23001', $q$UPDATE tax_payments SET amount = 1$q$);
+SELECT expect_error('payments are not deleted', '23001', $q$DELETE FROM tax_payments$q$);
+SELECT expect_ok('a payment is voided with its reason', $q$UPDATE tax_payments SET status = 'VOIDED', voided_at = now(), void_reason = 'x'$q$);
+SELECT expect_error('a tax journal type exists, an unknown one does not', '23514', $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JVZ', 'TAXES', '2026-10-01', 'x')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

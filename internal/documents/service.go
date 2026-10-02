@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/reservations"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -38,11 +39,12 @@ type Service struct {
 	ledger *cityledger.Service
 	cos    *companies.Service
 	acct   *accounting.Service
+	tax    *taxfiling.Service
 }
 
 // NewService wires the service.
-func NewService(c clock.Clock, days *tenancy.Service, f *folios.Service, fd *frontdesk.Service, r *reservations.Service, g *guests.Service, l *cityledger.Service, co *companies.Service, acct *accounting.Service) *Service {
-	return &Service{clock: c, days: days, folios: f, front: fd, res: r, guests: g, ledger: l, cos: co, acct: acct}
+func NewService(c clock.Clock, days *tenancy.Service, f *folios.Service, fd *frontdesk.Service, r *reservations.Service, g *guests.Service, l *cityledger.Service, co *companies.Service, acct *accounting.Service, tax *taxfiling.Service) *Service {
+	return &Service{clock: c, days: days, folios: f, front: fd, res: r, guests: g, ledger: l, cos: co, acct: acct, tax: tax}
 }
 
 const registrationTerms = "I confirm that the details above are correct and that I will settle my account in full on departure. " +

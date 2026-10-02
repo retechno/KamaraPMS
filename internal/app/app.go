@@ -39,6 +39,7 @@ import (
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -96,7 +97,8 @@ func New(d Deps) *App {
 	companiesSvc := companies.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	foliosSvc.SetCompanyGate(companiesSvc)
 	cityLedgerSvc := cityledger.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, companiesSvc)
-	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc, accountingSvc)
+	taxSvc := taxfiling.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
+	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc, accountingSvc, taxSvc)
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
 	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)
@@ -132,6 +134,7 @@ func New(d Deps) *App {
 	accountingHTTP.RegisterReports(api)
 	payables.NewHandler(payablesSvc).Register(api)
 	bankrec.NewHandler(bankrecSvc).Register(api)
+	taxfiling.NewHandler(taxSvc).Register(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
 	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
