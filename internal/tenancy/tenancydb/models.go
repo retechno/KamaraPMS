@@ -50,6 +50,7 @@ type Property struct {
 	Email                           *string
 	TaxID                           *string
 	DocumentFooter                  *string
+	RefundMethods                   []string
 }
 
 type Tenant struct {

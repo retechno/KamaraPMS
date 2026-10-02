@@ -149,7 +149,7 @@ func (e *Env) PropertyIn(t *testing.T, tenantID int64, code, currency string, de
 		Settings: tenancy.PropertySettings{
 			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: currency, CurrencyDecimals: decimals,
 			CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
-			NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"),
+			NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"), RefundMethods: []string{"CASH"},
 		},
 		OpeningBusinessDate: BD,
 	})

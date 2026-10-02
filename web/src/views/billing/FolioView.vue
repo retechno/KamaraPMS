@@ -36,6 +36,8 @@ type Pending =
   | { kind: 'void'; item: FolioItem }
   | { kind: 'refund'; item: FolioItem }
 const pending = ref<Pending | null>(null)
+// The methods the property allows for a refund (cash unless configured otherwise).
+const refundMethods = computed(() => (property.current?.refund_methods?.length ? property.current.refund_methods : ['CASH']))
 const correction = reactive({ reason: '', amount: '', method: '', reference: '' })
 const approving = ref(false)
 // One key per attempt; it is kept while a request may have been lost and renewed once the server has answered.
@@ -149,7 +151,7 @@ function startCorrection(kind: 'reverse' | 'void' | 'refund', item: FolioItem): 
   pending.value = { kind, item }
   correction.reason = ''
   correction.amount = kind === 'refund' ? item.credit : ''
-  correction.method = ''
+  correction.method = refundMethods.value[0] ?? 'CASH'
   correction.reference = ''
   dialogError.value = null
   approving.value = false
@@ -189,7 +191,7 @@ async function approve(approval: Approval): Promise<void> {
           amount: correction.amount,
           reason: correction.reason,
           approval,
-          ...(correction.method ? { payment_method: correction.method as PaymentMethod } : {}),
+          payment_method: correction.method as PaymentMethod,
           ...(correction.reference.trim() ? { reference_number: correction.reference.trim() } : {}),
         },
       })
@@ -307,10 +309,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <label v-if="pending.kind === 'refund'" class="field">
           <span>Refund by</span>
           <select v-model="correction.method" name="refund_method" data-testid="refund-method">
-            <option value="">Same method as the payment</option>
-            <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
+            <option v-for="m in refundMethods" :key="m" :value="m">{{ m }}</option>
           </select>
-          <small class="muted">The money can leave by another method than it came in, e.g. cash for a bank transfer. The day close books it to the account of the method chosen.</small>
+          <small class="muted">The property decides which methods a refund may leave by (Setup → Properties). The day close books it to the account of the method chosen.</small>
         </label>
         <label v-if="pending.kind === 'refund'" class="field">
           <span>Reference (optional)</span>

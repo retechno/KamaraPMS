@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.34.0
+  version: 0.35.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -5399,7 +5399,7 @@ components:
     PropertySettings:
       type: object
       required: [name, timezone, currency_code, currency_decimals, check_in_time, check_out_time,
-                 require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time]
+                 require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods]
       properties:
         name: { type: string }
         address: { type: string }
@@ -5417,6 +5417,13 @@ components:
         require_room_inspection_for_checkin: { type: boolean }
         night_audit_marks_occupied_dirty: { type: boolean }
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
+        refund_methods: { $ref: "#/components/schemas/RefundMethods" }
+    RefundMethods:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+      description: "The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`."
     Property:
       allOf:
         - $ref: "#/components/schemas/PropertySettings"
@@ -5465,6 +5472,7 @@ components:
         require_room_inspection_for_checkin: { type: boolean, default: false }
         night_audit_marks_occupied_dirty: { type: boolean, default: true }
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
+        refund_methods: { $ref: "#/components/schemas/RefundMethods" }
         opening_business_date:
           $ref: "#/components/schemas/Date"
           description: The property's current local date or the day before.
@@ -5488,6 +5496,7 @@ components:
         require_room_inspection_for_checkin: { type: boolean }
         night_audit_marks_occupied_dirty: { type: boolean }
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
+        refund_methods: { $ref: "#/components/schemas/RefundMethods" }
         status: { type: string, enum: [ACTIVE, INACTIVE] }
     DayClock:
       type: object

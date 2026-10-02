@@ -51,7 +51,7 @@ func settings() tenancy.PropertySettings {
 		Name: "Hotel Bali", Address: "Jl. Pantai 1", City: "Denpasar", CountryCode: "id",
 		Timezone: "Asia/Jakarta", CurrencyCode: "idr", CurrencyDecimals: 0,
 		CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
-		NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"),
+		NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"), RefundMethods: []string{"CASH"},
 	}
 }
 

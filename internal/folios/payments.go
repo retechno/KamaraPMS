@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -355,10 +356,11 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 	if err != nil {
 		return PaymentResult{}, err
 	}
-	decimals, err := s.decimals(ctx, propertyID)
+	prop, err := s.days.GetProperty(ctx, propertyID)
 	if err != nil {
 		return PaymentResult{}, err
 	}
+	decimals := prop.CurrencyDecimals
 	amount, fe := parsePositive("amount", in.Amount, decimals)
 	var fields []apperr.FieldError
 	if fe != nil {
@@ -368,6 +370,8 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 	if method != "" {
 		if fe := validateMethod(method); fe != nil {
 			fields = append(fields, *fe)
+		} else if !slices.Contains(prop.RefundMethods, method) {
+			fields = append(fields, fieldErr("payment_method", "NOT_ALLOWED", "this property refunds by "+strings.Join(prop.RefundMethods, ", ")+" only"))
 		}
 	}
 	fields = append(fields, validateText("reference_number", in.ReferenceNumber, maxReferenceLen)...)
@@ -429,8 +433,13 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 					return apperr.Conflict("REFUND_EXCEEDS_PAYMENT", "the refund is more than what is left of the payment").
 						WithContext("refundable", fixed(refundable, decimals))
 				}
+				// Without a method the refund leaves by the payment's own when the property allows it, else by the first
+				// method it allows (cash unless configured otherwise).
 				if method == "" {
-					method = orig.PaymentMethod
+					method = prop.RefundMethods[0]
+					if slices.Contains(prop.RefundMethods, orig.PaymentMethod) {
+						method = orig.PaymentMethod
+					}
 				}
 				by := approval.UserID()
 				pay, err := s.posting(p, propertyID, day.BusinessDate, folio).createPayment(ctx, PaymentTypeRefund, method, amount,

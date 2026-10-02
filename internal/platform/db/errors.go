@@ -52,6 +52,7 @@ var constraintErrors = map[string]mapped{
 	"charge_code_service_charges_pair_uk":     {apperr.KindConflict, "RULE_ALREADY_MAPPED", "the service charge is already mapped to this charge code"},
 	"charge_code_service_charges_sequence_uk": {apperr.KindConflict, "SEQUENCE_TAKEN", "another active service charge already uses this sequence"},
 	"room_charge_code_type":                   {apperr.KindInvalid, "CHARGE_CODE_NOT_ROOM", "room revenue must use a charge code of type ROOM"},
+	"properties_refund_methods_ck":            {apperr.KindInvalid, "VALIDATION_FAILED", "refund_methods: one or more of CASH, CARD, BANK_TRANSFER, OTHER"},
 	"properties_currency_lock":                {apperr.KindConflict, "CURRENCY_LOCKED", "the property currency cannot change once financial transactions exist"},
 	"charge_codes_price_mode_lock":            {apperr.KindConflict, "PRICE_MODE_LOCKED", "the price mode of a charge code in use cannot change"},
 	"charge_codes_charge_type_lock":           {apperr.KindConflict, "CHARGE_TYPE_LOCKED", "the charge type of a room revenue code cannot change"},

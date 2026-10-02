@@ -4644,7 +4644,10 @@ export interface components {
             require_room_inspection_for_checkin: boolean;
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time: components["schemas"]["TimeOfDay"];
+            refund_methods: components["schemas"]["RefundMethods"];
         };
+        /** @description The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`. */
+        RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER")[];
         Property: components["schemas"]["PropertySettings"] & {
             /** Format: int64 */
             id: number;
@@ -4687,6 +4690,7 @@ export interface components {
             /** @default true */
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
+            refund_methods?: components["schemas"]["RefundMethods"];
             /** @description The property's current local date or the day before. */
             opening_business_date: components["schemas"]["Date"];
         };
@@ -4711,6 +4715,7 @@ export interface components {
             require_room_inspection_for_checkin?: boolean;
             night_audit_marks_occupied_dirty?: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
+            refund_methods?: components["schemas"]["RefundMethods"];
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
         };

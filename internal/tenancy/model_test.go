@@ -77,6 +77,7 @@ func TestPropertySettingsValidate(t *testing.T) {
 	valid := PropertySettings{
 		Name: "Hotel Bali", Timezone: "Asia/Makassar", CurrencyCode: "IDR", CurrencyDecimals: 0,
 		CountryCode: "ID", CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
+		RefundMethods: []string{"CASH"},
 	}
 	if errs := valid.Validate(); len(errs) != 0 {
 		t.Fatalf("valid settings rejected: %+v", errs)

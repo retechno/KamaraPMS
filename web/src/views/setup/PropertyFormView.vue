@@ -14,6 +14,13 @@ const store = usePropertyStore()
 const isNew = computed(() => !props.id)
 const zones = timeZones()
 
+const REFUND_CHOICES = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'CARD', label: 'Card' },
+  { value: 'BANK_TRANSFER', label: 'Bank transfer' },
+  { value: 'OTHER', label: 'Other' },
+]
+
 const form = reactive({
   code: '',
   name: '',
@@ -32,6 +39,7 @@ const form = reactive({
   night_audit_earliest_time: '20:00',
   require_room_inspection_for_checkin: false,
   night_audit_marks_occupied_dirty: true,
+  refund_methods: ['CASH'] as string[],
   status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
   opening_business_date: '',
 })
@@ -80,6 +88,7 @@ onMounted(async () => {
         night_audit_earliest_time: data.night_audit_earliest_time,
         require_room_inspection_for_checkin: data.require_room_inspection_for_checkin,
         night_audit_marks_occupied_dirty: data.night_audit_marks_occupied_dirty,
+        refund_methods: [...data.refund_methods],
         status: data.status,
       })
     }
@@ -114,6 +123,7 @@ async function submit(): Promise<void> {
         night_audit_earliest_time: form.night_audit_earliest_time,
         require_room_inspection_for_checkin: form.require_room_inspection_for_checkin,
         night_audit_marks_occupied_dirty: form.night_audit_marks_occupied_dirty,
+        refund_methods: form.refund_methods as CreatePropertyRequest['refund_methods'],
         opening_business_date: form.opening_business_date,
       }
       saved = (await api.POST('/api/v1/properties', { body })).data
@@ -144,6 +154,7 @@ function changedFields(): PatchPropertyRequest {
     'check_out_time', 'night_audit_earliest_time', 'require_room_inspection_for_checkin',
     'night_audit_marks_occupied_dirty', 'status',
   ] as const
+  if (form.refund_methods.length && [...form.refund_methods].sort().join() !== [...original.refund_methods].sort().join()) patch.refund_methods = form.refund_methods
   for (const k of keys) {
     const now = k === 'currency_decimals' ? Number(form[k]) : form[k]
     const before = original[k] ?? ''
@@ -268,6 +279,15 @@ function changedFields(): PatchPropertyRequest {
         <input v-model="form.night_audit_marks_occupied_dirty" type="checkbox" name="night_audit_marks_occupied_dirty" />
         <span>Night audit marks occupied rooms DIRTY (stay-over cleaning)</span>
       </label>
+      <fieldset class="field" data-testid="refund-methods">
+        <legend>Refunds can leave by</legend>
+        <label v-for="m in REFUND_CHOICES" :key="m.value" class="check">
+          <input v-model="form.refund_methods" type="checkbox" name="refund_methods" :value="m.value" />
+          <span>{{ m.label }}</span>
+        </label>
+        <small class="hint">Front office can refund only by the methods ticked here, whatever the guest paid with. Keep at least one; cash is the usual choice.</small>
+        <small v-if="fieldError('refund_methods')" class="error-text">{{ fieldError('refund_methods') }}</small>
+      </fieldset>
     </div>
 
     <template v-if="isNew">

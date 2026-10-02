@@ -140,6 +140,7 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			RequireRoomInspectionForCheckin: st.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
+			RefundMethods:                   st.RefundMethods,
 			ActorID:                         p.ActorID(),
 		})
 		if err != nil {
@@ -252,6 +253,7 @@ type PropertyPatch struct {
 	RequireRoomInspectionForCheckin *bool
 	NightAuditMarksOccupiedDirty    *bool
 	NightAuditEarliestTime          *civil.TimeOfDay
+	RefundMethods                   []string
 	Status                          *string
 }
 
@@ -292,6 +294,9 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.RequireRoomInspectionForCheckin, patch.RequireRoomInspectionForCheckin)
 		apply(&st.NightAuditMarksOccupiedDirty, patch.NightAuditMarksOccupiedDirty)
 		apply(&st.NightAuditEarliestTime, patch.NightAuditEarliestTime)
+		if patch.RefundMethods != nil {
+			st.RefundMethods = patch.RefundMethods
+		}
 		apply(&status, patch.Status)
 		st.Normalize()
 
@@ -332,6 +337,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			RequireRoomInspectionForCheckin: st.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
+			RefundMethods:                   st.RefundMethods,
 			Status:                          status,
 			ActorID:                         p.ActorID(),
 		})

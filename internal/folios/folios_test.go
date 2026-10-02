@@ -15,6 +15,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/dbtest"
 	"kamarapms/internal/rooms/roomstest"
+	"kamarapms/internal/tenancy"
 )
 
 func TestMain(m *testing.M) { os.Exit(dbtest.RunMain(m)) }
@@ -600,7 +601,7 @@ func TestCashierList(t *testing.T) {
 	f.payment(t, "p1", "100000")
 	card, err := f.Folios.PostPayment(f.admin, f.propID, f.folio, "p2", folios.PaymentInput{Amount: "50000", PaymentMethod: "CARD"})
 	must(t, err)
-	_, err = f.Folios.Refund(f.admin, f.propID, card.Payment.ID, "r1", folios.RefundInput{Amount: "20000", Reason: "x", Approval: f.approval()})
+	_, err = f.Folios.Refund(f.admin, f.propID, card.Payment.ID, "r1", folios.RefundInput{Amount: "20000", Reason: "x", Approval: f.approval()}) // a card payment is refunded in cash
 	must(t, err)
 	gone := f.payment(t, "p3", "7000")
 	_, err = f.Folios.Void(f.admin, f.propID, gone.Payment.ID, folios.CorrectionInput{Reason: "x", Approval: f.approval()})
@@ -615,12 +616,12 @@ func TestCashierList(t *testing.T) {
 	for _, tt := range list.Totals {
 		totals[tt.PaymentMethod] = tt
 	}
-	if totals["CASH"].Net != "100000" || totals["CARD"].Paid != "50000" || totals["CARD"].Refunded != "20000" || totals["CARD"].Net != "30000" {
+	if totals["CASH"].Paid != "100000" || totals["CASH"].Refunded != "20000" || totals["CASH"].Net != "80000" || totals["CARD"].Paid != "50000" || totals["CARD"].Net != "50000" {
 		t.Fatalf("totals (a voided payment is not counted): %+v", list.Totals)
 	}
 	cards, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "CARD"}, 0, 10)
 	must(t, err)
-	if len(cards.Data) != 2 || len(cards.Totals) != 0 {
+	if len(cards.Data) != 1 || len(cards.Totals) != 0 {
 		t.Fatalf("filter: %+v", cards)
 	}
 	_, err = f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "X"}, 0, 10)
@@ -733,22 +734,39 @@ func TestLedgerIsAppendOnlyAndConstrained(t *testing.T) {
 	_ = civil.Date{}
 }
 
-// A refund may leave by another method than the payment came in by: a bank transfer refunded in cash. The cap is
-// still the payment's amount, whatever the method.
-func TestRefundByAnotherMethod(t *testing.T) {
+// A refund leaves by the methods the property allows (cash only by default), whatever the payment came in by.
+func TestRefundMethodFollowsTheProperty(t *testing.T) {
 	f := setup(t)
-	pay := f.payment(t, "p1", "100000")
-	res, err := f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m1", folios.RefundInput{
-		Amount: "30000", PaymentMethod: "BANK_TRANSFER", ReferenceNumber: "TRF-9", Reason: "goodwill", Approval: f.approval()})
+	pay, err := f.Folios.PostPayment(f.admin, f.propID, f.folio, "tp", folios.PaymentInput{Amount: "100000", PaymentMethod: "BANK_TRANSFER"})
 	must(t, err)
-	if res.Payment.PaymentMethod != "BANK_TRANSFER" || res.Payment.ReferenceNumber != "TRF-9" {
-		t.Fatalf("refund: %+v", res.Payment)
+	refund := func(key, method string) (folios.PaymentResult, error) {
+		return f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, key, folios.RefundInput{Amount: "10000", PaymentMethod: method, Reason: "goodwill", Approval: f.approval()})
 	}
-	e := code(t, mustErr2(f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m2", folios.RefundInput{
-		Amount: "80000", PaymentMethod: "OTHER", Reason: "x", Approval: f.approval()})), "REFUND_EXCEEDS_PAYMENT")
-	if e.Context["refundable"] != "70000" {
-		t.Fatalf("context: %v", e.Context)
+	// default: cash only; no method given means cash, a transfer is refused
+	res, err := refund("m1", "")
+	must(t, err)
+	if res.Payment.PaymentMethod != "CASH" {
+		t.Fatalf("default method: %s", res.Payment.PaymentMethod)
 	}
-	wantCode(t, mustErr2(f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m3", folios.RefundInput{
-		Amount: "1", PaymentMethod: "BITCOIN", Reason: "x", Approval: f.approval()})), "VALIDATION_FAILED")
+	wantCode(t, mustErr2(refund("m2", "BANK_TRANSFER")), "VALIDATION_FAILED")
+	wantCode(t, mustErr2(refund("m3", "BITCOIN")), "VALIDATION_FAILED")
+	// the property allows transfers too: the payment's own method becomes the default again
+	_, err = f.Tenancy.UpdateProperty(f.admin, f.propID, tenancy.PropertyPatch{RefundMethods: []string{"CASH", "BANK_TRANSFER"}})
+	must(t, err)
+	res, err = refund("m4", "")
+	must(t, err)
+	if res.Payment.PaymentMethod != "BANK_TRANSFER" {
+		t.Fatalf("default method: %s", res.Payment.PaymentMethod)
+	}
+	res, err = refund("m5", "CASH")
+	must(t, err)
+	if res.Payment.PaymentMethod != "CASH" {
+		t.Fatalf("method: %s", res.Payment.PaymentMethod)
+	}
+	wantCode(t, mustErr2(refund("m6", "CARD")), "VALIDATION_FAILED")
+	// the setting itself is validated
+	_, err = f.Tenancy.UpdateProperty(f.admin, f.propID, tenancy.PropertyPatch{RefundMethods: []string{"CASH", "CASH"}})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.Tenancy.UpdateProperty(f.admin, f.propID, tenancy.PropertyPatch{RefundMethods: []string{}})
+	wantCode(t, err, "VALIDATION_FAILED")
 }

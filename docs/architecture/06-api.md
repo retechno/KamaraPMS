@@ -495,7 +495,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `{P}/payments/{id}/refunds`** ⓘ (`payment.refund`)
 - **Request:** `{ amount, payment_method?, reference_number?, reason, approval }`
-- **Rules:** `amount ≤ refundable`. `payment_method` defaults to the original payment's but may differ (a bank transfer refunded in cash, or the other way round); the cashier totals and the day close journal follow the refund's own method, so the money is booked to that method's account. The folio screen offers the choice.
+- **Rules:** `amount ≤ refundable`. A refund leaves by a method the property allows (`properties.refund_methods`, CASH only by default, set in the property settings, migration 00035): another method is 422 `payment_method: NOT_ALLOWED`. Without `payment_method` the payment's own method is used when allowed, otherwise the first allowed method (cash). The cashier totals and the day close journal follow the refund's own method, so a bank transfer refunded in cash is booked to the cash account. The folio screen offers only the allowed methods.
 - **TX:** `T[L1 share, L4 folio → original payment, L5]`
 
 **GET `{P}/payments?business_date&method`** (`folio.read`)

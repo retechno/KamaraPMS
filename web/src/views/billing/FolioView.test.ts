@@ -167,6 +167,17 @@ describe('FolioView', () => {
     expect(init.body).toMatchObject({ amount: '30000', reason: 'goodwill', payment_method: 'CASH', reference_number: 'KW-1' })
   })
 
+  it('offers only the refund methods the property allows, cash by default', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=refund-2]').trigger('click')
+    const select = () => w.get('select[name=refund_method]').findAll('option').map((o) => o.text())
+    expect(select()).toEqual(['CASH'])
+    usePropertyStore().current = { id: 7, refund_methods: ['CASH', 'BANK_TRANSFER'] } as never
+    await flushPromises()
+    expect(select()).toEqual(['CASH', 'BANK_TRANSFER'])
+  })
+
   it('posts an adjustment through the approval dialog', async () => {
     const w = mountView()
     await flushPromises()

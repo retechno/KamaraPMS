@@ -64,6 +64,7 @@ func toProperty(p tenancydb.Property) Property {
 			RequireRoomInspectionForCheckin: p.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    p.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          p.NightAuditEarliestTime,
+			RefundMethods:                   p.RefundMethods,
 		},
 		Status:    p.Status,
 		CreatedAt: p.CreatedAt,

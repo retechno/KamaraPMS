@@ -89,7 +89,7 @@ func (e env) property(t *testing.T, ctx context.Context, code string) int64 {
 	p, err := e.tenancy.CreateProperty(ctx, tenancy.CreatePropertyInput{Code: code, OpeningBusinessDate: civil.MustParseDate("2026-09-30"),
 		Settings: tenancy.PropertySettings{Name: code, Timezone: "Asia/Jakarta", CurrencyCode: "IDR",
 			CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
-			NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00")}})
+			NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"), RefundMethods: []string{"CASH"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

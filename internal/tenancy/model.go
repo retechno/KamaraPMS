@@ -8,6 +8,7 @@ package tenancy
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,6 +71,8 @@ type PropertySettings struct {
 	RequireRoomInspectionForCheckin bool            `json:"require_room_inspection_for_checkin"`
 	NightAuditMarksOccupiedDirty    bool            `json:"night_audit_marks_occupied_dirty"`
 	NightAuditEarliestTime          civil.TimeOfDay `json:"night_audit_earliest_time"`
+	// RefundMethods are the methods a refund may leave by (CASH by default).
+	RefundMethods []string `json:"refund_methods"`
 }
 
 var (
@@ -154,8 +157,22 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 	if money.ValidateDecimals(s.CurrencyDecimals) != nil {
 		add("currency_decimals", "OUT_OF_RANGE", "between 0 and 3")
 	}
+	if len(s.RefundMethods) == 0 {
+		add("refund_methods", "REQUIRED", "at least one of "+strings.Join(RefundMethodChoices, ", "))
+	}
+	seen := map[string]bool{}
+	for _, m := range s.RefundMethods {
+		if !slices.Contains(RefundMethodChoices, m) || seen[m] {
+			add("refund_methods", "INVALID_VALUE", "each of "+strings.Join(RefundMethodChoices, ", ")+", once")
+			break
+		}
+		seen[m] = true
+	}
 	return errs
 }
+
+// RefundMethodChoices are the methods a property can allow for refunds.
+var RefundMethodChoices = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
 
 // Business day statuses.
 const (
