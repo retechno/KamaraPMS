@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import HousekeepingView from './HousekeepingView.vue'
@@ -28,7 +30,8 @@ function mountBoard(permissions: string[], board: object[]) {
   GET = vi.fn().mockResolvedValue({ data: { data: board } })
   POST = vi.fn().mockResolvedValue({ data: {} })
   PUT = vi.fn().mockResolvedValue({ data: {} })
-  return mount(HousekeepingView, { global: { plugins: [pinia] } })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+  return mount(HousekeepingView, { global: { plugins: [pinia, router] } })
 }
 
 describe('HousekeepingView', () => {
@@ -45,7 +48,7 @@ describe('HousekeepingView', () => {
     await flushPromises()
     expect(GET).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/housekeeping', { params: { path: { propertyId: 7 } } })
     expect(w.get('[data-testid=room-201] [data-testid=status]').text()).toBe('Dirty')
-    expect(w.get('[data-testid=room-202]').text()).toContain('occupied')
+    expect(w.get('[data-testid=room-202]').text()).toContain('Occupied')
     expect(w.get('[data-testid=room-202] [data-testid=block]').text()).toBe('OOO until 2026-10-04')
   })
 
@@ -142,5 +145,37 @@ describe('HousekeepingView', () => {
     const w = mountBoard([], [room({})])
     await flushPromises()
     expect(w.find('[data-testid=flags-201]').exists()).toBe(false)
+  })
+
+  it('sorts by room and by status, and links to the maintenance report of a room', async () => {
+    const w = mountBoard(['maintenance.report'], [room({ room_id: 3, room_number: '301', status: 'CLEAN', allowed_next: [] }), room({}), room({ room_id: 2, room_number: '202', status: 'INSPECTED', allowed_next: [] })])
+    await flushPromises()
+    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text().slice(0, 3))
+    expect(numbers()).toEqual(['301', '201', '202'])
+    await w.get('[data-testid=sort-room_number]').trigger('click')
+    expect(numbers()).toEqual(['201', '202', '301'])
+    expect(w.get('[data-testid=report-201]').attributes('href')).toBe('/maintenance?room=1')
+  })
+
+  it('names the empty board and an empty filter differently', async () => {
+    const none = mountBoard([], [])
+    await flushPromises()
+    expect(none.get('[data-testid=empty]').text()).toContain('No active rooms yet')
+    const some = mountBoard([], [room({})])
+    await flushPromises()
+    await some.get('[data-testid=filter-CLEAN]').trigger('click')
+    expect(some.find('[data-testid=empty]').exists()).toBe(false)
+    expect(some.text()).toContain('No rooms match the filter.')
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountBoard(['housekeeping.update'], [room({ priority: 'HIGH', dnd: true, occupancy: 'OCCUPIED', block: { type: 'OOS', end_date: '2026-10-04' } })])
+    await flushPromises()
+    expect(w.get('[data-testid=room-201] [data-testid=status]').text()).toBe('Kotor')
+    expect(w.get('[data-testid=act-CLEANING]').text()).toBe('Mulai bersihkan')
+    expect(w.get('[data-testid=block]').text()).toBe('OOS sampai 2026-10-04')
+    expect(w.get('[data-testid=flags]').text()).toContain('Tinggi')
+    setLocale('en')
   })
 })

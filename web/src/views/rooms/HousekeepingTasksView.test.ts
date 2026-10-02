@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import HousekeepingTasksView from './HousekeepingTasksView.vue'
@@ -150,5 +151,43 @@ describe('HousekeepingTasksView', () => {
     await flushPromises()
     const last = GET.mock.calls.filter(([p]) => (p as string).endsWith('/tasks')).at(-1)
     expect(last?.[1].params.query).toEqual({ assigned_to: 9 })
+  })
+
+  it('shows the status of a task and of its room as badges, and the kind in words', async () => {
+    const w = mountView()
+    await flushPromises()
+    const done = w.get('[data-testid=task-103-CHECKOUT]').text()
+    expect(done).toContain('Done')
+    expect(done).toContain('Clean') // the room is clean
+    expect(done).toContain('Check-out')
+    const todo = w.get('[data-testid=task-101-ARRIVAL]').text()
+    expect(todo).toContain('To do')
+    expect(todo).toContain('Dirty')
+    expect(todo).toContain('Arrival')
+    expect(w.get('[data-testid=task-102-STAYOVER]').text()).toContain('Stayover')
+  })
+
+  it('sorts the tasks by room', async () => {
+    const w = mountView()
+    await flushPromises()
+    const rooms = () => w.findAll('[data-testid=tasks] tbody tr').map((r) => r.findAll('td')[1]!.text().slice(0, 3))
+    expect(rooms()).toEqual(['101', '102', '103'])
+    await w.get('[data-testid=sort-room_number]').trigger('click')
+    await w.get('[data-testid=sort-room_number]').trigger('click')
+    expect(rooms()).toEqual(['103', '102', '101'])
+  })
+
+  it('speaks Indonesian, the notices included', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Daftar pembersihan')
+    expect(w.get('[data-testid=generate]').text()).toBe('Buat daftar hari ini')
+    expect(w.get('[data-testid=task-101-ARRIVAL]').text()).toContain('Kedatangan')
+    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 4 } })
+    await w.get('[data-testid=generate]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=notice]').text()).toBe('4 tugas ditambahkan.')
+    setLocale('en')
   })
 })

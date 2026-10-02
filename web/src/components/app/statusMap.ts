@@ -14,6 +14,7 @@ export type StatusDomain =
   | 'payment' // a payment or a journal: posted or voided
   | 'work' // a task that is done by someone: maintenance, a lost item
   | 'reconciliation'
+  | 'task' // a cleaning task
 
 type Variant = NonNullable<BadgeVariants['variant']>
 
@@ -35,6 +36,7 @@ const MAP: Record<StatusDomain, Record<string, Variant>> = {
   payment: { POSTED: 'success', VOIDED: 'destructive' },
   work: { OPEN: 'warning', IN_PROGRESS: 'secondary', RESOLVED: 'success', CANCELLED: 'destructive' },
   reconciliation: { OPEN: 'warning', RECONCILED: 'success' },
+  task: { PENDING: 'outline', IN_PROGRESS: 'secondary', DONE: 'success', SKIPPED: 'warning' },
 }
 
 /** The badge variant of a status; a status the map does not know is shown plainly. */
