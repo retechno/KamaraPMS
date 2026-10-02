@@ -4,6 +4,15 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { RoomType } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -32,6 +41,14 @@ const blank = () => ({
 const form = reactive(blank())
 
 const sorted = computed(() => [...types.value].sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code)))
+const columns = computed<Column<RoomType>[]>(() => [
+  { key: 'code', label: t('roomTypes.code') },
+  { key: 'name', label: t('roomTypes.name') },
+  { key: 'adults', label: t('roomTypes.adultsChildren') },
+  { key: 'occupancy', label: t('roomTypes.occupancy') },
+  { key: 'status', label: t('setup.status') },
+  ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 async function load(): Promise<void> {
@@ -99,94 +116,65 @@ watch(() => property.currentId, load, { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Room types</h1>
-    <button v-if="canManage && !editing" type="button" class="btn-primary" @click="startNew">New room type</button>
-  </div>
+  <PageHeader :title="t('roomTypes.title')">
+    <template #actions>
+      <Button v-if="canManage && !editing" type="button" data-testid="new-type" @click="startNew">{{ t('roomTypes.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
 
-  <form v-if="editing" class="card" novalidate @submit.prevent="save">
-    <h2>{{ editing === 'new' ? 'New room type' : `Edit ${form.code}` }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Code</span>
-        <input v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-        <small class="hint">Permanent, e.g. DLX.</small>
-        <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-      </label>
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Max adults</span>
-        <input v-model="form.max_adult" name="max_adult" type="number" min="1" :aria-invalid="!!fieldError('max_adult')" />
-        <small v-if="fieldError('max_adult')" class="error-text">{{ fieldError('max_adult') }}</small>
-      </label>
-      <label class="field">
-        <span>Max children</span>
-        <input v-model="form.max_child" name="max_child" type="number" min="0" :aria-invalid="!!fieldError('max_child')" />
-        <small v-if="fieldError('max_child')" class="error-text">{{ fieldError('max_child') }}</small>
-      </label>
-      <label class="field">
-        <span>Max occupancy</span>
-        <input v-model="form.max_occupancy" name="max_occupancy" type="number" min="1" :aria-invalid="!!fieldError('max_occupancy')" />
-        <small class="hint">At most adults + children.</small>
-        <small v-if="fieldError('max_occupancy')" class="error-text">{{ fieldError('max_occupancy') }}</small>
-      </label>
-      <label class="field">
-        <span>Base occupancy</span>
-        <input v-model="form.base_occupancy" name="base_occupancy" type="number" min="1" :aria-invalid="!!fieldError('base_occupancy')" />
-        <small class="hint">At most max occupancy.</small>
-        <small v-if="fieldError('base_occupancy')" class="error-text">{{ fieldError('base_occupancy') }}</small>
-      </label>
-      <label class="field">
-        <span>Sort order</span>
-        <input v-model="form.sort_order" name="sort_order" type="number" />
-      </label>
-      <label class="field">
-        <span>Description</span>
-        <input v-model="form.description" name="description" />
-      </label>
-      <label class="check">
-        <input v-model="form.is_active" name="is_active" type="checkbox" />
-        <span>Active (sellable)</span>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" @click="editing = null">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="editing" class="mb-4">
+    <form novalidate @submit.prevent="save">
+      <CardHeader><CardTitle>{{ editing === 'new' ? t('roomTypes.new') : t('roomTypes.edit', { code: form.code }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('roomTypes.code')" :hint="t('roomTypes.codeHint')" :error="fieldError('code')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.description')">
+            <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.maxAdult')" :error="fieldError('max_adult')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.max_adult" name="max_adult" type="number" min="1" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.maxChild')" :error="fieldError('max_child')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.max_child" name="max_child" type="number" min="0" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.sortOrder')">
+            <template #default="{ id }"><Input :id="id" v-model="form.sort_order" name="sort_order" type="number" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.maxOccupancy')" :hint="t('roomTypes.maxOccupancyHint')" :error="fieldError('max_occupancy')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.max_occupancy" name="max_occupancy" type="number" min="1" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roomTypes.baseOccupancy')" :hint="t('roomTypes.baseOccupancyHint')" :error="fieldError('base_occupancy')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.base_occupancy" name="base_occupancy" type="number" min="1" :aria-invalid="invalid" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('roomTypes.activeCheck') }}</span>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section class="card">
-    <p v-if="loaded && !types.length" class="muted" data-testid="empty">No room types yet. Room types group interchangeable rooms; availability is counted per type.</p>
-    <table v-else-if="types.length" class="list">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Adults / children</th>
-          <th>Occupancy (base / max)</th>
-          <th>Status</th>
-          <th v-if="canManage" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="t in sorted" :key="t.id" :data-testid="`type-${t.code}`">
-          <td>
-            <b>{{ t.code }}</b>
-          </td>
-          <td>{{ t.name }}</td>
-          <td>{{ t.max_adult }} / {{ t.max_child }}</td>
-          <td>{{ t.base_occupancy }} / {{ t.max_occupancy }}</td>
-          <td>{{ t.is_active ? 'Active' : 'Inactive' }}</td>
-          <td v-if="canManage"><button type="button" @click="startEdit(t)">Edit</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card>
+    <EmptyState v-if="loaded && !types.length" :title="t('roomTypes.empty')" :description="t('roomTypes.emptyHint')" data-testid="empty" />
+    <DataTable v-else-if="types.length" :columns="columns" :rows="sorted" row-key="id" :row-test-id="(r) => `type-${r.code}`" :caption="t('roomTypes.title')">
+      <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
+      <template #cell-adults="{ row }">{{ row.max_adult }} / {{ row.max_child }}</template>
+      <template #cell-occupancy="{ row }">{{ row.base_occupancy }} / {{ row.max_occupancy }}</template>
+      <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+      <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
+    </DataTable>
+  </Card>
 </template>

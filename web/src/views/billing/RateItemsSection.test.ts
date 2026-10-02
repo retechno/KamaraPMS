@@ -43,7 +43,7 @@ describe('RateItemsSection', () => {
   it('creates a tax with its rate as a string and the tax-on-service flag', async () => {
     const w = mountSection('tax')
     await flushPromises()
-    await w.get('.page-head button').trigger('click')
+    await w.get('[data-testid=new-item]').trigger('click')
     await w.get('input[name=code]').setValue('CITY')
     await w.get('input[name=name]').setValue('City tax')
     await w.get('input[name=rate]').setValue('1.5')
@@ -59,7 +59,7 @@ describe('RateItemsSection', () => {
     const w = mountSection('service')
     await flushPromises()
     expect(GET.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/service-charges')
-    await w.get('.page-head button').trigger('click')
+    await w.get('[data-testid=new-item]').trigger('click')
     expect(w.find('input[name=tax_on_service]').exists()).toBe(false)
     await w.get('input[name=code]').setValue('SVC2')
     await w.get('input[name=name]').setValue('Service')
@@ -130,7 +130,7 @@ describe('RateItemsSection', () => {
         errors: [{ field: 'rate', code: 'INVALID_RATE', message: 'a percentage from 0 to 100' }],
       }),
     )
-    await w.get('.page-head button').trigger('click')
+    await w.get('[data-testid=new-item]').trigger('click')
     await w.get('input[name=rate]').setValue('150')
     await w.get('form').trigger('submit')
     await flushPromises()
@@ -141,7 +141,7 @@ describe('RateItemsSection', () => {
   it('is read-only without billing_config.manage', async () => {
     const w = mountSection('tax', [])
     await flushPromises()
-    expect(w.find('.page-head button').exists()).toBe(false)
+    expect(w.find('[data-testid=new-item]').exists()).toBe(false)
     expect(w.find('[data-testid=tax-VAT] button').exists()).toBe(false)
   })
 })

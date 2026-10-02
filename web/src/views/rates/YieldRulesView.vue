@@ -5,6 +5,16 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { RateQuote, RatePlan, RoomType, YieldRule } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -33,6 +43,15 @@ const blank = () => ({
 })
 const form = reactive(blank())
 
+const columns = computed<Column<YieldRule>[]>(() => [
+  { key: 'priority', label: t('yieldRules.colPriority'), align: 'right' },
+  { key: 'rule', label: t('yieldRules.colRule') },
+  { key: 'when', label: t('yieldRules.colWhen') },
+  { key: 'adjusts', label: t('yieldRules.colAdjusts'), align: 'right' },
+  { key: 'status', label: t('setup.status') },
+  { key: 'actions', label: '', align: 'right' },
+])
+
 const orNull = (s: string): string | null => (s.trim() === '' ? null : s.trim())
 const intOrNull = (s: string): number | null => (s.trim() === '' ? null : Number(s))
 
@@ -43,14 +62,14 @@ async function load(): Promise<void> {
   if (propertyId === null) return
   try {
     const path = { path: { propertyId } }
-    const [r, p, t] = await Promise.all([
+    const [r, p, rt] = await Promise.all([
       api.GET('/api/v1/properties/{propertyId}/yield-rules', { params: path }),
       fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/rate-plans', { params: { ...path, query: { limit: 200, cursor } } })),
       fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { ...path, query: { limit: 200, cursor } } })),
     ])
     rules.value = r.data?.data ?? []
     plans.value = p
-    types.value = t
+    types.value = rt
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -58,17 +77,17 @@ async function load(): Promise<void> {
   }
 }
 
-const planCode = (id: number | null) => (id === null ? 'all plans' : (plans.value.find((p) => p.id === id)?.code ?? `plan ${id}`))
-const typeCode = (id: number | null) => (id === null ? 'all room types' : (types.value.find((t) => t.id === id)?.code ?? `type ${id}`))
+const planCode = (id: number | null) => (id === null ? t('yieldRules.allPlansShort') : (plans.value.find((p) => p.id === id)?.code ?? t('yieldRules.planN', { id })))
+const typeCode = (id: number | null) => (id === null ? t('yieldRules.allTypesShort') : (types.value.find((x) => x.id === id)?.code ?? t('yieldRules.typeN', { id })))
 
 // The conditions of a rule in a line a person can read.
 function conditions(r: YieldRule): string {
   const parts: string[] = [`${planCode(r.rate_plan_id)}, ${typeCode(r.room_type_id)}`]
-  if (r.stay_from || r.stay_to) parts.push(`stay ${r.stay_from ?? '…'} to ${r.stay_to ?? '…'}`)
+  if (r.stay_from || r.stay_to) parts.push(t('yieldRules.condStay', { from: r.stay_from ?? '…', to: r.stay_to ?? '…' }))
   if (r.weekdays?.length) parts.push(r.weekdays.join(' '))
-  if (r.occupancy_from || r.occupancy_to) parts.push(`occupancy ${r.occupancy_from ?? '0'}% to ${r.occupancy_to ?? '100'}%`)
-  if (r.lead_days_min !== null || r.lead_days_max !== null) parts.push(`${r.lead_days_min ?? 0} to ${r.lead_days_max ?? '…'} days ahead`)
-  if (r.stay_nights_min !== null || r.stay_nights_max !== null) parts.push(`${r.stay_nights_min ?? 1} to ${r.stay_nights_max ?? '…'} nights`)
+  if (r.occupancy_from || r.occupancy_to) parts.push(t('yieldRules.condOccupancy', { from: r.occupancy_from ?? '0', to: r.occupancy_to ?? '100' }))
+  if (r.lead_days_min !== null || r.lead_days_max !== null) parts.push(t('yieldRules.condLead', { from: r.lead_days_min ?? 0, to: r.lead_days_max ?? '…' }))
+  if (r.stay_nights_min !== null || r.stay_nights_max !== null) parts.push(t('yieldRules.condNights', { from: r.stay_nights_min ?? 1, to: r.stay_nights_max ?? '…' }))
   return parts.join(' · ')
 }
 
@@ -142,7 +161,7 @@ async function toggle(r: YieldRule): Promise<void> {
 
 async function remove(r: YieldRule): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !(await confirm({ title: `Delete the rule ${r.code}?`, description: 'Reservations already made keep their prices.', destructive: true }))) return
+  if (propertyId === null || !(await confirm({ title: t('yieldRules.deleteTitle', { code: r.code }), description: t('yieldRules.deleteHint'), destructive: true }))) return
   error.value = null
   try {
     await api.DELETE('/api/v1/properties/{propertyId}/yield-rules/{id}', { params: { path: { propertyId, id: r.id } } })
@@ -180,209 +199,204 @@ watch(pid, load, { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Yield rules</h1>
-    <button v-if="canManage && !editing" type="button" class="btn-primary" data-testid="new-rule" @click="startNew">New rule</button>
-  </div>
-  <p class="muted">
-    A rule changes the price a night is sold at when its conditions hold, for example +20% when the hotel is 70% full, or -10% for bookings made two days ahead.
-    The rate grid stays the base price. Rules apply in priority order, each to the price the one before left. A booking keeps the price it was sold at.
-  </p>
+  <PageHeader :title="t('yieldRules.title')" :description="t('yieldRules.intro')">
+    <template #actions>
+      <Button v-if="canManage && !editing" type="button" data-testid="new-rule" @click="startNew">{{ t('yieldRules.newRule') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canManage" class="muted" data-testid="read-only">Your role at this property can view the rules but not change them: the <code>rate.manage</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('yieldRules.readOnly', { permission: 'rate.manage' }) }}</p>
 
-  <form v-if="editing" class="card" novalidate data-testid="rule-form" @submit.prevent="save">
-    <h2>{{ editing === 'new' ? 'New yield rule' : `Edit ${form.code}` }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Code</span>
-        <input v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-        <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-      </label>
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Priority</span>
-        <input v-model="form.priority" name="priority" inputmode="numeric" />
-        <small class="hint">Lower applies first.</small>
-        <small v-if="fieldError('priority')" class="error-text">{{ fieldError('priority') }}</small>
-      </label>
-    </div>
+  <Card v-if="editing" class="mb-4">
+    <form novalidate data-testid="rule-form" @submit.prevent="save">
+      <CardHeader><CardTitle>{{ editing === 'new' ? t('yieldRules.formNew') : t('yieldRules.formEdit', { code: form.code }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <FormField :label="t('yieldRules.code')" :error="fieldError('code')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.priority')" :hint="t('yieldRules.priorityHint')" :error="fieldError('priority')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.priority" name="priority" inputmode="numeric" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
 
-    <h3>When</h3>
-    <div class="form-grid">
-      <label class="field">
-        <span>Rate plan</span>
-        <select v-model="form.rate_plan_id" name="rate_plan_id">
-          <option value="">All plans</option>
-          <option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Room type</span>
-        <select v-model="form.room_type_id" name="room_type_id">
-          <option value="">All room types</option>
-          <option v-for="t in types" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Stay nights from</span>
-        <input v-model="form.stay_from" name="stay_from" type="date" />
-      </label>
-      <label class="field">
-        <span>Stay nights to</span>
-        <input v-model="form.stay_to" name="stay_to" type="date" :aria-invalid="!!fieldError('stay_to')" />
-        <small v-if="fieldError('stay_to')" class="error-text">{{ fieldError('stay_to') }}</small>
-      </label>
-      <label class="field">
-        <span>Occupancy from (%)</span>
-        <input v-model="form.occupancy_from" name="occupancy_from" inputmode="decimal" :aria-invalid="!!fieldError('occupancy_from')" />
-        <small class="hint">How full the hotel is that night, counting the rooms held by reservations and stays. Included.</small>
-        <small v-if="fieldError('occupancy_from')" class="error-text">{{ fieldError('occupancy_from') }}</small>
-      </label>
-      <label class="field">
-        <span>Occupancy to (%)</span>
-        <input v-model="form.occupancy_to" name="occupancy_to" inputmode="decimal" :aria-invalid="!!fieldError('occupancy_to')" />
-        <small class="hint">Excluded, except 100, which includes a full house.</small>
-        <small v-if="fieldError('occupancy_to')" class="error-text">{{ fieldError('occupancy_to') }}</small>
-      </label>
-      <label class="field">
-        <span>Booked at least (days ahead)</span>
-        <input v-model="form.lead_min" name="lead_min" inputmode="numeric" />
-      </label>
-      <label class="field">
-        <span>Booked at most (days ahead)</span>
-        <input v-model="form.lead_max" name="lead_max" inputmode="numeric" :aria-invalid="!!fieldError('lead_days_max')" />
-        <small v-if="fieldError('lead_days_max')" class="error-text">{{ fieldError('lead_days_max') }}</small>
-      </label>
-      <label class="field">
-        <span>Stay of at least (nights)</span>
-        <input v-model="form.stay_min" name="stay_min" inputmode="numeric" />
-      </label>
-      <label class="field">
-        <span>Stay of at most (nights)</span>
-        <input v-model="form.stay_max" name="stay_max" inputmode="numeric" />
-      </label>
-    </div>
-    <fieldset class="field" data-testid="weekdays">
-      <legend>Weekdays (none ticked means every day)</legend>
-      <label v-for="d in DAYS" :key="d" class="check"><input v-model="form.weekdays" type="checkbox" name="weekdays" :value="d" /><span>{{ d }}</span></label>
-    </fieldset>
-
-    <h3>Then</h3>
-    <div class="form-grid">
-      <label class="field">
-        <span>Adjust by</span>
-        <select v-model="form.adjustment_type" name="adjustment_type">
-          <option value="PERCENT">A percentage of the price</option>
-          <option value="AMOUNT">An amount</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Value (negative lowers the price)</span>
-        <input v-model="form.adjustment_value" name="adjustment_value" inputmode="decimal" :aria-invalid="!!fieldError('adjustment_value')" />
-        <small v-if="fieldError('adjustment_value')" class="error-text">{{ fieldError('adjustment_value') }}</small>
-      </label>
-      <label class="field">
-        <span>Never below (optional)</span>
-        <input v-model="form.floor_amount" name="floor_amount" inputmode="decimal" :aria-invalid="!!fieldError('floor_amount')" />
-        <small v-if="fieldError('floor_amount')" class="error-text">{{ fieldError('floor_amount') }}</small>
-      </label>
-      <label class="field">
-        <span>Never above (optional)</span>
-        <input v-model="form.cap_amount" name="cap_amount" inputmode="decimal" :aria-invalid="!!fieldError('cap_amount')" />
-        <small v-if="fieldError('cap_amount')" class="error-text">{{ fieldError('cap_amount') }}</small>
-      </label>
-    </div>
-    <label class="check"><input v-model="form.is_active" type="checkbox" name="is_active" /><span>Active</span></label>
-    <div class="form-actions">
-      <button type="button" @click="editing = null">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
-    </div>
-  </form>
-
-  <section class="card">
-    <p v-if="loaded && !rules.length" class="muted" data-testid="empty">No yield rule yet: every night is sold at its grid price.</p>
-    <table v-else-if="rules.length" class="list" data-testid="rules">
-      <thead><tr><th class="num">Priority</th><th>Rule</th><th>When</th><th class="num">Adjusts</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        <tr v-for="r in rules" :key="r.id" :data-testid="`rule-${r.code}`" :class="{ off: !r.is_active }">
-          <td class="num">{{ r.priority }}</td>
-          <td><b>{{ r.code }}</b> <small class="muted">{{ r.name }}</small></td>
-          <td><small>{{ conditions(r) }}</small></td>
-          <td class="num"><b>{{ adjustment(r) }}</b><small v-if="r.floor_amount || r.cap_amount" class="muted"> ({{ r.floor_amount ?? '–' }} to {{ r.cap_amount ?? '–' }})</small></td>
-          <td>{{ r.is_active ? 'Active' : 'Off' }}</td>
-          <td class="actions">
-            <template v-if="canManage">
-              <button type="button" :data-testid="`edit-${r.code}`" @click="startEdit(r)">Edit</button>
-              <button type="button" :data-testid="`toggle-${r.code}`" @click="toggle(r)">{{ r.is_active ? 'Turn off' : 'Turn on' }}</button>
-              <button type="button" :data-testid="`delete-${r.code}`" @click="remove(r)">Delete</button>
+        <h3 class="mb-2 mt-5 text-sm font-semibold">{{ t('yieldRules.when') }}</h3>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormField :label="t('yieldRules.ratePlan')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.rate_plan_id" name="rate_plan_id">
+                <option value="">{{ t('yieldRules.allPlans') }}</option>
+                <option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
+              </NativeSelect>
             </template>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+          </FormField>
+          <FormField :label="t('yieldRules.roomType')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.room_type_id" name="room_type_id">
+                <option value="">{{ t('yieldRules.allTypes') }}</option>
+                <option v-for="rt in types" :key="rt.id" :value="rt.id">{{ rt.code }} · {{ rt.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('yieldRules.stayFrom')">
+            <template #default="{ id }"><Input :id="id" v-model="form.stay_from" name="stay_from" type="date" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.stayTo')" :error="fieldError('stay_to')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.stay_to" name="stay_to" type="date" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.occFrom')" :hint="t('yieldRules.occFromHint')" :error="fieldError('occupancy_from')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.occupancy_from" name="occupancy_from" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.occTo')" :hint="t('yieldRules.occToHint')" :error="fieldError('occupancy_to')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.occupancy_to" name="occupancy_to" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.leadMin')">
+            <template #default="{ id }"><Input :id="id" v-model="form.lead_min" name="lead_min" inputmode="numeric" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.leadMax')" :error="fieldError('lead_days_max')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.lead_max" name="lead_max" inputmode="numeric" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.stayMin')">
+            <template #default="{ id }"><Input :id="id" v-model="form.stay_min" name="stay_min" inputmode="numeric" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.stayMax')">
+            <template #default="{ id }"><Input :id="id" v-model="form.stay_max" name="stay_max" inputmode="numeric" /></template>
+          </FormField>
+        </div>
+        <fieldset class="mt-3 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2" data-testid="weekdays">
+          <legend class="px-1 text-sm font-medium">{{ t('yieldRules.weekdays') }}</legend>
+          <label v-for="d in DAYS" :key="d" class="flex items-center gap-1.5 text-sm">
+            <input v-model="form.weekdays" type="checkbox" name="weekdays" :value="d" class="size-4 accent-primary" /><span>{{ d }}</span>
+          </label>
+        </fieldset>
 
-  <form class="card" novalidate data-testid="quote-form" @submit.prevent="runQuote">
-    <h2>Price check</h2>
-    <p class="muted">What a booking made now would cost, night by night, with the rules that moved each price.</p>
-    <div class="form-grid">
-      <label class="field">
-        <span>Rate plan</span>
-        <select v-model="check.plan" name="quote_plan"><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option></select>
-      </label>
-      <label class="field">
-        <span>Room type</span>
-        <select v-model="check.type" name="quote_type"><option v-for="t in types" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }}</option></select>
-      </label>
-      <label class="field"><span>Arrival</span><input v-model="check.arrival" name="quote_arrival" type="date" /></label>
-      <label class="field"><span>Departure</span><input v-model="check.departure" name="quote_departure" type="date" /></label>
-    </div>
-    <div class="form-actions"><button type="submit" :disabled="quoting || check.plan === '' || check.type === ''" data-testid="quote-run">Check the price</button></div>
-    <p v-if="quoteError" class="alert" role="alert" data-testid="quote-error">{{ quoteError.message }} <code>{{ quoteError.code }}</code></p>
-    <template v-if="quote">
-      <table class="list" data-testid="quote">
-        <thead><tr><th>Night</th><th class="num">Grid</th><th class="num">Full</th><th>Rules</th><th class="num">Price</th></tr></thead>
-        <tbody>
-          <tr v-for="n in quote.nights" :key="n.date">
-            <td>{{ n.date }}</td>
-            <td class="num">{{ n.grid_rate ?? 'not set' }}</td>
-            <td class="num">{{ n.occupancy_percent }}%</td>
-            <td><small v-for="s in n.steps" :key="s.code" class="step">{{ s.code }} {{ s.before }} → {{ s.after }}</small><small v-if="!n.steps.length" class="muted">none</small></td>
-            <td class="num"><b>{{ n.amount ?? '–' }}</b></td>
-          </tr>
-        </tbody>
-        <tfoot><tr><td colspan="4">Total ({{ quote.price_mode === 'INCLUSIVE' ? 'inclusive' : 'exclusive' }}; grid {{ quote.grid_total }})</td><td class="num"><b data-testid="quote-total">{{ quote.total }}</b></td></tr></tfoot>
-      </table>
-      <p v-if="quote.missing_nights" class="muted">{{ quote.missing_nights }} night(s) have no grid price.</p>
-    </template>
-  </form>
+        <h3 class="mb-2 mt-5 text-sm font-semibold">{{ t('yieldRules.then') }}</h3>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormField :label="t('yieldRules.adjustBy')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.adjustment_type" name="adjustment_type">
+                <option value="PERCENT">{{ t('yieldRules.percent') }}</option>
+                <option value="AMOUNT">{{ t('yieldRules.amountType') }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('yieldRules.value')" :error="fieldError('adjustment_value')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.adjustment_value" name="adjustment_value" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.floor')" :error="fieldError('floor_amount')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.floor_amount" name="floor_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.cap')" :error="fieldError('cap_amount')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.cap_amount" name="cap_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
+        <label class="mt-4 flex items-center gap-2 text-sm">
+          <input v-model="form.is_active" type="checkbox" name="is_active" class="size-4 accent-primary" /><span>{{ t('yieldRules.activeCheck') }}</span>
+        </label>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ saving ? t('yieldRules.saving') : t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
+
+  <Card class="mb-4">
+    <EmptyState v-if="loaded && !rules.length" :title="t('yieldRules.empty')" data-testid="empty" />
+    <DataTable
+      v-else-if="rules.length"
+      :columns="columns"
+      :rows="rules"
+      row-key="id"
+      :row-test-id="(r) => `rule-${r.code}`"
+      :row-class="(r) => (r.is_active ? undefined : 'opacity-55')"
+      :caption="t('yieldRules.title')"
+      data-testid="rules"
+    >
+      <template #cell-priority="{ row }">{{ row.priority }}</template>
+      <template #cell-rule="{ row }"><b>{{ row.code }}</b> <small class="text-muted-foreground">{{ row.name }}</small></template>
+      <template #cell-when="{ row }"><small>{{ conditions(row) }}</small></template>
+      <template #cell-adjusts="{ row }">
+        <b>{{ adjustment(row) }}</b><small v-if="row.floor_amount || row.cap_amount" class="text-muted-foreground"> ({{ row.floor_amount ?? '–' }} to {{ row.cap_amount ?? '–' }})</small>
+      </template>
+      <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('yieldRules.on') : t('yieldRules.off') }}</Badge></template>
+      <template #cell-actions="{ row }">
+        <div v-if="canManage" class="flex justify-end gap-1.5">
+          <Button type="button" variant="outline" size="sm" :data-testid="`edit-${row.code}`" @click="startEdit(row)">{{ t('common.edit') }}</Button>
+          <Button type="button" variant="outline" size="sm" :data-testid="`toggle-${row.code}`" @click="toggle(row)">{{ row.is_active ? t('yieldRules.turnOff') : t('yieldRules.turnOn') }}</Button>
+          <Button type="button" variant="outline" size="sm" :data-testid="`delete-${row.code}`" @click="remove(row)">{{ t('common.delete') }}</Button>
+        </div>
+      </template>
+    </DataTable>
+  </Card>
+
+  <Card>
+    <form novalidate data-testid="quote-form" @submit.prevent="runQuote">
+      <CardHeader>
+        <CardTitle>{{ t('yieldRules.checkTitle') }}</CardTitle>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('yieldRules.checkHint') }}</p>
+      </CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormField :label="t('yieldRules.ratePlan')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="check.plan" name="quote_plan"><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option></NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('yieldRules.roomType')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="check.type" name="quote_type"><option v-for="rt in types" :key="rt.id" :value="rt.id">{{ rt.code }} · {{ rt.name }}</option></NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('yieldRules.arrival')">
+            <template #default="{ id }"><Input :id="id" v-model="check.arrival" name="quote_arrival" type="date" /></template>
+          </FormField>
+          <FormField :label="t('yieldRules.departure')">
+            <template #default="{ id }"><Input :id="id" v-model="check.departure" name="quote_departure" type="date" /></template>
+          </FormField>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <Button type="submit" :disabled="quoting || check.plan === '' || check.type === ''" data-testid="quote-run">{{ t('yieldRules.checkRun') }}</Button>
+        </div>
+        <p v-if="quoteError" class="alert mt-3" role="alert" data-testid="quote-error">{{ quoteError.message }} <code>{{ quoteError.code }}</code></p>
+        <template v-if="quote">
+          <table class="mt-4 w-full border-collapse text-sm" data-testid="quote">
+            <thead>
+              <tr class="border-b border-border text-left text-xs text-muted-foreground">
+                <th class="py-1.5 pr-3 font-medium">{{ t('yieldRules.night') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('yieldRules.grid') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('yieldRules.full') }}</th>
+                <th class="px-3 font-medium">{{ t('yieldRules.rules') }}</th>
+                <th class="pl-3 text-right font-medium">{{ t('yieldRules.price') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="n in quote.nights" :key="n.date" class="border-b border-border">
+                <td class="py-1.5 pr-3">{{ n.date }}</td>
+                <td class="px-3 text-right tabular-nums">{{ n.grid_rate ?? t('yieldRules.notSet') }}</td>
+                <td class="px-3 text-right tabular-nums">{{ n.occupancy_percent }}%</td>
+                <td class="px-3">
+                  <small v-for="s in n.steps" :key="s.code" class="block">{{ s.code }} {{ s.before }} → {{ s.after }}</small>
+                  <small v-if="!n.steps.length" class="text-muted-foreground">{{ t('yieldRules.none') }}</small>
+                </td>
+                <td class="pl-3 text-right tabular-nums"><b>{{ n.amount ?? '–' }}</b></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4" class="pt-2">{{ quote.price_mode === 'INCLUSIVE' ? t('yieldRules.totalInclusive', { grid: quote.grid_total }) : t('yieldRules.totalExclusive', { grid: quote.grid_total }) }}</td>
+                <td class="pl-3 pt-2 text-right tabular-nums"><b data-testid="quote-total">{{ quote.total }}</b></td>
+              </tr>
+            </tfoot>
+          </table>
+          <p v-if="quote.missing_nights" class="mt-2 text-sm text-muted-foreground">{{ t('yieldRules.missing', { n: quote.missing_nights }) }}</p>
+        </template>
+      </CardContent>
+    </form>
+  </Card>
 </template>
-
-<style scoped>
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.off {
-  opacity: 0.55;
-}
-.actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-.step {
-  display: block;
-}
-h3 {
-  margin: 16px 0 8px;
-  font-size: 14px;
-}
-</style>

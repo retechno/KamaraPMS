@@ -45,7 +45,7 @@ describe('GlAccountInput', () => {
     w = mountInput('CHARGE_CODE', '4110')
     await flushPromises()
     expect(w.get('[data-testid=account-hint]').text()).toBe('4110 - Room revenue')
-    expect(w.get('[data-testid=account-hint]').classes()).not.toContain('error-text')
+    expect(w.get('[data-testid=account-hint]').classes()).not.toContain('text-destructive')
     for (const [code, text] of [
       ['', 'No account'], ['9999', 'not in the chart'], ['4199', 'inactive'], ['4100', 'header account'], ['1110', 'does not fit'],
     ] as const) {
@@ -53,7 +53,7 @@ describe('GlAccountInput', () => {
       const hint = w.get('[data-testid=account-hint]')
       expect(hint.text()).toContain(text)
       expect(hint.text()).toContain('suspense')
-      expect(hint.classes()).toContain('error-text')
+      expect(hint.classes()).toContain('text-destructive')
     }
   })
 

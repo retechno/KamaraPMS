@@ -4,6 +4,16 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { ChargeCode, MealPlan, RatePlan } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -18,7 +28,17 @@ const saving = ref(false)
 const editing = ref<RatePlan | 'new' | null>(null)
 
 const canManage = computed(() => auth.can('rate.manage', property.currentId))
-const meals: Record<MealPlan, string> = { RO: 'Room only', BB: 'Bed and breakfast', HB: 'Half board', FB: 'Full board', AI: 'All inclusive' }
+const mealKeys: MealPlan[] = ['RO', 'BB', 'HB', 'FB', 'AI']
+const columns = computed<Column<RatePlan>[]>(() => [
+  { key: 'code', label: t('ratePlans.code') },
+  { key: 'name', label: t('ratePlans.name') },
+  { key: 'meal_plan', label: t('ratePlans.mealPlan') },
+  { key: 'room_charge_code', label: t('ratePlans.roomChargeCode') },
+  { key: 'price_mode', label: t('ratePlans.prices') },
+  { key: 'is_refundable', label: t('ratePlans.refundable') },
+  { key: 'status', label: t('setup.status') },
+  ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 const blank = () => ({
   code: '', name: '', description: '', meal_plan: 'RO' as MealPlan, cancellation_policy: '', is_refundable: true, room_charge_code_id: 0, is_active: true,
 })
@@ -94,100 +114,79 @@ watch(() => property.currentId, load, { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Rate plans</h1>
-    <button v-if="canManage && !editing" type="button" class="btn-primary" :disabled="!roomCodes.length" @click="startNew">New rate plan</button>
-  </div>
+  <PageHeader :title="t('ratePlans.title')">
+    <template #actions>
+      <Button v-if="canManage && !editing" type="button" :disabled="!roomCodes.length" data-testid="new-plan" @click="startNew">{{ t('ratePlans.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <span v-if="error.code === 'RATE_PLAN_PRICE_MODE_MISMATCH'"> Create a new plan for the other price mode instead.</span>
+    <span v-if="error.code === 'RATE_PLAN_PRICE_MODE_MISMATCH'"> {{ t('ratePlans.mismatch') }}</span>
   </p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canManage" class="muted" data-testid="read-only">
-    Your role at this property can view rate plans but not create or edit them: the <code>rate.manage</code> permission is needed (ask an administrator, or change the role under Setup → Roles).
-  </p>
-  <p v-else-if="loaded && !roomCodes.length" class="muted">Rate plans sell through a room charge code; there is none yet.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('ratePlans.readOnly', { permission: 'rate.manage' }) }}</p>
+  <p v-else-if="loaded && !roomCodes.length" class="muted">{{ t('ratePlans.needCode') }}</p>
 
-  <form v-if="editing" class="card" novalidate data-testid="plan-form" @submit.prevent="save">
-    <h2>{{ editing === 'new' ? 'New rate plan' : `Edit ${form.code}` }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Code</span>
-        <input v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-        <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-      </label>
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Meal plan</span>
-        <select v-model="form.meal_plan" name="meal_plan">
-          <option v-for="(label, k) in meals" :key="k" :value="k">{{ k }} · {{ label }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Room charge code</span>
-        <select v-model="form.room_charge_code_id" name="room_charge_code_id" :aria-invalid="!!fieldError('room_charge_code_id')">
-          <option v-for="c in selectable" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-        </select>
-        <small v-if="chosenMode" class="hint" data-testid="mode-hint">
-          Rates are entered as {{ chosenMode === 'INCLUSIVE' ? 'inclusive prices (service and tax are contained)' : 'exclusive prices (service and tax are added)' }}.
-        </small>
-        <small v-if="fieldError('room_charge_code_id')" class="error-text">{{ fieldError('room_charge_code_id') }}</small>
-      </label>
-      <label class="field">
-        <span>Description</span>
-        <input v-model="form.description" name="description" />
-      </label>
-      <label class="field">
-        <span>Cancellation policy</span>
-        <input v-model="form.cancellation_policy" name="cancellation_policy" />
-      </label>
-      <label class="check">
-        <input v-model="form.is_refundable" name="is_refundable" type="checkbox" />
-        <span>Refundable</span>
-      </label>
-      <label class="check">
-        <input v-model="form.is_active" name="is_active" type="checkbox" />
-        <span>Active (can be booked)</span>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" @click="editing = null">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="editing" class="mb-4">
+    <form novalidate data-testid="plan-form" @submit.prevent="save">
+      <CardHeader><CardTitle>{{ editing === 'new' ? t('ratePlans.new') : t('ratePlans.edit', { code: form.code }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('ratePlans.code')" :error="fieldError('code')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('ratePlans.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('ratePlans.mealPlan')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.meal_plan" name="meal_plan">
+                <option v-for="k in mealKeys" :key="k" :value="k">{{ k }} · {{ t(`ratePlans.meal_${k}`) }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('ratePlans.roomChargeCode')" :error="fieldError('room_charge_code_id')">
+            <template #default="{ id, invalid }">
+              <NativeSelect :id="id" v-model="form.room_charge_code_id" name="room_charge_code_id" :aria-invalid="invalid">
+                <option v-for="c in selectable" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+              </NativeSelect>
+              <small v-if="chosenMode" class="text-xs text-muted-foreground" data-testid="mode-hint">
+                {{ chosenMode === 'INCLUSIVE' ? t('ratePlans.modeInclusive') : t('ratePlans.modeExclusive') }}
+              </small>
+            </template>
+          </FormField>
+          <FormField :label="t('ratePlans.description')">
+            <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" /></template>
+          </FormField>
+          <FormField :label="t('ratePlans.cancellationPolicy')">
+            <template #default="{ id }"><Input :id="id" v-model="form.cancellation_policy" name="cancellation_policy" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_refundable" name="is_refundable" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('ratePlans.refundable') }}</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('ratePlans.activeCheck') }}</span>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section class="card">
-    <p v-if="loaded && !plans.length" class="muted" data-testid="empty">No rate plans yet.</p>
-    <table v-else-if="plans.length" class="list">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Meal plan</th>
-          <th>Room charge code</th>
-          <th>Prices</th>
-          <th>Refundable</th>
-          <th>Status</th>
-          <th v-if="canManage" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="p in plans" :key="p.id" :data-testid="`plan-${p.code}`">
-          <td><b>{{ p.code }}</b></td>
-          <td>{{ p.name }}</td>
-          <td>{{ p.meal_plan }}</td>
-          <td>{{ p.room_charge_code }}</td>
-          <td>{{ p.price_mode === 'INCLUSIVE' ? 'Inclusive' : 'Exclusive' }}</td>
-          <td>{{ p.is_refundable ? 'Yes' : 'No' }}</td>
-          <td>{{ p.is_active ? 'Active' : 'Inactive' }}</td>
-          <td v-if="canManage"><button type="button" @click="startEdit(p)">Edit</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card>
+    <EmptyState v-if="loaded && !plans.length" :title="t('ratePlans.empty')" data-testid="empty" />
+    <DataTable v-else-if="plans.length" :columns="columns" :rows="plans" row-key="id" :row-test-id="(p) => `plan-${p.code}`" :caption="t('ratePlans.title')">
+      <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
+      <template #cell-price_mode="{ row }">{{ row.price_mode === 'INCLUSIVE' ? t('ratePlans.inclusive') : t('ratePlans.exclusive') }}</template>
+      <template #cell-is_refundable="{ row }">{{ row.is_refundable ? t('common.yes') : t('common.no') }}</template>
+      <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+      <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
+    </DataTable>
+  </Card>
 </template>

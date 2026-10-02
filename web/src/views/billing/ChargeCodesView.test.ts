@@ -84,7 +84,7 @@ describe('ChargeCodesView', () => {
   it('offers the calculator only for existing codes', async () => {
     const w = mountView(['billing_config.manage'])
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-code]').trigger('click')
     expect(w.find('[data-testid=calculator]').exists()).toBe(false)
     await w.get('button[type=button]').trigger('click') // Close
     await w.get('[data-testid=code-SPA] button').trigger('click')
@@ -105,7 +105,7 @@ describe('ChargeCodesView', () => {
   it('creates a charge code sending only the default price that was entered', async () => {
     const w = mountView(['billing_config.manage'])
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-code]').trigger('click')
     await w.get('input[name=code]').setValue('MASSAGE')
     await w.get('input[name=name]').setValue('Massage')
     await w.get('select[name=charge_type]').setValue('SERVICE')
@@ -153,7 +153,7 @@ describe('ChargeCodesView', () => {
     await w.get('select[name=type_filter]').setValue('SERVICE')
     expect(w.find('[data-testid=code-ROOM]').exists()).toBe(false)
     expect(w.find('[data-testid=code-SPA]').exists()).toBe(true)
-    expect(w.find('button.btn-primary').exists()).toBe(false)
+    expect(w.find('[data-testid=new-code]').exists()).toBe(false)
     expect(w.find('[data-testid=code-SPA] button').exists()).toBe(false)
   })
 })

@@ -120,7 +120,7 @@ describe('RateGridView', () => {
   it('moves the window by a week', async () => {
     const w = mountGrid()
     await flushPromises()
-    await w.findAll('.nav button')[2]?.trigger('click') // Week →
+    await w.find('[data-testid=week-next]').trigger('click') // Week →
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-08', to: '2026-10-22' } } })
   })

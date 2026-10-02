@@ -50,7 +50,7 @@ describe('RatePlansView', () => {
   it('offers only active ROOM codes for a new plan and explains the price mode', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-plan]').trigger('click')
     expect(w.findAll('select[name=room_charge_code_id] option').map((o) => o.text())).toEqual(['ROOM · Room charge', 'ROOM_NETT · Room nett'])
     expect(w.get('[data-testid=mode-hint]').text()).toContain('exclusive prices (service and tax are added)')
     await w.get('select[name=room_charge_code_id]').setValue(2)
@@ -60,7 +60,7 @@ describe('RatePlansView', () => {
   it('creates a plan', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-plan]').trigger('click')
     await w.get('input[name=code]').setValue('NETT')
     await w.get('input[name=name]').setValue('Nett rate')
     await w.get('select[name=meal_plan]').setValue('HB')
@@ -91,7 +91,7 @@ describe('RatePlansView', () => {
   it('is read-only without rate.manage', async () => {
     const w = mountView([])
     await flushPromises()
-    expect(w.find('button.btn-primary').exists()).toBe(false)
+    expect(w.find('[data-testid=new-plan]').exists()).toBe(false)
     expect(w.get('[data-testid=read-only]').text()).toContain('rate.manage')
     expect(w.find('[data-testid=plan-BAR] button').exists()).toBe(false)
   })

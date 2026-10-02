@@ -3,6 +3,11 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CalculateChargeRequest, ChargeCalculation, PriceMode } from '@/api/types'
+import FormField from '@/components/app/FormField.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 
 /**
@@ -48,64 +53,58 @@ watch(() => props.version, () => {
 </script>
 
 <template>
-  <section class="calc" data-testid="calculator">
-    <h2>Calculator</h2>
-    <p class="muted">Previews the calculation with the saved rules. Nothing is posted.</p>
+  <section class="mt-6 border-t border-border pt-4" data-testid="calculator">
+    <h2 class="m-0 text-base font-semibold">{{ t('calc.title') }}</h2>
+    <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('calc.hint') }}</p>
     <p v-if="error && !error.fieldErrors.length" class="alert" role="alert" data-testid="calc-error">{{ error.message }} <code>{{ error.code }}</code></p>
-    <div class="form-grid" @keydown.enter.prevent="calculate">
-      <label class="field">
-        <span>Quantity</span>
-        <input v-model="quantity" name="quantity" inputmode="decimal" :aria-invalid="!!fieldError('quantity')" />
-        <small v-if="fieldError('quantity')" class="error-text">{{ fieldError('quantity') }}</small>
-      </label>
-      <label class="field">
-        <span>Unit price {{ currency }}</span>
-        <input v-model="unitPrice" name="unit_price" inputmode="decimal" :aria-invalid="!!fieldError('unit_price')" />
-        <small class="hint">Negative for a credit.</small>
-        <small v-if="fieldError('unit_price')" class="error-text">{{ fieldError('unit_price') }}</small>
-      </label>
-      <label class="field">
-        <span>Discount</span>
-        <input v-model="discount" name="discount_amount" inputmode="decimal" :aria-invalid="!!fieldError('discount_amount')" />
-        <small v-if="fieldError('discount_amount')" class="error-text">{{ fieldError('discount_amount') }}</small>
-      </label>
-      <label class="field">
-        <span>Price is</span>
-        <select v-model="modeOverride" name="price_mode">
-          <option value="">As the code ({{ priceMode.toLowerCase() }})</option>
-          <option value="EXCLUSIVE">Exclusive</option>
-          <option value="INCLUSIVE">Inclusive</option>
-        </select>
-      </label>
-      <div class="actions">
-        <button type="button" :disabled="busy" data-testid="calculate" @click="calculate">Calculate</button>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" @keydown.enter.prevent="calculate">
+      <FormField :label="t('calc.quantity')" :error="fieldError('quantity')">
+        <template #default="{ id, invalid }"><Input :id="id" v-model="quantity" name="quantity" inputmode="decimal" :aria-invalid="invalid" /></template>
+      </FormField>
+      <FormField :label="t('calc.unitPrice', { currency })" :hint="t('calc.unitPriceHint')" :error="fieldError('unit_price')">
+        <template #default="{ id, invalid }"><Input :id="id" v-model="unitPrice" name="unit_price" inputmode="decimal" :aria-invalid="invalid" /></template>
+      </FormField>
+      <FormField :label="t('calc.discount')" :error="fieldError('discount_amount')">
+        <template #default="{ id, invalid }"><Input :id="id" v-model="discount" name="discount_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+      </FormField>
+      <FormField :label="t('calc.priceIs')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model="modeOverride" name="price_mode">
+            <option value="">{{ t('calc.asCode', { mode: priceMode === 'INCLUSIVE' ? t('calc.inclusive').toLowerCase() : t('calc.exclusive').toLowerCase() }) }}</option>
+            <option value="EXCLUSIVE">{{ t('calc.exclusive') }}</option>
+            <option value="INCLUSIVE">{{ t('calc.inclusive') }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <div class="flex items-end">
+        <Button type="button" variant="outline" :disabled="busy" data-testid="calculate" @click="calculate">{{ t('calc.calculate') }}</Button>
       </div>
     </div>
 
-    <table v-if="result" class="list result" data-testid="result">
+    <table v-if="result" class="mt-4 w-full border-collapse text-sm" data-testid="result">
       <thead>
-        <tr>
-          <th>Line</th>
-          <th class="num">Rate</th>
-          <th class="num">On</th>
-          <th class="num">Amount</th>
+        <tr class="border-b border-border text-left text-xs text-muted-foreground">
+          <th class="py-1.5 pr-3 font-medium">{{ t('calc.line') }}</th>
+          <th class="px-3 text-right font-medium">{{ t('calc.rate') }}</th>
+          <th class="px-3 text-right font-medium">{{ t('calc.on') }}</th>
+          <th class="pl-3 text-right font-medium">{{ t('calc.amount') }}</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="[&_td.num]:text-right [&_td.num]:tabular-nums [&_td]:py-1.5 [&_tr]:border-b [&_tr]:border-border">
         <tr>
-          <td>Quoted amount ({{ result.quantity }} × {{ result.unit_price }})</td>
+          <td>{{ t('calc.quoted', { quantity: result.quantity, price: result.unit_price }) }}</td>
           <td />
           <td />
           <td class="num" data-testid="base">{{ result.base_amount }}</td>
         </tr>
         <tr v-if="Number(result.discount_amount) !== 0">
-          <td>Discount</td>
+          <td>{{ t('calc.discount') }}</td>
           <td />
           <td />
           <td class="num">−{{ result.discount_amount }}</td>
         </tr>
         <tr>
-          <td>Net revenue <small v-if="Number(result.rounding_adjustment) !== 0" class="muted" data-testid="adjustment">(includes rounding {{ result.rounding_adjustment }})</small></td>
+          <td>{{ t('calc.netRevenue') }} <small v-if="Number(result.rounding_adjustment) !== 0" class="text-muted-foreground" data-testid="adjustment">{{ t('calc.rounding', { amount: result.rounding_adjustment }) }}</small></td>
           <td />
           <td />
           <td class="num" data-testid="net">{{ result.net_amount }}</td>
@@ -117,13 +116,13 @@ watch(() => props.version, () => {
           <td class="num">{{ c.amount }}</td>
         </tr>
         <tr v-for="c in result.taxes" :key="`t${c.rule_id}`" data-testid="tax-line">
-          <td>{{ c.name }}<small v-if="c.tax_on_service" class="muted"> (incl. service)</small></td>
+          <td>{{ c.name }}<small v-if="c.tax_on_service" class="text-muted-foreground"> {{ t('calc.inclService') }}</small></td>
           <td class="num">{{ Number(c.rate) }}%</td>
           <td class="num">{{ c.base_amount }}</td>
           <td class="num">{{ c.amount }}</td>
         </tr>
-        <tr class="total">
-          <td><b>Total</b> <small class="muted">{{ result.price_mode.toLowerCase() }} price</small></td>
+        <tr class="border-t-2 border-border">
+          <td><b>{{ t('calc.total') }}</b> <small class="text-muted-foreground">{{ result.price_mode === 'INCLUSIVE' ? t('calc.priceInclusive') : t('calc.priceExclusive') }}</small></td>
           <td />
           <td />
           <td class="num" data-testid="total"><b>{{ result.total_amount }}</b></td>
@@ -132,25 +131,3 @@ watch(() => props.version, () => {
     </table>
   </section>
 </template>
-
-<style scoped>
-.calc {
-  margin-top: 24px;
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
-}
-.actions {
-  display: flex;
-  align-items: flex-end;
-}
-.result {
-  margin-top: 16px;
-}
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.total td {
-  border-top: 2px solid var(--border);
-}
-</style>

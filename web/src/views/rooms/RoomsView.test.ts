@@ -51,7 +51,7 @@ describe('RoomsView', () => {
   it('creates a room with the chosen type and initial housekeeping status', async () => {
     const w = mountRooms(['room.manage'])
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-room]').trigger('click')
     await w.get('input[name=room_number]').setValue('301')
     await w.get('input[name=floor]').setValue('3')
     await w.get('select[name=initial_housekeeping_status]').setValue('CLEAN')
@@ -66,7 +66,7 @@ describe('RoomsView', () => {
   it('offers only active types for a new room', async () => {
     const w = mountRooms(['room.manage'])
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-room]').trigger('click')
     const options = w.findAll('select[name=room_type_id] option').map((o) => o.text())
     expect(options).toEqual(['DLX · Deluxe'])
   })
@@ -91,7 +91,7 @@ describe('RoomsView', () => {
   it('hides editing without room.manage', async () => {
     const w = mountRooms([])
     await flushPromises()
-    expect(w.find('button.btn-primary').exists()).toBe(false)
+    expect(w.find('[data-testid=new-room]').exists()).toBe(false)
     expect(w.find('[data-testid=room-201] button').exists()).toBe(false)
   })
 })
