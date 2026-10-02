@@ -579,7 +579,7 @@ export const en = {
     markClean: 'Mark clean',
     inspect: 'Inspect',
     dirty: 'Dirty',
-    cleaning: 'Cleaning',
+    cleaning: 'Being cleaned',
     clean: 'Clean',
     inspected: 'Inspected',
     empty: 'No active rooms yet. Add rooms under Setup.',

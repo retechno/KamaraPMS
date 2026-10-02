@@ -1,24 +1,96 @@
 /*
- * Tailwind CSS v4 for the redesigned UI (docs/architecture: frontend redesign, phase 0).
+ * The one stylesheet of the application: Tailwind CSS v4, the design tokens, a small base and the few shared classes
+ * that texts use (`.alert`, `.notice`, `.muted`). Everything else is a utility on a component of `components/ui`
+ * or `components/app`.
  *
- * Layer order: the pages that have not been migrated yet are styled by main.css, which now lives in the `legacy`
- * layer. Tailwind's utilities sit above it, so a migrated component can restyle itself with utilities, and the old
- * global `button`, `.card` and `.field` rules never fight them. Preflight (Tailwind's reset) is NOT imported yet: it
- * would change the margins and headings of every page that has not been migrated. It comes with the clean-up phase.
+ * Tailwind's own reset (preflight) is deliberately not imported: pages rely on the browser's margins for paragraphs,
+ * headings and lists, and a reset would change all of them at once. The base below sets only what the application
+ * needs (box sizing, fonts, colours, the focus ring).
  */
-@layer theme, base, legacy, components, utilities;
+@layer theme, base, components, utilities;
 
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'tw-animate-css';
 
-/* Dark follows the system setting, as the existing palette does. */
+/* Dark follows the system setting. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 /*
- * The design tokens are the existing palette (variables of main.css), named the way shadcn-vue components expect.
- * `inline` makes the utilities read the variable at use, so dark mode changes them without a second definition.
+ * The palette: light by default, dark when the system says so. Tokens below name these variables the way shadcn-vue
+ * components expect; `inline` makes the utilities read the variable at use, so dark mode needs no second definition.
  */
+@layer base {
+  :root {
+    --surface: #ffffff;
+    --surface-2: #f6f7f9;
+    --border: #e3e6ea;
+    --hover: #eceef2;
+    --text: #1c2128;
+    --text-muted: #626b77;
+    --accent: #1f6f5c;
+    --accent-strong: #185a4a;
+    --accent-soft: #e3f2ee;
+    --accent-contrast: #ffffff;
+    --ok: #2e9d6a;
+    --danger: #c2413a;
+    --warning: #c98a10;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #171a1f;
+      --surface-2: #111317;
+      --border: #2a2f37;
+      --hover: #22262d;
+      --text: #e6e9ee;
+      --text-muted: #98a1ad;
+      --accent: #3fa98d;
+      --accent-strong: #7fd0b9;
+      --accent-soft: #1b3830;
+      --accent-contrast: #0c1512;
+      --ok: #4cc38a;
+      --danger: #ef6b62;
+      --warning: #e0a93a;
+      color-scheme: dark;
+    }
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--accent-strong);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
 @theme inline {
   --color-background: var(--surface-2);
   --color-foreground: var(--text);
@@ -48,4 +120,33 @@
   --radius-xl: 16px;
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Shared classes of texts: a failure, a confirmation, a quiet line. They sit below utilities, so a utility can still adjust one. */
+@layer components {
+  .alert {
+    margin-bottom: 1rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-md);
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+  }
+  .alert.warning {
+    border-color: var(--warning);
+    color: var(--text);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+  }
+  .notice {
+    margin-bottom: 1rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--ok);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+  }
+  .muted {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
 }

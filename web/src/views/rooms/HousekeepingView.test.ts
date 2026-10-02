@@ -81,7 +81,7 @@ describe('HousekeepingView', () => {
       params: { path: { propertyId: 7, id: 1 } },
       body: { status: 'CLEANING' },
     })
-    expect(w.get('[data-testid=status]').text()).toBe('Cleaning')
+    expect(w.get('[data-testid=status]').text()).toBe('Being cleaned')
   })
 
   it('shows the error code and refreshes when another user changed the room first', async () => {
@@ -95,7 +95,7 @@ describe('HousekeepingView', () => {
     await flushPromises()
 
     expect(w.get('[data-testid=hk-error]').text()).toContain('INVALID_HK_TRANSITION')
-    expect(w.get('[data-testid=status]').text()).toBe('Cleaning')
+    expect(w.get('[data-testid=status]').text()).toBe('Being cleaned')
   })
 
   it('filters by status chip', async () => {

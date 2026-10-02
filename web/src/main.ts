@@ -4,7 +4,6 @@ import App from './App.vue'
 import { currentLocale, i18n } from './i18n'
 import { router } from './router'
 import './assets/tailwind.css'
-import './assets/main.css'
 
 import { onSessionLost } from './api/session'
 import { useAuthStore } from './stores/auth'

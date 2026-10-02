@@ -70,6 +70,6 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
 - **Frontend:** access token in memory only (`api/session.ts`); refresh token is an httpOnly cookie.
   Mock the API client with a fresh `vi.fn()` per test (Vitest 5 quirk with mockReset/mockClear).
   TypeScript stays on 5.x (TS 7 lacks the JS API vue-tsc/openapi-typescript need).
-  The UI is being redesigned on Tailwind v4 + `components/ui` (see `docs/architecture/README.md`): migrated code styles with utilities, `main.css` is the `legacy` layer, and texts go through `src/i18n` keys (English and Indonesian). A redesign changes templates and styles only; keep `data-testid`, input `name` and heading text that tests read.
+  The UI is built on Tailwind v4 + `components/ui` (see `docs/architecture/README.md`): it styles with utilities (`assets/tailwind.css` is the only stylesheet, no preflight), and texts go through `src/i18n` keys (English and Indonesian). A redesign changes templates and styles only; keep `data-testid`, input `name` and heading text that tests read.
 - **Line endings LF** (`.gitattributes`); gofmt rejects CRLF.
 - Never commit `.env`, `bin/`, or secrets.
