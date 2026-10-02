@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import FolioView from './FolioView.vue'
@@ -172,10 +173,10 @@ describe('FolioView', () => {
     await flushPromises()
     await w.get('[data-testid=refund-2]').trigger('click')
     const select = () => w.get('select[name=refund_method]').findAll('option').map((o) => o.text())
-    expect(select()).toEqual(['CASH'])
+    expect(select()).toEqual(['Cash'])
     usePropertyStore().current = { id: 7, refund_methods: ['CASH', 'BANK_TRANSFER'] } as never
     await flushPromises()
-    expect(select()).toEqual(['CASH', 'BANK_TRANSFER'])
+    expect(select()).toEqual(['Cash', 'Bank transfer'])
   })
 
   it('posts an adjustment through the approval dialog', async () => {
@@ -200,7 +201,7 @@ describe('FolioView', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'the charge is invalid', errors: [{ field: 'quantity', code: 'INVALID_VALUE', message: 'a positive number' }] }))
     await w.get('form[data-testid=charge-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('.error-text').text()).toBe('a positive number')
+    expect(w.get('form[data-testid=charge-form] [role=alert]').text()).toBe('a positive number')
   })
 
   it('closes a folio without a stay', async () => {
@@ -284,5 +285,80 @@ describe('FolioView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  const tabsOf = (w: ReturnType<typeof mountView>) => w.findAll('[data-testid=post-tabs] button').map((b) => b.text())
+  const shown = (w: ReturnType<typeof mountView>, form: string) => !w.get(`[data-testid=${form}]`).element.closest('.hidden')
+
+  it('has one tab for each posting form the role may use, the first one open', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(tabsOf(w)).toEqual(['Charge', 'Payment', 'Adjustment'])
+    expect(shown(w, 'charge-form')).toBe(true)
+    expect(shown(w, 'payment-form')).toBe(false)
+    const all = mountView(folio(), [...ALL, 'cityledger.transfer'])
+    await flushPromises()
+    expect(tabsOf(all)).toEqual(['Charge', 'Payment', 'Transfer', 'Adjustment'])
+    const cashier = mountView(folio(), ['folio.read', 'payment.post'])
+    await flushPromises()
+    expect(tabsOf(cashier)).toEqual(['Payment'])
+    expect(shown(cashier, 'payment-form')).toBe(true)
+    const reader = mountView(folio(), ['folio.read'])
+    await flushPromises()
+    expect(reader.find('[data-testid=post-tabs]').exists()).toBe(false)
+  })
+
+  it('switches between the forms and keeps what was typed in the others', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=quantity]').setValue('3')
+    const tab = w.get('[data-testid=tab-payment]')
+    await tab.trigger('mousedown', { button: 0 })
+    await tab.trigger('focus')
+    await flushPromises()
+    expect(shown(w, 'payment-form')).toBe(true)
+    expect(shown(w, 'charge-form')).toBe(false)
+    expect((w.get('input[name=quantity]').element as HTMLInputElement).value).toBe('3')
+  })
+
+  it('shows the status, the totals and the figures of the open ledger', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Folio FOL000001')
+    expect(w.get('[data-testid=folio-status]').text()).toBe('Open')
+    expect(w.get('[data-testid=debit]').text()).toBe('122100')
+    expect(w.get('[data-testid=credit]').text()).toBe('100000')
+    const closed = mountView(folio({ status: 'CLOSED' }))
+    await flushPromises()
+    expect(closed.get('[data-testid=folio-status]').text()).toBe('Closed')
+  })
+
+  it('strikes a reversed item through and shows the detail of an item under it', async () => {
+    const w = mountView(folio({ items: [item({ id: 5, reversed_by_item_id: 6, reason: 'posted twice' })] }))
+    await flushPromises()
+    expect(w.get('[data-testid=item-5]').classes()).toContain('line-through')
+    await w.get('[data-testid=toggle-5]').trigger('click')
+    const detail = w.get('[data-testid=detail-5]').text()
+    expect(detail).toContain('1 x 100000 (exclusive) · net 100000 · posted twice')
+    await w.get('[data-testid=toggle-5]').trigger('click')
+    expect(w.find('[data-testid=detail-5]').exists()).toBe(false)
+  })
+
+  it('speaks Indonesian: the page, the approval dialog and the notice', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=print-invoice]').exists()).toBe(false) // no reservation.read
+    expect(tabsOf(w)).toEqual(['Biaya', 'Pembayaran', 'Penyesuaian'])
+    await w.get('[data-testid=reverse-1]').trigger('click')
+    await w.get('input[name=reason]').setValue('dobel')
+    await w.get('form[data-testid=correction-form]').trigger('submit')
+    expect(w.get('[data-testid=approval-dialog]').text()).toContain('Setujui reversal')
+    expect(w.get('[data-testid=approval-dialog]').text()).toContain('Kata sandi penyetuju')
+    await w.get('input[name=approval_password]').setValue('pw')
+    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=notice]').text()).toBe('Item di-reverse.')
+    setLocale('en')
   })
 })

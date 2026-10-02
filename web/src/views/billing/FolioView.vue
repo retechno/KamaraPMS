@@ -1,10 +1,23 @@
 <script setup lang="ts">
+import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Approval, ChargeCode, Company, Folio, FolioItem, PaymentMethod } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -112,7 +125,7 @@ const postCharge = () => run('charge', async () => {
   })
   charge.unitPrice = ''
   charge.description = ''
-  notice.value = 'Charge posted.'
+  notice.value = t('folio.noticeCharge')
 })
 
 const postPayment = () => run('payment', async () => {
@@ -122,7 +135,7 @@ const postPayment = () => run('payment', async () => {
   })
   payment.amount = ''
   payment.reference = ''
-  notice.value = 'Payment posted.'
+  notice.value = t('folio.noticePayment')
 })
 
 const postTransfer = () => run('transfer', async () => {
@@ -132,12 +145,12 @@ const postTransfer = () => run('transfer', async () => {
   })
   transfer.amount = ''
   transfer.reference = ''
-  notice.value = 'Transferred to the company\'s city ledger account.'
+  notice.value = t('folio.noticeTransfer')
 })
 
 const closeFolio = () => run('close', async () => {
   await api.POST('/api/v1/properties/{propertyId}/folios/{id}/close', { params: base(), body: { version: folio.value?.version ?? 0 } })
-  notice.value = 'Folio closed.'
+  notice.value = t('folio.noticeClosed')
 })
 
 function startAdjust(): void {
@@ -177,13 +190,13 @@ async function approve(approval: Approval): Promise<void> {
       })
       adjust.amount = ''
       adjust.reason = ''
-      notice.value = 'Adjustment posted.'
+      notice.value = t('folio.noticeAdjust')
     } else if (p.kind === 'reverse') {
       await api.POST('/api/v1/properties/{propertyId}/folio-items/{id}/reverse', { params: { path: { propertyId, id: p.item.id } }, body: { reason: correction.reason, approval } })
-      notice.value = 'Item reversed.'
+      notice.value = t('folio.noticeReverse')
     } else if (p.kind === 'void') {
       await api.POST('/api/v1/properties/{propertyId}/payments/{id}/void', { params: { path: { propertyId, id: p.item.payment_id as number } }, body: { reason: correction.reason, approval } })
-      notice.value = 'Payment voided.'
+      notice.value = t('folio.noticeVoid')
     } else {
       await api.POST('/api/v1/properties/{propertyId}/payments/{id}/refunds', {
         params: { path: { propertyId, id: p.item.payment_id as number }, header: { 'Idempotency-Key': keyFor(`refund-${p.item.id}`) } },
@@ -196,7 +209,7 @@ async function approve(approval: Approval): Promise<void> {
         },
       })
       delete keys[`refund-${p.item.id}`]
-      notice.value = 'Refund posted.'
+      notice.value = t('folio.noticeRefund')
     }
     delete keys.adjust
     pending.value = null
@@ -218,13 +231,34 @@ const isTransfer = (i: FolioItem) => i.description.includes('(CITY_LEDGER)')
 const refundable = (i: FolioItem) => isOpen.value && can('payment.refund') && i.transaction_type === 'PAYMENT' && !i.reversed_by_item_id && !isTransfer(i)
 const dialogTitle = computed(() => {
   switch (pending.value?.kind) {
-    case 'adjust': return 'Approve adjustment'
-    case 'reverse': return 'Approve reversal'
-    case 'void': return 'Approve void'
-    case 'refund': return 'Approve refund'
+    case 'adjust': return t('folio.approveAdjust')
+    case 'reverse': return t('folio.approveReverse')
+    case 'void': return t('folio.approveVoid')
+    case 'refund': return t('folio.approveRefund')
     default: return ''
   }
 })
+
+const methodLabel = (m: string): string => t(`cashier.${m}` as never)
+
+const itemColumns = computed<Column<FolioItem>[]>(() => [
+  { key: 'business_date', label: t('folio.date') },
+  { key: 'description', label: t('folio.description') },
+  { key: 'charge_code', label: t('folio.code') },
+  { key: 'debit', label: t('folio.debit'), align: 'right', class: 'tabular-nums' },
+  { key: 'credit', label: t('folio.credit'), align: 'right', class: 'tabular-nums' },
+  { key: 'actions', label: '', align: 'right' },
+])
+
+// The posting forms, one tab each, only for what the role may do. All forms stay in the page (hidden when not chosen).
+const postTab = ref('')
+const postTabs = computed(() => [
+  ...(can('folio.post_charge') ? [{ value: 'charge', label: t('folio.tabCharge') }] : []),
+  ...(can('payment.post') ? [{ value: 'payment', label: t('folio.tabPayment') }] : []),
+  ...(can('cityledger.transfer') ? [{ value: 'transfer', label: t('folio.tabTransfer') }] : []),
+  ...(can('folio.adjust') ? [{ value: 'adjust', label: t('folio.tabAdjust') }] : []),
+])
+const activeTab = computed(() => (postTabs.value.some((x) => x.value === postTab.value) ? postTab.value : (postTabs.value[0]?.value ?? '')))
 
 const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
 
@@ -241,259 +275,230 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Folio <span v-if="folio">{{ folio.folio_number }}</span></h1>
-    <div class="links">
-      <RouterLink v-if="folio" :to="`/reservations/${folio.reservation_id}`">Reservation</RouterLink>
-      <RouterLink to="/folios">Folios</RouterLink>
-    </div>
-  </div>
+  <PageHeader :title="`${t('folio.title')}${folio ? ` ${folio.folio_number}` : ''}`">
+    <template v-if="folio" #marks>
+      <StatusBadge domain="record" :status="folio.status" data-testid="folio-status" />
+    </template>
+    <template #actions>
+      <Button v-if="folio" as-child variant="outline" size="sm">
+        <RouterLink :to="`/reservations/${folio.reservation_id}`">{{ t('folio.reservation') }}</RouterLink>
+      </Button>
+      <Button as-child variant="outline" size="sm">
+        <RouterLink to="/folios">{{ t('folio.foliosLink') }}</RouterLink>
+      </Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">Your role at this property does not allow viewing folios.</p>
+  <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
+  <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">{{ t('folio.noAccess') }}</p>
 
   <template v-else-if="folio">
-    <section class="card summary" data-testid="summary">
-      <span class="badge" :class="folio.status.toLowerCase()" data-testid="folio-status">{{ folio.status }}</span>
-      <span>Debit <strong data-testid="debit">{{ folio.totals.debit }}</strong></span>
-      <span>Credit <strong data-testid="credit">{{ folio.totals.credit }}</strong></span>
-      <span>Balance <strong data-testid="balance" class="balance">{{ folio.balance }}</strong></span>
-      <button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" type="button" :disabled="busy" data-testid="close" @click="closeFolio">Close folio</button>
-      <button v-if="canPrint && pid !== null" type="button" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id))">{{ isOpen ? 'Print bill' : 'Print invoice' }}</button>
-    </section>
-
-    <section class="card">
-      <table class="list" data-testid="items">
-        <thead><tr><th>Date</th><th>Description</th><th>Code</th><th class="num">Debit</th><th class="num">Credit</th><th /></tr></thead>
-        <tbody>
-          <template v-for="i in folio.items" :key="i.id">
-            <tr :data-testid="`item-${i.id}`" :class="{ struck: i.reversed_by_item_id }">
-              <td>{{ i.business_date }}</td>
-              <td>
-                <button type="button" class="link" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
-                <small class="muted"> {{ i.transaction_type }}</small>
-              </td>
-              <td>{{ i.charge_code }}</td>
-              <td class="num">{{ i.debit }}</td>
-              <td class="num">{{ i.credit }}</td>
-              <td class="row-actions">
-                <button v-if="reversible(i)" type="button" :data-testid="`reverse-${i.id}`" @click="startCorrection('reverse', i)">Reverse</button>
-                <button v-if="voidable(i)" type="button" :data-testid="`void-${i.id}`" @click="startCorrection('void', i)">Void</button>
-                <button v-if="refundable(i)" type="button" :data-testid="`refund-${i.id}`" @click="startCorrection('refund', i)">Refund</button>
-                <button v-if="i.payment_id && canPrint && pid !== null" type="button" :data-testid="`receipt-${i.id}`" @click="print(documentPath.receipt(pid, i.payment_id))">Receipt</button>
-              </td>
-            </tr>
-            <tr v-if="open === i.id" class="detail" :data-testid="`detail-${i.id}`">
-              <td colspan="6">
-                <span class="muted">{{ i.quantity }} x {{ i.unit_price }} ({{ i.price_mode.toLowerCase() }}) · net {{ i.net_amount }}<template v-if="i.reason"> · {{ i.reason }}</template></span>
-                <ul v-if="i.components.length" class="comps">
-                  <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ c.name }} {{ c.rate }}% on {{ c.base_amount }} = {{ c.amount }}</li>
-                </ul>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <p v-if="!folio.items.length" class="muted" data-testid="empty">Nothing is posted to this folio yet.</p>
-    </section>
-
-    <form v-if="pending && pending.kind !== 'adjust' && !approving" class="card" novalidate data-testid="correction-form" @submit.prevent="approving = true">
-      <h2>{{ pending.kind === 'reverse' ? 'Reverse' : pending.kind === 'void' ? 'Void' : 'Refund' }}: {{ pending.item.description }}</h2>
-      <div class="form-grid">
-        <label v-if="pending.kind === 'refund'" class="field">
-          <span>Amount</span>
-          <input v-model="correction.amount" name="refund_amount" inputmode="decimal" />
-        </label>
-        <label v-if="pending.kind === 'refund'" class="field">
-          <span>Refund by</span>
-          <select v-model="correction.method" name="refund_method" data-testid="refund-method">
-            <option v-for="m in refundMethods" :key="m" :value="m">{{ m }}</option>
-          </select>
-          <small class="muted">The property decides which methods a refund may leave by (Setup → Properties). The day close books it to the account of the method chosen.</small>
-        </label>
-        <label v-if="pending.kind === 'refund'" class="field">
-          <span>Reference (optional)</span>
-          <input v-model="correction.reference" name="refund_reference" maxlength="100" />
-        </label>
-        <label class="field">
-          <span>Reason</span>
-          <input v-model="correction.reason" name="reason" maxlength="500" />
-        </label>
+    <!-- the totals stay in view while the ledger scrolls -->
+    <Card class="sticky top-[3.75rem] z-20 mb-4 flex flex-wrap items-center gap-x-8 gap-y-2 px-5 py-3" data-testid="summary">
+      <div>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('folio.debit') }}</p>
+        <p class="m-0 font-semibold tabular-nums"><span data-testid="debit">{{ folio.totals.debit }}</span></p>
       </div>
-      <div class="form-actions">
-        <button type="button" @click="cancelCorrection">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!correction.reason.trim()">Continue to approval</button>
+      <div>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('folio.credit') }}</p>
+        <p class="m-0 font-semibold tabular-nums"><span data-testid="credit">{{ folio.totals.credit }}</span></p>
       </div>
-    </form>
+      <div>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('folio.balance') }}</p>
+        <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ folio.balance }}</span></p>
+      </div>
+      <div class="ml-auto flex flex-wrap gap-2">
+        <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
+        <Button v-if="canPrint && pid !== null" variant="outline" size="sm" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id))">
+          <Printer />{{ isOpen ? t('folio.printBill') : t('folio.printInvoice') }}
+        </Button>
+      </div>
+    </Card>
+
+    <Card class="mb-4" data-testid="items">
+      <DataTable
+        :columns="itemColumns"
+        :rows="folio.items"
+        row-key="id"
+        :row-test-id="(i) => `item-${i.id}`"
+        :row-class="(i) => (i.reversed_by_item_id ? 'struck text-muted-foreground line-through' : undefined)"
+        :is-expanded="(i) => open === i.id"
+        :detail-test-id="(i) => `detail-${i.id}`"
+        :caption="t('folio.title')"
+      >
+        <template #cell-description="{ row: i }">
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
+          <small class="ml-1 text-muted-foreground">{{ i.transaction_type }}</small>
+        </template>
+        <template #cell-debit="{ row: i }"><span :class="Number(i.debit) === 0 && 'text-muted-foreground'">{{ i.debit }}</span></template>
+        <template #cell-credit="{ row: i }"><span :class="Number(i.credit) === 0 && 'text-muted-foreground'">{{ i.credit }}</span></template>
+        <template #cell-actions="{ row: i }">
+          <span class="inline-flex flex-wrap justify-end gap-1.5 no-underline">
+            <Button v-if="reversible(i)" variant="outline" size="sm" :data-testid="`reverse-${i.id}`" @click="startCorrection('reverse', i)">{{ t('folio.reverse') }}</Button>
+            <Button v-if="voidable(i)" variant="outline" size="sm" :data-testid="`void-${i.id}`" @click="startCorrection('void', i)">{{ t('folio.void') }}</Button>
+            <Button v-if="refundable(i)" variant="outline" size="sm" :data-testid="`refund-${i.id}`" @click="startCorrection('refund', i)">{{ t('folio.refund') }}</Button>
+            <Button v-if="i.payment_id && canPrint && pid !== null" variant="ghost" size="sm" :data-testid="`receipt-${i.id}`" @click="print(documentPath.receipt(pid, i.payment_id))">{{ t('folio.receipt') }}</Button>
+          </span>
+        </template>
+        <template #detail="{ row: i }">
+          <span class="text-sm text-muted-foreground">
+            {{ t('folio.detailLine', { quantity: i.quantity, unitPrice: i.unit_price, mode: i.price_mode.toLowerCase(), net: i.net_amount }) }}<template v-if="i.reason"> · {{ i.reason }}</template>
+          </span>
+          <ul v-if="i.components.length" class="m-0 mt-1 list-disc pl-5 text-sm">
+            <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ t('folio.componentLine', { name: c.name, rate: c.rate, base: c.base_amount, amount: c.amount }) }}</li>
+          </ul>
+        </template>
+        <template #empty><EmptyState :title="t('folio.nothing')" data-testid="empty" /></template>
+      </DataTable>
+    </Card>
+
+    <Card v-if="pending && pending.kind !== 'adjust' && !approving" class="mb-4 border-primary/50">
+      <form novalidate data-testid="correction-form" @submit.prevent="approving = true">
+        <CardHeader><CardTitle>{{ t(`folio.${pending.kind}` as never) }}: {{ pending.item.description }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <FormField v-if="pending.kind === 'refund'" :label="t('folio.amount')">
+              <template #default="{ id }"><Input :id="id" v-model="correction.amount" name="refund_amount" inputmode="decimal" /></template>
+            </FormField>
+            <FormField v-if="pending.kind === 'refund'" :label="t('folio.refundBy')" :hint="t('folio.refundByHint')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="correction.method" name="refund_method" data-testid="refund-method">
+                  <option v-for="m in refundMethods" :key="m" :value="m">{{ methodLabel(m) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="pending.kind === 'refund'" :label="t('folio.referenceOptional')">
+              <template #default="{ id }"><Input :id="id" v-model="correction.reference" name="refund_reference" maxlength="100" /></template>
+            </FormField>
+            <FormField :label="t('folio.reason')">
+              <template #default="{ id }"><Input :id="id" v-model="correction.reason" name="reason" maxlength="500" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="cancelCorrection">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="!correction.reason.trim()">{{ t('folio.continueApproval') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
 
     <ApprovalDialog v-if="approving && pending" :title="dialogTitle" :busy="busy" :error="dialogError" @approve="approve" @cancel="cancelCorrection" />
 
-    <template v-if="isOpen">
-      <form v-if="can('folio.post_charge')" class="card" novalidate data-testid="charge-form" @submit.prevent="postCharge">
-        <h2>Post a charge</h2>
-        <div class="form-grid">
-          <label class="field">
-            <span>Charge code</span>
-            <select v-model.number="charge.codeId" name="charge_code">
-              <option v-for="c in chargeCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-            </select>
-            <small v-if="fieldError('charge_code_id')" class="error-text">{{ fieldError('charge_code_id') }}</small>
-          </label>
-          <label class="field">
-            <span>Quantity</span>
-            <input v-model="charge.quantity" name="quantity" inputmode="decimal" :aria-invalid="!!fieldError('quantity')" />
-            <small v-if="fieldError('quantity')" class="error-text">{{ fieldError('quantity') }}</small>
-          </label>
-          <label class="field">
-            <span>Unit price (default when empty)</span>
-            <input v-model="charge.unitPrice" name="unit_price" inputmode="decimal" :aria-invalid="!!fieldError('unit_price')" />
-            <small v-if="fieldError('unit_price')" class="error-text">{{ fieldError('unit_price') }}</small>
-          </label>
-          <label class="field">
-            <span>Description</span>
-            <input v-model="charge.description" name="description" />
-          </label>
-        </div>
-        <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Post charge</button></div>
-      </form>
+    <Tabs v-if="isOpen && postTabs.length" :model-value="activeTab" @update:model-value="postTab = String($event)">
+      <TabsList data-testid="post-tabs">
+        <TabsTrigger v-for="tb in postTabs" :key="tb.value" :value="tb.value" :data-testid="`tab-${tb.value}`">{{ tb.label }}</TabsTrigger>
+      </TabsList>
 
-      <form v-if="can('payment.post')" class="card" novalidate data-testid="payment-form" @submit.prevent="postPayment">
-        <h2>Take a payment</h2>
-        <div class="form-grid">
-          <label class="field">
-            <span>Amount</span>
-            <input v-model="payment.amount" name="amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
-            <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-          </label>
-          <label class="field">
-            <span>Method</span>
-            <select v-model="payment.method" name="payment_method">
-              <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Reference</span>
-            <input v-model="payment.reference" name="reference" />
-          </label>
-        </div>
-        <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Post payment</button></div>
-      </form>
+      <TabsContent value="charge" force-mount :class="activeTab !== 'charge' && 'hidden'">
+        <Card v-if="can('folio.post_charge')">
+          <form novalidate data-testid="charge-form" @submit.prevent="postCharge">
+            <CardHeader><CardTitle>{{ t('folio.postChargeTitle') }}</CardTitle></CardHeader>
+            <CardContent>
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <FormField :label="t('folio.chargeCode')" :error="fieldError('charge_code_id')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model.number="charge.codeId" name="charge_code">
+                      <option v-for="c in chargeCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+                    </NativeSelect>
+                  </template>
+                </FormField>
+                <FormField :label="t('folio.quantity')" :error="fieldError('quantity')">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="charge.quantity" name="quantity" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <FormField :label="t('folio.unitPrice')" :error="fieldError('unit_price')">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="charge.unitPrice" name="unit_price" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <FormField :label="t('folio.description')">
+                  <template #default="{ id }"><Input :id="id" v-model="charge.description" name="description" /></template>
+                </FormField>
+              </div>
+              <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.postCharge') }}</Button></div>
+            </CardContent>
+          </form>
+        </Card>
+      </TabsContent>
 
-      <form v-if="can('cityledger.transfer') && isOpen" class="card" novalidate data-testid="transfer-form" @submit.prevent="postTransfer">
-        <h2>Transfer to a company (city ledger)</h2>
-        <p v-if="companiesDenied" class="muted" data-testid="transfer-denied">Choosing a company needs the <code>cityledger.read</code> or <code>reservation.read</code> permission too.</p>
-        <p v-else-if="!companies.length" class="muted" data-testid="transfer-none">There is no active company: add one under Setup → Companies.</p>
-        <div v-else class="form-grid">
-          <label class="field">
-            <span>Company</span>
-            <select v-model.number="transfer.companyId" name="transfer_company">
-              <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-            </select>
-            <small v-if="fieldError('company_id')" class="error-text">{{ fieldError('company_id') }}</small>
-          </label>
-          <label class="field">
-            <span>Amount (folio balance {{ folio?.balance }})</span>
-            <input v-model="transfer.amount" name="transfer_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
-            <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-          </label>
-          <label class="field">
-            <span>Reference (PO, voucher)</span>
-            <input v-model="transfer.reference" name="transfer_reference" />
-          </label>
-        </div>
-        <div v-if="companies.length" class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Transfer</button></div>
-      </form>
+      <TabsContent value="payment" force-mount :class="activeTab !== 'payment' && 'hidden'">
+        <Card v-if="can('payment.post')">
+          <form novalidate data-testid="payment-form" @submit.prevent="postPayment">
+            <CardHeader><CardTitle>{{ t('folio.takePaymentTitle') }}</CardTitle></CardHeader>
+            <CardContent>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <FormField :label="t('folio.amount')" :error="fieldError('amount')">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="payment.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <FormField :label="t('folio.method')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model="payment.method" name="payment_method">
+                      <option v-for="m in METHODS" :key="m" :value="m">{{ methodLabel(m) }}</option>
+                    </NativeSelect>
+                  </template>
+                </FormField>
+                <FormField :label="t('folio.reference')">
+                  <template #default="{ id }"><Input :id="id" v-model="payment.reference" name="reference" /></template>
+                </FormField>
+              </div>
+              <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.postPayment') }}</Button></div>
+            </CardContent>
+          </form>
+        </Card>
+      </TabsContent>
 
-      <form v-if="can('folio.adjust')" class="card" novalidate data-testid="adjust-form" @submit.prevent="startAdjust">
-        <h2>Adjustment (needs approval)</h2>
-        <div class="form-grid">
-          <label class="field">
-            <span>Charge code</span>
-            <select v-model.number="adjust.codeId" name="adjust_code">
-              <option v-for="c in adjustCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Amount (negative to credit)</span>
-            <input v-model="adjust.amount" name="adjust_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
-            <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-          </label>
-          <label class="field">
-            <span>Reason</span>
-            <input v-model="adjust.reason" name="adjust_reason" maxlength="500" />
-          </label>
-        </div>
-        <div class="form-actions"><button type="submit" :disabled="busy || !adjust.amount || !adjust.reason.trim()">Continue to approval</button></div>
-      </form>
-    </template>
+      <TabsContent value="transfer" force-mount :class="activeTab !== 'transfer' && 'hidden'">
+        <Card v-if="can('cityledger.transfer')">
+          <form novalidate data-testid="transfer-form" @submit.prevent="postTransfer">
+            <CardHeader><CardTitle>{{ t('folio.transferTitle') }}</CardTitle></CardHeader>
+            <CardContent>
+              <p v-if="companiesDenied" class="m-0 text-sm text-muted-foreground" data-testid="transfer-denied">{{ t('folio.transferDenied') }}</p>
+              <p v-else-if="!companies.length" class="m-0 text-sm text-muted-foreground" data-testid="transfer-none">{{ t('folio.transferNone') }}</p>
+              <div v-else class="grid gap-4 sm:grid-cols-3">
+                <FormField :label="t('folio.company')" :error="fieldError('company_id')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model.number="transfer.companyId" name="transfer_company">
+                      <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+                    </NativeSelect>
+                  </template>
+                </FormField>
+                <FormField :label="t('folio.transferAmount', { balance: folio?.balance ?? '' })" :error="fieldError('amount')">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="transfer.amount" name="transfer_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <FormField :label="t('folio.transferReference')">
+                  <template #default="{ id }"><Input :id="id" v-model="transfer.reference" name="transfer_reference" /></template>
+                </FormField>
+              </div>
+              <div v-if="companies.length" class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.transferButton') }}</Button></div>
+            </CardContent>
+          </form>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="adjust" force-mount :class="activeTab !== 'adjust' && 'hidden'">
+        <Card v-if="can('folio.adjust')">
+          <form novalidate data-testid="adjust-form" @submit.prevent="startAdjust">
+            <CardHeader><CardTitle>{{ t('folio.adjustTitle') }}</CardTitle></CardHeader>
+            <CardContent>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <FormField :label="t('folio.chargeCode')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model.number="adjust.codeId" name="adjust_code">
+                      <option v-for="c in adjustCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+                    </NativeSelect>
+                  </template>
+                </FormField>
+                <FormField :label="t('folio.adjustAmount')" :error="fieldError('amount')">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="adjust.amount" name="adjust_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <FormField :label="t('folio.reason')">
+                  <template #default="{ id }"><Input :id="id" v-model="adjust.reason" name="adjust_reason" maxlength="500" /></template>
+                </FormField>
+              </div>
+              <div class="mt-4 flex justify-end"><Button type="submit" variant="outline" :disabled="busy || !adjust.amount || !adjust.reason.trim()">{{ t('folio.continueApproval') }}</Button></div>
+            </CardContent>
+          </form>
+        </Card>
+      </TabsContent>
+    </Tabs>
   </template>
 </template>
-
-<style scoped>
-.links {
-  display: flex;
-  gap: 16px;
-}
-.summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: center;
-}
-.balance {
-  font-size: 18px;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.struck td {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-.struck .row-actions {
-  text-decoration: none;
-}
-.row-actions {
-  white-space: nowrap;
-  display: flex;
-  gap: 6px;
-}
-.detail td {
-  background: var(--accent-soft);
-}
-.comps {
-  margin: 4px 0 0;
-  padding-left: 18px;
-}
-.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  text-decoration: underline;
-  text-align: left;
-}
-.badge {
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  background: var(--accent-soft);
-}
-.badge.closed {
-  background: #eef0f3;
-}
-</style>

@@ -2,6 +2,10 @@
 import { onMounted, ref } from 'vue'
 import type { ApiError } from '@/api/problem'
 import type { Approval } from '@/api/types'
+import FormField from '@/components/app/FormField.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -20,9 +24,9 @@ const emit = defineEmits<{ approve: [approval: Approval]; cancel: [] }>()
 const auth = useAuthStore()
 const email = ref(auth.me?.user.email ?? '')
 const password = ref('')
-const passwordInput = ref<HTMLInputElement | null>(null)
+const passwordBox = ref<{ $el: HTMLInputElement } | null>(null)
 
-onMounted(() => passwordInput.value?.focus())
+onMounted(() => passwordBox.value?.$el.focus())
 
 function submit(): void {
   const approval = { email: email.value.trim(), password: password.value }
@@ -37,39 +41,31 @@ function cancel(): void {
 </script>
 
 <template>
-  <div class="overlay" @keydown.esc="cancel">
-    <form class="dialog card" role="dialog" aria-modal="true" aria-labelledby="approval-title" novalidate data-testid="approval-dialog" @submit.prevent="submit">
-      <h2 id="approval-title">{{ title }}</h2>
-      <p class="muted">{{ message ?? 'A correction needs an approval. Enter the approver\'s own email and password.' }}</p>
+  <div class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" @keydown.esc="cancel">
+    <form
+      class="w-full max-w-md rounded-xl border border-border bg-card p-5 text-card-foreground shadow-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="approval-title"
+      novalidate
+      data-testid="approval-dialog"
+      @submit.prevent="submit"
+    >
+      <h2 id="approval-title" class="m-0 text-base font-semibold">{{ title }}</h2>
+      <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ message ?? t('approval.message') }}</p>
       <p v-if="error" class="alert" role="alert" data-testid="approval-error">{{ error.message }} <code>{{ error.code }}</code></p>
-      <label class="field">
-        <span>Approver email</span>
-        <input v-model="email" name="approval_email" type="email" autocomplete="off" />
-      </label>
-      <label class="field">
-        <span>Approver password</span>
-        <input ref="passwordInput" v-model="password" name="approval_password" type="password" autocomplete="off" />
-      </label>
-      <div class="form-actions">
-        <button type="button" data-testid="approval-cancel" @click="cancel">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || !email || !password" data-testid="approval-submit">Approve</button>
+      <div class="flex flex-col gap-3">
+        <FormField :label="t('approval.email')">
+          <template #default="{ id }"><Input :id="id" v-model="email" name="approval_email" type="email" autocomplete="off" /></template>
+        </FormField>
+        <FormField :label="t('approval.password')">
+          <template #default="{ id }"><Input :id="id" ref="passwordBox" v-model="password" name="approval_password" type="password" autocomplete="off" /></template>
+        </FormField>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <Button type="button" variant="outline" data-testid="approval-cancel" @click="cancel">{{ t('common.cancel') }}</Button>
+        <Button type="submit" :disabled="busy || !email || !password" data-testid="approval-submit">{{ t('approval.approve') }}</Button>
       </div>
     </form>
   </div>
 </template>
-
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 0.4);
-  display: grid;
-  place-items: center;
-  z-index: 50;
-  padding: 16px;
-}
-.dialog {
-  width: min(420px, 100%);
-  margin: 0;
-}
-</style>

@@ -38,8 +38,11 @@ const props = withDefaults(
     rowTestId?: (row: T) => string
     /** Extra classes for a row (a voided payment struck through). */
     rowClass?: (row: T) => string | undefined
+    /** Rows for which the `detail` slot is shown in a row of its own under them. */
+    isExpanded?: (row: T) => boolean
+    detailTestId?: (row: T) => string
   }>(),
-  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined },
+  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined, isExpanded: undefined, detailTestId: undefined },
 )
 const emit = defineEmits<{ rowClick: [row: T] }>()
 defineOptions({ inheritAttrs: false })
@@ -127,9 +130,8 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
           </tr>
         </template>
         <template v-else>
+          <template v-for="row in sorted" :key="keyOf(row)">
           <tr
-            v-for="row in sorted"
-            :key="keyOf(row)"
             :data-testid="rowTestId?.(row)"
             :tabindex="clickable ? 0 : undefined"
             :class="cn('border-b border-border hover:bg-accent/50', clickable && 'cursor-pointer', rowClass?.(row))"
@@ -142,6 +144,10 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
               </slot>
             </td>
           </tr>
+          <tr v-if="isExpanded?.(row)" class="border-b border-border bg-muted/40" :data-testid="detailTestId?.(row)">
+            <td :colspan="columns.length" class="px-3 py-2.5"><slot name="detail" :row="row" /></td>
+          </tr>
+          </template>
         </template>
       </tbody>
     </table>
