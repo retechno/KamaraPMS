@@ -158,3 +158,30 @@ SELECT count(*)::int AS open_now,
        COALESCE(floor(max(extract(epoch FROM (now() - reported_at))) / 3600), 0)::int AS oldest_hours
 FROM maintenance_requests
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND status IN ('OPEN', 'IN_PROGRESS');
+
+-- Active rooms by housekeeping status, for the dashboard.
+-- name: DashboardRoomStatus :many
+SELECT h.status::text AS status, count(*)::int AS rooms
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
+GROUP BY h.status;
+
+-- Rooms sold per night ahead, whatever their type: sellable rooms (active, not blocked) against the rooms held by
+-- confirmed lines and open stays (the same demand as the availability inventory).
+-- name: DashboardForecast :many
+SELECT d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    ((SELECT count(*) FROM reservation_rooms l
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS booked
+FROM unnest(@dates::text[]) AS d (night)
+ORDER BY d.night;

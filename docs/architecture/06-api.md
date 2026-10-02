@@ -611,6 +611,7 @@ Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.a
 | `GET/POST {P}/lost-found`, `GET/PATCH {P}/lost-found/{id}` | read and record: `lostfound.report`; PATCH: `lostfound.manage` | Filters `status`, `category`, `room_id`, `found_from`, `found_to`, `q` |
 | `GET {P}/lost-found/{id}/possible-owners` | `lostfound.report` + `reservation.read` | Guests of the room around the day it was found |
 | `POST {P}/lost-found/{id}/return`, `/dispose` | `lostfound.manage` | Final; 409 `ITEM_NOT_STORED`; return needs `claimant_name`, dispose needs `reason` |
+| `GET {P}/dashboard` | `report.view` | The manager dashboard of the open business day: `today` (live summary), `movements`, `rooms` (housekeeping), `trend` (last 14 closed days), `month_to_date` and `previous_month`, `forecast` (next 14 nights). JSON only |
 | `GET {P}/reports/housekeeping-productivity`, `/housekeeping-dirty-rooms`, `/maintenance` | `report.view` | JSON or `?format=csv`; the first and the last take `from` and `to`, the second `min_hours` |
 
 ## 19. Accounting (after M15)

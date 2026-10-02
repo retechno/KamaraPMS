@@ -347,3 +347,46 @@ func TestSafeCellNeutralisesFormulas(t *testing.T) {
 		t.Fatalf("csv: %s", sb.String())
 	}
 }
+
+func TestDashboard(t *testing.T) {
+	f := setup(t)
+	f.stay(t, f.r101, "2026-10-02")
+	dash, err := f.Reports.Dashboard(f.admin, f.propID)
+	must(t, err)
+	if dash.BusinessDate != d("2026-09-30") || dash.Today == nil || dash.Today.Rooms.Occupied != 1 {
+		t.Fatalf("today: %+v", dash.Today)
+	}
+	if m := dash.Movements; m.InHouse != 1 || m.ArrivalsCheckedIn != 1 || m.ArrivalsExpected != 0 || m.DeparturesExpected != 0 || m.InHouseBalance != "0" {
+		t.Fatalf("movements: %+v", m)
+	}
+	if n := dash.Rooms.Clean + dash.Rooms.Dirty + dash.Rooms.Cleaning + dash.Rooms.Inspected; n != 2 {
+		t.Fatalf("room statuses: %+v", dash.Rooms)
+	}
+	if len(dash.Forecast) != reports.ForecastDays || dash.Forecast[0].Booked != 1 || dash.Forecast[0].Sellable != 2 || dash.Forecast[0].OccupancyPercent != "50.00" ||
+		dash.Forecast[1].Booked != 1 || dash.Forecast[2].Booked != 0 {
+		t.Fatalf("forecast: %+v", dash.Forecast)
+	}
+	if len(dash.Trend) != 0 || dash.MonthToDate.Days != 0 {
+		t.Fatalf("nothing is closed yet: %+v %+v", dash.Trend, dash.MonthToDate)
+	}
+
+	// After two night audits: 30 Sep and 1 Oct are closed, today is 2 Oct and the stay leaves today.
+	f.audit(t)
+	f.audit(t)
+	dash, err = f.Reports.Dashboard(f.admin, f.propID)
+	must(t, err)
+	if dash.BusinessDate != d("2026-10-02") || len(dash.Trend) != 2 || dash.Trend[0].BusinessDate != d("2026-09-30") {
+		t.Fatalf("trend: %+v", dash.Trend)
+	}
+	if dash.MonthToDate.Days != 1 || dash.MonthToDate.RoomRevenue == "0" || dash.PreviousMonth.Days != 0 { // 1 Sep was not a business day here
+		t.Fatalf("month: %+v previous %+v", dash.MonthToDate, dash.PreviousMonth)
+	}
+	if dash.Movements.DeparturesExpected != 1 || dash.Movements.InHouse != 1 {
+		t.Fatalf("movements on the departure day: %+v", dash.Movements)
+	}
+
+	// report.view is needed
+	clerk := f.User(t, f.tenantID, f.propID, auth.PermFolioRead)
+	_, err = f.Reports.Dashboard(clerk, f.propID)
+	wantCode(t, err, "PERMISSION_DENIED")
+}

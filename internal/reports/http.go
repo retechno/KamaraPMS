@@ -42,6 +42,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/departures", httpx.HandlerFunc(h.dated(func(r *http.Request, pid int64, d civil.Date) (any, error) {
 		return h.svc.Departures(r.Context(), pid, d)
 	})))
+	mux.Handle("GET /api/v1/properties/{propertyId}/dashboard", httpx.HandlerFunc(h.plain(func(r *http.Request, pid int64) (any, error) { return h.svc.Dashboard(r.Context(), pid) })))
 	mux.Handle("GET "+p+"/in-house", httpx.HandlerFunc(h.plain(func(r *http.Request, pid int64) (any, error) { return h.svc.InHouse(r.Context(), pid) })))
 	mux.Handle("GET "+p+"/housekeeping-productivity", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
 		return h.svc.HousekeepingProductivity(r.Context(), pid, f, t)

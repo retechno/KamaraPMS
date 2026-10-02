@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { usePropertyStore } from '@/stores/property'
 import { useSystemStore, type ComponentStatus } from '@/stores/system'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
+import ManagerDashboard from '@/views/dashboard/ManagerDashboard.vue'
 
 const system = useSystemStore()
 const property = usePropertyStore()
@@ -22,6 +23,8 @@ const label: Record<ComponentStatus, string> = { unknown: 'Unknown', up: 'Operat
 
 <template>
   <h1>Dashboard</h1>
+
+  <ManagerDashboard />
 
   <section v-if="property.clock && property.current" class="card" data-testid="business-day-card">
     <h2>Business day · {{ property.current.name }}</h2>

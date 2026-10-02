@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.35.0
+  version: 0.36.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2111,6 +2111,22 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/dashboard:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getDashboard
+      summary: The manager dashboard of the open business day (report.view)
+      description: "One read of what the reports show: the open day live, the front desk's work left, housekeeping, the last 14 closed days, the month against the one before, and the next 14 nights. No writes, no locks."
+      tags: [reports]
+      responses:
+        "200":
+          description: The dashboard.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reports/daily-summary:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -7427,6 +7443,35 @@ components:
               refunds: { $ref: "#/components/schemas/Amount" }
               net: { $ref: "#/components/schemas/Amount" }
         net: { $ref: "#/components/schemas/Amount" }
+    StatisticsDay:
+      type: object
+      required: [business_date, rooms_total, rooms_out_of_order, rooms_sellable, rooms_occupied, room_nights_sold, arrivals, departures, no_shows, room_revenue, occupancy_percent, adr, revpar]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        rooms_total: { type: integer }
+        rooms_out_of_order: { type: integer }
+        rooms_sellable: { type: integer }
+        rooms_occupied: { type: integer }
+        room_nights_sold: { type: integer }
+        arrivals: { type: integer }
+        departures: { type: integer }
+        no_shows: { type: integer }
+        room_revenue: { $ref: "#/components/schemas/Amount" }
+        occupancy_percent: { type: string }
+        adr: { $ref: "#/components/schemas/Amount" }
+        revpar: { $ref: "#/components/schemas/Amount" }
+    StatisticsTotals:
+      type: object
+      required: [days, available_room_nights, occupied_room_nights, room_nights_sold, room_revenue, occupancy_percent, adr, revpar]
+      properties:
+        days: { type: integer }
+        available_room_nights: { type: integer }
+        occupied_room_nights: { type: integer }
+        room_nights_sold: { type: integer }
+        room_revenue: { $ref: "#/components/schemas/Amount" }
+        occupancy_percent: { type: string }
+        adr: { $ref: "#/components/schemas/Amount" }
+        revpar: { $ref: "#/components/schemas/Amount" }
     StatisticsReport:
       type: object
       required: [from, to, days, totals]
@@ -7435,35 +7480,54 @@ components:
         to: { $ref: "#/components/schemas/Date" }
         days:
           type: array
+          items: { $ref: "#/components/schemas/StatisticsDay" }
+        totals: { $ref: "#/components/schemas/StatisticsTotals" }
+    Dashboard:
+      type: object
+      required: [business_date, today, movements, rooms, trend, month_to_date, previous_month, forecast]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        today:
+          description: The open day computed live (the closing summary it will get).
+          oneOf:
+            - { $ref: "#/components/schemas/NightAuditSummary" }
+            - { type: "null" }
+        movements:
+          type: object
+          required: [arrivals_expected, arrivals_checked_in, departures_expected, departures_checked_out, in_house, in_house_balance]
+          properties:
+            arrivals_expected: { type: integer, description: Rooms arriving today that are not checked in yet. }
+            arrivals_checked_in: { type: integer }
+            departures_expected: { type: integer, description: Stays leaving today that are still open. }
+            departures_checked_out: { type: integer }
+            in_house: { type: integer }
+            in_house_balance: { $ref: "#/components/schemas/Amount", description: What the stays in house owe on their folios now. }
+        rooms:
+          type: object
+          required: [clean, dirty, cleaning, inspected]
+          description: Active rooms by housekeeping status.
+          properties:
+            clean: { type: integer }
+            dirty: { type: integer }
+            cleaning: { type: integer }
+            inspected: { type: integer }
+        trend:
+          type: array
+          description: The last 14 closed days, oldest first.
+          items: { $ref: "#/components/schemas/StatisticsDay" }
+        month_to_date: { $ref: "#/components/schemas/StatisticsTotals", description: The closed days of the current month. }
+        previous_month: { $ref: "#/components/schemas/StatisticsTotals", description: The same number of days of the month before. }
+        forecast:
+          type: array
+          description: The next 14 nights, today first.
           items:
             type: object
-            required: [business_date, rooms_total, rooms_out_of_order, rooms_sellable, rooms_occupied, room_nights_sold, arrivals, departures, no_shows, room_revenue, occupancy_percent, adr, revpar]
+            required: [date, rooms_sellable, rooms_booked, occupancy_percent]
             properties:
-              business_date: { $ref: "#/components/schemas/Date" }
-              rooms_total: { type: integer }
-              rooms_out_of_order: { type: integer }
+              date: { $ref: "#/components/schemas/Date" }
               rooms_sellable: { type: integer }
-              rooms_occupied: { type: integer }
-              room_nights_sold: { type: integer }
-              arrivals: { type: integer }
-              departures: { type: integer }
-              no_shows: { type: integer }
-              room_revenue: { $ref: "#/components/schemas/Amount" }
+              rooms_booked: { type: integer, description: Rooms held by confirmed reservations and open stays. }
               occupancy_percent: { type: string }
-              adr: { $ref: "#/components/schemas/Amount" }
-              revpar: { $ref: "#/components/schemas/Amount" }
-        totals:
-          type: object
-          required: [days, available_room_nights, occupied_room_nights, room_nights_sold, room_revenue, occupancy_percent, adr, revpar]
-          properties:
-            days: { type: integer }
-            available_room_nights: { type: integer }
-            occupied_room_nights: { type: integer }
-            room_nights_sold: { type: integer }
-            room_revenue: { $ref: "#/components/schemas/Amount" }
-            occupancy_percent: { type: string }
-            adr: { $ref: "#/components/schemas/Amount" }
-            revpar: { $ref: "#/components/schemas/Amount" }
     StayListReport:
       type: object
       required: [rows]

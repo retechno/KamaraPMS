@@ -1709,6 +1709,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The manager dashboard of the open business day (report.view)
+         * @description One read of what the reports show: the open day live, the front desk's work left, housekeeping, the last 14 closed days, the month against the one before, and the next 14 nights. No writes, no locks.
+         */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/daily-summary": {
         parameters: {
             query?: never;
@@ -6445,34 +6467,73 @@ export interface components {
             }[];
             net: components["schemas"]["Amount"];
         };
+        StatisticsDay: {
+            business_date: components["schemas"]["Date"];
+            rooms_total: number;
+            rooms_out_of_order: number;
+            rooms_sellable: number;
+            rooms_occupied: number;
+            room_nights_sold: number;
+            arrivals: number;
+            departures: number;
+            no_shows: number;
+            room_revenue: components["schemas"]["Amount"];
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+        };
+        StatisticsTotals: {
+            days: number;
+            available_room_nights: number;
+            occupied_room_nights: number;
+            room_nights_sold: number;
+            room_revenue: components["schemas"]["Amount"];
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+        };
         StatisticsReport: {
             from: components["schemas"]["Date"];
             to: components["schemas"]["Date"];
-            days: {
-                business_date: components["schemas"]["Date"];
-                rooms_total: number;
-                rooms_out_of_order: number;
-                rooms_sellable: number;
-                rooms_occupied: number;
-                room_nights_sold: number;
-                arrivals: number;
-                departures: number;
-                no_shows: number;
-                room_revenue: components["schemas"]["Amount"];
-                occupancy_percent: string;
-                adr: components["schemas"]["Amount"];
-                revpar: components["schemas"]["Amount"];
-            }[];
-            totals: {
-                days: number;
-                available_room_nights: number;
-                occupied_room_nights: number;
-                room_nights_sold: number;
-                room_revenue: components["schemas"]["Amount"];
-                occupancy_percent: string;
-                adr: components["schemas"]["Amount"];
-                revpar: components["schemas"]["Amount"];
+            days: components["schemas"]["StatisticsDay"][];
+            totals: components["schemas"]["StatisticsTotals"];
+        };
+        Dashboard: {
+            business_date: components["schemas"]["Date"];
+            /** @description The open day computed live (the closing summary it will get). */
+            today: components["schemas"]["NightAuditSummary"] | null;
+            movements: {
+                /** @description Rooms arriving today that are not checked in yet. */
+                arrivals_expected: number;
+                arrivals_checked_in: number;
+                /** @description Stays leaving today that are still open. */
+                departures_expected: number;
+                departures_checked_out: number;
+                in_house: number;
+                /** @description What the stays in house owe on their folios now. */
+                in_house_balance: components["schemas"]["Amount"];
             };
+            /** @description Active rooms by housekeeping status. */
+            rooms: {
+                clean: number;
+                dirty: number;
+                cleaning: number;
+                inspected: number;
+            };
+            /** @description The last 14 closed days, oldest first. */
+            trend: components["schemas"]["StatisticsDay"][];
+            /** @description The closed days of the current month. */
+            month_to_date: components["schemas"]["StatisticsTotals"];
+            /** @description The same number of days of the month before. */
+            previous_month: components["schemas"]["StatisticsTotals"];
+            /** @description The next 14 nights, today first. */
+            forecast: {
+                date: components["schemas"]["Date"];
+                rooms_sellable: number;
+                /** @description Rooms held by confirmed reservations and open stays. */
+                rooms_booked: number;
+                occupancy_percent: string;
+            }[];
         };
         StayListReport: {
             date?: components["schemas"]["Date"];
@@ -11070,6 +11131,30 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The dashboard. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getDailySummaryReport: {
