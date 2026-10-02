@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -7,6 +7,9 @@ import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import FolioView from './FolioView.vue'
+
+// The approval dialog is rendered in a portal on the body, not inside the wrapper.
+const dlg = (sel: string) => new DOMWrapper(document.body.querySelector(sel) as Element)
 
 let GET = vi.fn()
 let POST = vi.fn()
@@ -53,6 +56,7 @@ function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiE
 
 describe('FolioView', () => {
   beforeEach(() => {
+    document.body.innerHTML = ''
     GET = vi.fn()
     POST = vi.fn()
     openPdf = vi.fn().mockResolvedValue(undefined)
@@ -122,29 +126,29 @@ describe('FolioView', () => {
     const w = mountView()
     await flushPromises()
     await w.get('[data-testid=reverse-1]').trigger('click')
-    expect(w.find('[data-testid=approval-dialog]').exists()).toBe(false) // the reason comes first
+    expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(false) // the reason comes first
     expect(w.get('form[data-testid=correction-form] button[type=submit]').attributes('disabled')).toBeDefined()
     await w.get('input[name=reason]').setValue('posted twice')
     await w.get('form[data-testid=correction-form]').trigger('submit')
-    expect(w.find('[data-testid=approval-dialog]').exists()).toBe(true)
+    expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(true)
     expect(POST).not.toHaveBeenCalled()
 
     // a wrong password keeps the dialog open with the server's message
     POST.mockRejectedValueOnce(new ApiError({ type: 't', title: 'Unauthorized', status: 401, code: 'APPROVAL_INVALID_CREDENTIALS', detail: 'the approver email or password is incorrect' }))
-    await w.get('input[name=approval_password]').setValue('wrong')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('wrong')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=approval-error]').text()).toContain('APPROVAL_INVALID_CREDENTIALS')
-    expect(w.find('[data-testid=approval-dialog]').exists()).toBe(true)
+    expect(dlg('[data-testid=approval-error]').text()).toContain('APPROVAL_INVALID_CREDENTIALS')
+    expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(true)
 
     POST.mockResolvedValue({ data: {} })
-    await w.get('input[name=approval_password]').setValue('right')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('right')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/folio-items/{id}/reverse', {
       params: { path: { propertyId: 7, id: 1 } }, body: { reason: 'posted twice', approval: { email: 'clerk@hotel.com', password: 'right' } },
     }])
-    expect(w.find('[data-testid=approval-dialog]').exists()).toBe(false)
+    expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(false)
     expect(w.get('[data-testid=notice]').text()).toBe('Item reversed.')
   })
 
@@ -158,8 +162,8 @@ describe('FolioView', () => {
     await w.get('input[name=refund_reference]').setValue('KW-1')
     await w.get('input[name=reason]').setValue('goodwill')
     await w.get('form[data-testid=correction-form]').trigger('submit')
-    await w.get('input[name=approval_password]').setValue('pw')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('pw')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     const [path, init] = POST.mock.calls.at(-1) as [string, { params: { path: { id: number }; header: Record<string, string> }; body: object }]
     expect(path).toBe('/api/v1/properties/{propertyId}/payments/{id}/refunds')
@@ -185,9 +189,9 @@ describe('FolioView', () => {
     await w.get('input[name=adjust_amount]').setValue('-50000')
     await w.get('input[name=adjust_reason]').setValue('spilled')
     await w.get('form[data-testid=adjust-form]').trigger('submit')
-    expect(w.find('[data-testid=approval-dialog]').exists()).toBe(true)
-    await w.get('input[name=approval_password]').setValue('pw')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(true)
+    await dlg('input[name=approval_password]').setValue('pw')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     const [path, init] = POST.mock.calls.at(-1) as [string, { body: object }]
     expect(path).toBe('/api/v1/properties/{propertyId}/folios/{id}/adjustments')
@@ -353,10 +357,10 @@ describe('FolioView', () => {
     await w.get('[data-testid=reverse-1]').trigger('click')
     await w.get('input[name=reason]').setValue('dobel')
     await w.get('form[data-testid=correction-form]').trigger('submit')
-    expect(w.get('[data-testid=approval-dialog]').text()).toContain('Setujui reversal')
-    expect(w.get('[data-testid=approval-dialog]').text()).toContain('Kata sandi penyetuju')
-    await w.get('input[name=approval_password]').setValue('pw')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    expect(dlg('[data-testid=approval-dialog]').text()).toContain('Setujui reversal')
+    expect(dlg('[data-testid=approval-dialog]').text()).toContain('Kata sandi penyetuju')
+    await dlg('input[name=approval_password]').setValue('pw')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(w.get('[data-testid=notice]').text()).toBe('Item di-reverse.')
     setLocale('en')
@@ -396,9 +400,9 @@ describe('FolioView', () => {
     await w.get('input[name=adjust_reason]').setValue('too much')
     await w.get('form[data-testid=adjust-form]').trigger('submit')
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ADJUSTMENT_EXCEEDS_POSTED', detail: 'the credit is more than what the charge code has posted on this folio' }))
-    await w.get('input[name=approval_password]').setValue('pw')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('pw')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=approval-error]').text()).toContain('ADJUSTMENT_EXCEEDS_POSTED')
+    expect(dlg('[data-testid=approval-error]').text()).toContain('ADJUSTMENT_EXCEEDS_POSTED')
   })
 })

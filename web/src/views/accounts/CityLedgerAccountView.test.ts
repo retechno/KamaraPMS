@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -6,6 +6,9 @@ import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import CityLedgerAccountView from './CityLedgerAccountView.vue'
+
+// The approval dialog is rendered in a portal on the body, not inside the wrapper.
+const dlg = (sel: string) => new DOMWrapper(document.body.querySelector(sel) as Element)
 
 let GET = vi.fn()
 let POST = vi.fn()
@@ -64,6 +67,7 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'city
 
 describe('CityLedgerAccountView', () => {
   beforeEach(() => {
+    document.body.innerHTML = ''
     GET = vi.fn()
     POST = vi.fn()
     openPdf = vi.fn().mockResolvedValue(undefined)
@@ -111,8 +115,8 @@ describe('CityLedgerAccountView', () => {
     expect((w.get('[data-testid=void-continue]').element as HTMLButtonElement).disabled).toBe(true)
     await w.get('input[name=void_reason]').setValue('bounced')
     await w.get('[data-testid=void-continue]').trigger('click')
-    await w.get('input[name=approval_password]').setValue('secret')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void', {
       params: { path: { propertyId: 7, id: 31 } }, body: { reason: 'bounced', approval: { email: 'clerk@hotel.com', password: 'secret' } },
@@ -176,8 +180,8 @@ describe('CityLedgerAccountView', () => {
     await w.get('[data-testid=void-CINV000001]').trigger('click')
     await w.get('input[name=void_reason]').setValue('wrong company')
     await w.get('[data-testid=void-continue]').trigger('click')
-    await w.get('input[name=approval_password]').setValue('secret')
-    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void', {
       params: { path: { propertyId: 7, id: 51 } }, body: { reason: 'wrong company', approval: { email: 'clerk@hotel.com', password: 'secret' } },
