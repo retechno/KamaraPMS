@@ -1,116 +1,144 @@
+import type { Component } from 'vue'
+import { BedDouble, ConciergeBell, Landmark, MoonStar, Receipt, Settings } from 'lucide-vue-next'
+
 /**
- * Application navigation. Items become enabled as their milestone lands
- * (docs/architecture/07-milestones.md); until then they are shown disabled so
- * the shape of the product is visible from day one.
+ * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`, `nav.groups.<group>`),
+ * so the menu follows the language. An item shows to everyone unless it is `adminOnly`; what a person may do on the
+ * page is still decided by the page and the API.
  */
 export interface NavItem {
-  label: string
-  to?: string // route path when available
-  milestone: string
+  id: string
+  to: string
   adminOnly?: boolean // shown to tenant administrators only
+  group?: string // a sub-heading inside the section (finance)
 }
 
 export interface NavSection {
-  title: string
+  id: string
+  icon: Component
   items: NavItem[]
+  /** Open when the person has not chosen otherwise; the section of the current page is always open. */
+  defaultOpen?: boolean
 }
 
 export const navigation: NavSection[] = [
   {
-    title: 'Front office',
+    id: 'frontDesk',
+    icon: ConciergeBell,
+    defaultOpen: true,
     items: [
-      { label: 'Dashboard', to: '/', milestone: 'M0' },
-      { label: 'Guests', to: '/guests', milestone: 'M4' },
-      { label: 'Reservations', to: '/reservations', milestone: 'M8' },
-      { label: 'Groups', to: '/groups', milestone: 'S1' },
-      { label: 'Tape chart', to: '/reservations/tape', milestone: 'M8' },
-      { label: 'Arrivals', to: '/arrivals', milestone: 'M10' },
-      { label: 'Walk-in', to: '/walk-in', milestone: 'M10' },
-      { label: 'In-house', to: '/in-house', milestone: 'M10' },
-      { label: 'Departures', to: '/departures', milestone: 'M12' },
+      { id: 'dashboard', to: '/' },
+      { id: 'reservations', to: '/reservations' },
+      { id: 'tapeChart', to: '/reservations/tape' },
+      { id: 'arrivals', to: '/arrivals' },
+      { id: 'inHouse', to: '/in-house' },
+      { id: 'departures', to: '/departures' },
+      { id: 'walkIn', to: '/walk-in' },
+      { id: 'guests', to: '/guests' },
+      { id: 'groups', to: '/groups' },
     ],
   },
   {
-    title: 'Rooms',
+    id: 'rooms',
+    icon: BedDouble,
+    defaultOpen: true,
     items: [
-      { label: 'Room status', to: '/room-status', milestone: 'M10' },
-      { label: 'Housekeeping', to: '/housekeeping', milestone: 'M3' },
-      { label: 'Cleaning list', to: '/housekeeping/tasks', milestone: 'S2' },
-      { label: 'Maintenance', to: '/maintenance', milestone: 'S2' },
-      { label: 'Lost & found', to: '/lost-found', milestone: 'S2' },
-      { label: 'Room blocks', to: '/room-blocks', milestone: 'M3' },
+      { id: 'roomStatus', to: '/room-status' },
+      { id: 'housekeeping', to: '/housekeeping' },
+      { id: 'cleaningList', to: '/housekeeping/tasks' },
+      { id: 'maintenance', to: '/maintenance' },
+      { id: 'lostFound', to: '/lost-found' },
+      { id: 'roomBlocks', to: '/room-blocks' },
     ],
   },
   {
-    title: 'Billing',
+    id: 'billing',
+    icon: Receipt,
+    defaultOpen: true,
     items: [
-      { label: 'Folios', to: '/folios', milestone: 'M9' },
-      { label: 'Cashier', to: '/cashier', milestone: 'M9' },
-      { label: 'Room charges', to: '/room-charges', milestone: 'M11' },
-      { label: 'City ledger', to: '/city-ledger', milestone: 'S1' },
+      { id: 'folios', to: '/folios' },
+      { id: 'cashier', to: '/cashier' },
+      { id: 'roomCharges', to: '/room-charges' },
+      { id: 'cityLedger', to: '/city-ledger' },
     ],
   },
   {
-    title: 'Accounting',
+    id: 'endOfDay',
+    icon: MoonStar,
+    defaultOpen: true,
     items: [
-      { label: 'Chart of accounts', to: '/accounting/accounts', milestone: 'S3' },
-      { label: 'System accounts', to: '/accounting/mapping', milestone: 'S3' },
-      { label: 'Journals', to: '/accounting/journals', milestone: 'S3' },
-      { label: 'Periods', to: '/accounting/periods', milestone: 'S3' },
-      { label: 'Fiscal years', to: '/accounting/fiscal-years', milestone: 'S3' },
-      { label: 'Trial balance', to: '/accounting/trial-balance', milestone: 'S3' },
-      { label: 'General ledger', to: '/accounting/ledger', milestone: 'S3' },
-      { label: 'Income statement', to: '/accounting/income-statement', milestone: 'S3' },
-      { label: 'Balance sheet', to: '/accounting/balance-sheet', milestone: 'S3' },
-      { label: 'Control accounts', to: '/accounting/reconciliation', milestone: 'S3' },
+      { id: 'nightAudit', to: '/night-audit' },
+      { id: 'reports', to: '/reports' },
     ],
   },
   {
-    title: 'Payables',
+    id: 'finance',
+    icon: Landmark,
     items: [
-      { label: 'Suppliers', to: '/payables/suppliers', milestone: 'S3' },
-      { label: 'Supplier bills', to: '/payables/bills', milestone: 'S3' },
-      { label: 'Supplier payments', to: '/payables/payments', milestone: 'S3' },
-      { label: 'Payables aging', to: '/payables/aging', milestone: 'S3' },
+      { id: 'chartOfAccounts', to: '/accounting/accounts', group: 'accounting' },
+      { id: 'systemAccounts', to: '/accounting/mapping', group: 'accounting' },
+      { id: 'journals', to: '/accounting/journals', group: 'accounting' },
+      { id: 'periods', to: '/accounting/periods', group: 'accounting' },
+      { id: 'fiscalYears', to: '/accounting/fiscal-years', group: 'accounting' },
+      { id: 'trialBalance', to: '/accounting/trial-balance', group: 'accounting' },
+      { id: 'generalLedger', to: '/accounting/ledger', group: 'accounting' },
+      { id: 'incomeStatement', to: '/accounting/income-statement', group: 'accounting' },
+      { id: 'balanceSheet', to: '/accounting/balance-sheet', group: 'accounting' },
+      { id: 'controlAccounts', to: '/accounting/reconciliation', group: 'accounting' },
+      { id: 'suppliers', to: '/payables/suppliers', group: 'payables' },
+      { id: 'supplierBills', to: '/payables/bills', group: 'payables' },
+      { id: 'supplierPayments', to: '/payables/payments', group: 'payables' },
+      { id: 'payablesAging', to: '/payables/aging', group: 'payables' },
+      { id: 'filingProfiles', to: '/tax/profiles', group: 'tax' },
+      { id: 'taxReturns', to: '/tax/returns', group: 'tax' },
+      { id: 'taxOwed', to: '/tax/liability', group: 'tax' },
+      { id: 'bankAccounts', to: '/bank/accounts', group: 'bank' },
+      { id: 'bankStatements', to: '/bank/statements', group: 'bank' },
     ],
   },
   {
-    title: 'Tax',
+    id: 'setup',
+    icon: Settings,
     items: [
-      { label: 'Filing profiles', to: '/tax/profiles', milestone: 'S3' },
-      { label: 'Tax returns', to: '/tax/returns', milestone: 'S3' },
-      { label: 'Tax owed', to: '/tax/liability', milestone: 'S3' },
-    ],
-  },
-  {
-    title: 'Bank',
-    items: [
-      { label: 'Bank accounts', to: '/bank/accounts', milestone: 'S3' },
-      { label: 'Bank statements', to: '/bank/statements', milestone: 'S3' },
-    ],
-  },
-  {
-    title: 'End of day',
-    items: [
-      { label: 'Night audit', to: '/night-audit', milestone: 'M13' },
-      { label: 'Reports', to: '/reports', milestone: 'M14' },
-    ],
-  },
-  {
-    title: 'Setup',
-    items: [
-      { label: 'Properties', to: '/setup/properties', milestone: 'M1', adminOnly: true },
-      { label: 'Users', to: '/setup/users', milestone: 'M2', adminOnly: true },
-      { label: 'Roles', to: '/setup/roles', milestone: 'M2', adminOnly: true },
-      { label: 'Room types', to: '/setup/room-types', milestone: 'M3' },
-      { label: 'Rooms', to: '/setup/rooms', milestone: 'M3' },
-      { label: 'Taxes & service charges', to: '/setup/taxes', milestone: 'M5' },
-      { label: 'Charge codes', to: '/setup/charge-codes', milestone: 'M5' },
-      { label: 'Companies', to: '/setup/companies', milestone: 'S1' },
-      { label: 'Rate plans', to: '/setup/rate-plans', milestone: 'M7' },
-      { label: 'Rate grid', to: '/setup/rates', milestone: 'M7' },
-      { label: 'Yield rules', to: '/setup/yield-rules', milestone: 'S4' },
-      { label: 'Audit trail', to: '/audit', milestone: 'M15' },
+      { id: 'properties', to: '/setup/properties', adminOnly: true },
+      { id: 'users', to: '/setup/users', adminOnly: true },
+      { id: 'roles', to: '/setup/roles', adminOnly: true },
+      { id: 'roomTypes', to: '/setup/room-types' },
+      { id: 'roomsSetup', to: '/setup/rooms' },
+      { id: 'taxesService', to: '/setup/taxes' },
+      { id: 'chargeCodes', to: '/setup/charge-codes' },
+      { id: 'companies', to: '/setup/companies' },
+      { id: 'ratePlans', to: '/setup/rate-plans' },
+      { id: 'rateGrid', to: '/setup/rates' },
+      { id: 'yieldRules', to: '/setup/yield-rules' },
+      { id: 'auditTrail', to: '/audit' },
     ],
   },
 ]
+
+/** The sections a person sees: items for administrators only are left out, and a section left empty disappears. */
+export function visibleNavigation(isAdmin: boolean): NavSection[] {
+  return navigation
+    .map((s) => ({ ...s, items: s.items.filter((i) => !i.adminOnly || isAdmin) }))
+    .filter((s) => s.items.length > 0)
+}
+
+export interface ActiveNav {
+  section: NavSection
+  item: NavItem
+}
+
+/**
+ * The menu item a path belongs to: the one with the longest matching route, so `/reservations/tape` is the tape chart
+ * and `/reservations/12` a reservation. `/` matches only itself.
+ */
+export function activeNav(path: string, sections: NavSection[] = navigation): ActiveNav | null {
+  let best: ActiveNav | null = null
+  for (const section of sections) {
+    for (const item of section.items) {
+      const hit = item.to === '/' ? path === '/' : path === item.to || path.startsWith(`${item.to}/`)
+      if (hit && (!best || item.to.length > best.item.to.length)) best = { section, item }
+    }
+  }
+  return best
+}
