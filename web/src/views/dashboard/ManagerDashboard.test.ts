@@ -66,9 +66,9 @@ describe('ManagerDashboard', () => {
     await flushPromises()
     expect(w.get('[data-testid=month-adr]').text()).toContain('▲ 25.0%')
     expect(w.get('[data-testid=month-occupancy]').text()).toContain('▲ 50.0%')
-    expect(w.get('[data-testid=trend]').findAll('.col')).toHaveLength(2)
-    expect(w.get('[data-testid=forecast]').findAll('.col')).toHaveLength(2)
-    expect(w.get('[data-testid=trend] .fill').attributes('style')).toContain('height: 50%')
+    expect(w.get('[data-testid=trend]').findAll('[data-testid=trend-day]')).toHaveLength(2)
+    expect(w.get('[data-testid=forecast]').findAll('[data-testid=forecast-day]')).toHaveLength(2)
+    expect(w.get('[data-testid=trend-bar]').attributes('style')).toContain('height: 50%')
   })
 
   it('says so when nothing is closed yet', async () => {
