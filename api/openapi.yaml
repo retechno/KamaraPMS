@@ -1775,6 +1775,7 @@ paths:
       summary: Post a signed adjustment on the current business date (folio.adjust, needs approval)
       description: |
         Needs the `approval` block (docs 06-api.md §14.1). The engine runs on a signed amount, so taxes and service charges follow the sign. A replay of the same Idempotency-Key returns the stored item and does not ask for approval again.
+        **An adjustment corrects what is already posted on the folio.** The charge code must have a posted net above zero on this folio (its charges, adjustments and reversals added up; a reversed charge nets out): otherwise 409 `ADJUSTMENT_NOTHING_POSTED`, and the thing to do is post a charge. A credit cannot take that net below zero: 409 `ADJUSTMENT_EXCEEDS_POSTED` with `context.posted`. An increase of what is posted is allowed. A ROOM code is adjustable once the night audit (or the room charges screen) has posted room charges on the folio.
       tags: [folios]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }

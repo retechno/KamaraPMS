@@ -471,7 +471,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 **POST `{P}/folios/{id}/adjustments`** ⓘ (`folio.adjust`)
 - **Purpose:** an adjustment.
 - **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id?, approval }`
-- **Rules:** processed through the engine, with a signed base.
+- **Rules:** processed through the engine, with a signed base. **An adjustment corrects what is already posted on the folio:** the charge code needs a posted net above zero on this folio (its charges, adjustments and reversals added up, so a reversed charge nets out), else 409 `ADJUSTMENT_NOTHING_POSTED` (post a charge instead); a credit cannot take that net below zero, else 409 `ADJUSTMENT_EXCEEDS_POSTED` with `context.posted`. An increase of what is posted is allowed. The check runs under the folio row lock, so two credits cannot both fit. A ROOM code is adjustable once room charges are posted on the folio.
 - **TX:** as for charges
 
 **POST `{P}/folio-items/{id}/reverse`** (`folio.reverse`)

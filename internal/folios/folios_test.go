@@ -259,7 +259,8 @@ func TestApprovalVerification(t *testing.T) {
 	if !strings.Contains(entry, "approved_by") || !strings.Contains(entry, "actor") {
 		t.Fatalf("audit: %s", entry)
 	}
-	// tenant administrators approve everywhere
+	// tenant administrators approve everywhere (the first charge is credited in full by now: correct a second one)
+	f.charge(t, "c2")
 	must(t, mustErr(adjust(f.admin, "a3", f.approval())))
 }
 
@@ -288,15 +289,20 @@ func TestAdjustmentSignAndValidation(t *testing.T) {
 	if neg.FolioBalance != "0" || it.Components[1].Amount != "-12100" {
 		t.Fatalf("balance and components: %+v", neg)
 	}
-	pos, err := f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a2", folios.AdjustmentInput{ChargeCodeID: f.laundry, Amount: "5000", Reason: "forgotten", Approval: f.approval(), RelatedItemID: &it.ID})
+	// the minibar was credited in full: nothing is left to correct on it, and a new charge is a charge
+	_, err = f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a2x", folios.AdjustmentInput{ChargeCodeID: f.minibar, Amount: "5000", Reason: "forgotten", Approval: f.approval()})
+	wantCode(t, err, "ADJUSTMENT_NOTHING_POSTED")
+	// a laundry charge posted first can then be corrected upwards
+	lc, err := f.Folios.PostCharge(f.admin, f.propID, f.folio, "c-laundry", folios.ChargeInput{ChargeCodeID: f.laundry, Quantity: "1", UnitPrice: ptr("20000")})
 	must(t, err)
-	if pos.Item.Debit != "5000" || pos.FolioBalance != "5000" {
+	pos, err := f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a2", folios.AdjustmentInput{ChargeCodeID: f.laundry, Amount: "5000", Reason: "under-charged", Approval: f.approval(), RelatedItemID: &lc.Item.ID})
+	must(t, err)
+	if pos.Item.Debit != "5000" || pos.FolioBalance != "25000" {
 		t.Fatalf("positive: %+v", pos)
 	}
-	// adjustments may use a ROOM code (only manual charges may not)
-	if _, err := f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a3", folios.AdjustmentInput{ChargeCodeID: f.room, Amount: "1000", Reason: "rate fix", Approval: f.approval()}); err != nil {
-		t.Fatalf("room adjustment: %v", err)
-	}
+	// a ROOM code is adjustable only once a room charge is posted on the folio (the night audit posts it)
+	_, err = f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a3", folios.AdjustmentInput{ChargeCodeID: f.room, Amount: "1000", Reason: "rate fix", Approval: f.approval()})
+	wantCode(t, err, "ADJUSTMENT_NOTHING_POSTED")
 	try := func(mut func(*folios.AdjustmentInput)) error {
 		in := folios.AdjustmentInput{ChargeCodeID: f.laundry, Amount: "100", Reason: "r", Approval: f.approval()}
 		mut(&in)
@@ -363,9 +369,8 @@ func TestSameDayReversal(t *testing.T) {
 
 func TestReversalFlipsThePostingRegister(t *testing.T) {
 	f := setup(t)
-	// a room-charge item (posted here as an adjustment on the ROOM code) with a register row, as night audit will write it
-	adj, err := f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "a1", folios.AdjustmentInput{ChargeCodeID: f.room, Amount: "800000", Reason: "test room night", Approval: f.approval()})
-	must(t, err)
+	// a ledger item (a charge here; night audit posts room charges) with a register row, as night audit will write it
+	adj := f.charge(t, "c1")
 	var typeID, roomID int64
 	must(t, f.Pool.QueryRow(context.Background(), `SELECT room_type_id, id FROM rooms LIMIT 1`).Scan(&typeID, &roomID))
 	stay := f.Stay(t, f.tenantID, f.propID, typeID, roomID, "2026-09-30", "2026-10-02")
@@ -769,4 +774,85 @@ func TestRefundMethodFollowsTheProperty(t *testing.T) {
 	wantCode(t, err, "VALIDATION_FAILED")
 	_, err = f.Tenancy.UpdateProperty(f.admin, f.propID, tenancy.PropertyPatch{RefundMethods: []string{}})
 	wantCode(t, err, "VALIDATION_FAILED")
+}
+
+// An adjustment corrects what is already posted on the folio: its charge code needs a posted net above zero, and a
+// credit cannot take it below zero.
+func TestAdjustmentCorrectsOnlyWhatIsPosted(t *testing.T) {
+	f := setup(t)
+	adjust := func(key, code string, codeID int64, amount string) (folios.ItemResult, error) {
+		_ = code
+		return f.Folios.PostAdjustment(f.admin, f.propID, f.folio, key, folios.AdjustmentInput{ChargeCodeID: codeID, Amount: amount, Reason: "fix", Approval: f.approval()})
+	}
+	// nothing posted yet: neither a credit nor a debit
+	_, err := adjust("n1", "minibar", f.minibar, "-1000")
+	wantCode(t, err, "ADJUSTMENT_NOTHING_POSTED")
+	_, err = adjust("n2", "minibar", f.minibar, "1000")
+	e := code(t, err, "ADJUSTMENT_NOTHING_POSTED")
+	if e.Context["charge_code_id"] != f.minibar {
+		t.Fatalf("context: %v", e.Context)
+	}
+
+	f.charge(t, "c1") // 100,000 net on the minibar
+	// another code is still not adjustable
+	_, err = adjust("n3", "laundry", f.laundry, "-1000")
+	wantCode(t, err, "ADJUSTMENT_NOTHING_POSTED")
+	// a credit within what is posted, and the rest of it, but not more
+	_, err = adjust("x1", "minibar", f.minibar, "-60000")
+	must(t, err)
+	e = code(t, mustErr3(adjust("x2", "minibar", f.minibar, "-50000")), "ADJUSTMENT_EXCEEDS_POSTED")
+	if e.Context["posted"] != "40000" {
+		t.Fatalf("context: %v", e.Context)
+	}
+	_, err = adjust("x3", "minibar", f.minibar, "-40000")
+	must(t, err)
+	_, err = adjust("x4", "minibar", f.minibar, "-1")
+	wantCode(t, err, "ADJUSTMENT_NOTHING_POSTED") // credited in full
+
+	// a reversed charge nets out: nothing is left to correct
+	lc, err := f.Folios.PostCharge(f.admin, f.propID, f.folio, "c-laundry", folios.ChargeInput{ChargeCodeID: f.laundry, Quantity: "1", UnitPrice: ptr("20000")})
+	must(t, err)
+	_, err = adjust("y1", "laundry", f.laundry, "1000")
+	must(t, err) // an increase of what is posted
+	_, err = f.Folios.Reverse(f.admin, f.propID, lc.Item.ID, folios.CorrectionInput{Reason: "twice", Approval: f.approval()})
+	must(t, err)
+	_, err = adjust("y2", "laundry", f.laundry, "-500") // 21,000 posted, 20,000 reversed: 1,000 left
+	must(t, err)
+	_, err = adjust("y3", "laundry", f.laundry, "-1000")
+	wantCode(t, err, "ADJUSTMENT_EXCEEDS_POSTED")
+}
+
+func mustErr3(_ folios.ItemResult, err error) error { return err }
+
+// Two credits that fit one after the other must not both be posted: the folio row is locked.
+func TestConcurrentAdjustmentsCannotCreditMoreThanIsPosted(t *testing.T) {
+	f := setup(t)
+	f.charge(t, "c1") // 100,000 posted
+	const n = 6
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = f.Folios.PostAdjustment(f.admin, f.propID, f.folio, "race-"+string(rune('a'+i)), folios.AdjustmentInput{ChargeCodeID: f.minibar, Amount: "-40000", Reason: "race", Approval: f.approval()})
+		}()
+	}
+	wg.Wait()
+	ok := 0
+	for _, err := range errs {
+		if err == nil {
+			ok++
+		} else {
+			wantCode(t, err, "ADJUSTMENT_EXCEEDS_POSTED")
+		}
+	}
+	if ok != 2 { // 40,000 + 40,000 fit in 100,000, a third does not
+		t.Fatalf("%d adjustments were posted, want 2", ok)
+	}
+	var net string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT COALESCE(sum(net_amount), 0)::text FROM folio_items WHERE folio_id = $1 AND charge_code_id = $2`, f.folio, f.minibar).Scan(&net))
+	if net != "20000.000" && net != "20000" {
+		t.Fatalf("net on the minibar is %s", net)
+	}
 }

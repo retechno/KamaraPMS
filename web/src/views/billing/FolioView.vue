@@ -64,7 +64,21 @@ const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const isOpen = computed(() => folio.value?.status === 'OPEN')
 const chargeCodes = computed(() => codes.value.filter((c) => c.is_active && c.charge_type !== 'ROOM'))
-const adjustCodes = computed(() => codes.value.filter((c) => c.is_active))
+// An adjustment corrects what is already posted: only the charge codes that have something posted on this folio (the net
+// of their charges, adjustments and reversals above zero). The server enforces it; this keeps the list honest.
+const postedNet = computed(() => {
+  const net = new Map<string, number>()
+  for (const i of folio.value?.items ?? []) {
+    if (!i.charge_code || !['CHARGE', 'ADJUSTMENT', 'REVERSAL'].includes(i.transaction_type)) continue
+    net.set(i.charge_code, Number(((net.get(i.charge_code) ?? 0) + Number(i.net_amount)).toFixed(3)))
+  }
+  return net
+})
+const adjustCodes = computed(() => codes.value.filter((c) => c.is_active && (postedNet.value.get(c.code) ?? 0) > 0))
+const adjustPosted = computed(() => {
+  const code = codes.value.find((c) => c.id === adjust.codeId)
+  return code ? (postedNet.value.get(code.code) ?? 0) : 0
+})
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 const base = () => ({ path: { propertyId: pid.value as number, id: Number(props.id) } })
@@ -78,7 +92,7 @@ async function load(): Promise<void> {
     folio.value = data ?? null
     codes.value = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/charge-codes', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))
     charge.codeId ||= chargeCodes.value[0]?.id ?? 0
-    adjust.codeId ||= adjustCodes.value[0]?.id ?? 0
+    if (!adjustCodes.value.some((c) => c.id === adjust.codeId)) adjust.codeId = adjustCodes.value[0]?.id ?? 0
     await loadCompanies(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -477,10 +491,14 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <TabsContent value="adjust" force-mount :class="activeTab !== 'adjust' && 'hidden'">
         <Card v-if="can('folio.adjust')">
           <form novalidate data-testid="adjust-form" @submit.prevent="startAdjust">
-            <CardHeader><CardTitle>{{ t('folio.adjustTitle') }}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>{{ t('folio.adjustTitle') }}</CardTitle>
+              <p class="m-0 text-sm text-muted-foreground">{{ t('folio.adjustHint') }}</p>
+            </CardHeader>
             <CardContent>
-              <div class="grid gap-4 sm:grid-cols-3">
-                <FormField :label="t('folio.chargeCode')">
+              <p v-if="!adjustCodes.length" class="m-0 text-sm text-muted-foreground" data-testid="adjust-nothing">{{ t('folio.adjustNothing') }}</p>
+              <div v-else class="grid gap-4 sm:grid-cols-3">
+                <FormField :label="t('folio.chargeCode')" :hint="t('folio.adjustPosted', { net: adjustPosted })">
                   <template #default="{ id }">
                     <NativeSelect :id="id" v-model.number="adjust.codeId" name="adjust_code">
                       <option v-for="c in adjustCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
@@ -494,7 +512,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                   <template #default="{ id }"><Input :id="id" v-model="adjust.reason" name="adjust_reason" maxlength="500" /></template>
                 </FormField>
               </div>
-              <div class="mt-4 flex justify-end"><Button type="submit" variant="outline" :disabled="busy || !adjust.amount || !adjust.reason.trim()">{{ t('folio.continueApproval') }}</Button></div>
+              <div v-if="adjustCodes.length" class="mt-4 flex justify-end"><Button type="submit" variant="outline" :disabled="busy || !adjust.amount || !adjust.reason.trim()">{{ t('folio.continueApproval') }}</Button></div>
             </CardContent>
           </form>
         </Card>

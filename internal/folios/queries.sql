@@ -193,3 +193,11 @@ WHERE property_id = @property_id AND folio_id = @folio_id AND transaction_type =
 
 -- name: ListStayOpenFolios :many
 SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'OPEN' ORDER BY id;
+
+-- What a charge code has posted on a folio: the net of its charges, adjustments and reversals (a reversed charge nets out).
+-- An adjustment corrects this, so it needs it to be above zero and, for a credit, to stay within it.
+-- name: SumNetOfChargeCodeOnFolio :one
+SELECT COALESCE(sum(net_amount), 0)::numeric AS net, count(*)::int AS items
+FROM folio_items
+WHERE property_id = @property_id AND folio_id = @folio_id AND charge_code_id = @charge_code_id
+  AND transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL');

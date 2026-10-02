@@ -191,7 +191,7 @@ describe('FolioView', () => {
     await flushPromises()
     const [path, init] = POST.mock.calls.at(-1) as [string, { body: object }]
     expect(path).toBe('/api/v1/properties/{propertyId}/folios/{id}/adjustments')
-    expect(init.body).toMatchObject({ charge_code_id: 1, amount: '-50000', reason: 'spilled', approval: { email: 'clerk@hotel.com', password: 'pw' } })
+    expect(init.body).toMatchObject({ charge_code_id: 2, amount: '-50000', reason: 'spilled', approval: { email: 'clerk@hotel.com', password: 'pw' } }) // the minibar: the code that is posted
     expect(w.get('[data-testid=notice]').text()).toBe('Adjustment posted.')
   })
 
@@ -360,5 +360,45 @@ describe('FolioView', () => {
     await flushPromises()
     expect(w.get('[data-testid=notice]').text()).toBe('Item di-reverse.')
     setLocale('en')
+  }, 20000) // a long walk through the page and the dialog: slow when the machine is busy
+
+  it('offers an adjustment only for the charge codes that have something posted on the folio', async () => {
+    const w = mountView()
+    await flushPromises()
+    const options = w.get('select[name=adjust_code]').findAll('option').map((o) => o.text())
+    expect(options).toEqual(['MINIBAR · Minibar']) // ROOM is active but nothing is posted on it
+    expect(w.get('[data-testid=adjust-form]').text()).toContain('Posted on this folio: 100000')
+    expect(w.find('[data-testid=adjust-nothing]').exists()).toBe(false)
+  })
+
+  it('has nothing to correct when nothing is posted, or when a charge was reversed in full', async () => {
+    const empty = mountView(folio({ items: [] }))
+    await flushPromises()
+    expect(empty.get('[data-testid=adjust-nothing]').text()).toContain('Nothing is posted on this folio to correct yet.')
+    expect(empty.find('select[name=adjust_code]').exists()).toBe(false)
+    expect(empty.find('input[name=adjust_amount]').exists()).toBe(false)
+
+    const reversed = mountView(folio({ items: [item({ id: 1, reversed_by_item_id: 3 }), item({ id: 3, transaction_type: 'REVERSAL', net_amount: '-100000', debit: '0', credit: '122100', reverses_item_id: 1 })] }))
+    await flushPromises()
+    expect(reversed.find('[data-testid=adjust-nothing]').exists()).toBe(true) // the reversal nets the charge out
+  })
+
+  it('counts adjustments and reversals in what is posted', async () => {
+    const w = mountView(folio({ items: [item({ id: 1 }), item({ id: 4, transaction_type: 'ADJUSTMENT', net_amount: '-30000', debit: '0', credit: '36630' })] }))
+    await flushPromises()
+    expect(w.get('[data-testid=adjust-form]').text()).toContain('Posted on this folio: 70000')
+  })
+
+  it('shows the server refusal of an adjustment that is more than what is posted', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=adjust_amount]').setValue('-900000')
+    await w.get('input[name=adjust_reason]').setValue('too much')
+    await w.get('form[data-testid=adjust-form]').trigger('submit')
+    POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ADJUSTMENT_EXCEEDS_POSTED', detail: 'the credit is more than what the charge code has posted on this folio' }))
+    await w.get('input[name=approval_password]').setValue('pw')
+    await w.get('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=approval-error]').text()).toContain('ADJUSTMENT_EXCEEDS_POSTED')
   })
 })

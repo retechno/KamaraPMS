@@ -209,6 +209,21 @@ func (ps posting) postAdjustment(ctx context.Context, cmd adjustmentCmd) (folios
 	if b.TotalAmount.IsZero() {
 		return foliosdb.FolioItem{}, apperr.Invalid("the adjustment is invalid", fieldErr("amount", "INVALID_AMOUNT", "the adjustment amounts to nothing"))
 	}
+	// An adjustment corrects what is already posted: the charge code must have something posted on this folio (the
+	// folio row is locked, so the sum cannot move under us) and a credit cannot take it below zero. Something that was
+	// never posted is a charge, not an adjustment.
+	posted, err := ps.s.q(ctx).SumNetOfChargeCodeOnFolio(ctx, foliosdb.SumNetOfChargeCodeOnFolioParams{PropertyID: ps.propertyID, FolioID: ps.folio.ID, ChargeCodeID: &cmd.chargeCodeID})
+	if err != nil {
+		return foliosdb.FolioItem{}, err
+	}
+	if !posted.Net.IsPositive() {
+		return foliosdb.FolioItem{}, apperr.Conflict("ADJUSTMENT_NOTHING_POSTED", "the charge code has nothing posted on this folio: post a charge instead of an adjustment").
+			WithContext("charge_code_id", cmd.chargeCodeID)
+	}
+	if b.NetAmount.IsNegative() && posted.Net.Add(b.NetAmount).IsNegative() {
+		return foliosdb.FolioItem{}, apperr.Conflict("ADJUSTMENT_EXCEEDS_POSTED", "the credit is more than what the charge code has posted on this folio").
+			WithContext("charge_code_id", cmd.chargeCodeID).WithContext("posted", posted.Net.String())
+	}
 	id, by, reason := cmd.chargeCodeID, cmd.approval.UserID(), cmd.reason
 	spec := itemSpec{
 		transactionType: TypeAdjustment, chargeCodeID: &id, serviceDate: ps.bd, description: "Adjustment: " + reason, amounts: amountsOf(b),

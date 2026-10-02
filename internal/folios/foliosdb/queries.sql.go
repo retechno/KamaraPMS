@@ -1296,6 +1296,33 @@ func (q *Queries) PaymentTotals(ctx context.Context, arg PaymentTotalsParams) ([
 	return items, nil
 }
 
+const sumNetOfChargeCodeOnFolio = `-- name: SumNetOfChargeCodeOnFolio :one
+SELECT COALESCE(sum(net_amount), 0)::numeric AS net, count(*)::int AS items
+FROM folio_items
+WHERE property_id = $1 AND folio_id = $2 AND charge_code_id = $3
+  AND transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+`
+
+type SumNetOfChargeCodeOnFolioParams struct {
+	PropertyID   int64
+	FolioID      int64
+	ChargeCodeID *int64
+}
+
+type SumNetOfChargeCodeOnFolioRow struct {
+	Net   decimal.Decimal
+	Items int32
+}
+
+// What a charge code has posted on a folio: the net of its charges, adjustments and reversals (a reversed charge nets out).
+// An adjustment corrects this, so it needs it to be above zero and, for a credit, to stay within it.
+func (q *Queries) SumNetOfChargeCodeOnFolio(ctx context.Context, arg SumNetOfChargeCodeOnFolioParams) (SumNetOfChargeCodeOnFolioRow, error) {
+	row := q.db.QueryRow(ctx, sumNetOfChargeCodeOnFolio, arg.PropertyID, arg.FolioID, arg.ChargeCodeID)
+	var i SumNetOfChargeCodeOnFolioRow
+	err := row.Scan(&i.Net, &i.Items)
+	return i, err
+}
+
 const sumRefundsOf = `-- name: SumRefundsOf :one
 SELECT COALESCE(sum(amount), 0)::numeric AS refunded, count(*)::int AS refund_count
 FROM payments WHERE property_id = $1 AND refund_of_payment_id = $2 AND status = 'POSTED'

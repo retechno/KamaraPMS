@@ -390,3 +390,20 @@ func TestDashboard(t *testing.T) {
 	_, err = f.Reports.Dashboard(clerk, f.propID)
 	wantCode(t, err, "PERMISSION_DENIED")
 }
+
+// The room revenue the night audit posted can be corrected, within what was posted; before it, there is nothing to correct.
+func TestRoomRevenueIsAdjustedOnlyOnceItIsPosted(t *testing.T) {
+	f := setup(t)
+	st := f.stay(t, f.r101, "2026-10-03")
+	var room int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'ROOM'`, f.propID).Scan(&room))
+	adjust := func(key, amount string) error {
+		_, err := f.Folios.PostAdjustment(f.admin, f.propID, st.Folio.ID, key, folios.AdjustmentInput{ChargeCodeID: room, Amount: amount, Reason: "rate fix", Approval: f.approval()})
+		return err
+	}
+	wantCode(t, adjust("r0", "-100000"), "ADJUSTMENT_NOTHING_POSTED") // the night is not charged yet
+	f.audit(t)                                                        // posts the room night of 30 Sep (1,000,000)
+	must(t, adjust("r1", "-100000"))
+	wantCode(t, adjust("r2", "-5000000"), "ADJUSTMENT_EXCEEDS_POSTED")
+	must(t, adjust("r3", "50000")) // an increase of what is posted
+}
