@@ -12,6 +12,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -285,19 +286,13 @@ async function book(): Promise<void> {
             </FormField>
             <FormField v-if="groups.length || form.groupId" :label="t('newReservation.group')" :error="fieldError('booking_group_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.groupId" name="booking_group_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('newReservation.groupNone') }}</option>
-                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ $date(g.arrival_date) }} - {{ $date(g.departure_date) }})</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.groupId" name="booking_group_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('newReservation.groupNone')}` }, ...groups.map((g) => ({ value: g.id, label: `${g.code} · ${g.name} (${$date(g.arrival_date)} - ${$date(g.departure_date)})` }))]" />
                 <small v-if="chosenGroup" class="text-xs text-muted-foreground" data-testid="group-hint">{{ t('newReservation.groupHint', { from: $date(chosenGroup.arrival_date), to: $date(chosenGroup.departure_date) }) }}{{ chosenGroup.company_name ? t('newReservation.groupHintCompany', { company: chosenGroup.company_name }) : '' }}.</small>
               </template>
             </FormField>
             <FormField v-if="companies.length && !form.groupId" :label="t('newReservation.company')" :error="fieldError('company_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.companyId" name="company_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('newReservation.companyNone') }}</option>
-                  <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.companyId" name="company_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('newReservation.companyNone')}` }, ...companies.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }))]" />
               </template>
             </FormField>
           </div>

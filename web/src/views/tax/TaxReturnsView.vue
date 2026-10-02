@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -326,10 +327,7 @@ watch([() => pid.value, taxId], () => {
                     </FormField>
                     <FormField v-if="payForm.penalty.trim() && Number(payForm.penalty) > 0" :label="t('taxReturns.penaltyAccount')" :error="fieldError('penalty_account_id')">
                       <template #default="{ id, invalid }">
-                        <NativeSelect :id="id" v-model.number="payForm.penalty_account_id" name="penalty_account" :aria-invalid="invalid">
-                          <option :value="0">{{ t('taxReturns.chooseAccount') }}</option>
-                          <option v-for="a in expenses" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                        </NativeSelect>
+                        <Combobox :id="id" v-model="payForm.penalty_account_id" name="penalty_account" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('taxReturns.chooseAccount')}` }, ...expenses.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                       </template>
                     </FormField>
                   </div>

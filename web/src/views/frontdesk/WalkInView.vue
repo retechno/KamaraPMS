@@ -10,6 +10,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -145,9 +146,7 @@ watch(businessDate, (bd) => {
           </FormField>
           <FormField :label="t('walkIn.room')" :error="fieldError('room_id')">
             <template #default="{ id, invalid }">
-              <NativeSelect :id="id" v-model.number="form.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
-                <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : t('walkIn.notReadyTag') }}</option>
-              </NativeSelect>
+              <Combobox :id="id" v-model="form.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${isReady(r.housekeeping_status) ? '' : t('walkIn.notReadyTag')}` }))]" />
               <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('walkIn.noRooms') }}</small>
             </template>
           </FormField>

@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, FreeRoom, RoomType } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import FormField from '@/components/app/FormField.vue'
 import { t } from '@/i18n'
@@ -108,9 +109,7 @@ async function submit(): Promise<void> {
       </FormField>
       <FormField :label="t('frontDesk.checkIn.room')" :error="fieldError('room_id')">
         <template #default="{ id, invalid }">
-          <NativeSelect :id="id" v-model.number="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
-            <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}` }}</option>
-          </NativeSelect>
+          <Combobox :id="id" v-model="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}` }))]" />
           <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('frontDesk.checkIn.noFreeRoom') }}</small>
         </template>
       </FormField>

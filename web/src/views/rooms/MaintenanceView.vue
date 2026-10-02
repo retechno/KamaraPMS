@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -217,10 +218,7 @@ watch(() => route.query.room, (v) => {
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField :label="t('maintenance.room')">
               <template #default="{ id }">
-                <NativeSelect :id="id" v-model.number="form.room_id" name="room_id">
-                  <option :value="0">{{ t('maintenance.notRoom') }}</option>
-                  <option v-for="r in roomList" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.room_type_code }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.room_id" name="room_id" :options="[{ value: 0, label: `${t('maintenance.notRoom')}` }, ...roomList.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.room_type_code}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('maintenance.place')" :error="fieldError('location')">
@@ -333,10 +331,7 @@ watch(() => route.query.room, (v) => {
               </FormField>
               <FormField class="w-44" :label="t('maintenance.assignedTo')">
                 <template #default="{ id }">
-                  <NativeSelect :id="id" v-model.number="action.assignTo" name="assign_to">
-                    <option :value="0">{{ t('maintenance.nobody') }}</option>
-                    <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
-                  </NativeSelect>
+                  <Combobox :id="id" v-model="action.assignTo" name="assign_to" :options="[{ value: 0, label: `${t('maintenance.nobody')}` }, ...staff.map((s) => ({ value: s.id, label: `${s.full_name}` }))]" />
                 </template>
               </FormField>
               <Button variant="outline" size="sm" :disabled="busy" data-testid="assign" @click="assign">{{ t('maintenance.saveAssignment') }}</Button>

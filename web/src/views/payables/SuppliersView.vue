@@ -11,7 +11,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -169,10 +169,7 @@ watch(() => pid.value, () => {
             </FormField>
             <FormField v-if="accounts.length" :label="t('payables.usualExpense')" :error="fieldError('default_account_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.default_account_id" name="default_account_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('payables.none') }}</option>
-                  <option v-for="a in expenseAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.default_account_id" name="default_account_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('payables.none')}` }, ...expenseAccounts.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
               </template>
             </FormField>
             <FormField class="sm:col-span-2 lg:col-span-3" :label="t('payables.bankDetails')">

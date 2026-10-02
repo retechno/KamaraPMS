@@ -8,3 +8,6 @@ import { formatPlugin } from '@/utils/format'
 i18n.global.setLocaleMessage('id', id)
 i18n.global.locale.value = 'en'
 config.global.plugins = [i18n, formatPlugin]
+
+// jsdom has no layout: the list of a combobox scrolls the highlighted item into view.
+Element.prototype.scrollIntoView = () => {}

@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -244,10 +245,7 @@ watch(() => pid.value, () => {
             </FormField>
             <FormField :label="t('accountingBooks.under')" :error="fieldError('parent_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.parent_id" name="parent_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('accountingBooks.topLevel') }}</option>
-                  <option v-for="p in parents" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.parent_id" name="parent_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('accountingBooks.topLevel')}` }, ...parents.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('accountingBooks.statementGroup')" :error="fieldError('statement_group')">

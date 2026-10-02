@@ -13,6 +13,7 @@ import ReservationEmails from '@/components/ReservationEmails.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -282,9 +283,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </FormField>
             <FormField class="w-52" :label="t('reservation.freeRoom')">
               <template #default="{ id }">
-                <NativeSelect :id="id" v-model.number="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length">
-                  <option v-for="r in assigning.rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length" :options="[...assigning.rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}` }))]" />
                 <small v-if="!assigning.rooms.length" class="text-xs text-muted-foreground" data-testid="no-free-rooms">{{ t('reservation.noFreeRooms', { type: typeCode(assigning.typeId) }) }}</small>
               </template>
             </FormField>

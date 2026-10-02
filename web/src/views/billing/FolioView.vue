@@ -15,6 +15,7 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { t } from '@/i18n'
@@ -413,9 +414,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <FormField :label="t('folio.chargeCode')" :error="fieldError('charge_code_id')">
                   <template #default="{ id }">
-                    <NativeSelect :id="id" v-model.number="charge.codeId" name="charge_code">
-                      <option v-for="c in chargeCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-                    </NativeSelect>
+                    <Combobox :id="id" v-model="charge.codeId" name="charge_code" :options="[...chargeCodes.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }))]" />
                   </template>
                 </FormField>
                 <FormField :label="t('folio.quantity')" :error="fieldError('quantity')">
@@ -470,9 +469,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <div v-else class="grid gap-4 sm:grid-cols-3">
                 <FormField :label="t('folio.company')" :error="fieldError('company_id')">
                   <template #default="{ id }">
-                    <NativeSelect :id="id" v-model.number="transfer.companyId" name="transfer_company">
-                      <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-                    </NativeSelect>
+                    <Combobox :id="id" v-model="transfer.companyId" name="transfer_company" :options="[...companies.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }))]" />
                   </template>
                 </FormField>
                 <FormField :label="t('folio.transferAmount', { balance: folio?.balance ?? '' })" :error="fieldError('amount')">
@@ -500,9 +497,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <div v-else class="grid gap-4 sm:grid-cols-3">
                 <FormField :label="t('folio.chargeCode')" :hint="t('folio.adjustPosted', { net: adjustPosted })">
                   <template #default="{ id }">
-                    <NativeSelect :id="id" v-model.number="adjust.codeId" name="adjust_code">
-                      <option v-for="c in adjustCodes" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-                    </NativeSelect>
+                    <Combobox :id="id" v-model="adjust.codeId" name="adjust_code" :options="[...adjustCodes.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }))]" />
                   </template>
                 </FormField>
                 <FormField :label="t('folio.adjustAmount')" :error="fieldError('amount')">

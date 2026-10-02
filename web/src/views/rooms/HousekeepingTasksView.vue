@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -198,9 +199,7 @@ watch(() => [filter.view, filter.status], () => void load())
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormField :label="t('cleaning.room')" :error="fieldError('room_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="manual.room_id" name="room_id" :aria-invalid="invalid">
-                  <option v-for="r in boardRooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.room_type_code }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="manual.room_id" name="room_id" :aria-invalid="invalid" :options="[...boardRooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.room_type_code}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('cleaning.kind')">
@@ -220,10 +219,7 @@ watch(() => [filter.view, filter.status], () => void load())
             </FormField>
             <FormField :label="t('cleaning.assignTo')" :error="fieldError('assigned_to')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="manual.assigned_to" name="assigned_to" :aria-invalid="invalid">
-                  <option :value="0">{{ t('cleaning.nobodyYet') }}</option>
-                  <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="manual.assigned_to" name="assigned_to" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('cleaning.nobodyYet')}` }, ...staff.map((s) => ({ value: s.id, label: `${s.full_name}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('cleaning.note')">
@@ -273,10 +269,7 @@ watch(() => [filter.view, filter.status], () => void load())
         <form v-if="can('housekeeping.assign') && openCount" class="flex flex-wrap items-end gap-3" novalidate data-testid="assign-form" @submit.prevent="assign">
           <FormField class="w-64" :label="t('cleaning.giveTicked', { n: picked.length })">
             <template #default="{ id }">
-              <NativeSelect :id="id" v-model.number="assignTo" name="assign_to">
-                <option :value="0">{{ t('cleaning.nobodyTakeBack') }}</option>
-                <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
-              </NativeSelect>
+              <Combobox :id="id" v-model="assignTo" name="assign_to" :options="[{ value: 0, label: `${t('cleaning.nobodyTakeBack')}` }, ...staff.map((s) => ({ value: s.id, label: `${s.full_name}` }))]" />
             </template>
           </FormField>
           <Button type="submit" variant="outline" :disabled="busy || !picked.length" data-testid="assign">{{ t('cleaning.assign') }}</Button>

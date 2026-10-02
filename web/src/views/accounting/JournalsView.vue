@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -223,10 +224,7 @@ watch(() => pid.value, () => {
             <tbody class="[&_td]:py-1.5 [&_td]:pr-3 [&_td]:align-top">
               <tr v-for="(l, i) in form.lines" :key="i" :data-testid="`line-${i}`">
                 <td>
-                  <NativeSelect v-model.number="l.account_id" :name="`account_${i}`" :aria-invalid="!!fieldError(`lines[${i}].account_id`)">
-                    <option :value="0">{{ t('journals.chooseAccount') }}</option>
-                    <option v-for="a in postable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                  </NativeSelect>
+                  <Combobox v-model="l.account_id" :name="`account_${i}`" :aria-invalid="!!fieldError(`lines[${i}].account_id`)" :options="[{ value: 0, label: `${t('journals.chooseAccount')}` }, ...postable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                   <small v-if="fieldError(`lines[${i}].account_id`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].account_id`) }}</small>
                 </td>
                 <td><Input v-model="l.debit" class="text-right" :name="`debit_${i}`" inputmode="decimal" :disabled="l.credit.trim() !== ''" /></td>

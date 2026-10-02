@@ -10,7 +10,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -114,10 +114,7 @@ watch(() => pid.value, () => {
       <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
         <FormField class="w-80" :label="t('accountingBooks.account')">
           <template #default="{ id }">
-            <NativeSelect :id="id" v-model.number="form.account" name="account">
-              <option :value="0">{{ t('accountingBooks.chooseAccount') }}</option>
-              <option v-for="a in postable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-            </NativeSelect>
+            <Combobox :id="id" v-model="form.account" name="account" :options="[{ value: 0, label: `${t('accountingBooks.chooseAccount')}` }, ...postable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
           </template>
         </FormField>
         <FormField :label="t('accountingBooks.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>

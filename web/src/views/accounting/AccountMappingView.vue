@@ -7,7 +7,7 @@ import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -110,9 +110,7 @@ watch(() => pid.value, () => void load(), { immediate: true })
         <DataTable :columns="mapColumns" :rows="entries" row-key="map_key" :row-test-id="(e) => `map-${e.map_key}`" :caption="t('accounting.amTitle')" data-testid="map">
           <template #cell-meaning="{ row }"><b>{{ row.meaning }}</b> <small class="text-muted-foreground">{{ row.map_key }}</small></template>
           <template #cell-account="{ row }">
-            <NativeSelect v-if="can('accounting.manage')" v-model.number="choice[row.map_key]" class="max-w-sm" :name="`map_${row.map_key}`">
-              <option v-for="a in options(row.map_key)" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-            </NativeSelect>
+            <Combobox v-if="can('accounting.manage')" v-model="choice[row.map_key]" class="max-w-sm" :name="`map_${row.map_key}`" :options="[...options(row.map_key).map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
             <template v-else>{{ row.account_code }} · {{ row.account_name }}</template>
           </template>
         </DataTable>

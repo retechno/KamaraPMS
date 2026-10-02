@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -247,10 +248,7 @@ watch(businessDate, (bd) => {
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FormField :label="t('roomBlocks.room')" :error="fieldError('room_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model="form.room_id" name="room_id" :aria-invalid="invalid">
-                  <option :value="0" disabled>{{ t('roomBlocks.selectRoom') }}</option>
-                  <option v-for="r in sortedRooms" :key="r.id" :value="r.id">{{ r.room_number }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.room_id" name="room_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('roomBlocks.selectRoom')}`, disabled: true }, ...sortedRooms.map((r) => ({ value: r.id, label: `${r.room_number}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('roomBlocks.type')" :hint="t('roomBlocks.unsellable')">

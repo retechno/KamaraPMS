@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -192,10 +193,7 @@ watch(() => [filter.status, filter.category], () => void load())
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField :label="t('lostFound.foundInRoom')">
               <template #default="{ id }">
-                <NativeSelect :id="id" v-model.number="form.room_id" name="room_id">
-                  <option :value="0">{{ t('lostFound.notInRoom') }}</option>
-                  <option v-for="r in roomList" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.room_type_code }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.room_id" name="room_id" :options="[{ value: 0, label: `${t('lostFound.notInRoom')}` }, ...roomList.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.room_type_code}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('lostFound.place')" :error="fieldError('location')">

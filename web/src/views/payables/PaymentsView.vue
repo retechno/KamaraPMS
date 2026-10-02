@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -212,10 +213,7 @@ watch(() => pid.value, () => {
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FormField :label="t('payables.supplier')" :error="fieldError('supplier_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.supplier_id" name="supplier_id" :aria-invalid="invalid" @change="loadOpen">
-                  <option :value="0">{{ t('payables.chooseSupplier') }}</option>
-                  <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }} ({{ t('payables.owedSuffix', { amount: $money(s.outstanding) }) }})</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.supplier_id" name="supplier_id" :aria-invalid="invalid" @update:model-value="loadOpen" :options="[{ value: 0, label: `${t('payables.chooseSupplier')}` }, ...suppliers.map((s) => ({ value: s.id, label: `${s.code} · ${s.name} (${t('payables.owedSuffix', { amount: $money(s.outstanding) })})` }))]" />
               </template>
             </FormField>
             <FormField :label="t('payables.paymentDate')" :error="fieldError('payment_date')">
@@ -263,10 +261,7 @@ watch(() => pid.value, () => {
         <form class="mb-4 flex flex-wrap items-end gap-4" novalidate @submit.prevent="load">
           <FormField class="w-64" :label="t('payables.supplier')">
             <template #default="{ id }">
-              <NativeSelect :id="id" v-model.number="filter.supplier" name="supplier">
-                <option :value="0">{{ t('payables.all') }}</option>
-                <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }}</option>
-              </NativeSelect>
+              <Combobox :id="id" v-model="filter.supplier" name="supplier" :options="[{ value: 0, label: `${t('payables.all')}` }, ...suppliers.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))]" />
             </template>
           </FormField>
           <FormField class="w-44" :label="t('payables.status')">

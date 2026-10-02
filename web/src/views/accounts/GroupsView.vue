@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -141,10 +141,7 @@ watch(activeOnly, () => void load())
           </FormField>
           <FormField :label="t('groups.billedCompany')">
             <template #default="{ id }">
-              <NativeSelect :id="id" v-model.number="form.company_id" name="company_id">
-                <option :value="0">{{ t('groups.noCompany') }}</option>
-                <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-              </NativeSelect>
+              <Combobox :id="id" v-model="form.company_id" name="company_id" :options="[{ value: 0, label: `${t('groups.noCompany')}` }, ...companies.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }))]" />
             </template>
           </FormField>
           <FormField :label="t('groups.arrival')" :error="fieldError('arrival_date')">

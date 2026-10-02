@@ -11,7 +11,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -127,10 +127,7 @@ watch(() => pid.value, () => {
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormField v-if="editing === 'new'" :label="t('bankAccounts.booksAccount')" :error="fieldError('account_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.account_id" name="account_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('bankAccounts.chooseAccount') }}</option>
-                  <option v-for="a in choices" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.account_id" name="account_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('bankAccounts.chooseAccount')}` }, ...choices.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
               </template>
             </FormField>
             <FormField :label="t('bankAccounts.name')" :error="fieldError('name')">

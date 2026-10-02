@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Combobox } from '@/components/ui/combobox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -139,10 +139,7 @@ watch(() => pid.value, () => {
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormField v-if="editing === 'new'" :label="t('taxProfiles.tax')" :error="fieldError('tax_id')">
               <template #default="{ id, invalid }">
-                <NativeSelect :id="id" v-model.number="form.tax_id" name="tax_id" :aria-invalid="invalid">
-                  <option :value="0">{{ t('taxProfiles.chooseTax') }}</option>
-                  <option v-for="x in choices" :key="x.id" :value="x.id">{{ x.code }} · {{ x.name }} ({{ Number(x.rate) }}%)</option>
-                </NativeSelect>
+                <Combobox :id="id" v-model="form.tax_id" name="tax_id" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('taxProfiles.chooseTax')}` }, ...choices.map((x) => ({ value: x.id, label: `${x.code} · ${x.name} (${Number(x.rate)}%)` }))]" />
               </template>
             </FormField>
             <FormField :label="t('taxProfiles.authority')" :error="fieldError('authority')">

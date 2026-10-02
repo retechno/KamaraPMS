@@ -8,6 +8,7 @@ import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -195,9 +196,7 @@ async function addGuest(g: Guest): Promise<void> {
           </FormField>
           <FormField :label="t('stayActions.room')" :error="fieldError('room_id')">
             <template #default="{ id, invalid }">
-              <NativeSelect :id="id" v-model.number="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
-                <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag') }}</option>
-              </NativeSelect>
+              <Combobox :id="id" v-model="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag')}` }))]" />
               <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('stayActions.noRooms', { date: until }) }}</small>
             </template>
           </FormField>

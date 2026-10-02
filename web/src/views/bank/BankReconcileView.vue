@@ -11,6 +11,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -320,10 +321,7 @@ watch([() => pid.value, sid], () => {
               <p class="m-0 text-sm text-muted-foreground">{{ t('reconcile.postHint', { what: line.description || t('reconcile.lineN', { n: line.line_no }), amount: $money(line.amount), date: $date(line.line_date) }) }}</p>
               <FormField :label="t('reconcile.account')">
                 <template #default="{ id }">
-                  <NativeSelect :id="id" v-model.number="adjust.account_id" name="adjust_account">
-                    <option :value="0">{{ t('reconcile.chooseAccount') }}</option>
-                    <option v-for="a in chargeable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                  </NativeSelect>
+                  <Combobox :id="id" v-model="adjust.account_id" name="adjust_account" :options="[{ value: 0, label: `${t('reconcile.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 </template>
               </FormField>
               <FormField :label="t('reconcile.description')">
@@ -354,10 +352,7 @@ watch([() => pid.value, sid], () => {
               </p>
               <FormField v-if="settleGross > settleNet" :label="t('reconcile.commissionAccount')">
                 <template #default="{ id }">
-                  <NativeSelect :id="id" v-model.number="settle.fee_account_id" name="settle_fee">
-                    <option :value="0">{{ t('reconcile.chooseAccount') }}</option>
-                    <option v-for="a in chargeable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-                  </NativeSelect>
+                  <Combobox :id="id" v-model="settle.fee_account_id" name="settle_fee" :options="[{ value: 0, label: `${t('reconcile.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 </template>
               </FormField>
               <FormField :label="t('reconcile.description')">
