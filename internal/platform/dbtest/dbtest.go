@@ -184,6 +184,7 @@ func Reset(t testing.TB, p *pgxpool.Pool) {
 DO $$
 DECLARE tables text;
 BEGIN
+    PERFORM set_config('pms.allow_truncate', 'on', true); -- the ledger tables refuse TRUNCATE otherwise
     SELECT string_agg(format('%I', tablename), ', ') INTO tables
       FROM pg_tables
      WHERE schemaname = 'public' AND tablename <> 'goose_db_version';

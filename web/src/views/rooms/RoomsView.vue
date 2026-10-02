@@ -4,6 +4,16 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { HousekeepingStatus, Room, RoomType } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -25,6 +35,15 @@ const visible = computed(() => {
   const list = typeFilter.value ? rooms.value.filter((r) => r.room_type_id === Number(typeFilter.value)) : rooms.value
   return [...list].sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }))
 })
+
+const columns = computed<Column<Room>[]>(() => [
+  { key: 'room_number', label: t('rooms.room'), sortable: true, filter: 'text' },
+  { key: 'type', label: t('rooms.type'), sortable: true, filter: 'select', filterValue: (r) => typeById.value.get(r.room_type_id)?.code, sortValue: (r) => typeById.value.get(r.room_type_id)?.code },
+  { key: 'floor', label: t('rooms.floor'), sortable: true, filter: 'select' },
+  { key: 'building', label: t('rooms.building'), filter: 'select' },
+  { key: 'status', label: t('setup.status'), filter: 'select', filterValue: (r) => (r.is_active ? t('setup.active') : t('setup.inactive')) },
+  ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 
 const blank = () => ({
   room_number: '',
@@ -122,107 +141,83 @@ watch(() => property.currentId, load, { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Rooms</h1>
-    <button v-if="canManage && !editing" type="button" class="btn-primary" :disabled="!types.length" @click="startNew">New room</button>
-  </div>
+  <PageHeader :title="t('rooms.title')">
+    <template #actions>
+      <Button v-if="canManage && !editing" type="button" :disabled="!types.length" data-testid="new-room" @click="startNew">{{ t('rooms.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <div v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <ul v-if="conflicts.length" class="conflicts" data-testid="conflicts">
+    <ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
       <li v-for="c in conflicts" :key="`${c.type}-${c.id}`">
-        {{ c.type === 'STAY' ? `In-house stay ${c.reference ?? c.id}` : `Reservation line ${c.id}` }}: {{ c.from }} to {{ c.to }}
+        {{ c.type === 'STAY' ? t('rooms.stayConflict', { ref: c.reference ?? c.id }) : t('rooms.lineConflict', { id: c.id }) }}: {{ t('rooms.conflictRange', { from: $date(c.from), to: $date(c.to) }) }}
       </li>
     </ul>
   </div>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="loaded && !types.length" class="muted">Create a room type before adding rooms.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="loaded && !types.length" class="muted">{{ t('rooms.needType') }}</p>
 
-  <form v-if="editing" class="card" novalidate @submit.prevent="save">
-    <h2>{{ editing === 'new' ? 'New room' : `Edit room ${editing.room_number}` }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Room number</span>
-        <input v-model="form.room_number" name="room_number" :aria-invalid="!!fieldError('room_number')" />
-        <small v-if="fieldError('room_number')" class="error-text">{{ fieldError('room_number') }}</small>
-      </label>
-      <label class="field">
-        <span>Room type</span>
-        <select v-model="form.room_type_id" name="room_type_id" :aria-invalid="!!fieldError('room_type_id')">
-          <option v-for="t in assignable" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }}</option>
-        </select>
-        <small v-if="fieldError('room_type_id')" class="error-text">{{ fieldError('room_type_id') }}</small>
-      </label>
-      <label class="field">
-        <span>Floor</span>
-        <input v-model="form.floor" name="floor" />
-      </label>
-      <label class="field">
-        <span>Building</span>
-        <input v-model="form.building" name="building" />
-      </label>
-      <label v-if="editing === 'new'" class="field">
-        <span>Initial housekeeping</span>
-        <select v-model="form.initial_housekeeping_status" name="initial_housekeeping_status">
-          <option value="DIRTY">Dirty</option>
-          <option value="CLEAN">Clean</option>
-          <option value="INSPECTED">Inspected</option>
-        </select>
-      </label>
-      <label class="check">
-        <input v-model="form.is_active" name="is_active" type="checkbox" />
-        <span>Active (in service)</span>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" @click="editing = null">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="editing" class="mb-4">
+    <form novalidate @submit.prevent="save">
+      <CardHeader><CardTitle>{{ editing === 'new' ? t('rooms.new') : t('rooms.edit', { number: editing.room_number }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('rooms.roomNumber')" :error="fieldError('room_number')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.room_number" name="room_number" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('rooms.roomType')" :error="fieldError('room_type_id')">
+            <template #default="{ id, invalid }">
+              <NativeSelect :id="id" v-model="form.room_type_id" name="room_type_id" :aria-invalid="invalid">
+                <option v-for="rt in assignable" :key="rt.id" :value="rt.id">{{ rt.code }} · {{ rt.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField v-if="editing === 'new'" :label="t('rooms.initialHousekeeping')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.initial_housekeeping_status" name="initial_housekeeping_status">
+                <option value="DIRTY">{{ t('status.DIRTY') }}</option>
+                <option value="CLEAN">{{ t('status.CLEAN') }}</option>
+                <option value="INSPECTED">{{ t('status.INSPECTED') }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('rooms.floor')">
+            <template #default="{ id }"><Input :id="id" v-model="form.floor" name="floor" /></template>
+          </FormField>
+          <FormField :label="t('rooms.building')">
+            <template #default="{ id }"><Input :id="id" v-model="form.building" name="building" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('rooms.activeCheck') }}</span>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section class="card">
-    <label v-if="types.length > 1" class="field filter">
-      <span>Room type</span>
-      <select v-model="typeFilter" name="type_filter">
-        <option value="">All types</option>
-        <option v-for="t in types" :key="t.id" :value="t.id">{{ t.code }}</option>
-      </select>
-    </label>
-    <p v-if="loaded && !rooms.length && types.length" class="muted" data-testid="empty">No rooms yet.</p>
-    <table v-else-if="rooms.length" class="list">
-      <thead>
-        <tr>
-          <th>Room</th>
-          <th>Type</th>
-          <th>Floor</th>
-          <th>Building</th>
-          <th>Status</th>
-          <th v-if="canManage" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in visible" :key="r.id" :data-testid="`room-${r.room_number}`">
-          <td>
-            <b>{{ r.room_number }}</b>
-          </td>
-          <td>{{ typeById.get(r.room_type_id)?.code }}</td>
-          <td>{{ r.floor }}</td>
-          <td>{{ r.building }}</td>
-          <td>{{ r.is_active ? 'Active' : 'Inactive' }}</td>
-          <td v-if="canManage"><button type="button" @click="startEdit(r)">Edit</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card>
+    <CardContent class="pt-4">
+      <FormField v-if="types.length > 1" class="mb-3 max-w-56" :label="t('rooms.roomType')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model="typeFilter" name="type_filter">
+            <option value="">{{ t('rooms.allTypes') }}</option>
+            <option v-for="rt in types" :key="rt.id" :value="rt.id">{{ rt.code }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <EmptyState v-if="loaded && !rooms.length && types.length" :title="t('rooms.empty')" data-testid="empty" />
+      <DataTable v-else-if="rooms.length" :columns="columns" :rows="visible" row-key="id" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('rooms.title')">
+        <template #cell-room_number="{ row }"><b>{{ row.room_number }}</b></template>
+        <template #cell-type="{ row }">{{ typeById.get(row.room_type_id)?.code }}</template>
+        <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+        <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
+      </DataTable>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.filter {
-  max-width: 220px;
-  margin-bottom: 12px;
-}
-.conflicts {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-</style>

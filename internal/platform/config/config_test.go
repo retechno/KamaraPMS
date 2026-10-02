@@ -113,3 +113,66 @@ func TestAuthSettings(t *testing.T) {
 		t.Fatalf("weak secret / long access TTL must be refused: %v", err)
 	}
 }
+
+func TestRateLimitSetting(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://pms:secret@localhost:5432/pms", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(v string) (Config, error) {
+		m := map[string]string{}
+		for k, x := range base {
+			m[k] = x
+		}
+		if v != "" {
+			m["PMS_RATE_LIMIT_PER_MINUTE"] = v
+		}
+		return LoadFrom(env(m))
+	}
+	if cfg, err := with(""); err != nil || cfg.RateLimit != 600 {
+		t.Fatalf("default: %v %d", err, cfg.RateLimit)
+	}
+	if cfg, err := with("120"); err != nil || cfg.RateLimit != 120 {
+		t.Fatalf("120: %v %d", err, cfg.RateLimit)
+	}
+	if cfg, err := with("0"); err != nil || cfg.RateLimit != 0 {
+		t.Fatalf("0 disables: %v %d", err, cfg.RateLimit)
+	}
+	for _, bad := range []string{"-1", "many", "1.5"} {
+		if _, err := with(bad); err == nil || !strings.Contains(err.Error(), "PMS_RATE_LIMIT_PER_MINUTE") {
+			t.Fatalf("%q: %v", bad, err)
+		}
+	}
+}
+
+func TestSMTPSettings(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://pms:secret@localhost:5432/pms", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(extra map[string]string) (Config, error) {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return LoadFrom(env(m))
+	}
+	if cfg, err := with(nil); err != nil || cfg.SMTPHost != "" || cfg.SMTPPort != 587 || cfg.SMTPTLS != "starttls" {
+		t.Fatalf("off by default: %v %+v", err, cfg)
+	}
+	cfg, err := with(map[string]string{"PMS_SMTP_HOST": "smtp.example.com", "PMS_SMTP_FROM": "reservations@hotel.example", "PMS_SMTP_USERNAME": "u", "PMS_SMTP_PASSWORD": "p", "PMS_SMTP_TLS": "TLS", "PMS_SMTP_PORT": "465"})
+	if err != nil || cfg.SMTPHost != "smtp.example.com" || cfg.SMTPTLS != "tls" || cfg.SMTPPort != 465 || cfg.SMTPPassword != "p" {
+		t.Fatalf("configured: %v %+v", err, cfg)
+	}
+	for name, extra := range map[string]map[string]string{
+		"no sender":          {"PMS_SMTP_HOST": "h"},
+		"sender with a name": {"PMS_SMTP_HOST": "h", "PMS_SMTP_FROM": "Hotel <a@b.test>"},
+		"bad tls":            {"PMS_SMTP_HOST": "h", "PMS_SMTP_FROM": "a@b.test", "PMS_SMTP_TLS": "ssl"},
+		"bad port":           {"PMS_SMTP_HOST": "h", "PMS_SMTP_FROM": "a@b.test", "PMS_SMTP_PORT": "99999"},
+		"plain text in prod": {"PMS_ENV": "production", "PMS_COOKIE_SECURE": "true", "PMS_SMTP_HOST": "h", "PMS_SMTP_FROM": "a@b.test", "PMS_SMTP_TLS": "none", "PMS_SMTP_USERNAME": "u"},
+	} {
+		if _, err := with(extra); err == nil || !strings.Contains(err.Error(), "PMS_SMTP") {
+			t.Errorf("%s must be refused: %v", name, err)
+		}
+	}
+	if _, err := with(map[string]string{"PMS_ENV": "production", "PMS_COOKIE_SECURE": "true", "PMS_SMTP_HOST": "localhost", "PMS_SMTP_FROM": "a@b.test", "PMS_SMTP_TLS": "none"}); err != nil {
+		t.Errorf("an unauthenticated relay without TLS is allowed: %v", err)
+	}
+}

@@ -52,19 +52,19 @@ func (g Guest) FullName() string { return strings.TrimSpace(g.FirstName + " " + 
 
 // Profile is the editable part of a guest.
 type Profile struct {
-	FirstName   string
-	LastName    string
-	Email       string
-	Phone       string
-	Nationality string
-	CountryCode string
-	DateOfBirth *civil.Date
-	Gender      string
-	IDType      string
-	IDNumber    string
-	Address     string
-	City        string
-	Notes       string
+	FirstName   string      `json:"first_name"`
+	LastName    string      `json:"last_name"`
+	Email       string      `json:"email"`
+	Phone       string      `json:"phone"`
+	Nationality string      `json:"nationality"`
+	CountryCode string      `json:"country_code"`
+	DateOfBirth *civil.Date `json:"date_of_birth"`
+	Gender      string      `json:"gender"`
+	IDType      string      `json:"id_type"`
+	IDNumber    string      `json:"id_number"`
+	Address     string      `json:"address"`
+	City        string      `json:"city"`
+	Notes       string      `json:"notes"`
 }
 
 // Normalize trims text and upper-cases codes.

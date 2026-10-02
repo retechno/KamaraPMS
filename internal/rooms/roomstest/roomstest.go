@@ -5,22 +5,43 @@ package roomstest
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/availability"
+	"kamarapms/internal/bankrec"
+	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/cityledger"
+	"kamarapms/internal/companies"
+	"kamarapms/internal/documents"
+	"kamarapms/internal/expected"
+	"kamarapms/internal/folios"
+	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/groups"
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/lostfound"
+	"kamarapms/internal/maintenance"
+	"kamarapms/internal/nightaudit"
+	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/rates"
+	"kamarapms/internal/reports"
+	"kamarapms/internal/reservations"
+	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -39,6 +60,27 @@ type Env struct {
 	HK      *housekeeping.Service
 	Rooms   *rooms.Service
 	Guests  *guests.Service
+	Billing *billingconfig.Service
+	Rates   *rates.Service
+	Avail   *availability.Service
+	Res     *reservations.Service
+	IAM     *iam.Service
+	Folios  *folios.Service
+	Front   *frontdesk.Service
+	Charges *roomcharge.Service
+	Audit   *nightaudit.Service
+	Reports *reports.Service
+	Docs    *documents.Service
+
+	Companies   *companies.Service
+	CityLedger  *cityledger.Service
+	Groups      *groups.Service
+	Maintenance *maintenance.Service
+	Accounting  *accounting.Service
+	Payables    *payables.Service
+	BankRec     *bankrec.Service
+	Tax         *taxfiling.Service
+	LostFound   *lostfound.Service
 
 	seq int
 }
@@ -54,7 +96,28 @@ func Setup(t *testing.T) *Env {
 	authz := iam.NewAuthorizer(txm)
 	ten := tenancy.NewService(txm, c, aw, authz)
 	hk := housekeeping.NewService(txm, c, aw, authz, ten)
-	return &Env{Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rooms.NewService(txm, c, aw, authz, ten, hk), Guests: guests.NewService(txm, c, aw, authz, ten)}
+	avail := availability.NewService(txm)
+	billing := billingconfig.NewService(txm, c, aw, authz, ten)
+	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
+	rt := rates.NewService(txm, c, aw, authz, ten, avail)
+	gs := guests.NewService(txm, c, aw, authz, ten)
+	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
+	acct := accounting.NewService(txm, c, aw, authz, ten, ia)
+	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
+	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
+	co := companies.NewService(txm, c, aw, authz, ten)
+	fo.SetCompanyGate(co)
+	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co)
+	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
+	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
+	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)
+	na.SetJournaler(acct)
+	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)
+	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
+	taxSvc := taxfiling.NewService(txm, c, aw, authz, ten, acct, ia)
+	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+		Avail: avail, Res: rs,
+		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
 }
 
 // Admin returns a context authenticated as the tenant administrator.
@@ -72,15 +135,21 @@ func (e *Env) Tenant(t *testing.T, code string) tenancy.Tenant {
 	return tn
 }
 
-// Property creates a property whose business date is BD.
+// Property creates an IDR property (no decimals) whose business date is BD.
 func (e *Env) Property(t *testing.T, tenantID int64, code string) tenancy.PropertyWithDay {
+	t.Helper()
+	return e.PropertyIn(t, tenantID, code, "IDR", 0)
+}
+
+// PropertyIn creates a property with the given currency whose business date is BD.
+func (e *Env) PropertyIn(t *testing.T, tenantID int64, code, currency string, decimals int32) tenancy.PropertyWithDay {
 	t.Helper()
 	p, err := e.Tenancy.CreateProperty(Admin(tenantID), tenancy.CreatePropertyInput{
 		Code: code,
 		Settings: tenancy.PropertySettings{
-			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: "IDR", CurrencyDecimals: 0,
+			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: currency, CurrencyDecimals: decimals,
 			CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
-			NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"),
+			NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"), RefundMethods: []string{"CASH"},
 		},
 		OpeningBusinessDate: BD,
 	})
@@ -108,6 +177,47 @@ func (e *Env) User(t *testing.T, tenantID, propertyID int64, perms ...auth.Permi
 		tenantID, userID, propertyID, roleID)
 	must(t, err)
 	return auth.WithPrincipal(ctx, auth.Principal{TenantID: tenantID, UserID: userID})
+}
+
+// Password is the password of every account made by Account and AdminAccount.
+const Password = "correct horse battery staple"
+
+// Account creates a non-admin user with a real password (for approvals) holding perms at the property. It returns the
+// user's context and email.
+func (e *Env) Account(t *testing.T, tenantID, propertyID int64, perms ...auth.Permission) (context.Context, string) {
+	t.Helper()
+	ctx := e.User(t, tenantID, propertyID, perms...)
+	p, err := auth.Require(ctx)
+	must(t, err)
+	e.setPassword(t, p.UserID)
+	return ctx, e.emailOf(t, p.UserID)
+}
+
+// AdminAccount creates a tenant administrator with a real password. It returns the user's context and email.
+func (e *Env) AdminAccount(t *testing.T, tenantID int64) (context.Context, string) {
+	t.Helper()
+	e.seq++
+	email := fmt.Sprintf("admin%d@hotel.com", e.seq)
+	var id int64
+	must(t, e.Pool.QueryRow(context.Background(), `INSERT INTO users (tenant_id, email, password_hash, full_name, is_tenant_admin) VALUES ($1, $2, 'x', 'Admin', true) RETURNING id`,
+		tenantID, email).Scan(&id))
+	e.setPassword(t, id)
+	return auth.WithPrincipal(context.Background(), auth.Principal{TenantID: tenantID, UserID: id, IsTenantAdmin: true}), email
+}
+
+func (e *Env) setPassword(t *testing.T, userID int64) {
+	t.Helper()
+	hash, err := iam.HashPassword(Password)
+	must(t, err)
+	_, err = e.Pool.Exec(context.Background(), `UPDATE users SET password_hash = $2 WHERE id = $1`, userID, hash)
+	must(t, err)
+}
+
+func (e *Env) emailOf(t *testing.T, userID int64) string {
+	t.Helper()
+	var email string
+	must(t, e.Pool.QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, userID).Scan(&email))
+	return email
 }
 
 // UserAt creates a non-admin user with one role per property (different permissions at each) and returns its context.
@@ -182,8 +292,7 @@ func (e *Env) base(t *testing.T, tenantID, propertyID int64) base {
 		return b
 	}
 	var ccID int64
-	must(t, e.Pool.QueryRow(ctx, `INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type) VALUES ($1, $2, 'ROOM', 'Room', 'ROOM') RETURNING id`,
-		tenantID, propertyID).Scan(&ccID))
+	must(t, e.Pool.QueryRow(ctx, `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'ROOM'`, propertyID).Scan(&ccID)) // seeded with the property
 	must(t, e.Pool.QueryRow(ctx, `INSERT INTO rate_plans (tenant_id, property_id, code, name, room_charge_code_id) VALUES ($1, $2, 'BAR', 'Best', $3) RETURNING id`,
 		tenantID, propertyID, ccID).Scan(&b.ratePlanID))
 	if err := e.Pool.QueryRow(ctx, `SELECT id FROM guests WHERE tenant_id = $1 AND code = 'G1'`, tenantID).Scan(&b.guestID); err != nil {

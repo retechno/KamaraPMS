@@ -299,7 +299,7 @@ erDiagram
 | (P) property-scoped | `tenant_id` + `property_id bigint NOT NULL`, FK `(tenant_id, property_id) → properties(tenant_id, id)`, plus `UNIQUE (property_id, id)`. |
 | Internal FKs | Composite: `(property_id, x_id) → x(property_id, id)`. For guests: `(tenant_id, guest_id) → guests(tenant_id, id)`. **Cross-property and cross-tenant references are impossible.** |
 | Enums | `varchar` + `CHECK IN (…)`. A new value such as `price_mode = 'MIXED'` is a one-line migration. |
-| Money | `numeric(18,2)`. **Engine precision comes from `properties.currency_decimals`.** Columns keep 2 decimals so that 0- and 2-decimal currencies share one schema. |
+| Money | `numeric(18,3)` (15 integer digits). **Engine precision comes from `properties.currency_decimals` (0 to 3).** Columns keep three decimals so that 0-, 2- and 3-decimal currencies (IDR, USD, KWD) share one schema; the application rejects amounts with more decimals than the property's currency (migration 00015 widened them from two). |
 | Rates | `numeric(7,4)` as a percent (11.0000 = 11%). |
 | Names | `*_date` means `date`, and `*_at` means `timestamptz`. |
 | [std] | `created_at timestamptz NOT NULL DEFAULT now()`, `created_by bigint NULL`, `updated_at timestamptz NOT NULL DEFAULT now()`, `updated_by bigint NULL` (`*_by` → users). |
@@ -508,6 +508,7 @@ Trigger `properties_currency_lock`: raises an exception on changing `currency_co
 | name | varchar(100) | NO | |
 | rate | numeric(7,4) | NO | A percent. CHECK `BETWEEN 0 AND 100` |
 | tax_on_service | boolean | NO | DEFAULT false |
+| gl_account_code | varchar(30) | YES | Tax payable account code of the future COA (text, no FK). CHECK shape `^[A-Z0-9][A-Z0-9._:/-]{0,29}$`. Migration 00019. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -519,6 +520,7 @@ There is no `is_inclusive` column (rejected).
 | code | varchar(20) | NO | UK `(property_id, code)` |
 | name | varchar(100) | NO | |
 | rate | numeric(7,4) | NO | A percent. CHECK `BETWEEN 0 AND 100` |
+| gl_account_code | varchar(30) | YES | Service charge payable account code. Same rules. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -529,8 +531,9 @@ There is no `is_inclusive` column (rejected).
 | name | varchar(100) | NO | |
 | charge_type | varchar(20) | NO | CHECK IN (`ROOM`,`FOOD_BEVERAGE`,`SERVICE`,`FEE`,`OTHER`) |
 | price_mode | varchar(12) | NO | CHECK IN (`EXCLUSIVE`,`INCLUSIVE`). DEFAULT `EXCLUSIVE`. **Immutable once used** (trigger). |
-| default_unit_price | numeric(18,2) | YES | CHECK ≥ 0 |
+| default_unit_price | numeric(18,3) | YES | CHECK ≥ 0 |
 | is_system | boolean | NO | |
+| gl_account_code | varchar(30) | YES | Revenue account code. Same rules. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -577,7 +580,7 @@ There is no `is_inclusive` column (rejected).
 | rate_plan_id | bigint | NO | PK part. FK → rate_plans |
 | room_type_id | bigint | NO | PK part. FK → room_types |
 | stay_date | date | NO | PK part |
-| amount | numeric(18,2) | NO | CHECK ≥ 0. Expressed in the room charge code's price mode. |
+| amount | numeric(18,3) | NO | CHECK ≥ 0. Expressed in the room charge code's price mode. |
 | updated_at, updated_by | | | |
 
 - **PK `(rate_plan_id, room_type_id, stay_date)`**
@@ -631,9 +634,9 @@ There is no `is_inclusive` column (rejected).
 | rate_plan_id | bigint | NO | FK → rate_plans |
 | charge_code_id | bigint | NO | FK → charge_codes (snapshot of the plan's room code) |
 | price_mode | varchar(12) | NO | Snapshot of the charge code |
-| base_rate | numeric(18,2) | YES | Grid price. NULL when there was no grid price. |
-| discount_amount | numeric(18,2) | NO | DEFAULT 0. CHECK ≥ 0 |
-| amount | numeric(18,2) | NO | Agreed price per night. CHECK ≥ 0 |
+| base_rate | numeric(18,3) | YES | Grid price. NULL when there was no grid price. |
+| discount_amount | numeric(18,3) | NO | DEFAULT 0. CHECK ≥ 0 |
+| amount | numeric(18,3) | NO | Agreed price per night. CHECK ≥ 0 |
 | is_override | boolean | NO | CHECK `is_override OR (base_rate IS NOT NULL AND amount = base_rate − discount_amount)` |
 | created_at, created_by, updated_at, updated_by | | | |
 
@@ -721,16 +724,17 @@ There is no `is_inclusive` column (rejected).
 | reference_id | varchar(64) | YES | CHECK `(reference_type IS NULL) = (reference_id IS NULL)` |
 | description | varchar(300) | NO | |
 | quantity | numeric(10,3) | NO | CHECK ≠ 0 |
-| unit_price | numeric(18,2) | NO | As entered, in `price_mode` terms |
+| unit_price | numeric(18,3) | NO | As entered, in `price_mode` terms |
 | price_mode | varchar(12) | NO | CHECK IN (`EXCLUSIVE`,`INCLUSIVE`) |
-| base_amount | numeric(18,2) | NO | Signed, revenue perspective |
-| discount_amount | numeric(18,2) | NO | DEFAULT 0 |
-| net_amount | numeric(18,2) | NO | Includes `rounding_adjustment` |
-| rounding_adjustment | numeric(18,2) | NO | DEFAULT 0. Non-zero only for INCLUSIVE. |
-| service_charge_total | numeric(18,2) | NO | DEFAULT 0 (= Σ components) |
-| tax_total | numeric(18,2) | NO | DEFAULT 0 (= Σ components) |
-| debit | numeric(18,2) | NO | CHECK ≥ 0 |
-| credit | numeric(18,2) | NO | CHECK ≥ 0 |
+| revenue_account_code | varchar(30) | YES | Snapshot of the charge code's account when posted; a reversal copies the original's. NULL for payments and unmapped codes. |
+| base_amount | numeric(18,3) | NO | Signed, revenue perspective |
+| discount_amount | numeric(18,3) | NO | DEFAULT 0 |
+| net_amount | numeric(18,3) | NO | Includes `rounding_adjustment` |
+| rounding_adjustment | numeric(18,3) | NO | DEFAULT 0. Non-zero only for INCLUSIVE. |
+| service_charge_total | numeric(18,3) | NO | DEFAULT 0 (= Σ components) |
+| tax_total | numeric(18,3) | NO | DEFAULT 0 (= Σ components) |
+| debit | numeric(18,3) | NO | CHECK ≥ 0 |
+| credit | numeric(18,3) | NO | CHECK ≥ 0 |
 | source | varchar(15) | NO | CHECK IN (`MANUAL`,`ROOM_POSTING`,`SYSTEM`,`INTEGRATION`) |
 | reason | varchar(500) | YES | |
 | idempotency_key | varchar(100) | YES | UK `(property_id, idempotency_key) WHERE NOT NULL` |
@@ -766,8 +770,9 @@ Triggers:
 | name | varchar(100) | NO | Snapshot |
 | rate | numeric(7,4) | NO | Snapshot (a percent) |
 | tax_on_service | boolean | YES | Snapshot (taxes only). CHECK `(component_type = 'TAX') = (tax_on_service IS NOT NULL)` |
-| base_amount | numeric(18,2) | NO | The taxable base used |
-| amount | numeric(18,2) | NO | Signed like the item |
+| gl_account_code | varchar(30) | YES | Snapshot of the tax / service charge account when posted; a reversal copies the original's. |
+| base_amount | numeric(18,3) | NO | The taxable base used |
+| amount | numeric(18,3) | NO | Signed like the item |
 | sequence | smallint | NO | |
 | created_at | timestamptz | NO | |
 
@@ -780,7 +785,7 @@ Triggers:
 | folio_id | bigint | NO | FK → folios. IDX. |
 | payment_type | varchar(10) | NO | CHECK IN (`PAYMENT`,`REFUND`) |
 | payment_method | varchar(15) | NO | CHECK IN (`CASH`,`CARD`,`BANK_TRANSFER`,`OTHER`) |
-| amount | numeric(18,2) | NO | CHECK > 0. The currency is the property's. |
+| amount | numeric(18,3) | NO | CHECK > 0. The currency is the property's. |
 | paid_at | timestamptz | NO | Server time |
 | business_date | date | NO | FK → business_days. IDX `(property_id, business_date)`. |
 | reference_number | varchar(100) | YES | Never a card number (PAN) |

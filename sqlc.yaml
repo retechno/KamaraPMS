@@ -19,6 +19,12 @@ overrides:
       - db_type: "timestamptz"
         nullable: true
         go_type: { import: "time", type: "Time", pointer: true }
+      # Money and percentages are decimals, never floats.
+      - db_type: "pg_catalog.numeric"
+        go_type: "github.com/shopspring/decimal.Decimal"
+      - db_type: "pg_catalog.numeric"
+        nullable: true
+        go_type: { import: "github.com/shopspring/decimal", type: "Decimal", pointer: true }
       # Nullable scalars as plain pointers instead of pgtype wrappers
       - db_type: "pg_catalog.varchar"
         nullable: true
@@ -99,6 +105,226 @@ sql:
       go:
         package: guestsdb
         out: internal/guests/guestsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/billingconfig/queries.sql
+    gen:
+      go:
+        package: billingconfigdb
+        out: internal/billingconfig/billingconfigdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/rates/queries.sql
+    gen:
+      go:
+        package: ratesdb
+        out: internal/rates/ratesdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/availability/queries.sql
+    gen:
+      go:
+        package: availabilitydb
+        out: internal/availability/availabilitydb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/reservations/queries.sql
+    gen:
+      go:
+        package: reservationsdb
+        out: internal/reservations/reservationsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/folios/queries.sql
+    gen:
+      go:
+        package: foliosdb
+        out: internal/folios/foliosdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/frontdesk/queries.sql
+    gen:
+      go:
+        package: frontdeskdb
+        out: internal/frontdesk/frontdeskdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/nightaudit/queries.sql
+    gen:
+      go:
+        package: nightauditdb
+        out: internal/nightaudit/nightauditdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/reports/queries.sql
+    gen:
+      go:
+        package: reportsdb
+        out: internal/reports/reportsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/notifications/queries.sql
+    gen:
+      go:
+        package: notificationsdb
+        out: internal/notifications/notificationsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/cityledger/queries.sql
+    gen:
+      go:
+        package: cityledgerdb
+        out: internal/cityledger/cityledgerdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/maintenance/queries.sql
+    gen:
+      go:
+        package: maintenancedb
+        out: internal/maintenance/maintenancedb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/lostfound/queries.sql
+    gen:
+      go:
+        package: lostfounddb
+        out: internal/lostfound/lostfounddb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/accounting/queries.sql
+    gen:
+      go:
+        package: accountingdb
+        out: internal/accounting/accountingdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/groups/queries.sql
+    gen:
+      go:
+        package: groupsdb
+        out: internal/groups/groupsdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/companies/queries.sql
+    gen:
+      go:
+        package: companiesdb
+        out: internal/companies/companiesdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/expected/queries.sql
+    gen:
+      go:
+        package: expecteddb
+        out: internal/expected/expecteddb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/roomcharge/queries.sql
+    gen:
+      go:
+        package: roomchargedb
+        out: internal/roomcharge/roomchargedb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/payables/queries.sql
+    gen:
+      go:
+        package: payablesdb
+        out: internal/payables/payablesdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/bankrec/queries.sql
+    gen:
+      go:
+        package: bankrecdb
+        out: internal/bankrec/bankrecdb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/taxfiling/queries.sql
+    gen:
+      go:
+        package: taxfilingdb
+        out: internal/taxfiling/taxfilingdb
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true

@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import FormField from '@/components/app/FormField.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { i18n, LOCALES, setLocale, t, type Locale } from '@/i18n'
 import { rememberedTenantCode, useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -12,11 +18,9 @@ const form = reactive({ tenant_code: rememberedTenantCode(), email: '', password
 const busy = ref(false)
 const message = ref('')
 
-const messages: Record<string, string> = {
-  INVALID_CREDENTIALS: 'The tenant code, email or password is incorrect.',
-  TOO_MANY_ATTEMPTS: 'Too many failed attempts. Please wait a few minutes and try again.',
-  VALIDATION_FAILED: 'Enter your tenant code, email and password.',
-}
+const known = ['INVALID_CREDENTIALS', 'TOO_MANY_ATTEMPTS', 'VALIDATION_FAILED'] as const
+const messageFor = (code: string, fallback: string): string => ((known as readonly string[]).includes(code) ? t(`login.${code}` as 'login.INVALID_CREDENTIALS') : fallback)
+const locale = computed(() => i18n.global.locale.value)
 
 /**
  * Only same-site paths are allowed after sign-in. "//host" and "/\host" are
@@ -34,7 +38,7 @@ async function submit(): Promise<void> {
     await auth.login(form.tenant_code, form.email, form.password)
     await router.replace(safeRedirect(route.query.redirect))
   } catch (e) {
-    message.value = e instanceof ApiError ? (messages[e.code] ?? e.message) : 'The server could not be reached.'
+    message.value = e instanceof ApiError ? messageFor(e.code, e.message) : t('login.unreachable')
     form.password = ''
   } finally {
     busy.value = false
@@ -43,65 +47,30 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <main class="login">
-    <form class="card" novalidate @submit.prevent="submit">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">K</span>
-        <h1>Sign in to KamaraPMS</h1>
-      </div>
-      <p v-if="message" class="alert" role="alert" data-testid="login-error">{{ message }}</p>
-      <label class="field">
-        <span>Tenant code</span>
-        <input v-model="form.tenant_code" name="tenant_code" autocomplete="organization" autocapitalize="characters" required />
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input v-model="form.email" name="email" type="email" autocomplete="username" required />
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <input v-model="form.password" name="password" type="password" autocomplete="current-password" required />
-      </label>
-      <button type="submit" class="btn-primary" :disabled="busy">{{ busy ? 'Signing in…' : 'Sign in' }}</button>
-    </form>
+  <main class="grid min-h-screen place-items-center p-4">
+    <Card class="w-full max-w-sm">
+      <form class="grid gap-4" novalidate @submit.prevent="submit">
+        <CardContent class="grid gap-4 pt-6">
+          <div class="flex items-center gap-2.5">
+            <span class="grid size-8 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
+            <h1 class="m-0 text-lg font-semibold">{{ t('login.title') }}</h1>
+          </div>
+          <p v-if="message" class="alert m-0" role="alert" data-testid="login-error">{{ message }}</p>
+          <FormField :label="t('login.tenantCode')">
+            <template #default="{ id }"><Input :id="id" v-model="form.tenant_code" name="tenant_code" autocomplete="organization" autocapitalize="characters" required /></template>
+          </FormField>
+          <FormField :label="t('login.email')">
+            <template #default="{ id }"><Input :id="id" v-model="form.email" name="email" type="email" autocomplete="username" required /></template>
+          </FormField>
+          <FormField :label="t('login.password')">
+            <template #default="{ id }"><Input :id="id" v-model="form.password" name="password" type="password" autocomplete="current-password" required /></template>
+          </FormField>
+          <Button type="submit" :disabled="busy">{{ busy ? t('login.signingIn') : t('login.signIn') }}</Button>
+          <NativeSelect :model-value="locale" class="w-auto justify-self-end" :aria-label="t('language.label')" @change="void setLocale(($event.target as HTMLSelectElement).value as Locale)">
+            <option v-for="l in LOCALES" :key="l" :value="l">{{ t(`language.${l}` as never) }}</option>
+          </NativeSelect>
+        </CardContent>
+      </form>
+    </Card>
   </main>
 </template>
-
-<style scoped>
-.login {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-}
-form {
-  width: min(380px, 100%);
-  display: grid;
-  gap: 14px;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.brand h1 {
-  font-size: 18px;
-  margin: 0;
-}
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 700;
-}
-.alert {
-  margin: 0;
-}
-button {
-  padding: 9px 14px;
-}
-</style>

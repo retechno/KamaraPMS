@@ -5,6 +5,11 @@ import { ApiError } from '@/api/problem'
 import type { GuestHistoryItem, GuestView, PatchGuestRequest } from '@/api/types'
 import GuestFields from '@/components/GuestFields.vue'
 import { blankGuestForm } from '@/components/guestForm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/i18n'
 import { formatBusinessDate } from '@/utils/dates'
 
 const props = defineProps<{ id: string }>()
@@ -19,8 +24,17 @@ const notFound = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 
+const columns = computed<Column<GuestHistoryItem>[]>(() => [
+  { key: 'property_code', label: t('guest.property') },
+  { key: 'type', label: t('guest.type') },
+  { key: 'number', label: t('guest.number') },
+  { key: 'role', label: t('guest.role') },
+  { key: 'dates', label: t('guest.dates') },
+  { key: 'status', label: t('setup.status') },
+])
+
 const guestId = computed(() => Number(props.id))
-const title = computed(() => (guest.value ? [guest.value.first_name, guest.value.last_name].filter(Boolean).join(' ') : 'Guest'))
+const title = computed(() => (guest.value ? [guest.value.first_name, guest.value.last_name].filter(Boolean).join(' ') : t('guest.fallback')))
 
 function fill(g: GuestView): void {
   guest.value = g
@@ -70,58 +84,44 @@ onMounted(load)
 </script>
 
 <template>
-  <p v-if="notFound" class="muted" data-testid="not-found">This guest does not exist or is not accessible.</p>
+  <p v-if="notFound" class="muted" data-testid="not-found">{{ t('guest.notFound') }}</p>
   <template v-else>
-    <div class="page-head">
-      <h1 class="page-title">{{ title }}</h1>
-      <code v-if="guest">{{ guest.code }}</code>
-    </div>
+    <PageHeader :title="title">
+      <template #marks><code v-if="guest" class="text-sm text-muted-foreground">{{ guest.code }}</code></template>
+    </PageHeader>
 
     <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-    <p v-if="saved" class="muted" role="status" data-testid="saved">Saved.</p>
+    <p v-if="saved" class="muted" role="status" data-testid="saved">{{ t('guest.saved') }}</p>
 
-    <form v-if="guest" class="card" novalidate @submit.prevent="save">
-      <h2>Profile</h2>
-      <GuestFields v-model="form" :error="error" :disabled="!guest.can_edit" />
-      <p v-if="!guest.can_edit" class="muted" data-testid="read-only">
-        You can view this profile but not edit it: editing needs guest.write at a property where the guest has stayed or booked.
-      </p>
-      <div v-else class="form-actions">
-        <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-      </div>
-    </form>
+    <Card v-if="guest" class="mb-4">
+      <form novalidate @submit.prevent="save">
+        <CardHeader><CardTitle>{{ t('guest.profile') }}</CardTitle></CardHeader>
+        <CardContent>
+          <GuestFields v-model="form" :error="error" :disabled="!guest.can_edit" />
+          <p v-if="!guest.can_edit" class="mb-0 mt-3 text-sm text-muted-foreground" data-testid="read-only">{{ t('guest.readOnly') }}</p>
+          <div v-else class="mt-4 flex justify-end">
+            <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
 
-    <section class="card">
-      <h2>History</h2>
-      <p v-if="!history.length" class="muted" data-testid="no-history">No reservations or stays yet.</p>
-      <table v-else class="list">
-        <thead>
-          <tr>
-            <th>Property</th>
-            <th>Type</th>
-            <th>Number</th>
-            <th>Role</th>
-            <th>Dates</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="h in history" :key="`${h.type}-${h.id}`">
-            <td>{{ h.property_code }}</td>
-            <td>{{ h.type === 'STAY' ? 'Stay' : 'Reservation' }}</td>
-            <td>{{ h.number }}</td>
-            <td>{{ h.role.toLowerCase() }}</td>
-            <td>{{ formatBusinessDate(h.arrival_date) }} to {{ formatBusinessDate(h.departure_date) }}</td>
-            <td>{{ h.status }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-if="hidden" class="muted" data-testid="hidden">
-        {{ hidden }} more {{ hidden === 1 ? 'entry' : 'entries' }} at other properties {{ hidden === 1 ? 'is' : 'are' }} not shown.
-      </p>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" @click="loadHistory(true)">Load more</button>
-      </div>
-    </section>
+    <Card>
+      <CardHeader><CardTitle>{{ t('guest.history') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p v-if="!history.length" class="m-0 text-sm text-muted-foreground" data-testid="no-history">{{ t('guest.noHistory') }}</p>
+        <DataTable v-else :columns="columns" :rows="history" :row-key="(h) => `${h.type}-${h.id}`" :caption="t('guest.history')">
+          <template #cell-type="{ row }">{{ row.type === 'STAY' ? t('guest.stay') : t('guest.reservation') }}</template>
+          <template #cell-role="{ row }">{{ row.role.toLowerCase() }}</template>
+          <template #cell-dates="{ row }">{{ t('guest.dateRange', { from: formatBusinessDate(row.arrival_date), to: formatBusinessDate(row.departure_date) }) }}</template>
+        </DataTable>
+        <p v-if="hidden" class="mb-0 mt-3 text-sm text-muted-foreground" data-testid="hidden">
+          {{ hidden === 1 ? t('guest.hiddenOne') : t('guest.hiddenMany', { n: hidden }) }}
+        </p>
+        <div v-if="nextCursor" class="mt-3 flex justify-center">
+          <Button type="button" variant="outline" @click="loadHistory(true)">{{ t('guest.more') }}</Button>
+        </div>
+      </CardContent>
+    </Card>
   </template>
 </template>

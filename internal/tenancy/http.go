@@ -76,20 +76,25 @@ func (f *fieldParser) err() error {
 }
 
 type createPropertyRequest struct {
-	Code                            string  `json:"code"`
-	Name                            string  `json:"name"`
-	Address                         string  `json:"address"`
-	City                            string  `json:"city"`
-	CountryCode                     string  `json:"country_code"`
-	Timezone                        string  `json:"timezone"`
-	CurrencyCode                    string  `json:"currency_code"`
-	CurrencyDecimals                *int32  `json:"currency_decimals"`
-	CheckInTime                     *string `json:"check_in_time"`
-	CheckOutTime                    *string `json:"check_out_time"`
-	RequireRoomInspectionForCheckin bool    `json:"require_room_inspection_for_checkin"`
-	NightAuditMarksOccupiedDirty    *bool   `json:"night_audit_marks_occupied_dirty"`
-	NightAuditEarliestTime          *string `json:"night_audit_earliest_time"`
-	OpeningBusinessDate             *string `json:"opening_business_date"`
+	Code                            string   `json:"code"`
+	Name                            string   `json:"name"`
+	Address                         string   `json:"address"`
+	City                            string   `json:"city"`
+	CountryCode                     string   `json:"country_code"`
+	Phone                           string   `json:"phone"`
+	Email                           string   `json:"email"`
+	TaxID                           string   `json:"tax_id"`
+	DocumentFooter                  string   `json:"document_footer"`
+	Timezone                        string   `json:"timezone"`
+	CurrencyCode                    string   `json:"currency_code"`
+	CurrencyDecimals                *int32   `json:"currency_decimals"`
+	CheckInTime                     *string  `json:"check_in_time"`
+	CheckOutTime                    *string  `json:"check_out_time"`
+	RequireRoomInspectionForCheckin bool     `json:"require_room_inspection_for_checkin"`
+	NightAuditMarksOccupiedDirty    *bool    `json:"night_audit_marks_occupied_dirty"`
+	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
+	RefundMethods                   []string `json:"refund_methods"`
+	OpeningBusinessDate             *string  `json:"opening_business_date"`
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
@@ -101,11 +106,16 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 		Code: req.Code,
 		Settings: PropertySettings{
 			Name: req.Name, Address: req.Address, City: req.City, CountryCode: req.CountryCode,
+			Phone: req.Phone, Email: req.Email, TaxID: req.TaxID, DocumentFooter: req.DocumentFooter,
 			Timezone: req.Timezone, CurrencyCode: req.CurrencyCode,
 			RequireRoomInspectionForCheckin: req.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    true,
 			NightAuditEarliestTime:          civil.MustParseTimeOfDay("20:00"),
+			RefundMethods:                   []string{"CASH"},
 		},
+	}
+	if req.RefundMethods != nil {
+		in.Settings.RefundMethods = req.RefundMethods
 	}
 	var fp fieldParser
 	if req.CurrencyDecimals == nil {
@@ -173,19 +183,24 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) error {
 }
 
 type patchPropertyRequest struct {
-	Name                            *string `json:"name"`
-	Address                         *string `json:"address"`
-	City                            *string `json:"city"`
-	CountryCode                     *string `json:"country_code"`
-	Timezone                        *string `json:"timezone"`
-	CurrencyCode                    *string `json:"currency_code"`
-	CurrencyDecimals                *int32  `json:"currency_decimals"`
-	CheckInTime                     *string `json:"check_in_time"`
-	CheckOutTime                    *string `json:"check_out_time"`
-	RequireRoomInspectionForCheckin *bool   `json:"require_room_inspection_for_checkin"`
-	NightAuditMarksOccupiedDirty    *bool   `json:"night_audit_marks_occupied_dirty"`
-	NightAuditEarliestTime          *string `json:"night_audit_earliest_time"`
-	Status                          *string `json:"status"`
+	Name                            *string  `json:"name"`
+	Address                         *string  `json:"address"`
+	City                            *string  `json:"city"`
+	CountryCode                     *string  `json:"country_code"`
+	Phone                           *string  `json:"phone"`
+	Email                           *string  `json:"email"`
+	TaxID                           *string  `json:"tax_id"`
+	DocumentFooter                  *string  `json:"document_footer"`
+	Timezone                        *string  `json:"timezone"`
+	CurrencyCode                    *string  `json:"currency_code"`
+	CurrencyDecimals                *int32   `json:"currency_decimals"`
+	CheckInTime                     *string  `json:"check_in_time"`
+	CheckOutTime                    *string  `json:"check_out_time"`
+	RequireRoomInspectionForCheckin *bool    `json:"require_room_inspection_for_checkin"`
+	NightAuditMarksOccupiedDirty    *bool    `json:"night_audit_marks_occupied_dirty"`
+	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
+	RefundMethods                   []string `json:"refund_methods"`
+	Status                          *string  `json:"status"`
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
@@ -199,9 +214,11 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
 	}
 	patch := PropertyPatch{
 		Name: req.Name, Address: req.Address, City: req.City, CountryCode: req.CountryCode,
+		Phone: req.Phone, Email: req.Email, TaxID: req.TaxID, DocumentFooter: req.DocumentFooter,
 		Timezone: req.Timezone, CurrencyCode: req.CurrencyCode, CurrencyDecimals: req.CurrencyDecimals,
 		RequireRoomInspectionForCheckin: req.RequireRoomInspectionForCheckin,
 		NightAuditMarksOccupiedDirty:    req.NightAuditMarksOccupiedDirty,
+		RefundMethods:                   req.RefundMethods,
 		Status:                          req.Status,
 	}
 	var fp fieldParser

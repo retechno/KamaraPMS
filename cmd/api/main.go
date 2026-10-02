@@ -15,6 +15,7 @@ import (
 
 	"kamarapms/internal/app"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/notifications"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/config"
 	"kamarapms/internal/platform/db"
@@ -59,11 +60,23 @@ func run() error {
 		logger.Info("migrations applied", "count", n)
 	}
 
-	handler := app.NewHandler(app.Deps{
-		Logger:    logger,
-		DB:        pool,
-		TxManager: db.NewTxManager(pool, cfg.DBLockTimeout),
-		Clock:     clock.System{},
+	var mailer notifications.Sender
+	if cfg.SMTPHost != "" {
+		mailer = notifications.NewSMTPSender(notifications.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+			From: cfg.SMTPFrom, FromName: cfg.SMTPFromName, TLS: cfg.SMTPTLS,
+		})
+		logger.Info("e-mail enabled", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "tls", cfg.SMTPTLS, "from", cfg.SMTPFrom)
+	} else {
+		logger.Info("e-mail is off (PMS_SMTP_HOST is not set)")
+	}
+	application := app.New(app.Deps{
+		Mail:               mailer,
+		Logger:             logger,
+		DB:                 pool,
+		TxManager:          db.NewTxManager(pool, cfg.DBLockTimeout),
+		Clock:              clock.System{},
+		RateLimitPerMinute: cfg.RateLimit,
 		Tokens: iam.TokenConfig{
 			Secret:       cfg.JWTSecret,
 			AccessTTL:    cfg.AccessTokenTTL,
@@ -74,13 +87,15 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           handler,
+		Handler:           application.Handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
+
+	go application.Background(ctx) // the e-mail worker; it stops with the signal context
 
 	serveErr := make(chan error, 1)
 	go func() {

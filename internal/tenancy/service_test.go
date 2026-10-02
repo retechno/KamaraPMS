@@ -51,7 +51,7 @@ func settings() tenancy.PropertySettings {
 		Name: "Hotel Bali", Address: "Jl. Pantai 1", City: "Denpasar", CountryCode: "id",
 		Timezone: "Asia/Jakarta", CurrencyCode: "idr", CurrencyDecimals: 0,
 		CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),
-		NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"),
+		NightAuditMarksOccupiedDirty: true, NightAuditEarliestTime: civil.MustParseTimeOfDay("20:00"), RefundMethods: []string{"CASH"},
 	}
 }
 
@@ -105,7 +105,7 @@ func TestCreatePropertyOpensDayAndSequences(t *testing.T) {
 	if n := e.count(t, `SELECT count(*) FROM business_days WHERE property_id = $1 AND status = 'OPEN'`, p.ID); n != 1 {
 		t.Fatalf("open business days: %d", n)
 	}
-	if n := e.count(t, `SELECT count(*) FROM document_sequences WHERE property_id = $1`, p.ID); n != 4 {
+	if n := e.count(t, `SELECT count(*) FROM document_sequences WHERE property_id = $1`, p.ID); n != 13 {
 		t.Fatalf("sequences: %d", n)
 	}
 	// tenant.created + property.created + business_day.opened, stamped with the business date.

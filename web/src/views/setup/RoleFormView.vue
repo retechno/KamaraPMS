@@ -4,6 +4,13 @@ import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { components } from '@/api/schema'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 
 type PermissionInfo = components['schemas']['PermissionInfo']
 
@@ -71,62 +78,41 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <h1 class="page-title">{{ isNew ? 'New role' : `Role: ${form.name}` }}</h1>
+  <PageHeader :title="isNew ? t('roles.new') : t('roles.role', { name: form.name })" />
   <p v-if="error" class="alert" role="alert">{{ error.message }} <code>{{ error.code }}</code></p>
 
-  <form class="card" novalidate @submit.prevent="save">
-    <div class="form-grid">
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!error?.fieldMessage('name')" />
-        <small v-if="error?.fieldMessage('name')" class="error-text">{{ error.fieldMessage('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Description</span>
-        <input v-model="form.description" name="description" />
-      </label>
-    </div>
+  <Card>
+    <form novalidate @submit.prevent="save">
+      <CardContent class="pt-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <FormField :label="t('roles.name')" :error="error?.fieldMessage('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('roles.description')">
+            <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" /></template>
+          </FormField>
+        </div>
 
-    <h2 style="margin-top: 24px">Permissions</h2>
-    <p class="muted">Changes apply to everyone holding this role on their next request.</p>
-    <fieldset v-for="[group, items] in groups" :key="group" class="group">
-      <legend>
-        <label class="check">
-          <input type="checkbox" :checked="items.every((p) => selected.has(p.code))" @change="toggleGroup(items, ($event.target as HTMLInputElement).checked)" />
-          <strong>{{ group }}</strong>
-        </label>
-      </legend>
-      <label v-for="p in items" :key="p.code" class="check">
-        <input type="checkbox" :checked="selected.has(p.code)" :data-permission="p.code" @change="toggle(p.code, ($event.target as HTMLInputElement).checked)" />
-        <span>{{ p.description }} <code class="code">{{ p.code }}</code> <span class="badge">{{ p.milestone }}</span></span>
-      </label>
-    </fieldset>
+        <h2 class="mb-1 mt-6 text-base font-semibold">{{ t('roles.permissions') }}</h2>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('roles.permissionsHint') }}</p>
+        <fieldset v-for="[group, items] in groups" :key="group" class="mb-3 grid gap-2 rounded-lg border border-border px-3.5 pb-3 pt-2">
+          <legend class="px-1">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" class="size-4 accent-primary" :checked="items.every((p) => selected.has(p.code))" @change="toggleGroup(items, ($event.target as HTMLInputElement).checked)" />
+              <strong>{{ group }}</strong>
+            </label>
+          </legend>
+          <label v-for="p in items" :key="p.code" class="flex items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-0.5 size-4 accent-primary" :checked="selected.has(p.code)" :data-permission="p.code" @change="toggle(p.code, ($event.target as HTMLInputElement).checked)" />
+            <span>{{ p.description }} <code class="text-[11px] text-muted-foreground">{{ p.code }}</code> <Badge variant="outline">{{ p.milestone }}</Badge></span>
+          </label>
+        </fieldset>
 
-    <div class="form-actions">
-      <button type="button" @click="router.push('/setup/roles')">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="busy">{{ busy ? 'Saving…' : isNew ? 'Create role' : 'Save changes' }}</button>
-    </div>
-  </form>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="router.push('/setup/roles')">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="busy">{{ busy ? t('roles.saving') : isNew ? t('roles.create') : t('roles.saveChanges') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 </template>
-
-<style scoped>
-.group {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px 12px;
-  margin: 0 0 12px;
-  display: grid;
-  gap: 8px;
-}
-.code {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.badge {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-</style>

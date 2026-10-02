@@ -636,6 +636,3967 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/taxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List taxes */
+        get: operations["listTaxes"];
+        put?: never;
+        /**
+         * Create a tax (billing_config.manage)
+         * @description There is no inclusive flag: whether a price contains the tax is a property of the charge code's price mode.
+         */
+        post: operations["createTax"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/taxes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a tax (billing_config.manage); the code cannot change
+         * @description A rate change affects future postings only; the response then carries `affected_open_stays`. Deactivation is 409 `TAX_IN_USE` while the tax is mapped to a charge code.
+         */
+        patch: operations["updateTax"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/service-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List service charges */
+        get: operations["listServiceCharges"];
+        put?: never;
+        /** Create a service charge (billing_config.manage) */
+        post: operations["createServiceCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/service-charges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a service charge (billing_config.manage)
+         * @description Same rules as taxes (409 `SERVICE_CHARGE_IN_USE` on deactivation while mapped).
+         */
+        patch: operations["updateServiceCharge"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List charge codes with their active rules */
+        get: operations["listChargeCodes"];
+        put?: never;
+        /**
+         * Create a charge code without rules (billing_config.manage)
+         * @description Every property starts with ten system codes (ROOM, ROOM_EXEMPT, BREAKFAST, RESTAURANT, LAUNDRY, MINIBAR, EXTRA_BED, NO_SHOW_FEE, CANCEL_FEE, OTHER) and no rules.
+         */
+        post: operations["createChargeCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A charge code with its ordered rules */
+        get: operations["getChargeCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a charge code (billing_config.manage); the code cannot change
+         * @description `price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`). The charge type of a system code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`). Deactivation is 409 `CHARGE_CODE_IN_USE` while an active rate plan sells through the code. An empty `default_unit_price` clears it.
+         */
+        patch: operations["updateChargeCode"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-codes/{id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the ordered tax and service rules of a charge code (billing_config.manage)
+         * @description The request is the complete rule set. Rules that are no longer listed are deactivated (history is
+         *     kept). Taxes and service charges must exist in the property (404 `TAX_NOT_FOUND`,
+         *     `SERVICE_CHARGE_NOT_FOUND`) and be active (422 `TAX_INACTIVE`, `SERVICE_CHARGE_INACTIVE`).
+         *     Sequences are unique per list and at least 1. Affects future postings only.
+         */
+        put: operations["replaceChargeCodeRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/charge-calculations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview the charge calculation engine result (any access to the property)
+         * @description Runs the Charge Calculation Engine for a charge code and returns the full breakdown. Nothing is
+         *     posted or stored. The charge code's active, ordered rules and the property's currency precision are
+         *     used; `price_mode` overrides the code's own mode.
+         *
+         *     Amounts are signed: a negative `unit_price` (or `quantity`) calculates a credit, as adjustments do.
+         *     `discount_amount` is a non-negative magnitude, at most the amount, with no more decimals than the
+         *     currency; it always reduces the amount towards zero.
+         *
+         *     Every line amount is rounded half away from zero at the currency precision. An inclusive price
+         *     always totals exactly the quoted amount: any rounding residual is reported as `rounding_adjustment`
+         *     and added to the net revenue, never to the service charge or tax.
+         */
+        post: operations["calculateCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List rate plans */
+        get: operations["listRatePlans"];
+        put?: never;
+        /**
+         * Create a rate plan (rate.manage)
+         * @description The room charge code must be an active charge code of type ROOM. It owns the tax and service rules and the price mode the grid amounts are read in.
+         */
+        post: operations["createRatePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a rate plan (rate.manage); the code cannot change
+         * @description Changing the room charge code affects nightly snapshots taken from now on; existing reservations keep
+         *     theirs. A plan that already has rates cannot move to a room charge code with a different price mode
+         *     (409 `RATE_PLAN_PRICE_MODE_MISMATCH`), because its amounts would silently be read differently.
+         *     Deactivating a plan does not touch existing reservations.
+         */
+        patch: operations["updateRatePlan"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/yield-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the yield rules in the order they apply
+         * @description Yield rules adjust the price a night is sold at (see `POST` for the conditions). Readable by anyone at the property.
+         */
+        get: operations["listYieldRules"];
+        put?: never;
+        /**
+         * Create a yield rule (rate.manage)
+         * @description A rule matches a night when all its conditions hold (a condition left out always holds): rate plan, room type, stay dates, weekdays, how full the property is that night (`occupancy_from` included, `occupancy_to` excluded, except that 100 includes a full house), days between today and the night, and nights of the stay. Matching rules apply in `priority` order (then oldest first), each to the price the one before left, by a percentage (above -100, at most 1000) or an amount, kept within the rule's own `floor_amount` and `cap_amount`, never below zero and rounded at the currency's decimals.
+         *     Rules price the nights of bookings made, amended or quoted from now on; a booking keeps the price it was sold at. A night with an override keeps the override. 409 `CODE_TAKEN`; 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`.
+         */
+        post: operations["createYieldRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/yield-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A yield rule */
+        get: operations["getYieldRule"];
+        /**
+         * Replace a yield rule (rate.manage)
+         * @description The body is the whole rule; the code must be the one it has. 404 `YIELD_RULE_NOT_FOUND`.
+         */
+        put: operations["updateYieldRule"];
+        post?: never;
+        /**
+         * Delete a yield rule (rate.manage)
+         * @description Reservations keep the codes of the rules that priced them.
+         */
+        delete: operations["deleteYieldRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a stay would be priced at today, rule by rule
+         * @description Prices a stay as a booking made now would be: per night the grid price, how full the property is, each rule that moved the price and the price the night is sold at. Nights without a grid price are counted in `missing_nights` and carry no price. Readable by anyone at the property.
+         */
+        get: operations["getRateQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The rate grid of a plan for [from, to), with the plan's price mode
+         * @description `from` and `to` are required; `to` is exclusive and the span is at most 730 days. The list is not paginated. Nights without a rate are simply absent.
+         */
+        get: operations["getRates"];
+        /**
+         * Bulk upsert one amount over a date range (rate.manage)
+         * @description Sets `amount` for every listed room type on every night of [from, to) that falls on one of
+         *     `weekdays` (all days when omitted). The amount is read in the plan's price mode, is not negative and
+         *     has at most the currency's decimals (two at most). The whole request succeeds or nothing is written.
+         *     Existing reservations are not affected: they hold their own nightly snapshots.
+         */
+        put: operations["fillRates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Availability per room type and night, with rate plan prices (reservation.read)
+         * @description Advisory: only booking decides. `arrival` must not be before the business date, `departure` is after
+         *     arrival, at most 365 nights. `available` is `sellable - demand` and never negative. A rate plan with
+         *     nights that have no rate is listed with `missing_nights` and no `estimate`.
+         */
+        get: operations["searchAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/availability/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Free specific rooms of a room type for [arrival, departure) (reservation.read) */
+        get: operations["listFreeRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Search reservations, newest first (reservation.read)
+         * @description `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number and the booker's name.
+         */
+        get: operations["listReservations"];
+        put?: never;
+        /**
+         * Create a draft reservation, optionally confirming it at once (reservation.create)
+         * @description The `Idempotency-Key` header is required: the same key with the same body returns the stored
+         *     reservation, the same key with another body is 422 `IDEMPOTENCY_KEY_REUSED`. Drafts hold no inventory.
+         *     With `confirm: true` a booker is required and every room goes through the availability check (409
+         *     `ROOM_TYPE_NOT_AVAILABLE` or `ROOM_NOT_AVAILABLE`); `room_id` is only accepted then, and must be a room
+         *     of the booked type. Every night needs a grid price or a `nightly_overrides` entry (needs
+         *     `reservation.override_rate`), otherwise 409 `RATE_NOT_SET`.
+         */
+        post: operations["createReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Reservation detail with rooms, nightly rates, estimates and folios (reservation.read) */
+        get: operations["getReservation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit header fields (reservation.update); needs the current version */
+        patch: operations["updateReservation"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a draft reservation (reservation.create)
+         * @description All draft rooms become CONFIRMED or none does. A booker is required. 409 `ROOM_TYPE_NOT_AVAILABLE` lists the failing nights in `context.nights`; 409 `ROOM_NOT_AVAILABLE` names the room and why.
+         */
+        post: operations["confirmReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a reservation (reservation.cancel)
+         * @description A reason is required. Rejected (409 `RESERVATION_HAS_STAYS`) once any room is checked in or completed. `requires_folio_resolution` is true when an open folio still has a balance (a deposit to refund, a fee to post).
+         */
+        post: operations["cancelReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reinstate a cancelled reservation (reservation.reinstate)
+         * @description Only the rooms that were cancelled together with the reservation come back, if they arrive on or after the business date and the inventory still has room.
+         */
+        post: operations["reinstateReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a room to a draft or confirmed reservation (reservation.update)
+         * @description On a confirmed reservation the room is created CONFIRMED and goes through the availability check.
+         */
+        post: operations["addReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Amend a draft or confirmed room (reservation.update)
+         * @description Availability is re-checked without the room's own demand. Nights that survive keep their price
+         *     snapshot; changing the rate plan or room type prices every night again; new nights come from the
+         *     grid. The room type cannot change while a room is assigned (409 `ROOM_ASSIGNED`).
+         */
+        patch: operations["updateReservationRoom"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel one room (reservation.cancel)
+         * @description The reservation is cancelled with its last room that is not cancelled.
+         */
+        post: operations["cancelReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/no-show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a confirmed room as a no-show (nightaudit.no_show)
+         * @description Only a CONFIRMED room whose arrival date has come (arrival on or before the business date). Releases its inventory.
+         */
+        post: operations["markReservationRoomNoShow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/assign-room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign a specific room (reservation.update)
+         * @description A room of another type than the booked one is an upgrade: it needs `upgrade: true` and `reservation.upgrade`, and the room type of the room must have the inventory. The room must be free (409 `ROOM_NOT_AVAILABLE` with the reasons).
+         */
+        post: operations["assignReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the assigned room off (reservation.update)
+         * @description The room goes back to consuming its booked room type, which must have the inventory when it was an upgrade.
+         */
+        post: operations["unassignReservationRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tape-chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms with the bookings and blocks touching [from, to) (reservation.read)
+         * @description Read-only. The window is at most 62 days. Rows are the active rooms; CONFIRMED and CHECKED_IN room lines without a specific room are listed per room type under `unassigned`.
+         */
+        get: operations["getTapeChart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List folios with their balances (folio.read) */
+        get: operations["listFolios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A folio with its ledger items and components (folio.read)
+         * @description `balance` is debits minus credits; it is never stored. Amounts are formatted with the property's currency decimals.
+         */
+        get: operations["getFolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a manual charge (folio.post_charge)
+         * @description The breakdown comes only from the charge calculation engine. A charge code of type ROOM is refused (409 `ROOM_CHARGE_REQUIRES_ROOM_POSTING`). `unit_price` falls back to the charge code's default price. The folio must be OPEN. The same Idempotency-Key replays the stored item.
+         */
+        post: operations["postFolioCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a signed adjustment on the current business date (folio.adjust, needs approval)
+         * @description Needs the `approval` block (docs 06-api.md §14.1). The engine runs on a signed amount, so taxes and service charges follow the sign. A replay of the same Idempotency-Key returns the stored item and does not ask for approval again.
+         */
+        post: operations["postFolioAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a payment (payment.post) */
+        post: operations["postFolioPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a folio with a zero balance (folio.post_charge)
+         * @description For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
+         */
+        post: operations["closeFolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folio-items/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse an item posted on the current business date (folio.reverse, needs approval)
+         * @description Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`).
+         */
+        post: operations["reverseFolioItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a deposit on a draft or confirmed reservation (payment.post)
+         * @description The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+         */
+        post: operations["postDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The cashier list, newest first, with net totals per method for a business date (folio.read)
+         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded.
+         */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment taken on the current business date (payment.void, needs approval)
+         * @description The payment becomes VOIDED and its ledger entry is reversed. Rejected for a payment with refunds, for a refund, and for an earlier date (refund it instead).
+         */
+        post: operations["voidPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund part or all of a payment (payment.refund, needs approval)
+         * @description The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`).
+         */
+        post: operations["refundPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a confirmed room in (frontdesk.checkin)
+         * @description The arrival date must be the business date (409 `ARRIVAL_DATE_MISMATCH`). `room_id` may be omitted when a room is assigned. The room must be free (409 `ROOM_OCCUPIED`, `ROOM_BLOCKED`, `ROOM_NOT_AVAILABLE`) and ready: CLEAN or INSPECTED, or INSPECTED only when the property requires an inspection (409 `ROOM_NOT_READY` with `context.current` and `context.required`). An override needs `frontdesk.checkin_unready_room` and a reason. A room of another type than the booked one is an upgrade (needs `reservation.upgrade` and the room type's inventory). The open deposit folio of the reservation is linked to the stay, otherwise a folio is created. The same Idempotency-Key returns the stay it created.
+         */
+        post: operations["checkIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/walk-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create, confirm, assign and check in a room in one transaction (frontdesk.checkin and reservation.create)
+         * @description Arrival is the business date and the source is WALK_IN. Give `guest_id` or `new_guest`. Any refusal (room not free, not ready, no rate) leaves nothing behind.
+         */
+        post: operations["walkIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/arrivals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Confirmed rooms arriving on a date (reservation.read)
+         * @description `date` defaults to the business date. A room that is checked in is no longer an arrival.
+         */
+        get: operations["listArrivals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Stays, newest first (the in-house and due-out lists, reservation.read) */
+        get: operations["listStays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A stay with its segments, guests, room line, nightly rates and folio (reservation.read)
+         * @description `nightly_rates[].posted` says whether the night has been charged (always false until room charges are posted).
+         */
+        get: operations["getStay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/reverse-check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a check-in of the same business date (frontdesk.reverse_checkin)
+         * @description The stay is cancelled, its segment closed, the room line goes back to CONFIRMED, the folio is unlinked and the room becomes DIRTY. Refused once a charge is posted to the folio (409 `CHECK_IN_HAS_CHARGES`) or on a later business day (409 `CHECK_IN_NOT_REVERSIBLE`).
+         */
+        post: operations["reverseCheckIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an in-house stay to another room (frontdesk.room_move)
+         * @description The current segment closes and a new one opens for the target room; the old room becomes DIRTY. The target must be free for the rest of the stay (409 `ROOM_OCCUPIED`, `ROOM_NOT_AVAILABLE`), have inventory if its type differs (409 `ROOM_TYPE_NOT_AVAILABLE`) and be clean (409 `ROOM_NOT_READY`, override needs `frontdesk.override_room_not_ready`). `new_nightly_rates` (needs `frontdesk.rate_change`) may reprice the nights not yet charged (409 `NIGHT_ALREADY_POSTED`).
+         */
+        post: operations["moveStay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/change-departure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend or shorten an in-house stay (reservation.update)
+         * @description Extending needs the room free for the extra nights (409 `ROOM_NOT_AVAILABLE_FOR_EXTENSION`, the context lists `alternative_rooms` and `suggest_room_move`) and inventory. Shortening needs a date after the business date and after the last charged night (409 `NIGHT_ALREADY_POSTED`). The reservation line keeps its own dates.
+         */
+        post: operations["changeStayDeparture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/guests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an accompanying guest (frontdesk.checkin)
+         * @description 409 `GUEST_ALREADY_ON_STAY` when the guest is already the main or an accompanying guest.
+         */
+        post: operations["addStayGuest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/check-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check an in-house stay out (frontdesk.checkout)
+         * @description Posts every unposted night up to the business date (trigger CHECK_OUT), requires every folio of the stay to have a zero balance (409 `FOLIO_NOT_BALANCED`, context `folios`), closes the folios and the segment, completes the room line and makes the room DIRTY (and VACANT, derived). Leaving before the booked departure needs `confirm_early_departure` (409 `EARLY_DEPARTURE_NOT_CONFIRMED`); the stay then ends at the business date, or the next day once the calendar date has passed it. A room charge that cannot be posted refuses the check-out (409 `REQUIRED_CHARGES_NOT_POSTED`). Everything happens in one transaction. The `Idempotency-Key` header is required; a retry with the same version of an already completed check-out returns its result.
+         */
+        post: operations["checkOutStay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The manager dashboard of the open business day (report.view)
+         * @description One read of what the reports show: the open day live, the front desk's work left, housekeeping, the last 14 closed days, the month against the one before, and the next 14 nights. No writes, no locks.
+         */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/daily-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Closing summary of a business date (report.view)
+         * @description The stored summary of a closed day, or a live computation for the open day (`live: true`). A closed day without a stored summary has `summary: null`. 404 `BUSINESS_DAY_NOT_FOUND` for a date that was never a business day.
+         */
+        get: operations["getDailySummaryReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Revenue by charge code and charge type (report.view)
+         * @description Ledger items (charges, adjustments, reversals) by business date, signed so corrections net out. Rows carry the revenue account code the items were posted with.
+         */
+        get: operations["getRevenueReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/tax": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Taxes and service charges collected (report.view)
+         * @description Read from the component snapshots, so the code, name, rate and account are the ones in force when each item was posted: a rate edited in the range gives two lines.
+         */
+        get: operations["getTaxReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/cashier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Payments by business date and method (report.view)
+         * @description Posted payments and refunds netted; voided payments are shown apart.
+         */
+        get: operations["getCashierReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Occupancy, ADR and RevPAR over closed days (report.view)
+         * @description From the stored closing summaries. Totals use occupied over available (total less out-of-order) room nights, ADR per room night charged and RevPAR per available room night.
+         */
+        get: operations["getStatisticsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/arrivals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms arriving on a date, whatever became of them (report.view)
+         * @description Drafts are excluded.
+         */
+        get: operations["getArrivalsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/departures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Stays leaving on a date (report.view)
+         * @description Open or already checked out; cancelled stays are excluded.
+         */
+        get: operations["getDeparturesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/in-house": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Stays in house now, with their folio balance (report.view)
+         * @description Open stays with the room of their open segment.
+         */
+        get: operations["getInHouseReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The audit trail of a property, newest first (audit.read)
+         * @description Every state change writes an entry in its own transaction. Secrets are never shown (fields named like a password, secret or token are blanked). `from` and `to` are business dates, so entries without one are excluded when they are used.
+         */
+        get: operations["listAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant-level audit trail (users, roles, guests), newest first (tenant administrators) */
+        get: operations["listTenantAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/invoice.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Invoice of a folio, or a guest bill while it is open (folio.read and reservation.read)
+         * @description A closed folio prints as an INVOICE with the file name `invoice-<folio number>.pdf`; an open one as a GUEST BILL that says it is not final (`bill-<folio number>.pdf`). It lists every ledger line, the charges net of service and tax, each service charge and tax by name and rate (from the posted components), the payments and the balance. The guest profile (address) is shown only to callers with guest.read.
+         */
+        get: operations["getInvoicePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/stays/{id}/registration-card.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Registration card of a stay (reservation.read)
+         * @description Stay, room, dates, guests and rate, the guest's details (profile fields need guest.read; missing ones print as a dash to be written in), the terms, and signature lines.
+         */
+        get: operations["getRegistrationCardPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/receipt.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Receipt of a payment or refund (folio.read)
+         * @description A voided payment is stamped VOID with the reason, so a cancelled receipt cannot pass for a valid one.
+         */
+        get: operations["getReceiptPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/confirmation.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Confirmation letter of a reservation (reservation.read)
+         * @description The rooms booked with their estimates, the check-in and check-out times and the guest's request. This is the PDF attached to the confirmation e-mail.
+         */
+        get: operations["getConfirmationPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reservations/{id}/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The e-mails of a reservation and whether e-mail is on (reservation.read) */
+        get: operations["listReservationEmails"];
+        put?: never;
+        /**
+         * Queue the confirmation e-mail again (reservation.update)
+         * @description The e-mail goes through an outbox and a background worker (the answer is 202 with the queued entry). Confirming a reservation queues the first one automatically when the booker has an address. 409 `EMAIL_NOT_CONFIGURED` without a mail server, `RESERVATION_NOT_CONFIRMED`, `GUEST_HAS_NO_EMAIL`, `EMAIL_ALREADY_QUEUED`.
+         */
+        post: operations["resendConfirmationEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The full night audit pre-check (nightaudit.run)
+         * @description Runs every check and a dry run of the room charges; it writes nothing. `blockers` stop the run: unresolved arrivals (CONFIRMED rooms due to arrive), unresolved departures (OPEN stays due out), room charges in ERROR and posted nights that should not exist. `missing_charges` are READY nights before the business date (the run posts them), `tonight_charges` the READY nights of the business date. `can_run` is true when the time guard passes and nothing blocks.
+         */
+        get: operations["previewNightAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/no-shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark exactly the listed unresolved arrivals as no-show (nightaudit.no_show)
+         * @description One transaction. The request carries the exact `reservation_room_ids` the staff saw and `confirm: true`; the server never expands the set. If any line is no longer CONFIRMED with an arrival date up to the business date, nothing changes and the answer is 409 `NO_SHOW_SET_CHANGED` with the changed lines in `context.changed`. A no-show releases the inventory; no fee is posted.
+         */
+        post: operations["markNoShows"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close the business day (nightaudit.run)
+         * @description One transaction: advisory lock (409 `NIGHT_AUDIT_IN_PROGRESS`), the open day locked for update (409 `BUSINESS_DATE_MISMATCH`), the time guard (409 `NIGHT_AUDIT_TOO_EARLY`), the checks (409 `NIGHT_AUDIT_BLOCKED`, `context.blockers` has the shape of the preview's), housekeeping (rooms with an open segment become DIRTY when the property is configured so), the room charges (trigger NIGHT_AUDIT), a revalidation, the closing summary, and the move to the next business date. Any blocker rolls back everything, including the charges posted. It never changes a guest, reservation or stay status.
+         */
+        post: operations["runNightAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview the room charges that are due (nightaudit.run or folio.post_charge)
+         * @description A dry run of the room charge posting: which nights of which stays are READY, already posted, not applicable or in ERROR, with the service charge, tax and total the engine calculates. It modifies nothing. `business_date` must be the open business date (409 `BUSINESS_DATE_MISMATCH`). Without `stay_ids` every in-house stay is considered.
+         */
+        post: operations["previewRoomCharges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/room-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post the room charges that are due (nightaudit.run or folio.post_charge)
+         * @description Posts every READY night (earlier nights that were never posted and tonight's) through the folio posting service, in the order of stay and night, and records each in the posting register. The stays are locked first, so concurrent runs cannot charge a night twice; a second run answers `ALREADY_POSTED`. ERROR nights (no open folio, no nightly rate, no room for the night, an invalid charge code) are reported and never posted. `revalidation` re-reads the scope after the commit.
+         */
+        post: operations["postRoomCharges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List companies (reservation.read or cityledger.read) */
+        get: operations["listCompanies"];
+        put?: never;
+        /**
+         * Create a company (company.manage)
+         * @description A company is a corporate account the hotel bills instead of the guest. `credit_limit` empty means no limit, `0` means no credit. The code is unique per property (409 `CODE_TAKEN`).
+         */
+        post: operations["createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/companies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One company (reservation.read or cityledger.read) */
+        get: operations["getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a company (company.manage); the code cannot change
+         * @description A company that still owes money cannot be deactivated (409 `COMPANY_HAS_BALANCE`). Lowering the limit below the balance is allowed; it only stops new transfers. An empty `credit_limit` removes the limit.
+         */
+        patch: operations["updateCompany"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/companies/{id}/statement.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Statement of account of a company (cityledger.read)
+         * @description Transfers (debit), receipts (credit) and the balance after each line for the period, then the aging of what is still open. A voided receipt is listed and marked, and does not count. File name `statement-<company code>.pdf`.
+         */
+        get: operations["getCompanyStatementPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List booking groups, newest first (reservation.read) */
+        get: operations["listGroups"];
+        put?: never;
+        /**
+         * Create a booking group (group.manage)
+         * @description A group is a block of reservations that share dates and optionally a company that is billed. Rooms are booked as ordinary reservations that name the group (`booking_group_id` on the reservation); the stay must lie within the group's dates and the reservation inherits the group's company.
+         */
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One booking group (reservation.read) */
+        get: operations["getGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a booking group (group.manage); the code cannot change
+         * @description The dates cannot shrink past a booked room (409 `GROUP_HAS_ROOMS_OUTSIDE_DATES`) and the company cannot change while reservations bill another one (409 `GROUP_HAS_RESERVATIONS`). `company_id` below 1 removes the company. An inactive group takes no more rooms.
+         */
+        patch: operations["updateGroup"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The reservations of a group, by id (reservation.read)
+         * @description Not paginated.
+         */
+        get: operations["listGroupReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move part of an open folio's balance to a company's city ledger account (cityledger.transfer)
+         * @description Posts a payment with method `CITY_LEDGER` that credits the folio and adds to what the company owes.
+         *     The amount cannot exceed the folio's balance (409 `TRANSFER_EXCEEDS_BALANCE`). The company must be active
+         *     (409 `COMPANY_INACTIVE`) and stay within its credit limit (409 `CREDIT_LIMIT_EXCEEDED`, with
+         *     `context.credit_limit` and `context.balance`); the company row is locked, so the limit holds when several
+         *     folios transfer at once. A transfer is not refunded; it can be voided on the same business date unless
+         *     receipts already settled it (409 `COMPANY_BALANCE_SETTLED`).
+         */
+        post: operations["transferFolioToCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Companies with what they owe (cityledger.read)
+         * @description The balance is derived (transfers minus receipts), never stored.
+         */
+        get: operations["listCityLedgerAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One company's account (cityledger.read) */
+        get: operations["getCityLedgerAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's movements with the running balance (cityledger.read)
+         * @description `from` and `to` are optional business dates (inclusive). A period that starts after earlier movements opens with their balance. Lines are ordered by date, transfers before receipts; a voided line is listed but does not move the balance.
+         */
+        get: operations["getCityLedgerStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/aging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a company owes by age of the transfer (cityledger.read)
+         * @description As of the current business date, in the buckets 0-30, 31-60, 61-90 and 90+ days. Receipts settle the oldest transfers first.
+         */
+        get: operations["getCityLedgerAging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's receipts, oldest first (cityledger.read)
+         * @description Not paginated.
+         */
+        get: operations["listCityLedgerReceipts"];
+        put?: never;
+        /**
+         * Record money a company paid against its account (cityledger.receive)
+         * @description The receipt cannot exceed what the company owes (409 `RECEIPT_EXCEEDS_BALANCE`, with `context.balance`); the
+         *     company row is locked, so receipts taken at once cannot exceed it together. The receipt number comes from the
+         *     CITY_LEDGER_RECEIPT series. `allocations` pay invoices of the company with this receipt (the sum is at most the
+         *     amount; what is left stays on account): each invoice must be an issued invoice of the company (404
+         *     `INVOICE_NOT_FOUND`, 409 `INVOICE_NOT_PAYABLE`) and may not be paid more than it still owes (409
+         *     `ALLOCATION_EXCEEDS_INVOICE`, with `context.invoice_id` and `context.outstanding`).
+         */
+        post: operations["receiveCityLedgerPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a receipt taken on the current business date (cityledger.receive, needs approval) */
+        post: operations["voidCityLedgerReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoice-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Transfers of a company that are not on an invoice yet (cityledger.read)
+         * @description Oldest first. `invoiceable` is true once the guest of the folio has checked out; transfers of guests still in house are listed but cannot be invoiced. Not paginated.
+         */
+        get: operations["listCityLedgerInvoiceCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A company's invoices, newest first, without their lines (cityledger.read)
+         * @description Not paginated. Voided invoices are listed.
+         */
+        get: operations["listCityLedgerInvoices"];
+        put?: never;
+        /**
+         * Issue one invoice over several transfers of a company (cityledger.invoice)
+         * @description Combines the given transfers (at most 200) into one invoice. Every transfer must belong to the company, be
+         *     posted, not be on another live invoice (409 `TRANSFER_NOT_AVAILABLE`) and belong to a guest who has checked out
+         *     (409 `STAY_NOT_CHECKED_OUT`); both carry `context.payment_ids`. The due date is the invoice date plus the
+         *     company's payment terms. The company row is locked, so two invoices cannot claim the same transfer. An invoice
+         *     is a billing document: it does not change what the company owes.
+         */
+        post: operations["createCityLedgerInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One invoice with its lines (cityledger.read) */
+        get: operations["getCityLedgerInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void an invoice (cityledger.invoice, needs approval)
+         * @description Its transfers are released and can be invoiced again. 409 `INVOICE_ALREADY_VOIDED` for a voided invoice, 409 `INVOICE_HAS_PAYMENTS` while posted receipts have paid it (void them first).
+         */
+        post: operations["voidCityLedgerInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/invoice.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Invoice to a company as a PDF (cityledger.read)
+         * @description One line per checked-out stay (check-out date, guest, room, stay dates, folio, reference, amount), the total and the due date. A voided invoice is stamped VOID. File name `invoice-<invoice number>.pdf`.
+         */
+        get: operations["getCityLedgerInvoicePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a room's housekeeping flags (housekeeping.update)
+         * @description Priority (HIGH rooms come first on the cleaning list), do not disturb, a make-up request and a note. A flag change is not a status change: the time the room has been in its status does not restart.
+         */
+        put: operations["setRoomHousekeepingFlags"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Who can be given cleaning work (housekeeping.assign)
+         * @description Active users whose role holds housekeeping.update at the property, and tenant administrators. Not paginated.
+         */
+        get: operations["listHousekeepingStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The cleaning list of a business date with the workload per person
+         * @description Ordered with high priority first, then by floor and room. `date` defaults to the current business date. Not paginated. The workload has one line per housekeeper and one for tasks not assigned yet (`user_id` null).
+         */
+        get: operations["listHousekeepingTasks"];
+        put?: never;
+        /** Add a task by hand for the current business date (housekeeping.assign) */
+        post: operations["createHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the cleaning list of the current business date (housekeeping.assign)
+         * @description Occupied rooms get a CHECKOUT task (the guest leaves today or is overdue) or a STAYOVER task; a vacant room that
+         *     is not clean gets an ARRIVAL task when a guest is assigned to it today, otherwise a DIRTY task. Arrivals and rooms
+         *     flagged HIGH get high priority. A room that already has a task that day gets no second kind, and a room under a
+         *     block gets none. Running it again only adds what is new, so it can be run through the day, also by two people at once.
+         */
+        post: operations["generateHousekeepingTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give tasks to a housekeeper, or take them back with a null user (housekeeping.assign)
+         * @description Only open tasks can be assigned; if any is not (or does not exist) nothing changes (409 `TASK_NOT_ASSIGNABLE`, `context.task_ids`). The assignee must be staff (422 `ASSIGNEE_INVALID`).
+         */
+        post: operations["assignHousekeepingTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a pending task (housekeeping.update)
+         * @description An unassigned task goes to the person who starts it and a DIRTY room becomes CLEANING. 409 `TASK_NOT_PENDING` otherwise.
+         */
+        post: operations["startHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a task (housekeeping.update)
+         * @description A DIRTY or CLEANING room becomes CLEAN; a room that is already CLEAN or INSPECTED keeps its status. Finishing a task never inspects the room. 409 `TASK_ALREADY_CLOSED` when it is already finished (also when two people finish it at once).
+         */
+        post: operations["completeHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a task without cleaning (housekeeping.update)
+         * @description A reason is required (for example that the guest asked not to be disturbed). The room's status does not change.
+         */
+        post: operations["skipHousekeepingTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Who can take maintenance work (maintenance.manage)
+         * @description Active users whose role holds maintenance.report or maintenance.manage at the property, and tenant administrators. Not paginated.
+         */
+        get: operations["listMaintenanceStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List maintenance requests, newest first (maintenance.report) */
+        get: operations["listMaintenanceRequests"];
+        put?: never;
+        /**
+         * Report a problem (maintenance.report)
+         * @description Against a room (`room_id`) or a place (`location`, for example Lobby); at least one is required. The request starts OPEN with the number MNT….
+         */
+        post: operations["createMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One maintenance request (maintenance.report) */
+        get: operations["getMaintenanceRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the details of an open request (maintenance.manage)
+         * @description 409 `REQUEST_NOT_OPEN` once it is resolved or cancelled.
+         */
+        patch: operations["updateMaintenanceRequest"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give an open request to a technician, or take it back (maintenance.manage)
+         * @description A null user takes it back. The technician must be staff (field error `ASSIGNEE_INVALID`).
+         */
+        post: operations["assignMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start work on an OPEN request (maintenance.manage)
+         * @description An unassigned request goes to the person who starts it. 409 `REQUEST_NOT_OPEN` otherwise.
+         */
+        post: operations["startMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an open request as repaired (maintenance.manage)
+         * @description With `release_block` the room block taken for the request is cancelled too (needs room_block.manage). Two people closing a request at once: one wins, the other gets 409 `REQUEST_NOT_OPEN`.
+         */
+        post: operations["resolveMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an open request (maintenance.manage)
+         * @description A reason (`note`) is required; `release_block` works as for resolve.
+         */
+        post: operations["cancelMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a resolved request back to OPEN (maintenance.manage)
+         * @description For a repair that did not hold. 409 `REQUEST_NOT_RESOLVED` otherwise.
+         */
+        post: operations["reopenMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/maintenance-requests/{id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the request's room out of sale (maintenance.manage and room_block.manage)
+         * @description Creates an OOO or OOS room block from the start date (default today) to the end date (exclusive) with the request as its reason, and links it. 409 `REQUEST_HAS_NO_ROOM`, `REQUEST_ALREADY_BLOCKED` (one live block per request), and the usual `ROOM_BLOCK_CONFLICT` when a stay or reservation holds the room; a failed block changes nothing.
+         */
+        post: operations["blockRoomForMaintenanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** List lost and found items, newest first (lostfound.report) */
+        get: operations["listLostFoundItems"];
+        put?: never;
+        /**
+         * Record an item that was found (lostfound.report)
+         * @description In a room (`room_id`) or at a place (`location`, for example Pool); at least one is required. Dated with the current business date and numbered LF….
+         */
+        post: operations["createLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One item (lostfound.report) */
+        get: operations["getLostFoundItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the details of a stored item (lostfound.manage)
+         * @description 409 `ITEM_NOT_STORED` once it has been handed back or disposed of.
+         */
+        patch: operations["updateLostFoundItem"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/possible-owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Guests who had the item's room around the day it was found (lostfound.report and reservation.read)
+         * @description A hint, not a match: the guests of stays whose room segment covered the day the item was found or ended in the three days before. Empty for an item found at a place. Not paginated.
+         */
+        get: operations["listLostFoundPossibleOwners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand a stored item back to its owner (lostfound.manage)
+         * @description Records who took it and what was checked; final. 409 `ITEM_NOT_STORED` when it was already closed (also when two desks close it at once).
+         */
+        post: operations["returnLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/lost-found/{id}/dispose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a stored item that nobody claimed (lostfound.manage)
+         * @description A reason is required; final.
+         */
+        post: operations["disposeLostFoundItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/housekeeping-productivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What each housekeeper did (report.view)
+         * @description Per person and business date: rooms taken to CLEAN and to INSPECTED by hand (from the status log, a room cleaned twice counts twice), tasks finished and skipped on the cleaning list, and the average minutes between starting and finishing the tasks that were started. `people` totals each person over the range.
+         */
+        get: operations["getHousekeepingProductivityReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/housekeeping-dirty-rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Rooms that are not clean yet and for how long (report.view)
+         * @description Rooms that are DIRTY or CLEANING, longest first, with the derived occupancy, the priority and do-not-disturb flags and any active block. `min_hours` keeps the rooms that have been in this state at least that long. The age is measured in database time.
+         */
+        get: operations["getHousekeepingDirtyRoomsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Maintenance requests reported in a range, by category (report.view)
+         * @description How the requests of the range ended (resolved, cancelled, still open) and the average hours to resolve, per category and in total, plus the backlog of today (what is open now, how many are high priority, how old the oldest is).
+         */
+        get: operations["getMaintenanceReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chart of accounts, by code (accounting.view)
+         * @description Not paginated (a chart is a few hundred rows). With `format=csv` the whole chart is exported in the layout the import reads: code, name, type, parent_code, postable, group, active, description.
+         */
+        get: operations["listGlAccounts"];
+        put?: never;
+        /**
+         * Add an account (accounting.manage)
+         * @description The code is upper-cased and unique per property (409 `CODE_TAKEN`). A postable account needs a statement group of its type; the parent must be a header account of the same type. The code, type and normal side never change afterwards.
+         */
+        post: operations["createGlAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add and update accounts from CSV (accounting.manage)
+         * @description A row whose code exists updates that account (its type cannot change); other rows create one. The parent codes may appear anywhere in the file. Everything is checked and applied in one transaction: a file with a mistake changes nothing (422 with one field error per row, `rows[N].field`; 409 `ACCOUNT_IN_USE` when it would switch off an account the system posts to). `dry_run` checks and applies it without keeping it.
+         */
+        post: operations["importGlAccounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One account (accounting.view) */
+        get: operations["getGlAccount"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an account nobody uses (accounting.manage)
+         * @description 409 `ACCOUNT_IN_USE` while it has accounts under it, is used by the system, a charge code, a tax or a service charge, or has journal lines.
+         */
+        delete: operations["deleteGlAccount"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an account (accounting.manage)
+         * @description The name, parent, group, description and the postable and active flags. An account the system posts to cannot be deactivated or turned into a header (409 `ACCOUNT_IN_USE`); an account with accounts under it cannot take postings (409 `ACCOUNT_HAS_CHILDREN`). `parent_id` below 1 removes the parent.
+         */
+        patch: operations["updateGlAccount"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/account-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The accounts the system posts to (accounting.view)
+         * @description Ten keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT (what a payment method is received into), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
+         */
+        get: operations["getGlAccountMap"];
+        /**
+         * Point system keys at accounts (accounting.manage)
+         * @description Each account must be active, take postings and be of the right type (cash and receivables are assets, deposits and payables liabilities; suspense may be anything). All or nothing.
+         */
+        put: operations["setGlAccountMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/unmapped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Charge codes, taxes and service charges whose account code the journals cannot use (accounting.view)
+         * @description No code, a code that is not in the chart, an inactive account, a header account, or an account of a type that does not fit. Their amounts are posted to the fallback account of the kind (`posted_to`): tax to TAX_PAYABLE, service charge to SERVICE_PAYABLE, everything else to SUSPENSE. Only active items are checked.
+         */
+        get: operations["listUnmappedGlCodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Journals, newest first (accounting.view) */
+        get: operations["listJournals"];
+        put?: never;
+        /**
+         * Post a manual journal (accounting.post)
+         * @description The `Idempotency-Key` header is required; the same key returns the first journal. The date is not after the current business date nor before the accounting start date, and its month is open (409 `PERIOD_CLOSED`). Each line is a debit or a credit, at the property's decimals; debits equal credits (field `lines`). The accounts the guest ledger, city ledger and advance deposits are controlled by the day close and refused (`CONTROL_ACCOUNT`).
+         */
+        post: operations["postManualJournal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/post-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make the journals of closed business days that have none (accounting.close)
+         * @description The days from before accounting was set up and any the night audit skipped, oldest first, at most 400 a call. Safe to repeat.
+         */
+        post: operations["postPendingJournals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One journal with its lines (accounting.view) */
+        get: operations["getJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/journals/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a manual journal (accounting.post, needs approval)
+         * @description Posts the mirror image (a REVERSAL journal). Only a manual journal, once (409 `JOURNAL_NOT_REVERSIBLE`, `JOURNAL_ALREADY_REVERSED`); a day close journal follows the folios and is corrected there. The reversal date defaults to the current business date and its month must be open.
+         */
+        post: operations["reverseJournal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The months of the books, newest first (accounting.view)
+         * @description From the month of the accounting start date to the month of the current business date, with how many of their days have a journal and whether each can be closed.
+         */
+        get: operations["listGlPeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods/{start}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a month (accounting.close)
+         * @description A month closes in order, after it has ended, when every business day of it is closed with its journal (409 `PERIOD_NOT_READY`). A closed month takes no journals.
+         */
+        post: operations["closeGlPeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/periods/{start}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the latest closed month (accounting.close) */
+        post: operations["reopenGlPeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/trial-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Trial balance (accounting.view)
+         * @description Every account with entries up to the end date: the balance before the start, the movement of the range and the closing balance, each on the side it falls on. Debits equal credits in each column.
+         */
+        get: operations["getTrialBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * General ledger of one account (accounting.view)
+         * @description The entries of the account in the range with a running balance on the account's normal side (a credit account shows credit balances as positive). At most 5000 lines (`truncated`).
+         */
+        get: operations["getGeneralLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/income-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Income statement after USALI (accounting.view)
+         * @description Operating revenue by department, departmental expenses and profit, undistributed expenses, gross operating profit (GOP), management fees, non-operating expenses (EBITDA), depreciation, interest and income taxes down to net income. Lines of kind GROUP list their accounts; HEADING, SUBTOTAL and TOTAL are structure and results.
+         */
+        get: operations["getIncomeStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/balance-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Balance sheet (accounting.view)
+         * @description Assets, liabilities and equity as of a business date. Equity includes the earnings of all periods to date (there is no year-end closing entry). `difference` is zero when the books balance.
+         */
+        get: operations["getBalanceSheet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Control accounts against the folios (accounting.view)
+         * @description The guest ledger, advance deposits and city ledger accounts compared with what the folios and the city ledger say as of a date. Closed days without a journal (`pending_days`) and the open business day (`includes_open_day`) make the ledger fall behind. `reconciled` is true when nothing is pending and every difference is zero.
+         */
+        get: operations["getReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/trial-balance.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Trial balance as PDF (accounting.view) */
+        get: operations["getTrialBalancePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** General ledger of an account as PDF (accounting.view) */
+        get: operations["getGeneralLedgerPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/income-statement.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Income statement (USALI) as PDF (accounting.view) */
+        get: operations["getIncomeStatementPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/balance-sheet.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Balance sheet as PDF (accounting.view) */
+        get: operations["getBalanceSheetPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fiscal years of the books, newest first (accounting.view)
+         * @description From the year of the accounting start date to the year of the current business date. Years start on the first day of `fiscal_year_start_month`. Each carries the result of the year (net income, without any closing journal), how many of its months are closed and whether it can be closed or reopened.
+         */
+        get: operations["listFiscalYears"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a fiscal year (accounting.close)
+         * @description Posts the closing journal on the last day of the year: every revenue and expense balance of the year is closed to the RETAINED_EARNINGS account (a year without result closes without a journal). Needs the year ended, the year before it closed and all its months closed (409 `FISCAL_YEAR_NOT_READY`); 409 `FISCAL_YEAR_ALREADY_CLOSED`. The income statement leaves closing journals out; the balance sheet and ledgers keep them. A month of a closed year cannot be reopened (409 `PERIOD_IN_CLOSED_YEAR`).
+         */
+        post: operations["closeFiscalYear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen the latest closed fiscal year (accounting.close, needs approval)
+         * @description Reverses the closing journal and sets the year open again; closing it again makes a new journal. Only the latest closed year (409 `FISCAL_YEAR_NOT_LATEST`, `FISCAL_YEAR_NOT_CLOSED`).
+         */
+        post: operations["reopenFiscalYear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Suppliers by name, with what is owed to each (payables.view) */
+        get: operations["listSuppliers"];
+        put?: never;
+        /** Add a supplier (payables.manage) */
+        post: operations["createSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/suppliers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One supplier (payables.view) */
+        get: operations["getSupplier"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a supplier (payables.manage)
+         * @description The code never changes. A default account below 1 removes it.
+         */
+        patch: operations["updateSupplier"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/suppliers/{id}/open-bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** What is still owed on the bills of a supplier, oldest due date first (payables.view) */
+        get: operations["listOpenBills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Supplier bills, newest first (payables.view) */
+        get: operations["listBills"];
+        put?: never;
+        /**
+         * Enter a supplier bill (payables.post)
+         * @description The `Idempotency-Key` header is required. The journal debits each line's account against ACCOUNTS PAYABLE on the bill date; the date is not after the current business date nor before the accounting start date, and its month is open (409 `PERIOD_CLOSED`). The due date defaults to the bill date plus the supplier's payment terms. The same invoice of a supplier is entered once (409 `DUPLICATE_INVOICE`; a voided one may be entered again). 409 `SUPPLIER_INACTIVE`.
+         */
+        post: operations["postBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One bill with its lines (payables.view) */
+        get: operations["getBill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/bills/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a bill without payments (payables.post, needs approval)
+         * @description The journal of the bill is reversed on the current business date. 409 `BILL_HAS_PAYMENTS` (void the payments first), `BILL_ALREADY_VOIDED`.
+         */
+        post: operations["voidBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments to suppliers, newest first (payables.view) */
+        get: operations["listSupplierPayments"];
+        put?: never;
+        /**
+         * Pay a supplier (payables.post)
+         * @description The `Idempotency-Key` header is required. A payment is the sum of what it settles: each allocation names an open bill of the supplier and an amount up to what is still owed (409 `ALLOCATION_EXCEEDS_OUTSTANDING`, one field error per allocation, checked under the supplier's row lock so two payments cannot overpay a bill). The journal debits ACCOUNTS PAYABLE against the cash, bank or other payment account of the method.
+         */
+        post: operations["postSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One payment with the bills it settles (payables.view) */
+        get: operations["getSupplierPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment (payables.post, needs approval)
+         * @description The journal of the payment is reversed on the current business date and the bills it settled are open again. 409 `PAYMENT_ALREADY_VOIDED`.
+         */
+        post: operations["voidSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/aging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What is owed to suppliers by days overdue (payables.view)
+         * @description Open bills as of a business date, by supplier and bucket: not yet due, 1-30, 31-60, 61-90 and over 90 days past the due date. A past date reproduces what was owed then: payments and voids after it are ignored.
+         */
+        get: operations["getPayablesAging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The accounts of the books that are reconciled with a bank (bank.view) */
+        get: operations["listBankAccounts"];
+        put?: never;
+        /**
+         * Register an account of the books for reconciliation (bank.manage)
+         * @description An active asset account that takes postings, registered once (409 `BANK_ACCOUNT_EXISTS`).
+         */
+        post: operations["createBankAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One bank account (bank.view) */
+        get: operations["getBankAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a bank account or take it out of use (bank.manage) */
+        patch: operations["updateBankAccount"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Imported bank statements, newest first (bank.view) */
+        get: operations["listBankStatements"];
+        put?: never;
+        /**
+         * Import a bank statement (bank.reconcile)
+         * @description The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`.
+         */
+        post: operations["importBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A statement with its lines, matchings and the comparison of the bank with the books (bank.view) */
+        get: operations["getBankStatement"];
+        put?: never;
+        post?: never;
+        /** Delete a statement that is not reconciled (bank.reconcile) */
+        delete: operations["deleteBankStatement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/uncleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The journal lines of the account, up to the end of the statement, that no statement has cleared (bank.view) */
+        get: operations["listUnclearedJournalLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/clearings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match journal lines with a statement line (bank.reconcile)
+         * @description A journal line is cleared up to its amount, in one clearing or in parts by several statement lines (as when the day close of an earlier day carries the total of several transfers): 409 `ALREADY_CLEARED` when nothing is left of it, 422 `EXCEEDS_LINE`, `EXCEEDS_STATEMENT_LINE` and `WRONG_SIDE` for a part that does not fit. Without a statement line the journal lines are cleared on their own, in full: only when they add up to zero (a payment and its reversal), or, in the first statement of an account, when they are dated before it (the opening balance). 409 `STATEMENT_RECONCILED`.
+         */
+        post: operations["clearJournalLines"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/clearings/{clearingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                clearingId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo a matching (bank.reconcile) */
+        delete: operations["unclearJournalLine"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/auto-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match what can be decided by amount and date (bank.reconcile)
+         * @description Every statement line with nothing matched is matched with the one uncleared journal line of the same amount dated within three days of it (the nearest, when it is the only nearest). The rest is left for a person.
+         */
+        post: operations["autoMatchStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post what the bank shows and the books lack (bank.reconcile)
+         * @description From a line with nothing matched: a BANK journal dated the day of the line, the bank account against the account chosen (a fee, interest), cleared against the line. The date must be in an open accounting period (409 `PERIOD_CLOSED`); 409 `LINE_ALREADY_MATCHED`.
+         */
+        post: operations["adjustFromStatementLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile a statement (bank.reconcile)
+         * @description Needs the statement before it reconciled, every line matched, and the journal lines cleared so far to add up to the closing balance of the bank (409 `STATEMENT_NOT_READY`, `context.blockers`). A reconciled statement is final.
+         */
+        post: operations["reconcileStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the latest reconciled statement of an account (bank.reconcile, needs approval) */
+        post: operations["reopenStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/settlement-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Card or e-wallet payments waiting for their settlement (bank.view)
+         * @description The lines of the card (`CARD`) or e-wallet (`OTHER_PAYMENT`) clearing account, up to the end of the statement, that no settlement has settled.
+         */
+        get: operations["listSettlementLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle card or e-wallet payments from a statement line (bank.reconcile)
+         * @description The acquirer paid the amount of the line (money in) for the payment lines chosen and kept the difference. A BANK journal dated the day of the line debits the bank account with what was paid and the commission account with the difference, and credits the clearing account with the payments; each payment line is settled once (409 `ALREADY_SETTLED`) and the statement line is matched with the bank side. 422 `NET_EXCEEDS_GROSS`, `NOT_MONEY_IN`; a commission needs `fee_account_id`. 409 `LINE_ALREADY_MATCHED`, `PERIOD_CLOSED`.
+         */
+        post: operations["settleFromStatementLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** How each tax is filed (tax.view) */
+        get: operations["listTaxFilingProfiles"];
+        put?: never;
+        /**
+         * Set up the filing of a tax (tax.manage)
+         * @description The authority the tax is filed with, the registration number of the hotel with it and the day of the next month the return and the payment are due (1 to 28, 15 by default). 409 `TAX_PROFILE_EXISTS`.
+         */
+        post: operations["createTaxFilingProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One filing profile (tax.view) */
+        get: operations["getTaxFilingProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the filing of a tax (tax.manage) */
+        patch: operations["updateTaxFilingProfile"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The months of a tax, newest first (tax.view)
+         * @description From the month the books start to the current month: the tax collected, whether each month is still open, ready to file or filed, and what is paid and overdue.
+         */
+        get: operations["listTaxPeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The worksheet of a month of a tax (tax.view)
+         * @description The tax collected in the month by charge code and rate, read from the tax snapshots of the folio items (a reversal counts negatively), the tax the day close journals credited, and whether the month can be filed (`ready`, `blockers`): it is over, every business day of it is closed with its journal, the tax on the folios equals the books, and the tax is not negative. `return` is the return filed for the month, if there is one.
+         */
+        get: operations["getTaxWorksheet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Tax returns, newest period first (tax.view) */
+        get: operations["listTaxReturns"];
+        put?: never;
+        /**
+         * File the return of a month (tax.file)
+         * @description The `Idempotency-Key` header is required. The worksheet is computed again under the lock of the tax and frozen with its lines. 409 `TAX_MONTH_NOT_READY` (`context.blockers`), `TAX_RETURN_EXISTS`, `TAX_PREVIOUS_NOT_FILED` (the months go in order, the first month of the books excepted), `TAX_PROFILE_INACTIVE`. A voided return makes room for a new one.
+         */
+        post: operations["fileTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A return with its worksheet lines and payments (tax.view) */
+        get: operations["getTaxReturn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a return without payments (tax.file, needs approval)
+         * @description 409 `TAX_RETURN_HAS_PAYMENTS` (void its payments first), `TAX_RETURN_ALREADY_VOIDED`.
+         */
+        post: operations["voidTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay the tax authority against a return (tax.file)
+         * @description The `Idempotency-Key` header is required. Up to what is still owed on the return (422 `amount: EXCEEDS_OUTSTANDING`); a penalty is paid with it and goes to the expense account given. The journal (type TAX) debits the tax payable account of the tax (the TAX_PAYABLE system account when the tax has none usable) and the penalty account against the cash, bank or other-payment account of the method. The date must be in an open accounting period.
+         */
+        post: operations["payTaxReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments to the tax authority, newest first (tax.view) */
+        get: operations["listTaxPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One payment to the tax authority (tax.view) */
+        get: operations["getTaxPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/payments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a payment to the tax authority (tax.file, needs approval)
+         * @description The journal of the payment is reversed on the current business date and the amount is owed on the return again. 409 `TAX_PAYMENT_ALREADY_VOIDED`.
+         */
+        post: operations["voidTaxPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/liability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What is owed to the tax authority (tax.view)
+         * @description Per tax: collected on folios, filed, not on a return yet, paid, owed, and what is overdue (months not filed after their due date, and unpaid returns past it); per tax payable account of the books, its balance against what the taxes using it say is owed (`difference` should be zero). A past date reproduces what was owed then.
+         */
+        get: operations["getTaxLiability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/returns/{id}/return.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A tax return as PDF (tax.view) */
+        get: operations["getTaxReturnPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/worksheet.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The worksheet of a month of a tax as PDF (tax.view)
+         * @description A filed month answers the return.
+         */
+        get: operations["getTaxWorksheetPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -758,6 +4719,14 @@ export interface components {
             city?: string;
             /** @description ISO 3166-1 alpha-2 */
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             /**
              * @description IANA time zone
              * @example Asia/Jakarta
@@ -774,7 +4743,10 @@ export interface components {
             require_room_inspection_for_checkin: boolean;
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time: components["schemas"]["TimeOfDay"];
+            refund_methods: components["schemas"]["RefundMethods"];
         };
+        /** @description The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`. */
+        RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER")[];
         Property: components["schemas"]["PropertySettings"] & {
             /** Format: int64 */
             id: number;
@@ -799,6 +4771,14 @@ export interface components {
             address?: string;
             city?: string;
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             timezone: string;
             currency_code: string;
             currency_decimals: number;
@@ -809,6 +4789,7 @@ export interface components {
             /** @default true */
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
+            refund_methods?: components["schemas"]["RefundMethods"];
             /** @description The property's current local date or the day before. */
             opening_business_date: components["schemas"]["Date"];
         };
@@ -817,6 +4798,14 @@ export interface components {
             address?: string;
             city?: string;
             country_code?: string;
+            /** @description Printed on documents. */
+            phone?: string;
+            /** @description Printed on documents. */
+            email?: string;
+            /** @description Tax registration number printed on invoices (for example NPWP). */
+            tax_id?: string;
+            /** @description A line printed at the foot of every document. */
+            document_footer?: string;
             timezone?: string;
             currency_code?: string;
             currency_decimals?: number;
@@ -825,6 +4814,7 @@ export interface components {
             require_room_inspection_for_checkin?: boolean;
             night_audit_marks_occupied_dirty?: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
+            refund_methods?: components["schemas"]["RefundMethods"];
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
         };
@@ -1022,7 +5012,15 @@ export interface components {
             };
             /** @description Statuses reachable from the current one (INSPECTED additionally needs housekeeping.inspect). */
             allowed_next: components["schemas"]["HousekeepingStatus"][];
+            priority: components["schemas"]["HousekeepingPriority"];
+            /** @description Do not disturb. */
+            dnd: boolean;
+            /** @description The guest asked for the room to be made up. */
+            make_up_requested: boolean;
+            flag_note?: string;
         };
+        /** @enum {string} */
+        HousekeepingPriority: "NORMAL" | "HIGH";
         HousekeepingBoard: {
             data: components["schemas"]["HousekeepingBoardRoom"][];
         };
@@ -1162,12 +5160,1639 @@ export interface components {
             /** @description Items at properties the caller may not see. */
             hidden_count: number;
         };
+        /**
+         * @description A percentage from 0 to 100 with at most four decimals. Always returned with four decimals.
+         * @example 11.0000
+         */
+        Percent: string;
+        /**
+         * @description A non-negative decimal amount as a string. It may not have more decimals than the property currency.
+         * @example 250000
+         */
+        Amount: string;
+        /** @enum {string} */
+        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER";
+        /**
+         * @description Whether a price excludes or already contains the mapped service charges and taxes.
+         * @enum {string}
+         */
+        PriceMode: "EXCLUSIVE" | "INCLUSIVE";
+        /** @description An account code of the chart of accounts the accounting module will own (text, never an id), for example `4-1100` or `2.1.05`. Optional until accounting exists; the PMS only checks its shape. */
+        GlAccountCode: string | null;
+        Tax: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description The tax is also levied on the service charges. */
+            tax_on_service: boolean;
+            /** @description Tax payable account of the chart of accounts, copied onto the ledger when an item is posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Only on an update that changed the rate. Open stays that will be charged at the new rate from now on. */
+            affected_open_stays?: number;
+        };
+        TaxPage: {
+            data: components["schemas"]["Tax"][];
+            next_cursor?: string;
+        };
+        CreateTaxRequest: {
+            /** @description 1-20 characters, A-Z 0-9 - _ (upper-cased). */
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @default false */
+            tax_on_service: boolean;
+            /** @description Account code (A-Z 0-9 . - _ : /, at most 30 characters, upper-cased). Optional. */
+            gl_account_code?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchTaxRequest: {
+            name?: string;
+            rate?: components["schemas"]["Percent"];
+            tax_on_service?: boolean;
+            /** @description An account code, or an empty string to clear it. */
+            gl_account_code?: string;
+            is_active?: boolean;
+        };
+        ServiceCharge: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description Service charge payable account (optional). */
+            gl_account_code: components["schemas"]["GlAccountCode"];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Only on an update that changed the rate. */
+            affected_open_stays?: number;
+        };
+        ServiceChargePage: {
+            data: components["schemas"]["ServiceCharge"][];
+            next_cursor?: string;
+        };
+        CreateServiceChargeRequest: {
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description Account code, optional. */
+            gl_account_code?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchServiceChargeRequest: {
+            name?: string;
+            rate?: components["schemas"]["Percent"];
+            is_active?: boolean;
+        };
+        TaxRule: {
+            /** Format: int64 */
+            tax_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            tax_on_service: boolean;
+            /** @description Calculation and display order. */
+            sequence: number;
+        };
+        ServiceRule: {
+            /** Format: int64 */
+            service_charge_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            sequence: number;
+        };
+        ChargeCode: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            charge_type: components["schemas"]["ChargeType"];
+            price_mode: components["schemas"]["PriceMode"];
+            default_unit_price?: components["schemas"]["Amount"];
+            /** @description Revenue account of this charge (optional). Copied onto the ledger when an item is posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
+            is_system: boolean;
+            is_active: boolean;
+            /** @description Active tax rules in calculation order. */
+            taxes: components["schemas"]["TaxRule"][];
+            /** @description Active service rules in calculation order. */
+            service_charges: components["schemas"]["ServiceRule"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ChargeCodePage: {
+            data: components["schemas"]["ChargeCode"][];
+            next_cursor?: string;
+        };
+        CreateChargeCodeRequest: {
+            code: string;
+            name: string;
+            charge_type: components["schemas"]["ChargeType"];
+            price_mode: components["schemas"]["PriceMode"];
+            default_unit_price?: components["schemas"]["Amount"];
+            /** @description Revenue account code, optional. */
+            gl_account_code?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchChargeCodeRequest: {
+            name?: string;
+            charge_type?: components["schemas"]["ChargeType"];
+            price_mode?: components["schemas"]["PriceMode"];
+            /** @description An amount */
+            default_unit_price?: string;
+            /** @description An account code, or an empty string to clear it. */
+            gl_account_code?: string;
+            is_active?: boolean;
+        };
+        ReplaceRulesRequest: {
+            taxes?: {
+                /** Format: int64 */
+                tax_id: number;
+                sequence: number;
+            }[];
+            service_charges?: {
+                /** Format: int64 */
+                service_charge_id: number;
+                sequence: number;
+            }[];
+        };
+        /**
+         * @description A plain decimal amount as a string, possibly negative. No separators or exponents.
+         * @example 1000000
+         * @example -7.05
+         */
+        SignedAmount: string;
+        CalculateChargeRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            quantity: components["schemas"]["SignedAmount"];
+            unit_price: components["schemas"]["SignedAmount"];
+            price_mode?: components["schemas"]["PriceMode"];
+            discount_amount?: components["schemas"]["SignedAmount"];
+        };
+        CalculationComponent: {
+            /** Format: int64 */
+            rule_id: number;
+            code: string;
+            name: string;
+            rate: components["schemas"]["Percent"];
+            /** @description Taxes only. */
+            tax_on_service?: boolean;
+            /** @description The amount the rate was applied to. */
+            base_amount: string;
+            amount: string;
+            sequence: number;
+        };
+        ChargeCalculation: {
+            price_mode: components["schemas"]["PriceMode"];
+            quantity: string;
+            unit_price: string;
+            /** @description round(quantity x unit price) */
+            base_amount: string;
+            /** @description Signed like base_amount. */
+            discount_amount: string;
+            /** @description Net revenue; includes the rounding adjustment. */
+            net_amount: string;
+            /** @description Always 0 for an exclusive price. */
+            rounding_adjustment: string;
+            service_charges: components["schemas"]["CalculationComponent"][];
+            taxes: components["schemas"]["CalculationComponent"][];
+            service_charge_total: string;
+            tax_total: string;
+            /** @description The largest tax base (display only). */
+            taxable_amount: string;
+            /** @description Net + service + tax; equals the quoted price when inclusive. */
+            total_amount: string;
+        };
+        /**
+         * @description Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+         * @enum {string}
+         */
+        MealPlan: "RO" | "BB" | "HB" | "FB" | "AI";
+        RatePlan: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description?: string;
+            meal_plan: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            is_refundable: boolean;
+            /** Format: int64 */
+            room_charge_code_id: number;
+            /** @description Code of the room charge code. */
+            room_charge_code: string;
+            price_mode: components["schemas"]["PriceMode"];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RatePlanPage: {
+            data: components["schemas"]["RatePlan"][];
+            next_cursor?: string;
+        };
+        CreateRatePlanRequest: {
+            code: string;
+            name: string;
+            description?: string;
+            meal_plan: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            /** @default true */
+            is_refundable: boolean;
+            /** Format: int64 */
+            room_charge_code_id: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchRatePlanRequest: {
+            name?: string;
+            description?: string;
+            meal_plan?: components["schemas"]["MealPlan"];
+            cancellation_policy?: string;
+            is_refundable?: boolean;
+            /** Format: int64 */
+            room_charge_code_id?: number;
+            is_active?: boolean;
+        };
+        RateCell: {
+            /** Format: int64 */
+            room_type_id: number;
+            stay_date: components["schemas"]["Date"];
+            /** @description Formatted with the currency's decimals. */
+            amount: string;
+        };
+        RateGrid: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            room_charge_code: string;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rates: components["schemas"]["RateCell"][];
+        };
+        /** @enum {string} */
+        Weekday: "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+        FillRatesRequest: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            room_type_ids: number[];
+            from: components["schemas"]["Date"];
+            /** @description Exclusive; after from; at most 730 days after it. */
+            to: components["schemas"]["Date"];
+            /** @description Only these weekdays; all days when omitted or empty. */
+            weekdays?: components["schemas"]["Weekday"][];
+            amount: components["schemas"]["Amount"];
+        };
+        FillRatesResult: {
+            /** @description Nights written (new or overwritten). */
+            updated_nights: number;
+            /** @description Of those */
+            created_nights: number;
+        };
         HealthStatus: {
             /**
              * @example ok
              * @example ready
              */
             status: string;
+        };
+        Night: {
+            date: components["schemas"]["Date"];
+            sellable: number;
+            demand: number;
+            available: number;
+        };
+        NightAmount: {
+            date: components["schemas"]["Date"];
+            amount: string;
+        };
+        Estimate: {
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+        };
+        PlanOffer: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            price_mode: components["schemas"]["PriceMode"];
+            nightly: components["schemas"]["NightAmount"][];
+            /** @description Nights without a rate; the plan cannot be booked without overrides when above 0. */
+            missing_nights: number;
+            estimate: components["schemas"]["Estimate"] | null;
+        };
+        TypeOffer: {
+            /** Format: int64 */
+            room_type_id: number;
+            code: string;
+            name: string;
+            fits_occupancy: boolean;
+            available_min: number;
+            per_night: components["schemas"]["Night"][];
+            rate_plans: components["schemas"]["PlanOffer"][];
+        };
+        AvailabilitySearch: {
+            nights: components["schemas"]["Date"][];
+            room_types: components["schemas"]["TypeOffer"][];
+        };
+        FreeRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            floor?: string;
+            building?: string;
+            housekeeping_status: string;
+        };
+        NightOverride: {
+            date: components["schemas"]["Date"];
+            /** @description The agreed price of the night */
+            amount: string;
+            discount_amount?: string;
+        };
+        RoomInput: {
+            /** Format: int64 */
+            room_type_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            /**
+             * Format: int64
+             * @description The occupant
+             */
+            guest_id?: number;
+            /**
+             * Format: int64
+             * @description Only with confirm; must be a room of the booked type.
+             */
+            room_id?: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        CreateReservationRequest: {
+            /**
+             * Format: int64
+             * @description The booker; required when confirming.
+             */
+            guest_id?: number;
+            source: components["schemas"]["ReservationSource"];
+            market?: string;
+            special_request?: string;
+            remarks?: string;
+            /**
+             * Format: int64
+             * @description The company that is billed; a group's company is inherited.
+             */
+            company_id?: number | null;
+            /**
+             * Format: int64
+             * @description The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room)
+             */
+            booking_group_id?: number | null;
+            /** @default false */
+            confirm: boolean;
+            rooms: components["schemas"]["RoomInput"][];
+        };
+        /** @enum {string} */
+        ReservationSource: "WALK_IN" | "PHONE" | "EMAIL" | "WEBSITE" | "OTA" | "AGENT" | "OTHER";
+        PatchReservationRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            guest_id?: number;
+            source?: components["schemas"]["ReservationSource"];
+            market?: string;
+            special_request?: string;
+            remarks?: string;
+            /**
+             * Format: int64
+             * @description Below 1 clears the company.
+             */
+            company_id?: number;
+            /**
+             * Format: int64
+             * @description Below 1 clears the group.
+             */
+            booking_group_id?: number;
+        };
+        VersionRequest: {
+            /** Format: int32 */
+            version: number;
+        };
+        ReasonRequest: {
+            /** Format: int32 */
+            version: number;
+            /** @description Required to cancel; optional for a no-show. */
+            reason?: string;
+        };
+        AddRoomRequest: components["schemas"]["RoomInput"] & {
+            /** Format: int32 */
+            version: number;
+        };
+        PatchReservationRoomRequest: {
+            /** Format: int32 */
+            version: number;
+            arrival_date?: components["schemas"]["Date"];
+            departure_date?: components["schemas"]["Date"];
+            /** Format: int64 */
+            room_type_id?: number;
+            /** Format: int64 */
+            rate_plan_id?: number;
+            adult_count?: number;
+            child_count?: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        AssignRoomRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            room_id: number;
+            /** @default false */
+            upgrade: boolean;
+        };
+        GuestName: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            first_name?: string;
+            last_name: string;
+        };
+        YieldRuleRequest: {
+            code: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Only this plan; all plans when null.
+             */
+            rate_plan_id?: number | null;
+            /**
+             * Format: int64
+             * @description Only this room type; all types when null.
+             */
+            room_type_id?: number | null;
+            stay_from?: components["schemas"]["Date"] | null;
+            stay_to?: components["schemas"]["Date"] | null;
+            weekdays?: ("MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN")[] | null;
+            /** @description Percent of the sellable rooms held that night, included (0 to under 100). */
+            occupancy_from?: string | null;
+            /** @description Excluded, except 100 which includes a full house (over 0, at most 100). */
+            occupancy_to?: string | null;
+            lead_days_min?: number | null;
+            lead_days_max?: number | null;
+            stay_nights_min?: number | null;
+            stay_nights_max?: number | null;
+            /** @enum {string} */
+            adjustment_type: "PERCENT" | "AMOUNT";
+            /** @description Signed, not zero. A percentage is above -100 and at most 1000; an amount has at most the currency's decimals. */
+            adjustment_value: string;
+            floor_amount?: string | null;
+            cap_amount?: string | null;
+            /**
+             * @description Lower applies first.
+             * @default 100
+             */
+            priority: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        YieldRule: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            rate_plan_id: number | null;
+            /** Format: int64 */
+            room_type_id: number | null;
+            stay_from: components["schemas"]["Date"] | null;
+            stay_to: components["schemas"]["Date"] | null;
+            weekdays: ("MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN")[] | null;
+            occupancy_from: string | null;
+            occupancy_to: string | null;
+            lead_days_min: number | null;
+            lead_days_max: number | null;
+            stay_nights_min: number | null;
+            stay_nights_max: number | null;
+            /** @enum {string} */
+            adjustment_type: "PERCENT" | "AMOUNT";
+            adjustment_value: string;
+            floor_amount: string | null;
+            cap_amount: string | null;
+            priority: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        YieldRuleList: {
+            data: components["schemas"]["YieldRule"][];
+        };
+        RateQuote: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** Format: int64 */
+            room_type_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            /** @description The nights that have a price */
+            total: string;
+            /** @description The same nights at the grid price. */
+            grid_total: string;
+            missing_nights: number;
+            nights: {
+                date: components["schemas"]["Date"];
+                grid_rate: string | null;
+                occupancy_percent: string;
+                amount: string | null;
+                /** @description The rules that moved the price, in the order they applied. */
+                steps: {
+                    code: string;
+                    name: string;
+                    before: string;
+                    after: string;
+                }[];
+            }[];
+        };
+        NightRate: {
+            date: components["schemas"]["Date"];
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** Format: int64 */
+            charge_code_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            /** @description The price in the rate grid when the snapshot was taken, before the yield rules; null for an override on a night without a grid price. */
+            grid_rate: string | null;
+            /** @description The codes of the yield rules that moved the grid price to `base_rate`, in the order they applied; null when none did. */
+            yield_rules: string[] | null;
+            /** @description The price the night was sold at, the grid price after the yield rules; null for an override on a night without a grid price. */
+            base_rate: string | null;
+            discount_amount: string;
+            amount: string;
+            is_override: boolean;
+        };
+        ReservationRoom: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CHECKED_IN" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            /** Format: int64 */
+            rate_plan_id: number;
+            rate_plan_code: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest?: components["schemas"]["GuestName"];
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            nights: number;
+            adult_count: number;
+            child_count: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
+            /** Format: date-time */
+            no_show_at?: string | null;
+            nightly_rates: components["schemas"]["NightRate"][];
+            estimate: components["schemas"]["Estimate"];
+        };
+        ReservationFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Debits minus credits. */
+            balance: string;
+        };
+        Reservation: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest?: components["schemas"]["GuestName"];
+            /** Format: int64 */
+            company_id?: number | null;
+            company_name?: string;
+            /** Format: int64 */
+            booking_group_id?: number | null;
+            group_code?: string;
+            reservation_date: components["schemas"]["Date"];
+            source: components["schemas"]["ReservationSource"];
+            market?: string;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            /** @enum {string} */
+            display_status: "DRAFT" | "CONFIRMED" | "IN_HOUSE" | "CHECKED_OUT" | "NO_SHOW" | "CANCELLED";
+            special_request?: string;
+            remarks?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            confirmed_at?: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
+            /** Format: int32 */
+            version: number;
+            rooms: components["schemas"]["ReservationRoom"][];
+            folios: components["schemas"]["ReservationFolio"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationSummary: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest_name?: string;
+            /** Format: int64 */
+            company_id?: number | null;
+            company_name?: string;
+            /** Format: int64 */
+            booking_group_id?: number | null;
+            group_code?: string;
+            source: components["schemas"]["ReservationSource"];
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            room_count: number;
+            /** Format: int32 */
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationPage: {
+            data: components["schemas"]["ReservationSummary"][];
+            next_cursor?: string;
+        };
+        CancelResult: {
+            reservation: components["schemas"]["Reservation"];
+            folio_balance: string;
+            requires_folio_resolution: boolean;
+        };
+        TapeBooking: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** @enum {string} */
+            status: "CONFIRMED" | "CHECKED_IN";
+            guest_name?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+        };
+        TapeBlock: {
+            /** Format: int64 */
+            id: number;
+            block_type: components["schemas"]["BlockType"];
+            start_date: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+        };
+        TapeRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            bookings: components["schemas"]["TapeBooking"][];
+            blocks: components["schemas"]["TapeBlock"][];
+        };
+        TapeUnassigned: {
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            bookings: components["schemas"]["TapeBooking"][];
+        };
+        TapeChart: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rooms: components["schemas"]["TapeRoom"][];
+            unassigned: components["schemas"]["TapeUnassigned"][];
+        };
+        /** @description The approver's own credentials (a user holding `correction.approve` at the property; the actor may approve their own correction). The password is verified and never stored, logged or echoed. */
+        Approval: {
+            email: string;
+            /** Format: password */
+            password: string;
+        };
+        /** @enum {string} */
+        PaymentMethod: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+        PostChargeRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            /** @description A positive number with at most 3 decimals. */
+            quantity: string;
+            /** @description Defaults to the charge code's default price. */
+            unit_price?: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            discount_amount?: string;
+            service_date?: components["schemas"]["Date"];
+            description?: string;
+        };
+        PostAdjustmentRequest: {
+            /** Format: int64 */
+            charge_code_id: number;
+            /** @description Signed, non-zero, in the price mode's terms. */
+            amount: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            reason: string;
+            /** Format: int64 */
+            related_item_id?: number;
+            approval: components["schemas"]["Approval"];
+        };
+        CorrectionRequest: {
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        PostPaymentRequest: {
+            amount: string;
+            payment_method: components["schemas"]["PaymentMethod"];
+            reference_number?: string;
+            remarks?: string;
+        };
+        RefundRequest: {
+            amount: string;
+            payment_method?: components["schemas"]["PaymentMethod"];
+            reference_number?: string;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        FolioComponent: {
+            /** @enum {string} */
+            component_type: "SERVICE_CHARGE" | "TAX";
+            code: string;
+            name: string;
+            rate: string;
+            base_amount: string;
+            amount: string;
+            sequence: number;
+            /** @description The account the tax or service charge was mapped to when the item was posted. */
+            gl_account_code: components["schemas"]["GlAccountCode"];
+        };
+        FolioItem: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            folio_id: number;
+            /** @enum {string} */
+            transaction_type: "CHARGE" | "ADJUSTMENT" | "PAYMENT" | "REFUND" | "REVERSAL";
+            business_date: components["schemas"]["Date"];
+            service_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            transaction_at: string;
+            description: string;
+            charge_code?: string;
+            /** Format: int64 */
+            charge_code_id?: number | null;
+            /** @description The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. */
+            revenue_account_code: components["schemas"]["GlAccountCode"];
+            quantity: string;
+            unit_price: string;
+            price_mode: components["schemas"]["PriceMode"];
+            base_amount: string;
+            discount_amount: string;
+            net_amount: string;
+            rounding_adjustment: string;
+            service_charge_total: string;
+            tax_total: string;
+            debit: string;
+            credit: string;
+            components: components["schemas"]["FolioComponent"][];
+            /** Format: int64 */
+            payment_id?: number | null;
+            /** Format: int64 */
+            reverses_item_id?: number | null;
+            /** Format: int64 */
+            reversed_by_item_id?: number | null;
+            reason?: string;
+            room_number?: string;
+            /** Format: int64 */
+            created_by?: number | null;
+            /** Format: int64 */
+            approved_by?: number | null;
+        };
+        FolioTotals: {
+            debit: string;
+            credit: string;
+        };
+        Folio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            folio_type: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: int32 */
+            version: number;
+            balance: string;
+            totals: components["schemas"]["FolioTotals"];
+            items: components["schemas"]["FolioItem"][];
+        };
+        FolioSummary: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            stay_id: number | null;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: int32 */
+            version: number;
+            balance: string;
+        };
+        FolioPage: {
+            data: components["schemas"]["FolioSummary"][];
+            next_cursor?: string;
+        };
+        ItemResult: {
+            item: components["schemas"]["FolioItem"];
+            folio_balance: string;
+        };
+        Payment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            folio_id: number;
+            /** @enum {string} */
+            payment_type: "PAYMENT" | "REFUND";
+            /**
+             * @description CITY_LEDGER is a transfer to a company account
+             * @enum {string}
+             */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "CITY_LEDGER";
+            /**
+             * Format: int64
+             * @description The company of a CITY_LEDGER transfer.
+             */
+            company_id: number | null;
+            amount: string;
+            /** Format: date-time */
+            paid_at: string;
+            business_date: components["schemas"]["Date"];
+            reference_number?: string;
+            /** Format: int64 */
+            refund_of_payment_id: number | null;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            remarks?: string;
+            /** @description What is left to refund; only on a posted payment. */
+            refundable?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+        };
+        PaymentResult: {
+            payment: components["schemas"]["Payment"];
+            folio_item: components["schemas"]["FolioItem"];
+            folio_balance: string;
+        };
+        MethodTotal: {
+            payment_method: components["schemas"]["PaymentMethod"];
+            paid: string;
+            refunded: string;
+            net: string;
+        };
+        PaymentPage: {
+            data: components["schemas"]["Payment"][];
+            totals: components["schemas"]["MethodTotal"][];
+            next_cursor?: string;
+        };
+        CheckInRequest: {
+            /**
+             * Format: int32
+             * @description The reservation's version.
+             */
+            version: number;
+            /** Format: int64 */
+            room_id?: number;
+            /**
+             * Format: int64
+             * @description The guest who checks in.
+             */
+            guest_id: number;
+            accompanying_guest_ids?: number[];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        WalkInGuest: {
+            first_name?: string;
+            last_name: string;
+            email?: string;
+            phone?: string;
+            nationality?: string;
+            country_code?: string;
+            date_of_birth?: components["schemas"]["Date"];
+            gender?: string;
+            id_type?: string;
+            id_number?: string;
+            address?: string;
+            city?: string;
+            notes?: string;
+        };
+        WalkInRequest: {
+            /** Format: int64 */
+            guest_id?: number;
+            new_guest?: components["schemas"]["WalkInGuest"];
+            /** Format: int64 */
+            room_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            /** @default 0 */
+            child_count: number;
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+            accompanying_guest_ids?: number[];
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        ReverseCheckInRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            reason: string;
+        };
+        Stay: {
+            /** Format: int64 */
+            id: number;
+            stay_number: string;
+            /** Format: int64 */
+            reservation_id: number;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int64 */
+            guest_id: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+            /** @enum {string} */
+            status: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+            /** Format: date-time */
+            actual_check_in_at: string;
+            /** Format: date-time */
+            actual_check_out_at: string | null;
+            /** Format: int32 */
+            version: number;
+        };
+        StaySegment: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            /** Format: date-time */
+            check_in_at: string;
+            /** Format: date-time */
+            check_out_at: string | null;
+            start_business_date: components["schemas"]["Date"];
+            end_business_date: components["schemas"]["Date"] | null;
+            move_reason?: string;
+        };
+        StayFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            balance: string;
+        };
+        ReservationRef: {
+            /** Format: int64 */
+            id: number;
+            confirmation_number: string;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        CheckInResult: {
+            reservation?: components["schemas"]["ReservationRef"];
+            stay: components["schemas"]["Stay"];
+            stay_room: components["schemas"]["StaySegment"];
+            folio: components["schemas"]["StayFolio"];
+        };
+        ReverseResult: {
+            stay: components["schemas"]["Stay"];
+            folio: components["schemas"]["StayFolio"];
+        };
+        MoveRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            /** Format: int64 */
+            room_id: number;
+            reason: string;
+            new_nightly_rates?: components["schemas"]["NightOverride"][];
+            /** @default false */
+            override_room_not_ready: boolean;
+            override_reason?: string;
+        };
+        MoveResult: {
+            stay: components["schemas"]["Stay"];
+            closed_segment: components["schemas"]["StaySegment"];
+            new_segment: components["schemas"]["StaySegment"];
+        };
+        ChangeDepartureRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            departure_date: components["schemas"]["Date"];
+            nightly_overrides?: components["schemas"]["NightOverride"][];
+        };
+        AddStayGuestRequest: {
+            /** Format: int64 */
+            guest_id: number;
+        };
+        CheckOutRequest: {
+            /**
+             * Format: int32
+             * @description The stay's version.
+             */
+            version: number;
+            /** @default false */
+            confirm_early_departure: boolean;
+        };
+        ClosedFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+        };
+        CheckOutResult: {
+            stay: components["schemas"]["Stay"];
+            posted_room_charges: components["schemas"]["RoomChargeItem"][];
+            folios: components["schemas"]["ClosedFolio"][];
+            /** @description The housekeeping status the room has now (DIRTY). */
+            housekeeping: string;
+        };
+        StaySummary: {
+            /** Format: int64 */
+            id: number;
+            stay_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+            /** Format: int64 */
+            guest_id: number;
+            guest_name: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+            /** Format: int32 */
+            version: number;
+        };
+        StayPage: {
+            data: components["schemas"]["StaySummary"][];
+            next_cursor?: string;
+        };
+        Arrival: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int32 */
+            reservation_version: number;
+            /** Format: int64 */
+            guest_id: number | null;
+            guest_name?: string;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            /** @description The current housekeeping status of the assigned room (absent when no room is assigned). */
+            housekeeping_status?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count: number;
+        };
+        StayNight: {
+            date: components["schemas"]["Date"];
+            amount: string;
+            price_mode: components["schemas"]["PriceMode"];
+            is_override: boolean;
+            posted: boolean;
+        };
+        StayLine: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            room_type_code: string;
+            status: string;
+        };
+        StayDetail: {
+            stay: components["schemas"]["Stay"];
+            guest: components["schemas"]["GuestName"];
+            guests: components["schemas"]["GuestName"][];
+            segments: components["schemas"]["StaySegment"][];
+            line: components["schemas"]["StayLine"];
+            nightly_rates: components["schemas"]["StayNight"][];
+            folios: components["schemas"]["StayFolio"][];
+        };
+        RoomChargeRequest: {
+            business_date: components["schemas"]["Date"];
+            stay_ids?: number[];
+        };
+        /** @enum {string} */
+        RoomChargeStatus: "READY" | "POSTED" | "ALREADY_POSTED" | "NOT_APPLICABLE" | "ERROR";
+        RoomChargeItem: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            guest: string;
+            room_number?: string;
+            /** Format: int64 */
+            folio_id: number | null;
+            service_date: components["schemas"]["Date"];
+            charge_code?: string;
+            /** @description The agreed nightly amount from the stay's price snapshot. */
+            room_rate: string;
+            price_mode?: components["schemas"]["PriceMode"];
+            service_charge: string;
+            tax: string;
+            rounding_adjustment: string;
+            total: string;
+            status: components["schemas"]["RoomChargeStatus"];
+            /** @description For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE or NO_OPEN_FOLIO. */
+            reason?: string;
+            /** Format: int64 */
+            folio_item_id: number | null;
+        };
+        RoomChargePreview: {
+            business_date: components["schemas"]["Date"];
+            items: components["schemas"]["RoomChargeItem"][];
+            totals: {
+                ready_count: number;
+                ready_total: string;
+            };
+        };
+        RoomChargePosted: {
+            /** Format: int64 */
+            stay_id: number;
+            service_date: components["schemas"]["Date"];
+            status: components["schemas"]["RoomChargeStatus"];
+            /** Format: int64 */
+            folio_item_id?: number;
+            total?: string;
+            reason?: string;
+        };
+        /** @description A posted room night that should not exist (outside the stay's nights, or the stay was cancelled). */
+        InvalidPosting: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            service_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            folio_item_id: number;
+            /** @enum {string} */
+            reason: "OUTSIDE_STAY" | "STAY_CANCELLED";
+        };
+        RoomChargeRevalidation: {
+            ready: number;
+            errors: components["schemas"]["RoomChargeItem"][];
+            invalid: components["schemas"]["InvalidPosting"][];
+        };
+        RoomChargePostResponse: {
+            results: components["schemas"]["RoomChargePosted"][];
+            revalidation: components["schemas"]["RoomChargeRevalidation"];
+        };
+        UnresolvedArrival: {
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            guest: string;
+            room_type: string;
+            room?: string;
+            arrival_date: components["schemas"]["Date"];
+        };
+        UnresolvedDeparture: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            room?: string;
+            guest: string;
+            departure_date: components["schemas"]["Date"];
+        };
+        NightAuditBlockers: {
+            unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
+            unresolved_departures: components["schemas"]["UnresolvedDeparture"][];
+            charge_errors: components["schemas"]["RoomChargeItem"][];
+            invalid_charges: components["schemas"]["InvalidPosting"][];
+        };
+        NightAuditWarnings: {
+            stale_drafts: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+                arrival_date: components["schemas"]["Date"];
+            }[];
+            open_folios_of_cancelled_reservations: {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+                confirmation_number: string;
+                balance: components["schemas"]["Amount"];
+            }[];
+            blocks_ending: {
+                /** Format: int64 */
+                block_id: number;
+                block_type: string;
+                room: string;
+                end_date: components["schemas"]["Date"];
+            }[];
+        };
+        NightAuditPreview: {
+            business_date: components["schemas"]["Date"];
+            property_local_time: string;
+            time_guard_ok: boolean;
+            /** Format: date-time */
+            night_audit_allowed_from: string;
+            can_run: boolean;
+            blockers: components["schemas"]["NightAuditBlockers"];
+            missing_charges: {
+                count: number;
+                items: components["schemas"]["RoomChargeItem"][];
+            };
+            tonight_charges: {
+                count: number;
+                total: components["schemas"]["Amount"];
+            };
+            warnings: components["schemas"]["NightAuditWarnings"];
+        };
+        NoShowsRequest: {
+            business_date: components["schemas"]["Date"];
+            reservation_room_ids: number[];
+            /** @description Must be true. */
+            confirm: boolean;
+            reason?: string;
+        };
+        NoShowsResult: {
+            marked: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+            }[];
+            remaining_blockers: components["schemas"]["NightAuditBlockers"];
+        };
+        RunNightAuditRequest: {
+            business_date: components["schemas"]["Date"];
+        };
+        NightAuditMoney: {
+            net: components["schemas"]["Amount"];
+            service: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+        };
+        NightAuditSummary: {
+            business_date: components["schemas"]["Date"];
+            rooms: {
+                total: number;
+                out_of_order: number;
+                out_of_service: number;
+                sellable: number;
+                occupied: number;
+                /** @description Room nights charged for the business date. */
+                sold: number;
+            };
+            arrivals: number;
+            departures: number;
+            no_shows: number;
+            room_revenue: components["schemas"]["NightAuditMoney"];
+            revenue_by_charge_type: (components["schemas"]["NightAuditMoney"] & {
+                charge_type: string;
+            })[];
+            /** @description The till: folio payments (not transfers to a company) and city ledger receipts. */
+            payments_by_method: {
+                method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+            }[];
+            city_ledger: {
+                transferred: components["schemas"]["Amount"];
+                received: components["schemas"]["Amount"];
+                /** @description What companies owe at the end of the day. */
+                outstanding: components["schemas"]["Amount"];
+            };
+            /** @description Occupied rooms over rooms that are not out of order. */
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+            room_charges_posted: number;
+        };
+        NightAuditResult: {
+            closed_business_date: components["schemas"]["Date"];
+            new_business_date: components["schemas"]["Date"];
+            room_charges_posted: number;
+            summary: components["schemas"]["NightAuditSummary"];
+        };
+        DailySummaryReport: {
+            business_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            live: boolean;
+            summary: components["schemas"]["NightAuditSummary"] | null;
+        };
+        RevenueTotals: {
+            items: number;
+            net_amount: components["schemas"]["Amount"];
+            service_charge: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+            total: components["schemas"]["Amount"];
+        };
+        RevenueLine: {
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            name: string;
+            charge_type: string;
+            revenue_account_code: components["schemas"]["GlAccountCode"];
+            items: number;
+            base_amount: components["schemas"]["Amount"];
+            discount_amount: components["schemas"]["Amount"];
+            net_amount: components["schemas"]["Amount"];
+            service_charge: components["schemas"]["Amount"];
+            tax: components["schemas"]["Amount"];
+            total: components["schemas"]["Amount"];
+        };
+        RevenueReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            by_charge_code: components["schemas"]["RevenueLine"][];
+            by_charge_type: (components["schemas"]["RevenueTotals"] & {
+                charge_type: string;
+            })[];
+            totals: components["schemas"]["RevenueTotals"];
+        };
+        TaxReportLine: {
+            /** @enum {string} */
+            component_type: "TAX" | "SERVICE_CHARGE";
+            code: string;
+            name: string;
+            rate: string;
+            gl_account_code: components["schemas"]["GlAccountCode"];
+            items: number;
+            base_amount: components["schemas"]["Amount"];
+            amount: components["schemas"]["Amount"];
+        };
+        TaxReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            taxes: components["schemas"]["TaxReportLine"][];
+            service_charges: components["schemas"]["TaxReportLine"][];
+            tax_total: components["schemas"]["Amount"];
+            service_charge_total: components["schemas"]["Amount"];
+        };
+        CashierReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: {
+                business_date: components["schemas"]["Date"];
+                payment_method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+                count: number;
+                voided: components["schemas"]["Amount"];
+                voided_count: number;
+            }[];
+            by_method: {
+                payment_method: string;
+                payments: components["schemas"]["Amount"];
+                refunds: components["schemas"]["Amount"];
+                net: components["schemas"]["Amount"];
+            }[];
+            net: components["schemas"]["Amount"];
+        };
+        StatisticsDay: {
+            business_date: components["schemas"]["Date"];
+            rooms_total: number;
+            rooms_out_of_order: number;
+            rooms_sellable: number;
+            rooms_occupied: number;
+            room_nights_sold: number;
+            arrivals: number;
+            departures: number;
+            no_shows: number;
+            room_revenue: components["schemas"]["Amount"];
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+        };
+        StatisticsTotals: {
+            days: number;
+            available_room_nights: number;
+            occupied_room_nights: number;
+            room_nights_sold: number;
+            room_revenue: components["schemas"]["Amount"];
+            occupancy_percent: string;
+            adr: components["schemas"]["Amount"];
+            revpar: components["schemas"]["Amount"];
+        };
+        StatisticsReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            days: components["schemas"]["StatisticsDay"][];
+            totals: components["schemas"]["StatisticsTotals"];
+        };
+        Dashboard: {
+            business_date: components["schemas"]["Date"];
+            /** @description The open day computed live (the closing summary it will get). */
+            today: components["schemas"]["NightAuditSummary"] | null;
+            movements: {
+                /** @description Rooms arriving today that are not checked in yet. */
+                arrivals_expected: number;
+                arrivals_checked_in: number;
+                /** @description Stays leaving today that are still open. */
+                departures_expected: number;
+                departures_checked_out: number;
+                in_house: number;
+                /** @description What the stays in house owe on their folios now. */
+                in_house_balance: components["schemas"]["Amount"];
+            };
+            /** @description Active rooms by housekeeping status. */
+            rooms: {
+                clean: number;
+                dirty: number;
+                cleaning: number;
+                inspected: number;
+            };
+            /** @description The last 14 closed days, oldest first. */
+            trend: components["schemas"]["StatisticsDay"][];
+            /** @description The closed days of the current month. */
+            month_to_date: components["schemas"]["StatisticsTotals"];
+            /** @description The same number of days of the month before. */
+            previous_month: components["schemas"]["StatisticsTotals"];
+            /** @description The next 14 nights, today first. */
+            forecast: {
+                date: components["schemas"]["Date"];
+                rooms_sellable: number;
+                /** @description Rooms held by confirmed reservations and open stays. */
+                rooms_booked: number;
+                occupancy_percent: string;
+            }[];
+        };
+        StayListReport: {
+            date?: components["schemas"]["Date"];
+            rows: {
+                /** Format: int64 */
+                stay_id: number;
+                stay_number: string;
+                status?: string;
+                confirmation_number: string;
+                guest: string;
+                room?: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                adult_count: number;
+                child_count: number;
+                balance: components["schemas"]["Amount"];
+            }[];
+        };
+        ArrivalsReport: {
+            date: components["schemas"]["Date"];
+            rows: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                confirmation_number: string;
+                status: string;
+                guest: string;
+                room_type: string;
+                room?: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                adult_count: number;
+                child_count: number;
+            }[];
+        };
+        AuditLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            business_date: components["schemas"]["Date"] | null;
+            user: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+            } | null;
+            action: string;
+            entity_type: string;
+            /** Format: int64 */
+            entity_id: number;
+            /** @description The state before (null for a creation). */
+            old_data: unknown;
+            /** @description The state after. */
+            new_data: unknown;
+            request_id?: string;
+            ip_address?: string;
+        };
+        AuditLogPage: {
+            data: components["schemas"]["AuditLog"][];
+            next_cursor?: string;
+        };
+        EmailEntry: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "RESERVATION_CONFIRMATION";
+            to: string;
+            /**
+             * @description QUEUED: waiting or being retried; FAILED: given up after five attempts or refused; SKIPPED: the reservation was no longer confirmed.
+             * @enum {string}
+             */
+            status: "QUEUED" | "SENT" | "FAILED" | "SKIPPED";
+            attempts: number;
+            last_error?: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReservationEmails: {
+            /** @description False when the server has no mail server configured. */
+            enabled: boolean;
+            data: components["schemas"]["EmailEntry"][];
         };
         FieldError: {
             field: string;
@@ -1195,6 +6820,1604 @@ export interface components {
             retryable?: boolean;
             request_id?: string;
         };
+        Company: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description null: no limit; "0": no credit. */
+            credit_limit: string | null;
+            payment_terms_days: number;
+            notes?: string;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CompanyPage: {
+            data: components["schemas"]["Company"][];
+            next_cursor?: string;
+        };
+        CreateCompanyRequest: {
+            /** @description 1-20 characters: A-Z, 0-9, - or _ (upper-cased). */
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description Empty for no limit. At most the currency's decimals. */
+            credit_limit?: string;
+            /** @default 30 */
+            payment_terms_days: number;
+            notes?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchCompanyRequest: {
+            name?: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            /** @description Empty removes the limit. */
+            credit_limit?: string;
+            payment_terms_days?: number;
+            notes?: string;
+            is_active?: boolean;
+        };
+        Group: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            company_id: number | null;
+            company_name?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            notes?: string;
+            is_active: boolean;
+            /** @description Reservations that are not cancelled. */
+            reservation_count: number;
+            /** @description Rooms that are not cancelled. */
+            room_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GroupPage: {
+            data: components["schemas"]["Group"][];
+            next_cursor?: string;
+        };
+        CreateGroupRequest: {
+            code: string;
+            name: string;
+            /** Format: int64 */
+            company_id?: number | null;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            notes?: string;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchGroupRequest: {
+            name?: string;
+            /**
+             * Format: int64
+             * @description Below 1 removes the company.
+             */
+            company_id?: number;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            arrival_date?: components["schemas"]["Date"];
+            departure_date?: components["schemas"]["Date"];
+            notes?: string;
+            is_active?: boolean;
+        };
+        GroupMember: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            guest_name?: string;
+            /** Format: int64 */
+            company_id: number | null;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            room_count: number;
+        };
+        GroupMemberList: {
+            data: components["schemas"]["GroupMember"][];
+        };
+        TransferRequest: {
+            /** Format: int64 */
+            company_id: number;
+            amount: string;
+            reference_number?: string;
+            remarks?: string;
+        };
+        ReceiveRequest: {
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            allocations?: components["schemas"]["ReceiptAllocationRequest"][];
+        };
+        ReceiptAllocationRequest: {
+            /** Format: int64 */
+            invoice_id: number;
+            amount: string;
+        };
+        ReceiptAllocation: {
+            /** Format: int64 */
+            invoice_id: number;
+            invoice_number: string;
+            amount: string;
+        };
+        CityLedgerAccount: {
+            /** Format: int64 */
+            company_id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+            credit_limit: string | null;
+            payment_terms_days: number;
+            /** @description Posted transfers from folios. */
+            transferred: string;
+            /** @description Posted receipts. */
+            received: string;
+            /** @description transferred minus received. */
+            balance: string;
+            /** @description What can still be transferred within the limit; null without a limit. */
+            available: string | null;
+        };
+        CityLedgerAccountPage: {
+            data: components["schemas"]["CityLedgerAccount"][];
+            next_cursor?: string;
+        };
+        CityLedgerReceipt: {
+            /** Format: int64 */
+            id: number;
+            receipt_number: string;
+            /** Format: int64 */
+            company_id: number;
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            business_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            paid_at: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** @description The invoices this receipt pays (also on a voided receipt, where they no longer count). */
+            allocations: components["schemas"]["ReceiptAllocation"][];
+        };
+        CityLedgerReceiptResult: {
+            receipt: components["schemas"]["CityLedgerReceipt"];
+            /** @description The company's balance after the receipt or void. */
+            balance: string;
+        };
+        CityLedgerReceiptList: {
+            data: components["schemas"]["CityLedgerReceipt"][];
+        };
+        CityLedgerStatementLine: {
+            date: components["schemas"]["Date"];
+            /** @enum {string} */
+            kind: "TRANSFER" | "RECEIPT";
+            number: string;
+            description: string;
+            reference?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            debit: string;
+            credit: string;
+            /** @description The running balance of the posted lines. */
+            balance: string;
+            folio_number?: string;
+            confirmation_number?: string;
+            guest_name?: string;
+        };
+        CityLedgerStatement: {
+            company: components["schemas"]["CityLedgerAccount"];
+            from: components["schemas"]["Date"] | null;
+            to: components["schemas"]["Date"] | null;
+            opening_balance: string;
+            total_debit: string;
+            total_credit: string;
+            closing_balance: string;
+            lines: components["schemas"]["CityLedgerStatementLine"][];
+        };
+        CityLedgerAging: {
+            as_of: components["schemas"]["Date"];
+            total: string;
+            buckets: {
+                /** @enum {string} */
+                label: "0-30" | "31-60" | "61-90" | "90+";
+                amount: string;
+            }[];
+        };
+        CityLedgerInvoiceLine: {
+            /**
+             * Format: int64
+             * @description The transfer.
+             */
+            payment_id: number;
+            payment_number: string;
+            business_date: components["schemas"]["Date"];
+            folio_number: string;
+            confirmation_number: string;
+            stay_number?: string;
+            guest_name?: string;
+            /** @description The rooms of the stay */
+            room_numbers?: string;
+            arrival_date: components["schemas"]["Date"] | null;
+            departure_date: components["schemas"]["Date"] | null;
+            /** Format: date-time */
+            checked_out_at: string | null;
+            reference_number?: string;
+            amount: string;
+        };
+        CityLedgerCandidate: components["schemas"]["CityLedgerInvoiceLine"] & {
+            /** @description The state of the stay behind the folio; empty when the folio has no stay. */
+            stay_status: string;
+            /** @description True when the guest has checked out. */
+            invoiceable: boolean;
+        };
+        CityLedgerCandidateList: {
+            data: components["schemas"]["CityLedgerCandidate"][];
+        };
+        CityLedgerInvoice: {
+            /** Format: int64 */
+            id: number;
+            invoice_number: string;
+            /** Format: int64 */
+            company_id: number;
+            invoice_date: components["schemas"]["Date"];
+            due_date: components["schemas"]["Date"];
+            total: string;
+            /** @description What posted receipts have allocated to the invoice. */
+            paid: string;
+            /** @description Total less paid; 0 once voided. */
+            outstanding: string;
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOID";
+            notes?: string;
+            /** @enum {string} */
+            status: "ISSUED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: int64 */
+            created_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** @description Only on the detail and on creation. */
+            lines?: components["schemas"]["CityLedgerInvoiceLine"][];
+        };
+        CityLedgerInvoiceList: {
+            data: components["schemas"]["CityLedgerInvoice"][];
+        };
+        CreateCityLedgerInvoiceRequest: {
+            payment_ids: number[];
+            notes?: string;
+        };
+        HousekeepingFlags: {
+            /** Format: int64 */
+            room_id: number;
+            priority: components["schemas"]["HousekeepingPriority"];
+            dnd: boolean;
+            make_up_requested: boolean;
+            note?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HousekeepingFlagsRequest: {
+            priority?: components["schemas"]["HousekeepingPriority"];
+            dnd?: boolean;
+            make_up_requested?: boolean;
+            note?: string;
+        };
+        HousekeepingStaffMember: {
+            /** Format: int64 */
+            id: number;
+            full_name: string;
+            email: string;
+        };
+        HousekeepingStaffList: {
+            data: components["schemas"]["HousekeepingStaffMember"][];
+        };
+        /** @enum {string} */
+        HousekeepingTaskStatus: "PENDING" | "IN_PROGRESS" | "DONE" | "SKIPPED";
+        /** @enum {string} */
+        HousekeepingTaskType: "CHECKOUT" | "STAYOVER" | "ARRIVAL" | "DIRTY" | "DEEP" | "OTHER";
+        HousekeepingTask: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            floor?: string;
+            room_type_code: string;
+            task_date: components["schemas"]["Date"];
+            task_type: components["schemas"]["HousekeepingTaskType"];
+            status: components["schemas"]["HousekeepingTaskStatus"];
+            priority: components["schemas"]["HousekeepingPriority"];
+            /** @enum {string} */
+            source: "AUTO" | "MANUAL";
+            /** Format: int64 */
+            assigned_to: number | null;
+            assignee_name?: string;
+            /** @description The note of the task */
+            notes?: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            room_status: components["schemas"]["HousekeepingStatus"];
+            /** Format: date-time */
+            room_status_since: string;
+            dnd: boolean;
+            make_up_requested: boolean;
+            flag_note?: string;
+        };
+        HousekeepingWorkload: {
+            /**
+             * Format: int64
+             * @description Null for the tasks that are not assigned yet.
+             */
+            user_id: number | null;
+            name: string;
+            total: number;
+            pending: number;
+            in_progress: number;
+            done: number;
+            skipped: number;
+        };
+        HousekeepingTaskList: {
+            date: components["schemas"]["Date"];
+            data: components["schemas"]["HousekeepingTask"][];
+            workload: components["schemas"]["HousekeepingWorkload"][];
+        };
+        GenerateHousekeepingResult: {
+            date: components["schemas"]["Date"];
+            created: number;
+        };
+        CreateHousekeepingTaskRequest: {
+            /** Format: int64 */
+            room_id: number;
+            task_type: components["schemas"]["HousekeepingTaskType"];
+            priority?: components["schemas"]["HousekeepingPriority"];
+            /** Format: int64 */
+            assigned_to?: number | null;
+            notes?: string;
+        };
+        AssignHousekeepingRequest: {
+            task_ids: number[];
+            /**
+             * Format: int64
+             * @description Null takes the tasks back.
+             */
+            user_id?: number | null;
+        };
+        /** @enum {string} */
+        MaintenanceStatus: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+        /** @enum {string} */
+        MaintenanceCategory: "PLUMBING" | "ELECTRICAL" | "AC" | "FURNITURE" | "APPLIANCE" | "OTHER";
+        /** @enum {string} */
+        MaintenancePriority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+        MaintenanceBlock: {
+            /** Format: int64 */
+            id: number;
+            block_type: components["schemas"]["BlockType"];
+            start_date: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "ACTIVE" | "CANCELLED";
+        };
+        MaintenanceRequest: {
+            /** Format: int64 */
+            id: number;
+            request_number: string;
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            location?: string;
+            category: components["schemas"]["MaintenanceCategory"];
+            description: string;
+            priority: components["schemas"]["MaintenancePriority"];
+            status: components["schemas"]["MaintenanceStatus"];
+            business_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            reported_by: number | null;
+            reporter_name?: string;
+            /** Format: date-time */
+            reported_at: string;
+            /** Format: int64 */
+            assigned_to: number | null;
+            assignee_name?: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** @description The repair note */
+            resolution_note?: string;
+            block: components["schemas"]["MaintenanceBlock"] | null;
+        };
+        MaintenanceRequestPage: {
+            data: components["schemas"]["MaintenanceRequest"][];
+            next_cursor?: string;
+        };
+        CreateMaintenanceRequest: {
+            /** Format: int64 */
+            room_id?: number | null;
+            location?: string;
+            category: components["schemas"]["MaintenanceCategory"];
+            description: string;
+            priority?: components["schemas"]["MaintenancePriority"];
+        };
+        PatchMaintenanceRequest: {
+            location?: string;
+            category?: components["schemas"]["MaintenanceCategory"];
+            description?: string;
+            priority?: components["schemas"]["MaintenancePriority"];
+        };
+        AssignMaintenanceRequest: {
+            /** Format: int64 */
+            user_id?: number | null;
+        };
+        CloseMaintenanceRequest: {
+            note?: string;
+            /** @default false */
+            release_block: boolean;
+        };
+        BlockMaintenanceRequest: {
+            block_type: components["schemas"]["BlockType"];
+            start_date?: components["schemas"]["Date"];
+            end_date: components["schemas"]["Date"];
+        };
+        /** @enum {string} */
+        LostFoundStatus: "STORED" | "RETURNED" | "DISPOSED";
+        /** @enum {string} */
+        LostFoundCategory: "ELECTRONICS" | "CLOTHING" | "DOCUMENTS" | "JEWELRY" | "BAGS" | "OTHER";
+        LostFoundItem: {
+            /** Format: int64 */
+            id: number;
+            item_number: string;
+            description: string;
+            category: components["schemas"]["LostFoundCategory"];
+            /** Format: int64 */
+            room_id: number | null;
+            room_number?: string;
+            location?: string;
+            found_on: components["schemas"]["Date"];
+            /** Format: date-time */
+            found_at: string;
+            /** Format: int64 */
+            found_by: number | null;
+            finder_name?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+            status: components["schemas"]["LostFoundStatus"];
+            closed_on: components["schemas"]["Date"] | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            closer_name?: string;
+            claimant_name?: string;
+            claimant_proof?: string;
+            /** @description The hand-over note */
+            close_note?: string;
+        };
+        LostFoundPage: {
+            data: components["schemas"]["LostFoundItem"][];
+            next_cursor?: string;
+        };
+        CreateLostFoundItem: {
+            description: string;
+            category: components["schemas"]["LostFoundCategory"];
+            /** Format: int64 */
+            room_id?: number | null;
+            location?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+        };
+        PatchLostFoundItem: {
+            description?: string;
+            category?: components["schemas"]["LostFoundCategory"];
+            location?: string;
+            storage_location?: string;
+            possible_owner?: string;
+            notes?: string;
+        };
+        ReturnLostFoundItem: {
+            claimant_name: string;
+            /** @description What was checked: an ID card, a booking number, the contents. */
+            claimant_proof?: string;
+            note?: string;
+        };
+        DisposeLostFoundItem: {
+            reason: string;
+        };
+        LostFoundOwner: {
+            /** Format: int64 */
+            stay_id: number;
+            stay_number: string;
+            guest_name: string;
+            phone?: string;
+            email?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            stay_status: string;
+        };
+        LostFoundOwnerList: {
+            data: components["schemas"]["LostFoundOwner"][];
+        };
+        HousekeepingProductivityReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: {
+                business_date: components["schemas"]["Date"];
+                /** Format: int64 */
+                user_id: number;
+                user: string;
+                rooms_cleaned: number;
+                rooms_inspected: number;
+                tasks_done: number;
+                tasks_skipped: number;
+                /** @description One decimal; empty when no finished task was started. */
+                avg_task_minutes: string;
+            }[];
+            people: {
+                /** Format: int64 */
+                user_id: number;
+                user: string;
+                days_worked: number;
+                rooms_cleaned: number;
+                rooms_inspected: number;
+                tasks_done: number;
+                tasks_skipped: number;
+                avg_task_minutes: string;
+            }[];
+        };
+        HousekeepingDirtyRoomsReport: {
+            min_hours: number;
+            rows: {
+                room_number: string;
+                floor?: string;
+                room_type: string;
+                status: components["schemas"]["HousekeepingStatus"];
+                /** @description When the room entered this status (UTC). */
+                since: string;
+                hours: number;
+                occupancy: components["schemas"]["Occupancy"];
+                priority: components["schemas"]["HousekeepingPriority"];
+                dnd: boolean;
+                /** @description The active block type (OOO or OOS) when the room is blocked. */
+                block?: string;
+            }[];
+        };
+        MaintenanceReportLine: {
+            category: string;
+            reported: number;
+            resolved: number;
+            cancelled: number;
+            still_open: number;
+            /** @description One decimal; empty when nothing was resolved. */
+            avg_hours_to_resolve: string;
+        };
+        MaintenanceReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: components["schemas"]["MaintenanceReportLine"][];
+            totals: components["schemas"]["MaintenanceReportLine"];
+            backlog: {
+                open_now: number;
+                /** @description Open requests of priority HIGH or URGENT. */
+                high_priority: number;
+                oldest_hours: number;
+            };
+        };
+        /** @enum {string} */
+        GlAccountType: "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
+        GlAccount: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            /**
+             * @description The side the account normally carries; a contra account (accumulated depreciation
+             * @enum {string}
+             */
+            normal_side: "DEBIT" | "CREDIT";
+            /** Format: int64 */
+            parent_id: number | null;
+            parent_code?: string;
+            /** @description A header account only groups. */
+            is_postable: boolean;
+            is_active: boolean;
+            /** @description What the balance sheet and the income statement add up (USALI sections such as REV_ROOMS */
+            statement_group?: string;
+            description?: string;
+            /** @description Something refers to the account: children, the system map, a charge code, tax or service charge. */
+            in_use: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GlAccountList: {
+            data: components["schemas"]["GlAccount"][];
+        };
+        CreateGlAccount: {
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            /**
+             * @description Defaults to the side of the type.
+             * @enum {string}
+             */
+            normal_side?: "DEBIT" | "CREDIT";
+            /** Format: int64 */
+            parent_id?: number | null;
+            /** @default true */
+            is_postable: boolean;
+            /** @default true */
+            is_active: boolean;
+            statement_group?: string;
+            description?: string;
+        };
+        PatchGlAccount: {
+            name?: string;
+            /**
+             * Format: int64
+             * @description Below 1 removes the parent.
+             */
+            parent_id?: number;
+            is_postable?: boolean;
+            is_active?: boolean;
+            statement_group?: string;
+            description?: string;
+        };
+        ImportGlAccounts: {
+            /** @description CSV text with a header row; needs the columns code, name and type, and may have parent_code, postable, group, active and description in any order. */
+            csv: string;
+            /** @default false */
+            dry_run: boolean;
+        };
+        ImportGlAccountsResult: {
+            dry_run: boolean;
+            created: number;
+            updated: number;
+        };
+        GlAccountMapEntry: {
+            /** @enum {string} */
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE";
+            meaning: string;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            account_type: components["schemas"]["GlAccountType"];
+        };
+        GlAccountMapList: {
+            data: components["schemas"]["GlAccountMapEntry"][];
+        };
+        SetGlAccountMap: {
+            entries: {
+                map_key: string;
+                /** Format: int64 */
+                account_id: number;
+            }[];
+        };
+        GlCodeIssue: {
+            /** @enum {string} */
+            kind: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE";
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            gl_account_code?: string;
+            /** @enum {string} */
+            problem: "NO_CODE" | "UNKNOWN_ACCOUNT" | "INACTIVE_ACCOUNT" | "HEADER_ACCOUNT" | "WRONG_TYPE";
+            /** @description The fallback account its amounts go to. */
+            posted_to: string;
+        };
+        GlCodeReport: {
+            checked: number;
+            issues: components["schemas"]["GlCodeIssue"][];
+        };
+        /** @enum {string} */
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES" | "BANK" | "TAX";
+        JournalLine: {
+            line_no: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            debit: string;
+            credit: string;
+            description?: string;
+            /**
+             * @description What a day close line adds up.
+             * @enum {string}
+             */
+            source_type?: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE" | "PAYMENT" | "RECEIPT" | "DEPOSIT_RELEASE";
+            /** @description The charge code */
+            source_ref?: string;
+        };
+        Journal: {
+            /** Format: int64 */
+            id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            /** Format: date */
+            journal_date: string;
+            description: string;
+            reference?: string;
+            /** Format: int64 */
+            reverses_journal_id: number | null;
+            reverses_number?: string;
+            /** Format: int64 */
+            reversed_by_journal_id: number | null;
+            reversed_by_number?: string;
+            reason?: string;
+            /** Format: date-time */
+            posted_at: string;
+            /** Format: int64 */
+            posted_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** @description The sum of the debits. */
+            total: string;
+            line_count: number;
+            /** @description Only when one journal is read. */
+            lines?: components["schemas"]["JournalLine"][];
+        };
+        JournalList: {
+            data: components["schemas"]["Journal"][];
+        };
+        ManualJournalRequest: {
+            /** Format: date */
+            journal_date: string;
+            description: string;
+            reference?: string;
+            lines: {
+                /** Format: int64 */
+                account_id: number;
+                debit?: string;
+                credit?: string;
+                description?: string;
+            }[];
+        };
+        ReverseJournalRequest: {
+            /** Format: date */
+            journal_date?: string | null;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        GlPeriod: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Business days of the month from the accounting start date. */
+            days: number;
+            /** @description Of those */
+            posted_days: number;
+            closable: boolean;
+            reopenable: boolean;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: int64 */
+            closed_by: number | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            reopen_reason?: string;
+        };
+        GlPeriodList: {
+            data: components["schemas"]["GlPeriod"][];
+        };
+        TrialRow: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            account_type: components["schemas"]["GlAccountType"];
+            opening_debit: string;
+            opening_credit: string;
+            debit: string;
+            credit: string;
+            closing_debit: string;
+            closing_credit: string;
+        };
+        TrialBalance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["TrialRow"][];
+            totals: components["schemas"]["TrialRow"];
+        };
+        LedgerLine: {
+            /** Format: date */
+            journal_date: string;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description: string;
+            source_type?: string;
+            source_ref?: string;
+            debit: string;
+            credit: string;
+            balance: string;
+        };
+        GeneralLedger: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            account: components["schemas"]["GlAccount"];
+            opening_balance: string;
+            lines: components["schemas"]["LedgerLine"][];
+            total_debit: string;
+            total_credit: string;
+            closing_balance: string;
+            truncated: boolean;
+        };
+        StatementAccount: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            amount: string;
+        };
+        StatementLine: {
+            key: string;
+            title: string;
+            /** @enum {string} */
+            kind: "HEADING" | "GROUP" | "SUBTOTAL" | "TOTAL";
+            amount: string;
+            accounts: components["schemas"]["StatementAccount"][];
+        };
+        IncomeStatement: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            lines: components["schemas"]["StatementLine"][];
+            net_income: string;
+        };
+        BalanceSheet: {
+            /** Format: date */
+            as_of: string;
+            lines: components["schemas"]["StatementLine"][];
+            total_assets: string;
+            total_liabilities: string;
+            total_equity: string;
+            difference: string;
+        };
+        ReconciliationControl: {
+            /** @enum {string} */
+            key: "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "CITY_LEDGER" | "ACCOUNTS_PAYABLE";
+            title: string;
+            account: string;
+            ledger: string;
+            source: string;
+            difference: string;
+            basis: string;
+        };
+        Reconciliation: {
+            /** Format: date */
+            as_of: string;
+            /** Format: date */
+            start_date: string;
+            controls: components["schemas"]["ReconciliationControl"][];
+            pending_days: number;
+            includes_open_day: boolean;
+            reconciled: boolean;
+        };
+        FiscalYear: {
+            /** Format: date */
+            year_start: string;
+            /** Format: date */
+            year_end: string;
+            /** @description FY plus the year the fiscal year ends in. */
+            label: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Months of the year from the accounting start date. */
+            months: number;
+            closed_months: number;
+            /** @description The result of the year from the journals, closing journals left out. */
+            net_income: string;
+            closable: boolean;
+            reopenable: boolean;
+            /** Format: int64 */
+            closing_journal_id: number | null;
+            closing_journal_number?: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            reopen_reason?: string;
+        };
+        FiscalYearList: {
+            data: components["schemas"]["FiscalYear"][];
+        };
+        Supplier: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days: number;
+            /** Format: int64 */
+            default_account_id: number | null;
+            default_account_code?: string;
+            default_account_name?: string;
+            bank_details?: string;
+            notes?: string;
+            is_active: boolean;
+            /** @description What is owed to the supplier now (bills not voided less payments not voided). */
+            outstanding: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SupplierList: {
+            data: components["schemas"]["Supplier"][];
+        };
+        CreateSupplierRequest: {
+            code: string;
+            name: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days?: number | null;
+            /** Format: int64 */
+            default_account_id?: number | null;
+            bank_details?: string;
+            notes?: string;
+            is_active?: boolean | null;
+        };
+        UpdateSupplierRequest: {
+            name?: string;
+            contact_name?: string;
+            email?: string;
+            phone?: string;
+            address?: string;
+            city?: string;
+            tax_id?: string;
+            payment_terms_days?: number;
+            /**
+             * Format: int64
+             * @description A value below 1 removes the default account.
+             */
+            default_account_id?: number;
+            bank_details?: string;
+            notes?: string;
+            is_active?: boolean;
+        };
+        BillLine: {
+            line_no: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            description?: string;
+            amount: string;
+        };
+        Bill: {
+            /** Format: int64 */
+            id: number;
+            bill_number: string;
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            description?: string;
+            total: string;
+            paid: string;
+            outstanding: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one bill is read or created. */
+            lines?: components["schemas"]["BillLine"][];
+        };
+        BillList: {
+            data: components["schemas"]["Bill"][];
+        };
+        PostBillRequest: {
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date?: string | null;
+            description?: string;
+            lines: {
+                /** Format: int64 */
+                account_id: number;
+                description?: string;
+                /** @description Above zero, at the property's decimals. */
+                amount: string;
+            }[];
+        };
+        OpenBill: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            total: string;
+            outstanding: string;
+        };
+        OpenBillList: {
+            data: components["schemas"]["OpenBill"][];
+        };
+        Allocation: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            amount: string;
+        };
+        SupplierPayment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one payment is read or created. */
+            allocations?: components["schemas"]["Allocation"][];
+        };
+        SupplierPaymentList: {
+            data: components["schemas"]["SupplierPayment"][];
+        };
+        PostSupplierPaymentRequest: {
+            /** Format: int64 */
+            supplier_id: number;
+            /** Format: date */
+            payment_date: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+            allocations: {
+                /** Format: int64 */
+                bill_id: number;
+                amount: string;
+            }[];
+        };
+        AgingBucket: {
+            CURRENT: string;
+            DAYS_1_30: string;
+            DAYS_31_60: string;
+            DAYS_61_90: string;
+            DAYS_OVER_90: string;
+        };
+        AgingBill: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            days_overdue: number;
+            outstanding: string;
+        };
+        AgingSupplier: {
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            buckets: components["schemas"]["AgingBucket"];
+            total: string;
+            bills: components["schemas"]["AgingBill"][];
+        };
+        PayablesAging: {
+            /** Format: date */
+            as_of: string;
+            suppliers: components["schemas"]["AgingSupplier"][];
+            buckets: components["schemas"]["AgingBucket"];
+            total: string;
+        };
+        BankAccount: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            name: string;
+            account_number?: string;
+            is_active: boolean;
+            book_balance: string;
+            /**
+             * Format: date
+             * @description The end of the latest reconciled statement.
+             */
+            reconciled_to: string | null;
+            open_statements: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BankAccountList: {
+            data: components["schemas"]["BankAccount"][];
+        };
+        CreateBankAccountRequest: {
+            /** Format: int64 */
+            account_id: number;
+            name: string;
+            account_number?: string;
+            is_active?: boolean | null;
+        };
+        UpdateBankAccountRequest: {
+            name?: string;
+            account_number?: string;
+            is_active?: boolean;
+        };
+        BankStatement: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            bank_account_id: number;
+            bank_name: string;
+            account_code: string;
+            /** Format: date */
+            period_from: string;
+            /** Format: date */
+            period_to: string;
+            opening_balance: string;
+            closing_balance: string;
+            /** @enum {string} */
+            status: "OPEN" | "RECONCILED";
+            note?: string;
+            line_count: number;
+            matched_count: number;
+            /** Format: date-time */
+            imported_at: string;
+            /** Format: date-time */
+            reconciled_at: string | null;
+            reopen_reason?: string;
+        };
+        BankStatementList: {
+            data: components["schemas"]["BankStatement"][];
+        };
+        BankClearing: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            statement_line_id: number | null;
+            /** Format: int64 */
+            journal_line_id: number;
+            amount: string;
+            /** Format: date */
+            journal_date: string;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description?: string;
+        };
+        BankStatementLine: {
+            /** Format: int64 */
+            id: number;
+            line_no: number;
+            /** Format: date */
+            line_date: string;
+            description?: string;
+            reference?: string;
+            /** @description Money in is positive */
+            amount: string;
+            /** @description What the journal lines matched with it add up to. */
+            cleared: string;
+            /** @description True when `cleared` equals `amount`. */
+            matched: boolean;
+            clearings: components["schemas"]["BankClearing"][];
+        };
+        BankReconciliationSummary: {
+            statement_closing: string;
+            /** @description What the account of the books adds up to at the end of the statement. */
+            book_balance: string;
+            /** @description The journal lines cleared in this and the earlier statements; the statement reconciles when it equals the closing balance. */
+            cleared_total: string;
+            /** @description Money in the books that the bank does not show yet (in transit). */
+            uncleared_in: string;
+            /** @description Payments in the books that the bank does not show yet (outstanding). */
+            uncleared_out: string;
+            uncleared_count: number;
+            unmatched_lines: number;
+            unmatched_amount: string;
+            /** @description The closing balance plus money in transit less outstanding payments. */
+            adjusted_bank: string;
+            /** @description The adjusted bank balance less the book balance. */
+            difference: string;
+            blockers: string[];
+            can_reconcile: boolean;
+        };
+        BankStatementDetail: components["schemas"]["BankStatement"] & {
+            lines: components["schemas"]["BankStatementLine"][];
+            clearings: components["schemas"]["BankClearing"][];
+            summary: components["schemas"]["BankReconciliationSummary"];
+        };
+        ImportBankStatementRequest: {
+            /** Format: int64 */
+            bank_account_id: number;
+            /** Format: date */
+            period_from: string;
+            /** Format: date */
+            period_to: string;
+            opening_balance: string;
+            closing_balance: string;
+            note?: string;
+            /** @description The lines of the statement as CSV with a header row. */
+            csv: string;
+        };
+        UnclearedLine: {
+            /** Format: int64 */
+            journal_line_id: number;
+            /** Format: date */
+            journal_date: string;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description?: string;
+            reference?: string;
+            /** @description A debit (money in) is positive. */
+            amount: string;
+            /** @description What has been cleared of the line so far */
+            cleared: string;
+            /** @description What is left of the line. */
+            remaining: string;
+        };
+        UnclearedLineList: {
+            data: components["schemas"]["UnclearedLine"][];
+        };
+        /** @description Either `journal_line_ids` (each cleared for what is left of it, against `statement_line_id`) or `allocations` (explicit parts). */
+        ClearJournalLinesRequest: {
+            /** Format: int64 */
+            statement_line_id?: number | null;
+            journal_line_ids?: number[];
+            allocations?: {
+                /** Format: int64 */
+                statement_line_id?: number | null;
+                /** Format: int64 */
+                journal_line_id: number;
+                /** @description A part of the journal line, on its side and not more than what is left of it or of the statement line; empty means what is left of the journal line. */
+                amount?: string | null;
+            }[];
+        };
+        AdjustFromLineRequest: {
+            /**
+             * Format: int64
+             * @description The account the bank item belongs to (not the bank account itself).
+             */
+            account_id: number;
+            description?: string;
+        };
+        AutoMatchResult: {
+            matched: number;
+            remaining: number;
+        };
+        SettleRequest: {
+            /** @enum {string} */
+            account_key: "CARD" | "OTHER_PAYMENT";
+            journal_line_ids: number[];
+            /**
+             * Format: int64
+             * @description The account for the commission; needed when the payments add up to more than the line.
+             */
+            fee_account_id?: number;
+            description?: string;
+        };
+        TaxFilingProfile: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            tax_rate: string;
+            /** @description The account the tax is owed on */
+            gl_account_code?: string;
+            authority: string;
+            registration_number?: string;
+            /** @description The day of the next month the return and the payment are due. */
+            due_day: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxFilingProfileList: {
+            data: components["schemas"]["TaxFilingProfile"][];
+        };
+        CreateTaxFilingProfileRequest: {
+            /** Format: int64 */
+            tax_id: number;
+            authority: string;
+            registration_number?: string;
+            due_day?: number | null;
+            is_active?: boolean | null;
+        };
+        UpdateTaxFilingProfileRequest: {
+            authority?: string;
+            registration_number?: string;
+            due_day?: number;
+            is_active?: boolean;
+        };
+        TaxFilingWorksheetLine: {
+            charge_code: string;
+            charge_name?: string;
+            rate: string;
+            items: number;
+            /** @description The amount the tax was calculated on. */
+            base_amount: string;
+            tax_amount: string;
+        };
+        TaxFilingWorksheet: {
+            profile: components["schemas"]["TaxFilingProfile"];
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            lines: components["schemas"]["TaxFilingWorksheetLine"][];
+            base_amount: string;
+            tax_amount: string;
+            /** @description What the day close journals credited for the tax in the month. */
+            gl_collected: string;
+            /** @description The tax on the folios less what the books credited. */
+            difference: string;
+            days: number;
+            posted_days: number;
+            ready: boolean;
+            blockers: string[];
+            return: components["schemas"]["TaxFilingReturn"] | null;
+        };
+        TaxFilingPeriod: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            tax_amount: string;
+            /** @enum {string} */
+            status: "OPEN" | "READY" | "FILED";
+            /** Format: int64 */
+            return_id: number | null;
+            paid: string;
+            outstanding: string;
+            overdue: boolean;
+        };
+        TaxFilingPeriodList: {
+            data: components["schemas"]["TaxFilingPeriod"][];
+        };
+        TaxFilingPayment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            /** Format: int64 */
+            return_id: number;
+            return_number: string;
+            tax_code: string;
+            tax_name: string;
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            penalty: string;
+            /** @description The amount and the penalty. */
+            total: string;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            /** @description The billing code or receipt number of the tax authority. */
+            reference_number?: string;
+            remarks?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxFilingPaymentList: {
+            data: components["schemas"]["TaxFilingPayment"][];
+        };
+        TaxFilingReturn: {
+            /** Format: int64 */
+            id: number;
+            return_number: string;
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: date */
+            due_date: string;
+            base_amount: string;
+            tax_amount: string;
+            /** @enum {string} */
+            status: "FILED" | "VOIDED";
+            /** Format: date */
+            filed_on: string;
+            filing_reference?: string;
+            notes?: string;
+            /** Format: date-time */
+            filed_at: string;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            paid: string;
+            outstanding: string;
+            /** @enum {string} */
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOIDED";
+            overdue: boolean;
+            /** @description Only when one return is read. */
+            lines?: components["schemas"]["TaxFilingWorksheetLine"][];
+            /** @description Only when one return is read. */
+            payments?: components["schemas"]["TaxFilingPayment"][];
+        };
+        TaxFilingReturnList: {
+            data: components["schemas"]["TaxFilingReturn"][];
+        };
+        FileTaxReturnRequest: {
+            /** Format: int64 */
+            tax_id: number;
+            /**
+             * Format: date
+             * @description The first day of the month.
+             */
+            period_start: string;
+            /**
+             * Format: date
+             * @description When the return was filed with the authority; the current business date by default.
+             */
+            filed_on?: string | null;
+            /** @description The receipt or number of the filing. */
+            filing_reference?: string;
+            notes?: string;
+        };
+        PayTaxRequest: {
+            /** Format: date */
+            payment_date: string;
+            amount: string;
+            penalty?: string;
+            /**
+             * Format: int64
+             * @description Needed with a penalty: the expense account.
+             */
+            penalty_account_id?: number;
+            /** @enum {string} */
+            payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
+            reference_number?: string;
+            remarks?: string;
+        };
+        TaxFilingLiabilityLine: {
+            /** Format: int64 */
+            tax_id: number;
+            tax_code: string;
+            tax_name: string;
+            authority?: string;
+            account_code: string;
+            collected: string;
+            filed: string;
+            unfiled: string;
+            paid: string;
+            /** @description What was collected less what was paid. */
+            owed: string;
+            overdue_unfiled_months: number;
+            overdue_unpaid: string;
+            returns_filed: number;
+            registration_number?: string;
+        };
+        TaxFilingLiabilityAccount: {
+            account_code: string;
+            books: string;
+            owed: string;
+            difference: string;
+        };
+        TaxFilingLiability: {
+            /** Format: date */
+            as_of: string;
+            taxes: components["schemas"]["TaxFilingLiabilityLine"][];
+            accounts: components["schemas"]["TaxFilingLiabilityAccount"][];
+            owed: string;
+        };
     };
     responses: {
         /** @description An error, described as RFC 9457 problem details. */
@@ -1210,6 +8433,7 @@ export interface components {
     parameters: {
         PropertyId: number;
         Id: number;
+        LineId: number;
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
@@ -2192,6 +9416,9 @@ export interface operations {
             query?: {
                 status?: components["schemas"]["HousekeepingStatus"];
                 floor?: string;
+                occupancy?: components["schemas"]["Occupancy"];
+                /** @description Only rooms with a flag: high priority, do not disturb, a make-up request or a note. */
+                flagged?: boolean;
             };
             header?: never;
             path: {
@@ -2409,6 +9636,6286 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listTaxes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tax"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tax"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listServiceCharges: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceChargePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createServiceCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCharge"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateServiceCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchServiceChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCharge"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listChargeCodes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                charge_type?: components["schemas"]["ChargeType"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCodePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChargeCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The charge code. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateChargeCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchChargeCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated resource. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    replaceChargeCodeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description The charge code with its new rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCode"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    calculateCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalculateChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The breakdown. Money uses the currency's decimals; rates use four. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeCalculation"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRatePlans: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of rate plans. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlanPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createRatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRatePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The created rate plan. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateRatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRatePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated rate plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listYieldRules: {
+        parameters: {
+            query?: {
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules, lowest priority first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRuleList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The created rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRateQuote: {
+        parameters: {
+            query: {
+                rate_plan_id: number;
+                room_type_id: number;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quote. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateQuote"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRates: {
+        parameters: {
+            query: {
+                rate_plan_id: number;
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                room_type_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grid slice, ordered by night then room type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateGrid"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fillRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FillRatesRequest"];
+            };
+        };
+        responses: {
+            /** @description How many nights were written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillRatesResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    searchAvailability: {
+        parameters: {
+            query: {
+                arrival: components["schemas"]["Date"];
+                departure: components["schemas"]["Date"];
+                adults?: number;
+                children?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The search result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilitySearch"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFreeRooms: {
+        parameters: {
+            query: {
+                room_type_id: number;
+                arrival: components["schemas"]["Date"];
+                departure: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The free rooms, with their housekeeping status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FreeRoom"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listReservations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                arrival_from?: components["schemas"]["Date"];
+                arrival_to?: components["schemas"]["Date"];
+                company_id?: number;
+                booking_group_id?: number;
+                status?: "DRAFT" | "CONFIRMED" | "CANCELLED";
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of reservations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createReservation: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReservationRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchReservationRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    confirmReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reinstateReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchReservationRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    markReservationRoomNoShow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    assignReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignRoomRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    unassignReservationRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTapeChart: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapeChart"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFolios: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                reservation_id?: number;
+                stay_id?: number;
+                status?: "OPEN" | "CLOSED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of folios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folio"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    postFolioCharge: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postFolioAdjustment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostAdjustmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    postFolioPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    closeFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The closed folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folio"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reverseFolioItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal item and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    postDeposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPayments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                business_date?: components["schemas"]["Date"];
+                method?: components["schemas"]["PaymentMethod"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of payments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided payment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    refundPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The refund, its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    checkIn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description The stay, its first segment and its folio. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    walkIn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalkInRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation, the stay and the folio. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listArrivals: {
+        parameters: {
+            query?: {
+                date?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The arrivals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Arrival"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listStays: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: "OPEN" | "CHECKED_OUT" | "CANCELLED";
+                departure_date?: components["schemas"]["Date"];
+                /** @description Stays leaving on or before this date (the departures list */
+                departure_until?: components["schemas"]["Date"];
+                /** @description The room of the open segment. */
+                room_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of stays. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getStay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseCheckIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseCheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description The cancelled stay and the unlinked folio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    moveStay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    changeStayDeparture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDepartureRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stay"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addStayGuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddStayGuestRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    checkOutStay: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckOutRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOutResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The dashboard. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getDailySummaryReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailySummaryReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRevenueReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevenueReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCashierReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getStatisticsReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatisticsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getArrivalsReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrivalsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDeparturesReport: {
+        parameters: {
+            query: {
+                date: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayListReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInHouseReport: {
+        parameters: {
+            query?: {
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayListReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAuditLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                entity_type?: string;
+                entity_id?: number;
+                user_id?: number;
+                /** @description An exact action such as `stay.checked_in`. */
+                action?: string;
+                /** @description First business date. */
+                from?: components["schemas"]["Date"];
+                /** @description Last business date. */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTenantAuditLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                entity_type?: string;
+                entity_id?: number;
+                user_id?: number;
+                /** @description An exact action such as `stay.checked_in`. */
+                action?: string;
+                /** @description First business date. */
+                from?: components["schemas"]["Date"];
+                /** @description Last business date. */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInvoicePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRegistrationCardPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getReceiptPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getConfirmationPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listReservationEmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The e-mails, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationEmails"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    resendConfirmationEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The queued e-mail. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailEntry"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    previewNightAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pre-check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    markNoShows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoShowsRequest"];
+            };
+        };
+        responses: {
+            /** @description The lines that were marked and what still blocks the run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoShowsResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    runNightAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunNightAuditRequest"];
+            };
+        };
+        responses: {
+            /** @description The day is closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewRoomCharges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomChargePreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postRoomCharges: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomChargeRequest"];
+            };
+        };
+        responses: {
+            /** @description The results and the revalidation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomChargePostResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCompanies: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of companies, by id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The created company. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The company. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated company. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCompanyStatementPdf: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGroups: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                active?: boolean;
+                company_id?: number;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of groups with their reservation and room counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The created group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGroupReservations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMemberList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    transferFolioToCompany: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer (a payment), its ledger entry and the folio's balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerAccounts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Only companies with a balance above zero. */
+                owing?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of accounts, by company id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAccountPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerStatement: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The statement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerStatement"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerAging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The aging. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAging"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerReceipts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The receipts, voided ones included. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    receiveCityLedgerPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiveRequest"];
+            };
+        };
+        responses: {
+            /** @description The receipt and the account's balance after it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidCityLedgerReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided receipt and the account's balance after it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerInvoiceCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerCandidateList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerInvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoiceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCityLedgerInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description The invoice with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidCityLedgerInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerInvoice"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerInvoicePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document as a PDF (never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setRoomHousekeepingFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HousekeepingFlagsRequest"];
+            };
+        };
+        responses: {
+            /** @description The flags. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingFlags"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listHousekeepingStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The staff. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingStaffList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listHousekeepingTasks: {
+        parameters: {
+            query?: {
+                date?: components["schemas"]["Date"];
+                status?: components["schemas"]["HousekeepingTaskStatus"];
+                assigned_to?: number;
+                unassigned?: boolean;
+                floor?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTaskList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHousekeepingTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The task. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    generateHousekeepingTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many tasks this run added. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateHousekeepingResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    assignHousekeepingTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignHousekeepingRequest"];
+            };
+        };
+        responses: {
+            /** @description How many tasks were assigned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        assigned: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    completeHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    skipHousekeepingTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingTask"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listMaintenanceStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The staff. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingStaffList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMaintenanceRequests: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: components["schemas"]["MaintenanceStatus"];
+                /** @description Only OPEN and IN_PROGRESS requests. */
+                open?: boolean;
+                room_id?: number;
+                assigned_to?: number;
+                category?: components["schemas"]["MaintenanceCategory"];
+                priority?: components["schemas"]["MaintenancePriority"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequestPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    assignMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    resolveMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CloseMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reopenMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    blockRoomForMaintenanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listLostFoundItems: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+                status?: components["schemas"]["LostFoundStatus"];
+                category?: components["schemas"]["LostFoundCategory"];
+                room_id?: number;
+                found_from?: components["schemas"]["Date"];
+                found_to?: components["schemas"]["Date"];
+                /** @description Matches the item number, description, storage place, possible owner or who took it. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listLostFoundPossibleOwners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guests, most recent stay first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundOwnerList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    returnLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    disposeLostFoundItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisposeLostFoundItem"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LostFoundItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHousekeepingProductivityReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingProductivityReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHousekeepingDirtyRoomsReport: {
+        parameters: {
+            query?: {
+                min_hours?: number;
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingDirtyRoomsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getMaintenanceReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGlAccounts: {
+        parameters: {
+            query?: {
+                account_type?: components["schemas"]["GlAccountType"];
+                statement_group?: string;
+                active?: boolean;
+                postable?: boolean;
+                /** @description Matches the code or the name. */
+                q?: string;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGlAccount"];
+            };
+        };
+        responses: {
+            /** @description The account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importGlAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportGlAccounts"];
+            };
+        };
+        responses: {
+            /** @description What the import did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportGlAccountsResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateGlAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGlAccount"];
+            };
+        };
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGlAccountMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The keys with their accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountMapList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setGlAccountMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetGlAccountMap"];
+            };
+        };
+        responses: {
+            /** @description The keys with their accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlAccountMapList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listUnmappedGlCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlCodeReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listJournals: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                type?: components["schemas"]["JournalType"];
+                /** @description Only journals with a line on this account. */
+                account_id?: number;
+                /** @description Text in the number */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The journals, without their lines. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postManualJournal: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualJournalRequest"];
+            };
+        };
+        responses: {
+            /** @description The journal with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postPendingJournals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many days were journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        posted: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The journal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseJournalRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal journal. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGlPeriods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The periods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriodList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    closeGlPeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriod"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenGlPeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the month. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlPeriod"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTrialBalance: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialBalance"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGeneralLedger: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneralLedger"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getIncomeStatement: {
+        parameters: {
+            query?: {
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeStatement"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBalanceSheet: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceSheet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getReconciliation: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reconciliation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTrialBalancePdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGeneralLedgerPdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getIncomeStatementPdf: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBalanceSheetPdf: {
+        parameters: {
+            query?: {
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFiscalYears: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fiscal years. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYearList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    closeFiscalYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fiscal year, now closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYear"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenFiscalYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The first day of the fiscal year. */
+                start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The fiscal year, open again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYear"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSuppliers: {
+        parameters: {
+            query?: {
+                active?: boolean;
+                /** @description Text in the code or the name. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description The supplier. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listOpenBills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBillList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBills: {
+        parameters: {
+            query?: {
+                supplier_id?: number;
+                status?: "POSTED" | "VOIDED";
+                from?: string;
+                to?: string;
+                /** @description Text in the bill number */
+                q?: string;
+                /** @description Only bills with something still owed. */
+                open_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postBill: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostBillRequest"];
+            };
+        };
+        responses: {
+            /** @description The bill with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSupplierPayments: {
+        parameters: {
+            query?: {
+                supplier_id?: number;
+                status?: "POSTED" | "VOIDED";
+                from?: string;
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPaymentList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postSupplierPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostSupplierPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment with what it settles. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPayablesAging: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayablesAging"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBankAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccountList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBankAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The bank account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBankAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBankStatements: {
+        parameters: {
+            query?: {
+                bank_account_id?: number;
+                status?: "OPEN" | "RECONCILED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBankStatementRequest"];
+            };
+        };
+        responses: {
+            /** @description The statement with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, with its lines and matchings. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listUnclearedJournalLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclearedLineList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    clearJournalLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClearJournalLinesRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    unclearJournalLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                clearingId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    autoMatchStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoMatchResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adjustFromStatementLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustFromLineRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reconcileStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reopenStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSettlementLines: {
+        parameters: {
+            query: {
+                account_key: "CARD" | "OTHER_PAYMENT";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The payment lines. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclearedLineList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    settleFromStatementLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettleRequest"];
+            };
+        };
+        responses: {
+            /** @description The statement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxFilingProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfileList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxFilingProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The profile. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateTaxFilingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaxFilingProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxPeriods: {
+        parameters: {
+            query: {
+                tax_id: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPeriodList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxWorksheet: {
+        parameters: {
+            query: {
+                tax_id: number;
+                /** @description The first day of the month. */
+                period: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingWorksheet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxReturns: {
+        parameters: {
+            query?: {
+                tax_id?: number;
+                status?: "FILED" | "VOIDED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturnList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fileTaxReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileTaxReturnRequest"];
+            };
+        };
+        responses: {
+            /** @description The return with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidTaxReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingReturn"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    payTaxReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayTaxRequest"];
+            };
+        };
+        responses: {
+            /** @description The payment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxPayments: {
+        parameters: {
+            query?: {
+                return_id?: number;
+                status?: "POSTED" | "VOIDED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPaymentList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidTaxPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingPayment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxLiability: {
+        parameters: {
+            query?: {
+                /** @description The business date; the current business date by default. */
+                as_of?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingLiability"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxReturnPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The return as filed, with its payments (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getTaxWorksheetPdf: {
+        parameters: {
+            query: {
+                tax_id: number;
+                period: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The worksheet (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

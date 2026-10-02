@@ -303,7 +303,7 @@ func (q *Queries) GetVisibleGuest(ctx context.Context, arg GetVisibleGuestParams
 }
 
 const guestLinkedTo = `-- name: GuestLinkedTo :one
-SELECT guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $1::bigint[])::boolean AS linked
+SELECT COALESCE(guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $1::bigint[]), false)::boolean AS linked
 FROM guests g WHERE g.tenant_id = $2 AND g.id = $3
 `
 

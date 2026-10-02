@@ -69,6 +69,9 @@ describe('PropertyFormView (create)', () => {
     const { wrapper, router } = await mountForm()
     await wrapper.get('input[name=code]').setValue('BALI')
     await wrapper.get('input[name=name]').setValue('Hotel Bali')
+    const methods = wrapper.findAll('input[name=refund_methods]')
+    expect(methods.map((m) => (m.element as HTMLInputElement).checked)).toEqual([true, false, false, false]) // cash only
+    await methods[2]!.setValue(true) // bank transfer too
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
@@ -77,6 +80,7 @@ describe('PropertyFormView (create)', () => {
     expect(opts.body).toMatchObject({
       code: 'BALI', name: 'Hotel Bali', timezone: 'Asia/Jakarta', currency_code: 'IDR', currency_decimals: 0,
       check_in_time: '14:00', check_out_time: '12:00', night_audit_marks_occupied_dirty: true,
+      refund_methods: ['CASH', 'BANK_TRANSFER'],
     })
     expect(opts.body.opening_business_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(router.currentRoute.value.path).toBe('/setup/properties')

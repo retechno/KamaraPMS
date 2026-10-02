@@ -1,158 +1,108 @@
 <script setup lang="ts">
+import { CalendarPlus, DoorOpen, MoonStar } from 'lucide-vue-next'
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { useSystemStore, type ComponentStatus } from '@/stores/system'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
+import ManagerDashboard from '@/views/dashboard/ManagerDashboard.vue'
 
 const system = useSystemStore()
 const property = usePropertyStore()
+const auth = useAuthStore()
 onMounted(() => system.check())
+
+const pid = computed(() => property.currentId)
+const can = (permission: string) => pid.value !== null && auth.can(permission, pid.value)
 
 const local = computed(() => (property.clock ? wallClock(property.clock.property_local_time) : null))
 const auditFrom = computed(() => {
   const c = property.clock
-  if (!c) return ''
+  if (!c || !property.current) return ''
   // Shown in the property's zone: the rule is "from HH:MM local on the business date".
-  return property.current ? `${property.current.night_audit_earliest_time} on ${formatBusinessDate(c.business_date)}` : ''
+  return t('dashboard.page.allowedFrom', { time: property.current.night_audit_earliest_time, date: formatBusinessDate(c.business_date) })
 })
 
-const label: Record<ComponentStatus, string> = { unknown: 'Unknown', up: 'Operational', down: 'Unavailable' }
+const label = (s: ComponentStatus): string => t(`dashboard.page.${s}` as never)
+const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s === 'down' ? ('destructive' as const) : ('outline' as const))
 </script>
 
 <template>
-  <h1>Dashboard</h1>
+  <PageHeader :title="t('dashboard.page.title')">
+    <template v-if="property.current" #marks>
+      <Badge variant="secondary" data-testid="property-name">{{ property.current.name }}</Badge>
+    </template>
+    <template #actions>
+      <Button v-if="can('reservation.create')" as-child size="sm" data-testid="quick-new-reservation">
+        <RouterLink to="/reservations/new"><CalendarPlus />{{ t('dashboard.page.newReservation') }}</RouterLink>
+      </Button>
+      <Button v-if="can('frontdesk.checkin')" as-child size="sm" variant="outline" data-testid="quick-walk-in">
+        <RouterLink to="/walk-in"><DoorOpen />{{ t('dashboard.page.walkIn') }}</RouterLink>
+      </Button>
+      <Button v-if="can('nightaudit.run')" as-child size="sm" variant="outline" data-testid="quick-night-audit">
+        <RouterLink to="/night-audit"><MoonStar />{{ t('dashboard.page.runNightAudit') }}</RouterLink>
+      </Button>
+    </template>
+  </PageHeader>
 
-  <section v-if="property.clock && property.current" class="card" data-testid="business-day-card">
-    <h2>Business day · {{ property.current.name }}</h2>
-    <p class="bd">{{ formatBusinessDate(property.clock.business_date) }}</p>
-    <dl class="status-list">
-      <div class="status-row">
-        <dt>Property local time</dt>
-        <dd>{{ local ? `${formatBusinessDate(local.date)} ${local.time}` : '—' }} ({{ property.clock.timezone }})</dd>
-      </div>
-      <div class="status-row">
-        <dt>Night audit</dt>
-        <dd>{{ property.clock.night_audit_allowed ? 'Can run now' : `Allowed from ${auditFrom}` }}</dd>
-      </div>
-    </dl>
-  </section>
-  <section v-else-if="property.loaded && !property.hasProperties" class="card">
-    <h2>Set up your first property</h2>
-    <p class="muted">A property holds its own time zone, currency and business date.</p>
-    <RouterLink to="/setup/properties/new">Create a property</RouterLink>
-  </section>
+  <ManagerDashboard />
 
-  <section class="card" aria-labelledby="status-title">
-    <div class="card-head">
-      <h2 id="status-title">System status</h2>
-      <button type="button" :disabled="system.checking" @click="system.check()">
-        {{ system.checking ? 'Checking…' : 'Refresh' }}
-      </button>
-    </div>
-    <dl class="status-list">
-      <div class="status-row">
-        <dt>API</dt>
-        <dd :class="`status status-${system.apiStatus}`" data-testid="api-status">{{ label[system.apiStatus] }}</dd>
-      </div>
-      <div class="status-row">
-        <dt>Database</dt>
-        <dd :class="`status status-${system.databaseStatus}`" data-testid="db-status">
-          {{ label[system.databaseStatus] }}
-        </dd>
-      </div>
-    </dl>
-    <p v-if="system.lastError" class="error" role="alert">
-      {{ system.lastError.message }}
-      <code>{{ system.lastError.code }}</code>
-      <span v-if="system.lastError.requestId"> · request {{ system.lastError.requestId }}</span>
-    </p>
-    <p v-if="system.checkedAt" class="muted">Last checked {{ system.checkedAt.toLocaleTimeString() }}</p>
-  </section>
+  <div class="grid gap-4 md:grid-cols-2">
+    <Card v-if="property.clock && property.current" data-testid="business-day-card">
+      <CardHeader><CardTitle>{{ t('dashboard.page.businessDay') }} · {{ property.current.name }}</CardTitle></CardHeader>
+      <CardContent>
+        <p class="m-0 mb-3 text-2xl font-semibold tracking-tight">{{ formatBusinessDate(property.clock.business_date) }}</p>
+        <dl class="m-0 divide-y divide-border text-sm">
+          <div class="flex justify-between gap-3 py-2">
+            <dt class="font-medium">{{ t('dashboard.page.localTime') }}</dt>
+            <dd class="m-0 text-right">{{ local ? `${formatBusinessDate(local.date)} ${local.time}` : '—' }} ({{ property.clock.timezone }})</dd>
+          </div>
+          <div class="flex justify-between gap-3 py-2">
+            <dt class="font-medium">{{ t('dashboard.page.nightAudit') }}</dt>
+            <dd class="m-0 text-right">{{ property.clock.night_audit_allowed ? t('dashboard.page.canRunNow') : auditFrom }}</dd>
+          </div>
+        </dl>
+      </CardContent>
+    </Card>
+    <Card v-else-if="property.loaded && !property.hasProperties">
+      <CardHeader><CardTitle>{{ t('dashboard.page.setupTitle') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p class="m-0 mb-3 text-sm text-muted-foreground">{{ t('dashboard.page.setupBody') }}</p>
+        <RouterLink to="/setup/properties/new">{{ t('dashboard.page.createProperty') }}</RouterLink>
+      </CardContent>
+    </Card>
 
-  <section class="card">
-    <h2>Getting started</h2>
-    <p class="muted">
-      The foundation (M0) is in place. Property setup and the business date arrive with milestone M1; front-office
-      features follow milestone by milestone.
-    </p>
-  </section>
+    <Card aria-labelledby="status-title">
+      <CardHeader class="flex-row items-center justify-between">
+        <CardTitle id="status-title">{{ t('dashboard.page.systemStatus') }}</CardTitle>
+        <Button variant="outline" size="sm" :disabled="system.checking" @click="system.check()">
+          {{ system.checking ? t('dashboard.page.checking') : t('common.refresh') }}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <dl class="m-0 divide-y divide-border text-sm">
+          <div class="flex items-center justify-between py-2">
+            <dt class="font-medium">{{ t('dashboard.page.api') }}</dt>
+            <dd class="m-0"><Badge :variant="variant(system.apiStatus)" data-testid="api-status">{{ label(system.apiStatus) }}</Badge></dd>
+          </div>
+          <div class="flex items-center justify-between py-2">
+            <dt class="font-medium">{{ t('dashboard.page.database') }}</dt>
+            <dd class="m-0"><Badge :variant="variant(system.databaseStatus)" data-testid="db-status">{{ label(system.databaseStatus) }}</Badge></dd>
+          </div>
+        </dl>
+        <p v-if="system.lastError" class="m-0 mt-3 text-sm text-destructive" role="alert">
+          {{ system.lastError.message }}
+          <code>{{ system.lastError.code }}</code>
+          <span v-if="system.lastError.requestId"> · {{ t('dashboard.page.request', { id: system.lastError.requestId }) }}</span>
+        </p>
+        <p v-if="system.checkedAt" class="m-0 mt-3 text-sm text-muted-foreground">{{ t('dashboard.page.lastChecked', { time: system.checkedAt.toLocaleTimeString() }) }}</p>
+      </CardContent>
+    </Card>
+  </div>
 </template>
-
-<style scoped>
-h1 {
-  margin: 0 0 20px;
-  font-size: 24px;
-  letter-spacing: -0.02em;
-}
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-.card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.card-head h2 {
-  margin: 0;
-}
-.status-list {
-  margin: 16px 0 0;
-}
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-top: 1px solid var(--border);
-}
-dt {
-  font-weight: 500;
-}
-dd {
-  margin: 0;
-}
-.status::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
-  background: var(--text-muted);
-}
-.status-up::before {
-  background: var(--ok);
-}
-.status-down::before {
-  background: var(--danger);
-}
-.bd {
-  font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-.error {
-  margin: 12px 0 0;
-  color: var(--danger);
-}
-.error code {
-  font-size: 12px;
-  margin-left: 6px;
-}
-.muted {
-  color: var(--text-muted);
-  font-size: 14px;
-  margin: 12px 0 0;
-}
-</style>

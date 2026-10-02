@@ -46,6 +46,11 @@ type Property struct {
 	CreatedBy                       *int64
 	UpdatedAt                       time.Time
 	UpdatedBy                       *int64
+	Phone                           *string
+	Email                           *string
+	TaxID                           *string
+	DocumentFooter                  *string
+	RefundMethods                   []string
 }
 
 type Tenant struct {

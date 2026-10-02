@@ -67,7 +67,7 @@
 - **Request:** `{ code, name, address?, city?, country_code?, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin?, night_audit_marks_occupied_dirty?, night_audit_earliest_time?, opening_business_date }`
 - **Response 201:** the property, including `business_date`.
 - **Validation:** the timezone is a valid IANA name. The currency is ISO 4217. Decimals are 0–3. The code is unique in the tenant.
-- **Rules:** creates the first OPEN business day, the 4 document sequences and the seeded charge codes (with no tax mappings).
+- **Rules:** creates the first OPEN business day, the 4 document sequences and the ten seeded system charge codes (`seed_charge_codes`, migration 00014; all EXCLUSIVE, with no tax or service mappings).
 - **TX:** `T[—]`: all inserts.
 
 **GET `{P}`**
@@ -221,60 +221,76 @@ There are no endpoints to open or close days directly. That only happens through
 - **Rules:** limited to the caller's readable properties unless they hold `guest.history_all_properties` at one of them (administrators: all). `hidden_count` counts what was left out. Reservation dates are the span of its lines.
 - **TX:** R
 
-## 9. Billing configuration (write: `billing_config.manage`)
+## 9. Billing configuration (write: `billing_config.manage`; read: any access to the property)
+
+Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage strings with four decimals (`"11.0000"`); input may omit trailing zeros. Amounts (`default_unit_price`) are plain decimal strings, formatted with the property's currency decimals, and may not have more decimals than the currency (0 to 3).
 
 **GET / POST `{P}/taxes`, PATCH `{P}/taxes/{id}`**
 - **Request:** `{ code, name, rate: "11.0000", tax_on_service, is_active? }`
-- **Validation:** `0 ≤ rate ≤ 100`. There is **no inclusive flag**.
+- **Validation:** `0 ≤ rate ≤ 100`, at most four decimals. There is **no inclusive flag** (unknown fields are 422 `UNKNOWN_FIELD`).
 - **Rules:**
-  - A rate change affects future postings only. The response includes `affected_open_stays` as a warning.
-  - Deactivation is rejected while the tax is actively mapped (409 `TAX_IN_USE`).
-- **TX:** master pattern
+  - A rate change affects future postings only. The PATCH response then includes `affected_open_stays`: the open stays whose remaining nights are charged through a charge code that maps this tax.
+  - Deactivation is rejected while the tax is actively mapped (409 `TAX_IN_USE`, `context.charge_code_rules`).
+- **TX:** master pattern (`T[tax FOR UPDATE]` + audit)
 
 **GET / POST `{P}/service-charges`, PATCH `/{id}`**
 - **Request:** `{ code, name, rate, is_active? }`
-- **Rules:** same as taxes.
+- **Rules:** same as taxes (409 `SERVICE_CHARGE_IN_USE`).
 - **TX:** master pattern
 
 **GET / POST `{P}/charge-codes`, GET / PATCH `/{id}`**
-- **Request:** `{ code, name, charge_type, price_mode, default_unit_price?, is_active? }`
-- **Rules:** `price_mode` is immutable once the code is used (409 `PRICE_MODE_LOCKED`). System codes can't be deactivated while they're referenced by an active rate plan.
-- **TX:** master pattern
+- **Request:** `{ code, name, charge_type, price_mode, default_unit_price?, is_active? }`. Responses carry the active rules: `taxes: [{ tax_id, code, name, rate, tax_on_service, sequence }]` and `service_charges: [{ service_charge_id, code, name, rate, sequence }]`.
+- **Filters:** `active`, `charge_type`.
+- **Rules:**
+  - `price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`, enforced by a trigger). Re-sending the current value is not a change.
+  - The charge type of a **system** code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`); a code used for room revenue stays `ROOM` (trigger, 409 `CHARGE_TYPE_LOCKED`).
+  - A code cannot be deactivated while an active rate plan sells through it (409 `CHARGE_CODE_IN_USE`).
+  - Every property starts with ten system codes: `ROOM`, `ROOM_EXEMPT` (type ROOM), `BREAKFAST`, `RESTAURANT`, `MINIBAR` (FOOD_BEVERAGE), `LAUNDRY`, `EXTRA_BED` (SERVICE), `NO_SHOW_FEE`, `CANCEL_FEE` (FEE), `OTHER`. They carry no rules; the owner maps taxes and service charges per property.
+- **TX:** master pattern (`T[charge_code FOR UPDATE]` + audit)
 
 **PUT `{P}/charge-codes/{id}/rules`**
 - **Purpose:** replace the ordered tax and service mappings.
-- **Request:** `{ taxes: [{ tax_id, sequence }], service_charges: [{ service_charge_id, sequence }] }`
+- **Request:** `{ taxes: [{ tax_id, sequence }], service_charges: [{ service_charge_id, sequence }] }` (at most 20 each; an empty list removes all rules).
 - **Response:** the charge code with its rules.
-- **Validation:** the IDs are active and in the same property. Sequences are unique and ≥ 1.
-- **Rules:** mappings that are no longer listed are set to `is_active = false`. Affects future postings only.
-- **TX:** `T[charge_code FOR UPDATE]`: upsert mappings + audit
+- **Validation:** sequences are unique per list, from 1 to 32767 (gaps allowed); ids are not repeated; the taxes and service charges exist in the property (404 `TAX_NOT_FOUND` / `SERVICE_CHARGE_NOT_FOUND`) and are active (422 `TAX_INACTIVE` / `SERVICE_CHARGE_INACTIVE`, field `taxes[i].tax_id`).
+- **Rules:** mappings that are no longer listed are set to `is_active = false` (history stays); re-adding one reuses its row. Affects future postings only.
+- **TX:** `T[L1 share, charge_code FOR UPDATE, taxes and service charges FOR SHARE]`: deactivate all, upsert the listed rules, audit with the old and new rule sets. The share locks make "map a tax" and "deactivate the tax" mutually exclusive, so an inactive tax is never mapped.
 
-**POST `{P}/charge-calculations`**
-- **Purpose:** preview the engine result. Nothing is posted.
-- **Request:** `{ charge_code_id, quantity, unit_price, price_mode?, discount_amount? }`
-- **Response:** the full Breakdown (base, discount, net, rounding adjustment, service components, tax components, totals).
-- **Rules:** `ChargeCalculationService`.
+**ChargeRuleResolver** (internal, used by `ChargeCalculationService` in M6): `billingconfig.Service.ResolveRules(tenant, property, chargeCode)` returns the code with its active, ordered rules and decimal rates. A mapping applies only while the tax or service charge itself is active. It is a lock-free read of committed configuration.
+
+**POST `{P}/charge-calculations`** (any access to the property)
+- **Purpose:** preview the engine result. Nothing is posted or stored.
+- **Request:** `{ charge_code_id, quantity, unit_price, price_mode?, discount_amount? }`. The numbers are plain decimal strings (no separators or exponents). `quantity` and `unit_price` are signed: a negative price (or quantity) previews a credit, as an adjustment does. `discount_amount` is a magnitude.
+- **Response 200:** `{ price_mode, quantity, unit_price, base_amount, discount_amount, net_amount, rounding_adjustment, service_charges: [{ rule_id, code, name, rate, base_amount, amount, sequence }], taxes: [{ ..., tax_on_service }], service_charge_total, tax_total, taxable_amount, total_amount }`. Money uses the property's currency decimals (`"7.00"`), rates four (`"11.0000"`). `discount_amount` has the sign of `base_amount`, so `net = base − discount` holds for exclusive prices.
+- **Errors:** 422 with the field (`quantity`, `unit_price`, `discount_amount`, `price_mode`, `charge_code_id`); 404 `CHARGE_CODE_NOT_FOUND` (also another property's code); 409 `CHARGE_CODE_INACTIVE`.
+- **Rules:** `billingconfig.Service.Calculate` (ChargeCalculationService): resolve the active ordered rules and the property's decimals, call `chargecalc.Calculate`. A price-mode override replaces the code's mode for this calculation only.
 - **TX:** R
 
 ## 10. Rate plans and rates
 
-**GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`)
-- **Request:** `{ code, name, description?, meal_plan, cancellation_policy?, is_refundable, room_charge_code_id, is_active? }`
-- **Validation:** the room charge code is active with `charge_type = ROOM`.
-- **Rules:** changing `room_charge_code_id` affects **new** nightly snapshots only.
-- **TX:** master pattern
+**GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`; read: any access to the property)
+- **Request:** `{ code, name, description?, meal_plan (RO|BB|HB|FB|AI), cancellation_policy?, is_refundable?, room_charge_code_id, is_active? }`. The code is upper-cased and immutable. Responses add `room_charge_code` (its code) and `price_mode` (the code's, i.e. how grid amounts are read).
+- **Validation:** the room charge code is an active charge code of this property with `charge_type = ROOM` (404 `CHARGE_CODE_NOT_FOUND` for another property's, 422 `CHARGE_CODE_NOT_ROOM` on `room_charge_code_id` otherwise; a trigger backs it up).
+- **Rules:**
+  - Changing `room_charge_code_id` affects **new** nightly snapshots only.
+  - A plan that already has rates cannot move to a room charge code with a different price mode (409 `RATE_PLAN_PRICE_MODE_MISMATCH`, with the counts in `context`): its amounts would silently be read as another kind of price. Create a new plan instead.
+  - Deactivation is allowed; it stops new bookings (M8) and leaves existing reservations alone.
+- **TX:** `T[L1 share, room charge code FOR SHARE, plan FOR UPDATE]` + audit
 
-**GET `{P}/rates?rate_plan_id&room_type_id&from&to`**
+**GET `{P}/rates?rate_plan_id&from&to&room_type_id?`**
 - **Purpose:** the rate grid, with the plan's price mode.
+- **Response:** `{ rate_plan_id, price_mode, room_charge_code, from, to, rates: [{ room_type_id, stay_date, amount }] }`, ordered by night then room type. Amounts carry the currency's decimals. Nights without a rate are absent. Not paginated: `from` and `to` (exclusive) are required and span at most 730 days.
 - **TX:** R
 
 **PUT `{P}/rates`** (`rate.manage`)
 - **Purpose:** bulk upsert.
-- **Request:** `{ rate_plan_id, room_type_ids[], from, to (exclusive), weekdays?, amount }`
-- **Response:** `{ updated_nights }`
-- **Validation:** `to > from`, a span of ≤ 730 days, and `amount ≥ 0`.
-- **Rules:** existing reservations are not affected (snapshots).
-- **TX:** `T[—]` (batched upsert) + audit summary
+- **Request:** `{ rate_plan_id, room_type_ids[] (1 to 50), from, to (exclusive), weekdays? (MON..SUN; all days when omitted), amount }`
+- **Response:** `{ updated_nights, created_nights }`: nights written (new or overwritten) and how many of those were new.
+- **Validation:** `to > from`, a span of ≤ 730 days, `amount ≥ 0` with at most the currency's decimals (0 to 3) and fewer than 10^15; the weekdays must select at least one night (422 `NO_NIGHTS`). Room types and the plan must exist in the property (404). Rates may be prepared for an inactive plan and for past dates.
+- **Rules:** all or nothing. Existing reservations are not affected (snapshots).
+- **TX:** `T[L1 share, L2 room types FOR SHARE, plan FOR SHARE]`: one batched upsert + an audit summary. The plan's share lock and the plan update's exclusive lock make a fill and a price mode switch mutually exclusive.
+
+**Price lookup** (internal, for reservations in M8): `rates.Service.NightlyPrices(tenant, property, plan, room type, arrival, departure)` returns the price of every night of `[arrival, departure)` (at most 365 nights) with the room charge code and price mode they are read in. The plan must be active (409 `RATE_PLAN_INACTIVE`) and every night must have a rate (409 `RATE_NOT_SET`, `context.nights` lists up to 31 missing nights and `context.missing_nights` the total). A missing rate is never guessed. Taxes and service are the engine's job: the caller passes each amount and the code's rules to `ChargeCalculationService`.
 
 ## 11. Availability
 
@@ -282,7 +298,7 @@ There are no endpoints to open or close days directly. That only happens through
 - **Purpose:** availability per room type and night, with rate estimates.
 - **Response:** `{ nights[], room_types: [{ room_type_id, fits_occupancy, available_min, per_night: [{date, sellable, demand, available}], rate_plans: [{ id, code, nightly: [{date, amount}], estimate: {net, service, tax, total} }] }] }`
 - **Validation:** `departure > arrival`, `arrival ≥ BD`, and ≤ 365 nights.
-- **Rules:** Step 14 §14.1. The estimate comes from `ChargeCalculationService`. The result is advisory.
+- **Rules:** Step 14 §14.1. The estimate comes from `ChargeCalculationService`. The result is advisory. A rate plan also carries `name`, `price_mode` and `missing_nights`; with missing nights it has no `estimate`.
 - **TX:** R
 
 **GET `{P}/availability/rooms?room_type_id&arrival&departure`**
@@ -297,7 +313,12 @@ There are no endpoints to open or close days directly. That only happens through
 - **Response 201:** the reservation (as in GET).
 - **Validation:** Step 14 §14.2 "Create". Overrides need `reservation.override_rate`. `room_id` requires `confirm: true`.
 - **Rules:** creates the DRAFT and snapshots the nightly rows. `confirm: true` runs **confirm** in the same transaction.
-- **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks.
+- **Idempotency (implemented):** the key and a body hash are stored on the reservation; a replay returns the reservation, a different body with the same key is 422 `IDEMPOTENCY_KEY_REUSED`.
+- **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks (L2, L3) before the sequence.
+
+**GET `{P}/tape-chart?from&to`** (`reservation.read`)
+- **Purpose:** the read-only tape chart: active rooms with the CONFIRMED and CHECKED_IN lines and active blocks touching `[from, to)`, plus lines without a room per room type. At most 62 days.
+- **TX:** R
 
 **GET `{P}/reservations?arrival_from&arrival_to&status&q`**
 - **Purpose:** search (lines are joined for dates and status).
@@ -356,7 +377,8 @@ There are no endpoints to open or close days directly. That only happens through
 
 **POST `…/rooms/{lineId}/unassign-room`**
 - **Request:** `{ version }`
-- **TX:** `T[L4]`
+- **Rules:** an upgraded line returns to its booked type, which must have availability.
+- **TX:** `T[L1, L2, L3, L4]` (the type locks are needed for the availability re-check)
 
 **POST `{P}/reservations/{id}/deposits`** ⓘ (`payment.post`)
 - **Purpose:** take a deposit.
@@ -374,6 +396,10 @@ There are no endpoints to open or close days directly. That only happens through
 - **Validation:** occupancy is within the room type's limits. An override needs `frontdesk.checkin_unready_room` and a reason.
 - **Rules:** Step 14 §14.3 "Check-in", including `require_room_inspection_for_checkin`. Errors: `ARRIVAL_DATE_MISMATCH`, `ROOM_NOT_READY` (with `context.current` and `context.required`), `ROOM_OCCUPIED`, `ROOM_BLOCKED` and `ROOM_NOT_AVAILABLE`.
 - **TX:** see Step 15 #3
+
+**GET `{P}/arrivals?date`** (`reservation.read`)
+- **Purpose:** CONFIRMED rooms arriving on a date (default: the business date), for the arrivals screen.
+- **TX:** R
 
 **POST `{P}/walk-ins`** ⓘ (`frontdesk.checkin` + `reservation.create`)
 - **Purpose:** a walk-in.
@@ -445,7 +471,7 @@ There are no endpoints to open or close days directly. That only happens through
 **POST `{P}/folios/{id}/adjustments`** ⓘ (`folio.adjust`)
 - **Purpose:** an adjustment.
 - **Request:** `{ charge_code_id, amount (signed), price_mode?, reason, related_item_id?, approval }`
-- **Rules:** processed through the engine, with a signed base.
+- **Rules:** processed through the engine, with a signed base. **An adjustment corrects what is already posted on the folio:** the charge code needs a posted net above zero on this folio (its charges, adjustments and reversals added up, so a reversed charge nets out), else 409 `ADJUSTMENT_NOTHING_POSTED` (post a charge instead); a credit cannot take that net below zero, else 409 `ADJUSTMENT_EXCEEDS_POSTED` with `context.posted`. An increase of what is posted is allowed. The check runs under the folio row lock, so two credits cannot both fit. A ROOM code is adjustable once room charges are posted on the folio.
 - **TX:** as for charges
 
 **POST `{P}/folio-items/{id}/reverse`** (`folio.reverse`)
@@ -469,7 +495,7 @@ There are no endpoints to open or close days directly. That only happens through
 
 **POST `{P}/payments/{id}/refunds`** ⓘ (`payment.refund`)
 - **Request:** `{ amount, payment_method?, reference_number?, reason, approval }`
-- **Rules:** `amount ≤ refundable`.
+- **Rules:** `amount ≤ refundable`. A refund leaves by a method the property allows (`properties.refund_methods`, CASH only by default, set in the property settings, migration 00035): another method is 422 `payment_method: NOT_ALLOWED`. Without `payment_method` the payment's own method is used when allowed, otherwise the first allowed method (cash). The cashier totals and the day close journal follow the refund's own method, so a bank transfer refunded in cash is booked to the cash account. The folio screen offers only the allowed methods.
 - **TX:** `T[L1 share, L4 folio → original payment, L5]`
 
 **GET `{P}/payments?business_date&method`** (`folio.read`)
@@ -524,7 +550,7 @@ There are no endpoints to open or close days directly. That only happens through
 - **Rules:** Step 12 §12.5. It never changes guest, reservation or stay status.
 - **TX:** a single `T[L0 advisory, L1 UPDATE, L4 stays → folios]`. Any blocker rolls back everything.
 
-## 16. Audit
+## 16. Audit (implemented in M15: `internal/auditlog`; the tenant-level trail is `GET /api/v1/audit-logs`)
 
 **GET `{P}/audit-logs?entity_type&entity_id&user_id&from&to`** (`audit.read`)
 - **Response:** `[{ created_at, business_date, user, action, entity_type, entity_id, old_data, new_data }]`
@@ -538,8 +564,172 @@ Applies to: `POST {P}/folios/{id}/adjustments`, `POST {P}/folio-items/{id}/rever
 - **Request block:** `approval: { email, password }`. It is required; a request without it is 422 `APPROVAL_REQUIRED`.
 - **Who may approve:** any active user of the tenant who holds the new permission **`correction.approve`** at that property (tenant administrators pass every check). **The actor may approve their own correction**: they enter their own credentials again. A separate approver is optional.
 - **Two separate checks:** the actor needs the operation's permission (`folio.adjust`, `folio.reverse`, `payment.void`, `payment.refund`), and the approver needs `correction.approve`. A user with both can do both.
-- **Verification:** the approver's password is checked with the same argon2id verifier and the same rate limits as login, inside the request's transaction. Wrong email or password gives 401 `APPROVAL_INVALID_CREDENTIALS` (one generic error, no hint which part was wrong). A valid approver without the permission gives 403 `APPROVAL_NOT_PERMITTED`. Both count toward the login rate limit. Verifying an approval never creates a session or token.
+- **Verification:** the approver's password is checked with the same argon2id verifier and the same rate limits as login, just before the request's transaction opens (no lock is held while the password is hashed). Wrong email or password gives 401 `APPROVAL_INVALID_CREDENTIALS` (one generic error, no hint which part was wrong). A valid approver without the permission gives 403 `APPROVAL_NOT_PERMITTED`. Both count toward the login rate limit. Verifying an approval never creates a session or token.
 - **Never stored:** the password is not logged, not audited and not echoed back. Only the approver's user id is recorded.
 - **Recorded:** `approved_by` (NOT NULL, added by the M9 migration) on the correcting row: REVERSAL and ADJUSTMENT `folio_items`, VOIDED payments and REFUND payments. The audit entry carries `actor` and `approved_by` (equal when self-approved).
 - **Replays:** an `Idempotency-Key` replay returns the stored result and does not ask for approval again.
 - **Correction routes by date:** same business date → void (payments) or reversal (charges); an earlier date → an ADJUSTMENT or a REFUND posted on the current business date. A void or reversal of an earlier date is 409 `CORRECTION_REQUIRES_ADJUSTMENT`. Nothing is ever back-posted.
+
+## 17. Companies, groups and the city ledger (after M15)
+Errors and conventions are as everywhere. Permissions: `company.manage`, `group.manage`, `cityledger.read`, `cityledger.transfer`, `cityledger.receive`.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/companies`, `GET/PATCH {P}/companies/{id}` | read: `reservation.read` or `cityledger.read`; write: `company.manage` | `credit_limit` `null`/empty = no limit, `0` = no credit. Code unique (409 `CODE_TAKEN`). Deactivating a company that owes: 409 `COMPANY_HAS_BALANCE` |
+| `GET/POST {P}/groups`, `GET/PATCH {P}/groups/{id}`, `GET {P}/groups/{id}/reservations` | read: `reservation.read`; write: `group.manage` | Dates and company are guarded by the group's reservations: 409 `GROUP_HAS_ROOMS_OUTSIDE_DATES`, `GROUP_HAS_RESERVATIONS` |
+| `POST {P}/reservations` and `PATCH {P}/reservations/{id}` | as before | New fields `company_id` and `booking_group_id` (a value below 1 clears them on PATCH). 404 `COMPANY_NOT_FOUND`/`GROUP_NOT_FOUND`, 409 `COMPANY_INACTIVE`/`GROUP_INACTIVE`, 422 for a stay outside the group's dates or a company other than the group's. `GET {P}/reservations` filters by `company_id` and `booking_group_id` |
+| `POST {P}/folios/{id}/city-ledger-transfers` | `cityledger.transfer` | Idempotency-Key. 409 `TRANSFER_EXCEEDS_BALANCE`, `CREDIT_LIMIT_EXCEEDED`, `COMPANY_INACTIVE`; returns a payment with method `CITY_LEDGER` |
+| `GET {P}/city-ledger/accounts`, `.../accounts/{id}`, `/statement`, `/aging`, `/receipts` | `cityledger.read` | The balance is derived: transfers minus receipts |
+| `POST {P}/city-ledger/accounts/{id}/receipts` | `cityledger.receive` | Idempotency-Key. 409 `RECEIPT_EXCEEDS_BALANCE`. Optional `allocations` `[{invoice_id, amount}]` pay invoices of the company: 404 `INVOICE_NOT_FOUND`, 409 `INVOICE_NOT_PAYABLE`, `ALLOCATION_EXCEEDS_INVOICE` |
+| `POST {P}/city-ledger/receipts/{id}/void` | `cityledger.receive` + approval | Current business date only (409 `CORRECTION_REQUIRES_ADJUSTMENT`), 409 `RECEIPT_ALREADY_VOIDED` |
+| `GET {P}/companies/{id}/statement.pdf` | `cityledger.read` | `from`, `to` optional |
+| `GET {P}/city-ledger/accounts/{id}/invoice-candidates` | `cityledger.read` | Transfers not on a live invoice; `invoiceable` is true once the guest has checked out |
+| `GET/POST {P}/city-ledger/accounts/{id}/invoices` | read: `cityledger.read`; issue: `cityledger.invoice` | POST `{payment_ids, notes}` with Idempotency-Key combines the transfers into one invoice. 409 `TRANSFER_NOT_AVAILABLE`, `STAY_NOT_CHECKED_OUT` (`context.payment_ids`) |
+| `GET {P}/city-ledger/invoices/{id}` | `cityledger.read` | With its lines |
+| `POST {P}/city-ledger/invoices/{id}/void` | `cityledger.invoice` + approval | Releases the transfers; 409 `INVOICE_ALREADY_VOIDED` |
+| `GET {P}/city-ledger/invoices/{id}/invoice.pdf` | `cityledger.read` | A voided invoice is stamped VOID |
+
+`CITY_LEDGER` appears as a payment method on payments (with `company_id`) but is refused by the payment, deposit and refund endpoints; a transfer is not refunded (409 `PAYMENT_NOT_REFUNDABLE`), and voiding one after receipts settled it is 409 `COMPANY_BALANCE_SETTLED`.
+
+## 18. Housekeeping, continued (after M15)
+Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.assign` (generate, assign, add a task, staff list), reads need access to the property.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `PUT {P}/rooms/{id}/housekeeping/flags` | `housekeeping.update` | `{priority, dnd, make_up_requested, note}` replaces the flags; does not change the status or its clock |
+| `GET {P}/housekeeping?occupancy&flagged` | access | The board now carries `priority`, `dnd`, `make_up_requested`, `flag_note` |
+| `GET {P}/housekeeping/staff` | `housekeeping.assign` | Who can be assigned |
+| `GET {P}/housekeeping/tasks?date&status&assigned_to&unassigned&floor` | access | `{date, data, workload}`; high priority first |
+| `POST {P}/housekeeping/tasks/generate` | `housekeeping.assign` | Adds the day's list; `{date, created}`; idempotent |
+| `POST {P}/housekeeping/tasks` | `housekeeping.assign` | A manual task for the current business date |
+| `POST {P}/housekeeping/tasks/assign` | `housekeeping.assign` | `{task_ids, user_id\|null}`; 409 `TASK_NOT_ASSIGNABLE` (`context.task_ids`), field error `ASSIGNEE_INVALID` |
+| `POST {P}/housekeeping/tasks/{id}/start`, `/complete`, `/skip` | `housekeeping.update` | 409 `TASK_NOT_PENDING`, `TASK_ALREADY_CLOSED`; skip needs `{reason}` |
+| `GET/POST {P}/maintenance-requests`, `GET/PATCH {P}/maintenance-requests/{id}` | read and report: `maintenance.report`; PATCH: `maintenance.manage` | Filters `status`, `open`, `room_id`, `assigned_to`, `category`, `priority`; cursor paging |
+| `POST {P}/maintenance-requests/{id}/assign`, `/start`, `/resolve`, `/cancel`, `/reopen` | `maintenance.manage` | 409 `REQUEST_NOT_OPEN`, `REQUEST_NOT_RESOLVED`; cancel needs `note`; resolve and cancel take `release_block` |
+| `POST {P}/maintenance-requests/{id}/block` | `maintenance.manage` + `room_block.manage` | `{block_type, start_date?, end_date}`; 409 `REQUEST_HAS_NO_ROOM`, `REQUEST_ALREADY_BLOCKED`, `ROOM_BLOCK_CONFLICT` |
+| `GET {P}/maintenance-staff` | `maintenance.manage` | Who can take work |
+| `GET/POST {P}/lost-found`, `GET/PATCH {P}/lost-found/{id}` | read and record: `lostfound.report`; PATCH: `lostfound.manage` | Filters `status`, `category`, `room_id`, `found_from`, `found_to`, `q` |
+| `GET {P}/lost-found/{id}/possible-owners` | `lostfound.report` + `reservation.read` | Guests of the room around the day it was found |
+| `POST {P}/lost-found/{id}/return`, `/dispose` | `lostfound.manage` | Final; 409 `ITEM_NOT_STORED`; return needs `claimant_name`, dispose needs `reason` |
+| `GET {P}/dashboard` | `report.view` | The manager dashboard of the open business day: `today` (live summary), `movements`, `rooms` (housekeeping), `trend` (last 14 closed days), `month_to_date` and `previous_month`, `forecast` (next 14 nights). JSON only |
+| `GET {P}/reports/housekeeping-productivity`, `/housekeeping-dirty-rooms`, `/maintenance` | `report.view` | JSON or `?format=csv`; the first and the last take `from` and `to`, the second `min_hours` |
+
+## 19. Accounting (after M15)
+Permissions: `accounting.view` (read), `accounting.manage` (chart and system accounts), `accounting.post` (manual journals), `accounting.close` (periods).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/accounts` | `accounting.view` | Filters `account_type`, `statement_group`, `active`, `postable`, `q`; `format=csv` exports the chart |
+| `POST {P}/accounting/accounts` | `accounting.manage` | 409 `CODE_TAKEN`; field errors for the group, parent and code |
+| `GET/PATCH/DELETE {P}/accounting/accounts/{id}` | read: `accounting.view`; write: `accounting.manage` | 409 `ACCOUNT_IN_USE`, `ACCOUNT_HAS_CHILDREN` |
+| `POST {P}/accounting/accounts/import` | `accounting.manage` | `{csv, dry_run}`; all or nothing; row errors as `rows[N].field` |
+| `GET/PUT {P}/accounting/account-map` | read: `accounting.view`; write: `accounting.manage` | The ten system keys; PUT `{entries: [{map_key, account_id}]}` is all or nothing |
+| `GET {P}/accounting/unmapped` | `accounting.view` | Charge codes, taxes and service charges whose account code the journals cannot use, and where they are posted instead |
+
+### 19.1 Journals and periods
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/journals` | `accounting.view` | Filters `from`, `to`, `type` (DAY_CLOSE, MANUAL, REVERSAL), `account_id`, `q`, `limit` (at most 200); newest first, without lines |
+| `GET {P}/accounting/journals/{id}` | `accounting.view` | With its lines; day close lines carry `source_type` (CHARGE_CODE, TAX, SERVICE_CHARGE, PAYMENT, RECEIPT, DEPOSIT_RELEASE) and `source_ref` |
+| `POST {P}/accounting/journals` | `accounting.post` | Manual journal; `Idempotency-Key` required; 422 field errors per line (`lines[N].account_id`: NOT_FOUND, NOT_POSTABLE, INACTIVE, CONTROL_ACCOUNT; `lines`: UNBALANCED, INVALID_COUNT); 409 `PERIOD_CLOSED` |
+| `POST {P}/accounting/journals/{id}/reverse` | `accounting.post` + approval | `{journal_date?, reason, approval}`; 409 `JOURNAL_NOT_REVERSIBLE` (day close or reversal), `JOURNAL_ALREADY_REVERSED` |
+| `POST {P}/accounting/journals/post-pending` | `accounting.close` | Journals closed days that have none; `{posted}` |
+| `GET {P}/accounting/periods` | `accounting.view` | Months from the start date to today, newest first, with `posted_days`, `closable`, `reopenable` |
+| `POST {P}/accounting/periods/{start}/close` | `accounting.close` | `{start}` is the first day of the month; 409 `PERIOD_NOT_READY` (context `days`, `posted_days`), `PERIOD_ALREADY_CLOSED` |
+| `POST {P}/accounting/periods/{start}/reopen` | `accounting.close` | `{reason}`; only the latest closed month: 409 `PERIOD_NOT_LATEST`, `PERIOD_NOT_CLOSED` |
+
+### 19.2 Reports
+All need `accounting.view`; `from` and `to` default to the current business month so far and the current business date, `as_of` to the current business date (not later: 422). A range is at most 5 years.
+
+| Method and path | Notes |
+|---|---|
+| `GET {P}/accounting/trial-balance` | `from`, `to`; rows per account with opening, movement and closing on their sides, and totals; `format=csv` |
+| `GET {P}/accounting/accounts/{id}/ledger` | `from`, `to`; opening balance, lines with running balance on the normal side, totals, `truncated`; `format=csv` |
+| `GET {P}/accounting/income-statement` | `from`, `to`; lines of kind HEADING, GROUP (with its accounts), SUBTOTAL and TOTAL in USALI order (keys include TOTAL_REVENUE, DEPT_PROFIT, GOP, EBITDA, EBIT, NET_INCOME), `net_income`; `format=csv` |
+| `GET {P}/accounting/balance-sheet` | `as_of`; the same line structure, totals and `difference`; `format=csv` |
+| `GET {P}/accounting/reconciliation` | `as_of`; `controls` (ledger, source, difference), `pending_days`, `includes_open_day`, `reconciled` |
+
+PDF versions (the documents of §15, `accounting.view`, inline and never cached): `GET {P}/accounting/trial-balance.pdf`, `GET {P}/accounting/accounts/{id}/ledger.pdf` and `GET {P}/accounting/income-statement.pdf` take `from` and `to`; `GET {P}/accounting/balance-sheet.pdf` takes `as_of`.
+
+### 19.3 Fiscal years
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/accounting/fiscal-years` | `accounting.view` | Newest first; `net_income` (closing journals left out), `months`, `closed_months`, `closable`, `reopenable`, `closing_journal_number` |
+| `POST {P}/accounting/fiscal-years/{start}/close` | `accounting.close` | `{start}` is the first day of the year; 409 `FISCAL_YEAR_NOT_READY` (context `months`, `closed_months`), `FISCAL_YEAR_ALREADY_CLOSED`, `ACCOUNT_MAP_INCOMPLETE`; 404 `FISCAL_YEAR_NOT_FOUND` |
+| `POST {P}/accounting/fiscal-years/{start}/reopen` | `accounting.close` + approval | `{reason, approval}`; 409 `FISCAL_YEAR_NOT_LATEST`, `FISCAL_YEAR_NOT_CLOSED`. Reopening a month of a closed year: 409 `PERIOD_IN_CLOSED_YEAR` |
+
+The journal type `CLOSING` appears in the journal list; the system account map has 11 keys (`RETAINED_EARNINGS` is the new one).
+
+## 20. Payables (after M15)
+Permissions: `payables.view` (read), `payables.manage` (suppliers), `payables.post` (bills and payments; a void also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/payables/suppliers` | `payables.view` | Filters `active`, `q`; each supplier carries `outstanding` |
+| `POST {P}/payables/suppliers` | `payables.manage` | 409 `CODE_TAKEN`; field errors `code`, `name`, `email`, `payment_terms_days`, `default_account_id` |
+| `GET/PATCH {P}/payables/suppliers/{id}` | read: `payables.view`; write: `payables.manage` | The code never changes |
+| `GET {P}/payables/suppliers/{id}/open-bills` | `payables.view` | What is still owed on each bill, oldest due date first |
+| `GET {P}/payables/bills` | `payables.view` | Filters `supplier_id`, `status`, `from`, `to`, `q`, `open_only`, `limit` |
+| `POST {P}/payables/bills` | `payables.post` | `Idempotency-Key` required; 409 `DUPLICATE_INVOICE`, `SUPPLIER_INACTIVE`, `PERIOD_CLOSED`; field errors per line (`lines[N].account_id`: NOT_FOUND, NOT_POSTABLE, INACTIVE, CONTROL_ACCOUNT; `lines[N].amount`) |
+| `GET {P}/payables/bills/{id}` | `payables.view` | With its lines |
+| `POST {P}/payables/bills/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `BILL_HAS_PAYMENTS`, `BILL_ALREADY_VOIDED` |
+| `GET/POST {P}/payables/payments` | read: `payables.view`; post: `payables.post` | POST needs `Idempotency-Key`; body `{supplier_id, payment_date, payment_method (CASH, BANK_TRANSFER, OTHER), allocations: [{bill_id, amount}]}`; 409 `ALLOCATION_EXCEEDS_OUTSTANDING` with one field error per allocation |
+| `GET {P}/payables/payments/{id}` | `payables.view` | With the bills it settles |
+| `POST {P}/payables/payments/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `PAYMENT_ALREADY_VOIDED` |
+| `GET {P}/payables/aging` | `payables.view` | `as_of` (not after the business date); buckets CURRENT, DAYS_1_30, DAYS_31_60, DAYS_61_90, DAYS_OVER_90 per supplier and in total |
+
+The journal type `PAYABLES` appears in the journal list; the system account map has 12 keys (`ACCOUNTS_PAYABLE` is the new one) and the reconciliation a fourth control.
+
+## 21. Bank reconciliation (after M15)
+Permissions: `bank.view` (read), `bank.manage` (register bank accounts), `bank.reconcile` (import, match, post, reconcile; reopening also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/bank/accounts` | read: `bank.view`; write: `bank.manage` | POST `{account_id, name, account_number?, is_active?}`; 409 `BANK_ACCOUNT_EXISTS`; each carries `book_balance`, `reconciled_to`, `open_statements` |
+| `GET/PATCH {P}/bank/accounts/{id}` | read: `bank.view`; write: `bank.manage` | The account of the books never changes |
+| `GET {P}/bank/statements` | `bank.view` | Filters `bank_account_id`, `status` |
+| `POST {P}/bank/statements` | `bank.reconcile` | `{bank_account_id, period_from, period_to, opening_balance, closing_balance, note?, csv}`; 422 with one field error per row (`rows[N].field`), `closing_balance: DOES_NOT_ADD_UP`, `opening_balance: NOT_CONTINUOUS`; 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE` |
+| `GET/DELETE {P}/bank/statements/{id}` | read: `bank.view`; delete: `bank.reconcile` | The detail has `lines` (with `cleared`, `matched`, `clearings`), `clearings` and the `summary` (book balance, uncleared in/out, adjusted bank, difference, `blockers`, `can_reconcile`); delete only while open |
+| `GET {P}/bank/statements/{id}/uncleared` | `bank.view` | The journal lines of the account up to the end of the statement that are not cleared in full, with `cleared` and `remaining` |
+| `POST {P}/bank/statements/{id}/clearings` | `bank.reconcile` | `{statement_line_id?, journal_line_ids}` (each cleared for what is left of it) or `{allocations: [{statement_line_id?, journal_line_id, amount?}]}` (parts); 409 `ALREADY_CLEARED`, `STATEMENT_RECONCILED`; 422 `EXCEEDS_LINE`, `EXCEEDS_STATEMENT_LINE`, `WRONG_SIDE`; without a statement line only offsetting or opening lines, in full |
+| `DELETE {P}/bank/statements/{id}/clearings/{clearingId}` | `bank.reconcile` | Undo a matching |
+| `POST {P}/bank/statements/{id}/auto-match` | `bank.reconcile` | `{matched, remaining}` |
+| `POST {P}/bank/statements/{id}/lines/{lineId}/adjust` | `bank.reconcile` | `{account_id, description?}`; posts a BANK journal; 409 `LINE_ALREADY_MATCHED`, `PERIOD_CLOSED` |
+| `GET {P}/bank/statements/{id}/settlement-lines` | `bank.view` | `account_key` CARD or OTHER_PAYMENT: the payment lines waiting for their settlement |
+| `POST {P}/bank/statements/{id}/lines/{lineId}/settle` | `bank.reconcile` | `{account_key, journal_line_ids, fee_account_id?, description?}`; posts a BANK journal (bank net, commission, clearing gross); 409 `ALREADY_SETTLED`, `LINE_ALREADY_MATCHED`; 422 `NET_EXCEEDS_GROSS`, `NOT_MONEY_IN` |
+| `POST {P}/bank/statements/{id}/reconcile` | `bank.reconcile` | 409 `STATEMENT_NOT_READY` (context `blockers`) |
+| `POST {P}/bank/statements/{id}/reopen` | `bank.reconcile` + approval | `{reason, approval}`; 409 `STATEMENT_NOT_LATEST`, `STATEMENT_NOT_RECONCILED` |
+
+The journal type `BANK` appears in the journal list.
+
+## 22. Tax filing (after M15)
+Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file returns and pay the authority; voiding one also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/tax/profiles` | read: `tax.view`; write: `tax.manage` | POST `{tax_id, authority, registration_number?, due_day?, is_active?}`; 409 `TAX_PROFILE_EXISTS` |
+| `GET/PATCH {P}/tax/profiles/{id}` | read: `tax.view`; write: `tax.manage` | The tax never changes |
+| `GET {P}/tax/periods?tax_id=` | `tax.view` | The months from the start of the books: `tax_amount`, `status` (OPEN, READY, FILED), `paid`, `outstanding`, `overdue` |
+| `GET {P}/tax/worksheet?tax_id=&period=` | `tax.view` | `period` is the first day of the month; lines, totals, `gl_collected`, `difference`, `ready`, `blockers`, and the `return` filed for it |
+| `GET/POST {P}/tax/returns` | read: `tax.view`; file: `tax.file` | POST `{tax_id, period_start, filed_on?, filing_reference?, notes?}` with `Idempotency-Key`; 409 `TAX_MONTH_NOT_READY` (context `blockers`), `TAX_RETURN_EXISTS`, `TAX_PREVIOUS_NOT_FILED`, `TAX_PROFILE_INACTIVE` |
+| `GET {P}/tax/returns/{id}` | `tax.view` | With worksheet lines and payments |
+| `POST {P}/tax/returns/{id}/void` | `tax.file` + approval | `{reason, approval}`; 409 `TAX_RETURN_HAS_PAYMENTS`, `TAX_RETURN_ALREADY_VOIDED` |
+| `POST {P}/tax/returns/{id}/payments` | `tax.file` | `{payment_date, amount, penalty?, penalty_account_id?, payment_method, reference_number?, remarks?}` with `Idempotency-Key`; 422 `amount: EXCEEDS_OUTSTANDING`, `penalty_account_id: REQUIRED`; 409 `TAX_RETURN_VOIDED`, `PERIOD_CLOSED` |
+| `GET {P}/tax/payments`, `GET {P}/tax/payments/{id}` | `tax.view` | Filters `return_id`, `status` |
+| `POST {P}/tax/payments/{id}/void` | `tax.file` + approval | `{reason, approval}`; 409 `TAX_PAYMENT_ALREADY_VOIDED` |
+| `GET {P}/tax/liability` | `tax.view` | `as_of` (not after the business date); per tax and per tax payable account |
+| `GET {P}/tax/returns/{id}/return.pdf`, `GET {P}/tax/worksheet.pdf?tax_id=&period=` | `tax.view` | PDF documents (§15 style); a filed month answers the return |
+
+The journal type `TAX` appears in the journal list.
+
+## 23. Yield management (after M15)
+Permissions: `rate.manage` changes rules; reading rules and quotes needs only access to the property.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/yield-rules` | property access | Filter `active`; the rules in the order they apply |
+| `POST {P}/yield-rules` | `rate.manage` | `{code, name, rate_plan_id?, room_type_id?, stay_from?, stay_to?, weekdays?, occupancy_from?, occupancy_to?, lead_days_min?, lead_days_max?, stay_nights_min?, stay_nights_max?, adjustment_type (PERCENT, AMOUNT), adjustment_value, floor_amount?, cap_amount?, priority?, is_active?}`; 409 `CODE_TAKEN`, 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`, 422 field errors |
+| `GET/PUT/DELETE {P}/yield-rules/{id}` | read: property access; write: `rate.manage` | PUT replaces the whole rule, the code cannot change; 404 `YIELD_RULE_NOT_FOUND` |
+| `GET {P}/rate-quotes?rate_plan_id&room_type_id&arrival_date&departure_date` | property access | Per night: `grid_rate`, `occupancy_percent`, `steps` (code, before, after), `amount`; `total`, `grid_total`, `missing_nights` |
+
+Reservation nights (`nightly_rates[]`) carry `grid_rate` and `yield_rules`; `base_rate` is the price the night was sold at.

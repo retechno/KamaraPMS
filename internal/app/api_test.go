@@ -16,6 +16,7 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/notifications"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
@@ -31,6 +32,9 @@ type apiEnv struct {
 	t       *testing.T
 	handler http.Handler
 	clock   *clock.Fake
+	build   func(perMinute int) *App
+	app     *App
+	mail    notifications.Sender
 }
 
 func newAPI(t *testing.T) *apiEnv {
@@ -51,8 +55,30 @@ func newAPI(t *testing.T) *apiEnv {
 			t.Fatal(err)
 		}
 	}
-	h := NewHandler(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens})
-	return &apiEnv{t: t, handler: h, clock: c}
+	env := &apiEnv{t: t, clock: c}
+	env.build = func(perMinute int) *App {
+		return New(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute, Mail: env.mail})
+	}
+	env.app = env.build(0)
+	env.handler = env.app.Handler
+	return env
+}
+
+// rateLimited rebuilds the handler with a request limit per minute per client address.
+func (e *apiEnv) rateLimited(perMinute int) {
+	e.t.Helper()
+	e.app = e.build(perMinute)
+	e.handler = e.app.Handler
+}
+
+func (e *apiEnv) get(path string) int { return e.getRec(path).Code }
+
+func (e *apiEnv) getRec(path string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.RemoteAddr = "192.0.2.10:4000"
+	rec := httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, r)
+	return rec
 }
 
 type response struct {
@@ -69,6 +95,12 @@ type client struct {
 
 func (c *client) do(method, path string, body any) response {
 	c.env.t.Helper()
+	return c.doWith(method, path, body, nil)
+}
+
+// doWith is do with extra request headers (for example Idempotency-Key).
+func (c *client) doWith(method, path string, body any, headers map[string]string) response {
+	c.env.t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -77,6 +109,9 @@ func (c *client) do(method, path string, body any) response {
 	}
 	r := httptest.NewRequest(method, path, &buf)
 	r.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 	if c.token != "" {
 		r.Header.Set("Authorization", "Bearer "+c.token)
 	}

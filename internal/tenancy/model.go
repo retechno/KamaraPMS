@@ -8,6 +8,7 @@ package tenancy
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,6 +59,10 @@ type PropertySettings struct {
 	Address                         string          `json:"address,omitempty"`
 	City                            string          `json:"city,omitempty"`
 	CountryCode                     string          `json:"country_code,omitempty"`
+	Phone                           string          `json:"phone,omitempty"`
+	Email                           string          `json:"email,omitempty"`
+	TaxID                           string          `json:"tax_id,omitempty"`
+	DocumentFooter                  string          `json:"document_footer,omitempty"`
 	Timezone                        string          `json:"timezone"`
 	CurrencyCode                    string          `json:"currency_code"`
 	CurrencyDecimals                int32           `json:"currency_decimals"`
@@ -66,6 +71,8 @@ type PropertySettings struct {
 	RequireRoomInspectionForCheckin bool            `json:"require_room_inspection_for_checkin"`
 	NightAuditMarksOccupiedDirty    bool            `json:"night_audit_marks_occupied_dirty"`
 	NightAuditEarliestTime          civil.TimeOfDay `json:"night_audit_earliest_time"`
+	// RefundMethods are the methods a refund may leave by (CASH by default).
+	RefundMethods []string `json:"refund_methods"`
 }
 
 var (
@@ -101,6 +108,10 @@ func (s *PropertySettings) Normalize() {
 	s.Name = strings.TrimSpace(s.Name)
 	s.Address = strings.TrimSpace(s.Address)
 	s.City = strings.TrimSpace(s.City)
+	s.Phone = strings.TrimSpace(s.Phone)
+	s.Email = strings.TrimSpace(s.Email)
+	s.TaxID = strings.TrimSpace(s.TaxID)
+	s.DocumentFooter = strings.TrimSpace(s.DocumentFooter)
 	s.CountryCode = strings.ToUpper(strings.TrimSpace(s.CountryCode))
 	s.Timezone = strings.TrimSpace(s.Timezone)
 	s.CurrencyCode = strings.ToUpper(strings.TrimSpace(s.CurrencyCode))
@@ -122,6 +133,18 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 	if len(s.City) > 100 {
 		add("city", "TOO_LONG", "at most 100 characters")
 	}
+	if len(s.Phone) > 40 {
+		add("phone", "TOO_LONG", "at most 40 characters")
+	}
+	if s.Email != "" && (len(s.Email) > 254 || !strings.Contains(s.Email, "@") || strings.ContainsAny(s.Email, " \r\n<>,;")) {
+		add("email", "INVALID_FORMAT", "an e-mail address")
+	}
+	if len(s.TaxID) > 40 {
+		add("tax_id", "TOO_LONG", "at most 40 characters")
+	}
+	if len(s.DocumentFooter) > 500 {
+		add("document_footer", "TOO_LONG", "at most 500 characters")
+	}
 	if s.CountryCode != "" && !countryPattern.MatchString(s.CountryCode) {
 		add("country_code", "INVALID_FORMAT", "ISO 3166-1 alpha-2, e.g. ID")
 	}
@@ -134,8 +157,22 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 	if money.ValidateDecimals(s.CurrencyDecimals) != nil {
 		add("currency_decimals", "OUT_OF_RANGE", "between 0 and 3")
 	}
+	if len(s.RefundMethods) == 0 {
+		add("refund_methods", "REQUIRED", "at least one of "+strings.Join(RefundMethodChoices, ", "))
+	}
+	seen := map[string]bool{}
+	for _, m := range s.RefundMethods {
+		if !slices.Contains(RefundMethodChoices, m) || seen[m] {
+			add("refund_methods", "INVALID_VALUE", "each of "+strings.Join(RefundMethodChoices, ", ")+", once")
+			break
+		}
+		seen[m] = true
+	}
 	return errs
 }
+
+// RefundMethodChoices are the methods a property can allow for refunds.
+var RefundMethodChoices = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
 
 // Business day statuses.
 const (
@@ -209,6 +246,24 @@ const (
 	SeqStay        SequenceType = "STAY"
 	SeqFolio       SequenceType = "FOLIO"
 	SeqPayment     SequenceType = "PAYMENT"
+	// SeqCityLedgerReceipt numbers what a company pays against its city ledger account.
+	SeqCityLedgerReceipt SequenceType = "CITY_LEDGER_RECEIPT"
+	// SeqCityLedgerInvoice numbers the invoices sent to companies.
+	SeqCityLedgerInvoice SequenceType = "CITY_LEDGER_INVOICE"
+	// SeqJournal numbers the general ledger journals.
+	SeqJournal SequenceType = "JOURNAL"
+	// SeqSupplierBill numbers the supplier bills entered in the payables.
+	SeqSupplierBill SequenceType = "SUPPLIER_BILL"
+	// SeqSupplierPayment numbers the payments to suppliers.
+	SeqSupplierPayment SequenceType = "SUPPLIER_PAYMENT"
+	// SeqTaxReturn numbers the tax returns filed.
+	SeqTaxReturn SequenceType = "TAX_RETURN"
+	// SeqTaxPayment numbers the payments to the tax authority.
+	SeqTaxPayment SequenceType = "TAX_PAYMENT"
+	// SeqMaintenance numbers maintenance requests.
+	SeqMaintenance SequenceType = "MAINTENANCE"
+	// SeqLostFound numbers lost and found items.
+	SeqLostFound SequenceType = "LOST_FOUND"
 )
 
 // defaultSequences are created with every property.
@@ -220,4 +275,13 @@ var defaultSequences = []struct {
 	{SeqStay, "STY"},
 	{SeqFolio, "FOL"},
 	{SeqPayment, "PAY"},
+	{SeqCityLedgerReceipt, "CLR"},
+	{SeqCityLedgerInvoice, "CINV"},
+	{SeqJournal, "JV"},
+	{SeqSupplierBill, "BILL"},
+	{SeqSupplierPayment, "SPAY"},
+	{SeqTaxReturn, "TXR"},
+	{SeqTaxPayment, "TXP"},
+	{SeqMaintenance, "MNT"},
+	{SeqLostFound, "LF"},
 }

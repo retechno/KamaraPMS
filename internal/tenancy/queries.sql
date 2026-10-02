@@ -10,13 +10,13 @@ SELECT * FROM tenants WHERE code = @code;
 
 -- name: CreateProperty :one
 INSERT INTO properties (
-    tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals,
+    tenant_id, code, name, address, city, country_code, phone, email, tax_id, document_footer, timezone, currency_code, currency_decimals,
     check_in_time, check_out_time, require_room_inspection_for_checkin,
-    night_audit_marks_occupied_dirty, night_audit_earliest_time, created_by, updated_by
+    night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, created_by, updated_by
 ) VALUES (
-    @tenant_id, @code, @name, sqlc.narg(address), sqlc.narg(city), sqlc.narg(country_code), @timezone,
+    @tenant_id, @code, @name, sqlc.narg(address), sqlc.narg(city), sqlc.narg(country_code), sqlc.narg(phone), sqlc.narg(email), sqlc.narg(tax_id), sqlc.narg(document_footer), @timezone,
     @currency_code, @currency_decimals, @check_in_time, @check_out_time, @require_room_inspection_for_checkin,
-    @night_audit_marks_occupied_dirty, @night_audit_earliest_time, sqlc.narg(actor_id), sqlc.narg(actor_id)
+    @night_audit_marks_occupied_dirty, @night_audit_earliest_time, @refund_methods, sqlc.narg(actor_id), sqlc.narg(actor_id)
 )
 RETURNING *;
 
@@ -45,6 +45,10 @@ UPDATE properties SET
     address = sqlc.narg(address),
     city = sqlc.narg(city),
     country_code = sqlc.narg(country_code),
+    phone = sqlc.narg(phone),
+    email = sqlc.narg(email),
+    tax_id = sqlc.narg(tax_id),
+    document_footer = sqlc.narg(document_footer),
     timezone = @timezone,
     currency_code = @currency_code,
     currency_decimals = @currency_decimals,
@@ -53,6 +57,7 @@ UPDATE properties SET
     require_room_inspection_for_checkin = @require_room_inspection_for_checkin,
     night_audit_marks_occupied_dirty = @night_audit_marks_occupied_dirty,
     night_audit_earliest_time = @night_audit_earliest_time,
+    refund_methods = @refund_methods,
     status = @status,
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND id = @id

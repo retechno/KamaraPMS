@@ -17,13 +17,29 @@ import (
 	"kamarapms/internal/tenancy/tenancydb"
 )
 
+// PropertyCreated describes a property that was just created, for modules that initialise their own
+// per-property data (charge codes, ...) in the same transaction.
+type PropertyCreated struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	ActorID      *int64
+}
+
 // Service is the tenancy application service.
 type Service struct {
-	txm   *db.TxManager
-	clock clock.Clock
-	audit *audit.Writer
-	authz auth.Authorizer
-	store store
+	onCreated []func(context.Context, PropertyCreated) error
+	txm       *db.TxManager
+	clock     clock.Clock
+	audit     *audit.Writer
+	authz     auth.Authorizer
+	store     store
+}
+
+// OnPropertyCreated registers a hook that CreateProperty runs inside its transaction. Hooks are registered
+// once at start-up (before the service handles requests). A failing hook rolls the property back.
+func (s *Service) OnPropertyCreated(fn func(context.Context, PropertyCreated) error) {
+	s.onCreated = append(s.onCreated, fn)
 }
 
 // NewService wires the tenancy service.
@@ -112,6 +128,10 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			Address:                         nullable(st.Address),
 			City:                            nullable(st.City),
 			CountryCode:                     nullable(st.CountryCode),
+			Phone:                           nullable(st.Phone),
+			Email:                           nullable(st.Email),
+			TaxID:                           nullable(st.TaxID),
+			DocumentFooter:                  nullable(st.DocumentFooter),
 			Timezone:                        st.Timezone,
 			CurrencyCode:                    st.CurrencyCode,
 			CurrencyDecimals:                decimals16(st.CurrencyDecimals),
@@ -120,6 +140,7 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			RequireRoomInspectionForCheckin: st.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
+			RefundMethods:                   st.RefundMethods,
 			ActorID:                         p.ActorID(),
 		})
 		if err != nil {
@@ -138,6 +159,12 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			if err := q.CreateDocumentSequence(ctx, tenancydb.CreateDocumentSequenceParams{
 				TenantID: p.TenantID, PropertyID: prop.ID, SequenceType: string(seq.Type), Prefix: seq.Prefix,
 			}); err != nil {
+				return err
+			}
+		}
+
+		for _, hook := range s.onCreated {
+			if err := hook(ctx, PropertyCreated{TenantID: p.TenantID, PropertyID: prop.ID, BusinessDate: day.BusinessDate, ActorID: p.ActorID()}); err != nil {
 				return err
 			}
 		}
@@ -214,6 +241,10 @@ type PropertyPatch struct {
 	Address                         *string
 	City                            *string
 	CountryCode                     *string
+	Phone                           *string
+	Email                           *string
+	TaxID                           *string
+	DocumentFooter                  *string
 	Timezone                        *string
 	CurrencyCode                    *string
 	CurrencyDecimals                *int32
@@ -222,6 +253,7 @@ type PropertyPatch struct {
 	RequireRoomInspectionForCheckin *bool
 	NightAuditMarksOccupiedDirty    *bool
 	NightAuditEarliestTime          *civil.TimeOfDay
+	RefundMethods                   []string
 	Status                          *string
 }
 
@@ -250,6 +282,10 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.Address, patch.Address)
 		apply(&st.City, patch.City)
 		apply(&st.CountryCode, patch.CountryCode)
+		apply(&st.Phone, patch.Phone)
+		apply(&st.Email, patch.Email)
+		apply(&st.TaxID, patch.TaxID)
+		apply(&st.DocumentFooter, patch.DocumentFooter)
 		apply(&st.Timezone, patch.Timezone)
 		apply(&st.CurrencyCode, patch.CurrencyCode)
 		apply(&st.CurrencyDecimals, patch.CurrencyDecimals)
@@ -258,6 +294,9 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.RequireRoomInspectionForCheckin, patch.RequireRoomInspectionForCheckin)
 		apply(&st.NightAuditMarksOccupiedDirty, patch.NightAuditMarksOccupiedDirty)
 		apply(&st.NightAuditEarliestTime, patch.NightAuditEarliestTime)
+		if patch.RefundMethods != nil {
+			st.RefundMethods = patch.RefundMethods
+		}
 		apply(&status, patch.Status)
 		st.Normalize()
 
@@ -286,6 +325,10 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			Address:                         nullable(st.Address),
 			City:                            nullable(st.City),
 			CountryCode:                     nullable(st.CountryCode),
+			Phone:                           nullable(st.Phone),
+			Email:                           nullable(st.Email),
+			TaxID:                           nullable(st.TaxID),
+			DocumentFooter:                  nullable(st.DocumentFooter),
 			Timezone:                        st.Timezone,
 			CurrencyCode:                    st.CurrencyCode,
 			CurrencyDecimals:                decimals16(st.CurrencyDecimals),
@@ -294,6 +337,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			RequireRoomInspectionForCheckin: st.RequireRoomInspectionForCheckin,
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
+			RefundMethods:                   st.RefundMethods,
 			Status:                          status,
 			ActorID:                         p.ActorID(),
 		})
@@ -405,6 +449,12 @@ func (s *Service) CloseAndOpenNext(ctx context.Context, prop Property, expected 
 	if err != nil {
 		return BusinessDay{}, BusinessDay{}, err
 	}
+	return s.CloseAndOpenNextLocked(ctx, prop, day, closedBy, summary)
+}
+
+// CloseAndOpenNextLocked is CloseAndOpenNext for a caller that already holds the OPEN day FOR UPDATE (day is
+// that row) and has gone past lock level L1, as night audit has after posting: the day is not locked again.
+func (s *Service) CloseAndOpenNextLocked(ctx context.Context, prop Property, day BusinessDay, closedBy *int64, summary json.RawMessage) (closed, opened BusinessDay, err error) {
 	now := s.clock.Now()
 	if c := EvaluateDay(day.BusinessDate, now, prop.Location(), prop.NightAuditEarliestTime); !c.NightAuditAllowed {
 		return BusinessDay{}, BusinessDay{}, apperr.Conflict("NIGHT_AUDIT_TOO_EARLY",

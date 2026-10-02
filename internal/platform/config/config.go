@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -36,6 +37,14 @@ type Config struct {
 	AccessTokenTTL  time.Duration // PMS_ACCESS_TOKEN_TTL, default 15m
 	RefreshTokenTTL time.Duration // PMS_REFRESH_TOKEN_TTL, default 720h (30 days)
 	CookieSecure    bool          // PMS_COOKIE_SECURE: refresh cookie over HTTPS only; default true except in development
+	SMTPHost        string        // PMS_SMTP_HOST: the mail server; empty turns e-mail off
+	SMTPPort        int           // PMS_SMTP_PORT, default 587
+	SMTPUsername    string        // PMS_SMTP_USERNAME
+	SMTPPassword    string        // PMS_SMTP_PASSWORD (never logged)
+	SMTPFrom        string        // PMS_SMTP_FROM: the sender address, required with a host
+	SMTPFromName    string        // PMS_SMTP_FROM_NAME
+	SMTPTLS         string        // PMS_SMTP_TLS: starttls (default), tls or none
+	RateLimit       int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
 }
 
 // Load reads the configuration from the process environment.
@@ -120,6 +129,37 @@ func LoadFrom(lookup func(string) (string, bool)) (Config, error) {
 		errs = append(errs, errors.New("PMS_COOKIE_SECURE: must be true in production"))
 	}
 	cfg.CookieSecure = secure
+
+	cfg.SMTPHost = get("PMS_SMTP_HOST", "")
+	cfg.SMTPUsername = get("PMS_SMTP_USERNAME", "")
+	cfg.SMTPPassword = get("PMS_SMTP_PASSWORD", "")
+	cfg.SMTPFrom = get("PMS_SMTP_FROM", "")
+	cfg.SMTPFromName = get("PMS_SMTP_FROM_NAME", "")
+	cfg.SMTPTLS = strings.ToLower(get("PMS_SMTP_TLS", "starttls"))
+	if n, err := strconv.Atoi(get("PMS_SMTP_PORT", "587")); err != nil || n < 1 || n > 65535 {
+		errs = append(errs, errors.New("PMS_SMTP_PORT: must be between 1 and 65535"))
+	} else {
+		cfg.SMTPPort = n
+	}
+	if cfg.SMTPHost != "" {
+		if a, err := mail.ParseAddress(cfg.SMTPFrom); err != nil || a.Address != cfg.SMTPFrom {
+			errs = append(errs, errors.New("PMS_SMTP_FROM: required with PMS_SMTP_HOST, a plain e-mail address"))
+		}
+		switch cfg.SMTPTLS {
+		case "starttls", "tls", "none":
+		default:
+			errs = append(errs, fmt.Errorf("PMS_SMTP_TLS: must be starttls, tls or none, got %q", cfg.SMTPTLS))
+		}
+		if cfg.SMTPTLS == "none" && cfg.Env == EnvProduction && cfg.SMTPUsername != "" {
+			errs = append(errs, errors.New("PMS_SMTP_TLS: credentials must not go over an unencrypted connection in production"))
+		}
+	}
+
+	if n, err := strconv.Atoi(get("PMS_RATE_LIMIT_PER_MINUTE", "600")); err != nil || n < 0 {
+		errs = append(errs, errors.New("PMS_RATE_LIMIT_PER_MINUTE: must be a non-negative integer (0 disables the limit)"))
+	} else {
+		cfg.RateLimit = n
+	}
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))

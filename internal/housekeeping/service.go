@@ -120,6 +120,23 @@ func (s *Service) MarkDirty(ctx context.Context, tenantID, propertyID, roomID in
 	if err != nil {
 		return err
 	}
+	return s.markDirtyAt(ctx, tenantID, propertyID, roomID, day.BusinessDate, source, notes, actorID)
+}
+
+// MarkDirtyLocked is MarkDirty for a caller that already holds the business day lock (bd is the locked date) and
+// has moved on to the room locks: it does not re-enter the business day level, so it can be used after the room
+// types and rooms are locked.
+func (s *Service) MarkDirtyLocked(ctx context.Context, tenantID, propertyID, roomID int64, bd civil.Date, source Source, notes string, actorID *int64) error {
+	if source == SourceManual {
+		return errors.New("housekeeping: MarkDirtyLocked is for system sources; use SetStatus for manual changes")
+	}
+	if _, err := db.Tx(ctx); err != nil {
+		return err
+	}
+	return s.markDirtyAt(ctx, tenantID, propertyID, roomID, bd, source, notes, actorID)
+}
+
+func (s *Service) markDirtyAt(ctx context.Context, tenantID, propertyID, roomID int64, bd civil.Date, source Source, notes string, actorID *int64) error {
 	from, err := s.lockStatus(ctx, tenantID, propertyID, roomID)
 	if err != nil {
 		return err
@@ -129,7 +146,7 @@ func (s *Service) MarkDirty(ctx context.Context, tenantID, propertyID, roomID in
 	}
 	_, err = s.apply(ctx, change{
 		TenantID: tenantID, PropertyID: propertyID, RoomID: roomID, From: from, To: Dirty,
-		Source: source, Notes: notes, BusinessDate: day.BusinessDate, ActorID: actorID,
+		Source: source, Notes: notes, BusinessDate: bd, ActorID: actorID,
 	})
 	return err
 }
@@ -192,8 +209,11 @@ func (s *Service) apply(ctx context.Context, c change) (State, error) {
 
 // BoardFilter narrows the housekeeping board.
 type BoardFilter struct {
-	Status *Status
-	Floor  *string
+	Status    *Status
+	Floor     *string
+	Occupancy *Occupancy
+	// Flagged keeps rooms that have a flag set (high priority, do not disturb, make-up request or a note).
+	Flagged bool
 }
 
 // Board lists the active rooms with housekeeping status and derived occupancy
@@ -208,6 +228,9 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 	}
 	if f.Status != nil && !f.Status.Valid() {
 		return nil, apperr.Invalid("the filter is invalid", apperr.FieldError{Field: "status", Code: "INVALID_VALUE"})
+	}
+	if f.Occupancy != nil && *f.Occupancy != Occupied && *f.Occupancy != Reserved && *f.Occupancy != Vacant {
+		return nil, apperr.Invalid("the filter is invalid", apperr.FieldError{Field: "occupancy", Code: "INVALID_VALUE", Message: "OCCUPIED, RESERVED or VACANT"})
 	}
 	day, err := s.days.CurrentBusinessDay(ctx, propertyID)
 	if err != nil {
@@ -224,18 +247,25 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 	if err != nil {
 		return nil, err
 	}
-	out := make([]BoardRoom, len(rows))
-	for i, r := range rows {
+	out := make([]BoardRoom, 0, len(rows))
+	for _, r := range rows {
 		b := BoardRoom{
 			RoomID: r.RoomID, RoomNumber: r.RoomNumber, Floor: deref(r.Floor), Building: deref(r.Building),
 			RoomTypeID: r.RoomTypeID, RoomTypeCode: r.RoomTypeCode, RoomTypeName: r.RoomTypeName,
 			Status: Status(r.HousekeepingStatus), StatusUpdatedAt: r.HousekeepingUpdatedAt,
 			Occupancy: Occupancy(r.Occupancy), AllowedNextState: NextStatuses(Status(r.HousekeepingStatus)),
+			Priority: r.Priority, DND: r.Dnd, MakeUpRequested: r.MakeUpRequested, FlagNote: deref(r.FlagNote),
 		}
 		if r.BlockType != nil && r.BlockEndDate != nil {
 			b.Block = &BoardBlock{Type: *r.BlockType, EndDate: *r.BlockEndDate}
 		}
-		out[i] = b
+		if f.Occupancy != nil && b.Occupancy != *f.Occupancy {
+			continue
+		}
+		if f.Flagged && b.Priority != PriorityHigh && !b.DND && !b.MakeUpRequested && b.FlagNote == "" {
+			continue
+		}
+		out = append(out, b)
 	}
 	return out, nil
 }

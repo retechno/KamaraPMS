@@ -19,6 +19,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/properties/{propertyId}/housekeeping", httpx.HandlerFunc(h.board))
 	mux.Handle("POST /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping", httpx.HandlerFunc(h.setStatus))
 	mux.Handle("GET /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping/logs", httpx.HandlerFunc(h.logs))
+	h.RegisterTasks(mux)
 }
 
 func roomID(r *http.Request) (int64, error) {
@@ -42,6 +43,11 @@ func (h *Handler) board(w http.ResponseWriter, r *http.Request) error {
 	if s := r.URL.Query().Get("floor"); s != "" {
 		f.Floor = &s
 	}
+	if s := r.URL.Query().Get("occupancy"); s != "" {
+		o := Occupancy(s)
+		f.Occupancy = &o
+	}
+	f.Flagged = r.URL.Query().Get("flagged") == "true"
 	rooms, err := h.svc.Board(r.Context(), pid, f)
 	if err != nil {
 		return err
