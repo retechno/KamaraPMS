@@ -5,6 +5,16 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { BankAccount, BankStatement } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -21,6 +31,16 @@ const busy = ref(false)
 const bank = ref(Number(route.query.bank) || 0)
 const importing = ref(false)
 const form = reactive({ period_from: '', period_to: '', opening_balance: '', closing_balance: '', note: '', csv: '' })
+
+const columns = computed<Column<BankStatement>[]>(() => [
+  { key: 'bank_name', label: t('bankStatements.bank') },
+  { key: 'period', label: t('bankStatements.period') },
+  { key: 'opening_balance', label: t('bankStatements.opening'), align: 'right' },
+  { key: 'closing_balance', label: t('bankStatements.closing'), align: 'right' },
+  { key: 'matched', label: t('bankStatements.matched') },
+  { key: 'status', label: t('setup.status') },
+  { key: 'actions', label: '', align: 'right' },
+])
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -79,7 +99,7 @@ async function runImport(): Promise<void> {
       },
     })
     importing.value = false
-    notice.value = `Statement imported with ${data?.lines.length ?? 0} line(s).`
+    notice.value = t('bankStatements.imported', { n: data?.lines.length ?? 0 })
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -90,12 +110,12 @@ async function runImport(): Promise<void> {
 
 async function remove(s: BankStatement): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !(await confirm({ title: `Delete the statement ${s.period_from} to ${s.period_to}?`, description: 'Its matchings are lost.', destructive: true }))) return
+  if (propertyId === null || !(await confirm({ title: t('bankStatements.deleteTitle', { from: s.period_from, to: s.period_to }), description: t('bankStatements.deleteHint'), destructive: true }))) return
   busy.value = true
   error.value = null
   try {
     await api.DELETE('/api/v1/properties/{propertyId}/bank/statements/{id}', { params: { path: { propertyId, id: s.id } } })
-    notice.value = 'Statement deleted.'
+    notice.value = t('bankStatements.deleted')
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -113,106 +133,87 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Bank statements</h1>
-    <button v-if="can('bank.reconcile') && bank && !importing" type="button" class="btn-primary" data-testid="new-statement" @click="startImport">Import a statement</button>
-  </div>
+  <PageHeader :title="t('bankStatements.title')">
+    <template #actions>
+      <Button v-if="can('bank.reconcile') && bank && !importing" type="button" data-testid="new-statement" @click="startImport">{{ t('bankStatements.import') }}</Button>
+    </template>
+  </PageHeader>
   <p v-if="error && !importing" class="alert" role="alert" data-testid="statement-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">Your role at this property cannot see bank statements: the <code>bank.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">{{ t('bankStatements.noAccess', { permission: 'bank.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <label class="field">
-        <span>Bank account</span>
-        <select v-model.number="bank" name="bank" @change="load">
-          <option :value="0">All</option>
-          <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }} ({{ b.account_code }})</option>
-        </select>
-      </label>
-    </form>
+    <Card class="mb-4">
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
+        <FormField class="w-72" :label="t('bankStatements.bankAccount')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model.number="bank" name="bank" @change="load">
+              <option :value="0">{{ t('bankStatements.all') }}</option>
+              <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }} ({{ b.account_code }})</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+      </form>
+    </Card>
 
-    <form v-if="importing" class="card" novalidate data-testid="import-form" @submit.prevent="runImport">
-      <h2>Import a statement</h2>
-      <p class="muted">
-        Paste the lines as CSV with a header row: a <code>date</code> column, <code>description</code>, optionally <code>reference</code>, and either <code>amount</code> (money in positive) or <code>credit</code> and <code>debit</code>
-        columns. The lines must add up to the difference of the two balances printed on the statement.
-      </p>
-      <div class="form-grid">
-        <label class="field">
-          <span>From</span>
-          <input v-model="form.period_from" name="period_from" type="date" :aria-invalid="!!fieldError('period_from')" />
-          <small v-if="fieldError('period_from')" class="error-text">{{ fieldError('period_from') }}</small>
-        </label>
-        <label class="field">
-          <span>To</span>
-          <input v-model="form.period_to" name="period_to" type="date" :aria-invalid="!!fieldError('period_to')" />
-          <small v-if="fieldError('period_to')" class="error-text">{{ fieldError('period_to') }}</small>
-        </label>
-        <label class="field">
-          <span>Opening balance</span>
-          <input v-model="form.opening_balance" name="opening_balance" inputmode="decimal" :aria-invalid="!!fieldError('opening_balance')" />
-          <small v-if="fieldError('opening_balance')" class="error-text">{{ fieldError('opening_balance') }}</small>
-        </label>
-        <label class="field">
-          <span>Closing balance</span>
-          <input v-model="form.closing_balance" name="closing_balance" inputmode="decimal" :aria-invalid="!!fieldError('closing_balance')" />
-          <small v-if="fieldError('closing_balance')" class="error-text">{{ fieldError('closing_balance') }}</small>
-        </label>
-        <label class="field wide"><span>Note</span><input v-model="form.note" name="note" maxlength="300" /></label>
-      </div>
-      <input type="file" accept=".csv,text/csv" data-testid="import-file" @change="readFile" />
-      <textarea v-model="form.csv" name="csv" rows="8" class="csv" placeholder="date,description,reference,amount" />
-      <small v-if="fieldError('csv')" class="error-text" data-testid="csv-error">{{ fieldError('csv') }}</small>
-      <p v-if="error" class="alert" role="alert" data-testid="import-error">
-        {{ error.message }} <code>{{ error.code }}</code>
-        <template v-for="(f, i) in rowErrors.slice(0, 8)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-      </p>
-      <div class="form-actions">
-        <button type="button" @click="importing = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || !form.csv.trim() || !form.period_from || !form.period_to || !form.closing_balance.trim()" data-testid="import-run">Import</button>
-      </div>
-    </form>
+    <Card v-if="importing" class="mb-4">
+      <form novalidate data-testid="import-form" @submit.prevent="runImport">
+        <CardHeader>
+          <CardTitle>{{ t('bankStatements.importTitle') }}</CardTitle>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('bankStatements.importHint', { date: 'date', description: 'description', reference: 'reference', amount: 'amount', credit: 'credit', debit: 'debit' }) }}</p>
+        </CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <FormField :label="t('bankStatements.from')" :error="fieldError('period_from')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.period_from" name="period_from" type="date" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('bankStatements.to')" :error="fieldError('period_to')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.period_to" name="period_to" type="date" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('bankStatements.opening')" :error="fieldError('opening_balance')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.opening_balance" name="opening_balance" inputmode="decimal" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('bankStatements.closing')" :error="fieldError('closing_balance')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.closing_balance" name="closing_balance" inputmode="decimal" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-4" :label="t('bankStatements.note')">
+              <template #default="{ id }"><Input :id="id" v-model="form.note" name="note" maxlength="300" /></template>
+            </FormField>
+          </div>
+          <input type="file" accept=".csv,text/csv" class="mt-4 block text-sm" data-testid="import-file" @change="readFile" />
+          <textarea
+            v-model="form.csv"
+            name="csv"
+            rows="8"
+            class="mt-2 w-full rounded-md border border-border bg-card p-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :placeholder="t('bankStatements.csvPlaceholder')"
+          />
+          <small v-if="fieldError('csv')" role="alert" class="text-xs text-destructive" data-testid="csv-error">{{ fieldError('csv') }}</small>
+          <p v-if="error" class="alert" role="alert" data-testid="import-error">
+            {{ error.message }} <code>{{ error.code }}</code>
+            <template v-for="(f, i) in rowErrors.slice(0, 8)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+          </p>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="importing = false">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy || !form.csv.trim() || !form.period_from || !form.period_to || !form.closing_balance.trim()" data-testid="import-run">{{ t('bankStatements.run') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
 
-    <section class="card">
-      <p v-if="loaded && !statements.length" class="muted" data-testid="empty">No statements yet.</p>
-      <table v-else class="list" data-testid="statements">
-        <thead><tr><th>Bank</th><th>Period</th><th class="num">Opening</th><th class="num">Closing</th><th>Matched</th><th>Status</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="s in statements" :key="s.id" :data-testid="`statement-${s.id}`">
-            <td>{{ s.bank_name }}</td>
-            <td>{{ s.period_from }} – {{ s.period_to }}</td>
-            <td class="num">{{ s.opening_balance }}</td>
-            <td class="num">{{ s.closing_balance }}</td>
-            <td>{{ s.matched_count }} of {{ s.line_count }}</td>
-            <td>{{ s.status === 'RECONCILED' ? 'Reconciled' : 'Open' }}</td>
-            <td class="row-actions">
-              <RouterLink :to="`/bank/statements/${s.id}`" :data-testid="`open-${s.id}`">{{ s.status === 'OPEN' && can('bank.reconcile') ? 'Reconcile' : 'View' }}</RouterLink>
-              <button v-if="s.status === 'OPEN' && can('bank.reconcile')" type="button" :data-testid="`delete-${s.id}`" @click="remove(s)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <Card>
+      <EmptyState v-if="loaded && !statements.length" :title="t('bankStatements.empty')" data-testid="empty" />
+      <DataTable v-else :columns="columns" :rows="statements" row-key="id" :row-test-id="(s) => `statement-${s.id}`" :caption="t('bankStatements.title')" data-testid="statements">
+        <template #cell-period="{ row }">{{ row.period_from }} – {{ row.period_to }}</template>
+        <template #cell-matched="{ row }">{{ t('bankStatements.matchedOf', { n: row.matched_count, total: row.line_count }) }}</template>
+        <template #cell-status="{ row }"><Badge :variant="row.status === 'RECONCILED' ? 'success' : 'warning'">{{ row.status === 'RECONCILED' ? t('bankStatements.reconciled') : t('bankStatements.open') }}</Badge></template>
+        <template #cell-actions="{ row }">
+          <div class="flex items-center justify-end gap-2">
+            <RouterLink :to="`/bank/statements/${row.id}`" class="text-sm text-primary hover:underline" :data-testid="`open-${row.id}`">{{ row.status === 'OPEN' && can('bank.reconcile') ? t('bankStatements.reconcile') : t('bankStatements.view') }}</RouterLink>
+            <Button v-if="row.status === 'OPEN' && can('bank.reconcile')" type="button" variant="outline" size="sm" :data-testid="`delete-${row.id}`" @click="remove(row)">{{ t('common.delete') }}</Button>
+          </div>
+        </template>
+      </DataTable>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.wide {
-  grid-column: 1 / -1;
-}
-.csv {
-  width: 100%;
-  font-family: monospace;
-  margin: 8px 0;
-}
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-</style>
