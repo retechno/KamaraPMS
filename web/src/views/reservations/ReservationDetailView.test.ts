@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import ReservationDetailView from './ReservationDetailView.vue'
@@ -108,7 +109,7 @@ describe('ReservationDetailView', () => {
     POST.mockRejectedValueOnce(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'a reason is required', errors: [{ field: 'reason', code: 'REQUIRED', message: 'a reason is required' }] }))
     await w.get('form[data-testid=reason-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('.error-text').text()).toContain('a reason is required')
+    expect(w.get('form[data-testid=reason-form] [role=alert]').text()).toContain('a reason is required')
     POST.mockResolvedValue({ data: { reservation: reservation({ status: 'CANCELLED', display_status: 'CANCELLED', version: 3 }), folio_balance: '-300000', requires_folio_resolution: true } })
     await w.get('input[name=reason]').setValue('guest request')
     await w.get('form[data-testid=reason-form]').trigger('submit')
@@ -190,5 +191,42 @@ describe('ReservationDetailView', () => {
     expect(w.find('form[data-testid=header-form]').exists()).toBe(false)
     expect(w.find('form[data-testid=deposit-form]').exists()).toBe(false)
     expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+  })
+
+  it('puts the main actions in the page header, by status and permission', async () => {
+    const draft = mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT' }))
+    await flushPromises()
+    expect(draft.get('header [data-testid=confirm]').exists()).toBe(true)
+    expect(draft.get('header [data-testid=cancel]').exists()).toBe(true)
+    expect(draft.find('[data-testid=print-confirmation]').exists()).toBe(false) // no confirmation of a draft
+    const confirmed = mountView()
+    await flushPromises()
+    expect(confirmed.get('header [data-testid=print-confirmation]').text()).toContain('Confirmation (PDF)')
+    expect(confirmed.find('[data-testid=confirm]').exists()).toBe(false)
+    const cancelled = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED', cancellation_reason: 'changed plans' }))
+    await flushPromises()
+    expect(cancelled.get('header [data-testid=reinstate]').exists()).toBe(true)
+    expect(cancelled.get('[data-testid=summary]').text()).toContain('Cancelled: changed plans')
+  })
+
+  it('shows each room with its status as a badge and the nights in the right number', async () => {
+    const w = mountView(reservation({ rooms: [line({ nights: 1 }), line({ id: 5, status: 'CHECKED_IN', nights: 3, room_number: '301' })] }))
+    await flushPromises()
+    expect(w.get('[data-testid=line-status-4]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=line-status-5]').text()).toBe('Checked in')
+    expect(w.get('[data-testid=room-4]').text()).toContain('(1 night)')
+    expect(w.get('[data-testid=room-5]').text()).toContain('(3 nights)')
+    expect(w.get('[data-testid=room-number-5]').text()).toBe('room 301')
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=status]').text()).toBe('Terkonfirmasi')
+    expect(w.get('[data-testid=room-4]').text()).toContain('belum ada kamar')
+    expect(w.get('[data-testid=summary]').text()).toContain('Perkiraan total (kamar aktif)')
+    expect(w.get('header [data-testid=cancel]').text()).toBe('Batalkan reservasi')
+    setLocale('en')
   })
 })

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import ReservationsView from './ReservationsView.vue'
@@ -68,5 +69,31 @@ describe('ReservationsView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('shows the status as a badge, the company and group, and sorts by arrival', async () => {
+    const w = mountView(['reservation.read'], { data: [
+      { ...row, id: 1, confirmation_number: 'RES000001', arrival_date: '2026-10-09', status: 'DRAFT', company_name: 'Acme', group_code: 'CONF' },
+      { ...row, id: 2, confirmation_number: 'RES000002', arrival_date: '2026-10-02', status: 'CANCELLED' },
+    ] })
+    await flushPromises()
+    expect(w.get('[data-testid=res-RES000001]').text()).toContain('Draft')
+    expect(w.get('[data-testid=res-RES000001]').text()).toContain('Acme · CONF')
+    expect(w.get('[data-testid=res-RES000002]').text()).toContain('Cancelled')
+    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
+    expect(numbers()).toEqual(['RES000001', 'RES000002'])
+    await w.get('[data-testid=sort-arrival_date]').trigger('click')
+    expect(numbers()).toEqual(['RES000002', 'RES000001'])
+  })
+
+  it('links to the tape chart and speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView(['reservation.read', 'reservation.create'])
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Reservasi')
+    expect(w.get('a[href="/reservations/tape"]').text()).toBe('Tape chart')
+    expect(w.get('[data-testid=new]').text()).toBe('Reservasi baru')
+    expect(w.get('select[name=status]').findAll('option').map((o) => o.text())).toEqual(['Semua', 'Draf', 'Terkonfirmasi', 'Dibatalkan'])
+    setLocale('en')
   })
 })

@@ -1,11 +1,21 @@
 <script setup lang="ts">
+import { CalendarPlus, GanttChart, Search } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { ReservationSummary } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { statusLabel } from '@/utils/reservations'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -19,6 +29,16 @@ const error = ref<ApiError | null>(null)
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
+
+const columns = computed<Column<ReservationSummary>[]>(() => [
+  { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true },
+  { key: 'guest_name', label: t('reservations.booker'), sortable: true },
+  { key: 'company', label: t('reservations.companyGroup') },
+  { key: 'arrival_date', label: t('reservations.arrival'), sortable: true },
+  { key: 'departure_date', label: t('reservations.departure'), sortable: true },
+  { key: 'room_count', label: t('reservations.rooms'), align: 'right', sortable: true },
+  { key: 'status', label: t('reservations.status'), sortable: true },
+])
 
 async function load(more = false): Promise<void> {
   const propertyId = property.currentId
@@ -57,114 +77,56 @@ watch(() => property.currentId, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Reservations</h1>
-    <div class="actions">
-      <RouterLink to="/reservations/tape">Tape chart</RouterLink>
-      <RouterLink v-if="canCreate" to="/reservations/new" class="btn-primary" data-testid="new">New reservation</RouterLink>
-    </div>
-  </div>
+  <PageHeader :title="t('reservations.title')">
+    <template #actions>
+      <Button as-child variant="outline" size="sm">
+        <RouterLink to="/reservations/tape"><GanttChart />{{ t('reservations.tapeChart') }}</RouterLink>
+      </Button>
+      <Button v-if="canCreate" as-child size="sm" data-testid="new">
+        <RouterLink to="/reservations/new"><CalendarPlus />{{ t('reservations.newReservation') }}</RouterLink>
+      </Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property does not allow viewing reservations.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('reservations.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
   <template v-else>
-    <form class="card filters" role="search" novalidate @submit.prevent="load()">
-      <label class="field grow">
-        <span>Search</span>
-        <input v-model="filter.q" name="q" type="search" placeholder="Confirmation number or booker name" />
-      </label>
-      <label class="field">
-        <span>Status</span>
-        <select v-model="filter.status" name="status">
-          <option value="">Any</option>
-          <option value="DRAFT">Draft</option>
-          <option value="CONFIRMED">Confirmed</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Arrival from</span>
-        <input v-model="filter.arrivalFrom" name="arrival_from" type="date" />
-      </label>
-      <label class="field">
-        <span>Arrival to</span>
-        <input v-model="filter.arrivalTo" name="arrival_to" type="date" />
-      </label>
-      <button type="submit" :disabled="loading">Search</button>
+    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" novalidate @submit.prevent="load()">
+      <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
+        <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('reservations.searchPlaceholder')" /></template>
+      </FormField>
+      <FormField class="w-40" :label="t('reservations.status')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model="filter.status" name="status">
+            <option value="">{{ t('reservations.any') }}</option>
+            <option value="DRAFT">{{ t('status.DRAFT') }}</option>
+            <option value="CONFIRMED">{{ t('status.CONFIRMED') }}</option>
+            <option value="CANCELLED">{{ t('status.CANCELLED') }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <FormField class="w-40" :label="t('reservations.arrivalFrom')">
+        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalFrom" name="arrival_from" type="date" /></template>
+      </FormField>
+      <FormField class="w-40" :label="t('reservations.arrivalTo')">
+        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalTo" name="arrival_to" type="date" /></template>
+      </FormField>
+      <Button type="submit" :disabled="loading"><Search />{{ t('reservations.search') }}</Button>
     </form>
 
-    <section class="card">
-      <p v-if="searched && !rows.length" class="muted" data-testid="empty">No reservations found.</p>
-      <table v-else-if="rows.length" class="list">
-        <thead>
-          <tr>
-            <th>Confirmation</th>
-            <th>Booker</th>
-            <th>Company / group</th>
-            <th>Arrival</th>
-            <th>Departure</th>
-            <th>Rooms</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in rows" :key="r.id" :data-testid="`res-${r.confirmation_number}`">
-            <td><RouterLink :to="`/reservations/${r.id}`">{{ r.confirmation_number }}</RouterLink></td>
-            <td>{{ r.guest_name || '—' }}</td>
-            <td>{{ [r.company_name, r.group_code].filter(Boolean).join(' · ') || '—' }}</td>
-            <td>{{ r.arrival_date }}</td>
-            <td>{{ r.departure_date }}</td>
-            <td>{{ r.room_count }}</td>
-            <td><span class="badge" :class="r.status.toLowerCase()">{{ statusLabel(r.status) }}</span></td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" :disabled="loading" data-testid="more" @click="load(true)">Load more</button>
-      </div>
-    </section>
+    <DataTable :columns="columns" :rows="rows" row-key="id" :loading="!searched" :row-test-id="(r) => `res-${r.confirmation_number}`" :caption="t('reservations.title')">
+      <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.id}`">{{ row.confirmation_number }}</RouterLink></template>
+      <template #cell-guest_name="{ row }">{{ row.guest_name || '—' }}</template>
+      <template #cell-company="{ row }">{{ [row.company_name, row.group_code].filter(Boolean).join(' · ') || '—' }}</template>
+      <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" /></template>
+      <template #empty><EmptyState :title="t('reservations.empty')" data-testid="empty" /></template>
+      <template #footer>
+        <div v-if="nextCursor" class="flex justify-center p-3">
+          <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="load(true)">{{ t('reservations.loadMore') }}</Button>
+        </div>
+      </template>
+    </DataTable>
   </template>
 </template>
-
-<style scoped>
-.actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.grow {
-  flex: 1;
-  min-width: 200px;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.badge {
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  background: var(--accent-soft);
-}
-.badge.cancelled {
-  background: #fde8e8;
-}
-.badge.draft {
-  background: #eef0f3;
-}
-</style>

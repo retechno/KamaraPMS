@@ -1,14 +1,24 @@
 <script setup lang="ts">
+import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
 import ReservationEmails from '@/components/ReservationEmails.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { guestLabel, newIdempotencyKey, statusLabel } from '@/utils/reservations'
+import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -73,7 +83,7 @@ async function run(action: () => Promise<{ data?: Reservation | CancelResult }>)
     const { data } = await action()
     if (data && 'reservation' in data) {
       adopt(data.reservation)
-      if (data.requires_folio_resolution) notice.value = `The folios still hold ${data.folio_balance}: refund the deposit or post a fee.`
+      if (data.requires_folio_resolution) notice.value = t('reservation.foliosHold', { balance: data.folio_balance })
     } else if (data) {
       adopt(data)
     }
@@ -165,7 +175,7 @@ async function takeDeposit(): Promise<void> {
     depositKey = newIdempotencyKey()
     deposit.amount = ''
     deposit.reference = ''
-    notice.value = data ? `Deposit ${data.payment.payment_number} taken; the folio balance is ${data.folio_balance}.` : ''
+    notice.value = data ? t('reservation.depositTaken', { number: data.payment.payment_number, balance: data.folio_balance }) : ''
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -183,209 +193,191 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Reservation <span v-if="res">{{ res.confirmation_number }}</span></h1>
-    <RouterLink to="/reservations">Reservations</RouterLink>
-  </div>
+  <PageHeader :title="`${t('reservation.title')}${res ? ` ${res.confirmation_number}` : ''}`">
+    <template v-if="res" #marks>
+      <StatusBadge domain="reservation" :status="res.display_status" data-testid="status" />
+    </template>
+    <template #actions>
+      <template v-if="res">
+        <Button v-if="status === 'DRAFT' && can('reservation.create')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm">{{ t('reservation.confirm') }}</Button>
+        <Button v-if="status === 'CANCELLED' && can('reservation.reinstate')" size="sm" :disabled="busy" data-testid="reinstate" @click="reinstate">{{ t('reservation.reinstate') }}</Button>
+        <Button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" variant="outline" size="sm" data-testid="print-confirmation" @click="printConfirmation"><Printer />{{ t('reservation.confirmationPdf') }}</Button>
+        <Button v-if="status !== 'CANCELLED' && can('reservation.cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
+      </template>
+      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('reservation.list') }}</RouterLink></Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">Your role at this property does not allow viewing reservations.</p>
+  <p v-if="pid === null" class="muted">{{ t('reservations.selectProperty') }}</p>
+  <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
-  <template v-else-if="res">
-    <section class="card" data-testid="summary">
-      <div class="head">
-        <span class="badge" :class="res.display_status.toLowerCase()" data-testid="status">{{ statusLabel(res.display_status) }}</span>
-        <span>{{ res.arrival_date }} &rarr; {{ res.departure_date }}</span>
-        <span class="muted">version {{ res.version }}</span>
-      </div>
-      <p>
-        Booker:
-        <RouterLink v-if="res.guest" :to="`/guests/${res.guest.id}`" data-testid="booker">{{ guestLabel(res.guest) }}</RouterLink>
-        <span v-else class="muted" data-testid="no-booker">not set</span>
-        · Source {{ res.source }} · Booked on {{ res.reservation_date }}
-      </p>
-      <p v-if="res.company_id || res.booking_group_id" data-testid="billing-links">
-        <template v-if="res.company_id">
-          Company:
-          <RouterLink v-if="can('cityledger.read')" :to="`/city-ledger/${res.company_id}`" data-testid="company-link">{{ res.company_name }}</RouterLink>
-          <span v-else data-testid="company-link">{{ res.company_name }}</span>
-        </template>
-        <template v-if="res.booking_group_id">
-          <template v-if="res.company_id"> · </template>Group:
-          <RouterLink :to="`/groups/${res.booking_group_id}`" data-testid="group-link">{{ res.group_code }}</RouterLink>
-        </template>
-      </p>
-      <p v-if="res.cancellation_reason" class="muted">Cancelled: {{ res.cancellation_reason }}</p>
-      <p>Estimated total (active rooms): <strong data-testid="estimate">{{ estimateTotal }}</strong></p>
+  <div v-else-if="res" class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div class="min-w-0">
+      <Card v-if="asking" class="mb-4 border-primary/50">
+        <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="reason-form" @submit.prevent="submitReason">
+          <FormField class="min-w-56 flex-1" :label="asking.kind === 'no-show' ? t('reservation.reasonOptional') : t('reservation.reason')" :error="fieldError('reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+          </FormField>
+          <Button type="submit" :variant="asking.kind === 'no-show' ? 'default' : 'destructive'" :disabled="busy">{{ asking.kind === 'no-show' ? t('reservation.markNoShow') : t('common.cancel') }}</Button>
+          <Button type="button" variant="outline" @click="asking = null">{{ t('reservation.keep') }}</Button>
+        </form>
+      </Card>
 
-      <div class="form-actions">
-        <button v-if="status === 'DRAFT' && can('reservation.create')" type="button" class="btn-primary" :disabled="busy" data-testid="confirm" @click="confirm">Confirm</button>
-        <button v-if="status !== 'CANCELLED' && can('reservation.cancel')" type="button" :disabled="busy" data-testid="cancel" @click="ask('cancel')">Cancel reservation</button>
-        <button v-if="status === 'CANCELLED' && can('reservation.reinstate')" type="button" class="btn-primary" :disabled="busy" data-testid="reinstate" @click="reinstate">Reinstate</button>
-        <button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" type="button" data-testid="print-confirmation" @click="printConfirmation">Confirmation (PDF)</button>
-      </div>
+      <Card v-for="line in res.rooms" :key="line.id" class="mb-4" :data-testid="`room-${line.id}`">
+        <CardHeader class="flex-row flex-wrap items-center gap-x-3 gap-y-1 pb-2">
+          <CardTitle>{{ line.room_type_code }}</CardTitle>
+          <span v-if="line.room_number" class="text-sm font-medium" :data-testid="`room-number-${line.id}`">{{ t('reservation.roomNumber', { number: line.room_number }) }}</span>
+          <span v-else class="text-sm text-muted-foreground">{{ t('reservation.noRoom') }}</span>
+          <StatusBadge domain="reservation" :status="line.status" :data-testid="`line-status-${line.id}`" />
+          <span class="text-sm">{{ line.arrival_date }} &rarr; {{ line.departure_date }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
+          <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
+          <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
+        </CardHeader>
+        <CardContent>
+          <table class="w-full border-collapse text-[13px]" :data-testid="`nights-${line.id}`">
+            <thead>
+              <tr class="text-xs uppercase tracking-wide text-muted-foreground">
+                <th class="py-1 text-left font-semibold">{{ t('reservation.night') }}</th>
+                <th class="py-1 text-right font-semibold">{{ t('reservation.amount') }}</th>
+                <th class="py-1 text-right font-semibold">{{ t('reservation.grid') }}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="n in line.nightly_rates" :key="n.date" class="border-t border-border">
+                <td class="py-1">{{ n.date }}</td>
+                <td class="py-1 text-right tabular-nums">{{ n.amount }}</td>
+                <td class="py-1 text-right tabular-nums text-muted-foreground">{{ n.grid_rate ?? n.base_rate ?? '—' }}</td>
+                <td class="py-1 pl-3">
+                  <small v-if="n.is_override" class="text-muted-foreground">{{ t('reservation.override') }}</small>
+                  <small v-if="n.yield_rules?.length" class="text-muted-foreground" :data-testid="`yield-${n.date}`" :title="t('reservation.yieldTitle')">{{ t('reservation.yieldLine', { codes: n.yield_rules.join(', ') }) }}</small>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="border-t border-border font-medium">
+                <td class="py-1.5">{{ t('reservation.estimateLine', { plan: line.rate_plan_code }) }}</td>
+                <td class="py-1.5 text-right tabular-nums" :data-testid="`line-estimate-${line.id}`">{{ line.estimate.total }}</td>
+                <td colspan="2" class="py-1.5 pl-3 text-xs font-normal text-muted-foreground">{{ t('reservation.estimateBreak', { net: line.estimate.net, service: line.estimate.service, tax: line.estimate.tax }) }}</td>
+              </tr>
+            </tfoot>
+          </table>
 
-      <form v-if="asking" class="reason" novalidate data-testid="reason-form" @submit.prevent="submitReason">
-        <label class="field">
-          <span>{{ asking.kind === 'no-show' ? 'Reason (optional)' : 'Reason' }}</span>
-          <input v-model="reason" name="reason" maxlength="500" :aria-invalid="!!fieldError('reason')" />
-          <small v-if="fieldError('reason')" class="error-text">{{ fieldError('reason') }}</small>
-        </label>
-        <button type="submit" class="btn-primary" :disabled="busy">{{ asking.kind === 'no-show' ? 'Mark no-show' : 'Cancel' }}</button>
-        <button type="button" @click="asking = null">Keep</button>
-      </form>
-    </section>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && !line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`assign-${line.id}`" @click="startAssign(line)">{{ t('reservation.assignRoom') }}</Button>
+            <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`unassign-${line.id}`" @click="unassign(line.id)">{{ t('reservation.unassignRoom') }}</Button>
+            <Button v-if="canNoShow(line)" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-${line.id}`" @click="ask('no-show', line.id)">{{ t('reservation.noShow') }}</Button>
+            <Button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" variant="outline" size="sm" class="text-destructive" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">{{ t('reservation.cancelRoom') }}</Button>
+          </div>
 
-    <ReservationEmails v-if="status !== 'DRAFT'" :reservation-id="res.id" :confirmed="status === 'CONFIRMED'" />
+          <form v-if="assigning && assigning.lineId === line.id" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
+            <FormField class="w-44" :label="t('reservation.roomType')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="assigning.typeId" name="assign_type" @change="loadFree">
+                  <option v-for="ty in activeTypes" :key="ty.id" :value="ty.id">{{ ty.code }} {{ ty.id === line.room_type_id ? t('reservation.booked') : t('reservation.upgrade') }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField class="w-52" :label="t('reservation.freeRoom')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length">
+                  <option v-for="r in assigning.rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}</option>
+                </NativeSelect>
+                <small v-if="!assigning.rooms.length" class="text-xs text-muted-foreground" data-testid="no-free-rooms">{{ t('reservation.noFreeRooms', { type: typeCode(assigning.typeId) }) }}</small>
+              </template>
+            </FormField>
+            <Button type="submit" size="sm" :disabled="busy || assigning.roomId === null">{{ t('reservation.assign') }}</Button>
+            <Button type="button" variant="outline" size="sm" @click="assigning = null">{{ t('common.close') }}</Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
 
-    <form v-if="status !== 'CANCELLED' && can('reservation.update')" class="card header-form" novalidate data-testid="header-form" @submit.prevent="saveHeader">
-      <h2>Details</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Source</span>
-          <select v-model="header.source" name="source">
-            <option v-for="s in ['WALK_IN', 'PHONE', 'EMAIL', 'WEBSITE', 'OTA', 'AGENT', 'OTHER']" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Remarks</span>
-          <input v-model="header.remarks" name="remarks" />
-        </label>
-      </div>
-      <div class="form-actions"><button type="submit" :disabled="busy">Save</button></div>
-    </form>
+    <aside class="flex min-w-0 flex-col gap-4">
+      <Card data-testid="summary">
+        <CardContent class="flex flex-col gap-2 p-5 text-sm">
+          <p class="m-0 font-medium">{{ res.arrival_date }} &rarr; {{ res.departure_date }} <span class="font-normal text-muted-foreground">· {{ t('reservation.version', { n: res.version }) }}</span></p>
+          <p class="m-0">
+            {{ t('reservation.booker') }}:
+            <RouterLink v-if="res.guest" :to="`/guests/${res.guest.id}`" data-testid="booker">{{ guestLabel(res.guest) }}</RouterLink>
+            <span v-else class="text-muted-foreground" data-testid="no-booker">{{ t('reservation.notSet') }}</span>
+          </p>
+          <p class="m-0 text-muted-foreground">{{ t('reservation.source') }} {{ res.source }} · {{ t('reservation.bookedOn') }} {{ res.reservation_date }}</p>
+          <p v-if="res.company_id || res.booking_group_id" class="m-0" data-testid="billing-links">
+            <template v-if="res.company_id">
+              {{ t('reservation.company') }}:
+              <RouterLink v-if="can('cityledger.read')" :to="`/city-ledger/${res.company_id}`" data-testid="company-link">{{ res.company_name }}</RouterLink>
+              <span v-else data-testid="company-link">{{ res.company_name }}</span>
+            </template>
+            <template v-if="res.booking_group_id">
+              <template v-if="res.company_id"> · </template>{{ t('reservation.group') }}:
+              <RouterLink :to="`/groups/${res.booking_group_id}`" data-testid="group-link">{{ res.group_code }}</RouterLink>
+            </template>
+          </p>
+          <p v-if="res.cancellation_reason" class="m-0 text-muted-foreground">{{ t('reservation.cancelledReason', { reason: res.cancellation_reason }) }}</p>
+          <div class="mt-1 border-t border-border pt-2">
+            <p class="m-0 text-xs text-muted-foreground">{{ t('reservation.estimateTotal') }}</p>
+            <p class="m-0 text-xl font-semibold tabular-nums tracking-tight"><span data-testid="estimate">{{ estimateTotal }}</span></p>
+          </div>
+        </CardContent>
+      </Card>
 
-    <section v-for="line in res.rooms" :key="line.id" class="card room" :data-testid="`room-${line.id}`">
-      <div class="head">
-        <strong>{{ line.room_type_code }}</strong>
-        <span v-if="line.room_number" :data-testid="`room-number-${line.id}`">room {{ line.room_number }}</span>
-        <span v-else class="muted">no room assigned</span>
-        <span class="badge" :class="line.status.toLowerCase()" :data-testid="`line-status-${line.id}`">{{ statusLabel(line.status) }}</span>
-        <span>{{ line.arrival_date }} &rarr; {{ line.departure_date }} ({{ line.nights }} night{{ line.nights === 1 ? '' : 's' }})</span>
-        <span class="muted">{{ line.adult_count }} adult(s), {{ line.child_count }} child(ren) · plan {{ line.rate_plan_code }}</span>
-        <span v-if="line.stay_id" class="muted">stay {{ line.stay_id }}</span>
-      </div>
+      <ReservationEmails v-if="status !== 'DRAFT'" :reservation-id="res.id" :confirmed="status === 'CONFIRMED'" />
 
-      <table class="list" :data-testid="`nights-${line.id}`">
-        <thead><tr><th>Night</th><th class="num">Amount</th><th class="num">Grid</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="n in line.nightly_rates" :key="n.date">
-            <td>{{ n.date }}</td>
-            <td class="num">{{ n.amount }}</td>
-            <td class="num">{{ n.grid_rate ?? n.base_rate ?? '—' }}</td>
-            <td>
-              <small v-if="n.is_override" class="muted">override</small>
-              <small v-if="n.yield_rules?.length" class="muted" :data-testid="`yield-${n.date}`" title="Yield rules that moved the grid price">yield: {{ n.yield_rules.join(', ') }}</small>
-            </td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr><td>Estimate ({{ line.rate_plan_code }})</td><td class="num" :data-testid="`line-estimate-${line.id}`">{{ line.estimate.total }}</td><td colspan="2" class="muted">net {{ line.estimate.net }}, service {{ line.estimate.service }}, tax {{ line.estimate.tax }}</td></tr>
-        </tfoot>
-      </table>
+      <Card v-if="res.folios.length" data-testid="folios">
+        <CardHeader><CardTitle>{{ t('reservation.folios') }}</CardTitle></CardHeader>
+        <CardContent>
+          <ul class="m-0 list-none p-0 text-sm">
+            <li v-for="f in res.folios" :key="f.id" class="flex items-center gap-2 py-1">
+              <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink>
+              <span class="text-muted-foreground">· {{ t('reservation.folioLine', { status: f.status, balance: f.balance }) }}</span>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
 
-      <div class="form-actions">
-        <button v-if="line.status === 'CONFIRMED' && can('reservation.update') && !line.room_number" type="button" :disabled="busy" :data-testid="`assign-${line.id}`" @click="startAssign(line)">Assign room</button>
-        <button v-if="line.status === 'CONFIRMED' && can('reservation.update') && line.room_number" type="button" :disabled="busy" :data-testid="`unassign-${line.id}`" @click="unassign(line.id)">Unassign room</button>
-        <button v-if="canNoShow(line)" type="button" :disabled="busy" :data-testid="`no-show-${line.id}`" @click="ask('no-show', line.id)">No-show</button>
-        <button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" type="button" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">Cancel room</button>
-      </div>
+      <Card v-if="(status === 'DRAFT' || status === 'CONFIRMED') && can('payment.post')">
+        <form novalidate data-testid="deposit-form" @submit.prevent="takeDeposit">
+          <CardHeader><CardTitle>{{ t('reservation.takeDeposit') }}</CardTitle></CardHeader>
+          <CardContent class="flex flex-col gap-3">
+            <FormField :label="t('reservation.amount')" :error="fieldError('amount')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="deposit.amount" name="deposit_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('reservation.method')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="deposit.method" name="deposit_method">
+                  <option v-for="m in ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('reservation.reference')">
+              <template #default="{ id }"><Input :id="id" v-model="deposit.reference" name="deposit_reference" /></template>
+            </FormField>
+            <Button type="submit" :disabled="busy || !deposit.amount">{{ t('reservation.takeDepositButton') }}</Button>
+          </CardContent>
+        </form>
+      </Card>
 
-      <form v-if="assigning && assigning.lineId === line.id" class="reason" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
-        <label class="field">
-          <span>Room type</span>
-          <select v-model.number="assigning.typeId" name="assign_type" @change="loadFree">
-            <option v-for="t in activeTypes" :key="t.id" :value="t.id">{{ t.code }}{{ t.id === line.room_type_id ? ' (booked)' : ' (upgrade)' }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Free room</span>
-          <select v-model.number="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length">
-            <option v-for="r in assigning.rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}</option>
-          </select>
-          <small v-if="!assigning.rooms.length" class="muted" data-testid="no-free-rooms">No free {{ typeCode(assigning.typeId) }} room for these dates.</small>
-        </label>
-        <button type="submit" class="btn-primary" :disabled="busy || assigning.roomId === null">Assign</button>
-        <button type="button" @click="assigning = null">Close</button>
-      </form>
-    </section>
-
-    <section v-if="res.folios.length" class="card" data-testid="folios">
-      <h2>Folios</h2>
-      <ul>
-        <li v-for="f in res.folios" :key="f.id">
-          <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink> · {{ f.status }} · balance {{ f.balance }}
-        </li>
-      </ul>
-    </section>
-
-    <form v-if="(status === 'DRAFT' || status === 'CONFIRMED') && can('payment.post')" class="card" novalidate data-testid="deposit-form" @submit.prevent="takeDeposit">
-      <h2>Take a deposit</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Amount</span>
-          <input v-model="deposit.amount" name="deposit_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
-          <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-        </label>
-        <label class="field">
-          <span>Method</span>
-          <select v-model="deposit.method" name="deposit_method">
-            <option v-for="m in ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']" :key="m" :value="m">{{ m }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Reference</span>
-          <input v-model="deposit.reference" name="deposit_reference" />
-        </label>
-      </div>
-      <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy || !deposit.amount">Take deposit</button></div>
-    </form>
-  </template>
+      <Card v-if="status !== 'CANCELLED' && can('reservation.update')">
+        <form novalidate data-testid="header-form" @submit.prevent="saveHeader">
+          <CardHeader><CardTitle>{{ t('reservation.details') }}</CardTitle></CardHeader>
+          <CardContent class="flex flex-col gap-3">
+            <FormField :label="t('reservation.source')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="header.source" name="source">
+                  <option v-for="s in ['WALK_IN', 'PHONE', 'EMAIL', 'WEBSITE', 'OTA', 'AGENT', 'OTHER']" :key="s" :value="s">{{ s }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('reservation.remarks')">
+              <template #default="{ id }"><Input :id="id" v-model="header.remarks" name="remarks" /></template>
+            </FormField>
+            <Button type="submit" variant="outline" :disabled="busy">{{ t('common.save') }}</Button>
+          </CardContent>
+        </form>
+      </Card>
+    </aside>
+  </div>
 </template>
-
-<style scoped>
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.reason {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.badge {
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  background: var(--accent-soft);
-}
-.badge.cancelled,
-.badge.no_show {
-  background: #fde8e8;
-}
-.badge.draft {
-  background: #eef0f3;
-}
-</style>
