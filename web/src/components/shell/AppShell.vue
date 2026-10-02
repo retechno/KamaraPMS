@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import ConfirmHost from '@/components/app/ConfirmHost.vue'
+import ToastHost from '@/components/app/ToastHost.vue'
 import CommandPalette from '@/components/shell/CommandPalette.vue'
 import SidebarNav from '@/components/shell/SidebarNav.vue'
 import TopBar from '@/components/shell/TopBar.vue'
@@ -82,5 +84,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     </Dialog>
 
     <CommandPalette v-model:open="palette" />
+    <ConfirmHost />
+    <ToastHost />
   </div>
 </template>

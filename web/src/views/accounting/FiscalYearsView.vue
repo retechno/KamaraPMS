@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Approval, FiscalYear } from '@/api/types'
+import { confirm } from '@/composables/useConfirm'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -39,8 +40,12 @@ async function load(): Promise<void> {
 async function close(y: FiscalYear): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
-  const msg = `Close ${y.label}? The result of the year (${y.net_income}) is moved to retained earnings and every month of the year stays closed until the year is reopened.`
-  if (!window.confirm(msg)) return
+  const question = {
+    title: `Close ${y.label}?`,
+    description: `The result of the year (${y.net_income}) is moved to retained earnings and every month of the year stays closed until the year is reopened.`,
+    destructive: true,
+  }
+  if (!(await confirm(question))) return
   busy.value = true
   error.value = null
   notice.value = ''

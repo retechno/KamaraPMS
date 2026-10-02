@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GlPeriod } from '@/api/types'
+import { confirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -35,7 +36,7 @@ async function load(): Promise<void> {
 
 async function close(p: GlPeriod): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !window.confirm(`Close ${monthLabel(p.period_start)}? No journal can be posted into it afterwards.`)) return
+  if (propertyId === null || !(await confirm({ title: `Close ${monthLabel(p.period_start)}?`, description: 'No journal can be posted into it afterwards.', destructive: true }))) return
   busy.value = true
   error.value = null
   notice.value = ''

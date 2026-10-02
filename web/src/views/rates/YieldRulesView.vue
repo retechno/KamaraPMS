@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { RateQuote, RatePlan, RoomType, YieldRule } from '@/api/types'
+import { confirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -141,7 +142,7 @@ async function toggle(r: YieldRule): Promise<void> {
 
 async function remove(r: YieldRule): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !window.confirm(`Delete the rule ${r.code}? Reservations already made keep their prices.`)) return
+  if (propertyId === null || !(await confirm({ title: `Delete the rule ${r.code}?`, description: 'Reservations already made keep their prices.', destructive: true }))) return
   error.value = null
   try {
     await api.DELETE('/api/v1/properties/{propertyId}/yield-rules/{id}', { params: { path: { propertyId, id: r.id } } })

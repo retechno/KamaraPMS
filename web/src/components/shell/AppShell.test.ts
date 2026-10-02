@@ -2,6 +2,8 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { confirm } from '@/composables/useConfirm'
+import { toast } from '@/composables/useToast'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -124,5 +126,19 @@ describe('AppShell', () => {
     await mountShell(1280)
     await mounted!.get('[data-testid=sign-out]').trigger('click')
     expect(mounted!.emitted('signOut')).toHaveLength(1)
+  })
+
+  it('answers confirm() with its own dialog and shows toasts', async () => {
+    await mountShell(1280)
+    const answer = confirm({ title: 'Delete the rule?', destructive: true })
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=confirm-dialog]')!.textContent).toContain('Delete the rule?')
+    document.body.querySelector<HTMLElement>('[data-testid=confirm-ok]')!.click()
+    await expect(answer).resolves.toBe(true)
+
+    toast.success('Saved')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=toast-success]')!.textContent).toContain('Saved')
+    toast.clear()
   })
 })

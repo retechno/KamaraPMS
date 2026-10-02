@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GlAccount } from '@/api/types'
+import { confirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from './accountApi'
@@ -103,7 +104,7 @@ async function save(): Promise<void> {
 
 async function remove(a: GlAccount): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !window.confirm(`Delete account ${a.code} ${a.name}?`)) return
+  if (propertyId === null || !(await confirm({ title: `Delete account ${a.code} ${a.name}?`, destructive: true }))) return
   busy.value = true
   error.value = null
   notice.value = ''

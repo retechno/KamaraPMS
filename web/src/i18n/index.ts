@@ -32,6 +32,9 @@ export const i18n = createI18n<[Messages], Locale, false>({
  */
 export const t = i18n.global.t
 
+/** Whether a key has a message in the current language or the fallback (to show a raw value when it has none). */
+export const te = (key: string): boolean => i18n.global.te(key) || i18n.global.te(key, 'en')
+
 export function currentLocale(): Locale {
   return i18n.global.locale.value
 }

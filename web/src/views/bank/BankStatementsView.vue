@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { BankAccount, BankStatement } from '@/api/types'
+import { confirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -89,7 +90,7 @@ async function runImport(): Promise<void> {
 
 async function remove(s: BankStatement): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !window.confirm(`Delete the statement ${s.period_from} to ${s.period_to}? Its matchings are lost.`)) return
+  if (propertyId === null || !(await confirm({ title: `Delete the statement ${s.period_from} to ${s.period_to}?`, description: 'Its matchings are lost.', destructive: true }))) return
   busy.value = true
   error.value = null
   try {

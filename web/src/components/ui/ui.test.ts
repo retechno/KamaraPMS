@@ -46,3 +46,65 @@ describe('ui foundation', () => {
     expect(mount(C).text()).toBe('Cancel')
   })
 })
+
+describe('ui: card, form controls, tabs and sheet', () => {
+  it('renders a card with its parts', async () => {
+    const { Card, CardContent, CardDescription, CardHeader, CardTitle } = await import('./card')
+    const w = mount({
+      components: { Card, CardContent, CardDescription, CardHeader, CardTitle },
+      template: '<Card><CardHeader><CardTitle>Rooms</CardTitle><CardDescription>All</CardDescription></CardHeader><CardContent>body</CardContent></Card>',
+    })
+    expect(w.get('h2').text()).toBe('Rooms')
+    expect(w.get('[data-slot=card]').classes()).toContain('rounded-xl')
+    expect(w.text()).toContain('body')
+  })
+
+  it('binds an input and a select with v-model and passes attributes', async () => {
+    const { Input } = await import('./input')
+    const { NativeSelect } = await import('./native-select')
+    const w = mount({
+      components: { Input, NativeSelect },
+      data: () => ({ name: 'a', kind: 'x' }),
+      template: '<div><Input v-model="name" name="n" aria-invalid="true" /><NativeSelect v-model="kind" name="k"><option value="x">X</option><option value="y">Y</option></NativeSelect><i>{{ name }}{{ kind }}</i></div>',
+    })
+    await w.get('input[name=n]').setValue('bali')
+    await w.get('select[name=k]').setValue('y')
+    expect(w.get('i').text()).toBe('baliy')
+    expect(w.get('input').attributes('aria-invalid')).toBe('true')
+    expect(w.get('input').classes()).toContain('h-9')
+  })
+
+  it('switches tabs', async () => {
+    const { Tabs, TabsContent, TabsList, TabsTrigger } = await import('./tabs')
+    const w = mount({
+      components: { Tabs, TabsContent, TabsList, TabsTrigger },
+      template:
+        '<Tabs default-value="a"><TabsList><TabsTrigger value="a" data-testid="ta">A</TabsTrigger><TabsTrigger value="b" data-testid="tb">B</TabsTrigger></TabsList><TabsContent value="a">first</TabsContent><TabsContent value="b">second</TabsContent></Tabs>',
+    })
+    expect(w.text()).toContain('first')
+    expect(w.text()).not.toContain('second')
+    await w.get('[data-testid=tb]').trigger('mousedown', { button: 0 })
+    await w.get('[data-testid=tb]').trigger('focus')
+    expect(w.text()).toContain('second')
+    expect(w.get('[data-testid=tb]').attributes('data-state')).toBe('active')
+  })
+
+  it('draws a skeleton as decoration only', async () => {
+    const { Skeleton } = await import('./skeleton')
+    expect(mount(Skeleton).attributes('aria-hidden')).toBe('true')
+  })
+
+  it('opens a sheet from the right side', async () => {
+    const { Sheet, SheetContent, SheetTitle } = await import('./sheet')
+    const w = mount({
+      components: { Sheet, SheetContent, SheetTitle },
+      template: '<Sheet :open="true"><SheetContent data-testid="sheet"><SheetTitle>Detail</SheetTitle></SheetContent></Sheet>',
+    }, { attachTo: document.body })
+    await Promise.resolve()
+    const el = document.body.querySelector('[data-testid=sheet]')!
+    expect(el.className).toContain('right-0')
+    expect(el.textContent).toContain('Detail')
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+})
