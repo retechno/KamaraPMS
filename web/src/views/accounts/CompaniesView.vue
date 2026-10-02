@@ -4,6 +4,15 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Company } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -79,119 +88,99 @@ async function save(): Promise<void> {
   }
 }
 
-const limitText = (c: Company) => (c.credit_limit === null ? 'No limit' : c.credit_limit === '0' ? 'No credit' : c.credit_limit)
+const limitText = (c: Company) => (c.credit_limit === null ? t('companies.noLimit') : c.credit_limit === '0' ? t('companies.noCredit') : c.credit_limit)
+const columns = computed<Column<Company>[]>(() => [
+  { key: 'code', label: t('companies.code') },
+  { key: 'name', label: t('companies.name') },
+  { key: 'contact', label: t('companies.colContact') },
+  { key: 'credit', label: t('companies.colCredit') },
+  { key: 'terms', label: t('companies.colTerms') },
+  { key: 'status', label: t('setup.status') },
+  ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 
 watch(() => property.currentId, load, { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Companies</h1>
-    <button v-if="canManage && !editing" type="button" class="btn-primary" @click="startNew">New company</button>
-  </div>
+  <PageHeader :title="t('companies.title')">
+    <template #actions>
+      <Button v-if="canManage && !editing" type="button" data-testid="new-company" @click="startNew">{{ t('companies.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <span v-if="error.code === 'COMPANY_HAS_BALANCE'"> Record the company's payments under City ledger first.</span>
+    <span v-if="error.code === 'COMPANY_HAS_BALANCE'"> {{ t('companies.hasBalance') }}</span>
   </p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property cannot see companies.</p>
-  <p v-else-if="!canManage" class="muted" data-testid="read-only">
-    Your role can view companies but not edit them: the <code>company.manage</code> permission is needed.
-  </p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('companies.noAccess') }}</p>
+  <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('companies.readOnly', { permission: 'company.manage' }) }}</p>
 
-  <form v-if="editing" class="card" novalidate data-testid="company-form" @submit.prevent="save">
-    <h2>{{ editing === 'new' ? 'New company' : `Edit ${form.code}` }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Code</span>
-        <input v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-        <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-      </label>
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Contact person</span>
-        <input v-model="form.contact_name" name="contact_name" />
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input v-model="form.email" name="email" type="email" :aria-invalid="!!fieldError('email')" />
-        <small v-if="fieldError('email')" class="error-text">{{ fieldError('email') }}</small>
-      </label>
-      <label class="field">
-        <span>Phone</span>
-        <input v-model="form.phone" name="phone" />
-      </label>
-      <label class="field">
-        <span>Tax ID</span>
-        <input v-model="form.tax_id" name="tax_id" />
-      </label>
-      <label class="field">
-        <span>Address</span>
-        <input v-model="form.address" name="address" />
-      </label>
-      <label class="field">
-        <span>City</span>
-        <input v-model="form.city" name="city" />
-      </label>
-      <label class="field">
-        <span>Payment terms (days)</span>
-        <input v-model.number="form.payment_terms_days" name="payment_terms_days" type="number" min="0" max="365" :aria-invalid="!!fieldError('payment_terms_days')" />
-      </label>
-      <label class="field">
-        <span>Credit limit</span>
-        <input v-model="form.credit_limit" name="credit_limit" inputmode="decimal" :disabled="form.unlimited" :aria-invalid="!!fieldError('credit_limit')" />
-        <small class="hint">0 means no credit: nothing can be transferred to this company.</small>
-        <small v-if="fieldError('credit_limit')" class="error-text">{{ fieldError('credit_limit') }}</small>
-      </label>
-      <label class="check">
-        <input v-model="form.unlimited" name="unlimited" type="checkbox" />
-        <span>No credit limit</span>
-      </label>
-      <label class="field">
-        <span>Notes</span>
-        <input v-model="form.notes" name="notes" />
-      </label>
-      <label class="check">
-        <input v-model="form.is_active" name="is_active" type="checkbox" />
-        <span>Active (can be billed)</span>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" @click="editing = null">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="editing" class="mb-4">
+    <form novalidate data-testid="company-form" @submit.prevent="save">
+      <CardHeader><CardTitle>{{ editing === 'new' ? t('companies.new') : t('companies.edit', { code: form.code }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('companies.code')" :error="fieldError('code')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('companies.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('companies.contact')">
+            <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" /></template>
+          </FormField>
+          <FormField :label="t('companies.email')" :error="fieldError('email')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.email" name="email" type="email" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('companies.phone')">
+            <template #default="{ id }"><Input :id="id" v-model="form.phone" name="phone" /></template>
+          </FormField>
+          <FormField :label="t('companies.taxId')">
+            <template #default="{ id }"><Input :id="id" v-model="form.tax_id" name="tax_id" /></template>
+          </FormField>
+          <FormField :label="t('companies.address')">
+            <template #default="{ id }"><Input :id="id" v-model="form.address" name="address" /></template>
+          </FormField>
+          <FormField :label="t('companies.city')">
+            <template #default="{ id }"><Input :id="id" v-model="form.city" name="city" /></template>
+          </FormField>
+          <FormField :label="t('companies.terms')" :error="fieldError('payment_terms_days')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model.number="form.payment_terms_days" name="payment_terms_days" type="number" min="0" max="365" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('companies.creditLimit')" :hint="t('companies.creditHint')" :error="fieldError('credit_limit')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.credit_limit" name="credit_limit" inputmode="decimal" :disabled="form.unlimited" :aria-invalid="invalid" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.unlimited" name="unlimited" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('companies.unlimited') }}</span>
+          </label>
+          <FormField :label="t('companies.notes')">
+            <template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('companies.activeCheck') }}</span>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section v-if="canRead" class="card">
-    <p v-if="loaded && !companies.length" class="muted" data-testid="empty">No companies yet.</p>
-    <table v-else-if="companies.length" class="list">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Contact</th>
-          <th>Credit limit</th>
-          <th>Terms</th>
-          <th>Status</th>
-          <th v-if="canManage" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="c in companies" :key="c.id" :data-testid="`company-${c.code}`">
-          <td><b>{{ c.code }}</b></td>
-          <td>{{ c.name }}</td>
-          <td>{{ c.contact_name }} <small class="muted">{{ c.email }}</small></td>
-          <td>{{ limitText(c) }}</td>
-          <td>{{ c.payment_terms_days }} days</td>
-          <td>{{ c.is_active ? 'Active' : 'Inactive' }}</td>
-          <td v-if="canManage"><button type="button" @click="startEdit(c)">Edit</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card v-if="canRead">
+    <EmptyState v-if="loaded && !companies.length" :title="t('companies.empty')" data-testid="empty" />
+    <DataTable v-else-if="companies.length" :columns="columns" :rows="companies" row-key="id" :row-test-id="(c) => `company-${c.code}`" :caption="t('companies.title')">
+      <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
+      <template #cell-contact="{ row }">{{ row.contact_name }} <small class="text-muted-foreground">{{ row.email }}</small></template>
+      <template #cell-credit="{ row }">{{ limitText(row) }}</template>
+      <template #cell-terms="{ row }">{{ t('companies.days', { n: row.payment_terms_days }) }}</template>
+      <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+      <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
+    </DataTable>
+  </Card>
 </template>

@@ -46,7 +46,7 @@ describe('CompaniesView', () => {
   it('creates a company with a limit, or without one', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-company]').trigger('click')
     await w.get('input[name=code]').setValue('NEW')
     await w.get('input[name=name]').setValue('New Co')
     await w.get('[data-testid=company-form]').trigger('submit')
@@ -54,7 +54,7 @@ describe('CompaniesView', () => {
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/companies', expect.objectContaining({
       params: { path: { propertyId: 7 } }, body: expect.objectContaining({ code: 'NEW', name: 'New Co', credit_limit: '', payment_terms_days: 30, is_active: true }),
     }))
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-company]').trigger('click')
     await w.get('input[name=code]').setValue('LIM')
     await w.get('input[name=name]').setValue('Limited')
     await w.get('input[name=unlimited]').setValue(false)
@@ -82,7 +82,7 @@ describe('CompaniesView', () => {
   it('is read-only without company.manage and hidden without any read permission', async () => {
     const reader = mountView(['reservation.read'])
     await flushPromises()
-    expect(reader.find('button.btn-primary').exists()).toBe(false)
+    expect(reader.find('[data-testid=new-company]').exists()).toBe(false)
     expect(reader.find('[data-testid=read-only]').exists()).toBe(true)
     expect(reader.find('[data-testid=company-ACME] button').exists()).toBe(false)
     const none = mountView([])
