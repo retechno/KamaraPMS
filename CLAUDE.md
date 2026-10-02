@@ -33,6 +33,7 @@ scripts/sqlc.sh generate          # after editing any queries.sql; CI fails if g
 go run ./cmd/migrate up|down|status
 go run ./cmd/pms-admin create-tenant|create-admin ...
 go run ./cmd/pms-seed rooms -tenant DEMO -property BALI   # demo data for a DEVELOPMENT database: 100 rooms over 4 types (idempotent, -dry-run shows it)
+go run ./cmd/pms-seed rates -tenant DEMO -property BALI   # demo rate plan RO and 90 days of prices per room type, higher on Fri/Sat (idempotent)
 cd web && npm test && npm run type-check && npm run build
 cd web && npm run gen:api         # after editing api/openapi.yaml (the TS types are generated, never hand-edited)
 ```

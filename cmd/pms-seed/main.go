@@ -2,11 +2,17 @@
 // every row has its audit entry and the rooms their housekeeping state).
 //
 //	pms-seed rooms -tenant DEMO -property BALI [-floors 10] [-per-floor 10] [-dry-run]
+//	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
-// floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states. It is safe to run
-// again: a room number or a room type code that exists is left alone. It refuses to run against a production
-// configuration. It reads PMS_DATABASE_URL from the environment or ./.env.
+// floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states.
+//
+// rates: creates the rate plan (Room Only, sold through the ROOM charge code) when the property lacks it and fills the
+// grid of every room type for the next days from the business date: a weekday price and a higher weekend price
+// (Friday and Saturday).
+//
+// Both are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
+// refuse to run against a production configuration. They read PMS_DATABASE_URL from the environment or ./.env.
 package main
 
 import (
@@ -21,12 +27,14 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
+	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/config"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/rates"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/tenancy"
 )
@@ -39,35 +47,52 @@ func main() {
 }
 
 const usage = `usage:
-  pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]`
+  pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]
+  pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]`
 
-// A room type the seed creates when the property has no type with that code.
+// A room type the seed creates when the property has no type with that code, and the price of its nights.
 type typeSpec struct {
 	code, name, description string
 	maxAdult, maxChild      int32
-	// share is how many rooms of each ten (by position on the floor) are of this type.
+	// positions are the places on a floor (1 to 10) that have this type.
 	positions []int
+	// weekday and weekend are the nightly prices (Friday and Saturday are the weekend).
+	weekday, weekend string
 }
 
 var types = []typeSpec{
-	{code: "STD", name: "Standard", description: "Standard room", maxAdult: 2, maxChild: 1, positions: []int{1, 2, 3, 4}},
-	{code: "SUP", name: "Superior", description: "Superior room", maxAdult: 2, maxChild: 1, positions: []int{5, 6, 7}},
-	{code: "DLX", name: "Deluxe", description: "Deluxe room", maxAdult: 2, maxChild: 2, positions: []int{8, 9}},
-	{code: "STE", name: "Suite", description: "Suite", maxAdult: 3, maxChild: 2, positions: []int{10}},
+	{code: "STD", name: "Standard", description: "Standard room", maxAdult: 2, maxChild: 1, positions: []int{1, 2, 3, 4}, weekday: "500000", weekend: "600000"},
+	{code: "SUP", name: "Superior", description: "Superior room", maxAdult: 2, maxChild: 1, positions: []int{5, 6, 7}, weekday: "650000", weekend: "780000"},
+	{code: "DLX", name: "Deluxe", description: "Deluxe room", maxAdult: 2, maxChild: 2, positions: []int{8, 9}, weekday: "800000", weekend: "960000"},
+	{code: "STE", name: "Suite", description: "Suite", maxAdult: 3, maxChild: 2, positions: []int{10}, weekday: "1500000", weekend: "1800000"},
 }
 
 // A housekeeping state for a new room, by its number: most are ready, some need work, so the boards look alive.
 var states = []housekeeping.Status{housekeeping.Clean, housekeeping.Clean, housekeeping.Inspected, housekeeping.Dirty, housekeeping.Clean, housekeeping.Cleaning, housekeeping.Inspected}
 
+// env is what a seed command works with: the services, the tenant's administrator as the actor, and the property.
+type env struct {
+	ctx        context.Context
+	tenant     tenancy.Tenant
+	propertyID int64
+	ten        *tenancy.Service
+	rm         *rooms.Service
+	rt         *rates.Service
+	bc         *billingconfig.Service
+}
+
 func run(args []string) error {
-	if len(args) == 0 || args[0] != "rooms" {
+	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates") {
 		return fmt.Errorf("%s", usage)
 	}
-	fs := flag.NewFlagSet("rooms", flag.ContinueOnError)
+	cmd := args[0]
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	tenantCode := fs.String("tenant", "", "tenant code")
 	propertyCode := fs.String("property", "", "property code")
-	floors := fs.Int("floors", 10, "number of floors (1 to 30)")
-	perFloor := fs.Int("per-floor", 10, "rooms per floor (10, so the types spread evenly)")
+	floors := fs.Int("floors", 10, "rooms: number of floors (1 to 30)")
+	perFloor := fs.Int("per-floor", 10, "rooms: rooms per floor (10, so the types spread evenly)")
+	days := fs.Int("days", 90, "rates: nights to price from the business date (1 to 365)")
+	plan := fs.String("plan", "RO", "rates: the rate plan code")
 	dryRun := fs.Bool("dry-run", false, "show what would be created, create nothing")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -75,27 +100,46 @@ func run(args []string) error {
 	if *tenantCode == "" || *propertyCode == "" {
 		return fmt.Errorf("-tenant and -property are required\n%s", usage)
 	}
-	if *floors < 1 || *floors > 30 || *perFloor != 10 {
+	if cmd == "rooms" && (*floors < 1 || *floors > 30 || *perFloor != 10) {
 		return fmt.Errorf("-floors must be 1 to 30 and -per-floor 10")
 	}
+	if cmd == "rates" && (*days < 1 || *days > 365) {
+		return fmt.Errorf("-days must be 1 to 365")
+	}
 
-	if err := config.LoadDotEnv(".env"); err != nil {
+	e, closePool, err := open(*tenantCode, *propertyCode)
+	if err != nil {
 		return err
+	}
+	defer closePool()
+	if cmd == "rooms" {
+		return seedRooms(e, strings.ToUpper(*propertyCode), *floors, *perFloor, *dryRun)
+	}
+	return seedRates(e, strings.ToUpper(*propertyCode), strings.ToUpper(strings.TrimSpace(*plan)), *days, *dryRun)
+}
+
+// open reads the configuration, refuses production, wires the services and finds the tenant and the property.
+func open(tenantCode, propertyCode string) (*env, func(), error) {
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return nil, nil, err
 	}
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if cfg.Env == config.EnvProduction {
-		return fmt.Errorf("refusing to seed demo data into a production configuration")
+		return nil, nil, fmt.Errorf("refusing to seed demo data into a production configuration")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
 	pool, err := db.Open(ctx, cfg.DatabaseURL, 2)
 	if err != nil {
-		return err
+		cancel()
+		return nil, nil, err
 	}
-	defer pool.Close()
+	closeAll := func() {
+		pool.Close()
+		cancel()
+	}
 
 	txm := db.NewTxManager(pool, cfg.DBLockTimeout)
 	clk := clock.System{}
@@ -103,28 +147,40 @@ func run(args []string) error {
 	authz := iam.NewAuthorizer(txm)
 	ten := tenancy.NewService(txm, clk, aw, authz)
 	hk := housekeeping.NewService(txm, clk, aw, authz, ten)
-	rm := rooms.NewService(txm, clk, aw, authz, ten, hk, availability.NewService(txm))
-
-	tenant, err := ten.TenantByCode(ctx, *tenantCode)
-	if err != nil {
-		return err
+	avail := availability.NewService(txm)
+	e := &env{
+		ten: ten, rm: rooms.NewService(txm, clk, aw, authz, ten, hk, avail), rt: rates.NewService(txm, clk, aw, authz, ten, avail),
+		bc: billingconfig.NewService(txm, clk, aw, authz, ten),
 	}
+
+	tenant, err := ten.TenantByCode(ctx, tenantCode)
+	if err != nil {
+		closeAll()
+		return nil, nil, err
+	}
+	e.tenant = tenant
 	// The seed acts as the tenant's administrator (no user: the audit trail records it as the system).
-	ctx = auth.WithPrincipal(ctx, auth.Principal{TenantID: tenant.ID, IsTenantAdmin: true})
+	e.ctx = auth.WithPrincipal(ctx, auth.Principal{TenantID: tenant.ID, IsTenantAdmin: true})
 
-	props, err := ten.ListProperties(ctx, 0, 200)
+	props, err := ten.ListProperties(e.ctx, 0, 200)
 	if err != nil {
-		return err
+		closeAll()
+		return nil, nil, err
 	}
-	var propertyID int64
 	for _, p := range props {
-		if strings.EqualFold(p.Code, *propertyCode) {
-			propertyID = p.ID
+		if strings.EqualFold(p.Code, propertyCode) {
+			e.propertyID = p.ID
 		}
 	}
-	if propertyID == 0 {
-		return fmt.Errorf("tenant %s has no property %q", tenant.Code, *propertyCode)
+	if e.propertyID == 0 {
+		closeAll()
+		return nil, nil, fmt.Errorf("tenant %s has no property %q", tenant.Code, propertyCode)
 	}
+	return e, closeAll, nil
+}
+
+func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) error {
+	ctx, propertyID, rm := e.ctx, e.propertyID, e.rm
 
 	// Room types: reuse the ones that exist by code, create the others.
 	existing, err := rm.ListRoomTypes(ctx, propertyID, 0, nil, 200)
@@ -141,7 +197,7 @@ func run(args []string) error {
 			continue
 		}
 		fmt.Printf("room type %s (%s): to create\n", spec.code, spec.name)
-		if *dryRun {
+		if dryRun {
 			continue
 		}
 		t, err := rm.CreateRoomType(ctx, propertyID, rooms.RoomTypeInput{
@@ -172,20 +228,19 @@ func run(args []string) error {
 	}
 
 	created, skipped := 0, 0
-	for f := 1; f <= *floors; f++ {
-		for n := 1; n <= *perFloor; n++ {
+	for f := 1; f <= floors; f++ {
+		for n := 1; n <= perFloor; n++ {
 			number := strconv.Itoa(f*100 + n)
 			if have[number] {
 				skipped++
 				continue
 			}
-			code := typeCodeAt(n)
-			if *dryRun {
+			if dryRun {
 				created++
 				continue
 			}
 			_, err := rm.CreateRoom(ctx, propertyID, rooms.CreateRoomInput{
-				RoomInput:           rooms.RoomInput{RoomTypeID: typeID[code], RoomNumber: number, Floor: strconv.Itoa(f), IsActive: true},
+				RoomInput:           rooms.RoomInput{RoomTypeID: typeID[typeCodeAt(n)], RoomNumber: number, Floor: strconv.Itoa(f), IsActive: true},
 				InitialHousekeeping: states[(f*7+n)%len(states)],
 			})
 			if err != nil {
@@ -195,10 +250,99 @@ func run(args []string) error {
 		}
 	}
 	verb := "created"
-	if *dryRun {
+	if dryRun {
 		verb = "would create"
 	}
-	fmt.Printf("%s %d rooms in %s/%s (%d already existed)\n", verb, created, tenant.Code, strings.ToUpper(*propertyCode), skipped)
+	fmt.Printf("%s %d rooms in %s/%s (%d already existed)\n", verb, created, e.tenant.Code, propertyCode, skipped)
+	return nil
+}
+
+func seedRates(e *env, propertyCode, planCode string, days int, dryRun bool) error {
+	ctx, propertyID := e.ctx, e.propertyID
+
+	// The room types the seed prices: the ones of the property that carry a seed code.
+	roomTypes, err := e.rm.ListRoomTypes(ctx, propertyID, 0, nil, 200)
+	if err != nil {
+		return err
+	}
+	priced := map[string]int64{}
+	for _, t := range roomTypes {
+		priced[t.Code] = t.ID
+	}
+
+	// The rate plan: reuse it by code, or create it on the ROOM charge code.
+	plans, err := e.rt.ListRatePlans(ctx, propertyID, 0, nil, 200)
+	if err != nil {
+		return err
+	}
+	var planID int64
+	for _, p := range plans {
+		if p.Code == planCode {
+			planID = p.ID
+		}
+	}
+	if planID == 0 {
+		fmt.Printf("rate plan %s: to create\n", planCode)
+		if !dryRun {
+			typeRoom := "ROOM"
+			codes, err := e.bc.ListChargeCodes(ctx, propertyID, 0, billingconfig.ChargeCodeFilter{ChargeType: &typeRoom}, 50)
+			if err != nil {
+				return err
+			}
+			var charge int64
+			for _, c := range codes {
+				if c.Code == "ROOM" && c.IsActive {
+					charge = c.ID
+				}
+			}
+			if charge == 0 {
+				return fmt.Errorf("the property has no active ROOM charge code to sell rooms through")
+			}
+			p, err := e.rt.CreateRatePlan(ctx, propertyID, rates.RatePlanInput{
+				Code: planCode, Name: "Room Only", Description: "Demo plan: room only", MealPlan: "RO", IsRefundable: true, RoomChargeCodeID: charge, IsActive: true,
+			})
+			if err != nil {
+				return err
+			}
+			planID = p.ID
+		}
+	} else {
+		fmt.Printf("rate plan %s exists\n", planCode)
+	}
+
+	day, err := e.ten.CurrentBusinessDay(ctx, propertyID)
+	if err != nil {
+		return err
+	}
+	from := day.BusinessDate
+	to := from.AddDays(days)
+	written := int64(0)
+	for _, spec := range types {
+		id, ok := priced[spec.code]
+		if !ok {
+			fmt.Printf("room type %s is missing: run the rooms command first\n", spec.code)
+			continue
+		}
+		fmt.Printf("room type %s: %s on weekdays, %s on Fridays and Saturdays, %s to %s\n", spec.code, spec.weekday, spec.weekend, from, to.AddDays(-1))
+		if dryRun {
+			continue
+		}
+		// the weekday price for every night, then the weekend price over Fridays and Saturdays
+		base, err := e.rt.FillRates(e.ctx, propertyID, rates.FillInput{RatePlanID: planID, RoomTypeIDs: []int64{id}, From: from, To: to, Amount: spec.weekday})
+		if err != nil {
+			return fmt.Errorf("rates of %s: %w", spec.code, err)
+		}
+		weekend, err := e.rt.FillRates(e.ctx, propertyID, rates.FillInput{RatePlanID: planID, RoomTypeIDs: []int64{id}, From: from, To: to, Weekdays: []string{"FRI", "SAT"}, Amount: spec.weekend})
+		if err != nil {
+			return fmt.Errorf("weekend rates of %s: %w", spec.code, err)
+		}
+		written += base.UpdatedNights + weekend.UpdatedNights
+	}
+	if dryRun {
+		fmt.Printf("would price %d nights in %s/%s\n", days, e.tenant.Code, propertyCode)
+		return nil
+	}
+	fmt.Printf("wrote %d prices in %s/%s (plan %s)\n", written, e.tenant.Code, propertyCode, planCode)
 	return nil
 }
 
