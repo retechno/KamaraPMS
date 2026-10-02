@@ -196,8 +196,8 @@ describe('ReservationDetailView', () => {
   it('puts the main actions in the page header, by status and permission', async () => {
     const draft = mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT' }))
     await flushPromises()
-    expect(draft.get('header [data-testid=confirm]').exists()).toBe(true)
-    expect(draft.get('header [data-testid=cancel]').exists()).toBe(true)
+    expect(draft.find('header [data-testid=confirm]').exists()).toBe(true)
+    expect(draft.find('header [data-testid=cancel]').exists()).toBe(true)
     expect(draft.find('[data-testid=print-confirmation]').exists()).toBe(false) // no confirmation of a draft
     const confirmed = mountView()
     await flushPromises()
@@ -205,7 +205,7 @@ describe('ReservationDetailView', () => {
     expect(confirmed.find('[data-testid=confirm]').exists()).toBe(false)
     const cancelled = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED', cancellation_reason: 'changed plans' }))
     await flushPromises()
-    expect(cancelled.get('header [data-testid=reinstate]').exists()).toBe(true)
+    expect(cancelled.find('header [data-testid=reinstate]').exists()).toBe(true)
     expect(cancelled.get('[data-testid=summary]').text()).toContain('Cancelled: changed plans')
   })
 
