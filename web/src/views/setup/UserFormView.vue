@@ -4,6 +4,13 @@ import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { components } from '@/api/schema'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 
 type Role = components['schemas']['Role']
@@ -72,7 +79,7 @@ async function resetPassword(): Promise<void> {
   try {
     await api.POST('/api/v1/users/{userId}/password', { params: { path: { userId: Number(props.id) } }, body: { password: newPassword.value } })
     newPassword.value = ''
-    notice.value = 'Password set. The user was signed out everywhere.'
+    notice.value = t('users.passwordSet')
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -80,95 +87,74 @@ async function resetPassword(): Promise<void> {
 </script>
 
 <template>
-  <h1 class="page-title">{{ isNew ? 'New user' : form.full_name || 'User' }}</h1>
+  <PageHeader :title="isNew ? t('users.new') : form.full_name || t('users.userFallback')" />
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="alert warning" role="status">{{ notice }}</p>
 
-  <form class="card" novalidate @submit.prevent="save">
-    <h2>Profile</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Email</span>
-        <input v-model="form.email" type="email" name="email" :disabled="!isNew" :aria-invalid="!!error?.fieldMessage('email')" />
-        <small v-if="error?.fieldMessage('email')" class="error-text">{{ error.fieldMessage('email') }}</small>
-      </label>
-      <label class="field">
-        <span>Full name</span>
-        <input v-model="form.full_name" name="full_name" :aria-invalid="!!error?.fieldMessage('full_name')" />
-        <small v-if="error?.fieldMessage('full_name')" class="error-text">{{ error.fieldMessage('full_name') }}</small>
-      </label>
-      <label v-if="isNew" class="field">
-        <span>Initial password</span>
-        <input v-model="form.password" type="password" name="password" autocomplete="new-password" :aria-invalid="!!error?.fieldMessage('password')" />
-        <small class="hint">At least 12 characters. Share it privately; the user can change it after signing in.</small>
-        <small v-if="error?.fieldMessage('password')" class="error-text">{{ error.fieldMessage('password') }}</small>
-      </label>
-    </div>
-    <div style="margin-top: 14px; display: grid; gap: 10px">
-      <label class="check">
-        <input v-model="form.is_tenant_admin" type="checkbox" name="is_tenant_admin" />
-        <span>Tenant administrator (all properties, manages users, roles and properties)</span>
-      </label>
-      <label v-if="!isNew" class="check">
-        <input v-model="form.is_active" type="checkbox" name="is_active" />
-        <span>Active (deactivating signs the user out immediately)</span>
-      </label>
-    </div>
+  <Card class="mb-4">
+    <form novalidate @submit.prevent="save">
+      <CardHeader><CardTitle>{{ t('users.profile') }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('users.email')" :error="error?.fieldMessage('email')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.email" type="email" name="email" :disabled="!isNew" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('users.fullName')" :error="error?.fieldMessage('full_name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.full_name" name="full_name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField v-if="isNew" :label="t('users.initialPassword')" :hint="t('users.passwordHint')" :error="error?.fieldMessage('password')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.password" type="password" name="password" autocomplete="new-password" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
+        <div class="mt-4 grid gap-2.5">
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_tenant_admin" type="checkbox" name="is_tenant_admin" class="size-4 accent-primary" />
+            <span>{{ t('users.tenantAdmin') }}</span>
+          </label>
+          <label v-if="!isNew" class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_active" type="checkbox" name="is_active" class="size-4 accent-primary" />
+            <span>{{ t('users.activeCheck') }}</span>
+          </label>
+        </div>
 
-    <h2 style="margin-top: 24px">Property access</h2>
-    <p v-if="form.is_tenant_admin" class="muted">Administrators can access every property.</p>
-    <template v-else>
-      <p v-if="!grants.length" class="muted">No property access yet.</p>
-      <div v-for="(g, i) in grants" :key="i" class="grant-row">
-        <select v-model="g.property_id" :aria-label="`Property ${i + 1}`">
-          <option :value="null" disabled>Property…</option>
-          <option v-for="p in properties.properties" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
-        </select>
-        <select v-model="g.role_id" :aria-label="`Role ${i + 1}`">
-          <option :value="null" disabled>Role…</option>
-          <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-        </select>
-        <button type="button" @click="grants.splice(i, 1)">Remove</button>
-      </div>
-      <button type="button" @click="grants.push({ property_id: null, role_id: null })">Add property</button>
-      <small v-if="error?.fieldMessage('grants')" class="error-text">{{ error.fieldMessage('grants') }}</small>
-    </template>
+        <h2 class="mb-2 mt-6 text-base font-semibold">{{ t('users.propertyAccess') }}</h2>
+        <p v-if="form.is_tenant_admin" class="m-0 text-sm text-muted-foreground">{{ t('users.adminAll') }}</p>
+        <template v-else>
+          <p v-if="!grants.length" class="mb-2 mt-0 text-sm text-muted-foreground">{{ t('users.noGrants') }}</p>
+          <div v-for="(g, i) in grants" :key="i" class="mb-2 flex flex-wrap gap-2">
+            <NativeSelect v-model="g.property_id" class="w-56" :aria-label="t('users.propertyN', { n: i + 1 })">
+              <option :value="null" disabled>{{ t('users.propertyPlaceholder') }}</option>
+              <option v-for="p in properties.properties" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
+            </NativeSelect>
+            <NativeSelect v-model="g.role_id" class="w-56" :aria-label="t('users.roleN', { n: i + 1 })">
+              <option :value="null" disabled>{{ t('users.rolePlaceholder') }}</option>
+              <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
+            </NativeSelect>
+            <Button type="button" variant="outline" @click="grants.splice(i, 1)">{{ t('users.remove') }}</Button>
+          </div>
+          <Button type="button" variant="outline" size="sm" @click="grants.push({ property_id: null, role_id: null })">{{ t('users.addProperty') }}</Button>
+          <small v-if="error?.fieldMessage('grants')" role="alert" class="block text-xs text-destructive">{{ error.fieldMessage('grants') }}</small>
+        </template>
 
-    <div class="form-actions">
-      <button type="button" @click="router.push('/setup/users')">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="busy">{{ busy ? 'Saving…' : isNew ? 'Create user' : 'Save changes' }}</button>
-    </div>
-  </form>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="router.push('/setup/users')">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="busy">{{ busy ? t('users.saving') : isNew ? t('users.create') : t('users.saveChanges') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <form v-if="!isNew" class="card" novalidate @submit.prevent="resetPassword">
-    <h2>Set a new password</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>New password</span>
-        <input v-model="newPassword" type="password" autocomplete="new-password" />
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="submit" :disabled="newPassword.length < 12">Set password</button>
-    </div>
-  </form>
+  <Card v-if="!isNew">
+    <form novalidate @submit.prevent="resetPassword">
+      <CardHeader><CardTitle>{{ t('users.newPasswordTitle') }}</CardTitle></CardHeader>
+      <CardContent>
+        <FormField class="max-w-sm" :label="t('users.newPassword')">
+          <template #default="{ id }"><Input :id="id" v-model="newPassword" type="password" autocomplete="new-password" /></template>
+        </FormField>
+        <div class="mt-4 flex justify-end">
+          <Button type="submit" variant="outline" :disabled="newPassword.length < 12">{{ t('users.setPassword') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 </template>
-
-<style scoped>
-.grant-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-.grant-row select {
-  font: inherit;
-  font-size: 14px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  min-width: 200px;
-}
-</style>

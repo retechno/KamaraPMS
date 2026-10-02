@@ -1,12 +1,25 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { components } from '@/api/schema'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { t } from '@/i18n'
 
-const roles = ref<components['schemas']['Role'][]>([])
+type Role = components['schemas']['Role']
+
+const roles = ref<Role[]>([])
 const error = ref<ApiError | null>(null)
+const columns = computed<Column<Role>[]>(() => [
+  { key: 'name', label: t('roles.name') },
+  { key: 'description', label: t('roles.description') },
+  { key: 'permissions', label: t('roles.permissions'), align: 'right' },
+])
 
 onMounted(async () => {
   try {
@@ -18,30 +31,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Roles</h1>
-    <RouterLink to="/setup/roles/new" custom v-slot="{ navigate }">
-      <button type="button" class="btn-primary" @click="navigate">New role</button>
-    </RouterLink>
-  </div>
+  <PageHeader :title="t('roles.title')">
+    <template #actions>
+      <RouterLink to="/setup/roles/new" custom v-slot="{ navigate }">
+        <Button type="button" @click="navigate">{{ t('roles.new') }}</Button>
+      </RouterLink>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert">{{ error.message }}</p>
-  <section class="card">
-    <p v-if="!roles.length" class="muted">No roles yet. A role is a set of permissions you grant to users per property.</p>
-    <table v-else class="list">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Permissions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in roles" :key="r.id">
-          <td><RouterLink :to="`/setup/roles/${r.id}`">{{ r.name }}</RouterLink></td>
-          <td>{{ r.description }}</td>
-          <td>{{ r.permissions.length }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card>
+    <EmptyState v-if="!roles.length" :title="t('roles.empty')" :description="t('roles.emptyHint')" />
+    <DataTable v-else :columns="columns" :rows="roles" row-key="id" :caption="t('roles.title')">
+      <template #cell-name="{ row }"><RouterLink :to="`/setup/roles/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.name }}</RouterLink></template>
+      <template #cell-permissions="{ row }">{{ row.permissions.length }}</template>
+    </DataTable>
+  </Card>
 </template>
