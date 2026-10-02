@@ -26,9 +26,9 @@ const loaded = ref(false)
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 
 const columns = computed<Column<StaySummary>[]>(() => [
-  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
-  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
-  { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true },
+  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true, filter: 'text' as const },
+  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true, filter: 'text' as const },
+  { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true, filter: 'text' as const },
   { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true, format: 'date' as const },
   { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'party', label: t('frontDesk.page.party') },

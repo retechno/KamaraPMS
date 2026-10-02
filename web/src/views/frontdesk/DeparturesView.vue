@@ -30,9 +30,9 @@ const canCheckOut = computed(() => auth.can('frontdesk.checkout', property.curre
 const overdue = (s: StaySummary) => s.departure_date < businessDate.value
 
 const columns = computed<Column<StaySummary>[]>(() => [
-  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
-  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
-  { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true },
+  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true, filter: 'text' as const },
+  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true, filter: 'text' as const },
+  { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true, filter: 'text' as const },
   { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true, format: 'date' as const },
   { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'actions', label: '', align: 'right' },

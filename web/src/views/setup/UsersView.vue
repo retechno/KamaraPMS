@@ -17,10 +17,10 @@ const users = ref<User[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const columns = computed<Column<User>[]>(() => [
-  { key: 'full_name', label: t('users.name') },
-  { key: 'email', label: t('users.email') },
+  { key: 'full_name', label: t('users.name'), sortable: true, filter: 'text' as const },
+  { key: 'email', label: t('users.email'), sortable: true, filter: 'text' as const },
   { key: 'access', label: t('users.access') },
-  { key: 'status', label: t('setup.status') },
+  { key: 'status', label: t('setup.status'), filter: 'select' as const, filterValue: (r: User) => (r.is_active ? t('setup.active') : t('setup.inactive')) },
 ])
 
 onMounted(async () => {

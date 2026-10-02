@@ -36,13 +36,13 @@ const typeFilter = ref('')
 const canManage = computed(() => auth.can('billing_config.manage', property.currentId))
 const types: ChargeType[] = ['ROOM', 'FOOD_BEVERAGE', 'SERVICE', 'FEE', 'OTHER']
 const columns = computed<Column<ChargeCode>[]>(() => [
-  { key: 'code', label: t('chargeCodes.code') },
-  { key: 'name', label: t('chargeCodes.name') },
-  { key: 'charge_type', label: t('chargeCodes.type') },
-  { key: 'price_mode', label: t('chargeCodes.colPrices') },
+  { key: 'code', label: t('chargeCodes.code'), sortable: true, filter: 'text' as const },
+  { key: 'name', label: t('chargeCodes.name'), sortable: true, filter: 'text' as const },
+  { key: 'charge_type', label: t('chargeCodes.type'), filter: 'select' as const, filterValue: (r: ChargeCode) => t(`chargeCodes.type_${r.charge_type}` as 'chargeCodes.type_ROOM') },
+  { key: 'price_mode', label: t('chargeCodes.colPrices'), filter: 'select' as const, filterValue: (r: ChargeCode) => (r.price_mode === 'INCLUSIVE' ? t('chargeCodes.inclusive') : t('chargeCodes.exclusive')) },
   { key: 'summary', label: t('chargeCodes.colRules') },
   { key: 'account', label: t('chargeCodes.colAccount') },
-  { key: 'status', label: t('setup.status') },
+  { key: 'status', label: t('setup.status'), filter: 'select' as const, filterValue: (r: ChargeCode) => (r.is_active ? t('setup.active') : t('setup.inactive')) },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 const visible = computed(() => codes.value.filter((c) => !typeFilter.value || c.charge_type === typeFilter.value))

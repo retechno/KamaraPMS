@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import { statusText } from '@/utils/status'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -31,13 +32,13 @@ const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
 
 const columns = computed<Column<ReservationSummary>[]>(() => [
-  { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true },
-  { key: 'guest_name', label: t('reservations.booker'), sortable: true },
+  { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, filter: 'text' as const },
+  { key: 'guest_name', label: t('reservations.booker'), sortable: true, filter: 'text' as const },
   { key: 'company', label: t('reservations.companyGroup') },
   { key: 'arrival_date', label: t('reservations.arrival'), sortable: true, format: 'date' as const },
   { key: 'departure_date', label: t('reservations.departure'), sortable: true, format: 'date' as const },
   { key: 'room_count', label: t('reservations.rooms'), align: 'right', sortable: true },
-  { key: 'status', label: t('reservations.status'), sortable: true },
+  { key: 'status', label: t('reservations.status'), sortable: true, filter: 'select' as const, filterValue: (r: ReservationSummary) => statusText(r.status) },
 ])
 
 async function load(more = false): Promise<void> {

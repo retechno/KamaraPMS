@@ -39,8 +39,8 @@ const visible = computed(() => {
   return suppliers.value.filter((s) => (filter.inactive || s.is_active) && (!q || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)))
 })
 const columns = computed<Column<Supplier>[]>(() => [
-  { key: 'code', label: t('payables.code') },
-  { key: 'name', label: t('payables.name') },
+  { key: 'code', label: t('payables.code'), sortable: true, filter: 'text' as const },
+  { key: 'name', label: t('payables.name'), sortable: true, filter: 'text' as const },
   { key: 'terms', label: t('payables.colTerms') },
   { key: 'account', label: t('payables.usualAccount') },
   { key: 'outstanding', label: t('payables.owed'), align: 'right', format: 'money' as const },

@@ -76,4 +76,18 @@ describe('FoliosView', () => {
     expect(w.get('select[name=status]').findAll('option').map((o) => o.text())).toEqual(['Semua', 'Terbuka', 'Tertutup'])
     setLocale('en')
   })
+
+  it('narrows the loaded folios by column, in the words of the language', async () => {
+    const w = mountView(['folio.read'], { data: [
+      { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, version: 1, balance: '900' },
+      { id: 4, folio_number: 'FOL000004', status: 'CLOSED', reservation_id: 10, version: 1, balance: '0' },
+    ] })
+    await flushPromises()
+    expect(w.findAll('select[name=filter_status] option').map((o) => o.text())).toEqual(['All', 'Closed', 'Open'])
+    await w.get('select[name=filter_status]').setValue('Closed')
+    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000004'])
+    await w.get('select[name=filter_status]').setValue('')
+    await w.get('input[name=filter_folio_number]').setValue('3')
+    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000003'])
+  })
 })

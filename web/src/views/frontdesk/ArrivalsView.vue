@@ -40,10 +40,10 @@ const sheetOpen = computed({
 })
 
 const columns = computed<Column<Arrival>[]>(() => [
-  { key: 'confirmation_number', label: t('frontDesk.page.confirmation'), sortable: true },
-  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
-  { key: 'room_type_code', label: t('frontDesk.page.roomType'), sortable: true },
-  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
+  { key: 'confirmation_number', label: t('frontDesk.page.confirmation'), sortable: true, filter: 'text' as const },
+  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true, filter: 'text' as const },
+  { key: 'room_type_code', label: t('frontDesk.page.roomType'), sortable: true, filter: 'select' as const },
+  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true, filter: 'text' as const },
   { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'party', label: t('frontDesk.page.party') },
   { key: 'actions', label: '', align: 'right' },

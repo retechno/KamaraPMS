@@ -13,6 +13,7 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import { statusText } from '@/utils/status'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -29,9 +30,9 @@ const searched = ref(false)
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 
 const columns = computed<Column<FolioSummary>[]>(() => [
-  { key: 'folio_number', label: t('folios.folio'), sortable: true },
-  { key: 'reservation_id', label: t('folios.reservation'), sortable: true },
-  { key: 'status', label: t('folios.status'), sortable: true },
+  { key: 'folio_number', label: t('folios.folio'), sortable: true, filter: 'text' as const },
+  { key: 'reservation_id', label: t('folios.reservation'), sortable: true, filter: 'text' as const },
+  { key: 'status', label: t('folios.status'), sortable: true, filter: 'select' as const, filterValue: (r: FolioSummary) => statusText(r.status) },
   { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const },
 ])
 
