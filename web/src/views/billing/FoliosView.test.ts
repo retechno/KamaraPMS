@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import FoliosView from './FoliosView.vue'
@@ -49,5 +50,30 @@ describe('FoliosView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('shows the status as a badge and sorts balances by value', async () => {
+    const w = mountView(['folio.read'], { data: [
+      { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, version: 1, balance: '900' },
+      { id: 4, folio_number: 'FOL000004', status: 'CLOSED', reservation_id: 10, version: 1, balance: '250000' },
+      { id: 5, folio_number: 'FOL000005', status: 'OPEN', reservation_id: 11, version: 1, balance: '-10000' },
+    ] })
+    await flushPromises()
+    expect(w.get('[data-testid=folio-FOL000004]').text()).toContain('Closed')
+    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
+    await w.get('[data-testid=sort-balance]').trigger('click')
+    expect(numbers()).toEqual(['FOL000005', 'FOL000003', 'FOL000004'])
+    await w.get('[data-testid=sort-balance]').trigger('click')
+    expect(numbers()).toEqual(['FOL000004', 'FOL000003', 'FOL000005'])
+  })
+
+  it('links to the cashier and speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Folio')
+    expect(w.get('a[href="/cashier"]').text()).toBe('Kasir')
+    expect(w.get('select[name=status]').findAll('option').map((o) => o.text())).toEqual(['Semua', 'Terbuka', 'Tertutup'])
+    setLocale('en')
   })
 })

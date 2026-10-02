@@ -1,8 +1,21 @@
 <script setup lang="ts">
+import { FileText, Receipt, Search } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { MethodTotal, Payment } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import KpiCard from '@/components/app/KpiCard.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -19,8 +32,23 @@ const error = ref<ApiError | null>(null)
 const loading = ref(false)
 const searched = ref(false)
 
+const METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER'] as const
+
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 const canPrint = computed(() => auth.can('reservation.read', property.currentId)) // a receipt names the guest and the reservation
+const businessDate = computed(() => property.clock?.business_date ?? '')
+
+const methodLabel = (m: string): string => t(`cashier.${m}` as never)
+
+const columns = computed<Column<Payment>[]>(() => [
+  { key: 'payment_number', label: t('cashier.number'), sortable: true },
+  { key: 'payment_type', label: t('cashier.type'), sortable: true },
+  { key: 'payment_method', label: t('cashier.method'), sortable: true },
+  { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums' },
+  { key: 'status', label: t('cashier.status'), sortable: true },
+  { key: 'folio_id', label: t('cashier.folio') },
+  ...(canPrint.value ? [{ key: 'receipt', label: '', align: 'right' as const }] : []),
+])
 
 async function print(paymentId: number): Promise<void> {
   const propertyId = property.currentId
@@ -32,7 +60,6 @@ async function print(paymentId: number): Promise<void> {
     error.value = e instanceof ApiError ? e : null
   }
 }
-const businessDate = computed(() => property.clock?.business_date ?? '')
 
 async function load(more = false): Promise<void> {
   const propertyId = property.currentId
@@ -70,93 +97,70 @@ watch(businessDate, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Cashier</h1>
-    <RouterLink to="/folios">Folios</RouterLink>
-  </div>
+  <PageHeader :title="t('cashier.title')">
+    <template #actions>
+      <Button as-child variant="outline" size="sm">
+        <RouterLink to="/folios"><FileText />{{ t('cashier.foliosLink') }}</RouterLink>
+      </Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property does not allow viewing payments.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('cashier.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('cashier.noAccess') }}</p>
 
   <template v-else>
-    <form class="card filters" role="search" @submit.prevent="load()">
-      <label class="field">
-        <span>Business date</span>
-        <input v-model="date" name="business_date" type="date" />
-      </label>
-      <label class="field">
-        <span>Method</span>
-        <select v-model="method" name="method">
-          <option value="">Any</option>
-          <option value="CASH">Cash</option>
-          <option value="CARD">Card</option>
-          <option value="BANK_TRANSFER">Bank transfer</option>
-          <option value="OTHER">Other</option>
-        </select>
-      </label>
-      <button type="submit" :disabled="loading">Show</button>
+    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="load()">
+      <FormField class="w-44" :label="t('cashier.businessDate')">
+        <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
+      </FormField>
+      <FormField class="w-44" :label="t('cashier.method')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model="method" name="method">
+            <option value="">{{ t('cashier.any') }}</option>
+            <option v-for="m in METHODS" :key="m" :value="m">{{ methodLabel(m) }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <Button type="submit" :disabled="loading"><Search />{{ t('cashier.show') }}</Button>
     </form>
 
-    <section v-if="totals.length" class="card" data-testid="totals">
-      <h2>Totals</h2>
-      <table class="list">
-        <thead><tr><th>Method</th><th class="num">Paid</th><th class="num">Refunded</th><th class="num">Net</th></tr></thead>
-        <tbody>
-          <tr v-for="t in totals" :key="t.payment_method" :data-testid="`total-${t.payment_method}`">
-            <td>{{ t.payment_method }}</td><td class="num">{{ t.paid }}</td><td class="num">{{ t.refunded }}</td><td class="num">{{ t.net }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <div v-if="totals.length" class="mb-5 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="totals">
+      <KpiCard
+        v-for="tot in totals"
+        :key="tot.payment_method"
+        :data-testid="`total-${tot.payment_method}`"
+        :label="methodLabel(tot.payment_method)"
+        :value="tot.net"
+        :hint="t('cashier.paidRefunded', { paid: tot.paid, refunded: tot.refunded })"
+        :icon="Receipt"
+      />
+    </div>
 
-    <section class="card">
-      <p v-if="searched && !rows.length" class="muted" data-testid="empty">No payments found.</p>
-      <table v-else-if="rows.length" class="list">
-        <thead><tr><th>Number</th><th>Type</th><th>Method</th><th class="num">Amount</th><th>Status</th><th>Folio</th><th v-if="canPrint" /></tr></thead>
-        <tbody>
-          <tr v-for="p in rows" :key="p.id" :data-testid="`payment-${p.payment_number}`" :class="{ struck: p.status === 'VOIDED' }">
-            <td>{{ p.payment_number }}</td>
-            <td>{{ p.payment_type }}</td>
-            <td>{{ p.payment_method }}</td>
-            <td class="num">{{ p.amount }}</td>
-            <td>{{ p.status }}</td>
-            <td><RouterLink :to="`/folios/${p.folio_id}`">#{{ p.folio_id }}</RouterLink></td>
-            <td v-if="canPrint"><button type="button" :data-testid="`receipt-${p.payment_number}`" @click="print(p.id)">Receipt</button></td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" :disabled="loading" data-testid="more" @click="load(true)">Load more</button>
-      </div>
-    </section>
+    <DataTable
+      :columns="columns"
+      :rows="rows"
+      row-key="id"
+      :loading="!searched"
+      :row-test-id="(p) => `payment-${p.payment_number}`"
+      :row-class="(p) => (p.status === 'VOIDED' ? 'struck text-muted-foreground line-through' : undefined)"
+      :caption="t('cashier.title')"
+    >
+      <template #cell-payment_type="{ row }">
+        <Badge :variant="row.payment_type === 'REFUND' ? 'warning' : 'outline'">{{ t(`cashier.${row.payment_type}` as never) }}</Badge>
+      </template>
+      <template #cell-payment_method="{ row }">{{ methodLabel(row.payment_method) }}</template>
+      <template #cell-status="{ row }"><StatusBadge domain="payment" :status="row.status" /></template>
+      <template #cell-folio_id="{ row }"><RouterLink :to="`/folios/${row.folio_id}`">#{{ row.folio_id }}</RouterLink></template>
+      <template #cell-receipt="{ row }">
+        <Button variant="outline" size="sm" :data-testid="`receipt-${row.payment_number}`" @click="print(row.id)">{{ t('cashier.receipt') }}</Button>
+      </template>
+      <template #empty><EmptyState :title="t('cashier.empty')" data-testid="empty" /></template>
+      <template #footer>
+        <div v-if="nextCursor" class="flex justify-center p-3">
+          <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="load(true)">{{ t('cashier.loadMore') }}</Button>
+        </div>
+      </template>
+    </DataTable>
   </template>
 </template>
-
-<style scoped>
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.struck td {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-</style>

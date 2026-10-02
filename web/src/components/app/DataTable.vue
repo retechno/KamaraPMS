@@ -36,8 +36,10 @@ const props = withDefaults(
     caption?: string
     /** A `data-testid` for each row. */
     rowTestId?: (row: T) => string
+    /** Extra classes for a row (a voided payment struck through). */
+    rowClass?: (row: T) => string | undefined
   }>(),
-  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined },
+  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined },
 )
 const emit = defineEmits<{ rowClick: [row: T] }>()
 defineOptions({ inheritAttrs: false })
@@ -130,7 +132,7 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
             :key="keyOf(row)"
             :data-testid="rowTestId?.(row)"
             :tabindex="clickable ? 0 : undefined"
-            :class="cn('border-b border-border hover:bg-accent/50', clickable && 'cursor-pointer')"
+            :class="cn('border-b border-border hover:bg-accent/50', clickable && 'cursor-pointer', rowClass?.(row))"
             @click="clickable && emit('rowClick', row)"
             @keydown.enter="clickable && emit('rowClick', row)"
           >

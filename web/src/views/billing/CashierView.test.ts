@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import CashierView from './CashierView.vue'
@@ -43,7 +44,7 @@ describe('CashierView', () => {
     expect(GET.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { business_date: '2026-09-30' } } })
     expect(w.get('[data-testid=total-CASH]').text()).toContain('100000')
     expect(w.get('[data-testid=payment-PAY000002]').classes()).toContain('struck') // voided
-    expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('POSTED')
+    expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('Posted')
   })
 
   it('filters by date and method', async () => {
@@ -72,5 +73,50 @@ describe('CashierView', () => {
     const plain = mountView()
     await flushPromises()
     expect(plain.find('[data-testid^=receipt-]').exists()).toBe(false)
+  })
+
+  it('shows each method as a figure with what was paid and refunded', async () => {
+    const w = mountView()
+    GET.mockResolvedValue({ data: { ...page, totals: [{ payment_method: 'CASH', paid: '100000', refunded: '20000', net: '80000' }, { payment_method: 'BANK_TRANSFER', paid: '500000', refunded: '0', net: '500000' }] } })
+    await flushPromises()
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    const cash = w.get('[data-testid=total-CASH]').text()
+    expect(cash).toContain('Cash')
+    expect(cash).toContain('80000')
+    expect(cash).toContain('Paid 100000 · Refunded 20000')
+    expect(w.get('[data-testid=total-BANK_TRANSFER]').text()).toContain('Bank transfer')
+  })
+
+  it('marks a refund and strikes a voided payment', async () => {
+    const w = mountView()
+    GET.mockResolvedValue({ data: { data: [{ id: 5, payment_number: 'PAY000005', folio_id: 3, payment_type: 'REFUND', payment_method: 'CASH', amount: '30000', status: 'POSTED' }, ...page.data], totals: [] } })
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=payment-PAY000005]').text()).toContain('Refund')
+    expect(w.get('[data-testid=payment-PAY000005]').classes()).not.toContain('struck')
+    expect(w.get('[data-testid=payment-PAY000002]').classes()).toContain('line-through')
+    expect(w.get('[data-testid=payment-PAY000002]').text()).toContain('Voided')
+  })
+
+  it('sorts the payments by amount', async () => {
+    const w = mountView()
+    await flushPromises()
+    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
+    expect(numbers()).toEqual(['PAY000002', 'PAY000001'])
+    await w.get('[data-testid=sort-amount]').trigger('click')
+    expect(numbers()).toEqual(['PAY000002', 'PAY000001']) // 50000 then 100000
+    await w.get('[data-testid=sort-amount]').trigger('click')
+    expect(numbers()).toEqual(['PAY000001', 'PAY000002'])
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Kasir')
+    expect(w.get('[data-testid=total-CASH]').text()).toContain('Tunai')
+    expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('Terposting')
+    setLocale('en')
   })
 })

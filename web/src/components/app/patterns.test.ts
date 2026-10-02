@@ -168,6 +168,12 @@ describe('DataTable', () => {
     expect(w.findAll('thead th')[0]!.text()).toBe('Guest') // the other headers keep their label
   })
 
+  it('adds a class to the rows a page picks out', () => {
+    const w = make({ rowClass: (r: Row) => (r.id === 2 ? 'struck' : undefined) })
+    expect(w.findAll('tbody tr')[1]!.classes()).toContain('struck')
+    expect(w.findAll('tbody tr')[0]!.classes()).not.toContain('struck')
+  })
+
   it('gives each row a test id when asked', () => {
     const w = make({ rowTestId: (r: Row) => `guest-${r.id}` })
     expect(w.find('[data-testid=guest-2]').exists()).toBe(true)

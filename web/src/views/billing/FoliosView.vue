@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import { Search, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { FolioSummary } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Button } from '@/components/ui/button'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -17,6 +27,13 @@ const loading = ref(false)
 const searched = ref(false)
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
+
+const columns = computed<Column<FolioSummary>[]>(() => [
+  { key: 'folio_number', label: t('folios.folio'), sortable: true },
+  { key: 'reservation_id', label: t('folios.reservation'), sortable: true },
+  { key: 'status', label: t('folios.status'), sortable: true },
+  { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums' },
+])
 
 async function load(more = false): Promise<void> {
   const propertyId = property.currentId
@@ -45,66 +62,42 @@ watch(() => property.currentId, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Folios</h1>
-    <RouterLink to="/cashier">Cashier</RouterLink>
-  </div>
+  <PageHeader :title="t('folios.title')">
+    <template #actions>
+      <Button as-child variant="outline" size="sm">
+        <RouterLink to="/cashier"><Wallet />{{ t('folios.cashierLink') }}</RouterLink>
+      </Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property does not allow viewing folios.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('folios.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('folios.noAccess') }}</p>
 
   <template v-else>
-    <form class="card filters" role="search" @submit.prevent="load()">
-      <label class="field">
-        <span>Status</span>
-        <select v-model="status" name="status">
-          <option value="">Any</option>
-          <option value="OPEN">Open</option>
-          <option value="CLOSED">Closed</option>
-        </select>
-      </label>
-      <button type="submit" :disabled="loading">Search</button>
+    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="load()">
+      <FormField class="w-44" :label="t('folios.status')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model="status" name="status">
+            <option value="">{{ t('folios.any') }}</option>
+            <option value="OPEN">{{ t('folios.open') }}</option>
+            <option value="CLOSED">{{ t('folios.closed') }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <Button type="submit" :disabled="loading"><Search />{{ t('folios.search') }}</Button>
     </form>
-    <section class="card">
-      <p v-if="searched && !rows.length" class="muted" data-testid="empty">No folios found.</p>
-      <table v-else-if="rows.length" class="list">
-        <thead><tr><th>Folio</th><th>Reservation</th><th>Status</th><th class="num">Balance</th></tr></thead>
-        <tbody>
-          <tr v-for="f in rows" :key="f.id" :data-testid="`folio-${f.folio_number}`">
-            <td><RouterLink :to="`/folios/${f.id}`">{{ f.folio_number }}</RouterLink></td>
-            <td><RouterLink :to="`/reservations/${f.reservation_id}`">#{{ f.reservation_id }}</RouterLink></td>
-            <td>{{ f.status }}</td>
-            <td class="num">{{ f.balance }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" :disabled="loading" data-testid="more" @click="load(true)">Load more</button>
-      </div>
-    </section>
+
+    <DataTable :columns="columns" :rows="rows" row-key="id" :loading="!searched" :row-test-id="(f) => `folio-${f.folio_number}`" :caption="t('folios.title')">
+      <template #cell-folio_number="{ row }"><RouterLink :to="`/folios/${row.id}`">{{ row.folio_number }}</RouterLink></template>
+      <template #cell-reservation_id="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">#{{ row.reservation_id }}</RouterLink></template>
+      <template #cell-status="{ row }"><StatusBadge domain="record" :status="row.status" /></template>
+      <template #empty><EmptyState :title="t('folios.empty')" data-testid="empty" /></template>
+      <template #footer>
+        <div v-if="nextCursor" class="flex justify-center p-3">
+          <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="load(true)">{{ t('folios.loadMore') }}</Button>
+        </div>
+      </template>
+    </DataTable>
   </template>
 </template>
-
-<style scoped>
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-</style>
