@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import NightAuditView from './NightAuditView.vue'
@@ -139,5 +140,67 @@ describe('NightAuditView', () => {
     await flushPromises()
     expect(denied.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('says at the top whether the audit is ready and how many steps need attention', async () => {
+    const ready = mountView()
+    await flushPromises()
+    expect(ready.get('[data-testid=readiness]').text()).toBe('Ready to run')
+    expect(ready.get('[data-testid=audit-date]').text()).toBe('2026-09-30')
+    const stuck = mountView(blocked())
+    await flushPromises()
+    expect(stuck.get('[data-testid=readiness]').text()).toBe('3 step(s) need attention') // arrivals, departures, room charges
+    const early = mountView({ ...clean(), time_guard_ok: false, can_run: false })
+    await flushPromises()
+    expect(early.get('[data-testid=readiness]').text()).toBe('1 step(s) need attention')
+  })
+
+  it('marks each step done or in need of attention', async () => {
+    const w = mountView(blocked())
+    await flushPromises()
+    expect(w.get('[data-testid=guard]').attributes('data-state')).toBe('ok')
+    expect(w.get('[data-testid=arrivals]').attributes('data-state')).toBe('blocked')
+    expect(w.get('[data-testid=departures]').attributes('data-state')).toBe('blocked')
+    expect(w.get('[data-testid=charges]').attributes('data-state')).toBe('blocked')
+    expect(w.get('[data-testid=run]').attributes('data-state')).toBe('blocked')
+    const ok = mountView()
+    await flushPromises()
+    expect(ok.get('[data-testid=arrivals]').attributes('data-state')).toBe('ok')
+    expect(ok.get('[data-testid=run]').attributes('data-state')).toBe('pending')
+  })
+
+  it('selects arrivals one by one and with the select-all box', async () => {
+    const w = mountView(blocked())
+    await flushPromises()
+    const all = w.get('[data-testid=select-all]')
+    expect((all.element as HTMLInputElement).checked).toBe(false)
+    await w.get('[data-testid=arrival-31] input').setValue(true)
+    await w.get('[data-testid=arrival-32] input').setValue(true)
+    expect((w.get('[data-testid=select-all]').element as HTMLInputElement).checked).toBe(true)
+    await w.get('[data-testid=select-all]').setValue(false)
+    expect(w.get('[data-testid=mark-no-shows]').text()).toContain('Mark 0')
+  })
+
+  it('shows the closing summary as figures, and the readiness badge goes away once run', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=confirm_run]').setValue(true)
+    await w.get('[data-testid=run-audit]').trigger('click')
+    await flushPromises()
+    const text = w.get('[data-testid=summary]').text()
+    expect(text).toContain('2 of 3 (66.67%)')
+    expect(text).toContain('2 / 0 / 1')
+    expect(text).toContain('Payments CASH')
+    expect(w.find('[data-testid=readiness]').exists()).toBe(false)
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView(blocked())
+    await flushPromises()
+    expect(w.get('[data-testid=readiness]').text()).toBe('3 langkah perlu ditangani')
+    expect(w.get('[data-testid=mark-no-shows]').text()).toBe('Tandai 0 sebagai no-show')
+    expect(w.get('[data-testid=cannot-run]').text()).toBe('Selesaikan hal-hal di atas terlebih dahulu.')
+    setLocale('en')
   })
 })

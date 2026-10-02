@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * The one table of the application: a header that can sort, rows with a cell slot per column (`#cell-<key>="{ row,
- * value }"`), a loading state with skeleton rows, and an empty state. Sorting is done here on the rows it was given;
+ * value }"`), a header slot per column (`#header-<key>`, for a select-all box), a loading state with skeleton rows, and an empty state. Sorting is done here on the rows it was given;
  * a page that pages through the server keeps its own order and leaves `sortable` off.
  */
 export interface Column<R> {
@@ -114,7 +114,7 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
               <ArrowDown v-else-if="sort?.key === col.key" class="size-3.5" aria-hidden="true" />
               <ChevronsUpDown v-else class="size-3.5 opacity-50" aria-hidden="true" />
             </button>
-            <template v-else>{{ col.label }}</template>
+            <slot v-else :name="`header-${col.key}`" :column="col">{{ col.label }}</slot>
           </th>
         </tr>
       </thead>

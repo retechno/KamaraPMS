@@ -1,8 +1,20 @@
 <script setup lang="ts">
+import { CheckCircle2, RefreshCw } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { NightAuditPreview, NightAuditResult } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import FormField from '@/components/app/FormField.vue'
+import KpiCard from '@/components/app/KpiCard.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StepCard from '@/components/app/StepCard.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -21,7 +33,26 @@ const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const blockers = computed(() => preview.value?.blockers)
 const arrivals = computed(() => blockers.value?.unresolved_arrivals ?? [])
+const departures = computed(() => blockers.value?.unresolved_departures ?? [])
+const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0))
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
+
+// How many steps still need someone: the clock, the arrivals, the departures and the room charges.
+const attention = computed(() => (preview.value && !preview.value.time_guard_ok ? 1 : 0) + (arrivals.value.length ? 1 : 0) + (departures.value.length ? 1 : 0) + (chargeIssues.value ? 1 : 0))
+
+const arrivalColumns = computed<Column<(typeof arrivals.value)[number]>[]>(() => [
+  { key: 'select', label: '', class: 'w-8' },
+  { key: 'confirmation_number', label: t('nightAudit.reservation') },
+  { key: 'guest', label: t('nightAudit.guest') },
+  { key: 'room_type', label: t('nightAudit.room') },
+  { key: 'arrival_date', label: t('nightAudit.arrival') },
+])
+const departureColumns = computed<Column<(typeof departures.value)[number]>[]>(() => [
+  { key: 'stay_number', label: t('nightAudit.stay') },
+  { key: 'guest', label: t('nightAudit.guest') },
+  { key: 'room', label: t('nightAudit.room') },
+  { key: 'departure_date', label: t('nightAudit.departure') },
+])
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -54,7 +85,7 @@ async function markNoShows(): Promise<void> {
       params: { path: { propertyId } },
       body: { business_date: preview.value.business_date, reservation_room_ids: noShow.selected, confirm: noShow.confirm, reason: noShow.reason || undefined },
     })
-    notice.value = `${data?.marked.length ?? 0} arrival(s) marked as no-show.`
+    notice.value = t('nightAudit.marked', { n: data?.marked.length ?? 0 })
     noShow.selected = []
     noShow.confirm = false
     noShow.reason = ''
@@ -97,157 +128,145 @@ watch(pid, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Night audit <span v-if="preview" class="muted">{{ preview.business_date }}</span></h1>
-    <button type="button" :disabled="busy" data-testid="refresh" @click="load">Refresh</button>
-  </div>
+  <PageHeader :title="t('nightAudit.title')">
+    <template v-if="preview" #marks>
+      <Badge variant="secondary" data-testid="audit-date">{{ preview.business_date }}</Badge>
+      <Badge v-if="!result" :variant="attention ? 'warning' : 'success'" data-testid="readiness">
+        {{ attention ? t('nightAudit.notReady', { n: attention }) : t('nightAudit.ready') }}
+      </Badge>
+    </template>
+    <template #actions>
+      <Button variant="outline" size="sm" :disabled="busy" data-testid="refresh" @click="load">
+        <RefreshCw :class="busy && 'animate-spin'" />{{ t('common.refresh') }}
+      </Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('nightaudit.run')" class="muted" data-testid="no-access">Your role at this property does not allow running the night audit.</p>
+  <p v-if="pid === null" class="muted">{{ t('nightAudit.selectProperty') }}</p>
+  <p v-else-if="!can('nightaudit.run')" class="muted" data-testid="no-access">{{ t('nightAudit.noAccess') }}</p>
 
   <template v-else>
-    <section v-if="result" class="card" data-testid="result">
-      <h2>Business day {{ result.closed_business_date }} closed</h2>
-      <p>The business date is now <strong data-testid="new-date">{{ result.new_business_date }}</strong>. {{ result.room_charges_posted }} room charge(s) posted.</p>
-      <dl class="summary" data-testid="summary">
-        <div><dt>Occupied</dt><dd>{{ result.summary.rooms.occupied }} of {{ result.summary.rooms.total - result.summary.rooms.out_of_order }} ({{ result.summary.occupancy_percent }}%)</dd></div>
-        <div><dt>Arrivals / departures / no-shows</dt><dd>{{ result.summary.arrivals }} / {{ result.summary.departures }} / {{ result.summary.no_shows }}</dd></div>
-        <div><dt>Room revenue (net)</dt><dd>{{ result.summary.room_revenue.net }}</dd></div>
-        <div><dt>ADR</dt><dd>{{ result.summary.adr }}</dd></div>
-        <div><dt>RevPAR</dt><dd>{{ result.summary.revpar }}</dd></div>
-        <div v-for="m in result.summary.payments_by_method" :key="m.method"><dt>Payments {{ m.method }}</dt><dd>{{ m.net }}</dd></div>
-      </dl>
-    </section>
+    <Card v-if="result" class="mb-4 border-success/40" data-testid="result">
+      <CardHeader class="flex-row items-center gap-3">
+        <CheckCircle2 class="size-6 text-success" aria-hidden="true" />
+        <div>
+          <CardTitle>{{ t('nightAudit.closedTitle', { date: result.closed_business_date }) }}</CardTitle>
+          <p class="m-0 mt-0.5 text-sm text-muted-foreground">
+            {{ t('nightAudit.newDateIs') }} <strong class="text-foreground" data-testid="new-date">{{ result.new_business_date }}</strong>. {{ t('nightAudit.chargesPosted', { n: result.room_charges_posted }) }}
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3" data-testid="summary">
+          <KpiCard
+            :label="t('nightAudit.occupied')"
+            :value="`${result.summary.occupancy_percent}%`"
+            :hint="t('nightAudit.occupiedValue', { occupied: result.summary.rooms.occupied, available: result.summary.rooms.total - result.summary.rooms.out_of_order, pct: result.summary.occupancy_percent })"
+          />
+          <KpiCard :label="t('nightAudit.movements')" :value="`${result.summary.arrivals} / ${result.summary.departures} / ${result.summary.no_shows}`" />
+          <KpiCard :label="t('nightAudit.revenue')" :value="result.summary.room_revenue.net" />
+          <KpiCard :label="t('nightAudit.adr')" :value="result.summary.adr" />
+          <KpiCard :label="t('nightAudit.revpar')" :value="result.summary.revpar" />
+          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="m.net" />
+        </div>
+      </CardContent>
+    </Card>
 
     <template v-if="preview">
-      <section class="card" data-testid="guard">
-        <p v-if="preview.time_guard_ok">The business date can be closed now.</p>
-        <p v-else class="alert warning" data-testid="too-early">
-          The business date cannot be closed before {{ preview.night_audit_allowed_from }}. Property time: {{ preview.property_local_time }}.
+      <StepCard :step="1" :title="t('nightAudit.stepTime')" :state="preview.time_guard_ok ? 'ok' : 'blocked'" data-testid="guard">
+        <p v-if="preview.time_guard_ok" class="m-0 text-sm">{{ t('nightAudit.timeOk') }}</p>
+        <p v-else class="alert warning m-0" data-testid="too-early">
+          {{ t('nightAudit.tooEarly', { from: preview.night_audit_allowed_from, now: preview.property_local_time }) }}
         </p>
-      </section>
+      </StepCard>
 
-      <section class="card" data-testid="arrivals">
-        <h2>1. Unresolved arrivals <span class="muted">({{ arrivals.length }})</span></h2>
-        <p v-if="!arrivals.length" class="muted" data-testid="no-arrivals">Every arrival is checked in or resolved.</p>
+      <StepCard :step="2" :title="t('nightAudit.stepArrivals')" :state="arrivals.length ? 'blocked' : 'ok'" :summary="`(${arrivals.length})`" data-testid="arrivals">
+        <p v-if="!arrivals.length" class="m-0 text-sm text-muted-foreground" data-testid="no-arrivals">{{ t('nightAudit.allArrived') }}</p>
         <template v-else>
-          <p class="muted">Check each one in at <RouterLink to="/arrivals">Arrivals</RouterLink>, or amend or cancel the reservation, or mark the ones that did not come as no-show.</p>
-          <table class="list">
-            <thead><tr><th><input type="checkbox" :checked="allSelected" aria-label="Select all" data-testid="select-all" @change="toggleAll" /></th><th>Reservation</th><th>Guest</th><th>Room</th><th>Arrival</th></tr></thead>
-            <tbody>
-              <tr v-for="a in arrivals" :key="a.reservation_room_id" :data-testid="`arrival-${a.reservation_room_id}`">
-                <td><input v-model="noShow.selected" type="checkbox" :value="a.reservation_room_id" :aria-label="`Select ${a.confirmation_number}`" /></td>
-                <td><RouterLink :to="`/reservations/${a.reservation_id}`">{{ a.confirmation_number }}</RouterLink></td>
-                <td>{{ a.guest }}</td>
-                <td>{{ a.room_type }}<template v-if="a.room"> · {{ a.room }}</template></td>
-                <td>{{ a.arrival_date }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <form v-if="can('nightaudit.no_show')" class="noshow" novalidate data-testid="noshow-form" @submit.prevent="markNoShows">
-            <label class="field grow"><span>Reason</span><input v-model="noShow.reason" name="reason" maxlength="500" /></label>
-            <label class="check"><input v-model="noShow.confirm" type="checkbox" name="confirm" /><span>I confirm these guests did not arrive</span></label>
-            <button type="submit" :disabled="busy || !noShow.selected.length || !noShow.confirm" data-testid="mark-no-shows">Mark {{ noShow.selected.length }} as no-show</button>
+          <p class="mb-3 mt-0 text-sm text-muted-foreground">
+            {{ t('nightAudit.arrivalsHelpBefore') }} <RouterLink to="/arrivals">{{ t('frontDesk.page.arrivals') }}</RouterLink>{{ t('nightAudit.arrivalsHelpAfter') }}
+          </p>
+          <DataTable :columns="arrivalColumns" :rows="arrivals" row-key="reservation_room_id" :row-test-id="(a) => `arrival-${a.reservation_room_id}`">
+            <template #header-select>
+              <input type="checkbox" :checked="allSelected" :aria-label="t('nightAudit.selectAll')" data-testid="select-all" @change="toggleAll" />
+            </template>
+            <template #cell-select="{ row }">
+              <input v-model="noShow.selected" type="checkbox" :value="row.reservation_room_id" :aria-label="t('nightAudit.selectOne', { number: row.confirmation_number })" />
+            </template>
+            <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number }}</RouterLink></template>
+            <template #cell-room_type="{ row }">{{ row.room_type }}<template v-if="row.room"> · {{ row.room }}</template></template>
+          </DataTable>
+          <form v-if="can('nightaudit.no_show')" class="mt-4 flex flex-wrap items-end gap-4" novalidate data-testid="noshow-form" @submit.prevent="markNoShows">
+            <FormField class="min-w-56 flex-1" :label="t('nightAudit.noShowReason')">
+              <template #default="{ id }"><Input :id="id" v-model="noShow.reason" name="reason" maxlength="500" /></template>
+            </FormField>
+            <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="noShow.confirm" type="checkbox" name="confirm" /><span>{{ t('nightAudit.noShowConfirm') }}</span></label>
+            <Button type="submit" variant="outline" :disabled="busy || !noShow.selected.length || !noShow.confirm" data-testid="mark-no-shows">
+              {{ t('nightAudit.markNoShow', { n: noShow.selected.length }) }}
+            </Button>
           </form>
         </template>
-      </section>
+      </StepCard>
 
-      <section class="card" data-testid="departures">
-        <h2>2. Unresolved departures <span class="muted">({{ blockers?.unresolved_departures.length }})</span></h2>
-        <p v-if="!blockers?.unresolved_departures.length" class="muted">Nobody is overdue to leave.</p>
+      <StepCard :step="3" :title="t('nightAudit.stepDepartures')" :state="departures.length ? 'blocked' : 'ok'" :summary="`(${departures.length})`" data-testid="departures">
+        <p v-if="!departures.length" class="m-0 text-sm text-muted-foreground">{{ t('nightAudit.nobodyOverdue') }}</p>
         <template v-else>
-          <p class="muted">Check the guest out, or extend the stay, from the stay page.</p>
-          <table class="list">
-            <thead><tr><th>Stay</th><th>Guest</th><th>Room</th><th>Departure</th></tr></thead>
-            <tbody>
-              <tr v-for="s in blockers.unresolved_departures" :key="s.stay_id" :data-testid="`departure-${s.stay_id}`">
-                <td><RouterLink :to="`/stays/${s.stay_id}`">{{ s.stay_number }}</RouterLink></td>
-                <td>{{ s.guest }}</td><td>{{ s.room || '—' }}</td><td>{{ s.departure_date }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('nightAudit.departuresHelp') }}</p>
+          <DataTable :columns="departureColumns" :rows="departures" row-key="stay_id" :row-test-id="(s) => `departure-${s.stay_id}`">
+            <template #cell-stay_number="{ row }"><RouterLink :to="`/stays/${row.stay_id}`">{{ row.stay_number }}</RouterLink></template>
+            <template #cell-room="{ row }">{{ row.room || '—' }}</template>
+          </DataTable>
         </template>
-      </section>
+      </StepCard>
 
-      <section class="card" data-testid="charges">
-        <h2>3. Room charges</h2>
-        <p data-testid="charge-counts">
-          {{ preview.missing_charges.count }} missing night(s) from earlier days,
-          {{ preview.tonight_charges.count }} night(s) tonight (total {{ preview.tonight_charges.total }}). The run posts them;
-          <RouterLink to="/room-charges">Room charges</RouterLink> posts them beforehand.
+      <StepCard :step="4" :title="t('nightAudit.stepCharges')" :state="chargeIssues ? 'blocked' : 'ok'" data-testid="charges">
+        <p class="m-0 text-sm" data-testid="charge-counts">
+          {{ t('nightAudit.chargeCountsBefore', { missing: preview.missing_charges.count, tonight: preview.tonight_charges.count, total: preview.tonight_charges.total }) }}
+          <RouterLink to="/room-charges">{{ t('nav.items.roomCharges') }}</RouterLink> {{ t('nightAudit.chargeCountsAfter') }}
         </p>
-        <div v-if="blockers?.charge_errors.length" class="alert" data-testid="charge-errors">
-          <strong>{{ blockers.charge_errors.length }} night(s) cannot be charged:</strong>
-          <ul>
+        <div v-if="blockers?.charge_errors.length" class="alert mb-0 mt-3" data-testid="charge-errors">
+          <strong>{{ t('nightAudit.chargeErrors', { n: blockers.charge_errors.length }) }}</strong>
+          <ul class="m-0 mt-1 pl-5">
             <li v-for="c in blockers.charge_errors" :key="`${c.stay_id}-${c.service_date}`">
               <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ c.service_date }}: {{ c.reason }}
             </li>
           </ul>
         </div>
-        <div v-if="blockers?.invalid_charges.length" class="alert" data-testid="invalid-charges">
-          <strong>{{ blockers.invalid_charges.length }} posted night(s) should not exist:</strong>
-          <ul>
+        <div v-if="blockers?.invalid_charges.length" class="alert mb-0 mt-3" data-testid="invalid-charges">
+          <strong>{{ t('nightAudit.invalidCharges', { n: blockers.invalid_charges.length }) }}</strong>
+          <ul class="m-0 mt-1 pl-5">
             <li v-for="c in blockers.invalid_charges" :key="c.folio_item_id">
-              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ c.service_date }} ({{ c.reason }}): reverse it on the folio.
+              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ c.service_date }} ({{ c.reason }}): {{ t('nightAudit.reverseOnFolio') }}
             </li>
           </ul>
         </div>
-      </section>
+      </StepCard>
 
-      <section v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || preview.warnings.blocks_ending.length" class="card" data-testid="warnings">
-        <h2>Warnings <span class="muted">(do not stop the audit)</span></h2>
-        <ul>
-          <li v-for="d in preview.warnings.stale_drafts" :key="d.reservation_room_id">Draft {{ d.confirmation_number }} should have arrived on {{ d.arrival_date }}.</li>
-          <li v-for="f in preview.warnings.open_folios_of_cancelled_reservations" :key="f.folio_id">
-            Folio <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> of {{ f.confirmation_number }} is open with a balance of {{ f.balance }}.
-          </li>
-          <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ b.block_type }} block on room {{ b.room }} ends {{ b.end_date }}.</li>
-        </ul>
-      </section>
+      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || preview.warnings.blocks_ending.length" class="mb-4" data-testid="warnings">
+        <CardHeader><CardTitle>{{ t('nightAudit.warnings') }} <small class="font-normal text-muted-foreground">{{ t('nightAudit.warningsNote') }}</small></CardTitle></CardHeader>
+        <CardContent>
+          <ul class="m-0 pl-5 text-sm">
+            <li v-for="d in preview.warnings.stale_drafts" :key="d.reservation_room_id">{{ t('nightAudit.staleDraft', { number: d.confirmation_number, date: d.arrival_date }) }}</li>
+            <li v-for="f in preview.warnings.open_folios_of_cancelled_reservations" :key="f.folio_id">
+              {{ t('nightAudit.openFolioBefore') }} <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> {{ t('nightAudit.openFolioAfter', { number: f.confirmation_number, balance: f.balance }) }}
+            </li>
+            <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: b.end_date }) }}</li>
+          </ul>
+        </CardContent>
+      </Card>
 
-      <section class="card" data-testid="run">
-        <h2>4. Run</h2>
-        <p v-if="!preview.can_run" class="muted" data-testid="cannot-run">Resolve the items above first.</p>
-        <label class="check"><input v-model="confirmRun" type="checkbox" name="confirm_run" :disabled="!preview.can_run" /><span>Close {{ preview.business_date }} and open the next business date</span></label>
-        <div class="form-actions">
-          <button type="button" class="btn-primary" :disabled="busy || !preview.can_run || !confirmRun" data-testid="run-audit" @click="run">Run night audit</button>
+      <StepCard :step="5" :title="t('nightAudit.stepRun')" :state="preview.can_run ? 'pending' : 'blocked'" data-testid="run">
+        <p v-if="!preview.can_run" class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="cannot-run">{{ t('nightAudit.resolveFirst') }}</p>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="confirmRun" type="checkbox" name="confirm_run" :disabled="!preview.can_run" />
+          <span>{{ t('nightAudit.confirmRun', { date: preview.business_date }) }}</span>
+        </label>
+        <div class="mt-4 flex justify-end">
+          <Button :disabled="busy || !preview.can_run || !confirmRun" data-testid="run-audit" @click="run">{{ t('nightAudit.run') }}</Button>
         </div>
-      </section>
+      </StepCard>
     </template>
   </template>
 </template>
-
-<style scoped>
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.noshow {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-.summary {
-  display: grid;
-  gap: 6px;
-}
-.summary div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.summary dt {
-  color: var(--muted, inherit);
-}
-</style>

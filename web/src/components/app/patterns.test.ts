@@ -9,6 +9,7 @@ import FormField from './FormField.vue'
 import KpiCard from './KpiCard.vue'
 import PageHeader from './PageHeader.vue'
 import StatusBadge from './StatusBadge.vue'
+import StepCard from './StepCard.vue'
 import { knownStatus, statusVariant } from './statusMap'
 
 beforeEach(() => setLocale('en'))
@@ -161,6 +162,17 @@ describe('DataTable', () => {
     expect(plain.emitted('rowClick')).toBeUndefined()
   })
 
+  it('lets a page draw a header cell, for a select-all box', () => {
+    const w = make({}, { 'header-actions': () => h('input', { type: 'checkbox', 'data-testid': 'all' }) })
+    expect(w.find('thead [data-testid=all]').exists()).toBe(true)
+    expect(w.findAll('thead th')[0]!.text()).toBe('Guest') // the other headers keep their label
+  })
+
+  it('gives each row a test id when asked', () => {
+    const w = make({ rowTestId: (r: Row) => `guest-${r.id}` })
+    expect(w.find('[data-testid=guest-2]').exists()).toBe(true)
+  })
+
   it('passes attributes such as data-testid to its root', () => {
     expect(mount(DataTable as never, { props: { columns, rows, rowKey: 'id' }, attrs: { 'data-testid': 'guests' } } as never).attributes('data-testid')).toBe('guests')
   })
@@ -206,5 +218,21 @@ describe('EmptyState and KpiCard', () => {
     expect(w.get('[data-slot=kpi-value]').text()).toBe('66.67%')
     expect(w.get('[data-slot=kpi-value]').classes()).toContain('text-warning')
     expect(w.text()).toContain('6 of 9 rooms')
+  })
+})
+
+describe('StepCard', () => {
+  it('shows the number, the title and the state of a step', () => {
+    const w = mount(StepCard, { props: { step: 2, title: 'Unresolved arrivals', state: 'blocked', summary: '(3)' }, slots: { default: '<p data-testid="body">Check them in</p>' } })
+    expect(w.text()).toContain('2. Unresolved arrivals')
+    expect(w.text()).toContain('(3)')
+    expect(w.attributes('data-state')).toBe('blocked')
+    expect(w.find('[data-testid=body]').exists()).toBe(true)
+  })
+
+  it('has no body when there is nothing in the slot', () => {
+    const w = mount(StepCard, { props: { step: 1, title: 'Time', state: 'ok' } })
+    expect(w.attributes('data-state')).toBe('ok')
+    expect(w.find('[data-slot=card-content]').exists()).toBe(false)
   })
 })
