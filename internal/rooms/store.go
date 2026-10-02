@@ -14,6 +14,10 @@ func errRoomTypeNotFound() *apperr.Error {
 	return apperr.NotFound("ROOM_TYPE_NOT_FOUND", "the room type does not exist in this property")
 }
 
+func errBedTypeNotFound() *apperr.Error {
+	return apperr.NotFound("BED_TYPE_NOT_FOUND", "the bed type does not exist in this property")
+}
+
 func errRoomNotFound() *apperr.Error {
 	return apperr.NotFound("ROOM_NOT_FOUND", "the room does not exist in this property")
 }
@@ -44,8 +48,12 @@ func toRoomType(r roomsdb.RoomType) RoomType {
 func toRoom(r roomsdb.Room) Room {
 	return Room{
 		ID: r.ID, RoomTypeID: r.RoomTypeID, RoomNumber: r.RoomNumber, Floor: deref(r.Floor), Building: deref(r.Building),
-		IsActive: r.IsActive, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		BedTypeID: r.BedTypeID, IsActive: r.IsActive, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+func toBedType(b roomsdb.BedType) BedType {
+	return BedType{ID: b.ID, Code: b.Code, Name: b.Name, SortOrder: b.SortOrder, IsActive: b.IsActive, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt}
 }
 
 func toBlock(b roomsdb.RoomBlock) RoomBlock {

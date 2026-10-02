@@ -62,6 +62,7 @@ type ReservationRoom struct {
 	CreatedBy          *int64
 	UpdatedAt          time.Time
 	UpdatedBy          *int64
+	RequestedBedTypeID *int64
 }
 
 type ReservationRoomRate struct {

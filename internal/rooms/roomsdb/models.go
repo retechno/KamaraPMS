@@ -10,6 +10,20 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+type BedType struct {
+	ID         int64
+	TenantID   int64
+	PropertyID int64
+	Code       string
+	Name       string
+	SortOrder  int32
+	IsActive   bool
+	CreatedAt  time.Time
+	CreatedBy  *int64
+	UpdatedAt  time.Time
+	UpdatedBy  *int64
+}
+
 type Room struct {
 	ID         int64
 	TenantID   int64
@@ -23,6 +37,7 @@ type Room struct {
 	CreatedBy  *int64
 	UpdatedAt  time.Time
 	UpdatedBy  *int64
+	BedTypeID  *int64
 }
 
 type RoomBlock struct {
