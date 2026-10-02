@@ -732,3 +732,23 @@ func TestLedgerIsAppendOnlyAndConstrained(t *testing.T) {
 	}
 	_ = civil.Date{}
 }
+
+// A refund may leave by another method than the payment came in by: a bank transfer refunded in cash. The cap is
+// still the payment's amount, whatever the method.
+func TestRefundByAnotherMethod(t *testing.T) {
+	f := setup(t)
+	pay := f.payment(t, "p1", "100000")
+	res, err := f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m1", folios.RefundInput{
+		Amount: "30000", PaymentMethod: "BANK_TRANSFER", ReferenceNumber: "TRF-9", Reason: "goodwill", Approval: f.approval()})
+	must(t, err)
+	if res.Payment.PaymentMethod != "BANK_TRANSFER" || res.Payment.ReferenceNumber != "TRF-9" {
+		t.Fatalf("refund: %+v", res.Payment)
+	}
+	e := code(t, mustErr2(f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m2", folios.RefundInput{
+		Amount: "80000", PaymentMethod: "OTHER", Reason: "x", Approval: f.approval()})), "REFUND_EXCEEDS_PAYMENT")
+	if e.Context["refundable"] != "70000" {
+		t.Fatalf("context: %v", e.Context)
+	}
+	wantCode(t, mustErr2(f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, "m3", folios.RefundInput{
+		Amount: "1", PaymentMethod: "BITCOIN", Reason: "x", Approval: f.approval()})), "VALIDATION_FAILED")
+}

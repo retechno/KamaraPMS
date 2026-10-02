@@ -36,7 +36,7 @@ type Pending =
   | { kind: 'void'; item: FolioItem }
   | { kind: 'refund'; item: FolioItem }
 const pending = ref<Pending | null>(null)
-const correction = reactive({ reason: '', amount: '' })
+const correction = reactive({ reason: '', amount: '', method: '', reference: '' })
 const approving = ref(false)
 // One key per attempt; it is kept while a request may have been lost and renewed once the server has answered.
 const keys: Record<string, string> = {}
@@ -149,6 +149,8 @@ function startCorrection(kind: 'reverse' | 'void' | 'refund', item: FolioItem): 
   pending.value = { kind, item }
   correction.reason = ''
   correction.amount = kind === 'refund' ? item.credit : ''
+  correction.method = ''
+  correction.reference = ''
   dialogError.value = null
   approving.value = false
   error.value = null
@@ -183,7 +185,13 @@ async function approve(approval: Approval): Promise<void> {
     } else {
       await api.POST('/api/v1/properties/{propertyId}/payments/{id}/refunds', {
         params: { path: { propertyId, id: p.item.payment_id as number }, header: { 'Idempotency-Key': keyFor(`refund-${p.item.id}`) } },
-        body: { amount: correction.amount, reason: correction.reason, approval },
+        body: {
+          amount: correction.amount,
+          reason: correction.reason,
+          approval,
+          ...(correction.method ? { payment_method: correction.method as PaymentMethod } : {}),
+          ...(correction.reference.trim() ? { reference_number: correction.reference.trim() } : {}),
+        },
       })
       delete keys[`refund-${p.item.id}`]
       notice.value = 'Refund posted.'
@@ -295,6 +303,18 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <label v-if="pending.kind === 'refund'" class="field">
           <span>Amount</span>
           <input v-model="correction.amount" name="refund_amount" inputmode="decimal" />
+        </label>
+        <label v-if="pending.kind === 'refund'" class="field">
+          <span>Refund by</span>
+          <select v-model="correction.method" name="refund_method" data-testid="refund-method">
+            <option value="">Same method as the payment</option>
+            <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <small class="muted">The money can leave by another method than it came in, e.g. cash for a bank transfer. The day close books it to the account of the method chosen.</small>
+        </label>
+        <label v-if="pending.kind === 'refund'" class="field">
+          <span>Reference (optional)</span>
+          <input v-model="correction.reference" name="refund_reference" maxlength="100" />
         </label>
         <label class="field">
           <span>Reason</span>

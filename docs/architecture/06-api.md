@@ -495,7 +495,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `{P}/payments/{id}/refunds`** ⓘ (`payment.refund`)
 - **Request:** `{ amount, payment_method?, reference_number?, reason, approval }`
-- **Rules:** `amount ≤ refundable`.
+- **Rules:** `amount ≤ refundable`. `payment_method` defaults to the original payment's but may differ (a bank transfer refunded in cash, or the other way round); the cashier totals and the day close journal follow the refund's own method, so the money is booked to that method's account. The folio screen offers the choice.
 - **TX:** `T[L1 share, L4 folio → original payment, L5]`
 
 **GET `{P}/payments?business_date&method`** (`folio.read`)

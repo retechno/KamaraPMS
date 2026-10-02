@@ -153,6 +153,8 @@ describe('FolioView', () => {
     await w.get('[data-testid=refund-2]').trigger('click')
     expect((w.get('input[name=refund_amount]').element as HTMLInputElement).value).toBe('100000')
     await w.get('input[name=refund_amount]').setValue('30000')
+    await w.get('select[name=refund_method]').setValue('CASH')
+    await w.get('input[name=refund_reference]').setValue('KW-1')
     await w.get('input[name=reason]').setValue('goodwill')
     await w.get('form[data-testid=correction-form]').trigger('submit')
     await w.get('input[name=approval_password]').setValue('pw')
@@ -162,7 +164,7 @@ describe('FolioView', () => {
     expect(path).toBe('/api/v1/properties/{propertyId}/payments/{id}/refunds')
     expect(init.params.path.id).toBe(7) // the payment, not the ledger item
     expect(init.params.header['Idempotency-Key']).toBeTruthy()
-    expect(init.body).toMatchObject({ amount: '30000', reason: 'goodwill' })
+    expect(init.body).toMatchObject({ amount: '30000', reason: 'goodwill', payment_method: 'CASH', reference_number: 'KW-1' })
   })
 
   it('posts an adjustment through the approval dialog', async () => {
