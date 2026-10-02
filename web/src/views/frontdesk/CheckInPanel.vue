@@ -4,6 +4,11 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, FreeRoom, RoomType } from '@/api/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import FormField from '@/components/app/FormField.vue'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
@@ -89,56 +94,57 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="card panel" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
-    <h2>Check in {{ arrival.guest_name || arrival.confirmation_number }} · {{ arrival.room_type_code }}</h2>
+  <form class="flex flex-col gap-4" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
     <p v-if="error" class="alert" role="alert" data-testid="checkin-error">{{ error.message }} <code>{{ error.code }}</code></p>
-    <p v-if="arrival.guest_id === null" class="alert" data-testid="no-guest">The reservation has no guest yet: open it and set the booker first.</p>
+    <p v-if="arrival.guest_id === null" class="alert" data-testid="no-guest">{{ t('frontDesk.checkIn.noGuest') }}</p>
 
-    <div class="form-grid">
-      <label class="field">
-        <span>Room type</span>
-        <select v-model.number="typeId" name="room_type" @change="loadRooms">
-          <option v-for="t in activeTypes" :key="t.id" :value="t.id">{{ t.code }}{{ t.id === arrival.room_type_id ? ' (booked)' : ' (upgrade)' }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Room</span>
-        <select v-model.number="roomId" name="room" :disabled="!rooms.length">
-          <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : ' (not ready)' }}</option>
-        </select>
-        <small v-if="!rooms.length" class="muted" data-testid="no-rooms">No free room of this type for the stay.</small>
-        <small v-if="fieldError('room_id')" class="error-text">{{ fieldError('room_id') }}</small>
-      </label>
-      <label class="field">
-        <span>Adults</span>
-        <input v-model.number="form.adults" name="adults" type="number" min="1" :aria-invalid="!!fieldError('adult_count')" />
-        <small v-if="fieldError('adult_count')" class="error-text">{{ fieldError('adult_count') }}</small>
-      </label>
-      <label class="field">
-        <span>Children</span>
-        <input v-model.number="form.children" name="children" type="number" min="0" />
-      </label>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <FormField :label="t('frontDesk.checkIn.roomType')">
+        <template #default="{ id }">
+          <NativeSelect :id="id" v-model.number="typeId" name="room_type" @change="loadRooms">
+            <option v-for="ty in activeTypes" :key="ty.id" :value="ty.id">{{ ty.code }} {{ ty.id === arrival.room_type_id ? t('frontDesk.checkIn.booked') : t('frontDesk.checkIn.upgrade') }}</option>
+          </NativeSelect>
+        </template>
+      </FormField>
+      <FormField :label="t('frontDesk.checkIn.room')" :error="fieldError('room_id')">
+        <template #default="{ id, invalid }">
+          <NativeSelect :id="id" v-model.number="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
+            <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}` }}</option>
+          </NativeSelect>
+          <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('frontDesk.checkIn.noFreeRoom') }}</small>
+        </template>
+      </FormField>
+      <FormField :label="t('frontDesk.checkIn.adults')" :error="fieldError('adult_count')">
+        <template #default="{ id, invalid }">
+          <Input :id="id" v-model.number="form.adults" name="adults" type="number" min="1" :aria-invalid="invalid" />
+        </template>
+      </FormField>
+      <FormField :label="t('frontDesk.checkIn.children')">
+        <template #default="{ id }">
+          <Input :id="id" v-model.number="form.children" name="children" type="number" min="0" />
+        </template>
+      </FormField>
     </div>
-    <p v-if="isUpgrade" class="muted" data-testid="upgrade-note">A room of another type is an upgrade and needs the upgrade permission.</p>
+    <p v-if="isUpgrade" class="m-0 text-sm text-muted-foreground" data-testid="upgrade-note">{{ t('frontDesk.checkIn.upgradeNote') }}</p>
 
-    <div v-if="notReady" class="alert warning" data-testid="not-ready">
-      Room {{ selected?.room_number }} is {{ selected?.housekeeping_status }}; {{ requiresInspection ? 'an inspected' : 'a clean or inspected' }} room is needed.
+    <div v-if="notReady" class="alert warning m-0" data-testid="not-ready">
+      {{ t('frontDesk.checkIn.notReady', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '', need: requiresInspection ? t('frontDesk.checkIn.needInspected') : t('frontDesk.checkIn.needClean') }) }}
       <template v-if="canOverride">
-        <label class="check">
+        <label class="mt-2 flex items-center gap-2 text-sm">
           <input v-model="form.override" type="checkbox" name="override" />
-          <span>Check in anyway</span>
+          <span>{{ t('frontDesk.checkIn.anyway') }}</span>
         </label>
-        <label v-if="form.override" class="field">
-          <span>Reason</span>
-          <input v-model="form.reason" name="override_reason" maxlength="500" :aria-invalid="!!fieldError('override_reason')" />
-          <small v-if="fieldError('override_reason')" class="error-text">{{ fieldError('override_reason') }}</small>
-        </label>
+        <FormField v-if="form.override" class="mt-2" :label="t('frontDesk.checkIn.reason')" :error="fieldError('override_reason')">
+          <template #default="{ id, invalid }">
+            <Input :id="id" v-model="form.reason" name="override_reason" maxlength="500" :aria-invalid="invalid" />
+          </template>
+        </FormField>
       </template>
     </div>
 
-    <div class="form-actions">
-      <button type="button" @click="emit('cancel')">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="busy || roomId === null || arrival.guest_id === null || (notReady && !form.override)" data-testid="checkin-submit">Check in</button>
+    <div class="flex justify-end gap-2">
+      <Button type="button" variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button type="submit" :disabled="busy || roomId === null || arrival.guest_id === null || (notReady && !form.override)" data-testid="checkin-submit">{{ t('frontDesk.checkIn.submit') }}</Button>
     </div>
   </form>
 </template>

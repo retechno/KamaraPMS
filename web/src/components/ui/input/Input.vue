@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ class?: HTMLAttributes['class'] }>()
-const model = defineModel<string | number>()
+const model = defineModel<string | number | null>()
 </script>
 
 <template>

@@ -34,8 +34,10 @@ const props = withDefaults(
     clickable?: boolean
     /** A caption for screen readers. */
     caption?: string
+    /** A `data-testid` for each row. */
+    rowTestId?: (row: T) => string
   }>(),
-  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '' },
+  { loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined },
 )
 const emit = defineEmits<{ rowClick: [row: T] }>()
 defineOptions({ inheritAttrs: false })
@@ -126,6 +128,7 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
           <tr
             v-for="row in sorted"
             :key="keyOf(row)"
+            :data-testid="rowTestId?.(row)"
             :tabindex="clickable ? 0 : undefined"
             :class="cn('border-b border-border hover:bg-accent/50', clickable && 'cursor-pointer')"
             @click="clickable && emit('rowClick', row)"

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 // A styled native select: it opens the system picker, which is what a touch screen wants. Options go in the slot.
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ class?: HTMLAttributes['class'] }>()
-const model = defineModel<string | number>()
+const model = defineModel<string | number | null>()
 </script>
 
 <template>

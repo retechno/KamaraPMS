@@ -125,10 +125,10 @@ export const router = createRouter({
     { path: '/reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reports' } },
     { path: '/room-charges', name: 'room-charges', component: () => import('@/views/billing/RoomChargesView.vue'), meta: { title: 'Room charges' } },
     { path: '/cashier', name: 'cashier', component: () => import('@/views/billing/CashierView.vue'), meta: { title: 'Cashier' } },
-    { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/ArrivalsView.vue'), meta: { title: 'Arrivals' } },
+    { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/FrontDeskView.vue'), props: { tab: 'arrivals' }, meta: { title: 'Arrivals' } },
     { path: '/walk-in', name: 'walk-in', component: () => import('@/views/frontdesk/WalkInView.vue'), meta: { title: 'Walk-in' } },
-    { path: '/in-house', name: 'in-house', component: () => import('@/views/frontdesk/InHouseView.vue'), meta: { title: 'In-house' } },
-    { path: '/departures', name: 'departures', component: () => import('@/views/frontdesk/DeparturesView.vue'), meta: { title: 'Departures' } },
+    { path: '/in-house', name: 'in-house', component: () => import('@/views/frontdesk/FrontDeskView.vue'), props: { tab: 'in-house' }, meta: { title: 'In-house' } },
+    { path: '/departures', name: 'departures', component: () => import('@/views/frontdesk/FrontDeskView.vue'), props: { tab: 'departures' }, meta: { title: 'Departures' } },
     {
       path: '/stays/:id(\\d+)',
       name: 'stay',

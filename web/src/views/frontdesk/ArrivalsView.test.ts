@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
@@ -38,7 +38,22 @@ function mountView(permissions = ['reservation.read', 'frontdesk.checkin'], arri
   POST = vi.fn().mockResolvedValue({ data: { stay: { id: 55 } } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   const push = vi.spyOn(router, 'push')
-  return { w: mount(ArrivalsView, { global: { plugins: [pinia, router] } }), push }
+  const w = mount(ArrivalsView, { attachTo: document.body, global: { plugins: [pinia, router] } })
+  mounted.push(w)
+  return { w, push }
+}
+
+// The check-in form is in a side sheet, rendered in a portal: it is found in the document, not in the wrapper.
+const mounted: VueWrapper[] = []
+const panel = (sel: string) => {
+  const el = document.body.querySelector(sel)
+  if (!el) throw new Error(`nothing in the sheet matches ${sel}`)
+  return new DOMWrapper(el)
+}
+const inSheet = (sel: string) => document.body.querySelector(sel) !== null
+const reset = () => {
+  while (mounted.length) mounted.pop()!.unmount()
+  document.body.innerHTML = ''
 }
 
 describe('ArrivalsView and the check-in panel', () => {
@@ -46,12 +61,12 @@ describe('ArrivalsView and the check-in panel', () => {
     GET = vi.fn()
     POST = vi.fn()
   })
+  afterEach(reset)
 
   it('lists today\'s arrivals', async () => {
     const { w } = mountView()
     await flushPromises()
     expect(w.get('[data-testid=arrival-4]').text()).toContain('Siti Nurhaliza')
-    expect(w.find('[data-testid=walk-in]').exists()).toBe(true)
     const empty = mountView(undefined, [])
     await flushPromises()
     expect(empty.w.get('[data-testid=empty]').text()).toContain('No one')
@@ -63,8 +78,8 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    expect(w.get('select[name=room]').findAll('option')[0]?.text()).toBe('301 · INSPECTED')
-    expect(w.find('[data-testid=not-ready]').exists()).toBe(false)
+    expect(panel('select[name=room]').findAll('option')[0]?.text()).toBe('301 · INSPECTED')
+    expect(inSheet('[data-testid=not-ready]')).toBe(false)
   })
 
   it('needs read permission and hides check-in without frontdesk.checkin', async () => {
@@ -74,7 +89,6 @@ describe('ArrivalsView and the check-in panel', () => {
     const reader = mountView(['reservation.read'])
     await flushPromises()
     expect(reader.w.find('[data-testid=open-4]').exists()).toBe(false)
-    expect(reader.w.find('[data-testid=walk-in]').exists()).toBe(false)
   })
 
   it('offers free rooms with their status, and checks a ready room in with an Idempotency-Key', async () => {
@@ -83,14 +97,14 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
     expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/availability/rooms', { params: { path: { propertyId: 7 }, query: { room_type_id: 10, arrival: '2026-09-30', departure: '2026-10-02' } } }])
-    const options = w.get('select[name=room]').findAll('option').map((o) => o.text())
+    const options = panel('select[name=room]').findAll('option').map((o) => o.text())
     expect(options).toEqual(['101 · DIRTY (not ready)', '102 · CLEAN'])
     // the first room is dirty: the button is off until a ready room is chosen
-    expect(w.get('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
-    expect(w.get('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
-    await w.get('select[name=room]').setValue(22)
-    expect(w.find('[data-testid=not-ready]').exists()).toBe(false)
-    await w.get('form[data-testid=checkin-4]').trigger('submit')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
+    expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
+    await panel('select[name=room]').setValue(22)
+    expect(inSheet('[data-testid=not-ready]')).toBe(false)
+    await panel('form[data-testid=checkin-4]').trigger('submit')
     await flushPromises()
     const [path, init] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: object }]
     expect(path).toBe('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/check-in')
@@ -104,15 +118,16 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    expect(w.find('input[name=override]').exists()).toBe(false) // no frontdesk.checkin_unready_room
+    expect(inSheet('input[name=override]')).toBe(false) // no frontdesk.checkin_unready_room
+    reset()
 
     const sup = mountView(['reservation.read', 'frontdesk.checkin', 'frontdesk.checkin_unready_room'])
     await flushPromises()
     await sup.w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    await sup.w.get('input[name=override]').setValue(true)
-    await sup.w.get('input[name=override_reason]').setValue('guest waiting')
-    await sup.w.get('form[data-testid=checkin-4]').trigger('submit')
+    await panel('input[name=override]').setValue(true)
+    await panel('input[name=override_reason]').setValue('guest waiting')
+    await panel('form[data-testid=checkin-4]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { room_id: 21, override_room_not_ready: true, override_reason: 'guest waiting' } })
   })
@@ -122,8 +137,8 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    await w.get('select[name=room]').setValue(22)
-    expect(w.get('[data-testid=not-ready]').text()).toContain('an inspected room is needed')
+    await panel('select[name=room]').setValue(22)
+    expect(panel('[data-testid=not-ready]').text()).toContain('an inspected room is needed')
   })
 
   it('shows the server error and stays open', async () => {
@@ -131,11 +146,11 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    await w.get('select[name=room]').setValue(22)
+    await panel('select[name=room]').setValue(22)
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ROOM_OCCUPIED', detail: 'the room is occupied' }))
-    await w.get('form[data-testid=checkin-4]').trigger('submit')
+    await panel('form[data-testid=checkin-4]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=checkin-error]').text()).toContain('ROOM_OCCUPIED')
+    expect(panel('[data-testid=checkin-error]').text()).toContain('ROOM_OCCUPIED')
     expect(push).not.toHaveBeenCalled()
   })
 
@@ -144,8 +159,8 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    expect(w.find('[data-testid=no-guest]').exists()).toBe(true)
-    expect(w.get('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
+    expect(inSheet('[data-testid=no-guest]')).toBe(true)
+    expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
   })
 
   it('offers the assigned room even though the line holds it, and marks another type as an upgrade', async () => {
@@ -154,9 +169,9 @@ describe('ArrivalsView and the check-in panel', () => {
     GET.mockImplementation(async (path: string) => (path.endsWith('/availability/rooms') ? { data: { data: [{ room_id: 22, room_number: '102', housekeeping_status: 'CLEAN' }] } } : path.endsWith('/room-types') ? { data: { data: types } } : { data: { data: [arrival({ room_id: 21, room_number: '101' })] } }))
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    expect(w.get('select[name=room]').findAll('option').map((o) => o.text())[0]).toContain('101')
-    await w.get('select[name=room_type]').setValue(11)
+    expect(panel('select[name=room]').findAll('option').map((o) => o.text())[0]).toContain('101')
+    await panel('select[name=room_type]').setValue(11)
     await flushPromises()
-    expect(w.find('[data-testid=upgrade-note]').exists()).toBe(true)
+    expect(inSheet('[data-testid=upgrade-note]')).toBe(true)
   })
 })

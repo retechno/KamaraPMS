@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import CheckInPanel from './CheckInPanel.vue'
+
+/**
+ * The arrivals tab of the front desk: the rooms due today and, from "Check in", a side sheet with the check-in form,
+ * so the list stays in view. The page header and the tabs belong to FrontDeskView.
+ */
+const emit = defineEmits<{ loaded: [count: number] }>()
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -19,7 +31,23 @@ const loaded = ref(false)
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canCheckIn = computed(() => auth.can('frontdesk.checkin', property.currentId))
-const businessDate = computed(() => property.clock?.business_date ?? '')
+const current = computed(() => rows.value.find((a) => a.reservation_room_id === open.value) ?? null)
+const sheetOpen = computed({
+  get: () => open.value !== null,
+  set: (v: boolean) => {
+    if (!v) open.value = null
+  },
+})
+
+const columns = computed<Column<Arrival>[]>(() => [
+  { key: 'confirmation_number', label: t('frontDesk.page.confirmation'), sortable: true },
+  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
+  { key: 'room_type_code', label: t('frontDesk.page.roomType'), sortable: true },
+  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
+  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true },
+  { key: 'party', label: t('frontDesk.page.party') },
+  { key: 'actions', label: '', align: 'right' },
+])
 
 async function load(): Promise<void> {
   const propertyId = property.currentId
@@ -29,6 +57,7 @@ async function load(): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/arrivals', { params: { path: { propertyId }, query: {} } })
     rows.value = data?.data ?? []
     loaded.value = true
+    emit('loaded', rows.value.length)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -48,60 +77,51 @@ watch(() => property.currentId, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Arrivals <span class="muted">{{ businessDate }}</span></h1>
-    <RouterLink v-if="canCheckIn" to="/walk-in" class="btn-primary" data-testid="walk-in">Walk-in</RouterLink>
-  </div>
-
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property does not allow viewing arrivals.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('frontDesk.page.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessArrivals') }}</p>
 
   <template v-else>
-    <section class="card">
-      <p v-if="loaded && !rows.length" class="muted" data-testid="empty">No one is due to arrive.</p>
-      <table v-else-if="rows.length" class="list">
-        <thead><tr><th>Confirmation</th><th>Guest</th><th>Room type</th><th>Room</th><th>Departure</th><th>Party</th><th /></tr></thead>
-        <tbody>
-          <template v-for="a in rows" :key="a.reservation_room_id">
-            <tr :data-testid="`arrival-${a.reservation_room_id}`">
-              <td><RouterLink :to="`/reservations/${a.reservation_id}`">{{ a.confirmation_number }}</RouterLink></td>
-              <td>{{ a.guest_name || '—' }}</td>
-              <td>{{ a.room_type_code }}</td>
-              <td>{{ a.room_number || '—' }}</td>
-              <td>{{ a.departure_date }}</td>
-              <td>{{ a.adult_count }}+{{ a.child_count }}</td>
-              <td><button v-if="canCheckIn" type="button" :data-testid="`open-${a.reservation_room_id}`" @click="open = open === a.reservation_room_id ? null : a.reservation_room_id">Check in</button></td>
-            </tr>
-            <tr v-if="open === a.reservation_room_id" class="panel-row">
-              <td colspan="7"><CheckInPanel :arrival="a" @done="checkedIn" @cancel="open = null" /></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </section>
+    <DataTable
+      :columns="columns"
+      :rows="rows"
+      row-key="reservation_room_id"
+      :loading="!loaded"
+      :row-test-id="(a) => `arrival-${a.reservation_room_id}`"
+      :caption="t('frontDesk.page.arrivals')"
+    >
+      <template #cell-confirmation_number="{ row }">
+        <RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number }}</RouterLink>
+      </template>
+      <template #cell-guest_name="{ row }">{{ row.guest_name || '—' }}</template>
+      <template #cell-room_number="{ row }">
+        <span v-if="row.room_number" class="inline-flex items-center gap-1.5">
+          {{ row.room_number }}
+          <StatusBadge v-if="row.housekeeping_status" domain="housekeeping" :status="row.housekeeping_status" />
+        </span>
+        <template v-else>—</template>
+      </template>
+      <template #cell-party="{ row }">{{ row.adult_count }}+{{ row.child_count }}</template>
+      <template #cell-actions="{ row }">
+        <Button v-if="canCheckIn" size="sm" :data-testid="`open-${row.reservation_room_id}`" @click="open = open === row.reservation_room_id ? null : row.reservation_room_id">
+          {{ t('frontDesk.page.checkIn') }}
+        </Button>
+      </template>
+      <template #empty>
+        <EmptyState :title="t('frontDesk.page.noArrivals')" data-testid="empty" />
+      </template>
+    </DataTable>
+
+    <Sheet v-model:open="sheetOpen">
+      <SheetContent v-if="current" class="p-6" data-testid="checkin-sheet">
+        <SheetTitle class="text-lg">
+          {{ t('frontDesk.checkIn.title', { guest: current.guest_name || current.confirmation_number, type: current.room_type_code }) }}
+        </SheetTitle>
+        <SheetDescription class="mt-1">
+          {{ t('frontDesk.checkIn.subtitle', { confirmation: current.confirmation_number, arrival: current.arrival_date, departure: current.departure_date }) }}
+        </SheetDescription>
+        <CheckInPanel :key="current.reservation_room_id" :arrival="current" class="mt-4" @done="checkedIn" @cancel="open = null" />
+      </SheetContent>
+    </Sheet>
   </template>
 </template>
-
-<style scoped>
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.panel-row td {
-  padding: 0;
-  border: 0;
-}
-.btn-primary {
-  padding: 6px 14px;
-  border-radius: 8px;
-  text-decoration: none;
-}
-</style>
