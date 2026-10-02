@@ -1,4 +1,5 @@
 import { api } from '@/api/client'
+import { formatMoney } from '@/utils/format'
 
 /** Downloads a report as CSV: the same request with `format=csv`, saved as a file. */
 export async function downloadCsv(path: string, params: { path: object; query?: Record<string, unknown> }, filename: string): Promise<void> {
@@ -15,5 +16,5 @@ export async function downloadCsv(path: string, params: { path: object; query?: 
 /** Zero amounts are shown as a dash so the columns of a statement stay readable. */
 export function money(v: string | undefined): string {
   if (v === undefined || v === '' || Number(v) === 0) return '–'
-  return v
+  return formatMoney(v)
 }

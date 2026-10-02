@@ -28,18 +28,18 @@ type TaxRow = TaxFilingLiability['taxes'][number]
 type AccountRow = TaxFilingLiability['accounts'][number]
 const columns = computed<Column<TaxRow>[]>(() => [
   { key: 'tax', label: t('taxLiability.tax') },
-  { key: 'collected', label: t('taxLiability.collected'), align: 'right' },
-  { key: 'filed', label: t('taxLiability.onReturns'), align: 'right' },
-  { key: 'unfiled', label: t('taxLiability.unfiled'), align: 'right' },
-  { key: 'paid', label: t('taxLiability.paid'), align: 'right' },
-  { key: 'owed', label: t('taxLiability.owed'), align: 'right' },
+  { key: 'collected', label: t('taxLiability.collected'), align: 'right', format: 'money' as const },
+  { key: 'filed', label: t('taxLiability.onReturns'), align: 'right', format: 'money' as const },
+  { key: 'unfiled', label: t('taxLiability.unfiled'), align: 'right', format: 'money' as const },
+  { key: 'paid', label: t('taxLiability.paid'), align: 'right', format: 'money' as const },
+  { key: 'owed', label: t('taxLiability.owed'), align: 'right', format: 'money' as const },
   { key: 'overdue', label: t('taxLiability.overdue') },
 ])
 const accountColumns = computed<Column<AccountRow>[]>(() => [
   { key: 'account_code', label: t('taxLiability.payableAccount') },
-  { key: 'books', label: t('taxLiability.books'), align: 'right' },
-  { key: 'owed', label: t('taxLiability.taxesSay'), align: 'right' },
-  { key: 'difference', label: t('taxLiability.difference'), align: 'right' },
+  { key: 'books', label: t('taxLiability.books'), align: 'right', format: 'money' as const },
+  { key: 'owed', label: t('taxLiability.taxesSay'), align: 'right', format: 'money' as const },
+  { key: 'difference', label: t('taxLiability.difference'), align: 'right', format: 'money' as const },
 ])
 
 const pid = computed(() => property.currentId)
@@ -83,17 +83,17 @@ watch(() => pid.value, () => {
       <template v-else>
         <Card class="mb-4">
           <CardContent class="pt-4">
-            <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="owed-total">{{ t('taxLiability.owedTotal', { date: report.as_of }) }} <b>{{ report.owed }}</b></p>
+            <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="owed-total">{{ t('taxLiability.owedTotal', { date: $date(report.as_of) }) }} <b>{{ $money(report.owed) }}</b></p>
             <DataTable :columns="columns" :rows="report.taxes" row-key="tax_id" :row-test-id="(x) => `tax-${x.tax_code}`" :caption="t('taxLiability.title')" data-testid="taxes">
               <template #cell-tax="{ row }">
                 <RouterLink :to="{ path: '/tax/returns', query: { tax: String(row.tax_id) } }" class="text-primary hover:underline">{{ row.tax_code }}</RouterLink>
                 <small class="text-muted-foreground"> · {{ row.authority }} · {{ t('taxLiability.account', { code: row.account_code }) }}</small>
               </template>
               <template #cell-unfiled="{ row }">{{ money(row.unfiled) }}</template>
-              <template #cell-owed="{ row }"><b>{{ row.owed }}</b></template>
+              <template #cell-owed="{ row }"><b>{{ $money(row.owed) }}</b></template>
               <template #cell-overdue="{ row }">
                 <span v-if="row.overdue_unfiled_months" class="mr-2 text-destructive" data-testid="overdue-unfiled">{{ t('taxLiability.monthsNotFiled', { n: row.overdue_unfiled_months }) }}</span>
-                <span v-if="Number(row.overdue_unpaid)" class="text-destructive" data-testid="overdue-unpaid">{{ t('taxLiability.unpaid', { amount: row.overdue_unpaid }) }}</span>
+                <span v-if="Number(row.overdue_unpaid)" class="text-destructive" data-testid="overdue-unpaid">{{ t('taxLiability.unpaid', { amount: $money(row.overdue_unpaid) }) }}</span>
               </template>
             </DataTable>
           </CardContent>

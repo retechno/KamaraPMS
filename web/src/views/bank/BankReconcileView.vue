@@ -40,23 +40,23 @@ const reopening = ref<{ reason: string; asking: boolean } | null>(null)
 type StatementLine = BankStatementDetail['lines'][number]
 const lineColumns = computed<Column<StatementLine>[]>(() => [
   ...(editable.value ? [{ key: 'pick', label: '' }] : []),
-  { key: 'line_date', label: t('reconcile.date') },
+  { key: 'line_date', label: t('reconcile.date'), format: 'date' as const },
   { key: 'description', label: t('reconcile.detail') },
-  { key: 'amount', label: t('reconcile.amount'), align: 'right' as const },
+  { key: 'amount', label: t('reconcile.amount'), align: 'right' as const, format: 'money' as const },
   { key: 'clearings', label: t('reconcile.matchedWith') },
 ])
 const unclearedColumns = computed<Column<UnclearedLine>[]>(() => [
   ...(editable.value ? [{ key: 'pick', label: '' }] : []),
-  { key: 'journal_date', label: t('reconcile.date') },
+  { key: 'journal_date', label: t('reconcile.date'), format: 'date' as const },
   { key: 'journal_number', label: t('reconcile.journal') },
   { key: 'description', label: t('reconcile.detail') },
-  { key: 'remaining', label: t('reconcile.left'), align: 'right' as const },
+  { key: 'remaining', label: t('reconcile.left'), align: 'right' as const, format: 'money' as const },
 ])
 const settleColumns = computed<Column<UnclearedLine>[]>(() => [
   { key: 'pick', label: '' },
-  { key: 'journal_date', label: t('reconcile.date') },
+  { key: 'journal_date', label: t('reconcile.date'), format: 'date' as const },
   { key: 'description', label: t('reconcile.detail') },
-  { key: 'amount', label: t('reconcile.amount'), align: 'right' as const },
+  { key: 'amount', label: t('reconcile.amount'), align: 'right' as const, format: 'money' as const },
 ])
 
 const pid = computed(() => property.currentId)
@@ -262,12 +262,12 @@ watch([() => pid.value, sid], () => {
     <Card class="mb-4" data-testid="summary">
       <CardContent class="pt-4">
         <dl class="m-0 grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.closing') }}</dt><dd class="m-0 font-semibold" data-testid="closing">{{ statement.summary.statement_closing }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.inTransit') }}</dt><dd class="m-0 font-semibold">{{ statement.summary.uncleared_in }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.outstanding') }}</dt><dd class="m-0 font-semibold">{{ statement.summary.uncleared_out }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.adjusted') }}</dt><dd class="m-0 font-semibold" data-testid="adjusted">{{ statement.summary.adjusted_bank }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.book') }}</dt><dd class="m-0 font-semibold" data-testid="book">{{ statement.summary.book_balance }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.difference') }}</dt><dd :class="['m-0 font-semibold', Number(statement.summary.difference) !== 0 && 'text-destructive']" data-testid="difference">{{ statement.summary.difference }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.closing') }}</dt><dd class="m-0 font-semibold" data-testid="closing">{{ $money(statement.summary.statement_closing) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.inTransit') }}</dt><dd class="m-0 font-semibold">{{ $money(statement.summary.uncleared_in) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.outstanding') }}</dt><dd class="m-0 font-semibold">{{ $money(statement.summary.uncleared_out) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.adjusted') }}</dt><dd class="m-0 font-semibold" data-testid="adjusted">{{ $money(statement.summary.adjusted_bank) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.book') }}</dt><dd class="m-0 font-semibold" data-testid="book">{{ $money(statement.summary.book_balance) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('reconcile.difference') }}</dt><dd :class="['m-0 font-semibold', Number(statement.summary.difference) !== 0 && 'text-destructive']" data-testid="difference">{{ $money(statement.summary.difference) }}</dd></div>
         </dl>
         <p v-if="statement.status === 'RECONCILED'" class="notice mt-3" data-testid="reconciled">{{ statement.reconciled_at ? t('reconcile.reconciledOn', { date: statement.reconciled_at.slice(0, 10) }) : t('reconcile.reconciledNoDate') }}</p>
         <ul v-else-if="statement.summary.blockers.length" class="mb-0 mt-3 text-destructive" data-testid="blockers">
@@ -305,10 +305,10 @@ watch([() => pid.value, sid], () => {
             <template #cell-description="{ row }">{{ row.description }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
             <template #cell-clearings="{ row }">
               <span v-for="c in row.clearings" :key="c.id" class="mr-1.5 inline-block text-sm">
-                {{ c.journal_number }} · {{ c.amount }}
+                {{ c.journal_number }} · {{ $money(c.amount) }}
                 <button v-if="editable" type="button" class="cursor-pointer border-0 bg-transparent px-0.5 underline" :data-testid="`unmatch-${c.id}`" @click="unmatch(c.id)">{{ t('reconcile.undo') }}</button>
               </span>
-              <small v-if="!row.matched && row.clearings.length" class="text-destructive">{{ t('reconcile.partOf', { cleared: row.cleared, amount: row.amount }) }}</small>
+              <small v-if="!row.matched && row.clearings.length" class="text-destructive">{{ t('reconcile.partOf', { cleared: $money(row.cleared), amount: $money(row.amount) }) }}</small>
             </template>
           </DataTable>
           <div v-if="editable && line && !line.matched" class="mt-3">
@@ -317,7 +317,7 @@ watch([() => pid.value, sid], () => {
               <Button v-if="!adjust.open && !settle.open && Number(line.amount) > 0" type="button" variant="outline" size="sm" data-testid="settle-open" @click="startSettle">{{ t('reconcile.settleOpen') }}</Button>
             </div>
             <form v-if="adjust.open" class="grid gap-3" novalidate data-testid="adjust-form" @submit.prevent="postAdjust">
-              <p class="m-0 text-sm text-muted-foreground">{{ t('reconcile.postHint', { what: line.description || t('reconcile.lineN', { n: line.line_no }), amount: line.amount, date: line.line_date }) }}</p>
+              <p class="m-0 text-sm text-muted-foreground">{{ t('reconcile.postHint', { what: line.description || t('reconcile.lineN', { n: line.line_no }), amount: $money(line.amount), date: $date(line.line_date) }) }}</p>
               <FormField :label="t('reconcile.account')">
                 <template #default="{ id }">
                   <NativeSelect :id="id" v-model.number="adjust.account_id" name="adjust_account">
@@ -335,7 +335,7 @@ watch([() => pid.value, sid], () => {
               </div>
             </form>
             <form v-if="settle.open" class="grid gap-3" novalidate data-testid="settle-form" @submit.prevent="postSettle">
-              <p class="m-0 text-sm text-muted-foreground">{{ t('reconcile.settleHint', { amount: line.amount }) }}</p>
+              <p class="m-0 text-sm text-muted-foreground">{{ t('reconcile.settleHint', { amount: $money(line.amount) }) }}</p>
               <FormField :label="t('reconcile.paymentsOf')">
                 <template #default="{ id }">
                   <NativeSelect :id="id" v-model="settle.key" name="settle_key" @change="loadSettleLines">
@@ -349,8 +349,8 @@ watch([() => pid.value, sid], () => {
                 <template #cell-pick="{ row }"><input v-model="settle.picked" type="checkbox" class="size-4 accent-primary" :value="row.journal_line_id" /></template>
               </DataTable>
               <p v-if="settle.picked.length" class="m-0 text-sm" data-testid="settle-summary">
-                {{ t('reconcile.settleSummary', { gross: fromMilli(settleGross), net: fromMilli(settleNet) }) }}
-                <b :class="settleGross < settleNet && 'text-destructive'">{{ t('reconcile.commission', { amount: fromMilli(settleGross - settleNet) }) }}</b>
+                {{ t('reconcile.settleSummary', { gross: $money(fromMilli(settleGross)), net: $money(fromMilli(settleNet)) }) }}
+                <b :class="settleGross < settleNet && 'text-destructive'">{{ t('reconcile.commission', { amount: $money(fromMilli(settleGross - settleNet)) }) }}</b>
               </p>
               <FormField v-if="settleGross > settleNet" :label="t('reconcile.commissionAccount')">
                 <template #default="{ id }">
@@ -378,13 +378,13 @@ watch([() => pid.value, sid], () => {
           <p v-if="!uncleared.length" class="m-0 text-sm text-muted-foreground" data-testid="no-uncleared">{{ t('reconcile.allCleared', { date: statement.period_to }) }}</p>
           <DataTable v-else :columns="unclearedColumns" :rows="uncleared" row-key="journal_line_id" :row-test-id="(u) => `uncleared-${u.journal_line_id}`" :caption="t('reconcile.unclearedTitle')" data-testid="uncleared">
             <template #cell-pick="{ row }"><input v-model="picked" type="checkbox" class="size-4 accent-primary" :value="row.journal_line_id" /></template>
-            <template #cell-remaining="{ row }">{{ row.remaining }}<small v-if="row.cleared !== '0'" class="text-muted-foreground">{{ ` ${t('reconcile.ofAmount', { amount: row.amount })}` }}</small></template>
+            <template #cell-remaining="{ row }">{{ $money(row.remaining) }}<small v-if="row.cleared !== '0'" class="text-muted-foreground">{{ ` ${t('reconcile.ofAmount', { amount: $money(row.amount) })}` }}</small></template>
           </DataTable>
           <div v-if="editable && picked.length" class="mt-3 flex items-center justify-end gap-3">
-            <span class="text-sm text-muted-foreground" data-testid="picked-total">{{ t('reconcile.selected', { n: picked.length, total: fromMilli(pickedTotal) }) }}</span>
+            <span class="text-sm text-muted-foreground" data-testid="picked-total">{{ t('reconcile.selected', { n: picked.length, total: $money(fromMilli(pickedTotal)) }) }}</span>
             <Button type="button" :disabled="busy" data-testid="match" @click="match">{{ chosenLines.length === 1 ? t('reconcile.matchLine', { n: chosenLines[0]?.line_no ?? '' }) : chosenLines.length ? t('reconcile.matchLines', { n: chosenLines.length }) : t('reconcile.clearWithout') }}</Button>
           </div>
-          <p v-if="editable && picked.length && chosenLines.length > 1" class="mb-0 mt-2 text-sm text-muted-foreground" data-testid="spread-hint">{{ t('reconcile.spreadHint', { n: chosenLines.length, total: fromMilli(neededTotal) }) }}</p>
+          <p v-if="editable && picked.length && chosenLines.length > 1" class="mb-0 mt-2 text-sm text-muted-foreground" data-testid="spread-hint">{{ t('reconcile.spreadHint', { n: chosenLines.length, total: $money(fromMilli(neededTotal)) }) }}</p>
           <p v-if="editable && picked.length && !chosenLines.length" class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('reconcile.withoutLineHint') }}</p>
         </CardContent>
       </Card>

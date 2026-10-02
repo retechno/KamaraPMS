@@ -35,8 +35,8 @@ const form = reactive({ period_from: '', period_to: '', opening_balance: '', clo
 const columns = computed<Column<BankStatement>[]>(() => [
   { key: 'bank_name', label: t('bankStatements.bank') },
   { key: 'period', label: t('bankStatements.period') },
-  { key: 'opening_balance', label: t('bankStatements.opening'), align: 'right' },
-  { key: 'closing_balance', label: t('bankStatements.closing'), align: 'right' },
+  { key: 'opening_balance', label: t('bankStatements.opening'), align: 'right', format: 'money' as const },
+  { key: 'closing_balance', label: t('bankStatements.closing'), align: 'right', format: 'money' as const },
   { key: 'matched', label: t('bankStatements.matched') },
   { key: 'status', label: t('setup.status') },
   { key: 'actions', label: '', align: 'right' },

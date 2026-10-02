@@ -141,8 +141,8 @@ describe('YieldRulesView', () => {
     await flushPromises()
     const call = GET.mock.calls.find((c) => (c[0] as string).endsWith('/rate-quotes')) as [string, { params: { query: object } }]
     expect(call[1].params.query).toEqual({ rate_plan_id: 3, room_type_id: 5, arrival_date: '2026-10-03', departure_date: '2026-10-04' })
-    expect(w.get('[data-testid=quote]').text()).toContain('BUSY 1100000 → 1320000')
-    expect(w.get('[data-testid=quote-total]').text()).toBe('1320000')
+    expect(w.get('[data-testid=quote]').text()).toContain('BUSY 1,100,000 → 1,320,000')
+    expect(w.get('[data-testid=quote-total]').text()).toBe('1,320,000')
   })
 
   it('is read-only without rate.manage', async () => {

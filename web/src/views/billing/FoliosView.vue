@@ -32,7 +32,7 @@ const columns = computed<Column<FolioSummary>[]>(() => [
   { key: 'folio_number', label: t('folios.folio'), sortable: true },
   { key: 'reservation_id', label: t('folios.reservation'), sortable: true },
   { key: 'status', label: t('folios.status'), sortable: true },
-  { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums' },
+  { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const },
 ])
 
 async function load(more = false): Promise<void> {

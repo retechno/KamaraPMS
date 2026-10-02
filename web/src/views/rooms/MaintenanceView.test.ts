@@ -59,7 +59,7 @@ describe('MaintenanceView', () => {
     expect(w.get('[data-testid=request-MNT000001]').text()).toContain('Room 101')
     expect(w.get('[data-testid=request-MNT000002]').text()).toContain('Lobby')
     expect(w.get('[data-testid=request-MNT000002]').text()).toContain('Joko')
-    expect(w.get('[data-testid=request-MNT000004] [data-testid=blocked]').text()).toContain('OOO until 2026-10-03')
+    expect(w.get('[data-testid=request-MNT000004] [data-testid=blocked]').text()).toContain('OOO until 3 Oct 2026')
     expect(w.get('[data-testid=request-MNT000003]').classes()).toContain('closed')
   })
 
@@ -192,7 +192,7 @@ describe('MaintenanceView', () => {
     expect(w.find('[data-testid=detail]').exists()).toBe(false)
     await w.get('[data-testid=select-MNT000001]').trigger('click')
     expect(w.get('[data-testid=detail]').text()).toContain('Shower leaks')
-    expect(w.get('[data-testid=detail]').text()).toContain('Reported 2026-09-30 by Dewi')
+    expect(w.get('[data-testid=detail]').text()).toContain('Reported 30 Sep 2026 by Dewi')
     expect(w.get('[data-testid=request-MNT000001]').classes()).toContain('bg-accent') // the chosen row
   })
 

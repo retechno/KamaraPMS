@@ -25,9 +25,9 @@ const asOf = ref('')
 type Control = Reconciliation['controls'][number]
 const columns = computed<Column<Control>[]>(() => [
   { key: 'title', label: t('accounting.rcAccount') },
-  { key: 'ledger', label: t('accounting.rcBooks'), align: 'right' },
-  { key: 'source', label: t('accounting.rcFolios'), align: 'right' },
-  { key: 'difference', label: t('accounting.rcDifference'), align: 'right' },
+  { key: 'ledger', label: t('accounting.rcBooks'), align: 'right', format: 'money' as const },
+  { key: 'source', label: t('accounting.rcFolios'), align: 'right', format: 'money' as const },
+  { key: 'difference', label: t('accounting.rcDifference'), align: 'right', format: 'money' as const },
 ])
 
 const pid = computed(() => property.currentId)
@@ -69,15 +69,15 @@ watch(() => pid.value, () => {
     </Card>
     <Card v-if="report">
       <CardContent class="pt-4">
-        <p v-if="report.reconciled" class="notice" data-testid="reconciled">{{ t('accounting.rcReconciled', { date: report.as_of }) }}</p>
-        <p v-else class="alert" data-testid="not-reconciled">{{ t('accounting.rcNot', { date: report.as_of }) }}</p>
+        <p v-if="report.reconciled" class="notice" data-testid="reconciled">{{ t('accounting.rcReconciled', { date: $date(report.as_of) }) }}</p>
+        <p v-else class="alert" data-testid="not-reconciled">{{ t('accounting.rcNot', { date: $date(report.as_of) }) }}</p>
         <p v-if="report.pending_days" class="alert" data-testid="pending">{{ t('accounting.rcPending', { n: report.pending_days }) }}</p>
         <p v-if="report.includes_open_day" class="mb-3 text-sm text-muted-foreground" data-testid="open-day">{{ t('accounting.rcOpenDay') }}</p>
         <DataTable :columns="columns" :rows="report.controls" row-key="key" :row-test-id="(c) => `control-${c.key}`" :row-class="(c) => (Number(c.difference) !== 0 ? 'text-destructive' : undefined)" :caption="t('accounting.rcTitle')" data-testid="controls">
           <template #cell-title="{ row }">{{ row.title }}<br /><small class="text-muted-foreground">{{ row.account }} · {{ row.basis }}</small></template>
           <template #cell-difference="{ row }">{{ money(row.difference) }}</template>
         </DataTable>
-        <p class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('accounting.rcStart', { date: report.start_date }) }}</p>
+        <p class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('accounting.rcStart', { date: $date(report.start_date) }) }}</p>
       </CardContent>
     </Card>
   </template>

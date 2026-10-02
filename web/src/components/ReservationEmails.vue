@@ -70,7 +70,7 @@ watch(() => [pid.value, props.reservationId], () => void load(), { immediate: tr
       <ul v-else class="m-0 grid list-none gap-1.5 p-0 text-sm">
         <li v-for="e in state.data" :key="e.id" :data-testid="`email-${e.id}`">
           <Badge :variant="variant(e.status)">{{ label(e.status) }}</Badge>
-          {{ e.to }}
+          {{ $date(e.to) }}
           <span class="text-muted-foreground"> · {{ e.sent_at ?? e.created_at }}<template v-if="e.attempts > 1"> · {{ t('emails.attempts', { n: e.attempts }) }}</template></span>
           <small v-if="e.last_error" class="text-destructive"> {{ e.last_error }}</small>
         </li>

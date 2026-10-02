@@ -83,7 +83,7 @@ describe('bank views', () => {
   it('lists the bank accounts and registers a cash or bank account of the books', async () => {
     const w = await mountView(BankAccountsView)
     await flushPromises()
-    expect(w.get('[data-testid=bank-1130]').text()).toContain('750000')
+    expect(w.get('[data-testid=bank-1130]').text()).toContain('750,000')
     expect(w.get('[data-testid=bank-1130]').text()).toContain('never')
     await w.get('[data-testid=new-bank]').trigger('click')
     expect(w.findAll('select[name=account_id] option').map((o) => o.text())).toEqual(['Choose an account', '1140 · Bank - payroll account']) // not the registered one, not revenue
@@ -143,14 +143,14 @@ describe('bank views', () => {
   it('matches journal lines with a statement line and posts what the books lack', async () => {
     const w = await mountView(BankReconcileView, undefined, { id: '5' })
     await flushPromises()
-    expect(w.get('[data-testid=difference]').text()).toBe('-15000')
+    expect(w.get('[data-testid=difference]').text()).toBe('-15,000')
     expect(w.get('[data-testid=blockers]').text()).toContain('not matched')
     expect((w.get('[data-testid=reconcile]').element as HTMLButtonElement).disabled).toBe(true)
     expect(w.get('[data-testid=line-1]').classes()).toContain('done')
     // pick a statement line and a journal line, then match
     await w.get('[data-testid=pick-line-2]').setValue(true)
     await w.get('[data-testid=uncleared-102] input').setValue(true)
-    expect(w.get('[data-testid=picked-total]').text()).toContain('-250000')
+    expect(w.get('[data-testid=picked-total]').text()).toContain('-250,000')
     expect(w.get('[data-testid=match]').text()).toContain('Match with line 2')
     await w.get('[data-testid=match]').trigger('click')
     await flushPromises()
@@ -182,12 +182,12 @@ describe('bank views', () => {
     GET.mockImplementation(async (p: string) => (p.endsWith('/uncleared') ? { data: { data: [total] } } : { data: detail({ lines }) }))
     await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
     await flushPromises()
-    expect(w.get('[data-testid=uncleared-201]').text()).toContain('500000 of 600000') // what is left of a line cleared in part
+    expect(w.get('[data-testid=uncleared-201]').text()).toContain('500,000 of 600,000') // what is left of a line cleared in part
     await w.get('[data-testid=uncleared-201] input').setValue(true)
     await w.get('[data-testid=pick-line-1]').setValue(true)
     await w.get('[data-testid=pick-line-2]').setValue(true)
     expect(w.get('[data-testid=match]').text()).toContain('Match with 2 lines')
-    expect(w.get('[data-testid=spread-hint]').text()).toContain('300000 to match')
+    expect(w.get('[data-testid=spread-hint]').text()).toContain('300,000 to match')
     await w.get('[data-testid=match]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls.at(-1)?.[1].body).toEqual({
@@ -218,9 +218,9 @@ describe('bank views', () => {
     expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true)
     await w.get('[data-testid=settle-301] input').setValue(true)
     expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true) // the payments chosen are less than was paid out
-    expect(w.get('[data-testid=settle-summary]').text()).toContain('Payments 400000')
+    expect(w.get('[data-testid=settle-summary]').text()).toContain('Payments 400,000')
     await w.get('[data-testid=settle-302] input').setValue(true)
-    expect(w.get('[data-testid=settle-summary]').text()).toContain('commission 20000')
+    expect(w.get('[data-testid=settle-summary]').text()).toContain('commission 20,000')
     expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true) // a commission needs its account
     await w.get('select[name=settle_fee]').setValue(9)
     await w.get('input[name=settle_description]').setValue('Card settlement 1 Oct')

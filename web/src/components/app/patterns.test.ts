@@ -242,3 +242,29 @@ describe('StepCard', () => {
     expect(w.find('[data-slot=card-content]').exists()).toBe(false)
   })
 })
+
+describe('DataTable formats amounts and dates in the language of the page', () => {
+  it('groups digits and names the month by column format', async () => {
+    const { setLocale } = await import('@/i18n')
+    const { mount } = await import('@vue/test-utils')
+    const { default: DataTable } = await import('./DataTable.vue')
+    const columns = [
+      { key: 'amount', label: 'Amount', format: 'money' as const },
+      { key: 'day', label: 'Day', format: 'date' as const },
+      { key: 'raw', label: 'Raw' },
+    ]
+    const rows = [{ id: 1, amount: '2442000', day: '2026-08-17', raw: '2442000' }]
+    try {
+      const en = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
+      expect(en.text()).toContain('2,442,000')
+      expect(en.text()).toContain('17 Aug 2026')
+      setLocale('id')
+      const id = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
+      expect(id.text()).toContain('2.442.000')
+      expect(id.text()).toContain('17 Agu 2026')
+      expect(id.text()).toContain('2442000') // an unformatted column stays as it came
+    } finally {
+      setLocale('en')
+    }
+  })
+})

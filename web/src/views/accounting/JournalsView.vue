@@ -53,11 +53,11 @@ function ledgerLink(accountId: number, date: string): { path: string; query: Rec
 const typeLabel = (k: string): string => t(`journals.t_${k}` as 'journals.t_MANUAL')
 const TYPES = ['DAY_CLOSE', 'MANUAL', 'REVERSAL', 'CLOSING', 'PAYABLES', 'BANK', 'TAX'] as const
 const columns = computed<Column<Journal>[]>(() => [
-  { key: 'journal_date', label: t('journals.date') },
+  { key: 'journal_date', label: t('journals.date'), format: 'date' as const },
   { key: 'journal_number', label: t('journals.number') },
   { key: 'journal_type', label: t('journals.type') },
   { key: 'description', label: t('journals.description') },
-  { key: 'total', label: t('journals.total'), align: 'right' },
+  { key: 'total', label: t('journals.total'), align: 'right', format: 'money' as const },
   { key: 'reversed', label: '' },
 ])
 
@@ -238,11 +238,11 @@ watch(() => pid.value, () => {
             <tfoot>
               <tr data-testid="line-totals" class="border-t border-border">
                 <td class="pt-2"><Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, debit: '', credit: '', description: '' })">{{ t('journals.addLine') }}</Button></td>
-                <td class="pt-2 pr-3 text-right tabular-nums">{{ fromMilli(sums.debit) }}</td>
-                <td class="pt-2 pr-3 text-right tabular-nums">{{ fromMilli(sums.credit) }}</td>
+                <td class="pt-2 pr-3 text-right tabular-nums">{{ $money(fromMilli(sums.debit)) }}</td>
+                <td class="pt-2 pr-3 text-right tabular-nums">{{ $money(fromMilli(sums.credit)) }}</td>
                 <td colspan="2" class="pt-2">
                   <span v-if="!sums.valid" class="text-destructive">{{ t('journals.notNumber') }}</span>
-                  <span v-else-if="sums.debit !== sums.credit" class="text-destructive" data-testid="difference">{{ t('journals.outOfBalance', { amount: fromMilli(sums.debit > sums.credit ? sums.debit - sums.credit : sums.credit - sums.debit) }) }}</span>
+                  <span v-else-if="sums.debit !== sums.credit" class="text-destructive" data-testid="difference">{{ t('journals.outOfBalance', { amount: $money(fromMilli(sums.debit > sums.credit ? sums.debit - sums.credit : sums.credit - sums.debit)) }) }}</span>
                   <span v-else class="text-muted-foreground">{{ t('journals.balanced') }}</span>
                 </td>
               </tr>

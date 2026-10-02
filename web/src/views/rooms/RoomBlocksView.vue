@@ -48,8 +48,8 @@ const isWeekend = (d: string) => [0, 6].includes(new Date(`${d}T00:00:00Z`).getU
 const blockColumnsDef = computed<Column<RoomBlock>[]>(() => [
   { key: 'room_id', label: t('roomBlocks.room') },
   { key: 'block_type', label: t('roomBlocks.type') },
-  { key: 'start_date', label: t('roomBlocks.from') },
-  { key: 'end_date', label: t('roomBlocks.untilCol') },
+  { key: 'start_date', label: t('roomBlocks.from'), format: 'date' as const },
+  { key: 'end_date', label: t('roomBlocks.untilCol'), format: 'date' as const },
   { key: 'reason', label: t('roomBlocks.reason') },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
@@ -187,7 +187,7 @@ watch(businessDate, (bd) => {
     {{ error.message }} <code>{{ error.code }}</code>
     <ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
       <li v-for="c in conflicts" :key="`${c.type}-${c.id}`">
-        {{ c.type === 'STAY' ? t('roomBlocks.stayConflict', { ref: c.reference ?? c.id }) : t('roomBlocks.lineConflict', { id: c.id }) }}: {{ t('roomBlocks.conflictRange', { from: c.from, to: c.to }) }}
+        {{ c.type === 'STAY' ? t('roomBlocks.stayConflict', { ref: c.reference ?? c.id }) : t('roomBlocks.lineConflict', { id: c.id }) }}: {{ t('roomBlocks.conflictRange', { from: $date(c.from), to: $date(c.to) }) }}
       </li>
     </ul>
   </div>

@@ -184,7 +184,7 @@ watch(activeOnly, () => void load())
       <EmptyState v-if="loaded && !groups.length" :title="t('groups.empty')" data-testid="empty" />
       <DataTable v-else-if="groups.length" :columns="columns" :rows="groups" row-key="id" :row-test-id="(g) => `group-${g.code}`" :caption="t('groups.title')">
         <template #cell-code="{ row }"><RouterLink :to="`/groups/${row.id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink></template>
-        <template #cell-dates="{ row }">{{ t('groups.dateRange', { from: row.arrival_date, to: row.departure_date }) }}</template>
+        <template #cell-dates="{ row }">{{ t('groups.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
         <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
       </DataTable>
       <div v-if="nextCursor" class="mt-3 flex justify-center">

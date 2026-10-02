@@ -40,7 +40,7 @@ describe('GroupsView', () => {
     await flushPromises()
     const row = w.get('[data-testid=group-CONF]')
     expect(row.text()).toContain('Acme Corp')
-    expect(row.text()).toContain('2026-10-10 to 2026-10-14')
+    expect(row.text()).toContain('10 Oct 2026 to 14 Oct 2026')
     expect(row.text()).toContain('8')
     expect(GET.mock.calls[0]?.[1].params.query.active).toBe(true)
     await w.get('input[name=active_only]').setValue(false)

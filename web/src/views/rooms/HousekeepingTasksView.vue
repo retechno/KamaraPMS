@@ -154,7 +154,7 @@ const mayWork = (task: HousekeepingTask) => can('housekeeping.update') && open(t
 
 const workloadColumns = computed<Column<HousekeepingTaskList['workload'][number]>[]>(() => [
   { key: 'name', label: t('cleaning.housekeeper') },
-  { key: 'total', label: t('cleaning.tasks'), align: 'right' },
+  { key: 'total', label: t('cleaning.tasks'), align: 'right', format: 'money' as const },
   { key: 'pending', label: t('cleaning.todo'), align: 'right' },
   { key: 'in_progress', label: t('cleaning.inProgress'), align: 'right' },
   { key: 'done', label: t('cleaning.done'), align: 'right' },
@@ -239,7 +239,7 @@ watch(() => [filter.view, filter.status], () => void load())
     </Card>
 
     <Card v-if="list" class="mb-4" data-testid="workload">
-      <CardHeader><CardTitle>{{ list.date }}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{{ $date(list.date) }}</CardTitle></CardHeader>
       <CardContent>
         <p v-if="!list.workload.length" class="m-0 text-sm text-muted-foreground" data-testid="empty">
           {{ t('cleaning.noTasks') }} {{ can('housekeeping.assign') ? t('cleaning.generateToStart') : t('cleaning.supervisorGenerates') }}

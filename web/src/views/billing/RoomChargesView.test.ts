@@ -38,9 +38,9 @@ describe('RoomChargesView', () => {
     await flushPromises()
     expect(POST.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/night-audit/room-charges/preview', { params: { path: { propertyId: 7 } }, body: { business_date: '2026-10-01' } }])
     expect(w.get('[data-testid=ready-count]').text()).toBe('2 night(s) ready')
-    expect(w.get('[data-testid=ready-total]').text()).toBe('2442000')
+    expect(w.get('[data-testid=ready-total]').text()).toBe('2,442,000')
     expect(w.get('[data-testid=item-5-2026-09-30]').text()).toContain('missing')
-    expect(w.get('[data-testid=item-5-2026-10-01]').text()).toContain('1221000')
+    expect(w.get('[data-testid=item-5-2026-10-01]').text()).toContain('1,221,000')
   })
 
   it('posts with an Idempotency-Key and shows what happened', async () => {

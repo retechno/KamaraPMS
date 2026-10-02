@@ -49,7 +49,7 @@ describe('HousekeepingView', () => {
     expect(GET).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/housekeeping', { params: { path: { propertyId: 7 } } })
     expect(w.get('[data-testid=room-201] [data-testid=status]').text()).toBe('Dirty')
     expect(w.get('[data-testid=room-202]').text()).toContain('Occupied')
-    expect(w.get('[data-testid=room-202] [data-testid=block]').text()).toBe('OOO until 2026-10-04')
+    expect(w.get('[data-testid=room-202] [data-testid=block]').text()).toBe('OOO until 4 Oct 2026')
   })
 
   it('offers only the legal next statuses and hides INSPECTED without housekeeping.inspect', async () => {
@@ -174,7 +174,7 @@ describe('HousekeepingView', () => {
     await flushPromises()
     expect(w.get('[data-testid=room-201] [data-testid=status]').text()).toBe('Kotor')
     expect(w.get('[data-testid=act-CLEANING]').text()).toBe('Mulai bersihkan')
-    expect(w.get('[data-testid=block]').text()).toBe('OOS sampai 2026-10-04')
+    expect(w.get('[data-testid=block]').text()).toBe('OOS sampai 4 Okt 2026')
     expect(w.get('[data-testid=flags]').text()).toContain('Tinggi')
     setLocale('en')
   })

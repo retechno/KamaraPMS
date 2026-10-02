@@ -68,7 +68,7 @@ describe('NewReservationView', () => {
     expect(GET).toHaveBeenLastCalledWith('/api/v1/properties/{propertyId}/availability', {
       params: { path: { propertyId: 7 }, query: { arrival: '2026-10-02', departure: '2026-10-04', adults: 2, children: 0 } },
     })
-    expect(w.get('[data-testid=offer-DLX-BAR]').text()).toContain('2200000')
+    expect(w.get('[data-testid=offer-DLX-BAR]').text()).toContain('2,200,000')
     expect(w.get('[data-testid=pick-DLX-BAR]').attributes('disabled')).toBeUndefined()
     expect(w.get('[data-testid=pick-DLX-HALF]').attributes('disabled')).toBeDefined() // incomplete grid
     expect(w.get('[data-testid=offer-DLX-HALF]').get('[data-testid=missing]').text()).toContain('1 night(s) without a rate')
@@ -189,7 +189,7 @@ describe('NewReservationView: company and group', () => {
   it('books into a group, which brings its company and its dates', async () => {
     const { w } = await bookable()
     await w.get('select[name=booking_group_id]').setValue(4)
-    expect(w.get('[data-testid=group-hint]').text()).toContain('2026-10-02 to 2026-10-05')
+    expect(w.get('[data-testid=group-hint]').text()).toContain('2 Oct 2026 to 5 Oct 2026')
     expect(w.get('[data-testid=group-hint]').text()).toContain('Acme Corp is billed')
     expect(w.find('select[name=company_id]').exists()).toBe(false) // the group decides
     await w.get('[data-testid=book-form]').trigger('submit')

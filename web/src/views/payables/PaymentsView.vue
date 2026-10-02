@@ -44,18 +44,18 @@ const fieldError = (field: string) => error.value?.fieldMessage(field)
 const METHODS = ['CASH', 'BANK_TRANSFER', 'OTHER'] as const
 const methodLabel = (m: string): string => t(`payables.m_${m}` as 'payables.m_CASH')
 const columns = computed<Column<SupplierPayment>[]>(() => [
-  { key: 'payment_date', label: t('payables.date') },
+  { key: 'payment_date', label: t('payables.date'), format: 'date' as const },
   { key: 'payment_number', label: t('payables.payment') },
   { key: 'supplier', label: t('payables.supplier') },
   { key: 'method', label: t('payables.method') },
-  { key: 'amount', label: t('payables.amount'), align: 'right' },
+  { key: 'amount', label: t('payables.amount'), align: 'right', format: 'money' as const },
   { key: 'status', label: t('payables.status') },
 ])
 const openColumns = computed<Column<OpenBill>[]>(() => [
   { key: 'bill_number', label: t('payables.bill') },
   { key: 'supplier_invoice_number', label: t('payables.invoice') },
-  { key: 'due_date', label: t('payables.due') },
-  { key: 'outstanding', label: t('payables.owed'), align: 'right' },
+  { key: 'due_date', label: t('payables.due'), format: 'date' as const },
+  { key: 'outstanding', label: t('payables.owed'), align: 'right', format: 'money' as const },
   { key: 'pay', label: t('payables.pay'), align: 'right' },
 ])
 
@@ -214,7 +214,7 @@ watch(() => pid.value, () => {
               <template #default="{ id, invalid }">
                 <NativeSelect :id="id" v-model.number="form.supplier_id" name="supplier_id" :aria-invalid="invalid" @change="loadOpen">
                   <option :value="0">{{ t('payables.chooseSupplier') }}</option>
-                  <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }} ({{ t('payables.owedSuffix', { amount: s.outstanding }) }})</option>
+                  <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }} ({{ t('payables.owedSuffix', { amount: $money(s.outstanding) }) }})</option>
                 </NativeSelect>
               </template>
             </FormField>
@@ -245,7 +245,7 @@ watch(() => pid.value, () => {
               <template #footer>
                 <div class="mt-2 flex items-center justify-between border-t border-border pt-3">
                   <Button type="button" variant="outline" size="sm" data-testid="pay-all" @click="payAll">{{ t('payables.payEverything') }}</Button>
-                  <span class="text-sm"><b>{{ t('payables.payment') }}</b> <b class="ml-3 tabular-nums" data-testid="payment-total">{{ fromMilli(picked.sum) }}</b></span>
+                  <span class="text-sm"><b>{{ t('payables.payment') }}</b> <b class="ml-3 tabular-nums" data-testid="payment-total">{{ $money(fromMilli(picked.sum)) }}</b></span>
                 </div>
               </template>
             </DataTable>
@@ -303,7 +303,7 @@ watch(() => pid.value, () => {
               <table class="w-full border-collapse text-sm">
                 <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">{{ t('payables.bill') }}</th><th class="px-3 font-medium">{{ t('payables.invoice') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.settled') }}</th></tr></thead>
                 <tbody>
-                  <tr v-for="a in opened.allocations" :key="a.bill_id" class="border-b border-border"><td class="py-1 pr-3">{{ a.bill_number }}</td><td class="px-3">{{ a.supplier_invoice_number }}</td><td class="pl-3 text-right tabular-nums">{{ a.amount }}</td></tr>
+                  <tr v-for="a in opened.allocations" :key="a.bill_id" class="border-b border-border"><td class="py-1 pr-3">{{ a.bill_number }}</td><td class="px-3">{{ a.supplier_invoice_number }}</td><td class="pl-3 text-right tabular-nums">{{ $money(a.amount) }}</td></tr>
                 </tbody>
               </table>
               <p class="mb-0 mt-2 text-sm text-muted-foreground">

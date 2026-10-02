@@ -96,7 +96,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <Card v-if="group && !editing" class="mb-4" data-testid="group-summary">
     <CardContent class="pt-4">
       <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.dates') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.dateRange', { from: group.arrival_date, to: group.departure_date }) }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.dates') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.dateRange', { from: $date(group.arrival_date), to: $date(group.departure_date) }) }}</dd></div>
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.companyBilled') }}</dt><dd class="m-0 text-sm">{{ group.company_name || t('groupDetail.noCompany') }}</dd></div>
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.contact') }}</dt><dd class="m-0 text-sm">{{ group.contact_name }} {{ group.contact_email }} {{ group.contact_phone }}</dd></div>
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.reservations') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.reservationsValue', { n: group.reservation_count, rooms: group.room_count }) }}</dd></div>
@@ -157,7 +157,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <p v-if="!members.length" class="m-0 text-sm text-muted-foreground" data-testid="no-members">{{ t('groupDetail.noMembers') }}</p>
       <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')">
         <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`" class="text-primary hover:underline">{{ row.confirmation_number }}</RouterLink></template>
-        <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: row.arrival_date, to: row.departure_date }) }}</template>
+        <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
         <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" :label="statusLabel(row.status)" /></template>
       </DataTable>
     </CardContent>

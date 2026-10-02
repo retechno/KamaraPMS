@@ -73,7 +73,7 @@ describe('payables views', () => {
     const w = await mountView(SuppliersView)
     await flushPromises()
     expect(w.get('[data-testid=supplier-PLN]').text()).toContain('6510 - Electricity')
-    expect(w.get('[data-testid=owed]').text()).toBe('1500000')
+    expect(w.get('[data-testid=owed]').text()).toBe('1,500,000')
     expect(w.find('[data-testid=supplier-OLD]').exists()).toBe(false)
     await w.get('input[name=inactive]').setValue(true)
     expect(w.find('[data-testid=supplier-OLD]').exists()).toBe(true)
@@ -115,7 +115,7 @@ describe('payables views', () => {
     await w.get('[data-testid=add-line]').trigger('click')
     await w.get('select[name=account_1]').setValue(6)
     await w.get('input[name=amount_1]').setValue('110000')
-    expect(w.get('[data-testid=bill-total]').text()).toBe('1110000')
+    expect(w.get('[data-testid=bill-total]').text()).toBe('1,110,000')
     await w.get('[data-testid=bill-form]').trigger('submit')
     await flushPromises()
     const [path, init] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: unknown }]
@@ -169,7 +169,7 @@ describe('payables views', () => {
     await w.get('input[name=pay_BILL000001]').setValue('700000') // owed 600000
     expect((w.get('[data-testid=payment-post]').element as HTMLButtonElement).disabled).toBe(true)
     await w.get('[data-testid=pay-all]').trigger('click')
-    expect(w.get('[data-testid=payment-total]').text()).toBe('1100000')
+    expect(w.get('[data-testid=payment-total]').text()).toBe('1,100,000')
     await w.get('input[name=pay_BILL000003]').setValue('')
     await w.get('select[name=method]').setValue('CASH')
     await w.get('[data-testid=payment-form]').trigger('submit')
@@ -199,8 +199,8 @@ describe('payables views', () => {
   it('shows the aging by bucket with the bills of a supplier on demand', async () => {
     const w = await mountView(AgingView)
     await flushPromises()
-    expect(w.get('[data-testid=supplier-PLN]').text()).toContain('1000000')
-    expect(w.get('[data-testid=totals]').text()).toContain('1500000')
+    expect(w.get('[data-testid=supplier-PLN]').text()).toContain('1,000,000')
+    expect(w.get('[data-testid=totals]').text()).toContain('1,500,000')
     expect(w.find('[data-testid=bills-PLN]').exists()).toBe(false)
     await w.get('[data-testid=supplier-PLN]').trigger('click')
     expect(w.get('[data-testid=bills-PLN]').text()).toContain('BILL000001')

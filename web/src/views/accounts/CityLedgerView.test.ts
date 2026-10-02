@@ -31,7 +31,7 @@ describe('CityLedgerView', () => {
     const w = mountView()
     await flushPromises()
     expect(GET.mock.calls[0]?.[1].params.query.owing).toBe(true)
-    expect(w.get('[data-testid=account-ACME]').text()).toContain('200000')
+    expect(w.get('[data-testid=account-ACME]').text()).toContain('200,000')
     expect(w.get('[data-testid=account-ACME] a').attributes('href')).toBe('/city-ledger/1')
     expect(w.get('[data-testid=account-FREE]').text()).toContain('No limit')
     expect(w.get('[data-testid=account-FREE]').text()).toContain('(inactive)')

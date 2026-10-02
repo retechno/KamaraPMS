@@ -102,7 +102,7 @@ describe('tax views', () => {
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ tax_id: 9, period: '2026-09-01' })
     expect(w.get('[data-testid=lines]').text()).toContain('MINIBAR')
-    expect(w.get('[data-testid=totals]').text()).toContain('220000')
+    expect(w.get('[data-testid=totals]').text()).toContain('220,000')
     expect(w.get('[data-testid=books-check]').text()).toContain('they agree')
     await w.get('[data-testid=pdf]').trigger('click')
     expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/tax/worksheet.pdf?tax_id=9&period=2026-09-01')
@@ -147,7 +147,7 @@ describe('tax views', () => {
     await w.get('[data-testid=period-2026-08-01]').trigger('click')
     await flushPromises()
     expect(w.get('[data-testid=filed-header]').text()).toContain('TXR000001')
-    expect(w.get('[data-testid=filed-header]').text()).toContain('owed 100000')
+    expect(w.get('[data-testid=filed-header]').text()).toContain('owed 100,000')
     expect(w.find('[data-testid=void-return]').exists()).toBe(false) // it has payments
     await w.get('[data-testid=pdf]').trigger('click')
     expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/tax/returns/4/return.pdf')
@@ -179,10 +179,10 @@ describe('tax views', () => {
   it('shows what is owed, what is overdue and how the books compare', async () => {
     const w = await mountView(TaxLiabilityView)
     await flushPromises()
-    expect(w.get('[data-testid=owed-total]').text()).toContain('100000')
-    expect(w.get('[data-testid=tax-PB1]').text()).toContain('440000')
+    expect(w.get('[data-testid=owed-total]').text()).toContain('100,000')
+    expect(w.get('[data-testid=tax-PB1]').text()).toContain('440,000')
     expect(w.get('[data-testid=overdue-unfiled]').text()).toContain('1 month(s) not filed')
-    expect(w.get('[data-testid=overdue-unpaid]').text()).toContain('100000 unpaid')
+    expect(w.get('[data-testid=overdue-unpaid]').text()).toContain('100,000 unpaid')
     expect(w.get('[data-testid=account-2410]').text()).toContain('–') // no difference
     await w.get('input[name=as_of]').setValue('2026-09-30')
     await w.get('[data-testid=apply]').trigger('submit')

@@ -58,13 +58,13 @@ const total = computed(() => {
 const statusLabel = (s: string): string => t(`payables.st_${s}` as 'payables.st_PAID')
 const statusVariant = (s: string) => ({ UNPAID: 'warning', PARTIAL: 'secondary', PAID: 'success', VOIDED: 'destructive' })[s] as 'warning' | 'secondary' | 'success' | 'destructive'
 const columns = computed<Column<Bill>[]>(() => [
-  { key: 'bill_date', label: t('payables.date') },
+  { key: 'bill_date', label: t('payables.date'), format: 'date' as const },
   { key: 'bill_number', label: t('payables.bill') },
   { key: 'supplier', label: t('payables.supplier') },
   { key: 'supplier_invoice_number', label: t('payables.invoice') },
-  { key: 'due_date', label: t('payables.due') },
-  { key: 'total', label: t('payables.total'), align: 'right' },
-  { key: 'outstanding', label: t('payables.owed'), align: 'right' },
+  { key: 'due_date', label: t('payables.due'), format: 'date' as const },
+  { key: 'total', label: t('payables.total'), align: 'right', format: 'money' as const },
+  { key: 'outstanding', label: t('payables.owed'), align: 'right', format: 'money' as const },
   { key: 'payment_status', label: t('payables.status') },
 ])
 
@@ -253,7 +253,7 @@ watch(() => pid.value, () => {
                   <small class="ml-2 text-xs text-muted-foreground">{{ t('payables.taxLineHint') }}</small>
                 </td>
                 <td class="pt-2 text-right"><b>{{ t('payables.total') }}</b></td>
-                <td class="pt-2 pr-3 text-right tabular-nums" data-testid="bill-total"><b>{{ fromMilli(total.sum) }}</b></td>
+                <td class="pt-2 pr-3 text-right tabular-nums" data-testid="bill-total"><b>{{ $money(fromMilli(total.sum)) }}</b></td>
                 <td />
               </tr>
             </tfoot>
@@ -324,12 +324,12 @@ watch(() => pid.value, () => {
                     <td class="py-1 pr-3">{{ l.line_no }}</td>
                     <td class="px-3">{{ l.account_code }} · {{ l.account_name }}</td>
                     <td class="px-3"><small class="text-muted-foreground">{{ l.description }}</small></td>
-                    <td class="pl-3 text-right tabular-nums">{{ l.amount }}</td>
+                    <td class="pl-3 text-right tabular-nums">{{ $money(l.amount) }}</td>
                   </tr>
                 </tbody>
               </table>
               <p class="mb-0 mt-2 text-sm text-muted-foreground" @click.stop>
-                {{ t('payables.journal', { number: opened.journal_number }) }} · {{ t('payables.paidInfo', { amount: opened.paid }) }}<template v-if="opened.void_reason"> · {{ t('payables.voidedReason', { reason: opened.void_reason }) }}</template>
+                {{ t('payables.journal', { number: opened.journal_number }) }} · {{ t('payables.paidInfo', { amount: $money(opened.paid) }) }}<template v-if="opened.void_reason"> · {{ t('payables.voidedReason', { reason: opened.void_reason }) }}</template>
               </p>
               <div v-if="can('payables.post') && opened.status === 'POSTED' && row.id === opened.id" class="mt-2" @click.stop>
                 <Button v-if="!voiding" type="button" variant="outline" size="sm" data-testid="void" @click="voiding = { reason: '', asking: false }">{{ t('payables.voidEllipsis') }}</Button>

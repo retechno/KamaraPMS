@@ -136,12 +136,12 @@ watch([key, pid], () => {
             </thead>
             <tbody>
               <tr v-for="(r, ri) in table.rows" :key="ri" class="border-b border-border hover:bg-accent/50">
-                <td v-for="(c, i) in r" :key="i" :class="['px-3 py-2', table.numeric.includes(i) && 'text-right tabular-nums']">{{ c }}</td>
+                <td v-for="(c, i) in r" :key="i" :class="['px-3 py-2', table.numeric.includes(i) && 'text-right tabular-nums']">{{ table.numeric.includes(i) ? $money(c) : $date(c) }}</td>
               </tr>
             </tbody>
             <tfoot v-if="table.footer">
               <tr data-testid="footer" class="font-semibold">
-                <th v-for="(c, i) in table.footer" :key="i" :class="['px-3 py-2', table.numeric.includes(i) ? 'text-right tabular-nums' : 'text-left']">{{ c }}</th>
+                <th v-for="(c, i) in table.footer" :key="i" :class="['px-3 py-2', table.numeric.includes(i) ? 'text-right tabular-nums' : 'text-left']">{{ table.numeric.includes(i) ? $money(c) : c }}</th>
               </tr>
             </tfoot>
           </table>

@@ -35,7 +35,7 @@ const fieldError = (field: string) => error.value?.fieldMessage(field)
 const columns = computed<Column<BankAccount>[]>(() => [
   { key: 'name', label: t('bankAccounts.name') },
   { key: 'account', label: t('bankAccounts.booksAccount') },
-  { key: 'book_balance', label: t('bankAccounts.bookBalance'), align: 'right' },
+  { key: 'book_balance', label: t('bankAccounts.bookBalance'), align: 'right', format: 'money' as const },
   { key: 'reconciled_to', label: t('bankAccounts.reconciledTo') },
   { key: 'open_statements', label: t('bankAccounts.openStatements') },
   { key: 'actions', label: '', align: 'right' },

@@ -30,7 +30,7 @@ describe('FoliosView', () => {
     await flushPromises()
     expect(GET.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { limit: 50, status: 'OPEN' } } })
     const row = w.get('[data-testid=folio-FOL000001]')
-    expect(row.text()).toContain('-500000')
+    expect(row.text()).toContain('-500,000')
     expect(row.findAll('a').map((a) => a.attributes('href'))).toEqual(['/folios/3', '/reservations/9'])
   })
 

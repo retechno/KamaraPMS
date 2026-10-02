@@ -48,7 +48,7 @@ const categoryLabel = (c: string): string => t(`lostFound.cat${c}` as never)
 
 const columns = computed<Column<LostFoundItem>[]>(() => [
   { key: 'item_number', label: t('lostFound.number'), sortable: true },
-  { key: 'found_on', label: t('lostFound.found'), sortable: true },
+  { key: 'found_on', label: t('lostFound.found'), sortable: true, format: 'date' as const },
   { key: 'where', label: t('lostFound.where') },
   { key: 'description', label: t('lostFound.item') },
   { key: 'storage_location', label: t('lostFound.keptAt') },
@@ -286,17 +286,17 @@ watch(() => [filter.status, filter.category], () => void load())
         <CardHeader><CardTitle>{{ selected.item_number }} · {{ selected.description }}</CardTitle></CardHeader>
         <CardContent class="flex flex-col gap-4">
           <p class="m-0 text-sm text-muted-foreground">
-            {{ t('lostFound.foundLine', { date: selected.found_on }) }}{{ where(selected) ? ` ${t('lostFound.inPlace', { place: where(selected) })}` : '' }}{{ selected.finder_name ? ` ${t('lostFound.byFinder', { name: selected.finder_name })}` : '' }}.
+            {{ t('lostFound.foundLine', { date: $date(selected.found_on) }) }}{{ where(selected) ? ` ${t('lostFound.inPlace', { place: where(selected) })}` : '' }}{{ selected.finder_name ? ` ${t('lostFound.byFinder', { name: selected.finder_name })}` : '' }}.
             <template v-if="selected.possible_owner"> {{ t('lostFound.possibleOwnerLine', { name: selected.possible_owner }) }}</template>
-            <template v-if="selected.status === 'RETURNED'"> {{ t('lostFound.handedTo', { name: selected.claimant_name ?? '', date: selected.closed_on ?? '' }) }}<template v-if="selected.claimant_proof"> ({{ selected.claimant_proof }})</template>.</template>
-            <template v-if="selected.status === 'DISPOSED'"> {{ t('lostFound.disposedOn', { date: selected.closed_on ?? '', note: selected.close_note ?? '' }) }}</template>
+            <template v-if="selected.status === 'RETURNED'"> {{ t('lostFound.handedTo', { name: selected.claimant_name ?? '', date: $date(selected.closed_on) ?? '' }) }}<template v-if="selected.claimant_proof"> ({{ selected.claimant_proof }})</template>.</template>
+            <template v-if="selected.status === 'DISPOSED'"> {{ t('lostFound.disposedOn', { date: $date(selected.closed_on) ?? '', note: selected.close_note ?? '' }) }}</template>
           </p>
 
           <div v-if="owners.length" data-testid="owners">
             <h3 class="m-0 mb-1 text-sm font-semibold">{{ t('lostFound.whoHadRoom') }}</h3>
             <ul class="m-0 flex list-none flex-col gap-2 p-0 text-sm">
               <li v-for="o in owners" :key="o.stay_id" class="flex flex-wrap items-center gap-2">
-                <span>{{ o.guest_name }} <small class="text-muted-foreground">{{ t('lostFound.stayLine', { number: o.stay_number, from: o.arrival_date, to: o.departure_date, contact: [o.phone, o.email].filter(Boolean).join(' · ') }) }}</small></span>
+                <span>{{ o.guest_name }} <small class="text-muted-foreground">{{ t('lostFound.stayLine', { number: o.stay_number, from: $date(o.arrival_date), to: $date(o.departure_date), contact: [o.phone, o.email].filter(Boolean).join(' · ') }) }}</small></span>
                 <Button v-if="selected.status === 'STORED' && can('lostfound.manage')" variant="outline" size="sm" :data-testid="`owner-${o.stay_number}`" @click="useOwner(o)">{{ t('lostFound.handToGuest') }}</Button>
               </li>
             </ul>

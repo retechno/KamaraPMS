@@ -32,12 +32,12 @@ const form = reactive({ account: Number(route.query.account) || 0, from: queryDa
 type Line = GeneralLedger['lines'][number] & { idx: number }
 const entries = computed<Line[]>(() => (report.value?.lines ?? []).map((l, i) => ({ ...l, idx: i })))
 const columns = computed<Column<Line>[]>(() => [
-  { key: 'journal_date', label: t('accountingBooks.date') },
+  { key: 'journal_date', label: t('accountingBooks.date'), format: 'date' as const },
   { key: 'journal_number', label: t('accountingBooks.journal') },
   { key: 'description', label: t('accountingBooks.detail') },
-  { key: 'debit', label: t('accountingBooks.debit'), align: 'right' },
-  { key: 'credit', label: t('accountingBooks.creditCol'), align: 'right' },
-  { key: 'balance', label: t('accountingBooks.balance'), align: 'right' },
+  { key: 'debit', label: t('accountingBooks.debit'), align: 'right', format: 'money' as const },
+  { key: 'credit', label: t('accountingBooks.creditCol'), align: 'right', format: 'money' as const },
+  { key: 'balance', label: t('accountingBooks.balance'), align: 'right', format: 'money' as const },
 ])
 
 const pid = computed(() => property.currentId)
@@ -128,9 +128,9 @@ watch(() => pid.value, () => {
     <Card v-if="report">
       <CardHeader><CardTitle>{{ report.account.code }} · {{ report.account.name }}</CardTitle></CardHeader>
       <CardContent>
-        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('accountingBooks.glRange', { from: report.from, to: report.to, side: t(`accountingBooks.side_${report.account.normal_side}` as 'accountingBooks.side_DEBIT') }) }}</p>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('accountingBooks.glRange', { from: $date(report.from), to: $date(report.to), side: t(`accountingBooks.side_${report.account.normal_side}` as 'accountingBooks.side_DEBIT') }) }}</p>
         <p v-if="report.truncated" class="alert" data-testid="truncated">{{ t('accountingBooks.glTruncated') }}</p>
-        <p class="mb-2 mt-0 text-sm" data-testid="opening"><span class="text-muted-foreground">{{ t('accountingBooks.opening') }}:</span> <b class="tabular-nums">{{ report.opening_balance }}</b></p>
+        <p class="mb-2 mt-0 text-sm" data-testid="opening"><span class="text-muted-foreground">{{ t('accountingBooks.opening') }}:</span> <b class="tabular-nums">{{ $money(report.opening_balance) }}</b></p>
         <DataTable :columns="columns" :rows="entries" row-key="idx" :row-test-id="(l) => `entry-${l.idx}`" :caption="t('accountingBooks.glTitle')" data-testid="ledger">
           <template #cell-debit="{ row }">{{ money(row.debit) }}</template>
           <template #cell-credit="{ row }">{{ money(row.credit) }}</template>
@@ -139,7 +139,7 @@ watch(() => pid.value, () => {
               <span>{{ t('accountingBooks.closingBalance') }}</span>
               <span class="text-right tabular-nums">{{ money(report.total_debit) }}</span>
               <span class="text-right tabular-nums">{{ money(report.total_credit) }}</span>
-              <span class="text-right tabular-nums">{{ report.closing_balance }}</span>
+              <span class="text-right tabular-nums">{{ $money(report.closing_balance) }}</span>
             </div>
           </template>
         </DataTable>

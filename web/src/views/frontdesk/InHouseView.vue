@@ -29,8 +29,8 @@ const columns = computed<Column<StaySummary>[]>(() => [
   { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
   { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
   { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true },
-  { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true },
-  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true },
+  { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true, format: 'date' as const },
+  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'party', label: t('frontDesk.page.party') },
 ])
 

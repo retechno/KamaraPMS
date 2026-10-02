@@ -43,7 +43,7 @@ describe('FiscalYearsView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.get('[data-testid=year-FY2026]').text()).toContain('12 of 12')
-    expect(w.get('[data-testid=year-FY2026]').text()).toContain('1840000')
+    expect(w.get('[data-testid=year-FY2026]').text()).toContain('1,840,000')
     expect(w.find('[data-testid=close-FY2026]').exists()).toBe(true)
     expect(w.find('[data-testid=close-FY2027]').exists()).toBe(false)
     expect(w.get('[data-testid=year-FY2025]').text()).toContain('journal JV000009')

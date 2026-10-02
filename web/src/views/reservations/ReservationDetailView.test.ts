@@ -61,7 +61,7 @@ describe('ReservationDetailView', () => {
     await flushPromises()
     expect(w.get('[data-testid=yield-2026-10-02]').text()).toContain('BUSY, WEEKEND')
     expect(w.find('[data-testid=yield-2026-10-03]').exists()).toBe(false)
-    expect(w.get('[data-testid=nights-4]').text()).toContain('1000000') // the grid price stays visible beside the sold one
+    expect(w.get('[data-testid=nights-4]').text()).toContain('1,000,000') // the grid price stays visible beside the sold one
   })
 
   it('shows the header, the nightly rates with overrides, and the estimate', async () => {
@@ -70,10 +70,10 @@ describe('ReservationDetailView', () => {
     expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
     expect(w.get('[data-testid=booker]').text()).toBe('Siti Nurhaliza')
     const nights = w.get('[data-testid=nights-4]').text()
-    expect(nights).toContain('900000')
+    expect(nights).toContain('900,000')
     expect(nights).toContain('override')
-    expect(w.get('[data-testid=line-estimate-4]').text()).toBe('2194500')
-    expect(w.get('[data-testid=estimate]').text()).toBe('2194500')
+    expect(w.get('[data-testid=line-estimate-4]').text()).toBe('2,194,500')
+    expect(w.get('[data-testid=estimate]').text()).toBe('2,194,500')
     expect(w.get('[data-testid=room-4]').text()).toContain('no room assigned')
   })
 

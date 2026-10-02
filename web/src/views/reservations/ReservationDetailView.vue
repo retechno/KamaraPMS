@@ -231,7 +231,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <span v-if="line.room_number" class="text-sm font-medium" :data-testid="`room-number-${line.id}`">{{ t('reservation.roomNumber', { number: line.room_number }) }}</span>
           <span v-else class="text-sm text-muted-foreground">{{ t('reservation.noRoom') }}</span>
           <StatusBadge domain="reservation" :status="line.status" :data-testid="`line-status-${line.id}`" />
-          <span class="text-sm">{{ line.arrival_date }} &rarr; {{ line.departure_date }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
+          <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
           <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
           <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
         </CardHeader>
@@ -247,9 +247,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </thead>
             <tbody>
               <tr v-for="n in line.nightly_rates" :key="n.date" class="border-t border-border">
-                <td class="py-1">{{ n.date }}</td>
-                <td class="py-1 text-right tabular-nums">{{ n.amount }}</td>
-                <td class="py-1 text-right tabular-nums text-muted-foreground">{{ n.grid_rate ?? n.base_rate ?? '—' }}</td>
+                <td class="py-1">{{ $date(n.date) }}</td>
+                <td class="py-1 text-right tabular-nums">{{ $money(n.amount) }}</td>
+                <td class="py-1 text-right tabular-nums text-muted-foreground">{{ $money(n.grid_rate ?? n.base_rate) || '—' }}</td>
                 <td class="py-1 pl-3">
                   <small v-if="n.is_override" class="text-muted-foreground">{{ t('reservation.override') }}</small>
                   <small v-if="n.yield_rules?.length" class="text-muted-foreground" :data-testid="`yield-${n.date}`" :title="t('reservation.yieldTitle')">{{ t('reservation.yieldLine', { codes: n.yield_rules.join(', ') }) }}</small>
@@ -259,8 +259,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <tfoot>
               <tr class="border-t border-border font-medium">
                 <td class="py-1.5">{{ t('reservation.estimateLine', { plan: line.rate_plan_code }) }}</td>
-                <td class="py-1.5 text-right tabular-nums" :data-testid="`line-estimate-${line.id}`">{{ line.estimate.total }}</td>
-                <td colspan="2" class="py-1.5 pl-3 text-xs font-normal text-muted-foreground">{{ t('reservation.estimateBreak', { net: line.estimate.net, service: line.estimate.service, tax: line.estimate.tax }) }}</td>
+                <td class="py-1.5 text-right tabular-nums" :data-testid="`line-estimate-${line.id}`">{{ $money(line.estimate.total) }}</td>
+                <td colspan="2" class="py-1.5 pl-3 text-xs font-normal text-muted-foreground">{{ t('reservation.estimateBreak', { net: $money(line.estimate.net), service: $money(line.estimate.service), tax: $money(line.estimate.tax) }) }}</td>
               </tr>
             </tfoot>
           </table>
@@ -298,13 +298,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <aside class="flex min-w-0 flex-col gap-4">
       <Card data-testid="summary">
         <CardContent class="flex flex-col gap-2 p-5 text-sm">
-          <p class="m-0 font-medium">{{ res.arrival_date }} &rarr; {{ res.departure_date }} <span class="font-normal text-muted-foreground">· {{ t('reservation.version', { n: res.version }) }}</span></p>
+          <p class="m-0 font-medium">{{ $date(res.arrival_date) }} &rarr; {{ $date(res.departure_date) }} <span class="font-normal text-muted-foreground">· {{ t('reservation.version', { n: res.version }) }}</span></p>
           <p class="m-0">
             {{ t('reservation.booker') }}:
             <RouterLink v-if="res.guest" :to="`/guests/${res.guest.id}`" data-testid="booker">{{ guestLabel(res.guest) }}</RouterLink>
             <span v-else class="text-muted-foreground" data-testid="no-booker">{{ t('reservation.notSet') }}</span>
           </p>
-          <p class="m-0 text-muted-foreground">{{ t('reservation.source') }} {{ res.source }} · {{ t('reservation.bookedOn') }} {{ res.reservation_date }}</p>
+          <p class="m-0 text-muted-foreground">{{ t('reservation.source') }} {{ $money(res.source) }} · {{ t('reservation.bookedOn') }} {{ $date(res.reservation_date) }}</p>
           <p v-if="res.company_id || res.booking_group_id" class="m-0" data-testid="billing-links">
             <template v-if="res.company_id">
               {{ t('reservation.company') }}:
@@ -319,7 +319,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <p v-if="res.cancellation_reason" class="m-0 text-muted-foreground">{{ t('reservation.cancelledReason', { reason: res.cancellation_reason }) }}</p>
           <div class="mt-1 border-t border-border pt-2">
             <p class="m-0 text-xs text-muted-foreground">{{ t('reservation.estimateTotal') }}</p>
-            <p class="m-0 text-xl font-semibold tabular-nums tracking-tight"><span data-testid="estimate">{{ estimateTotal }}</span></p>
+            <p class="m-0 text-xl font-semibold tabular-nums tracking-tight"><span data-testid="estimate">{{ $money(estimateTotal) }}</span></p>
           </div>
         </CardContent>
       </Card>
@@ -332,7 +332,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <ul class="m-0 list-none p-0 text-sm">
             <li v-for="f in res.folios" :key="f.id" class="flex items-center gap-2 py-1">
               <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink>
-              <span class="text-muted-foreground">· {{ t('reservation.folioLine', { status: f.status, balance: f.balance }) }}</span>
+              <span class="text-muted-foreground">· {{ t('reservation.folioLine', { status: f.status, balance: $money(f.balance) }) }}</span>
             </li>
           </ul>
         </CardContent>

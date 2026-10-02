@@ -28,11 +28,11 @@ const columns = computed<Column<RoomChargeItem>[]>(() => [
   { key: 'stay_number', label: t('roomCharges.stay') },
   { key: 'guest', label: t('roomCharges.guest') },
   { key: 'room_number', label: t('roomCharges.room') },
-  { key: 'service_date', label: t('roomCharges.night') },
-  { key: 'room_rate', label: t('roomCharges.rate'), align: 'right' },
-  { key: 'service_charge', label: t('roomCharges.service'), align: 'right' },
-  { key: 'tax', label: t('roomCharges.tax'), align: 'right' },
-  { key: 'total', label: 'Total', align: 'right' },
+  { key: 'service_date', label: t('roomCharges.night'), format: 'date' as const },
+  { key: 'room_rate', label: t('roomCharges.rate'), align: 'right', format: 'money' as const },
+  { key: 'service_charge', label: t('roomCharges.service'), align: 'right', format: 'money' as const },
+  { key: 'tax', label: t('roomCharges.tax'), align: 'right', format: 'money' as const },
+  { key: 'total', label: 'Total', align: 'right', format: 'money' as const },
   { key: 'status', label: t('roomCharges.status') },
 ])
 
@@ -118,7 +118,7 @@ watch([pid, businessDate], () => {
       <CardContent class="pt-4">
         <div class="mb-3 flex flex-wrap items-center gap-6">
           <span data-testid="ready-count">{{ t('roomCharges.readyCount', { n: preview.totals.ready_count }) }}</span>
-          <span>{{ t('roomCharges.total') }} <strong data-testid="ready-total">{{ preview.totals.ready_total }}</strong></span>
+          <span>{{ t('roomCharges.total') }} <strong data-testid="ready-total">{{ $money(preview.totals.ready_total) }}</strong></span>
           <Button v-if="preview.totals.ready_count" type="button" :disabled="busy" data-testid="post" @click="post">{{ t('roomCharges.post') }}</Button>
         </div>
         <EmptyState v-if="!preview.items.length" :title="t('roomCharges.empty')" data-testid="empty" />
@@ -133,10 +133,10 @@ watch([pid, businessDate], () => {
           data-testid="items"
         >
           <template #cell-room_number="{ row }">{{ row.room_number || '—' }}</template>
-          <template #cell-service_date="{ row }">{{ row.service_date }} <small v-if="isMissing(row)" class="text-muted-foreground">{{ t('roomCharges.missing') }}</small></template>
-          <template #cell-service_charge="{ row }">{{ row.status === 'READY' ? row.service_charge : '' }}</template>
-          <template #cell-tax="{ row }">{{ row.status === 'READY' ? row.tax : '' }}</template>
-          <template #cell-total="{ row }">{{ row.status === 'READY' ? row.total : '' }}</template>
+          <template #cell-service_date="{ row }">{{ $date(row.service_date) }} <small v-if="isMissing(row)" class="text-muted-foreground">{{ t('roomCharges.missing') }}</small></template>
+          <template #cell-service_charge="{ row }">{{ row.status === 'READY' ? $money(row.service_charge) : '' }}</template>
+          <template #cell-tax="{ row }">{{ row.status === 'READY' ? $money(row.tax) : '' }}</template>
+          <template #cell-total="{ row }">{{ row.status === 'READY' ? $money(row.total) : '' }}</template>
           <template #cell-status="{ row }"><Badge :variant="row.status === 'READY' ? 'success' : row.status === 'ERROR' ? 'destructive' : 'outline'">{{ row.status }}</Badge><small v-if="row.reason" class="text-muted-foreground"> {{ row.reason }}</small></template>
         </DataTable>
         <p v-if="problems.length" class="alert mb-0 mt-3" data-testid="problems">{{ t('roomCharges.problems', { n: problems.length }) }}</p>

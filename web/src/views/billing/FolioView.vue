@@ -256,11 +256,11 @@ const dialogTitle = computed(() => {
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
 const itemColumns = computed<Column<FolioItem>[]>(() => [
-  { key: 'business_date', label: t('folio.date') },
+  { key: 'business_date', label: t('folio.date'), format: 'date' as const },
   { key: 'description', label: t('folio.description') },
   { key: 'charge_code', label: t('folio.code') },
-  { key: 'debit', label: t('folio.debit'), align: 'right', class: 'tabular-nums' },
-  { key: 'credit', label: t('folio.credit'), align: 'right', class: 'tabular-nums' },
+  { key: 'debit', label: t('folio.debit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
+  { key: 'credit', label: t('folio.credit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'actions', label: '', align: 'right' },
 ])
 
@@ -313,15 +313,15 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <Card class="sticky top-[3.75rem] z-20 mb-4 flex flex-wrap items-center gap-x-8 gap-y-2 px-5 py-3" data-testid="summary">
       <div>
         <p class="m-0 text-xs text-muted-foreground">{{ t('folio.debit') }}</p>
-        <p class="m-0 font-semibold tabular-nums"><span data-testid="debit">{{ folio.totals.debit }}</span></p>
+        <p class="m-0 font-semibold tabular-nums"><span data-testid="debit">{{ $money(folio.totals.debit) }}</span></p>
       </div>
       <div>
         <p class="m-0 text-xs text-muted-foreground">{{ t('folio.credit') }}</p>
-        <p class="m-0 font-semibold tabular-nums"><span data-testid="credit">{{ folio.totals.credit }}</span></p>
+        <p class="m-0 font-semibold tabular-nums"><span data-testid="credit">{{ $money(folio.totals.credit) }}</span></p>
       </div>
       <div>
         <p class="m-0 text-xs text-muted-foreground">{{ t('folio.balance') }}</p>
-        <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ folio.balance }}</span></p>
+        <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ $money(folio.balance) }}</span></p>
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
         <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
@@ -346,8 +346,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
           <small class="ml-1 text-muted-foreground">{{ i.transaction_type }}</small>
         </template>
-        <template #cell-debit="{ row: i }"><span :class="Number(i.debit) === 0 && 'text-muted-foreground'">{{ i.debit }}</span></template>
-        <template #cell-credit="{ row: i }"><span :class="Number(i.credit) === 0 && 'text-muted-foreground'">{{ i.credit }}</span></template>
+        <template #cell-debit="{ row: i }"><span :class="Number(i.debit) === 0 && 'text-muted-foreground'">{{ $money(i.debit) }}</span></template>
+        <template #cell-credit="{ row: i }"><span :class="Number(i.credit) === 0 && 'text-muted-foreground'">{{ $money(i.credit) }}</span></template>
         <template #cell-actions="{ row: i }">
           <span class="inline-flex flex-wrap justify-end gap-1.5 no-underline">
             <Button v-if="reversible(i)" variant="outline" size="sm" :data-testid="`reverse-${i.id}`" @click="startCorrection('reverse', i)">{{ t('folio.reverse') }}</Button>
@@ -358,10 +358,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         </template>
         <template #detail="{ row: i }">
           <span class="text-sm text-muted-foreground">
-            {{ t('folio.detailLine', { quantity: i.quantity, unitPrice: i.unit_price, mode: i.price_mode.toLowerCase(), net: i.net_amount }) }}<template v-if="i.reason"> · {{ i.reason }}</template>
+            {{ t('folio.detailLine', { quantity: i.quantity, unitPrice: $money(i.unit_price), mode: i.price_mode.toLowerCase(), net: $money(i.net_amount) }) }}<template v-if="i.reason"> · {{ i.reason }}</template>
           </span>
           <ul v-if="i.components.length" class="m-0 mt-1 list-disc pl-5 text-sm">
-            <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ t('folio.componentLine', { name: c.name, rate: c.rate, base: c.base_amount, amount: c.amount }) }}</li>
+            <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ t('folio.componentLine', { name: c.name, rate: c.rate, base: $money(c.base_amount), amount: $money(c.amount) }) }}</li>
           </ul>
         </template>
         <template #empty><EmptyState :title="t('folio.nothing')" data-testid="empty" /></template>

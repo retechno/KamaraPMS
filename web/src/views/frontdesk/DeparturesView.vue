@@ -33,8 +33,8 @@ const columns = computed<Column<StaySummary>[]>(() => [
   { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
   { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
   { key: 'stay_number', label: t('frontDesk.page.stay'), sortable: true },
-  { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true },
-  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true },
+  { key: 'arrival_date', label: t('frontDesk.page.arrival'), sortable: true, format: 'date' as const },
+  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'actions', label: '', align: 'right' },
 ])
 
@@ -74,7 +74,7 @@ watch(() => [property.currentId, businessDate.value], () => {
     <DataTable :columns="columns" :rows="rows" row-key="id" :loading="!loaded" :row-test-id="(s) => `stay-${s.stay_number}`" :caption="t('frontDesk.page.departures')">
       <template #cell-stay_number="{ row }"><RouterLink :to="`/stays/${row.id}`">{{ row.stay_number }}</RouterLink></template>
       <template #cell-departure_date="{ row }">
-        {{ row.departure_date }}
+        {{ $date(row.departure_date) }}
         <Badge v-if="overdue(row)" variant="warning" class="ml-1" data-testid="overdue">{{ t('frontDesk.page.overdue') }}</Badge>
       </template>
       <template #cell-actions="{ row }">

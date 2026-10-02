@@ -44,7 +44,7 @@ const columns = computed<Column<Payment>[]>(() => [
   { key: 'payment_number', label: t('cashier.number'), sortable: true },
   { key: 'payment_type', label: t('cashier.type'), sortable: true },
   { key: 'payment_method', label: t('cashier.method'), sortable: true },
-  { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums' },
+  { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const },
   { key: 'status', label: t('cashier.status'), sortable: true },
   { key: 'folio_id', label: t('cashier.folio') },
   ...(canPrint.value ? [{ key: 'receipt', label: '', align: 'right' as const }] : []),

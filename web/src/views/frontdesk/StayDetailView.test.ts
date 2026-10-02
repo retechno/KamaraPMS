@@ -47,7 +47,7 @@ describe('StayDetailView', () => {
     await flushPromises()
     expect(w.get('[data-testid=stay-status]').text()).toBe('OPEN')
     expect(w.get('[data-testid=companions]').text()).toContain('Budi Santoso')
-    expect(w.get('[data-testid=segments]').text()).toContain('Room 101 from 2026-09-30')
+    expect(w.get('[data-testid=segments]').text()).toContain('Room 101 from 30 Sep 2026')
     expect(w.get('[data-testid=nights]').text()).toContain('not yet')
     expect(w.get('[data-testid=folio-8]').attributes('href')).toBe('/folios/8')
   })

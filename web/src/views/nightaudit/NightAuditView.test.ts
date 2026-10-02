@@ -114,7 +114,7 @@ describe('NightAuditView', () => {
     await w.get('[data-testid=run-audit]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/night-audit/run', { params: { path: { propertyId: 7 } }, body: { business_date: '2026-09-30' } }])
-    expect(w.get('[data-testid=new-date]').text()).toBe('2026-10-01')
+    expect(w.get('[data-testid=new-date]').text()).toBe('1 Oct 2026')
     expect(w.get('[data-testid=summary]').text()).toContain('66.67%')
     expect(usePropertyStore().refreshClock).toHaveBeenCalled()
   })
@@ -146,7 +146,7 @@ describe('NightAuditView', () => {
     const ready = mountView()
     await flushPromises()
     expect(ready.get('[data-testid=readiness]').text()).toBe('Ready to run')
-    expect(ready.get('[data-testid=audit-date]').text()).toBe('2026-09-30')
+    expect(ready.get('[data-testid=audit-date]').text()).toBe('30 Sep 2026')
     const stuck = mountView(blocked())
     await flushPromises()
     expect(stuck.get('[data-testid=readiness]').text()).toBe('3 step(s) need attention') // arrivals, departures, room charges

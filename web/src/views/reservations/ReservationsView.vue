@@ -34,8 +34,8 @@ const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true },
   { key: 'guest_name', label: t('reservations.booker'), sortable: true },
   { key: 'company', label: t('reservations.companyGroup') },
-  { key: 'arrival_date', label: t('reservations.arrival'), sortable: true },
-  { key: 'departure_date', label: t('reservations.departure'), sortable: true },
+  { key: 'arrival_date', label: t('reservations.arrival'), sortable: true, format: 'date' as const },
+  { key: 'departure_date', label: t('reservations.departure'), sortable: true, format: 'date' as const },
   { key: 'room_count', label: t('reservations.rooms'), align: 'right', sortable: true },
   { key: 'status', label: t('reservations.status'), sortable: true },
 ])

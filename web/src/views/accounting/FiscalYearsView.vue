@@ -36,7 +36,7 @@ const columns = computed<Column<FiscalYear>[]>(() => [
   { key: 'label', label: t('accounting.fyYear') },
   { key: 'range', label: t('accounting.fyFromTo') },
   { key: 'months', label: t('accounting.fyMonthsClosed') },
-  { key: 'net_income', label: t('accounting.fyResult'), align: 'right' },
+  { key: 'net_income', label: t('accounting.fyResult'), align: 'right', format: 'money' as const },
   { key: 'status', label: t('accounting.status') },
   { key: 'actions', label: '', align: 'right' },
 ])
@@ -134,7 +134,7 @@ watch(() => pid.value, () => {
       <EmptyState v-if="loaded && !years.length" :title="t('accounting.fyEmpty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="years" row-key="year_start" :row-test-id="(y) => `year-${y.label}`" :caption="t('accounting.fyTitle')" data-testid="years">
         <template #cell-label="{ row }"><b>{{ row.label }}</b></template>
-        <template #cell-range="{ row }">{{ row.year_start }} – {{ row.year_end }}</template>
+        <template #cell-range="{ row }">{{ $date(row.year_start) }} – {{ $date(row.year_end) }}</template>
         <template #cell-months="{ row }">{{ t('accounting.fyOf', { n: row.closed_months, total: row.months }) }}</template>
         <template #cell-status="{ row }">
           <Badge :variant="row.status === 'CLOSED' ? 'outline' : 'success'">{{ row.status === 'CLOSED' ? t('accounting.closed') : t('accounting.open') }}</Badge>

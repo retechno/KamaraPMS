@@ -138,20 +138,20 @@ const statusText = (s: CityLedgerInvoice['payment_status']): string =>
 
 const candidateColumns = computed<Column<CityLedgerCandidate>[]>(() => [
   { key: 'select', label: '' },
-  { key: 'checked_out_at', label: t('clAccount.checkOut') },
+  { key: 'checked_out_at', label: t('clAccount.checkOut'), format: 'datetime' as const },
   { key: 'guest_name', label: t('clAccount.guest') },
   { key: 'room_numbers', label: t('clAccount.room') },
   { key: 'folio_number', label: t('clAccount.folio') },
   { key: 'reference_number', label: t('clAccount.reference') },
-  { key: 'amount', label: t('clAccount.amount'), align: 'right' },
+  { key: 'amount', label: t('clAccount.amount'), align: 'right', format: 'money' as const },
 ])
 const invoiceColumns = computed<Column<CityLedgerInvoice>[]>(() => [
   { key: 'invoice_number', label: t('clAccount.number') },
-  { key: 'invoice_date', label: t('clAccount.date') },
-  { key: 'due_date', label: t('clAccount.due') },
-  { key: 'total', label: t('clAccount.total'), align: 'right' },
-  { key: 'paid', label: t('clAccount.paid'), align: 'right' },
-  { key: 'outstanding', label: t('clAccount.outstanding'), align: 'right' },
+  { key: 'invoice_date', label: t('clAccount.date'), format: 'date' as const },
+  { key: 'due_date', label: t('clAccount.due'), format: 'date' as const },
+  { key: 'total', label: t('clAccount.total'), align: 'right', format: 'money' as const },
+  { key: 'paid', label: t('clAccount.paid'), align: 'right', format: 'money' as const },
+  { key: 'outstanding', label: t('clAccount.outstanding'), align: 'right', format: 'money' as const },
   { key: 'payment_status', label: t('setup.status') },
   { key: 'actions', label: '', align: 'right' },
 ])
@@ -267,17 +267,17 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <Card class="mb-4" data-testid="account-summary">
       <CardContent class="pt-4">
         <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
-          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.balance') }}</dt><dd class="m-0 text-sm"><b data-testid="balance">{{ account.balance }}</b></dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.transferred') }}</dt><dd class="m-0 text-sm">{{ account.transferred }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.received') }}</dt><dd class="m-0 text-sm">{{ account.received }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.creditLimit') }}</dt><dd class="m-0 text-sm">{{ account.credit_limit ?? t('clAccount.noLimit') }}</dd></div>
-          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.available') }}</dt><dd class="m-0 text-sm">{{ account.available ?? '-' }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.balance') }}</dt><dd class="m-0 text-sm"><b data-testid="balance">{{ $money(account.balance) }}</b></dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.transferred') }}</dt><dd class="m-0 text-sm">{{ $money(account.transferred) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.received') }}</dt><dd class="m-0 text-sm">{{ $money(account.received) }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.creditLimit') }}</dt><dd class="m-0 text-sm">{{ account.credit_limit ? $money(account.credit_limit) : t('clAccount.noLimit') }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.available') }}</dt><dd class="m-0 text-sm">{{ account.available ? $money(account.available) : '-' }}</dd></div>
           <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.terms') }}</dt><dd class="m-0 text-sm">{{ t('clAccount.days', { n: account.payment_terms_days }) }}</dd></div>
         </dl>
         <table v-if="aging" class="mt-4 w-full border-collapse text-sm" data-testid="aging">
-          <caption class="pb-1.5 text-left text-xs text-muted-foreground">{{ t('clAccount.aging', { date: aging.as_of }) }}</caption>
+          <caption class="pb-1.5 text-left text-xs text-muted-foreground">{{ t('clAccount.aging', { date: $date(aging.as_of) }) }}</caption>
           <thead><tr class="border-b border-border"><th v-for="b in aging.buckets" :key="b.label" class="py-1 text-right text-xs font-medium text-muted-foreground">{{ b.label }}</th></tr></thead>
-          <tbody><tr><td v-for="b in aging.buckets" :key="b.label" class="py-1.5 text-right tabular-nums">{{ b.amount }}</td></tr></tbody>
+          <tbody><tr><td v-for="b in aging.buckets" :key="b.label" class="py-1.5 text-right tabular-nums">{{ $money(b.amount) }}</td></tr></tbody>
         </table>
       </CardContent>
     </Card>
@@ -336,7 +336,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <FormField class="w-80" :label="t('clAccount.invoiceNote')">
             <template #default="{ id }"><Input :id="id" v-model="invoiceNotes" name="invoice_notes" maxlength="500" /></template>
           </FormField>
-          <Button type="submit" :disabled="busy || !picked.length" data-testid="create-invoice">{{ t('clAccount.createInvoice', { n: picked.length, total: pickedTotal }) }}</Button>
+          <Button type="submit" :disabled="busy || !picked.length" data-testid="create-invoice">{{ t('clAccount.createInvoice', { n: picked.length, total: $money(pickedTotal) }) }}</Button>
         </form>
       </CardContent>
     </Card>
@@ -345,7 +345,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <form novalidate data-testid="pay-form" @submit.prevent="payInvoice">
         <CardHeader>
           <CardTitle>{{ t('clAccount.payTitle', { number: paying.invoice.invoice_number }) }}</CardTitle>
-          <p class="m-0 text-sm text-muted-foreground">{{ t('clAccount.payHint', { amount: paying.invoice.outstanding }) }}</p>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('clAccount.payHint', { amount: $money(paying.invoice.outstanding) }) }}</p>
         </CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-3">
@@ -416,18 +416,18 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               </tr>
             </thead>
             <tbody class="[&_td]:py-1.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-border">
-              <tr><td colspan="6">{{ t('clAccount.opening') }}</td><td class="text-right tabular-nums">{{ statement.opening_balance }}</td><td /></tr>
+              <tr><td colspan="6">{{ t('clAccount.opening') }}</td><td class="text-right tabular-nums">{{ $money(statement.opening_balance) }}</td><td /></tr>
               <tr v-for="l in statement.lines" :key="`${l.kind}-${l.number}`" :class="{ voided: l.status === 'VOIDED', 'text-muted-foreground line-through': l.status === 'VOIDED' }" :data-testid="`line-${l.number}`">
-                <td>{{ l.date }}</td>
+                <td>{{ $date(l.date) }}</td>
                 <td>{{ l.number }}</td>
                 <td>{{ l.description }}<template v-if="l.guest_name"> · {{ l.guest_name }}</template><small v-if="l.status === 'VOIDED'"> {{ t('clAccount.voidedNote') }}</small></td>
                 <td>{{ l.reference }}</td>
                 <td class="text-right tabular-nums">{{ l.debit === '0' ? '' : l.debit }}</td>
                 <td class="text-right tabular-nums">{{ l.credit === '0' ? '' : l.credit }}</td>
-                <td class="text-right tabular-nums">{{ l.balance }}</td>
+                <td class="text-right tabular-nums">{{ $money(l.balance) }}</td>
                 <td><Button v-if="l.kind === 'RECEIPT' && voidable(l.number)" type="button" variant="outline" size="sm" :data-testid="`void-${l.number}`" @click="startVoid(l.number)">{{ t('clAccount.void') }}</Button></td>
               </tr>
-              <tr class="font-semibold"><td colspan="4">{{ t('clAccount.total') }}</td><td class="text-right tabular-nums">{{ statement.total_debit }}</td><td class="text-right tabular-nums">{{ statement.total_credit }}</td><td class="text-right tabular-nums"><b>{{ statement.closing_balance }}</b></td><td /></tr>
+              <tr class="font-semibold"><td colspan="4">{{ t('clAccount.total') }}</td><td class="text-right tabular-nums">{{ $money(statement.total_debit) }}</td><td class="text-right tabular-nums">{{ $money(statement.total_credit) }}</td><td class="text-right tabular-nums"><b>{{ $money(statement.closing_balance) }}</b></td><td /></tr>
             </tbody>
           </table>
         </div>

@@ -68,7 +68,7 @@ const offerColumns = computed<Column<Offer>[]>(() => [
   { key: 'type', label: t('newReservation.roomType') },
   { key: 'left', label: t('newReservation.roomsLeft') },
   { key: 'plan', label: t('newReservation.ratePlan') },
-  { key: 'estimate', label: t('newReservation.estimate'), align: 'right', class: 'tabular-nums' },
+  { key: 'estimate', label: t('newReservation.estimate'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'action', label: '', align: 'right' },
 ])
 const businessDate = computed(() => property.clock?.business_date ?? '')
@@ -234,7 +234,7 @@ async function book(): Promise<void> {
           </template>
           <template #cell-estimate="{ row: o }">
             <template v-if="o.plan">
-              <template v-if="o.plan.estimate">{{ o.plan.estimate.total }}</template>
+              <template v-if="o.plan.estimate">{{ $money(o.plan.estimate.total) }}</template>
               <small v-else class="text-muted-foreground" data-testid="missing">{{ t('newReservation.missing', { n: o.plan.missing_nights ?? 0 }) }}</small>
             </template>
           </template>
@@ -287,9 +287,9 @@ async function book(): Promise<void> {
               <template #default="{ id, invalid }">
                 <NativeSelect :id="id" v-model.number="form.groupId" name="booking_group_id" :aria-invalid="invalid">
                   <option :value="0">{{ t('newReservation.groupNone') }}</option>
-                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ g.arrival_date }} - {{ g.departure_date }})</option>
+                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ $date(g.arrival_date) }} - {{ $date(g.departure_date) }})</option>
                 </NativeSelect>
-                <small v-if="chosenGroup" class="text-xs text-muted-foreground" data-testid="group-hint">{{ t('newReservation.groupHint', { from: chosenGroup.arrival_date, to: chosenGroup.departure_date }) }}{{ chosenGroup.company_name ? t('newReservation.groupHintCompany', { company: chosenGroup.company_name }) : '' }}.</small>
+                <small v-if="chosenGroup" class="text-xs text-muted-foreground" data-testid="group-hint">{{ t('newReservation.groupHint', { from: $date(chosenGroup.arrival_date), to: $date(chosenGroup.departure_date) }) }}{{ chosenGroup.company_name ? t('newReservation.groupHintCompany', { company: chosenGroup.company_name }) : '' }}.</small>
               </template>
             </FormField>
             <FormField v-if="companies.length && !form.groupId" :label="t('newReservation.company')" :error="fieldError('company_id')">

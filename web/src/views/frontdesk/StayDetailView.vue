@@ -31,8 +31,8 @@ const checkingOut = ref(false)
 
 type Night = StayDetail['nightly_rates'][number]
 const nightColumns = computed<Column<Night>[]>(() => [
-  { key: 'date', label: t('stay.night') },
-  { key: 'amount', label: t('stay.amount'), align: 'right' },
+  { key: 'date', label: t('stay.night'), format: 'date' as const },
+  { key: 'amount', label: t('stay.amount'), align: 'right', format: 'money' as const },
   { key: 'posted', label: t('stay.charged') },
 ])
 
@@ -116,13 +116,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 flex flex-wrap items-center gap-2">
           <Badge variant="secondary" data-testid="stay-status">{{ detail.stay.status }}</Badge>
           <span>
-            {{ detail.guest.first_name }} {{ detail.guest.last_name }} · {{ detail.stay.arrival_date }} &rarr; {{ detail.stay.departure_date }} ·
+            {{ detail.guest.first_name }} {{ detail.guest.last_name }} · {{ $date(detail.stay.arrival_date) }} &rarr; {{ $date(detail.stay.departure_date) }} ·
             {{ t('stay.adults', { n: detail.stay.adult_count, c: detail.stay.child_count }) }} · {{ detail.line.room_type_code }}
           </span>
         </p>
         <p class="mb-0 mt-2 text-sm text-muted-foreground">
           {{ t('stay.reservation') }} <RouterLink :to="`/reservations/${detail.line.reservation_id}`" class="text-primary hover:underline">{{ detail.line.confirmation_number }}</RouterLink>
-          <template v-for="f in detail.folios" :key="f.id"> · {{ t('stay.folio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ t('stay.balance', { amount: f.balance }) }})</template>
+          <template v-for="f in detail.folios" :key="f.id"> · {{ t('stay.folio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ t('stay.balance', { amount: $money(f.balance) }) }})</template>
         </p>
         <p v-if="detail.guests.length" class="mb-0 mt-2 text-sm text-muted-foreground" data-testid="companions">{{ t('stay.with', { names: detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }) }}</p>
         <div class="mt-4 flex flex-wrap justify-end gap-2">
@@ -147,7 +147,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <CardHeader><CardTitle>{{ t('stay.rooms') }}</CardTitle></CardHeader>
       <CardContent>
         <ul class="m-0 pl-5 text-sm" data-testid="segments">
-          <li v-for="s in detail.segments" :key="s.id">{{ t('stay.segment', { room: s.room_number, from: s.start_business_date }) }}<template v-if="s.end_business_date">{{ t('stay.segmentTo', { to: s.end_business_date }) }}</template><template v-else>{{ t('stay.segmentCurrent') }}</template></li>
+          <li v-for="s in detail.segments" :key="s.id">{{ t('stay.segment', { room: s.room_number, from: $date(s.start_business_date) }) }}<template v-if="s.end_business_date">{{ t('stay.segmentTo', { to: $date(s.end_business_date) }) }}</template><template v-else>{{ t('stay.segmentCurrent') }}</template></li>
         </ul>
       </CardContent>
     </Card>

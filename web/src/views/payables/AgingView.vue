@@ -32,7 +32,7 @@ type SupplierRow = PayablesAging['suppliers'][number]
 const columns = computed<Column<SupplierRow>[]>(() => [
   { key: 'supplier', label: t('payables.supplier') },
   ...BUCKETS.map((k) => ({ key: k, label: bucketLabel(k), align: 'right' as const })),
-  { key: 'total', label: t('payables.total'), align: 'right' as const },
+  { key: 'total', label: t('payables.total'), align: 'right' as const, format: 'money' as const },
 ])
 
 async function load(): Promise<void> {
@@ -70,7 +70,7 @@ watch(() => pid.value, () => {
     </Card>
     <Card v-if="report">
       <CardContent class="pt-4">
-        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('payables.asOfNote', { date: report.as_of }) }}</p>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('payables.asOfNote', { date: $date(report.as_of) }) }}</p>
         <EmptyState v-if="!report.suppliers.length" :title="t('payables.aEmpty')" data-testid="empty" />
         <DataTable
           v-else
@@ -87,14 +87,14 @@ watch(() => pid.value, () => {
         >
           <template #cell-supplier="{ row }">{{ row.supplier_code }} · {{ row.supplier_name }}</template>
           <template v-for="k in BUCKETS" :key="k" #[`cell-${k}`]="{ row }">{{ money(row.buckets[k]) }}</template>
-          <template #cell-total="{ row }"><b>{{ row.total }}</b></template>
+          <template #cell-total="{ row }"><b>{{ $money(row.total) }}</b></template>
           <template #detail="{ row }">
             <table class="w-full border-collapse text-sm">
               <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">{{ t('payables.bill') }}</th><th class="px-3 font-medium">{{ t('payables.invoice') }}</th><th class="px-3 font-medium">{{ t('payables.billDateCol') }}</th><th class="px-3 font-medium">{{ t('payables.due') }}</th><th class="px-3 text-right font-medium">{{ t('payables.daysLate') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.owed') }}</th></tr></thead>
               <tbody>
                 <tr v-for="bill in row.bills" :key="bill.bill_id" class="border-b border-border">
-                  <td class="py-1 pr-3">{{ bill.bill_number }}</td><td class="px-3">{{ bill.supplier_invoice_number }}</td><td class="px-3">{{ bill.bill_date }}</td><td class="px-3">{{ bill.due_date }}</td>
-                  <td class="px-3 text-right tabular-nums">{{ bill.days_overdue || '' }}</td><td class="pl-3 text-right tabular-nums">{{ bill.outstanding }}</td>
+                  <td class="py-1 pr-3">{{ bill.bill_number }}</td><td class="px-3">{{ bill.supplier_invoice_number }}</td><td class="px-3">{{ $date(bill.bill_date) }}</td><td class="px-3">{{ $date(bill.due_date) }}</td>
+                  <td class="px-3 text-right tabular-nums">{{ bill.days_overdue || '' }}</td><td class="pl-3 text-right tabular-nums">{{ $money(bill.outstanding) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -103,7 +103,7 @@ watch(() => pid.value, () => {
             <div class="mt-2 grid grid-cols-[1fr_repeat(6,minmax(5rem,auto))] gap-x-3 border-t border-border px-3 pt-3 text-sm font-semibold" data-testid="totals">
               <span>{{ t('payables.total') }}</span>
               <span v-for="k in BUCKETS" :key="k" class="text-right tabular-nums">{{ money(report.buckets[k]) }}</span>
-              <span class="text-right tabular-nums">{{ report.total }}</span>
+              <span class="text-right tabular-nums">{{ $money(report.total) }}</span>
             </div>
           </template>
         </DataTable>

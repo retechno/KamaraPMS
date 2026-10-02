@@ -43,7 +43,7 @@ const columns = computed<Column<Supplier>[]>(() => [
   { key: 'name', label: t('payables.name') },
   { key: 'terms', label: t('payables.colTerms') },
   { key: 'account', label: t('payables.usualAccount') },
-  { key: 'outstanding', label: t('payables.owed'), align: 'right' },
+  { key: 'outstanding', label: t('payables.owed'), align: 'right', format: 'money' as const },
   { key: 'actions', label: '', align: 'right' },
 ])
 const owed = computed(() => visible.value.reduce((sum, s) => sum + Number(s.outstanding), 0))
@@ -218,7 +218,7 @@ watch(() => pid.value, () => {
             </template>
           </DataTable>
           <p class="mb-0 mt-3 flex justify-between border-t border-border pt-3 text-sm font-semibold">
-            <span>{{ t('payables.totalOwed') }}</span><span class="tabular-nums" data-testid="owed">{{ owed }}</span>
+            <span>{{ t('payables.totalOwed') }}</span><span class="tabular-nums" data-testid="owed">{{ $money(owed) }}</span>
           </p>
         </template>
       </CardContent>

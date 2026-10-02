@@ -63,7 +63,7 @@ async function submit(): Promise<void> {
       <template v-if="step === 'review'">
         <ol class="m-0 grid gap-2 pl-5">
           <li :class="{ 'marker:text-primary': !early || confirmEarly }" data-testid="step-departure">
-            {{ t('checkout.departure', { date: detail.stay.departure_date }) }}
+            {{ t('checkout.departure', { date: $date(detail.stay.departure_date) }) }}
             <template v-if="early">
               {{ t('checkout.early') }}
               <label class="ml-2 inline-flex items-center gap-1.5 text-sm"><input v-model="confirmEarly" type="checkbox" name="confirm_early" class="size-4 accent-primary" /><span>{{ t('checkout.confirmEarly') }}</span></label>
@@ -74,7 +74,7 @@ async function submit(): Promise<void> {
             <template v-if="!unbalanced.length">{{ t('checkout.balanced') }}</template>
             <template v-else>
               {{ t('checkout.withBalance') }}
-              <span v-for="f in unbalanced" :key="f.id"><RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ f.balance }}) </span>
+              <span v-for="f in unbalanced" :key="f.id"><RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ $money(f.balance) }}) </span>
             </template>
           </li>
         </ol>
@@ -87,7 +87,7 @@ async function submit(): Promise<void> {
       <template v-else-if="result">
         <p class="mt-0" data-testid="checkout-done">{{ t('checkout.done') }} <strong>{{ result.housekeeping }}</strong>.</p>
         <ul class="m-0 pl-5 text-sm">
-          <li v-for="c in result.posted_room_charges" :key="c.service_date">{{ t('checkout.roomCharge', { date: c.service_date, total: c.total }) }}</li>
+          <li v-for="c in result.posted_room_charges" :key="c.service_date">{{ t('checkout.roomCharge', { date: $date(c.service_date), total: $money(c.total) }) }}</li>
           <li v-for="f in result.folios" :key="f.id">{{ t('checkout.folioStatus', { number: f.folio_number, status: f.status }) }}</li>
         </ul>
       </template>

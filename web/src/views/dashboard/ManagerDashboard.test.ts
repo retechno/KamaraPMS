@@ -58,7 +58,7 @@ describe('ManagerDashboard', () => {
     expect(w.get('[data-testid=kpi-inhouse]').text()).toContain('owe 1200000')
     expect(w.get('[data-testid=kpi-city-ledger]').text()).toContain('2500000')
     expect(w.get('[data-testid=housekeeping]').text()).toContain('Dirty')
-    expect(w.get('[data-testid=payments]').text()).toContain('2900000')
+    expect(w.get('[data-testid=payments]').text()).toContain('2,900,000')
   })
 
   it('compares the month with the one before and draws the days', async () => {

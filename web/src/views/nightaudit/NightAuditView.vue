@@ -45,13 +45,13 @@ const arrivalColumns = computed<Column<(typeof arrivals.value)[number]>[]>(() =>
   { key: 'confirmation_number', label: t('nightAudit.reservation') },
   { key: 'guest', label: t('nightAudit.guest') },
   { key: 'room_type', label: t('nightAudit.room') },
-  { key: 'arrival_date', label: t('nightAudit.arrival') },
+  { key: 'arrival_date', label: t('nightAudit.arrival'), format: 'date' as const },
 ])
 const departureColumns = computed<Column<(typeof departures.value)[number]>[]>(() => [
   { key: 'stay_number', label: t('nightAudit.stay') },
   { key: 'guest', label: t('nightAudit.guest') },
   { key: 'room', label: t('nightAudit.room') },
-  { key: 'departure_date', label: t('nightAudit.departure') },
+  { key: 'departure_date', label: t('nightAudit.departure'), format: 'date' as const },
 ])
 
 async function load(): Promise<void> {
@@ -130,7 +130,7 @@ watch(pid, () => {
 <template>
   <PageHeader :title="t('nightAudit.title')">
     <template v-if="preview" #marks>
-      <Badge variant="secondary" data-testid="audit-date">{{ preview.business_date }}</Badge>
+      <Badge variant="secondary" data-testid="audit-date">{{ $date(preview.business_date) }}</Badge>
       <Badge v-if="!result" :variant="attention ? 'warning' : 'success'" data-testid="readiness">
         {{ attention ? t('nightAudit.notReady', { n: attention }) : t('nightAudit.ready') }}
       </Badge>
@@ -152,9 +152,9 @@ watch(pid, () => {
       <CardHeader class="flex-row items-center gap-3">
         <CheckCircle2 class="size-6 text-success" aria-hidden="true" />
         <div>
-          <CardTitle>{{ t('nightAudit.closedTitle', { date: result.closed_business_date }) }}</CardTitle>
+          <CardTitle>{{ t('nightAudit.closedTitle', { date: $date(result.closed_business_date) }) }}</CardTitle>
           <p class="m-0 mt-0.5 text-sm text-muted-foreground">
-            {{ t('nightAudit.newDateIs') }} <strong class="text-foreground" data-testid="new-date">{{ result.new_business_date }}</strong>. {{ t('nightAudit.chargesPosted', { n: result.room_charges_posted }) }}
+            {{ t('nightAudit.newDateIs') }} <strong class="text-foreground" data-testid="new-date">{{ $date(result.new_business_date) }}</strong>. {{ t('nightAudit.chargesPosted', { n: result.room_charges_posted }) }}
           </p>
         </div>
       </CardHeader>
@@ -223,14 +223,14 @@ watch(pid, () => {
 
       <StepCard :step="4" :title="t('nightAudit.stepCharges')" :state="chargeIssues ? 'blocked' : 'ok'" data-testid="charges">
         <p class="m-0 text-sm" data-testid="charge-counts">
-          {{ t('nightAudit.chargeCountsBefore', { missing: preview.missing_charges.count, tonight: preview.tonight_charges.count, total: preview.tonight_charges.total }) }}
+          {{ t('nightAudit.chargeCountsBefore', { missing: preview.missing_charges.count, tonight: preview.tonight_charges.count, total: $money(preview.tonight_charges.total) }) }}
           <RouterLink to="/room-charges">{{ t('nav.items.roomCharges') }}</RouterLink> {{ t('nightAudit.chargeCountsAfter') }}
         </p>
         <div v-if="blockers?.charge_errors.length" class="alert mb-0 mt-3" data-testid="charge-errors">
           <strong>{{ t('nightAudit.chargeErrors', { n: blockers.charge_errors.length }) }}</strong>
           <ul class="m-0 mt-1 pl-5">
             <li v-for="c in blockers.charge_errors" :key="`${c.stay_id}-${c.service_date}`">
-              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ c.service_date }}: {{ c.reason }}
+              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ $date(c.service_date) }}: {{ c.reason }}
             </li>
           </ul>
         </div>
@@ -238,7 +238,7 @@ watch(pid, () => {
           <strong>{{ t('nightAudit.invalidCharges', { n: blockers.invalid_charges.length }) }}</strong>
           <ul class="m-0 mt-1 pl-5">
             <li v-for="c in blockers.invalid_charges" :key="c.folio_item_id">
-              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ c.service_date }} ({{ c.reason }}): {{ t('nightAudit.reverseOnFolio') }}
+              <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ $date(c.service_date) }} ({{ c.reason }}): {{ t('nightAudit.reverseOnFolio') }}
             </li>
           </ul>
         </div>
@@ -248,11 +248,11 @@ watch(pid, () => {
         <CardHeader><CardTitle>{{ t('nightAudit.warnings') }} <small class="font-normal text-muted-foreground">{{ t('nightAudit.warningsNote') }}</small></CardTitle></CardHeader>
         <CardContent>
           <ul class="m-0 pl-5 text-sm">
-            <li v-for="d in preview.warnings.stale_drafts" :key="d.reservation_room_id">{{ t('nightAudit.staleDraft', { number: d.confirmation_number, date: d.arrival_date }) }}</li>
+            <li v-for="d in preview.warnings.stale_drafts" :key="d.reservation_room_id">{{ t('nightAudit.staleDraft', { number: d.confirmation_number, date: $date(d.arrival_date) }) }}</li>
             <li v-for="f in preview.warnings.open_folios_of_cancelled_reservations" :key="f.folio_id">
-              {{ t('nightAudit.openFolioBefore') }} <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> {{ t('nightAudit.openFolioAfter', { number: f.confirmation_number, balance: f.balance }) }}
+              {{ t('nightAudit.openFolioBefore') }} <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> {{ t('nightAudit.openFolioAfter', { number: f.confirmation_number, balance: $money(f.balance) }) }}
             </li>
-            <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: b.end_date }) }}</li>
+            <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: $date(b.end_date) }) }}</li>
           </ul>
         </CardContent>
       </Card>
@@ -261,7 +261,7 @@ watch(pid, () => {
         <p v-if="!preview.can_run" class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="cannot-run">{{ t('nightAudit.resolveFirst') }}</p>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="confirmRun" type="checkbox" name="confirm_run" :disabled="!preview.can_run" />
-          <span>{{ t('nightAudit.confirmRun', { date: preview.business_date }) }}</span>
+          <span>{{ t('nightAudit.confirmRun', { date: $date(preview.business_date) }) }}</span>
         </label>
         <div class="mt-4 flex justify-end">
           <Button :disabled="busy || !preview.can_run || !confirmRun" data-testid="run-audit" @click="run">{{ t('nightAudit.run') }}</Button>

@@ -151,7 +151,7 @@ watch(() => property.currentId, load, { immediate: true })
     {{ error.message }} <code>{{ error.code }}</code>
     <ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
       <li v-for="c in conflicts" :key="`${c.type}-${c.id}`">
-        {{ c.type === 'STAY' ? t('rooms.stayConflict', { ref: c.reference ?? c.id }) : t('rooms.lineConflict', { id: c.id }) }}: {{ t('rooms.conflictRange', { from: c.from, to: c.to }) }}
+        {{ c.type === 'STAY' ? t('rooms.stayConflict', { ref: c.reference ?? c.id }) : t('rooms.lineConflict', { id: c.id }) }}: {{ t('rooms.conflictRange', { from: $date(c.from), to: $date(c.to) }) }}
       </li>
     </ul>
   </div>

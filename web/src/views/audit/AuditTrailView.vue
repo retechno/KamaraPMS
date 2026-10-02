@@ -26,8 +26,8 @@ const open = ref<number | null>(null)
 const filter = reactive({ entity_type: '', entity_id: '', user_id: '', action: '', from: '', to: '' })
 
 const columns = computed<Column<AuditLog>[]>(() => [
-  { key: 'created_at', label: t('audit.when') },
-  { key: 'business_date', label: t('audit.businessDate') },
+  { key: 'created_at', label: t('audit.when'), format: 'datetime' as const },
+  { key: 'business_date', label: t('audit.businessDate'), format: 'date' as const },
   { key: 'user', label: t('audit.user') },
   { key: 'action', label: t('audit.action') },
   { key: 'entity', label: t('audit.entity') },
@@ -116,7 +116,7 @@ watch(pid, () => {
         :caption="t('audit.title')"
       >
         <template #cell-created_at="{ row }">{{ time(row.created_at) }}</template>
-        <template #cell-business_date="{ row }">{{ row.business_date ?? '—' }}</template>
+        <template #cell-business_date="{ row }">{{ $date(row.business_date) || '—' }}</template>
         <template #cell-user="{ row }">{{ row.user?.name ?? t('audit.system') }}</template>
         <template #cell-action="{ row }"><code>{{ row.action }}</code></template>
         <template #cell-entity="{ row }">{{ row.entity_type }} #{{ row.entity_id }}</template>

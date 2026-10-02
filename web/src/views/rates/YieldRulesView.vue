@@ -377,20 +377,20 @@ watch(pid, load, { immediate: true })
             </thead>
             <tbody>
               <tr v-for="n in quote.nights" :key="n.date" class="border-b border-border">
-                <td class="py-1.5 pr-3">{{ n.date }}</td>
-                <td class="px-3 text-right tabular-nums">{{ n.grid_rate ?? t('yieldRules.notSet') }}</td>
+                <td class="py-1.5 pr-3">{{ $date(n.date) }}</td>
+                <td class="px-3 text-right tabular-nums">{{ n.grid_rate ? $money(n.grid_rate) : t('yieldRules.notSet') }}</td>
                 <td class="px-3 text-right tabular-nums">{{ n.occupancy_percent }}%</td>
                 <td class="px-3">
-                  <small v-for="s in n.steps" :key="s.code" class="block">{{ s.code }} {{ s.before }} → {{ s.after }}</small>
+                  <small v-for="s in n.steps" :key="s.code" class="block">{{ s.code }} {{ $money(s.before) }} → {{ $money(s.after) }}</small>
                   <small v-if="!n.steps.length" class="text-muted-foreground">{{ t('yieldRules.none') }}</small>
                 </td>
-                <td class="pl-3 text-right tabular-nums"><b>{{ n.amount ?? '–' }}</b></td>
+                <td class="pl-3 text-right tabular-nums"><b>{{ n.amount ? $money(n.amount) : '–' }}</b></td>
               </tr>
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="4" class="pt-2">{{ quote.price_mode === 'INCLUSIVE' ? t('yieldRules.totalInclusive', { grid: quote.grid_total }) : t('yieldRules.totalExclusive', { grid: quote.grid_total }) }}</td>
-                <td class="pl-3 pt-2 text-right tabular-nums"><b data-testid="quote-total">{{ quote.total }}</b></td>
+                <td colspan="4" class="pt-2">{{ quote.price_mode === 'INCLUSIVE' ? t('yieldRules.totalInclusive', { grid: $money(quote.grid_total) }) : t('yieldRules.totalExclusive', { grid: $money(quote.grid_total) }) }}</td>
+                <td class="pl-3 pt-2 text-right tabular-nums"><b data-testid="quote-total">{{ $money(quote.total) }}</b></td>
               </tr>
             </tfoot>
           </table>

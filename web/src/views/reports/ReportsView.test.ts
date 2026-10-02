@@ -44,7 +44,7 @@ describe('ReportsView', () => {
     expect(GET.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/reports/revenue', { params: { path: { propertyId: 7 }, query: { from: '2026-09-24', to: '2026-09-30' } } }])
     expect(w.get('[data-testid=result]').text()).toContain('MINIBAR · Minibar')
     expect(w.get('[data-testid=result]').text()).toContain('4-1100')
-    expect(w.get('[data-testid=footer]').text()).toContain('3122100')
+    expect(w.get('[data-testid=footer]').text()).toContain('3,122,100')
   })
 
   it('uses a date for dated reports and no input for in-house, and says when there is nothing', async () => {

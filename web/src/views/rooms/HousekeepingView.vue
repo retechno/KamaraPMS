@@ -224,7 +224,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
       <template #cell-status="{ row: r }"><StatusBadge domain="housekeeping" :status="r.status" :label="label(r.status)" data-testid="status" /></template>
       <template #cell-occupancy="{ row: r }"><StatusBadge domain="occupancy" :status="r.occupancy" /></template>
       <template #cell-block="{ row: r }">
-        <Badge v-if="r.block" variant="warning" data-testid="block">{{ t('housekeeping.blockUntil', { type: r.block.type, date: r.block.end_date }) }}</Badge>
+        <Badge v-if="r.block" variant="warning" data-testid="block">{{ t('housekeeping.blockUntil', { type: r.block.type, date: $date(r.block.end_date) }) }}</Badge>
       </template>
       <template #cell-flags="{ row: r }">
         <span data-testid="flags" class="inline-flex flex-wrap items-center gap-1">

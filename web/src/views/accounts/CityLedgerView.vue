@@ -26,11 +26,11 @@ const q = ref('')
 
 const columns = computed<Column<CityLedgerAccount>[]>(() => [
   { key: 'company', label: t('cityLedger.company') },
-  { key: 'transferred', label: t('cityLedger.transferred'), align: 'right' },
-  { key: 'received', label: t('cityLedger.received'), align: 'right' },
-  { key: 'balance', label: t('cityLedger.balance'), align: 'right' },
-  { key: 'credit_limit', label: t('cityLedger.creditLimit'), align: 'right' },
-  { key: 'available', label: t('cityLedger.available'), align: 'right' },
+  { key: 'transferred', label: t('cityLedger.transferred'), align: 'right', format: 'money' as const },
+  { key: 'received', label: t('cityLedger.received'), align: 'right', format: 'money' as const },
+  { key: 'balance', label: t('cityLedger.balance'), align: 'right', format: 'money' as const },
+  { key: 'credit_limit', label: t('cityLedger.creditLimit'), align: 'right', format: 'money' as const },
+  { key: 'available', label: t('cityLedger.available'), align: 'right', format: 'money' as const },
 ])
 
 const canRead = computed(() => auth.can('cityledger.read', property.currentId))
@@ -85,9 +85,9 @@ watch(owingOnly, () => void load())
           <RouterLink :to="`/city-ledger/${row.company_id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink> {{ row.name }}
           <small v-if="!row.is_active" class="text-muted-foreground">{{ t('cityLedger.inactive') }}</small>
         </template>
-        <template #cell-balance="{ row }"><b>{{ row.balance }}</b></template>
-        <template #cell-credit_limit="{ row }">{{ row.credit_limit ?? t('cityLedger.noLimit') }}</template>
-        <template #cell-available="{ row }">{{ row.available ?? '-' }}</template>
+        <template #cell-balance="{ row }"><b>{{ $money(row.balance) }}</b></template>
+        <template #cell-credit_limit="{ row }">{{ row.credit_limit ? $money(row.credit_limit) : t('cityLedger.noLimit') }}</template>
+        <template #cell-available="{ row }">{{ row.available ? $money(row.available) : '-' }}</template>
       </DataTable>
       <div v-if="nextCursor" class="mt-3 flex justify-center">
         <Button type="button" variant="outline" data-testid="more" @click="load(true)">{{ t('cityLedger.more') }}</Button>

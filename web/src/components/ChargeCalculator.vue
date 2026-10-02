@@ -95,37 +95,37 @@ watch(() => props.version, () => {
           <td>{{ t('calc.quoted', { quantity: result.quantity, price: result.unit_price }) }}</td>
           <td />
           <td />
-          <td class="num" data-testid="base">{{ result.base_amount }}</td>
+          <td class="num" data-testid="base">{{ $money(result.base_amount) }}</td>
         </tr>
         <tr v-if="Number(result.discount_amount) !== 0">
           <td>{{ t('calc.discount') }}</td>
           <td />
           <td />
-          <td class="num">−{{ result.discount_amount }}</td>
+          <td class="num">−{{ $money(result.discount_amount) }}</td>
         </tr>
         <tr>
-          <td>{{ t('calc.netRevenue') }} <small v-if="Number(result.rounding_adjustment) !== 0" class="text-muted-foreground" data-testid="adjustment">{{ t('calc.rounding', { amount: result.rounding_adjustment }) }}</small></td>
+          <td>{{ t('calc.netRevenue') }} <small v-if="Number(result.rounding_adjustment) !== 0" class="text-muted-foreground" data-testid="adjustment">{{ t('calc.rounding', { amount: $money(result.rounding_adjustment) }) }}</small></td>
           <td />
           <td />
-          <td class="num" data-testid="net">{{ result.net_amount }}</td>
+          <td class="num" data-testid="net">{{ $money(result.net_amount) }}</td>
         </tr>
         <tr v-for="c in result.service_charges" :key="`s${c.rule_id}`" data-testid="service-line">
           <td>{{ c.name }}</td>
           <td class="num">{{ Number(c.rate) }}%</td>
-          <td class="num">{{ c.base_amount }}</td>
-          <td class="num">{{ c.amount }}</td>
+          <td class="num">{{ $money(c.base_amount) }}</td>
+          <td class="num">{{ $money(c.amount) }}</td>
         </tr>
         <tr v-for="c in result.taxes" :key="`t${c.rule_id}`" data-testid="tax-line">
           <td>{{ c.name }}<small v-if="c.tax_on_service" class="text-muted-foreground"> {{ t('calc.inclService') }}</small></td>
           <td class="num">{{ Number(c.rate) }}%</td>
-          <td class="num">{{ c.base_amount }}</td>
-          <td class="num">{{ c.amount }}</td>
+          <td class="num">{{ $money(c.base_amount) }}</td>
+          <td class="num">{{ $money(c.amount) }}</td>
         </tr>
         <tr class="border-t-2 border-border">
           <td><b>{{ t('calc.total') }}</b> <small class="text-muted-foreground">{{ result.price_mode === 'INCLUSIVE' ? t('calc.priceInclusive') : t('calc.priceExclusive') }}</small></td>
           <td />
           <td />
-          <td class="num" data-testid="total"><b>{{ result.total_amount }}</b></td>
+          <td class="num" data-testid="total"><b>{{ $money(result.total_amount) }}</b></td>
         </tr>
       </tbody>
     </table>

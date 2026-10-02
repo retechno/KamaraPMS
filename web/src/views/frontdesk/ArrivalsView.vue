@@ -44,7 +44,7 @@ const columns = computed<Column<Arrival>[]>(() => [
   { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true },
   { key: 'room_type_code', label: t('frontDesk.page.roomType'), sortable: true },
   { key: 'room_number', label: t('frontDesk.page.room'), sortable: true },
-  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true },
+  { key: 'departure_date', label: t('frontDesk.page.departure'), sortable: true, format: 'date' as const },
   { key: 'party', label: t('frontDesk.page.party') },
   { key: 'actions', label: '', align: 'right' },
 ])

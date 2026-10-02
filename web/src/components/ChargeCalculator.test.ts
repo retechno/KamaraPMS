@@ -39,11 +39,11 @@ describe('ChargeCalculator', () => {
       params: { path: { propertyId: 7 } },
       body: { charge_code_id: 10, quantity: '1', unit_price: '1000000' },
     })
-    expect(w.get('[data-testid=net]').text()).toBe('1000000')
+    expect(w.get('[data-testid=net]').text()).toBe('1,000,000')
     expect(w.get('[data-testid=service-line]').text()).toContain('10%')
-    expect(w.get('[data-testid=tax-line]').text()).toContain('1100000')
-    expect(w.get('[data-testid=tax-line]').text()).toContain('121000')
-    expect(w.get('[data-testid=total]').text()).toBe('1221000')
+    expect(w.get('[data-testid=tax-line]').text()).toContain('1,100,000')
+    expect(w.get('[data-testid=tax-line]').text()).toContain('121,000')
+    expect(w.get('[data-testid=total]').text()).toBe('1,221,000')
   })
 
   it('prefills the default price, and sends discount and price mode only when chosen', async () => {

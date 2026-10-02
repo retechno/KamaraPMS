@@ -168,7 +168,7 @@ const rooms = computed(() => {
                 <tr v-for="r in comparison" :key="r.key" :data-testid="`month-${r.key}`" class="border-t border-border">
                   <td class="py-1.5">{{ r.label }}</td>
                   <td class="py-1.5 text-right font-medium">{{ r.now }}</td>
-                  <td class="py-1.5 text-right text-muted-foreground">{{ r.before }}</td>
+                  <td class="py-1.5 text-right text-muted-foreground">{{ $money(r.before) }}</td>
                   <td class="py-1.5 text-right">
                     <span v-if="r.delta" :class="cn('inline-flex items-center gap-0.5', r.delta.up ? 'text-success' : 'text-destructive')">
                       <ArrowUpRight v-if="r.delta.up" class="size-3.5" aria-hidden="true" />
@@ -189,7 +189,7 @@ const rooms = computed(() => {
             <dl class="m-0 divide-y divide-border text-sm">
               <div v-for="m in today.payments_by_method" :key="m.method" class="flex justify-between py-1.5">
                 <dt>{{ m.method }}</dt>
-                <dd class="m-0 font-semibold">{{ m.net }}</dd>
+                <dd class="m-0 font-semibold">{{ $money(m.net) }}</dd>
               </div>
             </dl>
           </CardContent>

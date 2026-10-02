@@ -53,11 +53,11 @@ const METHODS = ['BANK_TRANSFER', 'CASH', 'OTHER'] as const
 const methodText = (m: string): string => t(`taxReturns.m_${m}` as 'taxReturns.m_CASH')
 const periodColumns = computed<Column<TaxFilingPeriod>[]>(() => [
   { key: 'month', label: t('taxReturns.month') },
-  { key: 'due_date', label: t('taxReturns.due') },
-  { key: 'tax_amount', label: t('taxReturns.taxAmount'), align: 'right' },
+  { key: 'due_date', label: t('taxReturns.due'), format: 'date' as const },
+  { key: 'tax_amount', label: t('taxReturns.taxAmount'), align: 'right', format: 'money' as const },
   { key: 'status', label: t('taxReturns.status') },
-  { key: 'paid', label: t('taxReturns.paid'), align: 'right' },
-  { key: 'outstanding', label: t('taxReturns.owed'), align: 'right' },
+  { key: 'paid', label: t('taxReturns.paid'), align: 'right', format: 'money' as const },
+  { key: 'outstanding', label: t('taxReturns.owed'), align: 'right', format: 'money' as const },
 ])
 const base = () => ({ path: { propertyId: pid.value as number } })
 const monthLabel = (start: string): string => new Date(`${start}T00:00:00Z`).toLocaleDateString(i18n.global.locale.value, { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -251,7 +251,7 @@ watch([() => pid.value, taxId], () => {
           @row-click="open"
         >
           <template #cell-month="{ row }"><span :class="row.overdue ? 'text-destructive' : undefined">{{ monthLabel(row.period_start) }}</span></template>
-          <template #cell-due_date="{ row }">{{ row.due_date }}<small v-if="row.overdue" class="text-destructive"> · {{ t('taxReturns.overdue') }}</small></template>
+          <template #cell-due_date="{ row }">{{ $date(row.due_date) }}<small v-if="row.overdue" class="text-destructive"> · {{ t('taxReturns.overdue') }}</small></template>
           <template #cell-status="{ row }"><Badge :variant="row.status === 'FILED' ? 'success' : row.status === 'READY' ? 'warning' : 'outline'">{{ statusText(row.status) }}</Badge></template>
           <template #cell-paid="{ row }">{{ row.status === 'FILED' ? row.paid : '' }}</template>
           <template #cell-outstanding="{ row }">{{ row.status === 'FILED' ? row.outstanding : '' }}</template>
@@ -267,22 +267,22 @@ watch([() => pid.value, taxId], () => {
                 <tbody>
                   <tr v-for="l in worksheet.lines" :key="`${l.charge_code}-${l.rate}`" class="border-b border-border">
                     <td class="py-1 pr-3">{{ l.charge_code }}<small v-if="l.charge_name" class="text-muted-foreground"> · {{ l.charge_name }}</small></td>
-                    <td class="px-3 text-right tabular-nums">{{ Number(l.rate) }}%</td><td class="px-3 text-right tabular-nums">{{ l.items }}</td><td class="px-3 text-right tabular-nums">{{ l.base_amount }}</td><td class="pl-3 text-right tabular-nums">{{ l.tax_amount }}</td>
+                    <td class="px-3 text-right tabular-nums">{{ Number(l.rate) }}%</td><td class="px-3 text-right tabular-nums">{{ l.items }}</td><td class="px-3 text-right tabular-nums">{{ $money(l.base_amount) }}</td><td class="pl-3 text-right tabular-nums">{{ $money(l.tax_amount) }}</td>
                   </tr>
                   <tr v-if="!worksheet.lines.length"><td colspan="5" class="py-1 text-muted-foreground">{{ t('taxReturns.nothing') }}</td></tr>
                 </tbody>
-                <tfoot><tr data-testid="totals" class="font-semibold"><th colspan="3" class="pt-2 text-left">{{ t('taxReturns.total') }}</th><th class="px-3 pt-2 text-right tabular-nums">{{ worksheet.base_amount }}</th><th class="pl-3 pt-2 text-right tabular-nums">{{ worksheet.tax_amount }}</th></tr></tfoot>
+                <tfoot><tr data-testid="totals" class="font-semibold"><th colspan="3" class="pt-2 text-left">{{ t('taxReturns.total') }}</th><th class="px-3 pt-2 text-right tabular-nums">{{ $money(worksheet.base_amount) }}</th><th class="pl-3 pt-2 text-right tabular-nums">{{ $money(worksheet.tax_amount) }}</th></tr></tfoot>
               </table>
               <p class="mb-2 mt-3 text-sm text-muted-foreground" data-testid="books-check" @click.stop>
-                {{ t('taxReturns.booksCredited', { amount: worksheet.gl_collected }) }}<template v-if="Number(worksheet.difference) !== 0"> · <b class="text-destructive">{{ t('taxReturns.difference', { amount: money(worksheet.difference) }) }}</b></template><template v-else> · {{ t('taxReturns.agree') }}</template>
+                {{ t('taxReturns.booksCredited', { amount: $money(worksheet.gl_collected) }) }}<template v-if="Number(worksheet.difference) !== 0"> · <b class="text-destructive">{{ t('taxReturns.difference', { amount: money(worksheet.difference) }) }}</b></template><template v-else> · {{ t('taxReturns.agree') }}</template>
                 · {{ t('taxReturns.daysClosed', { posted: worksheet.posted_days, days: worksheet.days }) }}
               </p>
               <Button type="button" variant="outline" size="sm" data-testid="pdf" @click="showPdf">{{ t('taxReturns.pdf') }}</Button>
 
               <template v-if="filed">
                 <h3 class="mb-2 mt-4 text-sm font-semibold" data-testid="filed-header">
-                  {{ t('taxReturns.filedHeader', { number: filed.return_number, date: filed.filed_on }) }}<small v-if="filed.filing_reference" class="text-muted-foreground"> · {{ filed.filing_reference }}</small> ·
-                  {{ payText(filed.payment_status) }} · {{ t('taxReturns.owedInfo', { amount: filed.outstanding }) }}
+                  {{ t('taxReturns.filedHeader', { number: filed.return_number, date: $date(filed.filed_on) }) }}<small v-if="filed.filing_reference" class="text-muted-foreground"> · {{ filed.filing_reference }}</small> ·
+                  {{ payText(filed.payment_status) }} · {{ t('taxReturns.owedInfo', { amount: $money(filed.outstanding) }) }}
                 </h3>
                 <table v-if="filed.payments?.length" class="w-full border-collapse text-sm" data-testid="payments">
                   <thead>
@@ -293,8 +293,8 @@ watch([() => pid.value, taxId], () => {
                   </thead>
                   <tbody>
                     <tr v-for="p in filed.payments" :key="p.id" :class="['border-b border-border', p.status === 'VOIDED' && 'voided text-muted-foreground line-through']" :data-testid="`payment-${p.payment_number}`">
-                      <td class="py-1 pr-3">{{ p.payment_date }}</td><td class="px-3">{{ p.payment_number }}</td><td class="px-3">{{ p.reference_number ?? '' }}</td>
-                      <td class="px-3 text-right tabular-nums">{{ p.amount }}</td><td class="px-3 text-right tabular-nums">{{ money(p.penalty) }}</td>
+                      <td class="py-1 pr-3">{{ $date(p.payment_date) }}</td><td class="px-3">{{ p.payment_number }}</td><td class="px-3">{{ p.reference_number ?? '' }}</td>
+                      <td class="px-3 text-right tabular-nums">{{ $money(p.amount) }}</td><td class="px-3 text-right tabular-nums">{{ money(p.penalty) }}</td>
                       <td><Button v-if="can('tax.file') && p.status === 'POSTED'" type="button" variant="outline" size="sm" :data-testid="`void-payment-${p.payment_number}`" @click="voiding = { kind: 'payment', id: p.id, reason: '', asking: false }">{{ t('taxReturns.voidEllipsis') }}</Button></td>
                     </tr>
                   </tbody>
@@ -344,7 +344,7 @@ watch([() => pid.value, taxId], () => {
                 <ul v-if="worksheet.blockers.length" class="mb-2 mt-3 text-destructive" data-testid="blockers"><li v-for="b in worksheet.blockers" :key="b">{{ b }}</li></ul>
                 <form v-if="can('tax.file') && worksheet.ready" class="mt-3 rounded-lg border border-border bg-card p-4" novalidate data-testid="file-form" @submit.prevent="file">
                   <h3 class="m-0 text-sm font-semibold">{{ t('taxReturns.fileTitle', { month: monthLabel(worksheet.period_start) }) }}</h3>
-                  <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('taxReturns.fileHint', { date: worksheet.due_date, authority: worksheet.profile.authority }) }}</p>
+                  <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('taxReturns.fileHint', { date: $date(worksheet.due_date), authority: worksheet.profile.authority }) }}</p>
                   <div class="grid gap-4 sm:grid-cols-2">
                     <FormField :label="t('taxReturns.filedOn')" :hint="t('taxReturns.filedOnHint')" :error="fieldError('filed_on')">
                       <template #default="{ id, invalid }"><Input :id="id" v-model="fileForm.filed_on" name="filed_on" type="date" :aria-invalid="invalid" /></template>

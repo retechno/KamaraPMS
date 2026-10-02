@@ -298,7 +298,7 @@ watch(() => route.query.room, (v) => {
           </template>
           <template #cell-where="{ row: r }">
             {{ where(r) }}
-            <Badge v-if="r.block && r.block.status === 'ACTIVE'" variant="warning" class="ml-1" data-testid="blocked">{{ t('maintenance.blockUntil', { type: r.block.block_type, date: r.block.end_date }) }}</Badge>
+            <Badge v-if="r.block && r.block.status === 'ACTIVE'" variant="warning" class="ml-1" data-testid="blocked">{{ t('maintenance.blockUntil', { type: r.block.block_type, date: $date(r.block.end_date) }) }}</Badge>
           </template>
           <template #cell-category="{ row: r }">{{ categoryLabel(r.category) }}</template>
           <template #cell-priority="{ row: r }"><Badge :variant="priorityVariant(r.priority)">{{ priorityLabel(r.priority) }}</Badge></template>
@@ -317,7 +317,7 @@ watch(() => route.query.room, (v) => {
           <div>
             <p class="m-0 text-sm">{{ selected.description }}</p>
             <p class="m-0 mt-1 text-sm text-muted-foreground">
-              {{ t('maintenance.reported', { date: selected.business_date }) }}{{ selected.reporter_name ? ` ${t('maintenance.byReporter', { name: selected.reporter_name })}` : '' }}.
+              {{ t('maintenance.reported', { date: $date(selected.business_date) }) }}{{ selected.reporter_name ? ` ${t('maintenance.byReporter', { name: selected.reporter_name })}` : '' }}.
               <template v-if="selected.resolution_note"> {{ t('maintenance.noteLabel', { note: selected.resolution_note }) }}</template>
             </p>
           </div>
@@ -355,7 +355,7 @@ watch(() => route.query.room, (v) => {
               </FormField>
               <label v-if="selected.block?.status === 'ACTIVE'" class="flex items-center gap-2 text-sm">
                 <input v-model="action.releaseBlock" name="release_block" type="checkbox" />
-                <span>{{ t('maintenance.putBack', { type: selected.block.block_type, date: selected.block.end_date }) }}</span>
+                <span>{{ t('maintenance.putBack', { type: selected.block.block_type, date: $date(selected.block.end_date) }) }}</span>
               </label>
               <div class="flex justify-end gap-2">
                 <Button type="button" variant="outline" size="sm" @click="closing = null">{{ t('maintenance.back') }}</Button>

@@ -5,6 +5,7 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
+import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
 
 /**
  * The one table of the application: a header that can sort, rows with a cell slot per column (`#cell-<key>="{ row,
@@ -19,6 +20,8 @@ export interface Column<R> {
   /** What to sort by, when it is not the value of `key` (a number inside text, a date). */
   sortValue?: (row: R) => string | number | null | undefined
   class?: string
+  /** How the default cell shows the value: an amount, a business date or an instant, in the language of the page. */
+  format?: 'money' | 'date' | 'datetime'
 }
 
 const props = withDefaults(
@@ -90,6 +93,13 @@ const sorted = computed(() => {
 const keyOf = (row: T): string | number =>
   typeof props.rowKey === 'function' ? props.rowKey(row) : ((row as Record<string, unknown>)[props.rowKey] as string | number)
 
+function shown(row: T, col: Column<T>): string {
+  const v = (row as Record<string, unknown>)[col.key]
+  if (v === null || v === undefined) return '—'
+  const text = String(v)
+  return col.format === 'money' ? formatMoney(text) : col.format === 'date' ? formatDate(text) : col.format === 'datetime' ? formatDateTime(text) : text
+}
+
 const alignClass = (a?: 'left' | 'right' | 'center') => (a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left')
 const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.dir === 'asc' ? 'ascending' : 'descending') : col.sortable ? 'none' : undefined)
 </script>
@@ -140,7 +150,7 @@ const ariaSort = (col: Column<T>) => (sort.value?.key === col.key ? (sort.value.
           >
             <td v-for="col in columns" :key="col.key" :class="cn('px-3 py-2.5 align-middle', alignClass(col.align), col.class)">
               <slot :name="`cell-${col.key}`" :row="row" :value="(row as Record<string, unknown>)[col.key]">
-                {{ (row as Record<string, unknown>)[col.key] ?? '—' }}
+                {{ shown(row, col) }}
               </slot>
             </td>
           </tr>
