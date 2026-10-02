@@ -59,6 +59,29 @@ describe('HousekeepingTasksView', () => {
     expect(w.find('[data-testid=done-103]').exists()).toBe(false) // finished
   })
 
+  it('ticks a whole floor at once and hands it to one housekeeper', async () => {
+    const data = [
+      task({ id: 1, room_number: '101', floor: '1' }),
+      task({ id: 2, room_id: 12, room_number: '102', floor: '1' }),
+      task({ id: 3, room_id: 21, room_number: '201', floor: '2' }),
+      task({ id: 4, room_id: 22, room_number: '202', floor: '2', status: 'DONE' }), // done: not part of a floor to hand out
+      task({ id: 5, room_id: 101, room_number: '1001', floor: '10' }),
+    ]
+    const w = mountView(['housekeeping.update', 'housekeeping.assign'], data)
+    await flushPromises()
+    expect(w.findAll('[data-testid^=floor-]').map((b) => b.text())).toEqual(['Floor 1 (2)', 'Floor 2 (1)', 'Floor 10 (1)']) // 10 after 2
+    await w.get('[data-testid=floor-1]').trigger('click')
+    expect(w.get('[data-testid=floor-1]').attributes('aria-pressed')).toBe('true')
+    await w.get('[data-testid=floor-2]').trigger('click')
+    expect(w.get('[data-testid=assign-form]').text()).toContain('3')
+    await w.get('[data-testid=floor-1]').trigger('click') // a second click on a ticked floor lets it go
+    await w.get('select[name=assign_to]').setValue(10)
+    POST.mockResolvedValue({ data: { assigned: 1 } })
+    await w.get('[data-testid=assign-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toEqual({ task_ids: [3], user_id: 10 })
+  })
+
   it('generates the list and says what it added', async () => {
     const w = mountView()
     await flushPromises()

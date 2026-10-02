@@ -150,6 +150,17 @@ function toggleAll(on: boolean): void {
   picked.value = on ? (list.value?.data ?? []).filter(open).map((task) => task.id) : []
 }
 
+// The open tasks of each floor, so a whole floor can be ticked at once and handed to one housekeeper.
+const floorGroups = computed(() => {
+  const groups = new Map<string, number[]>()
+  for (const task of (list.value?.data ?? []).filter(open)) groups.set(task.floor ?? '', [...(groups.get(task.floor ?? '') ?? []), task.id])
+  return [...groups.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, undefined, { numeric: true })))
+})
+const floorPicked = (ids: number[]) => ids.every((id) => picked.value.includes(id))
+function toggleFloor(ids: number[]): void {
+  picked.value = floorPicked(ids) ? picked.value.filter((id) => !ids.includes(id)) : [...new Set([...picked.value, ...ids])]
+}
+
 const openCount = computed(() => (list.value?.data ?? []).filter(open).length)
 const mayWork = (task: HousekeepingTask) => can('housekeeping.update') && open(task)
 
@@ -164,6 +175,7 @@ const workloadColumns = computed<Column<HousekeepingTaskList['workload'][number]
 const taskColumns = computed<Column<HousekeepingTask>[]>(() => [
   ...(can('housekeeping.assign') ? [{ key: 'pick', label: '', class: 'w-8' }] : []),
   { key: 'room_number', label: t('cleaning.room'), sortable: true },
+  { key: 'floor', label: t('cleaning.floorColumn'), sortable: true, filter: 'select' as const },
   { key: 'task_type', label: t('cleaning.kind'), sortable: true },
   { key: 'room_status', label: t('cleaning.roomIs'), sortable: true },
   { key: 'assignee_name', label: t('cleaning.housekeeper'), sortable: true },
@@ -265,6 +277,20 @@ watch(() => [filter.view, filter.status], () => void load())
             </template>
           </FormField>
         </form>
+
+        <div v-if="can('housekeeping.assign') && floorGroups.length > 1" class="flex flex-wrap items-center gap-2" role="group" :aria-label="t('cleaning.pickByFloor')" data-testid="floors">
+          <span class="text-sm font-medium">{{ t('cleaning.pickByFloor') }}</span>
+          <Button
+            v-for="[floor, ids] in floorGroups"
+            :key="floor"
+            type="button"
+            size="sm"
+            :variant="floorPicked(ids) ? 'default' : 'outline'"
+            :aria-pressed="floorPicked(ids)"
+            :data-testid="`floor-${floor || 'none'}`"
+            @click="toggleFloor(ids)"
+          >{{ floor ? t('cleaning.floorChip', { floor, n: ids.length }) : t('cleaning.noFloorChip', { n: ids.length }) }}</Button>
+        </div>
 
         <form v-if="can('housekeeping.assign') && openCount" class="flex flex-wrap items-end gap-3" novalidate data-testid="assign-form" @submit.prevent="assign">
           <FormField class="w-64" :label="t('cleaning.giveTicked', { n: picked.length })">
