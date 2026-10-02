@@ -6,6 +6,14 @@ import { ApiError } from '@/api/problem'
 import type { CreateGuestRequest, CreatedGuest, Guest } from '@/api/types'
 import GuestFields from '@/components/GuestFields.vue'
 import { blankGuestForm } from '@/components/guestForm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -23,6 +31,14 @@ const creating = ref(false)
 const form = reactive(blankGuestForm())
 const saving = ref(false)
 const created = ref<CreatedGuest | null>(null)
+
+const columns = computed<Column<Guest>[]>(() => [
+  { key: 'code', label: t('guests.code') },
+  { key: 'name', label: t('guests.name') },
+  { key: 'email', label: t('guests.email') },
+  { key: 'phone', label: t('guests.phone') },
+  { key: 'nationality', label: t('guests.nationality') },
+])
 
 const canRead = computed(() => auth.can('guest.read', property.currentId))
 const canWrite = computed(() => auth.can('guest.write', property.currentId))
@@ -87,85 +103,64 @@ watch(() => property.currentId, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Guests</h1>
-    <button v-if="canWrite && !creating" type="button" class="btn-primary" @click="startCreate">New guest</button>
-  </div>
+  <PageHeader :title="t('guests.title')">
+    <template #actions>
+      <Button v-if="canWrite && !creating" type="button" data-testid="new-guest" @click="startCreate">{{ t('guests.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property does not allow viewing guests.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('guests.noAccess') }}</p>
 
   <template v-else>
     <div v-if="created" class="alert warning" role="status" data-testid="created">
-      Created <RouterLink :to="`/guests/${created.id}`">{{ created.code }}</RouterLink>.
+      {{ t('guests.createdPrefix') }} <RouterLink :to="`/guests/${created.id}`" class="underline">{{ created.code }}</RouterLink>.
       <template v-if="created.possible_duplicates.length || created.hidden_duplicate_count">
-        <b>This may be a duplicate:</b>
-        <ul data-testid="duplicates">
+        <b>{{ t('guests.maybeDuplicate') }}</b>
+        <ul class="m-0 mt-1 pl-5" data-testid="duplicates">
           <li v-for="d in created.possible_duplicates" :key="d.guest.id">
-            <RouterLink :to="`/guests/${d.guest.id}`">{{ d.guest.code }} {{ fullName(d.guest) }}</RouterLink>
+            <RouterLink :to="`/guests/${d.guest.id}`" class="underline">{{ d.guest.code }} {{ fullName(d.guest) }}</RouterLink>
             <small> ({{ d.reasons.map((r) => r.toLowerCase().replaceAll('_', ' ')).join(', ') }})</small>
           </li>
           <li v-if="created.hidden_duplicate_count" data-testid="hidden-duplicates">
-            {{ created.hidden_duplicate_count }} similar profile(s) exist that you cannot see.
+            {{ t('guests.hiddenDuplicates', { n: created.hidden_duplicate_count }) }}
           </li>
         </ul>
       </template>
     </div>
 
-    <form v-if="creating" class="card" novalidate data-testid="create-form" @submit.prevent="create">
-      <h2>New guest</h2>
-      <GuestFields v-model="form" :error="error" />
-      <div class="form-actions">
-        <button type="button" @click="creating = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-      </div>
-    </form>
+    <Card v-if="creating" class="mb-4">
+      <form novalidate data-testid="create-form" @submit.prevent="create">
+        <CardHeader><CardTitle>{{ t('guests.new') }}</CardTitle></CardHeader>
+        <CardContent>
+          <GuestFields v-model="form" :error="error" />
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="creating = false">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
 
-    <form class="card search" role="search" @submit.prevent="search()">
-      <label class="field grow">
-        <span>Search</span>
-        <input v-model="query" name="q" type="search" placeholder="Name, email, phone, ID number or guest code" />
-      </label>
-      <button type="submit" :disabled="loading">Search</button>
-    </form>
+    <Card class="mb-4">
+      <form class="flex items-end gap-3 p-4" role="search" @submit.prevent="search()">
+        <FormField class="flex-1" :label="t('guests.search')">
+          <template #default="{ id }"><Input :id="id" v-model="query" name="q" type="search" :placeholder="t('guests.searchPlaceholder')" /></template>
+        </FormField>
+        <Button type="submit" variant="outline" :disabled="loading">{{ t('guests.search') }}</Button>
+      </form>
+    </Card>
 
-    <section class="card">
-      <p v-if="searched && !results.length" class="muted" data-testid="empty">No guests found.</p>
-      <table v-else-if="results.length" class="list">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Nationality</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="g in results" :key="g.id" :data-testid="`guest-${g.code}`">
-            <td><RouterLink :to="`/guests/${g.id}`">{{ g.code }}</RouterLink></td>
-            <td>{{ fullName(g) }}</td>
-            <td>{{ g.email }}</td>
-            <td>{{ g.phone }}</td>
-            <td>{{ g.nationality }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" :disabled="loading" data-testid="more" @click="search(true)">Load more</button>
+    <Card>
+      <EmptyState v-if="searched && !results.length" :title="t('guests.empty')" data-testid="empty" />
+      <DataTable v-else-if="results.length" :columns="columns" :rows="results" row-key="id" :row-test-id="(g) => `guest-${g.code}`" :caption="t('guests.title')">
+        <template #cell-code="{ row }"><RouterLink :to="`/guests/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink></template>
+        <template #cell-name="{ row }">{{ fullName(row) }}</template>
+      </DataTable>
+      <div v-if="nextCursor" class="flex justify-center p-3">
+        <Button type="button" variant="outline" :disabled="loading" data-testid="more" @click="search(true)">{{ t('guests.more') }}</Button>
       </div>
-    </section>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.search {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-.grow {
-  flex: 1;
-}
-</style>

@@ -4,6 +4,15 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Approval, CityLedgerAccount, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerStatement } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -86,7 +95,7 @@ async function receive(): Promise<void> {
     receipt.amount = ''
     receipt.reference = ''
     receipt.remarks = ''
-    notice.value = 'Receipt recorded.'
+    notice.value = t('clAccount.receiptRecorded')
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -99,7 +108,7 @@ async function receive(): Promise<void> {
 function startVoid(number: string): void {
   const r = receiptOf(number)
   if (!r) return
-  voiding.value = { kind: 'receipt', id: r.id, label: `receipt ${r.receipt_number}`, reason: '', asking: false }
+  voiding.value = { kind: 'receipt', id: r.id, label: t('clAccount.labelReceipt', { number: r.receipt_number }), reason: '', asking: false }
   dialogError.value = null
   error.value = null
 }
@@ -115,7 +124,7 @@ async function approveVoid(approval: Approval): Promise<void> {
     if (v.kind === 'receipt') await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void', { params, body })
     else await api.POST('/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void', { params, body })
     voiding.value = null
-    notice.value = v.kind === 'receipt' ? 'Receipt voided.' : 'Invoice voided.'
+    notice.value = v.kind === 'receipt' ? t('clAccount.receiptVoided') : t('clAccount.invoiceVoided')
     await load()
   } catch (e) {
     dialogError.value = e instanceof ApiError ? e : null
@@ -123,6 +132,29 @@ async function approveVoid(approval: Approval): Promise<void> {
     busy.value = false
   }
 }
+
+const statusText = (s: CityLedgerInvoice['payment_status']): string =>
+  ({ UNPAID: t('clAccount.unpaid'), PARTIAL: t('clAccount.partial'), PAID: t('clAccount.paidStatus'), VOID: t('clAccount.voided') })[s]
+
+const candidateColumns = computed<Column<CityLedgerCandidate>[]>(() => [
+  { key: 'select', label: '' },
+  { key: 'checked_out_at', label: t('clAccount.checkOut') },
+  { key: 'guest_name', label: t('clAccount.guest') },
+  { key: 'room_numbers', label: t('clAccount.room') },
+  { key: 'folio_number', label: t('clAccount.folio') },
+  { key: 'reference_number', label: t('clAccount.reference') },
+  { key: 'amount', label: t('clAccount.amount'), align: 'right' },
+])
+const invoiceColumns = computed<Column<CityLedgerInvoice>[]>(() => [
+  { key: 'invoice_number', label: t('clAccount.number') },
+  { key: 'invoice_date', label: t('clAccount.date') },
+  { key: 'due_date', label: t('clAccount.due') },
+  { key: 'total', label: t('clAccount.total'), align: 'right' },
+  { key: 'paid', label: t('clAccount.paid'), align: 'right' },
+  { key: 'outstanding', label: t('clAccount.outstanding'), align: 'right' },
+  { key: 'payment_status', label: t('setup.status') },
+  { key: 'actions', label: '', align: 'right' },
+])
 
 const invoiceable = computed(() => candidates.value.filter((c) => c.invoiceable))
 const waiting = computed(() => candidates.value.filter((c) => !c.invoiceable))
@@ -144,7 +176,7 @@ async function createInvoice(): Promise<void> {
     invoiceKey = newIdempotencyKey()
     picked.value = []
     invoiceNotes.value = ''
-    notice.value = `Invoice ${data?.invoice_number ?? ''} issued.`
+    notice.value = t('clAccount.invoiceIssued', { number: data?.invoice_number ?? '' })
     await load()
   } catch (e) {
     const failure = e instanceof ApiError ? e : null
@@ -176,7 +208,7 @@ async function payInvoice(): Promise<void> {
         allocations: [{ invoice_id: v.invoice.id, amount: v.amount }],
       },
     })
-    notice.value = `Payment recorded for invoice ${v.invoice.invoice_number}.`
+    notice.value = t('clAccount.paymentRecorded', { number: v.invoice.invoice_number })
     paying.value = null
     await load()
   } catch (e) {
@@ -190,7 +222,7 @@ async function payInvoice(): Promise<void> {
 }
 
 function startVoidInvoice(inv: CityLedgerInvoice): void {
-  voiding.value = { kind: 'invoice', id: inv.id, label: `invoice ${inv.invoice_number}`, reason: '', asking: false }
+  voiding.value = { kind: 'invoice', id: inv.id, label: t('clAccount.labelInvoice', { number: inv.invoice_number }), reason: '', asking: false }
   dialogError.value = null
   error.value = null
 }
@@ -219,206 +251,201 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">{{ account ? `${account.code} · ${account.name}` : 'Company account' }}</h1>
-    <RouterLink to="/city-ledger">City ledger</RouterLink>
-  </div>
+  <PageHeader :title="account ? `${account.code} · ${account.name}` : t('clAccount.fallback')">
+    <template #actions><RouterLink to="/city-ledger" class="text-sm text-primary hover:underline">{{ t('clAccount.back') }}</RouterLink></template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <span v-if="error.code === 'RECEIPT_EXCEEDS_BALANCE'"> A receipt cannot be more than the company owes.</span>
+    <span v-if="error.code === 'RECEIPT_EXCEEDS_BALANCE'"> {{ t('clAccount.exceeds') }}</span>
   </p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('cityledger.read')" class="muted" data-testid="no-access">Your role at this property cannot see the city ledger.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('cityledger.read')" class="muted" data-testid="no-access">{{ t('clAccount.noAccess') }}</p>
 
   <template v-else-if="account">
-    <section class="card" data-testid="account-summary">
-      <dl class="facts">
-        <div><dt>Balance owed</dt><dd><b data-testid="balance">{{ account.balance }}</b></dd></div>
-        <div><dt>Transferred</dt><dd>{{ account.transferred }}</dd></div>
-        <div><dt>Received</dt><dd>{{ account.received }}</dd></div>
-        <div><dt>Credit limit</dt><dd>{{ account.credit_limit ?? 'No limit' }}</dd></div>
-        <div><dt>Available</dt><dd>{{ account.available ?? '-' }}</dd></div>
-        <div><dt>Terms</dt><dd>{{ account.payment_terms_days }} days</dd></div>
-      </dl>
-      <table v-if="aging" class="list" data-testid="aging">
-        <caption>Aging as of {{ aging.as_of }} (days since the folio was transferred)</caption>
-        <thead><tr><th v-for="b in aging.buckets" :key="b.label" class="num">{{ b.label }}</th></tr></thead>
-        <tbody><tr><td v-for="b in aging.buckets" :key="b.label" class="num">{{ b.amount }}</td></tr></tbody>
-      </table>
-    </section>
+    <Card class="mb-4" data-testid="account-summary">
+      <CardContent class="pt-4">
+        <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.balance') }}</dt><dd class="m-0 text-sm"><b data-testid="balance">{{ account.balance }}</b></dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.transferred') }}</dt><dd class="m-0 text-sm">{{ account.transferred }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.received') }}</dt><dd class="m-0 text-sm">{{ account.received }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.creditLimit') }}</dt><dd class="m-0 text-sm">{{ account.credit_limit ?? t('clAccount.noLimit') }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.available') }}</dt><dd class="m-0 text-sm">{{ account.available ?? '-' }}</dd></div>
+          <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.terms') }}</dt><dd class="m-0 text-sm">{{ t('clAccount.days', { n: account.payment_terms_days }) }}</dd></div>
+        </dl>
+        <table v-if="aging" class="mt-4 w-full border-collapse text-sm" data-testid="aging">
+          <caption class="pb-1.5 text-left text-xs text-muted-foreground">{{ t('clAccount.aging', { date: aging.as_of }) }}</caption>
+          <thead><tr class="border-b border-border"><th v-for="b in aging.buckets" :key="b.label" class="py-1 text-right text-xs font-medium text-muted-foreground">{{ b.label }}</th></tr></thead>
+          <tbody><tr><td v-for="b in aging.buckets" :key="b.label" class="py-1.5 text-right tabular-nums">{{ b.amount }}</td></tr></tbody>
+        </table>
+      </CardContent>
+    </Card>
 
-    <form v-if="can('cityledger.receive')" class="card" novalidate data-testid="receipt-form" @submit.prevent="receive">
-      <h2>Record a payment from the company</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Amount</span>
-          <input v-model="receipt.amount" name="amount" inputmode="decimal" :aria-invalid="!!fieldError('amount')" />
-          <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-        </label>
-        <label class="field">
-          <span>Method</span>
-          <select v-model="receipt.method" name="payment_method">
-            <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Reference</span>
-          <input v-model="receipt.reference" name="reference" />
-        </label>
-        <label class="field">
-          <span>Remarks</span>
-          <input v-model="receipt.remarks" name="remarks" />
-        </label>
-      </div>
-      <div class="form-actions"><button type="submit" class="btn-primary" :disabled="busy">Record receipt</button></div>
-    </form>
-
-    <section v-if="can('cityledger.invoice') && (invoiceable.length || waiting.length)" class="card" data-testid="invoice-builder">
-      <h2>New invoice</h2>
-      <p class="muted">Pick the transfers to bill together. Only guests who have checked out can be invoiced.</p>
-      <table class="list">
-        <thead>
-          <tr>
-            <th><input type="checkbox" aria-label="Select all checked-out transfers" data-testid="pick-all" :checked="invoiceable.length > 0 && picked.length === invoiceable.length" :disabled="!invoiceable.length" @change="toggleAll(($event.target as HTMLInputElement).checked)" /></th>
-            <th>Check-out</th><th>Guest</th><th>Room</th><th>Folio</th><th>Reference</th><th class="num">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in candidates" :key="c.payment_id" :class="{ waiting: !c.invoiceable }" :data-testid="`candidate-${c.payment_number}`">
-            <td><input v-model="picked" type="checkbox" :value="c.payment_id" :disabled="!c.invoiceable" :aria-label="`Invoice ${c.payment_number}`" /></td>
-            <td>{{ c.checked_out_at ? c.checked_out_at.slice(0, 10) : '' }}<small v-if="!c.invoiceable" class="muted">in house</small></td>
-            <td>{{ c.guest_name }}</td>
-            <td>{{ c.room_numbers }}</td>
-            <td>{{ c.folio_number }}</td>
-            <td>{{ c.reference_number }}</td>
-            <td class="num">{{ c.amount }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <form class="filters" novalidate @submit.prevent="createInvoice">
-        <label class="field">
-          <span>Note on the invoice</span>
-          <input v-model="invoiceNotes" name="invoice_notes" maxlength="500" />
-        </label>
-        <button type="submit" class="btn-primary" :disabled="busy || !picked.length" data-testid="create-invoice">
-          Create invoice ({{ picked.length }} selected, {{ pickedTotal }})
-        </button>
+    <Card v-if="can('cityledger.receive')" class="mb-4">
+      <form novalidate data-testid="receipt-form" @submit.prevent="receive">
+        <CardHeader><CardTitle>{{ t('clAccount.recordTitle') }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <FormField :label="t('clAccount.amount')" :error="fieldError('amount')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="receipt.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('clAccount.method')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="receipt.method" name="payment_method">
+                  <option v-for="m in METHODS" :key="m" :value="m">{{ t(`clAccount.method_${m}`) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('clAccount.reference')">
+              <template #default="{ id }"><Input :id="id" v-model="receipt.reference" name="reference" /></template>
+            </FormField>
+            <FormField :label="t('clAccount.remarks')">
+              <template #default="{ id }"><Input :id="id" v-model="receipt.remarks" name="remarks" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('clAccount.recordReceipt') }}</Button></div>
+        </CardContent>
       </form>
-    </section>
+    </Card>
 
-    <form v-if="paying" class="card" novalidate data-testid="pay-form" @submit.prevent="payInvoice">
-      <h2>Payment for invoice {{ paying.invoice.invoice_number }}</h2>
-      <p class="muted">Outstanding {{ paying.invoice.outstanding }}. A smaller amount pays the invoice in part.</p>
-      <div class="form-grid">
-        <label class="field">
-          <span>Amount</span>
-          <input v-model="paying.amount" name="pay_amount" inputmode="decimal" :aria-invalid="!!fieldError('amount') || !!fieldError('allocations')" />
-          <small v-if="fieldError('amount')" class="error-text">{{ fieldError('amount') }}</small>
-          <small v-if="fieldError('allocations')" class="error-text">{{ fieldError('allocations') }}</small>
-        </label>
-        <label class="field">
-          <span>Method</span>
-          <select v-model="paying.method" name="pay_method">
-            <option v-for="m in METHODS" :key="m" :value="m">{{ m }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Reference</span>
-          <input v-model="paying.reference" name="pay_reference" />
-        </label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="paying = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || !paying.amount" data-testid="pay-submit">Record payment</button>
-      </div>
-    </form>
+    <Card v-if="can('cityledger.invoice') && (invoiceable.length || waiting.length)" class="mb-4" data-testid="invoice-builder">
+      <CardHeader>
+        <CardTitle>{{ t('clAccount.newInvoice') }}</CardTitle>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('clAccount.newInvoiceHint') }}</p>
+      </CardHeader>
+      <CardContent>
+        <DataTable :columns="candidateColumns" :rows="candidates" row-key="payment_id" :row-test-id="(c) => `candidate-${c.payment_number}`" :row-class="(c) => (c.invoiceable ? undefined : 'text-muted-foreground')" :caption="t('clAccount.newInvoice')">
+          <template #header-select>
+            <input
+              type="checkbox"
+              class="size-4 accent-primary"
+              :aria-label="t('clAccount.selectAll')"
+              data-testid="pick-all"
+              :checked="invoiceable.length > 0 && picked.length === invoiceable.length"
+              :disabled="!invoiceable.length"
+              @change="toggleAll(($event.target as HTMLInputElement).checked)"
+            />
+          </template>
+          <template #cell-select="{ row }">
+            <input v-model="picked" type="checkbox" class="size-4 accent-primary" :value="row.payment_id" :disabled="!row.invoiceable" :aria-label="t('clAccount.invoiceRow', { number: row.payment_number })" />
+          </template>
+          <template #cell-checked_out_at="{ row }">{{ row.checked_out_at ? row.checked_out_at.slice(0, 10) : '' }}<small v-if="!row.invoiceable" class="ml-1 text-muted-foreground">{{ t('clAccount.inHouse') }}</small></template>
+        </DataTable>
+        <form class="mt-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="createInvoice">
+          <FormField class="w-80" :label="t('clAccount.invoiceNote')">
+            <template #default="{ id }"><Input :id="id" v-model="invoiceNotes" name="invoice_notes" maxlength="500" /></template>
+          </FormField>
+          <Button type="submit" :disabled="busy || !picked.length" data-testid="create-invoice">{{ t('clAccount.createInvoice', { n: picked.length, total: pickedTotal }) }}</Button>
+        </form>
+      </CardContent>
+    </Card>
 
-    <section class="card" data-testid="invoices">
-      <h2>Invoices</h2>
-      <p v-if="!invoices.length" class="muted" data-testid="no-invoices">No invoice has been issued to this company.</p>
-      <table v-else class="list">
-        <thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Outstanding</th><th>Status</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="i in invoices" :key="i.id" :class="{ voided: i.status === 'VOIDED' }" :data-testid="`invoice-${i.invoice_number}`">
-            <td>{{ i.invoice_number }}</td>
-            <td>{{ i.invoice_date }}</td>
-            <td>{{ i.due_date }}</td>
-            <td class="num">{{ i.total }}</td>
-            <td class="num">{{ i.paid }}</td>
-            <td class="num">{{ i.outstanding }}</td>
-            <td>{{ { UNPAID: 'Unpaid', PARTIAL: 'Part paid', PAID: 'Paid', VOID: 'Voided' }[i.payment_status] }}</td>
-            <td class="row-actions">
-              <button v-if="i.status === 'ISSUED' && Number(i.outstanding) > 0 && can('cityledger.receive')" type="button" :data-testid="`pay-${i.invoice_number}`" @click="startPay(i)">Pay</button>
-              <button type="button" :data-testid="`print-${i.invoice_number}`" @click="printInvoice(i)">Print</button>
-              <button v-if="i.status === 'ISSUED' && can('cityledger.invoice')" type="button" :data-testid="`void-${i.invoice_number}`" @click="startVoidInvoice(i)">Void</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <section class="card" data-testid="statement">
-      <h2>Statement</h2>
-      <form class="filters" novalidate @submit.prevent="load()">
-        <label class="field">
-          <span>From</span>
-          <input v-model="period.from" name="from" type="date" :aria-invalid="!!fieldError('from')" />
-        </label>
-        <label class="field">
-          <span>To</span>
-          <input v-model="period.to" name="to" type="date" :aria-invalid="!!fieldError('to')" />
-          <small v-if="fieldError('to')" class="error-text">{{ fieldError('to') }}</small>
-        </label>
-        <button type="submit">Show</button>
-        <button type="button" data-testid="print-statement" @click="printStatement">Print statement</button>
+    <Card v-if="paying" class="mb-4">
+      <form novalidate data-testid="pay-form" @submit.prevent="payInvoice">
+        <CardHeader>
+          <CardTitle>{{ t('clAccount.payTitle', { number: paying.invoice.invoice_number }) }}</CardTitle>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('clAccount.payHint', { amount: paying.invoice.outstanding }) }}</p>
+        </CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-3">
+            <FormField :label="t('clAccount.amount')" :error="fieldError('amount') || fieldError('allocations')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="paying.amount" name="pay_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('clAccount.method')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="paying.method" name="pay_method">
+                  <option v-for="m in METHODS" :key="m" :value="m">{{ t(`clAccount.method_${m}`) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('clAccount.reference')">
+              <template #default="{ id }"><Input :id="id" v-model="paying.reference" name="pay_reference" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="paying = null">{{ t('clAccount.keep') }}</Button>
+            <Button type="submit" :disabled="busy || !paying.amount" data-testid="pay-submit">{{ t('clAccount.recordPayment') }}</Button>
+          </div>
+        </CardContent>
       </form>
-      <table v-if="statement" class="list">
-        <thead>
-          <tr><th>Date</th><th>Number</th><th>Description</th><th>Reference</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th><th /></tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="6">Opening balance</td><td class="num">{{ statement.opening_balance }}</td><td /></tr>
-          <tr v-for="l in statement.lines" :key="`${l.kind}-${l.number}`" :class="{ voided: l.status === 'VOIDED' }" :data-testid="`line-${l.number}`">
-            <td>{{ l.date }}</td>
-            <td>{{ l.number }}</td>
-            <td>{{ l.description }}<template v-if="l.guest_name"> · {{ l.guest_name }}</template><small v-if="l.status === 'VOIDED'"> (voided)</small></td>
-            <td>{{ l.reference }}</td>
-            <td class="num">{{ l.debit === '0' ? '' : l.debit }}</td>
-            <td class="num">{{ l.credit === '0' ? '' : l.credit }}</td>
-            <td class="num">{{ l.balance }}</td>
-            <td><button v-if="l.kind === 'RECEIPT' && voidable(l.number)" type="button" :data-testid="`void-${l.number}`" @click="startVoid(l.number)">Void</button></td>
-          </tr>
-          <tr class="total"><td colspan="4">Total</td><td class="num">{{ statement.total_debit }}</td><td class="num">{{ statement.total_credit }}</td><td class="num"><b>{{ statement.closing_balance }}</b></td><td /></tr>
-        </tbody>
-      </table>
-    </section>
+    </Card>
+
+    <Card class="mb-4" data-testid="invoices">
+      <CardHeader><CardTitle>{{ t('clAccount.invoices') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p v-if="!invoices.length" class="m-0 text-sm text-muted-foreground" data-testid="no-invoices">{{ t('clAccount.noInvoices') }}</p>
+        <DataTable v-else :columns="invoiceColumns" :rows="invoices" row-key="id" :row-test-id="(i) => `invoice-${i.invoice_number}`" :row-class="(i) => (i.status === 'VOIDED' ? 'text-muted-foreground line-through' : undefined)" :caption="t('clAccount.invoices')">
+          <template #cell-payment_status="{ row }"><Badge variant="outline">{{ statusText(row.payment_status) }}</Badge></template>
+          <template #cell-actions="{ row }">
+            <div class="flex justify-end gap-1.5">
+              <Button v-if="row.status === 'ISSUED' && Number(row.outstanding) > 0 && can('cityledger.receive')" type="button" variant="outline" size="sm" :data-testid="`pay-${row.invoice_number}`" @click="startPay(row)">{{ t('clAccount.pay') }}</Button>
+              <Button type="button" variant="outline" size="sm" :data-testid="`print-${row.invoice_number}`" @click="printInvoice(row)">{{ t('clAccount.print') }}</Button>
+              <Button v-if="row.status === 'ISSUED' && can('cityledger.invoice')" type="button" variant="outline" size="sm" :data-testid="`void-${row.invoice_number}`" @click="startVoidInvoice(row)">{{ t('clAccount.void') }}</Button>
+            </div>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
+
+    <Card data-testid="statement">
+      <CardHeader><CardTitle>{{ t('clAccount.statement') }}</CardTitle></CardHeader>
+      <CardContent>
+        <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="load()">
+          <FormField :label="t('clAccount.from')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="period.from" name="from" type="date" :aria-invalid="invalid || !!fieldError('from')" /></template>
+          </FormField>
+          <FormField :label="t('clAccount.to')" :error="fieldError('to')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="period.to" name="to" type="date" :aria-invalid="invalid" /></template>
+          </FormField>
+          <Button type="submit" variant="outline">{{ t('clAccount.show') }}</Button>
+          <Button type="button" variant="outline" data-testid="print-statement" @click="printStatement">{{ t('clAccount.printStatement') }}</Button>
+        </form>
+        <div v-if="statement" class="overflow-x-auto">
+          <table class="w-full border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-border text-left text-xs text-muted-foreground">
+                <th class="py-1.5 pr-3 font-medium">{{ t('clAccount.date') }}</th>
+                <th class="px-3 font-medium">{{ t('clAccount.number') }}</th>
+                <th class="px-3 font-medium">{{ t('clAccount.description') }}</th>
+                <th class="px-3 font-medium">{{ t('clAccount.reference') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('clAccount.debit') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('clAccount.credit') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('clAccount.balanceCol') }}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody class="[&_td]:py-1.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-border">
+              <tr><td colspan="6">{{ t('clAccount.opening') }}</td><td class="text-right tabular-nums">{{ statement.opening_balance }}</td><td /></tr>
+              <tr v-for="l in statement.lines" :key="`${l.kind}-${l.number}`" :class="{ voided: l.status === 'VOIDED', 'text-muted-foreground line-through': l.status === 'VOIDED' }" :data-testid="`line-${l.number}`">
+                <td>{{ l.date }}</td>
+                <td>{{ l.number }}</td>
+                <td>{{ l.description }}<template v-if="l.guest_name"> · {{ l.guest_name }}</template><small v-if="l.status === 'VOIDED'"> {{ t('clAccount.voidedNote') }}</small></td>
+                <td>{{ l.reference }}</td>
+                <td class="text-right tabular-nums">{{ l.debit === '0' ? '' : l.debit }}</td>
+                <td class="text-right tabular-nums">{{ l.credit === '0' ? '' : l.credit }}</td>
+                <td class="text-right tabular-nums">{{ l.balance }}</td>
+                <td><Button v-if="l.kind === 'RECEIPT' && voidable(l.number)" type="button" variant="outline" size="sm" :data-testid="`void-${l.number}`" @click="startVoid(l.number)">{{ t('clAccount.void') }}</Button></td>
+              </tr>
+              <tr class="font-semibold"><td colspan="4">{{ t('clAccount.total') }}</td><td class="text-right tabular-nums">{{ statement.total_debit }}</td><td class="text-right tabular-nums">{{ statement.total_credit }}</td><td class="text-right tabular-nums"><b>{{ statement.closing_balance }}</b></td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   </template>
 
-  <section v-if="voiding && !voiding.asking" class="card" data-testid="void-form">
-    <h2>Void {{ voiding.label }}</h2>
-    <label class="field">
-      <span>Reason</span>
-      <input v-model="voiding.reason" name="void_reason" />
-    </label>
-    <div class="form-actions">
-      <button type="button" @click="voiding = null">Cancel</button>
-      <button type="button" class="btn-primary" :disabled="!voiding.reason.trim()" data-testid="void-continue" @click="voiding.asking = true">Continue</button>
-    </div>
-  </section>
-  <ApprovalDialog v-if="voiding?.asking" title="Approve void" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
+  <Card v-if="voiding && !voiding.asking" class="mt-4" data-testid="void-form">
+    <CardHeader><CardTitle>{{ t('clAccount.voidTitle', { label: voiding.label }) }}</CardTitle></CardHeader>
+    <CardContent>
+      <FormField class="max-w-md" :label="t('clAccount.reason')">
+        <template #default="{ id }"><Input :id="id" v-model="voiding.reason" name="void_reason" /></template>
+      </FormField>
+      <div class="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" @click="voiding = null">{{ t('clAccount.keep') }}</Button>
+        <Button type="button" :disabled="!voiding.reason.trim()" data-testid="void-continue" @click="voiding.asking = true">{{ t('clAccount.continue') }}</Button>
+      </div>
+    </CardContent>
+  </Card>
+  <ApprovalDialog v-if="voiding?.asking" :title="t('clAccount.approveVoid')" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
 </template>
-
-<style scoped>
-.voided td {
-  color: var(--muted, #6b7280);
-  text-decoration: line-through;
-}
-.waiting td {
-  color: var(--muted, #6b7280);
-}
-.total td {
-  font-weight: 600;
-}
-</style>

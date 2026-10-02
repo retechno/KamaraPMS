@@ -3,6 +3,14 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { statusLabel } from '@/utils/reservations'
@@ -17,6 +25,14 @@ const error = ref<ApiError | null>(null)
 const editing = ref(false)
 const saving = ref(false)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
+
+const columns = computed<Column<GroupMember>[]>(() => [
+  { key: 'confirmation_number', label: t('groupDetail.confirmation') },
+  { key: 'guest_name', label: t('groupDetail.booker') },
+  { key: 'dates', label: t('groupDetail.dates') },
+  { key: 'room_count', label: t('groupDetail.rooms'), align: 'right' },
+  { key: 'status', label: t('setup.status') },
+])
 
 const pid = computed(() => property.currentId)
 const canManage = computed(() => auth.can('group.manage', pid.value))
@@ -68,92 +84,82 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">{{ group ? `${group.code} · ${group.name}` : 'Group' }}</h1>
-    <RouterLink to="/groups">Groups</RouterLink>
-  </div>
+  <PageHeader :title="group ? `${group.code} · ${group.name}` : t('groupDetail.fallback')">
+    <template #actions><RouterLink to="/groups" class="text-sm text-primary hover:underline">{{ t('groupDetail.back') }}</RouterLink></template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <span v-if="error.code === 'GROUP_HAS_ROOMS_OUTSIDE_DATES'"> Move or cancel those rooms first.</span>
+    <span v-if="error.code === 'GROUP_HAS_ROOMS_OUTSIDE_DATES'"> {{ t('groupDetail.moveRooms') }}</span>
   </p>
 
-  <section v-if="group && !editing" class="card" data-testid="group-summary">
-    <dl class="facts">
-      <div><dt>Dates</dt><dd>{{ group.arrival_date }} to {{ group.departure_date }}</dd></div>
-      <div><dt>Company billed</dt><dd>{{ group.company_name || 'None (guests pay)' }}</dd></div>
-      <div><dt>Contact</dt><dd>{{ group.contact_name }} {{ group.contact_email }} {{ group.contact_phone }}</dd></div>
-      <div><dt>Reservations</dt><dd>{{ group.reservation_count }} ({{ group.room_count }} rooms)</dd></div>
-      <div><dt>Status</dt><dd>{{ group.is_active ? 'Active' : 'Inactive: takes no more rooms' }}</dd></div>
-    </dl>
-    <p v-if="group.notes" class="muted">{{ group.notes }}</p>
-    <div class="form-actions">
-      <button v-if="canManage" type="button" data-testid="edit-group" @click="startEdit">Edit</button>
-      <RouterLink v-if="canBook" class="btn-primary" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">Add rooms</RouterLink>
-    </div>
-  </section>
+  <Card v-if="group && !editing" class="mb-4" data-testid="group-summary">
+    <CardContent class="pt-4">
+      <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.dates') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.dateRange', { from: group.arrival_date, to: group.departure_date }) }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.companyBilled') }}</dt><dd class="m-0 text-sm">{{ group.company_name || t('groupDetail.noCompany') }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.contact') }}</dt><dd class="m-0 text-sm">{{ group.contact_name }} {{ group.contact_email }} {{ group.contact_phone }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.reservations') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.reservationsValue', { n: group.reservation_count, rooms: group.room_count }) }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.status') }}</dt><dd class="m-0 text-sm">{{ group.is_active ? t('setup.active') : t('groupDetail.inactiveNote') }}</dd></div>
+      </dl>
+      <p v-if="group.notes" class="mb-0 mt-3 text-sm text-muted-foreground">{{ group.notes }}</p>
+      <div class="mt-4 flex justify-end gap-2">
+        <Button v-if="canManage" type="button" variant="outline" data-testid="edit-group" @click="startEdit">{{ t('common.edit') }}</Button>
+        <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
+          <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
+        </RouterLink>
+      </div>
+    </CardContent>
+  </Card>
 
-  <form v-if="group && editing" class="card" novalidate data-testid="group-form" @submit.prevent="save">
-    <h2>Edit {{ group.code }}</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Arrival</span>
-        <input v-model="form.arrival_date" name="arrival_date" type="date" :aria-invalid="!!fieldError('arrival_date')" />
-        <small v-if="fieldError('arrival_date')" class="error-text">{{ fieldError('arrival_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Departure</span>
-        <input v-model="form.departure_date" name="departure_date" type="date" :aria-invalid="!!fieldError('departure_date')" />
-        <small v-if="fieldError('departure_date')" class="error-text">{{ fieldError('departure_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Contact person</span>
-        <input v-model="form.contact_name" name="contact_name" />
-      </label>
-      <label class="field">
-        <span>Contact email</span>
-        <input v-model="form.contact_email" name="contact_email" type="email" :aria-invalid="!!fieldError('contact_email')" />
-      </label>
-      <label class="field">
-        <span>Contact phone</span>
-        <input v-model="form.contact_phone" name="contact_phone" />
-      </label>
-      <label class="field">
-        <span>Notes</span>
-        <input v-model="form.notes" name="notes" />
-      </label>
-      <label class="check">
-        <input v-model="form.is_active" name="is_active" type="checkbox" />
-        <span>Active (takes rooms)</span>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" @click="editing = false">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="group && editing" class="mb-4">
+    <form novalidate data-testid="group-form" @submit.prevent="save">
+      <CardHeader><CardTitle>{{ t('groupDetail.edit', { code: group.code }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('groupDetail.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.arrival')" :error="fieldError('arrival_date')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.arrival_date" name="arrival_date" type="date" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.departure')" :error="fieldError('departure_date')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure_date" name="departure_date" type="date" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.contactName')">
+            <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.contactEmail')" :error="fieldError('contact_email')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.contact_email" name="contact_email" type="email" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.contactPhone')">
+            <template #default="{ id }"><Input :id="id" v-model="form.contact_phone" name="contact_phone" /></template>
+          </FormField>
+          <FormField :label="t('groupDetail.notes')">
+            <template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('groupDetail.activeCheck') }}</span>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="editing = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section v-if="group" class="card">
-    <h2>Reservations</h2>
-    <p v-if="!members.length" class="muted" data-testid="no-members">No room is booked into this group yet.</p>
-    <table v-else class="list">
-      <thead>
-        <tr><th>Confirmation</th><th>Booker</th><th>Dates</th><th class="num">Rooms</th><th>Status</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="m in members" :key="m.reservation_id" :data-testid="`member-${m.confirmation_number}`">
-          <td><RouterLink :to="`/reservations/${m.reservation_id}`">{{ m.confirmation_number }}</RouterLink></td>
-          <td>{{ m.guest_name }}</td>
-          <td>{{ m.arrival_date }} to {{ m.departure_date }}</td>
-          <td class="num">{{ m.room_count }}</td>
-          <td>{{ statusLabel(m.status) }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <Card v-if="group">
+    <CardHeader><CardTitle>{{ t('groupDetail.members') }}</CardTitle></CardHeader>
+    <CardContent>
+      <p v-if="!members.length" class="m-0 text-sm text-muted-foreground" data-testid="no-members">{{ t('groupDetail.noMembers') }}</p>
+      <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')">
+        <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`" class="text-primary hover:underline">{{ row.confirmation_number }}</RouterLink></template>
+        <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: row.arrival_date, to: row.departure_date }) }}</template>
+        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" :label="statusLabel(row.status)" /></template>
+      </DataTable>
+    </CardContent>
+  </Card>
 </template>

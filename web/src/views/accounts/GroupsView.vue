@@ -4,6 +4,16 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Company, Group } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -23,6 +33,15 @@ const missingDates = ref(false)
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canManage = computed(() => auth.can('group.manage', property.currentId))
 const businessDate = computed(() => property.clock?.business_date ?? '')
+const columns = computed<Column<Group>[]>(() => [
+  { key: 'code', label: t('groups.code') },
+  { key: 'name', label: t('groups.name') },
+  { key: 'company_name', label: t('groups.company') },
+  { key: 'dates', label: t('groups.dates') },
+  { key: 'reservation_count', label: t('groups.reservations'), align: 'right' },
+  { key: 'room_count', label: t('groups.rooms'), align: 'right' },
+  { key: 'status', label: t('setup.status') },
+])
 const blank = () => ({ code: '', name: '', company_id: 0, contact_name: '', contact_email: '', contact_phone: '', arrival_date: businessDate.value, departure_date: '', notes: '' })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -99,100 +118,78 @@ watch(activeOnly, () => void load())
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Groups</h1>
-    <button v-if="canManage && !creating" type="button" class="btn-primary" @click="startNew">New group</button>
-  </div>
+  <PageHeader :title="t('groups.title')">
+    <template #actions>
+      <Button v-if="canManage && !creating" type="button" data-testid="new-group" @click="startNew">{{ t('groups.new') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead" class="muted" data-testid="no-access">Your role at this property cannot see groups.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('groups.noAccess') }}</p>
 
-  <form v-if="creating" class="card" novalidate data-testid="group-form" @submit.prevent="save">
-    <h2>New group</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Code</span>
-        <input v-model="form.code" name="code" :aria-invalid="!!fieldError('code')" />
-        <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-      </label>
-      <label class="field">
-        <span>Name</span>
-        <input v-model="form.name" name="name" :aria-invalid="!!fieldError('name')" />
-        <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-      </label>
-      <label class="field">
-        <span>Arrival</span>
-        <input v-model="form.arrival_date" name="arrival_date" type="date" :min="businessDate" :aria-invalid="!!fieldError('arrival_date')" />
-        <small v-if="fieldError('arrival_date')" class="error-text">{{ fieldError('arrival_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Departure</span>
-        <input v-model="form.departure_date" name="departure_date" type="date" :min="form.arrival_date" :aria-invalid="!!fieldError('departure_date')" />
-        <small v-if="fieldError('departure_date')" class="error-text">{{ fieldError('departure_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Company that is billed</span>
-        <select v-model.number="form.company_id" name="company_id">
-          <option :value="0">None (guests pay)</option>
-          <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Contact person</span>
-        <input v-model="form.contact_name" name="contact_name" />
-      </label>
-      <label class="field">
-        <span>Contact email</span>
-        <input v-model="form.contact_email" name="contact_email" type="email" :aria-invalid="!!fieldError('contact_email')" />
-        <small v-if="fieldError('contact_email')" class="error-text">{{ fieldError('contact_email') }}</small>
-      </label>
-      <label class="field">
-        <span>Contact phone</span>
-        <input v-model="form.contact_phone" name="contact_phone" />
-      </label>
-      <label class="field">
-        <span>Notes</span>
-        <input v-model="form.notes" name="notes" />
-      </label>
-    </div>
-    <p v-if="missingDates" class="error-text" role="alert" data-testid="dates-required">Arrival and departure dates are required.</p>
-    <div class="form-actions">
-      <button type="button" @click="creating = false">Cancel</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Save</button>
-    </div>
-  </form>
+  <Card v-if="creating" class="mb-4">
+    <form novalidate data-testid="group-form" @submit.prevent="save">
+      <CardHeader><CardTitle>{{ t('groups.new') }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('groups.code')" :error="fieldError('code')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groups.name')" :error="fieldError('name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groups.billedCompany')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model.number="form.company_id" name="company_id">
+                <option :value="0">{{ t('groups.noCompany') }}</option>
+                <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('groups.arrival')" :error="fieldError('arrival_date')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.arrival_date" name="arrival_date" type="date" :min="businessDate" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groups.departure')" :error="fieldError('departure_date')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure_date" name="departure_date" type="date" :min="form.arrival_date" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groups.contactName')">
+            <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" /></template>
+          </FormField>
+          <FormField :label="t('groups.contactEmail')" :error="fieldError('contact_email')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.contact_email" name="contact_email" type="email" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('groups.contactPhone')">
+            <template #default="{ id }"><Input :id="id" v-model="form.contact_phone" name="contact_phone" /></template>
+          </FormField>
+          <FormField :label="t('groups.notes')">
+            <template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" /></template>
+          </FormField>
+        </div>
+        <p v-if="missingDates" class="mb-0 mt-3 text-xs text-destructive" role="alert" data-testid="dates-required">{{ t('groups.datesRequired') }}</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="creating = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="saving">{{ t('common.save') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 
-  <section v-if="canRead" class="card">
-    <label class="check">
-      <input v-model="activeOnly" type="checkbox" name="active_only" />
-      <span>Active groups only</span>
-    </label>
-    <p v-if="loaded && !groups.length" class="muted" data-testid="empty">No groups yet.</p>
-    <table v-else-if="groups.length" class="list">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Company</th>
-          <th>Dates</th>
-          <th class="num">Reservations</th>
-          <th class="num">Rooms</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="g in groups" :key="g.id" :data-testid="`group-${g.code}`">
-          <td><RouterLink :to="`/groups/${g.id}`"><b>{{ g.code }}</b></RouterLink></td>
-          <td>{{ g.name }}</td>
-          <td>{{ g.company_name }}</td>
-          <td>{{ g.arrival_date }} to {{ g.departure_date }}</td>
-          <td class="num">{{ g.reservation_count }}</td>
-          <td class="num">{{ g.room_count }}</td>
-          <td>{{ g.is_active ? 'Active' : 'Inactive' }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <button v-if="nextCursor" type="button" data-testid="more" @click="load(true)">Load more</button>
-  </section>
+  <Card v-if="canRead">
+    <CardContent class="pt-4">
+      <label class="mb-3 flex items-center gap-2 text-sm">
+        <input v-model="activeOnly" type="checkbox" name="active_only" class="size-4 accent-primary" />
+        <span>{{ t('groups.activeOnly') }}</span>
+      </label>
+      <EmptyState v-if="loaded && !groups.length" :title="t('groups.empty')" data-testid="empty" />
+      <DataTable v-else-if="groups.length" :columns="columns" :rows="groups" row-key="id" :row-test-id="(g) => `group-${g.code}`" :caption="t('groups.title')">
+        <template #cell-code="{ row }"><RouterLink :to="`/groups/${row.id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink></template>
+        <template #cell-dates="{ row }">{{ t('groups.dateRange', { from: row.arrival_date, to: row.departure_date }) }}</template>
+        <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+      </DataTable>
+      <div v-if="nextCursor" class="mt-3 flex justify-center">
+        <Button type="button" variant="outline" data-testid="more" @click="load(true)">{{ t('groups.more') }}</Button>
+      </div>
+    </CardContent>
+  </Card>
 </template>

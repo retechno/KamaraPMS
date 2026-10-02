@@ -51,7 +51,7 @@ describe('GroupsView', () => {
   it('creates a group of a company and shows a refusal', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-group]').trigger('click')
     await flushPromises()
     expect((w.get('input[name=arrival_date]').element as HTMLInputElement).value).toBe('2026-10-01')
     await w.get('input[name=code]').setValue('WED')
@@ -61,7 +61,7 @@ describe('GroupsView', () => {
     await w.get('[data-testid=group-form]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toMatchObject({ code: 'WED', name: 'Wedding', company_id: 1, arrival_date: '2026-10-01', departure_date: '2026-10-03', is_active: true })
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-group]').trigger('click')
     await w.get('[data-testid=group-form]').trigger('submit')
     expect(w.find('[data-testid=dates-required]').exists()).toBe(true) // an empty date is never sent
     expect(POST).toHaveBeenCalledTimes(1)
@@ -69,13 +69,13 @@ describe('GroupsView', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'the group is invalid', errors: [{ field: 'departure_date', code: 'INVALID_RANGE', message: 'after the arrival date' }] } as never))
     await w.get('[data-testid=group-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('.error-text').text()).toContain('after the arrival date')
+    expect(w.get('[data-testid=group-form] [role=alert]').text()).toContain('after the arrival date')
   })
 
   it('needs group.manage to create and reservation.read to see', async () => {
     const reader = mountView(['reservation.read'])
     await flushPromises()
-    expect(reader.find('button.btn-primary').exists()).toBe(false)
+    expect(reader.find('[data-testid=new-group]').exists()).toBe(false)
     const none = mountView([])
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)

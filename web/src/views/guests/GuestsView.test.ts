@@ -77,7 +77,7 @@ describe('GuestsView', () => {
         possible_duplicates: [{ guest: siti, reasons: ['SAME_EMAIL'] }], hidden_duplicate_count: 2,
       },
     })
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-guest]').trigger('click')
     await w.get('input[name=last_name]').setValue('Nurhaliza')
     await w.get('input[name=email]').setValue('siti@mail.com')
     await w.get('[data-testid=create-form]').trigger('submit')
@@ -98,7 +98,7 @@ describe('GuestsView', () => {
         errors: [{ field: 'email', code: 'INVALID_FORMAT', message: 'a valid email address' }],
       }),
     )
-    await w.get('button.btn-primary').trigger('click')
+    await w.get('[data-testid=new-guest]').trigger('click')
     await w.get('input[name=email]').setValue('nope')
     await w.get('[data-testid=create-form]').trigger('submit')
     await flushPromises()
@@ -109,6 +109,6 @@ describe('GuestsView', () => {
   it('hides creation without guest.write', async () => {
     const w = mountView(['guest.read'])
     await flushPromises()
-    expect(w.find('button.btn-primary').exists()).toBe(false)
+    expect(w.find('[data-testid=new-guest]').exists()).toBe(false)
   })
 })
