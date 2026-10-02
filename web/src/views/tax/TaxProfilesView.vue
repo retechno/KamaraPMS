@@ -4,6 +4,16 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { TaxFilingProfile } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -30,9 +40,17 @@ const form = reactive({ tax_id: 0, authority: '', registration_number: '', due_d
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const fieldError = (field: string) => error.value?.fieldMessage(field)
+const columns = computed<Column<TaxFilingProfile>[]>(() => [
+  { key: 'tax', label: t('taxProfiles.tax') },
+  { key: 'authority', label: t('taxProfiles.authority') },
+  { key: 'registration_number', label: t('taxProfiles.registration') },
+  { key: 'due_day', label: t('taxProfiles.due') },
+  { key: 'status', label: t('taxProfiles.status') },
+  { key: 'actions', label: '', align: 'right' },
+])
 const choices = computed(() => {
   const taken = new Set(profiles.value.map((p) => p.tax_id))
-  return taxes.value.filter((t) => !taken.has(t.id))
+  return taxes.value.filter((x) => !taken.has(x.id))
 })
 
 async function load(): Promise<void> {
@@ -43,7 +61,7 @@ async function load(): Promise<void> {
     profiles.value = data?.data ?? []
     if (can('tax.manage') && !taxes.value.length) {
       const res = await api.GET('/api/v1/properties/{propertyId}/taxes', { params: { path: { propertyId } } })
-      taxes.value = ((res.data as { data?: TaxRow[] } | undefined)?.data ?? []).filter((t) => t.is_active)
+      taxes.value = ((res.data as { data?: TaxRow[] } | undefined)?.data ?? []).filter((x) => x.is_active)
     }
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -82,7 +100,7 @@ async function save(): Promise<void> {
         body: { authority: form.authority, registration_number: form.registration_number, due_day: Number(form.due_day), is_active: form.is_active },
       })
     }
-    notice.value = 'Saved.'
+    notice.value = t('taxProfiles.saved')
     editing.value = null
     await load()
   } catch (e) {
@@ -101,80 +119,66 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">How taxes are filed</h1>
-    <button v-if="can('tax.manage') && !editing" type="button" class="btn-primary" data-testid="new-profile" @click="startNew">Set up a tax</button>
-  </div>
+  <PageHeader :title="t('taxProfiles.title')" :description="pid !== null && can('tax.view') ? t('taxProfiles.intro') : undefined">
+    <template #actions>
+      <Button v-if="can('tax.manage') && !editing" type="button" data-testid="new-profile" @click="startNew">{{ t('taxProfiles.setUp') }}</Button>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="profile-error">
     {{ error.message }} <code>{{ error.code }}</code>
     <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
   </p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">Your role at this property cannot see tax filing: the <code>tax.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxProfiles.noAccess', { permission: 'tax.view' }) }}</p>
   <template v-else>
-    <p class="muted">
-      For each tax the hotel collects from guests (the hotel tax, VAT), say which authority it is filed with, the hotel's registration number there and the day of the next month the return and the payment are due.
-      The taxes themselves are set up under Setup → Taxes.
-    </p>
-    <form v-if="editing" class="card" novalidate data-testid="profile-form" @submit.prevent="save">
-      <h2>{{ editing === 'new' ? 'Set up a tax' : `Edit ${editing.tax_code}` }}</h2>
-      <div class="form-grid">
-        <label v-if="editing === 'new'" class="field">
-          <span>Tax</span>
-          <select v-model.number="form.tax_id" name="tax_id" :aria-invalid="!!fieldError('tax_id')">
-            <option :value="0">Choose a tax</option>
-            <option v-for="t in choices" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }} ({{ Number(t.rate) }}%)</option>
-          </select>
-          <small v-if="fieldError('tax_id')" class="error-text">{{ fieldError('tax_id') }}</small>
-        </label>
-        <label class="field">
-          <span>Tax authority</span>
-          <input v-model="form.authority" name="authority" maxlength="150" placeholder="e.g. Bapenda Kabupaten Badung" :aria-invalid="!!fieldError('authority')" />
-          <small v-if="fieldError('authority')" class="error-text">{{ fieldError('authority') }}</small>
-        </label>
-        <label class="field"><span>Registration number (NPWPD)</span><input v-model="form.registration_number" name="registration_number" maxlength="60" /></label>
-        <label class="field">
-          <span>Due day of the next month</span>
-          <input v-model="form.due_day" name="due_day" inputmode="numeric" :aria-invalid="!!fieldError('due_day')" />
-          <small v-if="fieldError('due_day')" class="error-text">{{ fieldError('due_day') }}</small>
-        </label>
-        <label class="check"><input v-model="form.is_active" name="is_active" type="checkbox" /><span>Filed (takes returns)</span></label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="editing = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || (editing === 'new' && !form.tax_id) || !form.authority.trim()">Save</button>
-      </div>
-    </form>
-    <section class="card">
-      <p v-if="loaded && !profiles.length" class="muted" data-testid="empty">No tax is set up for filing yet.</p>
-      <table v-else class="list" data-testid="profiles">
-        <thead><tr><th>Tax</th><th>Authority</th><th>Registration number</th><th>Due</th><th>Status</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="p in profiles" :key="p.id" :class="{ off: !p.is_active }" :data-testid="`profile-${p.tax_code}`">
-            <td><b>{{ p.tax_code }}</b> · {{ p.tax_name }} <small class="muted">{{ Number(p.tax_rate) }}%</small></td>
-            <td>{{ p.authority }}</td>
-            <td>{{ p.registration_number ?? '—' }}</td>
-            <td>day {{ p.due_day }}</td>
-            <td>{{ p.is_active ? 'Filed' : 'Not filed' }}</td>
-            <td class="row-actions">
-              <RouterLink :to="{ path: '/tax/returns', query: { tax: String(p.tax_id) } }">Returns</RouterLink>
-              <button v-if="can('tax.manage')" type="button" :data-testid="`edit-${p.tax_code}`" @click="startEdit(p)">Edit</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <Card v-if="editing" class="mb-4">
+      <form novalidate data-testid="profile-form" @submit.prevent="save">
+        <CardHeader><CardTitle>{{ editing === 'new' ? t('taxProfiles.setUp') : t('taxProfiles.edit', { code: editing.tax_code }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField v-if="editing === 'new'" :label="t('taxProfiles.tax')" :error="fieldError('tax_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.tax_id" name="tax_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('taxProfiles.chooseTax') }}</option>
+                  <option v-for="x in choices" :key="x.id" :value="x.id">{{ x.code }} · {{ x.name }} ({{ Number(x.rate) }}%)</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('taxProfiles.authority')" :error="fieldError('authority')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.authority" name="authority" maxlength="150" :placeholder="t('taxProfiles.authorityPlaceholder')" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('taxProfiles.registration')">
+              <template #default="{ id }"><Input :id="id" v-model="form.registration_number" name="registration_number" maxlength="60" /></template>
+            </FormField>
+            <FormField :label="t('taxProfiles.dueDay')" :error="fieldError('due_day')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.due_day" name="due_day" inputmode="numeric" :aria-invalid="invalid" /></template>
+            </FormField>
+            <label class="flex items-center gap-2 self-end pb-2 text-sm">
+              <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" /><span>{{ t('taxProfiles.filedCheck') }}</span>
+            </label>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy || (editing === 'new' && !form.tax_id) || !form.authority.trim()">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+    <Card>
+      <EmptyState v-if="loaded && !profiles.length" :title="t('taxProfiles.empty')" data-testid="empty" />
+      <DataTable v-else :columns="columns" :rows="profiles" row-key="id" :row-test-id="(p) => `profile-${p.tax_code}`" :row-class="(p) => (p.is_active ? undefined : 'text-muted-foreground')" :caption="t('taxProfiles.title')" data-testid="profiles">
+        <template #cell-tax="{ row }"><b>{{ row.tax_code }}</b> · {{ row.tax_name }} <small class="text-muted-foreground">{{ Number(row.tax_rate) }}%</small></template>
+        <template #cell-registration_number="{ row }">{{ row.registration_number ?? '—' }}</template>
+        <template #cell-due_day="{ row }">{{ t('taxProfiles.dayN', { n: row.due_day }) }}</template>
+        <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('taxProfiles.filed') : t('taxProfiles.notFiled') }}</Badge></template>
+        <template #cell-actions="{ row }">
+          <div class="flex items-center justify-end gap-2">
+            <RouterLink :to="{ path: '/tax/returns', query: { tax: String(row.tax_id) } }" class="text-sm text-primary hover:underline">{{ t('taxProfiles.returns') }}</RouterLink>
+            <Button v-if="can('tax.manage')" type="button" variant="outline" size="sm" :data-testid="`edit-${row.tax_code}`" @click="startEdit(row)">{{ t('common.edit') }}</Button>
+          </div>
+        </template>
+      </DataTable>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.off td {
-  color: var(--muted, #6b7280);
-}
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-</style>

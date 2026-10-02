@@ -4,6 +4,15 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { BankAccount, GlAccount } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from '@/views/accounting/accountApi'
@@ -23,6 +32,14 @@ const form = reactive({ account_id: 0, name: '', account_number: '', is_active: 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const fieldError = (field: string) => error.value?.fieldMessage(field)
+const columns = computed<Column<BankAccount>[]>(() => [
+  { key: 'name', label: t('bankAccounts.name') },
+  { key: 'account', label: t('bankAccounts.booksAccount') },
+  { key: 'book_balance', label: t('bankAccounts.bookBalance'), align: 'right' },
+  { key: 'reconciled_to', label: t('bankAccounts.reconciledTo') },
+  { key: 'open_statements', label: t('bankAccounts.openStatements') },
+  { key: 'actions', label: '', align: 'right' },
+])
 // Asset accounts that take postings and are not registered yet (cash and bank accounts first).
 const choices = computed(() => {
   const taken = new Set(banks.value.map((b) => b.account_id))
@@ -71,7 +88,7 @@ async function save(): Promise<void> {
         params: { path: { propertyId, id: editing.value.id } }, body: { name: form.name, account_number: form.account_number, is_active: form.is_active },
       })
     }
-    notice.value = 'Bank account saved.'
+    notice.value = t('bankAccounts.saved')
     editing.value = null
     await load()
   } catch (e) {
@@ -90,76 +107,64 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Bank accounts</h1>
-    <button v-if="can('bank.manage') && !editing" type="button" class="btn-primary" data-testid="new-bank" @click="startNew">Register an account</button>
-  </div>
+  <PageHeader :title="t('bankAccounts.title')" :description="pid !== null && can('bank.view') ? t('bankAccounts.intro') : undefined">
+    <template #actions>
+      <Button v-if="can('bank.manage') && !editing" type="button" data-testid="new-bank" @click="startNew">{{ t('bankAccounts.register') }}</Button>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="bank-error">
     {{ error.message }} <code>{{ error.code }}</code>
     <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
   </p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">Your role at this property cannot see bank accounts: the <code>bank.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">{{ t('bankAccounts.noAccess', { permission: 'bank.view' }) }}</p>
   <template v-else>
-    <p class="muted">The accounts of the books that are reconciled with a bank statement. Register the cash and bank accounts here, then import a statement for each period.</p>
-    <form v-if="editing" class="card" novalidate data-testid="bank-form" @submit.prevent="save">
-      <h2>{{ editing === 'new' ? 'Register an account' : `Edit ${editing.name}` }}</h2>
-      <div class="form-grid">
-        <label v-if="editing === 'new'" class="field">
-          <span>Account of the books</span>
-          <select v-model.number="form.account_id" name="account_id" :aria-invalid="!!fieldError('account_id')">
-            <option :value="0">Choose an account</option>
-            <option v-for="a in choices" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-          </select>
-          <small v-if="fieldError('account_id')" class="error-text">{{ fieldError('account_id') }}</small>
-        </label>
-        <label class="field">
-          <span>Name</span>
-          <input v-model="form.name" name="name" maxlength="100" :aria-invalid="!!fieldError('name')" />
-          <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-        </label>
-        <label class="field"><span>Account number at the bank</span><input v-model="form.account_number" name="account_number" maxlength="60" /></label>
-        <label class="check"><input v-model="form.is_active" name="is_active" type="checkbox" /><span>In use</span></label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="editing = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || (editing === 'new' && !form.account_id) || !form.name.trim()">Save</button>
-      </div>
-    </form>
-    <section class="card">
-      <p v-if="loaded && !banks.length" class="muted" data-testid="empty">No bank account is registered yet.</p>
-      <table v-else class="list" data-testid="banks">
-        <thead><tr><th>Name</th><th>Account of the books</th><th class="num">Book balance</th><th>Reconciled to</th><th>Open statements</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="b in banks" :key="b.id" :class="{ off: !b.is_active }" :data-testid="`bank-${b.account_code}`">
-            <td><b>{{ b.name }}</b><small v-if="b.account_number" class="muted"> · {{ b.account_number }}</small><small v-if="!b.is_active" class="muted"> · not in use</small></td>
-            <td>{{ b.account_code }} - {{ b.account_name }}</td>
-            <td class="num">{{ b.book_balance }}</td>
-            <td>{{ b.reconciled_to ?? 'never' }}</td>
-            <td>{{ b.open_statements }}</td>
-            <td class="row-actions">
-              <RouterLink :to="{ path: '/bank/statements', query: { bank: String(b.id) } }">Statements</RouterLink>
-              <button v-if="can('bank.manage')" type="button" :data-testid="`edit-${b.account_code}`" @click="startEdit(b)">Edit</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <Card v-if="editing" class="mb-4">
+      <form novalidate data-testid="bank-form" @submit.prevent="save">
+        <CardHeader><CardTitle>{{ editing === 'new' ? t('bankAccounts.register') : t('bankAccounts.edit', { name: editing.name }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField v-if="editing === 'new'" :label="t('bankAccounts.booksAccount')" :error="fieldError('account_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.account_id" name="account_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('bankAccounts.chooseAccount') }}</option>
+                  <option v-for="a in choices" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('bankAccounts.name')" :error="fieldError('name')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" maxlength="100" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('bankAccounts.accountNumber')">
+              <template #default="{ id }"><Input :id="id" v-model="form.account_number" name="account_number" maxlength="60" /></template>
+            </FormField>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" /><span>{{ t('bankAccounts.inUse') }}</span>
+            </label>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy || (editing === 'new' && !form.account_id) || !form.name.trim()">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+    <Card>
+      <EmptyState v-if="loaded && !banks.length" :title="t('bankAccounts.empty')" data-testid="empty" />
+      <DataTable v-else :columns="columns" :rows="banks" row-key="id" :row-test-id="(b) => `bank-${b.account_code}`" :row-class="(b) => (b.is_active ? undefined : 'text-muted-foreground')" :caption="t('bankAccounts.title')" data-testid="banks">
+        <template #cell-name="{ row }">
+          <b>{{ row.name }}</b><small v-if="row.account_number" class="text-muted-foreground"> · {{ row.account_number }}</small><small v-if="!row.is_active" class="text-muted-foreground"> · {{ t('bankAccounts.notInUse') }}</small>
+        </template>
+        <template #cell-account="{ row }">{{ row.account_code }} - {{ row.account_name }}</template>
+        <template #cell-reconciled_to="{ row }">{{ row.reconciled_to ?? t('bankAccounts.never') }}</template>
+        <template #cell-actions="{ row }">
+          <div class="flex items-center justify-end gap-2">
+            <RouterLink :to="{ path: '/bank/statements', query: { bank: String(row.id) } }" class="text-sm text-primary hover:underline">{{ t('bankAccounts.statements') }}</RouterLink>
+            <Button v-if="can('bank.manage')" type="button" variant="outline" size="sm" :data-testid="`edit-${row.account_code}`" @click="startEdit(row)">{{ t('common.edit') }}</Button>
+          </div>
+        </template>
+      </DataTable>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.off td {
-  color: var(--muted, #6b7280);
-}
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-</style>

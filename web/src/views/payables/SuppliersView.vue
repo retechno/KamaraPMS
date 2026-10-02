@@ -4,6 +4,15 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GlAccount, Supplier } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from '@/views/accounting/accountApi'
@@ -29,6 +38,14 @@ const visible = computed(() => {
   const q = filter.q.trim().toLowerCase()
   return suppliers.value.filter((s) => (filter.inactive || s.is_active) && (!q || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)))
 })
+const columns = computed<Column<Supplier>[]>(() => [
+  { key: 'code', label: t('payables.code') },
+  { key: 'name', label: t('payables.name') },
+  { key: 'terms', label: t('payables.colTerms') },
+  { key: 'account', label: t('payables.usualAccount') },
+  { key: 'outstanding', label: t('payables.owed'), align: 'right' },
+  { key: 'actions', label: '', align: 'right' },
+])
 const owed = computed(() => visible.value.reduce((sum, s) => sum + Number(s.outstanding), 0))
 
 async function load(): Promise<void> {
@@ -86,7 +103,7 @@ async function save(): Promise<void> {
         },
       })
     }
-    notice.value = 'Supplier saved.'
+    notice.value = t('payables.sSaved')
     editing.value = null
     await load()
   } catch (e) {
@@ -105,105 +122,106 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Suppliers</h1>
-    <button v-if="can('payables.manage') && !editing" type="button" class="btn-primary" data-testid="new-supplier" @click="startNew">New supplier</button>
-  </div>
+  <PageHeader :title="t('payables.sTitle')">
+    <template #actions>
+      <Button v-if="can('payables.manage') && !editing" type="button" data-testid="new-supplier" @click="startNew">{{ t('payables.sNew') }}</Button>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="supplier-error">
     {{ error.message }} <code>{{ error.code }}</code>
     <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 6)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
   </p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">Your role at this property cannot see suppliers: the <code>payables.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.sNoAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>
-    <form v-if="editing" class="card" novalidate data-testid="supplier-form" @submit.prevent="save">
-      <h2>{{ editing === 'new' ? 'New supplier' : `Edit ${form.code}` }}</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Code</span>
-          <input v-model="form.code" name="code" maxlength="20" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-          <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-        </label>
-        <label class="field">
-          <span>Name</span>
-          <input v-model="form.name" name="name" maxlength="150" :aria-invalid="!!fieldError('name')" />
-          <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-        </label>
-        <label class="field"><span>Contact</span><input v-model="form.contact_name" name="contact_name" maxlength="150" /></label>
-        <label class="field">
-          <span>E-mail</span>
-          <input v-model="form.email" name="email" type="email" maxlength="254" :aria-invalid="!!fieldError('email')" />
-          <small v-if="fieldError('email')" class="error-text">{{ fieldError('email') }}</small>
-        </label>
-        <label class="field"><span>Phone</span><input v-model="form.phone" name="phone" maxlength="40" /></label>
-        <label class="field"><span>Tax ID</span><input v-model="form.tax_id" name="tax_id" maxlength="40" /></label>
-        <label class="field"><span>Address</span><input v-model="form.address" name="address" maxlength="300" /></label>
-        <label class="field"><span>City</span><input v-model="form.city" name="city" maxlength="100" /></label>
-        <label class="field">
-          <span>Payment terms (days)</span>
-          <input v-model="form.payment_terms_days" name="payment_terms_days" inputmode="numeric" :aria-invalid="!!fieldError('payment_terms_days')" />
-          <small v-if="fieldError('payment_terms_days')" class="error-text">{{ fieldError('payment_terms_days') }}</small>
-        </label>
-        <label v-if="accounts.length" class="field">
-          <span>Usual expense account</span>
-          <select v-model.number="form.default_account_id" name="default_account_id" :aria-invalid="!!fieldError('default_account_id')">
-            <option :value="0">None</option>
-            <option v-for="a in expenseAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-          </select>
-          <small v-if="fieldError('default_account_id')" class="error-text">{{ fieldError('default_account_id') }}</small>
-        </label>
-        <label class="field wide"><span>Bank details</span><input v-model="form.bank_details" name="bank_details" maxlength="300" /></label>
-        <label class="field wide"><span>Notes</span><input v-model="form.notes" name="notes" maxlength="1000" /></label>
-        <label class="check"><input v-model="form.is_active" name="is_active" type="checkbox" /><span>Active (takes bills)</span></label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="editing = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy">Save</button>
-      </div>
-    </form>
-
-    <section class="card">
-      <form class="filters" novalidate @submit.prevent>
-        <label class="field"><span>Search</span><input v-model="filter.q" name="q" type="search" placeholder="Code or name" /></label>
-        <label class="check"><input v-model="filter.inactive" name="inactive" type="checkbox" /><span>Show inactive</span></label>
+    <Card v-if="editing" class="mb-4">
+      <form novalidate data-testid="supplier-form" @submit.prevent="save">
+        <CardHeader><CardTitle>{{ editing === 'new' ? t('payables.sNew') : t('payables.sEdit', { code: form.code }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField :label="t('payables.code')" :error="fieldError('code')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" maxlength="20" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('payables.name')" :error="fieldError('name')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" maxlength="150" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('payables.contact')">
+              <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" maxlength="150" /></template>
+            </FormField>
+            <FormField :label="t('payables.email')" :error="fieldError('email')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.email" name="email" type="email" maxlength="254" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('payables.phone')">
+              <template #default="{ id }"><Input :id="id" v-model="form.phone" name="phone" maxlength="40" /></template>
+            </FormField>
+            <FormField :label="t('payables.taxId')">
+              <template #default="{ id }"><Input :id="id" v-model="form.tax_id" name="tax_id" maxlength="40" /></template>
+            </FormField>
+            <FormField :label="t('payables.address')">
+              <template #default="{ id }"><Input :id="id" v-model="form.address" name="address" maxlength="300" /></template>
+            </FormField>
+            <FormField :label="t('payables.city')">
+              <template #default="{ id }"><Input :id="id" v-model="form.city" name="city" maxlength="100" /></template>
+            </FormField>
+            <FormField :label="t('payables.terms')" :error="fieldError('payment_terms_days')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.payment_terms_days" name="payment_terms_days" inputmode="numeric" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField v-if="accounts.length" :label="t('payables.usualExpense')" :error="fieldError('default_account_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.default_account_id" name="default_account_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('payables.none') }}</option>
+                  <option v-for="a in expenseAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-3" :label="t('payables.bankDetails')">
+              <template #default="{ id }"><Input :id="id" v-model="form.bank_details" name="bank_details" maxlength="300" /></template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-3" :label="t('payables.notes')">
+              <template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" maxlength="1000" /></template>
+            </FormField>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" /><span>{{ t('payables.activeCheck') }}</span>
+            </label>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
       </form>
-      <p v-if="loaded && !visible.length" class="muted" data-testid="empty">No suppliers.</p>
-      <table v-else class="list" data-testid="suppliers">
-        <thead><tr><th>Code</th><th>Name</th><th>Terms</th><th>Usual account</th><th class="num">Owed</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="s in visible" :key="s.id" :class="{ off: !s.is_active }" :data-testid="`supplier-${s.code}`">
-            <td><b>{{ s.code }}</b></td>
-            <td>{{ s.name }}<small v-if="!s.is_active" class="muted"> · inactive</small></td>
-            <td>{{ s.payment_terms_days }} days</td>
-            <td>{{ s.default_account_code ? `${s.default_account_code} - ${s.default_account_name}` : '—' }}</td>
-            <td class="num">{{ s.outstanding }}</td>
-            <td class="row-actions">
-              <RouterLink :to="{ path: '/payables/bills', query: { supplier: String(s.id) } }">Bills</RouterLink>
-              <button v-if="can('payables.manage')" type="button" :data-testid="`edit-${s.code}`" @click="startEdit(s)">Edit</button>
-            </td>
-          </tr>
-        </tbody>
-        <tfoot><tr><th colspan="4">Total owed</th><th class="num" data-testid="owed">{{ owed }}</th><th /></tr></tfoot>
-      </table>
-    </section>
+    </Card>
+
+    <Card>
+      <CardContent class="pt-4">
+        <form class="mb-4 flex flex-wrap items-end gap-4" novalidate @submit.prevent>
+          <FormField class="w-64" :label="t('payables.search')">
+            <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('payables.codeOrName')" /></template>
+          </FormField>
+          <label class="flex items-center gap-2 pb-2 text-sm">
+            <input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('payables.showInactive') }}</span>
+          </label>
+        </form>
+        <EmptyState v-if="loaded && !visible.length" :title="t('payables.sEmpty')" data-testid="empty" />
+        <template v-else>
+          <DataTable :columns="columns" :rows="visible" row-key="id" :row-test-id="(s) => `supplier-${s.code}`" :row-class="(s) => (s.is_active ? undefined : 'text-muted-foreground')" :caption="t('payables.sTitle')" data-testid="suppliers">
+            <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
+            <template #cell-name="{ row }">{{ row.name }}<small v-if="!row.is_active" class="text-muted-foreground"> · {{ t('payables.inactiveNote') }}</small></template>
+            <template #cell-terms="{ row }">{{ t('payables.days', { n: row.payment_terms_days }) }}</template>
+            <template #cell-account="{ row }">{{ row.default_account_code ? `${row.default_account_code} - ${row.default_account_name}` : '—' }}</template>
+            <template #cell-actions="{ row }">
+              <div class="flex items-center justify-end gap-2">
+                <RouterLink :to="{ path: '/payables/bills', query: { supplier: String(row.id) } }" class="text-sm text-primary hover:underline">{{ t('payables.bills') }}</RouterLink>
+                <Button v-if="can('payables.manage')" type="button" variant="outline" size="sm" :data-testid="`edit-${row.code}`" @click="startEdit(row)">{{ t('common.edit') }}</Button>
+              </div>
+            </template>
+          </DataTable>
+          <p class="mb-0 mt-3 flex justify-between border-t border-border pt-3 text-sm font-semibold">
+            <span>{{ t('payables.totalOwed') }}</span><span class="tabular-nums" data-testid="owed">{{ owed }}</span>
+          </p>
+        </template>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.wide {
-  grid-column: 1 / -1;
-}
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.off td {
-  color: var(--muted, #6b7280);
-}
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-</style>

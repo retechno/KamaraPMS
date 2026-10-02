@@ -4,6 +4,14 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { TaxFilingLiability } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { money } from '@/views/accounting/reportApi'
@@ -15,6 +23,24 @@ const report = ref<TaxFilingLiability | null>(null)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
 const asOf = ref('')
+
+type TaxRow = TaxFilingLiability['taxes'][number]
+type AccountRow = TaxFilingLiability['accounts'][number]
+const columns = computed<Column<TaxRow>[]>(() => [
+  { key: 'tax', label: t('taxLiability.tax') },
+  { key: 'collected', label: t('taxLiability.collected'), align: 'right' },
+  { key: 'filed', label: t('taxLiability.onReturns'), align: 'right' },
+  { key: 'unfiled', label: t('taxLiability.unfiled'), align: 'right' },
+  { key: 'paid', label: t('taxLiability.paid'), align: 'right' },
+  { key: 'owed', label: t('taxLiability.owed'), align: 'right' },
+  { key: 'overdue', label: t('taxLiability.overdue') },
+])
+const accountColumns = computed<Column<AccountRow>[]>(() => [
+  { key: 'account_code', label: t('taxLiability.payableAccount') },
+  { key: 'books', label: t('taxLiability.books'), align: 'right' },
+  { key: 'owed', label: t('taxLiability.taxesSay'), align: 'right' },
+  { key: 'difference', label: t('taxLiability.difference'), align: 'right' },
+])
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -41,56 +67,47 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Tax owed</h1>
-  </div>
+  <PageHeader :title="t('taxLiability.title')" />
   <p v-if="error" class="alert" role="alert" data-testid="liability-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">Your role at this property cannot see what is owed in tax: the <code>tax.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxLiability.noAccess', { permission: 'tax.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <label class="field"><span>As of</span><input v-model="asOf" name="as_of" type="date" /></label>
-      <button type="submit" :disabled="busy" data-testid="apply">Show</button>
-    </form>
-    <section v-if="report" class="card">
-      <p v-if="!report.taxes.length" class="muted" data-testid="empty">No tax is set up for filing yet.</p>
+    <Card class="mb-4">
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
+        <FormField :label="t('taxLiability.asOf')"><template #default="{ id }"><Input :id="id" v-model="asOf" name="as_of" type="date" /></template></FormField>
+        <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('taxLiability.show') }}</Button>
+      </form>
+    </Card>
+    <template v-if="report">
+      <EmptyState v-if="!report.taxes.length" :title="t('taxLiability.empty')" data-testid="empty" />
       <template v-else>
-        <p class="muted" data-testid="owed-total">Owed to the tax authorities as of {{ report.as_of }}: <b>{{ report.owed }}</b></p>
-        <table class="list" data-testid="taxes">
-          <thead><tr><th>Tax</th><th class="num">Collected</th><th class="num">On returns</th><th class="num">Not filed yet</th><th class="num">Paid</th><th class="num">Owed</th><th>Overdue</th></tr></thead>
-          <tbody>
-            <tr v-for="t in report.taxes" :key="t.tax_id" :data-testid="`tax-${t.tax_code}`">
-              <td><RouterLink :to="{ path: '/tax/returns', query: { tax: String(t.tax_id) } }">{{ t.tax_code }}</RouterLink> <small class="muted">· {{ t.authority }} · account {{ t.account_code }}</small></td>
-              <td class="num">{{ t.collected }}</td><td class="num">{{ t.filed }}</td><td class="num">{{ money(t.unfiled) }}</td><td class="num">{{ t.paid }}</td><td class="num"><b>{{ t.owed }}</b></td>
-              <td>
-                <span v-if="t.overdue_unfiled_months" class="error-text" data-testid="overdue-unfiled">{{ t.overdue_unfiled_months }} month(s) not filed</span>
-                <span v-if="Number(t.overdue_unpaid)" class="error-text" data-testid="overdue-unpaid">{{ t.overdue_unpaid }} unpaid</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <h2>Against the books</h2>
-        <table class="list" data-testid="accounts">
-          <thead><tr><th>Tax payable account</th><th class="num">Books</th><th class="num">Taxes say</th><th class="num">Difference</th></tr></thead>
-          <tbody>
-            <tr v-for="a in report.accounts" :key="a.account_code" :data-testid="`account-${a.account_code}`">
-              <td>{{ a.account_code }}</td><td class="num">{{ a.books }}</td><td class="num">{{ a.owed }}</td>
-              <td class="num" :class="{ bad: Number(a.difference) !== 0 }">{{ money(a.difference) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted">A difference means a day has no journal yet (Journals → "Journal missing days"), or a tax payable account carries something other than collected tax.</p>
+        <Card class="mb-4">
+          <CardContent class="pt-4">
+            <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="owed-total">{{ t('taxLiability.owedTotal', { date: report.as_of }) }} <b>{{ report.owed }}</b></p>
+            <DataTable :columns="columns" :rows="report.taxes" row-key="tax_id" :row-test-id="(x) => `tax-${x.tax_code}`" :caption="t('taxLiability.title')" data-testid="taxes">
+              <template #cell-tax="{ row }">
+                <RouterLink :to="{ path: '/tax/returns', query: { tax: String(row.tax_id) } }" class="text-primary hover:underline">{{ row.tax_code }}</RouterLink>
+                <small class="text-muted-foreground"> · {{ row.authority }} · {{ t('taxLiability.account', { code: row.account_code }) }}</small>
+              </template>
+              <template #cell-unfiled="{ row }">{{ money(row.unfiled) }}</template>
+              <template #cell-owed="{ row }"><b>{{ row.owed }}</b></template>
+              <template #cell-overdue="{ row }">
+                <span v-if="row.overdue_unfiled_months" class="mr-2 text-destructive" data-testid="overdue-unfiled">{{ t('taxLiability.monthsNotFiled', { n: row.overdue_unfiled_months }) }}</span>
+                <span v-if="Number(row.overdue_unpaid)" class="text-destructive" data-testid="overdue-unpaid">{{ t('taxLiability.unpaid', { amount: row.overdue_unpaid }) }}</span>
+              </template>
+            </DataTable>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>{{ t('taxLiability.againstBooks') }}</CardTitle></CardHeader>
+          <CardContent>
+            <DataTable :columns="accountColumns" :rows="report.accounts" row-key="account_code" :row-test-id="(a) => `account-${a.account_code}`" :caption="t('taxLiability.againstBooks')" data-testid="accounts">
+              <template #cell-difference="{ row }"><span :class="Number(row.difference) !== 0 ? 'text-destructive' : undefined">{{ money(row.difference) }}</span></template>
+            </DataTable>
+            <p class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('taxLiability.differenceHint') }}</p>
+          </CardContent>
+        </Card>
       </template>
-    </section>
+    </template>
   </template>
 </template>
-
-<style scoped>
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.bad {
-  color: var(--danger, #b91c1c);
-}
-</style>

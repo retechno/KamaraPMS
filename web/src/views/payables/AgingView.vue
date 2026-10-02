@@ -3,6 +3,14 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { PayablesAging } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { money } from '@/views/accounting/reportApi'
@@ -18,10 +26,14 @@ const expanded = ref<number | null>(null)
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
-const BUCKETS = [
-  { key: 'CURRENT', label: 'Not due' }, { key: 'DAYS_1_30', label: '1–30 days' }, { key: 'DAYS_31_60', label: '31–60 days' },
-  { key: 'DAYS_61_90', label: '61–90 days' }, { key: 'DAYS_OVER_90', label: 'Over 90 days' },
-] as const
+const BUCKETS = ['CURRENT', 'DAYS_1_30', 'DAYS_31_60', 'DAYS_61_90', 'DAYS_OVER_90'] as const
+const bucketLabel = (k: (typeof BUCKETS)[number]): string => t(`payables.b_${k}` as 'payables.b_CURRENT')
+type SupplierRow = PayablesAging['suppliers'][number]
+const columns = computed<Column<SupplierRow>[]>(() => [
+  { key: 'supplier', label: t('payables.supplier') },
+  ...BUCKETS.map((k) => ({ key: k, label: bucketLabel(k), align: 'right' as const })),
+  { key: 'total', label: t('payables.total'), align: 'right' as const },
+])
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -45,62 +57,57 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Payables aging</h1>
-  </div>
+  <PageHeader :title="t('payables.aTitle')" />
   <p v-if="error" class="alert" role="alert" data-testid="aging-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">Your role at this property cannot see payables: the <code>payables.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.aNoAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <label class="field"><span>As of</span><input v-model="asOf" name="as_of" type="date" /></label>
-      <button type="submit" :disabled="busy" data-testid="apply">Show</button>
-    </form>
-    <section v-if="report" class="card">
-      <p class="muted" data-testid="range">What is owed as of {{ report.as_of }}, by days past the due date.</p>
-      <p v-if="!report.suppliers.length" class="muted" data-testid="empty">Nothing is owed.</p>
-      <table v-else class="list" data-testid="aging">
-        <thead><tr><th>Supplier</th><th v-for="b in BUCKETS" :key="b.key" class="num">{{ b.label }}</th><th class="num">Total</th></tr></thead>
-        <tbody>
-          <template v-for="s in report.suppliers" :key="s.supplier_id">
-            <tr class="clickable" :data-testid="`supplier-${s.supplier_code}`" @click="expanded = expanded === s.supplier_id ? null : s.supplier_id">
-              <td>{{ s.supplier_code }} · {{ s.supplier_name }}</td>
-              <td v-for="b in BUCKETS" :key="b.key" class="num">{{ money(s.buckets[b.key]) }}</td>
-              <td class="num"><b>{{ s.total }}</b></td>
-            </tr>
-            <tr v-if="expanded === s.supplier_id" class="detail" :data-testid="`bills-${s.supplier_code}`">
-              <td :colspan="BUCKETS.length + 2">
-                <table class="list inner">
-                  <thead><tr><th>Bill</th><th>Invoice</th><th>Bill date</th><th>Due</th><th class="num">Days late</th><th class="num">Owed</th></tr></thead>
-                  <tbody>
-                    <tr v-for="bill in s.bills" :key="bill.bill_id">
-                      <td>{{ bill.bill_number }}</td><td>{{ bill.supplier_invoice_number }}</td><td>{{ bill.bill_date }}</td><td>{{ bill.due_date }}</td>
-                      <td class="num">{{ bill.days_overdue || '' }}</td><td class="num">{{ bill.outstanding }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
+    <Card class="mb-4">
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
+        <FormField :label="t('payables.asOf')"><template #default="{ id }"><Input :id="id" v-model="asOf" name="as_of" type="date" /></template></FormField>
+        <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('payables.show') }}</Button>
+      </form>
+    </Card>
+    <Card v-if="report">
+      <CardContent class="pt-4">
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('payables.asOfNote', { date: report.as_of }) }}</p>
+        <EmptyState v-if="!report.suppliers.length" :title="t('payables.aEmpty')" data-testid="empty" />
+        <DataTable
+          v-else
+          :columns="columns"
+          :rows="report.suppliers"
+          row-key="supplier_id"
+          clickable
+          :row-test-id="(s) => `supplier-${s.supplier_code}`"
+          :is-expanded="(s) => expanded === s.supplier_id"
+          :detail-test-id="(s) => `bills-${s.supplier_code}`"
+          :caption="t('payables.aTitle')"
+          data-testid="aging"
+          @row-click="(s) => (expanded = expanded === s.supplier_id ? null : s.supplier_id)"
+        >
+          <template #cell-supplier="{ row }">{{ row.supplier_code }} · {{ row.supplier_name }}</template>
+          <template v-for="k in BUCKETS" :key="k" #[`cell-${k}`]="{ row }">{{ money(row.buckets[k]) }}</template>
+          <template #cell-total="{ row }"><b>{{ row.total }}</b></template>
+          <template #detail="{ row }">
+            <table class="w-full border-collapse text-sm">
+              <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">{{ t('payables.bill') }}</th><th class="px-3 font-medium">{{ t('payables.invoice') }}</th><th class="px-3 font-medium">{{ t('payables.billDateCol') }}</th><th class="px-3 font-medium">{{ t('payables.due') }}</th><th class="px-3 text-right font-medium">{{ t('payables.daysLate') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.owed') }}</th></tr></thead>
+              <tbody>
+                <tr v-for="bill in row.bills" :key="bill.bill_id" class="border-b border-border">
+                  <td class="py-1 pr-3">{{ bill.bill_number }}</td><td class="px-3">{{ bill.supplier_invoice_number }}</td><td class="px-3">{{ bill.bill_date }}</td><td class="px-3">{{ bill.due_date }}</td>
+                  <td class="px-3 text-right tabular-nums">{{ bill.days_overdue || '' }}</td><td class="pl-3 text-right tabular-nums">{{ bill.outstanding }}</td>
+                </tr>
+              </tbody>
+            </table>
           </template>
-        </tbody>
-        <tfoot>
-          <tr data-testid="totals">
-            <th>Total</th>
-            <th v-for="b in BUCKETS" :key="b.key" class="num">{{ money(report.buckets[b.key]) }}</th>
-            <th class="num">{{ report.total }}</th>
-          </tr>
-        </tfoot>
-      </table>
-    </section>
+          <template #footer>
+            <div class="mt-2 grid grid-cols-[1fr_repeat(6,minmax(5rem,auto))] gap-x-3 border-t border-border px-3 pt-3 text-sm font-semibold" data-testid="totals">
+              <span>{{ t('payables.total') }}</span>
+              <span v-for="k in BUCKETS" :key="k" class="text-right tabular-nums">{{ money(report.buckets[k]) }}</span>
+              <span class="text-right tabular-nums">{{ report.total }}</span>
+            </div>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-.clickable {
-  cursor: pointer;
-}
-</style>
