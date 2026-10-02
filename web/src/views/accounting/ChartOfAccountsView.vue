@@ -4,10 +4,20 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GlAccount } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from './accountApi'
-import { ACCOUNT_TYPES, GROUPS, TYPE_LABEL, toTree } from './accountMeta'
+import { ACCOUNT_TYPES, GROUPS, toTree, type TreeRow } from './accountMeta'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -23,6 +33,18 @@ const form = reactive({ code: '', name: '', account_type: 'REVENUE', normal_side
 const importing = ref(false)
 const importText = ref('')
 const importResult = ref<{ dry_run: boolean; created: number; updated: number } | null>(null)
+
+const typeLabel = (k: string): string => t(`accountingBooks.type_${k}` as 'accountingBooks.type_ASSET')
+const groupLabel = (k: string): string => t(`accountingBooks.g_${k}` as 'accountingBooks.g_CASH')
+const columns = computed<Column<TreeRow>[]>(() => [
+  { key: 'code', label: t('accountingBooks.code') },
+  { key: 'name', label: t('accountingBooks.name') },
+  { key: 'type', label: t('accountingBooks.type') },
+  { key: 'normal', label: t('accountingBooks.normal') },
+  { key: 'group', label: t('accountingBooks.group') },
+  { key: 'status', label: t('setup.status') },
+  ...(can('accounting.manage') ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -104,13 +126,13 @@ async function save(): Promise<void> {
 
 async function remove(a: GlAccount): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !(await confirm({ title: `Delete account ${a.code} ${a.name}?`, destructive: true }))) return
+  if (propertyId === null || !(await confirm({ title: t('accountingBooks.deleteTitle', { code: a.code, name: a.name }), destructive: true }))) return
   busy.value = true
   error.value = null
   notice.value = ''
   try {
     await api.DELETE('/api/v1/properties/{propertyId}/accounting/accounts/{id}', { params: { path: { propertyId, id: a.id } } })
-    notice.value = `Account ${a.code} deleted.`
+    notice.value = t('accountingBooks.deleted', { code: a.code })
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -153,7 +175,7 @@ async function runImport(dryRun: boolean): Promise<void> {
     })
     importResult.value = data ?? null
     if (!dryRun) {
-      notice.value = `Imported: ${data?.created ?? 0} added, ${data?.updated ?? 0} updated.`
+      notice.value = t('accountingBooks.imported', { created: data?.created ?? 0, updated: data?.updated ?? 0 })
       importing.value = false
       importText.value = ''
       await load()
@@ -173,14 +195,13 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Chart of accounts</h1>
-    <div class="head-actions">
-      <button v-if="can('accounting.view')" type="button" data-testid="export" @click="exportCsv">Export CSV</button>
-      <button v-if="can('accounting.manage') && !importing" type="button" data-testid="open-import" @click="importing = true">Import CSV</button>
-      <button v-if="can('accounting.manage') && !editing" type="button" class="btn-primary" data-testid="new-account" @click="startNew()">New account</button>
-    </div>
-  </div>
+  <PageHeader :title="t('accountingBooks.coaTitle')">
+    <template #actions>
+      <Button v-if="can('accounting.view')" type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('accountingBooks.coaExport') }}</Button>
+      <Button v-if="can('accounting.manage') && !importing" type="button" variant="outline" data-testid="open-import" @click="importing = true">{{ t('accountingBooks.coaImport') }}</Button>
+      <Button v-if="can('accounting.manage') && !editing" type="button" data-testid="new-account" @click="startNew()">{{ t('accountingBooks.coaNew') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="coa-error">
     {{ error.message }} <code>{{ error.code }}</code>
@@ -190,143 +211,141 @@ watch(() => pid.value, () => {
     </template>
   </p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see the chart of accounts: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accountingBooks.coaNoAccess', { permission: 'accounting.view' }) }}</p>
 
   <template v-else>
-    <form v-if="editing" class="card" novalidate data-testid="account-form" @submit.prevent="save">
-      <h2>{{ editing === 'new' ? 'New account' : `Edit ${form.code}` }}</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Code</span>
-          <input v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="!!fieldError('code')" />
-          <small v-if="fieldError('code')" class="error-text">{{ fieldError('code') }}</small>
-        </label>
-        <label class="field">
-          <span>Name</span>
-          <input v-model="form.name" name="name" maxlength="150" :aria-invalid="!!fieldError('name')" />
-          <small v-if="fieldError('name')" class="error-text">{{ fieldError('name') }}</small>
-        </label>
-        <label class="field">
-          <span>Type</span>
-          <select v-model="form.account_type" name="account_type" :disabled="editing !== 'new'" @change="form.statement_group = ''; form.parent_id = 0">
-            <option v-for="t in ACCOUNT_TYPES" :key="t" :value="t">{{ TYPE_LABEL[t] }}</option>
-          </select>
-        </label>
-        <label v-if="editing === 'new'" class="field">
-          <span>Normal balance</span>
-          <select v-model="form.normal_side" name="normal_side">
-            <option value="">Usual for the type</option>
-            <option value="DEBIT">Debit</option>
-            <option value="CREDIT">Credit (a contra account)</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Under</span>
-          <select v-model.number="form.parent_id" name="parent_id" :aria-invalid="!!fieldError('parent_id')">
-            <option :value="0">Top level</option>
-            <option v-for="p in parents" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
-          </select>
-          <small v-if="fieldError('parent_id')" class="error-text">{{ fieldError('parent_id') }}</small>
-        </label>
-        <label class="field">
-          <span>Statement group</span>
-          <select v-model="form.statement_group" name="statement_group" :aria-invalid="!!fieldError('statement_group')">
-            <option value="">None (a header only)</option>
-            <option v-for="g in groups" :key="g.value" :value="g.value">{{ g.label }}</option>
-          </select>
-          <small v-if="fieldError('statement_group')" class="error-text">{{ fieldError('statement_group') }}</small>
-        </label>
-        <label class="field wide">
-          <span>Description</span>
-          <input v-model="form.description" name="description" maxlength="300" />
-        </label>
-        <label class="check">
-          <input v-model="form.is_postable" name="is_postable" type="checkbox" />
-          <span>Takes postings (not a header)</span>
-        </label>
-        <label class="check">
-          <input v-model="form.is_active" name="is_active" type="checkbox" />
-          <span>Active</span>
-        </label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="editing = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy">Save</button>
-      </div>
-    </form>
-
-    <form v-if="importing" class="card" novalidate data-testid="import-form" @submit.prevent="runImport(false)">
-      <h2>Import accounts from CSV</h2>
-      <p class="muted">A header row with code, name and type (and optionally parent_code, postable, group, active, description). A row whose code exists updates that account. Nothing is changed unless the whole file is valid.</p>
-      <input type="file" accept=".csv,text/csv" data-testid="import-file" @change="readFile" />
-      <textarea v-model="importText" name="csv" rows="8" class="csv" placeholder="code,name,type,parent_code,postable,group,active" />
-      <p v-if="importResult" class="notice" data-testid="import-result">
-        {{ importResult.dry_run ? 'The file is valid: it would add' : 'Added' }} {{ importResult.created }} and update {{ importResult.updated }} account(s).
-      </p>
-      <div class="form-actions">
-        <button type="button" @click="importing = false; importResult = null">Cancel</button>
-        <button type="button" :disabled="busy || !importText.trim()" data-testid="import-check" @click="runImport(true)">Check the file</button>
-        <button type="submit" class="btn-primary" :disabled="busy || !importText.trim()" data-testid="import-run">Import</button>
-      </div>
-    </form>
-
-    <section class="card">
-      <form class="filters" novalidate @submit.prevent>
-        <label class="field">
-          <span>Search</span>
-          <input v-model="filter.q" name="q" type="search" placeholder="Code or name" />
-        </label>
-        <label class="field">
-          <span>Type</span>
-          <select v-model="filter.type" name="filter_type">
-            <option value="">All</option>
-            <option v-for="t in ACCOUNT_TYPES" :key="t" :value="t">{{ TYPE_LABEL[t] }}</option>
-          </select>
-        </label>
-        <label class="check"><input v-model="filter.headers" name="headers" type="checkbox" /><span>Show header accounts</span></label>
-        <label class="check"><input v-model="filter.inactive" name="inactive" type="checkbox" /><span>Show inactive</span></label>
+    <Card v-if="editing" class="mb-4">
+      <form novalidate data-testid="account-form" @submit.prevent="save">
+        <CardHeader><CardTitle>{{ editing === 'new' ? t('accountingBooks.coaNew') : t('accountingBooks.coaEdit', { code: form.code }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField :label="t('accountingBooks.code')" :error="fieldError('code')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.code" name="code" :disabled="editing !== 'new'" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('accountingBooks.name')" :error="fieldError('name')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" maxlength="150" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('accountingBooks.type')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.account_type" name="account_type" :disabled="editing !== 'new'" @change="form.statement_group = ''; form.parent_id = 0">
+                  <option v-for="ty in ACCOUNT_TYPES" :key="ty" :value="ty">{{ typeLabel(ty) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="editing === 'new'" :label="t('accountingBooks.normalBalance')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.normal_side" name="normal_side">
+                  <option value="">{{ t('accountingBooks.usualForType') }}</option>
+                  <option value="DEBIT">{{ t('accountingBooks.debit') }}</option>
+                  <option value="CREDIT">{{ t('accountingBooks.creditContra') }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('accountingBooks.under')" :error="fieldError('parent_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.parent_id" name="parent_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('accountingBooks.topLevel') }}</option>
+                  <option v-for="p in parents" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('accountingBooks.statementGroup')" :error="fieldError('statement_group')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model="form.statement_group" name="statement_group" :aria-invalid="invalid">
+                  <option value="">{{ t('accountingBooks.noneHeader') }}</option>
+                  <option v-for="g in groups" :key="g.value" :value="g.value">{{ groupLabel(g.value) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-3" :label="t('accountingBooks.description')">
+              <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" maxlength="300" /></template>
+            </FormField>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="form.is_postable" name="is_postable" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.takesPostings') }}</span>
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.active') }}</span>
+            </label>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
       </form>
-      <p v-if="loaded && !visible.length" class="muted" data-testid="empty">No accounts match.</p>
-      <table v-else class="list" data-testid="accounts">
-        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Normal</th><th>Group</th><th>Status</th><th v-if="can('accounting.manage')" /></tr></thead>
-        <tbody>
-          <tr v-for="r in visible" :key="r.account.id" :class="{ header: !r.account.is_postable, off: !r.account.is_active }" :data-testid="`account-${r.account.code}`">
-            <td><span :style="{ paddingLeft: `${r.depth * 18}px` }"><b v-if="!r.account.is_postable">{{ r.account.code }}</b><template v-else>{{ r.account.code }}</template></span></td>
-            <td>{{ r.account.name }}</td>
-            <td>{{ r.account.account_type.toLowerCase() }}</td>
-            <td>{{ r.account.normal_side.toLowerCase() }}</td>
-            <td><small class="muted">{{ r.account.statement_group }}</small></td>
-            <td>{{ r.account.is_active ? '' : 'Inactive' }}</td>
-            <td v-if="can('accounting.manage')" class="row-actions">
-              <button v-if="!r.account.is_postable" type="button" :data-testid="`add-under-${r.account.code}`" @click="startNew(r.account)">Add under</button>
-              <button type="button" :data-testid="`edit-${r.account.code}`" @click="startEdit(r.account)">Edit</button>
-              <button v-if="!r.account.in_use" type="button" :data-testid="`delete-${r.account.code}`" @click="remove(r.account)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    </Card>
+
+    <Card v-if="importing" class="mb-4">
+      <form novalidate data-testid="import-form" @submit.prevent="runImport(false)">
+        <CardHeader>
+          <CardTitle>{{ t('accountingBooks.importTitle') }}</CardTitle>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('accountingBooks.importHint') }}</p>
+        </CardHeader>
+        <CardContent>
+          <input type="file" accept=".csv,text/csv" class="block text-sm" data-testid="import-file" @change="readFile" />
+          <textarea
+            v-model="importText"
+            name="csv"
+            rows="8"
+            class="mt-2 w-full rounded-md border border-border bg-card p-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder="code,name,type,parent_code,postable,group,active"
+          />
+          <p v-if="importResult" class="notice" data-testid="import-result">
+            {{ importResult.dry_run ? t('accountingBooks.importValid', { created: importResult.created, updated: importResult.updated }) : t('accountingBooks.importDone', { created: importResult.created, updated: importResult.updated }) }}
+          </p>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="importing = false; importResult = null">{{ t('common.cancel') }}</Button>
+            <Button type="button" variant="outline" :disabled="busy || !importText.trim()" data-testid="import-check" @click="runImport(true)">{{ t('accountingBooks.checkFile') }}</Button>
+            <Button type="submit" :disabled="busy || !importText.trim()" data-testid="import-run">{{ t('accountingBooks.import') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+
+    <Card>
+      <CardContent class="pt-4">
+        <form class="mb-4 flex flex-wrap items-end gap-4" novalidate @submit.prevent>
+          <FormField class="w-64" :label="t('accountingBooks.search')">
+            <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('accountingBooks.codeOrName')" /></template>
+          </FormField>
+          <FormField class="w-48" :label="t('accountingBooks.type')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="filter.type" name="filter_type">
+                <option value="">{{ t('accountingBooks.all') }}</option>
+                <option v-for="ty in ACCOUNT_TYPES" :key="ty" :value="ty">{{ typeLabel(ty) }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.headers" name="headers" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showHeaders') }}</span></label>
+          <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showInactive') }}</span></label>
+        </form>
+        <EmptyState v-if="loaded && !visible.length" :title="t('accountingBooks.coaEmpty')" data-testid="empty" />
+        <DataTable
+          v-else
+          :columns="columns"
+          :rows="visible"
+          :row-key="(r) => r.account.id"
+          :row-test-id="(r) => `account-${r.account.code}`"
+          :row-class="(r) => [!r.account.is_postable && 'header bg-accent/60', !r.account.is_active && 'text-muted-foreground'].filter(Boolean).join(' ') || undefined"
+          :caption="t('accountingBooks.coaTitle')"
+          data-testid="accounts"
+        >
+          <template #cell-code="{ row }"><span :style="{ paddingLeft: `${row.depth * 18}px` }"><b v-if="!row.account.is_postable">{{ row.account.code }}</b><template v-else>{{ row.account.code }}</template></span></template>
+          <template #cell-name="{ row }">{{ row.account.name }}</template>
+          <template #cell-type="{ row }">{{ typeLabel(row.account.account_type) }}</template>
+          <template #cell-normal="{ row }">{{ t(`accountingBooks.side_${row.account.normal_side}` as 'accountingBooks.side_DEBIT') }}</template>
+          <template #cell-group="{ row }"><small class="text-muted-foreground">{{ row.account.statement_group ? groupLabel(row.account.statement_group) : '' }}</small></template>
+          <template #cell-status="{ row }"><Badge v-if="!row.account.is_active" variant="outline">{{ t('accountingBooks.inactive') }}</Badge></template>
+          <template #cell-actions="{ row }">
+            <div class="flex justify-end gap-1.5">
+              <Button v-if="!row.account.is_postable" type="button" variant="outline" size="sm" :data-testid="`add-under-${row.account.code}`" @click="startNew(row.account)">{{ t('accountingBooks.addUnder') }}</Button>
+              <Button type="button" variant="outline" size="sm" :data-testid="`edit-${row.account.code}`" @click="startEdit(row.account)">{{ t('common.edit') }}</Button>
+              <Button v-if="!row.account.in_use" type="button" variant="outline" size="sm" :data-testid="`delete-${row.account.code}`" @click="remove(row.account)">{{ t('common.delete') }}</Button>
+            </div>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.head-actions {
-  display: flex;
-  gap: 8px;
-}
-.header td {
-  background: var(--accent-soft);
-}
-.off td {
-  color: var(--muted, #6b7280);
-}
-.wide {
-  grid-column: 1 / -1;
-}
-.csv {
-  width: 100%;
-  font-family: monospace;
-  margin: 8px 0;
-}
-</style>

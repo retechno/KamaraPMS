@@ -4,6 +4,15 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GlPeriod } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { i18n, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -19,7 +28,14 @@ const reopening = ref<{ start: string; reason: string } | null>(null)
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
-const monthLabel = (start: string): string => new Date(`${start}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const monthLabel = (start: string): string => new Date(`${start}T00:00:00Z`).toLocaleDateString(i18n.global.locale.value, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+const columns = computed<Column<GlPeriod>[]>(() => [
+  { key: 'month', label: t('accounting.pMonth') },
+  { key: 'status', label: t('accounting.status') },
+  { key: 'days', label: t('accounting.pDays') },
+  { key: 'actions', label: '', align: 'right' },
+])
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -36,13 +52,13 @@ async function load(): Promise<void> {
 
 async function close(p: GlPeriod): Promise<void> {
   const propertyId = pid.value
-  if (propertyId === null || !(await confirm({ title: `Close ${monthLabel(p.period_start)}?`, description: 'No journal can be posted into it afterwards.', destructive: true }))) return
+  if (propertyId === null || !(await confirm({ title: t('accounting.pCloseTitle', { month: monthLabel(p.period_start) }), description: t('accounting.pCloseHint'), destructive: true }))) return
   busy.value = true
   error.value = null
   notice.value = ''
   try {
     await api.POST('/api/v1/properties/{propertyId}/accounting/periods/{start}/close', { params: { path: { propertyId, start: p.period_start } } })
-    notice.value = `${monthLabel(p.period_start)} is closed.`
+    notice.value = t('accounting.pIsClosed', { month: monthLabel(p.period_start) })
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -60,7 +76,7 @@ async function reopen(): Promise<void> {
   notice.value = ''
   try {
     await api.POST('/api/v1/properties/{propertyId}/accounting/periods/{start}/reopen', { params: { path: { propertyId, start: r.start } }, body: { reason: r.reason.trim() } })
-    notice.value = `${monthLabel(r.start)} is open again.`
+    notice.value = t('accounting.pIsOpen', { month: monthLabel(r.start) })
     reopening.value = null
     await load()
   } catch (e) {
@@ -78,42 +94,43 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Accounting periods</h1>
-  </div>
+  <PageHeader :title="t('accounting.pTitle')" />
   <p v-if="error" class="alert" role="alert" data-testid="period-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see accounting periods: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accounting.noAccessView', { what: t('accounting.whatPeriods'), permission: 'accounting.view' }) }}</p>
   <template v-else>
-    <p class="muted">A month can be closed once it has ended and every business day of it is closed with its journal. A closed month takes no journals; the latest closed month can be reopened.</p>
-    <form v-if="reopening" class="card" novalidate data-testid="reopen-form" @submit.prevent="reopen">
-      <h2>Reopen {{ monthLabel(reopening.start) }}</h2>
-      <label class="field">
-        <span>Reason</span>
-        <input v-model="reopening.reason" name="reason" maxlength="500" />
-      </label>
-      <div class="form-actions">
-        <button type="button" @click="reopening = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy || !reopening.reason.trim()" data-testid="reopen-run">Reopen</button>
-      </div>
-    </form>
-    <section class="card">
-      <p v-if="loaded && !periods.length" class="muted" data-testid="empty">No period yet.</p>
-      <table v-else class="list" data-testid="periods">
-        <thead><tr><th>Month</th><th>Status</th><th>Days journaled</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="p in periods" :key="p.period_start" :data-testid="`period-${p.period_start}`">
-            <td>{{ monthLabel(p.period_start) }}</td>
-            <td>{{ p.status === 'CLOSED' ? 'Closed' : 'Open' }}<small v-if="p.reopen_reason && p.status === 'OPEN'" class="muted"> · reopened: {{ p.reopen_reason }}</small></td>
-            <td>{{ p.posted_days }} of {{ p.days }}</td>
-            <td class="row-actions">
-              <button v-if="can('accounting.close') && p.closable" type="button" class="btn-primary" :disabled="busy" :data-testid="`close-${p.period_start}`" @click="close(p)">Close</button>
-              <button v-if="can('accounting.close') && p.reopenable" type="button" :data-testid="`reopen-${p.period_start}`" @click="reopening = { start: p.period_start, reason: '' }">Reopen</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <p class="mb-4 text-sm text-muted-foreground">{{ t('accounting.pIntro') }}</p>
+    <Card v-if="reopening" class="mb-4">
+      <form novalidate data-testid="reopen-form" @submit.prevent="reopen">
+        <CardHeader><CardTitle>{{ t('accounting.reopenTitle', { label: monthLabel(reopening.start) }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <FormField class="max-w-md" :label="t('accounting.reason')">
+            <template #default="{ id }"><Input :id="id" v-model="reopening.reason" name="reason" maxlength="500" /></template>
+          </FormField>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="reopening = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy || !reopening.reason.trim()" data-testid="reopen-run">{{ t('accounting.reopen') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+    <Card>
+      <EmptyState v-if="loaded && !periods.length" :title="t('accounting.pEmpty')" data-testid="empty" />
+      <DataTable v-else :columns="columns" :rows="periods" row-key="period_start" :row-test-id="(p) => `period-${p.period_start}`" :caption="t('accounting.pTitle')" data-testid="periods">
+        <template #cell-month="{ row }">{{ monthLabel(row.period_start) }}</template>
+        <template #cell-status="{ row }">
+          <Badge :variant="row.status === 'CLOSED' ? 'outline' : 'success'">{{ row.status === 'CLOSED' ? t('accounting.closed') : t('accounting.open') }}</Badge>
+          <small v-if="row.reopen_reason && row.status === 'OPEN'" class="text-muted-foreground"> · {{ t('accounting.fyReopened', { reason: row.reopen_reason }) }}</small>
+        </template>
+        <template #cell-days="{ row }">{{ t('accounting.fyOf', { n: row.posted_days, total: row.days }) }}</template>
+        <template #cell-actions="{ row }">
+          <div class="flex justify-end gap-2">
+            <Button v-if="can('accounting.close') && row.closable" type="button" size="sm" :disabled="busy" :data-testid="`close-${row.period_start}`" @click="close(row)">{{ t('accounting.pClose') }}</Button>
+            <Button v-if="can('accounting.close') && row.reopenable" type="button" variant="outline" size="sm" :data-testid="`reopen-${row.period_start}`" @click="reopening = { start: row.period_start, reason: '' }">{{ t('accounting.reopen') }}</Button>
+          </div>
+        </template>
+      </DataTable>
+    </Card>
   </template>
 </template>

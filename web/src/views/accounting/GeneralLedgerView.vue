@@ -4,6 +4,14 @@ import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GeneralLedger, GlAccount } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from './accountApi'
@@ -20,6 +28,17 @@ const error = ref<ApiError | null>(null)
 const busy = ref(false)
 const queryDate = (v: unknown): string => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '')
 const form = reactive({ account: Number(route.query.account) || 0, from: queryDate(route.query.from), to: queryDate(route.query.to) })
+
+type Line = GeneralLedger['lines'][number] & { idx: number }
+const entries = computed<Line[]>(() => (report.value?.lines ?? []).map((l, i) => ({ ...l, idx: i })))
+const columns = computed<Column<Line>[]>(() => [
+  { key: 'journal_date', label: t('accountingBooks.date') },
+  { key: 'journal_number', label: t('accountingBooks.journal') },
+  { key: 'description', label: t('accountingBooks.detail') },
+  { key: 'debit', label: t('accountingBooks.debit'), align: 'right' },
+  { key: 'credit', label: t('accountingBooks.creditCol'), align: 'right' },
+  { key: 'balance', label: t('accountingBooks.balance'), align: 'right' },
+])
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -79,66 +98,52 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">General ledger</h1>
-    <div v-if="report" class="head-actions">
-      <button type="button" data-testid="pdf" @click="showPdf">PDF</button>
-      <button type="button" data-testid="export" @click="exportCsv">Export CSV</button>
-    </div>
-  </div>
+  <PageHeader :title="t('accountingBooks.glTitle')">
+    <template #actions>
+      <template v-if="report">
+        <Button type="button" variant="outline" data-testid="pdf" @click="showPdf">{{ t('accountingBooks.pdf') }}</Button>
+        <Button type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('accountingBooks.coaExport') }}</Button>
+      </template>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="report-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see the general ledger: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accountingBooks.glNoAccess', { permission: 'accounting.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <label class="field">
-        <span>Account</span>
-        <select v-model.number="form.account" name="account">
-          <option :value="0">Choose an account</option>
-          <option v-for="a in postable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
-        </select>
-      </label>
-      <label class="field"><span>From</span><input v-model="form.from" name="from" type="date" /></label>
-      <label class="field"><span>To</span><input v-model="form.to" name="to" type="date" /></label>
-      <button type="submit" :disabled="busy || !form.account" data-testid="apply">Show</button>
-    </form>
-    <section v-if="report" class="card">
-      <h2>{{ report.account.code }} · {{ report.account.name }}</h2>
-      <p class="muted" data-testid="range">{{ report.from }} to {{ report.to }} · balances on the {{ report.account.normal_side.toLowerCase() }} side</p>
-      <p v-if="report.truncated" class="alert" data-testid="truncated">Only the first 5000 entries are shown: narrow the range.</p>
-      <table class="list" data-testid="ledger">
-        <thead><tr><th>Date</th><th>Journal</th><th>Detail</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
-        <tbody>
-          <tr data-testid="opening"><td colspan="5">Opening balance</td><td class="num">{{ report.opening_balance }}</td></tr>
-          <tr v-for="(l, i) in report.lines" :key="i" :data-testid="`entry-${i}`">
-            <td>{{ l.journal_date }}</td>
-            <td>{{ l.journal_number }}</td>
-            <td>{{ l.description }}</td>
-            <td class="num">{{ money(l.debit) }}</td>
-            <td class="num">{{ money(l.credit) }}</td>
-            <td class="num">{{ l.balance }}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr data-testid="closing">
-            <th colspan="3">Closing balance</th>
-            <th class="num">{{ money(report.total_debit) }}</th>
-            <th class="num">{{ money(report.total_credit) }}</th>
-            <th class="num">{{ report.closing_balance }}</th>
-          </tr>
-        </tfoot>
-      </table>
-    </section>
+    <Card class="mb-4">
+      <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
+        <FormField class="w-80" :label="t('accountingBooks.account')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model.number="form.account" name="account">
+              <option :value="0">{{ t('accountingBooks.chooseAccount') }}</option>
+              <option v-for="a in postable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <FormField :label="t('accountingBooks.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
+        <FormField :label="t('accountingBooks.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+        <Button type="submit" variant="outline" :disabled="busy || !form.account" data-testid="apply">{{ t('accountingBooks.show') }}</Button>
+      </form>
+    </Card>
+    <Card v-if="report">
+      <CardHeader><CardTitle>{{ report.account.code }} · {{ report.account.name }}</CardTitle></CardHeader>
+      <CardContent>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('accountingBooks.glRange', { from: report.from, to: report.to, side: t(`accountingBooks.side_${report.account.normal_side}` as 'accountingBooks.side_DEBIT') }) }}</p>
+        <p v-if="report.truncated" class="alert" data-testid="truncated">{{ t('accountingBooks.glTruncated') }}</p>
+        <p class="mb-2 mt-0 text-sm" data-testid="opening"><span class="text-muted-foreground">{{ t('accountingBooks.opening') }}:</span> <b class="tabular-nums">{{ report.opening_balance }}</b></p>
+        <DataTable :columns="columns" :rows="entries" row-key="idx" :row-test-id="(l) => `entry-${l.idx}`" :caption="t('accountingBooks.glTitle')" data-testid="ledger">
+          <template #cell-debit="{ row }">{{ money(row.debit) }}</template>
+          <template #cell-credit="{ row }">{{ money(row.credit) }}</template>
+          <template #footer>
+            <div class="mt-2 grid grid-cols-[1fr_repeat(3,minmax(6rem,auto))] gap-x-3 border-t border-border px-3 pt-3 text-sm font-semibold" data-testid="closing">
+              <span>{{ t('accountingBooks.closingBalance') }}</span>
+              <span class="text-right tabular-nums">{{ money(report.total_debit) }}</span>
+              <span class="text-right tabular-nums">{{ money(report.total_credit) }}</span>
+              <span class="text-right tabular-nums">{{ report.closing_balance }}</span>
+            </div>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.head-actions {
-  display: flex;
-  gap: 8px;
-}
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-</style>

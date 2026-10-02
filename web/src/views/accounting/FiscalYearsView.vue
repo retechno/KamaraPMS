@@ -6,6 +6,15 @@ import { ApiError } from '@/api/problem'
 import type { Approval, FiscalYear } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -22,6 +31,15 @@ const reopening = ref<{ start: string; label: string; reason: string; asking: bo
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
+const intro = computed(() => t('accounting.fyIntro', { link: '\u0000' }).split('\u0000'))
+const columns = computed<Column<FiscalYear>[]>(() => [
+  { key: 'label', label: t('accounting.fyYear') },
+  { key: 'range', label: t('accounting.fyFromTo') },
+  { key: 'months', label: t('accounting.fyMonthsClosed') },
+  { key: 'net_income', label: t('accounting.fyResult'), align: 'right' },
+  { key: 'status', label: t('accounting.status') },
+  { key: 'actions', label: '', align: 'right' },
+])
 const path = { close: '/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/close', reopen: '/api/v1/properties/{propertyId}/accounting/fiscal-years/{start}/reopen' } as const
 
 async function load(): Promise<void> {
@@ -41,8 +59,8 @@ async function close(y: FiscalYear): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   const question = {
-    title: `Close ${y.label}?`,
-    description: `The result of the year (${y.net_income}) is moved to retained earnings and every month of the year stays closed until the year is reopened.`,
+    title: t('accounting.fyCloseTitle', { label: y.label }),
+    description: t('accounting.fyCloseHint', { amount: y.net_income }),
     destructive: true,
   }
   if (!(await confirm(question))) return
@@ -51,7 +69,7 @@ async function close(y: FiscalYear): Promise<void> {
   notice.value = ''
   try {
     await api.POST(path.close, { params: { path: { propertyId, start: y.year_start } } })
-    notice.value = `${y.label} is closed.`
+    notice.value = t('accounting.fyIsClosed', { label: y.label })
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -68,7 +86,7 @@ async function reopen(approval: Approval): Promise<void> {
   dialogError.value = null
   try {
     await api.POST(path.reopen, { params: { path: { propertyId, start: r.start } }, body: { reason: r.reason.trim(), approval } })
-    notice.value = `${r.label} is open again.`
+    notice.value = t('accounting.fyIsOpen', { label: r.label })
     reopening.value = null
     await load()
   } catch (e) {
@@ -86,60 +104,51 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Fiscal years</h1>
-  </div>
+  <PageHeader :title="t('accounting.fyTitle')" />
   <p v-if="error" class="alert" role="alert" data-testid="year-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see fiscal years: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accounting.noAccessView', { what: t('accounting.whatYears'), permission: 'accounting.view' }) }}</p>
   <template v-else>
-    <p class="muted">
-      Closing a fiscal year posts a closing journal on its last day that moves the revenue and expense balances to retained earnings, so the next year's income statement starts from zero.
-      A year closes when it has ended, the year before it is closed and every month of it is closed in <RouterLink to="/accounting/periods">Periods</RouterLink>.
+    <p class="mb-4 text-sm text-muted-foreground">
+      {{ intro[0] }}<RouterLink to="/accounting/periods" class="text-primary hover:underline">{{ t('accounting.fyPeriods') }}</RouterLink>{{ intro[1] }}
     </p>
-    <form v-if="reopening && !reopening.asking" class="card" novalidate data-testid="reopen-form" @submit.prevent="reopening.asking = true">
-      <h2>Reopen {{ reopening.label }}</h2>
-      <p class="muted">The closing journal is reversed. Reopening needs the approval of someone who may approve corrections.</p>
-      <label class="field">
-        <span>Reason</span>
-        <input v-model="reopening.reason" name="reason" maxlength="500" />
-      </label>
-      <div class="form-actions">
-        <button type="button" @click="reopening = null">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!reopening.reason.trim()" data-testid="reopen-ask">Continue</button>
-      </div>
-    </form>
-    <section class="card">
-      <p v-if="loaded && !years.length" class="muted" data-testid="empty">No fiscal year yet.</p>
-      <table v-else class="list" data-testid="years">
-        <thead><tr><th>Year</th><th>From – to</th><th>Months closed</th><th class="num">Result</th><th>Status</th><th /></tr></thead>
-        <tbody>
-          <tr v-for="y in years" :key="y.year_start" :data-testid="`year-${y.label}`">
-            <td><b>{{ y.label }}</b></td>
-            <td>{{ y.year_start }} – {{ y.year_end }}</td>
-            <td>{{ y.closed_months }} of {{ y.months }}</td>
-            <td class="num">{{ y.net_income }}</td>
-            <td>
-              {{ y.status === 'CLOSED' ? 'Closed' : 'Open' }}
-              <small v-if="y.closing_journal_number" class="muted"> · journal {{ y.closing_journal_number }}</small>
-              <small v-if="y.reopen_reason && y.status === 'OPEN'" class="muted"> · reopened: {{ y.reopen_reason }}</small>
-            </td>
-            <td class="row-actions">
-              <button v-if="can('accounting.close') && y.closable" type="button" class="btn-primary" :disabled="busy" :data-testid="`close-${y.label}`" @click="close(y)">Close year</button>
-              <button v-if="can('accounting.close') && y.reopenable" type="button" :data-testid="`reopen-${y.label}`" @click="reopening = { start: y.year_start, label: y.label, reason: '', asking: false }">Reopen</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <Card v-if="reopening && !reopening.asking" class="mb-4">
+      <form novalidate data-testid="reopen-form" @submit.prevent="reopening.asking = true">
+        <CardHeader>
+          <CardTitle>{{ t('accounting.reopenTitle', { label: reopening.label }) }}</CardTitle>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('accounting.fyReopenHint') }}</p>
+        </CardHeader>
+        <CardContent>
+          <FormField class="max-w-md" :label="t('accounting.reason')">
+            <template #default="{ id }"><Input :id="id" v-model="reopening.reason" name="reason" maxlength="500" /></template>
+          </FormField>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="reopening = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="!reopening.reason.trim()" data-testid="reopen-ask">{{ t('accounting.continue') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+    <Card>
+      <EmptyState v-if="loaded && !years.length" :title="t('accounting.fyEmpty')" data-testid="empty" />
+      <DataTable v-else :columns="columns" :rows="years" row-key="year_start" :row-test-id="(y) => `year-${y.label}`" :caption="t('accounting.fyTitle')" data-testid="years">
+        <template #cell-label="{ row }"><b>{{ row.label }}</b></template>
+        <template #cell-range="{ row }">{{ row.year_start }} – {{ row.year_end }}</template>
+        <template #cell-months="{ row }">{{ t('accounting.fyOf', { n: row.closed_months, total: row.months }) }}</template>
+        <template #cell-status="{ row }">
+          <Badge :variant="row.status === 'CLOSED' ? 'outline' : 'success'">{{ row.status === 'CLOSED' ? t('accounting.closed') : t('accounting.open') }}</Badge>
+          <small v-if="row.closing_journal_number" class="text-muted-foreground"> · {{ t('accounting.fyJournal', { number: row.closing_journal_number }) }}</small>
+          <small v-if="row.reopen_reason && row.status === 'OPEN'" class="text-muted-foreground"> · {{ t('accounting.fyReopened', { reason: row.reopen_reason }) }}</small>
+        </template>
+        <template #cell-actions="{ row }">
+          <div class="flex justify-end gap-2">
+            <Button v-if="can('accounting.close') && row.closable" type="button" size="sm" :disabled="busy" :data-testid="`close-${row.label}`" @click="close(row)">{{ t('accounting.fyCloseYear') }}</Button>
+            <Button v-if="can('accounting.close') && row.reopenable" type="button" variant="outline" size="sm" :data-testid="`reopen-${row.label}`" @click="reopening = { start: row.year_start, label: row.label, reason: '', asking: false }">{{ t('accounting.reopen') }}</Button>
+          </div>
+        </template>
+      </DataTable>
+    </Card>
   </template>
-  <ApprovalDialog v-if="reopening?.asking" title="Approve reopening" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
+  <ApprovalDialog v-if="reopening?.asking" :title="t('accounting.approveReopen')" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
 </template>
-
-<style scoped>
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-</style>
