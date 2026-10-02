@@ -3,6 +3,8 @@ package availability
 import (
 	"context"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/availability/availabilitydb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
@@ -52,6 +54,38 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 		}
 		sell, dem := int(r.Sellable), int(r.Demand)
 		out[r.RoomTypeID][r.Night] = Night{Date: r.Night, Sellable: sell, Demand: dem, Available: sell - dem}
+	}
+	return out, nil
+}
+
+// Occupancy is how full the property is on a night: the rooms held against the rooms that can be sold.
+type Occupancy struct {
+	Sellable int
+	Booked   int
+}
+
+// Percent is the share of the sellable rooms that are held, with two decimals (0 when nothing can be sold).
+func (o Occupancy) Percent() decimal.Decimal {
+	if o.Sellable <= 0 {
+		return decimal.Zero
+	}
+	return decimal.NewFromInt(int64(o.Booked)).Mul(decimal.NewFromInt(100)).DivRound(decimal.NewFromInt(int64(o.Sellable)), 2)
+}
+
+// PropertyOccupancy returns the occupancy of the whole property for each date, as of the business date bd.
+func (s *Service) PropertyOccupancy(ctx context.Context, tenantID, propertyID int64, bd civil.Date, dates []civil.Date) (map[civil.Date]Occupancy, error) {
+	out := make(map[civil.Date]Occupancy, len(dates))
+	if len(dates) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).PropertyOccupancy(ctx, availabilitydb.PropertyOccupancyParams{
+		TenantID: tenantID, PropertyID: propertyID, BusinessDate: bd, NextDate: bd.AddDays(1), Dates: isoDates(dates),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.Night] = Occupancy{Sellable: int(r.Sellable), Booked: int(r.Booked)}
 	}
 	return out, nil
 }

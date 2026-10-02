@@ -548,3 +548,63 @@ func (q *Queries) NightInventory(ctx context.Context, arg NightInventoryParams) 
 	}
 	return items, nil
 }
+
+const propertyOccupancy = `-- name: PropertyOccupancy :many
+SELECT d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.is_active
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    ((SELECT count(*) FROM reservation_rooms l
+       WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+        WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date)))::int AS booked
+FROM unnest($5::text[]) AS d (night)
+ORDER BY d.night
+`
+
+type PropertyOccupancyParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	NextDate     civil.Date
+	Dates        []string
+}
+
+type PropertyOccupancyRow struct {
+	Night    civil.Date
+	Sellable int32
+	Booked   int32
+}
+
+// How full the whole property is on each night: rooms held (confirmed lines and open stays, whatever their type)
+// against the rooms that can be sold (active, not blocked). The same demand as the inventory above, summed over types.
+func (q *Queries) PropertyOccupancy(ctx context.Context, arg PropertyOccupancyParams) ([]PropertyOccupancyRow, error) {
+	rows, err := q.db.Query(ctx, propertyOccupancy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.NextDate,
+		arg.Dates,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PropertyOccupancyRow{}
+	for rows.Next() {
+		var i PropertyOccupancyRow
+		if err := rows.Scan(&i.Night, &i.Sellable, &i.Booked); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

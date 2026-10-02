@@ -6,6 +6,10 @@ package ratesdb
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
+	"kamarapms/internal/platform/civil"
 )
 
 type RatePlan struct {
@@ -24,4 +28,33 @@ type RatePlan struct {
 	CreatedBy          *int64
 	UpdatedAt          time.Time
 	UpdatedBy          *int64
+}
+
+type YieldRule struct {
+	ID              int64
+	TenantID        int64
+	PropertyID      int64
+	Code            string
+	Name            string
+	RatePlanID      *int64
+	RoomTypeID      *int64
+	StayFrom        *civil.Date
+	StayTo          *civil.Date
+	Weekdays        []string
+	OccupancyFrom   *decimal.Decimal
+	OccupancyTo     *decimal.Decimal
+	LeadMin         pgtype.Int4
+	LeadMax         pgtype.Int4
+	StayMin         pgtype.Int4
+	StayMax         pgtype.Int4
+	AdjustmentType  string
+	AdjustmentValue decimal.Decimal
+	FloorAmount     *decimal.Decimal
+	CapAmount       *decimal.Decimal
+	Priority        int32
+	IsActive        bool
+	CreatedAt       time.Time
+	CreatedBy       *int64
+	UpdatedAt       time.Time
+	UpdatedBy       *int64
 }

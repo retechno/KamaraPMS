@@ -214,8 +214,26 @@ func ParseAmount(s string, currencyDecimals int32) (decimal.Decimal, error) {
 
 // NightPrice is one priced night of a stay.
 type NightPrice struct {
-	Date   civil.Date
+	Date civil.Date
+	// Amount is the price the night is sold at: the grid price after the yield rules.
 	Amount decimal.Decimal
+	// Grid is the price in the rate grid, before the rules; Steps are the rules that moved it and Occupancy how full the
+	// property was that night when it was priced.
+	Grid      decimal.Decimal
+	Steps     []Step
+	Occupancy decimal.Decimal
+}
+
+// RuleCodes lists the codes of the rules that moved the price, in the order they applied (nil when none did).
+func (n NightPrice) RuleCodes() []string {
+	if len(n.Steps) == 0 {
+		return nil
+	}
+	out := make([]string, len(n.Steps))
+	for i, st := range n.Steps {
+		out[i] = st.Code
+	}
+	return out
 }
 
 // NightlyPrices is the price lookup result: the plan's nights with the code they are charged through.

@@ -879,6 +879,83 @@ export interface paths {
         patch: operations["updateRatePlan"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/yield-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the yield rules in the order they apply
+         * @description Yield rules adjust the price a night is sold at (see `POST` for the conditions). Readable by anyone at the property.
+         */
+        get: operations["listYieldRules"];
+        put?: never;
+        /**
+         * Create a yield rule (rate.manage)
+         * @description A rule matches a night when all its conditions hold (a condition left out always holds): rate plan, room type, stay dates, weekdays, how full the property is that night (`occupancy_from` included, `occupancy_to` excluded, except that 100 includes a full house), days between today and the night, and nights of the stay. Matching rules apply in `priority` order (then oldest first), each to the price the one before left, by a percentage (above -100, at most 1000) or an amount, kept within the rule's own `floor_amount` and `cap_amount`, never below zero and rounded at the currency's decimals.
+         *     Rules price the nights of bookings made, amended or quoted from now on; a booking keeps the price it was sold at. A night with an override keeps the override. 409 `CODE_TAKEN`; 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`.
+         */
+        post: operations["createYieldRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/yield-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A yield rule */
+        get: operations["getYieldRule"];
+        /**
+         * Replace a yield rule (rate.manage)
+         * @description The body is the whole rule; the code must be the one it has. 404 `YIELD_RULE_NOT_FOUND`.
+         */
+        put: operations["updateYieldRule"];
+        post?: never;
+        /**
+         * Delete a yield rule (rate.manage)
+         * @description Reservations keep the codes of the rules that priced them.
+         */
+        delete: operations["deleteYieldRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a stay would be priced at today, rule by rule
+         * @description Prices a stay as a booking made now would be: per night the grid price, how full the property is, each rule that moved the price and the price the night is sold at. Nights without a grid price are counted in `missing_nights` and carry no price. Readable by anyone at the property.
+         */
+        get: operations["getRateQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/rates": {
         parameters: {
             query?: never;
@@ -5561,6 +5638,102 @@ export interface components {
             first_name?: string;
             last_name: string;
         };
+        YieldRuleRequest: {
+            code: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Only this plan; all plans when null.
+             */
+            rate_plan_id?: number | null;
+            /**
+             * Format: int64
+             * @description Only this room type; all types when null.
+             */
+            room_type_id?: number | null;
+            stay_from?: components["schemas"]["Date"] | null;
+            stay_to?: components["schemas"]["Date"] | null;
+            weekdays?: ("MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN")[] | null;
+            /** @description Percent of the sellable rooms held that night, included (0 to under 100). */
+            occupancy_from?: string | null;
+            /** @description Excluded, except 100 which includes a full house (over 0, at most 100). */
+            occupancy_to?: string | null;
+            lead_days_min?: number | null;
+            lead_days_max?: number | null;
+            stay_nights_min?: number | null;
+            stay_nights_max?: number | null;
+            /** @enum {string} */
+            adjustment_type: "PERCENT" | "AMOUNT";
+            /** @description Signed, not zero. A percentage is above -100 and at most 1000; an amount has at most the currency's decimals. */
+            adjustment_value: string;
+            floor_amount?: string | null;
+            cap_amount?: string | null;
+            /**
+             * @description Lower applies first.
+             * @default 100
+             */
+            priority: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        YieldRule: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            rate_plan_id: number | null;
+            /** Format: int64 */
+            room_type_id: number | null;
+            stay_from: components["schemas"]["Date"] | null;
+            stay_to: components["schemas"]["Date"] | null;
+            weekdays: ("MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN")[] | null;
+            occupancy_from: string | null;
+            occupancy_to: string | null;
+            lead_days_min: number | null;
+            lead_days_max: number | null;
+            stay_nights_min: number | null;
+            stay_nights_max: number | null;
+            /** @enum {string} */
+            adjustment_type: "PERCENT" | "AMOUNT";
+            adjustment_value: string;
+            floor_amount: string | null;
+            cap_amount: string | null;
+            priority: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        YieldRuleList: {
+            data: components["schemas"]["YieldRule"][];
+        };
+        RateQuote: {
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** Format: int64 */
+            room_type_id: number;
+            price_mode: components["schemas"]["PriceMode"];
+            /** @description The nights that have a price */
+            total: string;
+            /** @description The same nights at the grid price. */
+            grid_total: string;
+            missing_nights: number;
+            nights: {
+                date: components["schemas"]["Date"];
+                grid_rate: string | null;
+                occupancy_percent: string;
+                amount: string | null;
+                /** @description The rules that moved the price, in the order they applied. */
+                steps: {
+                    code: string;
+                    name: string;
+                    before: string;
+                    after: string;
+                }[];
+            }[];
+        };
         NightRate: {
             date: components["schemas"]["Date"];
             /** Format: int64 */
@@ -5568,7 +5741,11 @@ export interface components {
             /** Format: int64 */
             charge_code_id: number;
             price_mode: components["schemas"]["PriceMode"];
-            /** @description The grid price when the snapshot was taken; null for an override on a night without a grid price. */
+            /** @description The price in the rate grid when the snapshot was taken, before the yield rules; null for an override on a night without a grid price. */
+            grid_rate: string | null;
+            /** @description The codes of the yield rules that moved the grid price to `base_rate`, in the order they applied; null when none did. */
+            yield_rules: string[] | null;
+            /** @description The price the night was sold at, the grid price after the yield rules; null for an override on a night without a grid price. */
             base_rate: string | null;
             discount_amount: string;
             amount: string;
@@ -9897,6 +10074,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listYieldRules: {
+        parameters: {
+            query?: {
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules, lowest priority first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRuleList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The created rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteYieldRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRateQuote: {
+        parameters: {
+            query: {
+                rate_plan_id: number;
+                room_type_id: number;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quote. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateQuote"];
                 };
             };
             403: components["responses"]["Problem"];

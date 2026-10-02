@@ -333,6 +333,9 @@ type rateRow struct {
 	discount   decimal.Decimal
 	amount     decimal.Decimal
 	isOverride bool
+	// gridRate is the price in the rate grid and yieldRules the codes of the rules that moved it to base.
+	gridRate   *decimal.Decimal
+	yieldRules []string
 }
 
 type pricedLine struct {
@@ -382,9 +385,9 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 	if err != nil {
 		return pricedLine{}, err
 	}
-	gridBy := make(map[civil.Date]decimal.Decimal, len(grid.Nights))
+	gridBy := make(map[civil.Date]rates.NightPrice, len(grid.Nights))
 	for _, n := range grid.Nights {
-		gridBy[n.Date] = n.Amount
+		gridBy[n.Date] = n
 	}
 	var unpriced []string
 	out := pricedLine{ratePlanID: grid.RatePlanID, chargeCodeID: grid.RoomChargeCodeID, priceMode: grid.PriceMode}
@@ -406,9 +409,10 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		}
 		row := rateRow{date: d}
 		if g, ok := gridBy[d]; ok {
-			gg := g
-			row.base = &gg
-			row.amount = g
+			// the price the night is sold at: the grid price after the yield rules
+			sold, gridRate := g.Amount, g.Grid
+			row.base, row.gridRate, row.yieldRules = &sold, &gridRate, g.RuleCodes()
+			row.amount = g.Amount
 		}
 		if o, ok := byDate[d]; ok {
 			row.isOverride = true
@@ -428,7 +432,7 @@ func (s *Service) storeRates(ctx context.Context, p auth.Principal, propertyID, 
 		if err := q.InsertNightRate(ctx, reservationsdb.InsertNightRateParams{
 			TenantID: p.TenantID, PropertyID: propertyID, LineID: lineID, StayDate: r.date, RatePlanID: priced.ratePlanID,
 			ChargeCodeID: priced.chargeCodeID, PriceMode: priced.priceMode, BaseRate: r.base, DiscountAmount: r.discount,
-			Amount: r.amount, IsOverride: r.isOverride, ActorID: p.ActorID(),
+			Amount: r.amount, IsOverride: r.isOverride, GridRate: r.gridRate, YieldRules: r.yieldRules, ActorID: p.ActorID(),
 		}); err != nil {
 			return err
 		}

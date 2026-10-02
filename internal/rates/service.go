@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -22,11 +23,12 @@ type Service struct {
 	audit *audit.Writer
 	authz auth.Authorizer
 	days  *tenancy.Service
+	avail *availability.Service
 }
 
-// NewService wires the rates service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days}
+// NewService wires the rates service. avail answers how full the property is, for the occupancy rules of yield management.
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, avail *availability.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, avail: avail}
 }
 
 func (s *Service) q(ctx context.Context) *ratesdb.Queries { return ratesdb.New(s.txm.DB(ctx)) }
@@ -395,6 +397,33 @@ func (s *Service) PriceNights(ctx context.Context, tenantID, propertyID, ratePla
 	if err != nil {
 		return NightlyPrices{}, nil, err
 	}
+	rules, err := s.applicableRules(ctx, tenantID, propertyID, ratePlanID, roomTypeID)
+	if err != nil {
+		return NightlyPrices{}, nil, err
+	}
+	// The grid price stands when no rule can apply; only then does pricing need nothing but the grid.
+	var decimals int32
+	var bd civil.Date
+	var occupancy map[civil.Date]availability.Occupancy
+	if len(rules) > 0 {
+		if decimals, err = s.currencyDecimals(ctx, propertyID); err != nil {
+			return NightlyPrices{}, nil, err
+		}
+		day, err := s.days.CurrentBusinessDay(ctx, propertyID)
+		if err != nil {
+			return NightlyPrices{}, nil, err
+		}
+		bd = day.BusinessDate
+		if usesOccupancy(rules) {
+			var dates []civil.Date
+			for d := arrival; d.Before(departure); d = d.AddDays(1) {
+				dates = append(dates, d)
+			}
+			if occupancy, err = s.avail.PropertyOccupancy(ctx, tenantID, propertyID, bd, dates); err != nil {
+				return NightlyPrices{}, nil, err
+			}
+		}
+	}
 	have := make(map[civil.Date]decimal.Decimal, len(rows))
 	for _, r := range rows {
 		have[r.StayDate] = r.Amount
@@ -407,7 +436,15 @@ func (s *Service) PriceNights(ctx context.Context, tenantID, propertyID, ratePla
 			missing = append(missing, d)
 			continue
 		}
-		out.Nights = append(out.Nights, NightPrice{Date: d, Amount: amount})
+		night := NightPrice{Date: d, Amount: amount, Grid: amount}
+		if len(rules) > 0 {
+			occ := occupancy[d].Percent()
+			night.Occupancy = occ
+			night.Amount, night.Steps = ApplyYield(rules, amount, NightContext{
+				RatePlanID: ratePlanID, RoomTypeID: roomTypeID, Date: d, Occupancy: occ, LeadDays: max(0, bd.DaysUntil(d)), StayNights: arrival.DaysUntil(departure),
+			}, decimals)
+		}
+		out.Nights = append(out.Nights, night)
 	}
 	return out, missing, nil
 }

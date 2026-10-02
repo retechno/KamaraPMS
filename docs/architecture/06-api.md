@@ -721,3 +721,15 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `GET {P}/tax/returns/{id}/return.pdf`, `GET {P}/tax/worksheet.pdf?tax_id=&period=` | `tax.view` | PDF documents (§15 style); a filed month answers the return |
 
 The journal type `TAX` appears in the journal list.
+
+## 23. Yield management (after M15)
+Permissions: `rate.manage` changes rules; reading rules and quotes needs only access to the property.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET {P}/yield-rules` | property access | Filter `active`; the rules in the order they apply |
+| `POST {P}/yield-rules` | `rate.manage` | `{code, name, rate_plan_id?, room_type_id?, stay_from?, stay_to?, weekdays?, occupancy_from?, occupancy_to?, lead_days_min?, lead_days_max?, stay_nights_min?, stay_nights_max?, adjustment_type (PERCENT, AMOUNT), adjustment_value, floor_amount?, cap_amount?, priority?, is_active?}`; 409 `CODE_TAKEN`, 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`, 422 field errors |
+| `GET/PUT/DELETE {P}/yield-rules/{id}` | read: property access; write: `rate.manage` | PUT replaces the whole rule, the code cannot change; 404 `YIELD_RULE_NOT_FOUND` |
+| `GET {P}/rate-quotes?rate_plan_id&room_type_id&arrival_date&departure_date` | property access | Per night: `grid_rate`, `occupancy_percent`, `steps` (code, before, after), `amount`; `total`, `grid_total`, `missing_nights` |
+
+Reservation nights (`nightly_rates[]`) carry `grid_rate` and `yield_rules`; `base_rate` is the price the night was sold at.

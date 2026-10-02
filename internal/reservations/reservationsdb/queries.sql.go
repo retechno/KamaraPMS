@@ -605,10 +605,10 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) (Reserva
 const insertNightRate = `-- name: InsertNightRate :exec
 INSERT INTO reservation_room_rates (
     tenant_id, property_id, reservation_room_id, stay_date, rate_plan_id, charge_code_id, price_mode,
-    base_rate, discount_amount, amount, is_override, created_by, updated_by
+    base_rate, discount_amount, amount, is_override, grid_rate, yield_rules, created_by, updated_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
-    $8, $9, $10, $11, $12, $12
+    $8, $9, $10, $11, $12, $13, $14, $14
 )
 `
 
@@ -624,6 +624,8 @@ type InsertNightRateParams struct {
 	DiscountAmount decimal.Decimal
 	Amount         decimal.Decimal
 	IsOverride     bool
+	GridRate       *decimal.Decimal
+	YieldRules     []string
 	ActorID        *int64
 }
 
@@ -640,6 +642,8 @@ func (q *Queries) InsertNightRate(ctx context.Context, arg InsertNightRateParams
 		arg.DiscountAmount,
 		arg.Amount,
 		arg.IsOverride,
+		arg.GridRate,
+		arg.YieldRules,
 		arg.ActorID,
 	)
 	return err
@@ -932,7 +936,7 @@ func (q *Queries) ListLinesOfReservations(ctx context.Context, arg ListLinesOfRe
 }
 
 const listNightRates = `-- name: ListNightRates :many
-SELECT tenant_id, property_id, reservation_room_id, stay_date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override, created_at, created_by, updated_at, updated_by FROM reservation_room_rates
+SELECT tenant_id, property_id, reservation_room_id, stay_date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override, created_at, created_by, updated_at, updated_by, grid_rate, yield_rules FROM reservation_room_rates
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_room_id = ANY($3::bigint[])
 ORDER BY reservation_room_id, stay_date
 `
@@ -968,6 +972,8 @@ func (q *Queries) ListNightRates(ctx context.Context, arg ListNightRatesParams) 
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.GridRate,
+			&i.YieldRules,
 		); err != nil {
 			return nil, err
 		}

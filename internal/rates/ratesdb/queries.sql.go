@@ -8,6 +8,7 @@ package ratesdb
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
@@ -89,6 +90,122 @@ func (q *Queries) CreateRatePlan(ctx context.Context, arg CreateRatePlanParams) 
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const createYieldRule = `-- name: CreateYieldRule :one
+
+INSERT INTO yield_rules (
+    tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to,
+    lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active,
+    created_by, updated_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12, $13,
+    $14, $15, $16, $17, $18, $19,
+    $20, $21, $22, $22
+)
+RETURNING id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by
+`
+
+type CreateYieldRuleParams struct {
+	TenantID        int64
+	PropertyID      int64
+	Code            string
+	Name            string
+	RatePlanID      *int64
+	RoomTypeID      *int64
+	StayFrom        *civil.Date
+	StayTo          *civil.Date
+	Weekdays        []string
+	OccupancyFrom   *decimal.Decimal
+	OccupancyTo     *decimal.Decimal
+	LeadMin         pgtype.Int4
+	LeadMax         pgtype.Int4
+	StayMin         pgtype.Int4
+	StayMax         pgtype.Int4
+	AdjustmentType  string
+	AdjustmentValue decimal.Decimal
+	FloorAmount     *decimal.Decimal
+	CapAmount       *decimal.Decimal
+	Priority        int32
+	IsActive        bool
+	ActorID         *int64
+}
+
+// ---------------------------------------------------------------- yield rules
+func (q *Queries) CreateYieldRule(ctx context.Context, arg CreateYieldRuleParams) (YieldRule, error) {
+	row := q.db.QueryRow(ctx, createYieldRule,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Code,
+		arg.Name,
+		arg.RatePlanID,
+		arg.RoomTypeID,
+		arg.StayFrom,
+		arg.StayTo,
+		arg.Weekdays,
+		arg.OccupancyFrom,
+		arg.OccupancyTo,
+		arg.LeadMin,
+		arg.LeadMax,
+		arg.StayMin,
+		arg.StayMax,
+		arg.AdjustmentType,
+		arg.AdjustmentValue,
+		arg.FloorAmount,
+		arg.CapAmount,
+		arg.Priority,
+		arg.IsActive,
+		arg.ActorID,
+	)
+	var i YieldRule
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.RatePlanID,
+		&i.RoomTypeID,
+		&i.StayFrom,
+		&i.StayTo,
+		&i.Weekdays,
+		&i.OccupancyFrom,
+		&i.OccupancyTo,
+		&i.LeadMin,
+		&i.LeadMax,
+		&i.StayMin,
+		&i.StayMax,
+		&i.AdjustmentType,
+		&i.AdjustmentValue,
+		&i.FloorAmount,
+		&i.CapAmount,
+		&i.Priority,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const deleteYieldRule = `-- name: DeleteYieldRule :execrows
+DELETE FROM yield_rules WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type DeleteYieldRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) DeleteYieldRule(ctx context.Context, arg DeleteYieldRuleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteYieldRule, arg.TenantID, arg.PropertyID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getChargeCodeForPlan = `-- name: GetChargeCodeForPlan :one
@@ -255,6 +372,162 @@ func (q *Queries) GetRatePlanForUpdate(ctx context.Context, arg GetRatePlanForUp
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const getYieldRule = `-- name: GetYieldRule :one
+SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetYieldRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetYieldRule(ctx context.Context, arg GetYieldRuleParams) (YieldRule, error) {
+	row := q.db.QueryRow(ctx, getYieldRule, arg.TenantID, arg.PropertyID, arg.ID)
+	var i YieldRule
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.RatePlanID,
+		&i.RoomTypeID,
+		&i.StayFrom,
+		&i.StayTo,
+		&i.Weekdays,
+		&i.OccupancyFrom,
+		&i.OccupancyTo,
+		&i.LeadMin,
+		&i.LeadMax,
+		&i.StayMin,
+		&i.StayMax,
+		&i.AdjustmentType,
+		&i.AdjustmentValue,
+		&i.FloorAmount,
+		&i.CapAmount,
+		&i.Priority,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const getYieldRuleForUpdate = `-- name: GetYieldRuleForUpdate :one
+SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+`
+
+type GetYieldRuleForUpdateParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetYieldRuleForUpdate(ctx context.Context, arg GetYieldRuleForUpdateParams) (YieldRule, error) {
+	row := q.db.QueryRow(ctx, getYieldRuleForUpdate, arg.TenantID, arg.PropertyID, arg.ID)
+	var i YieldRule
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.RatePlanID,
+		&i.RoomTypeID,
+		&i.StayFrom,
+		&i.StayTo,
+		&i.Weekdays,
+		&i.OccupancyFrom,
+		&i.OccupancyTo,
+		&i.LeadMin,
+		&i.LeadMax,
+		&i.StayMin,
+		&i.StayMax,
+		&i.AdjustmentType,
+		&i.AdjustmentValue,
+		&i.FloorAmount,
+		&i.CapAmount,
+		&i.Priority,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const listApplicableYieldRules = `-- name: ListApplicableYieldRules :many
+SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules
+WHERE tenant_id = $1 AND property_id = $2 AND is_active
+  AND (rate_plan_id IS NULL OR rate_plan_id = $3)
+  AND (room_type_id IS NULL OR room_type_id = $4)
+ORDER BY priority, id
+`
+
+type ListApplicableYieldRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+	RatePlanID *int64
+	RoomTypeID *int64
+}
+
+// The rules that can apply to a plan and room type (the ones that name another plan or type are left out).
+func (q *Queries) ListApplicableYieldRules(ctx context.Context, arg ListApplicableYieldRulesParams) ([]YieldRule, error) {
+	rows, err := q.db.Query(ctx, listApplicableYieldRules,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RatePlanID,
+		arg.RoomTypeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []YieldRule{}
+	for rows.Next() {
+		var i YieldRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.Code,
+			&i.Name,
+			&i.RatePlanID,
+			&i.RoomTypeID,
+			&i.StayFrom,
+			&i.StayTo,
+			&i.Weekdays,
+			&i.OccupancyFrom,
+			&i.OccupancyTo,
+			&i.LeadMin,
+			&i.LeadMax,
+			&i.StayMin,
+			&i.StayMax,
+			&i.AdjustmentType,
+			&i.AdjustmentValue,
+			&i.FloorAmount,
+			&i.CapAmount,
+			&i.Priority,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listChargeCodeModes = `-- name: ListChargeCodeModes :many
@@ -450,6 +723,66 @@ func (q *Queries) ListRates(ctx context.Context, arg ListRatesParams) ([]ListRat
 	return items, nil
 }
 
+const listYieldRules = `-- name: ListYieldRules :many
+SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules
+WHERE tenant_id = $1 AND property_id = $2
+  AND ($3::boolean IS NULL OR is_active = $3::boolean)
+ORDER BY priority, id
+`
+
+type ListYieldRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+	Active     *bool
+}
+
+func (q *Queries) ListYieldRules(ctx context.Context, arg ListYieldRulesParams) ([]YieldRule, error) {
+	rows, err := q.db.Query(ctx, listYieldRules, arg.TenantID, arg.PropertyID, arg.Active)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []YieldRule{}
+	for rows.Next() {
+		var i YieldRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.Code,
+			&i.Name,
+			&i.RatePlanID,
+			&i.RoomTypeID,
+			&i.StayFrom,
+			&i.StayTo,
+			&i.Weekdays,
+			&i.OccupancyFrom,
+			&i.OccupancyTo,
+			&i.LeadMin,
+			&i.LeadMax,
+			&i.StayMin,
+			&i.StayMax,
+			&i.AdjustmentType,
+			&i.AdjustmentValue,
+			&i.FloorAmount,
+			&i.CapAmount,
+			&i.Priority,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const roomTypeExists = `-- name: RoomTypeExists :one
 SELECT EXISTS (SELECT 1 FROM room_types WHERE tenant_id = $1 AND property_id = $2 AND id = $3)
 `
@@ -516,6 +849,101 @@ func (q *Queries) UpdateRatePlan(ctx context.Context, arg UpdateRatePlanParams) 
 		&i.CancellationPolicy,
 		&i.IsRefundable,
 		&i.RoomChargeCodeID,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const updateYieldRule = `-- name: UpdateYieldRule :one
+UPDATE yield_rules SET
+    name = $1, rate_plan_id = $2, room_type_id = $3,
+    stay_from = $4, stay_to = $5, weekdays = $6,
+    occupancy_from = $7, occupancy_to = $8,
+    lead_min = $9, lead_max = $10, stay_min = $11, stay_max = $12,
+    adjustment_type = $13, adjustment_value = $14,
+    floor_amount = $15, cap_amount = $16, priority = $17, is_active = $18,
+    updated_by = $19
+WHERE tenant_id = $20 AND property_id = $21 AND id = $22
+RETURNING id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by
+`
+
+type UpdateYieldRuleParams struct {
+	Name            string
+	RatePlanID      *int64
+	RoomTypeID      *int64
+	StayFrom        *civil.Date
+	StayTo          *civil.Date
+	Weekdays        []string
+	OccupancyFrom   *decimal.Decimal
+	OccupancyTo     *decimal.Decimal
+	LeadMin         pgtype.Int4
+	LeadMax         pgtype.Int4
+	StayMin         pgtype.Int4
+	StayMax         pgtype.Int4
+	AdjustmentType  string
+	AdjustmentValue decimal.Decimal
+	FloorAmount     *decimal.Decimal
+	CapAmount       *decimal.Decimal
+	Priority        int32
+	IsActive        bool
+	ActorID         *int64
+	TenantID        int64
+	PropertyID      int64
+	ID              int64
+}
+
+func (q *Queries) UpdateYieldRule(ctx context.Context, arg UpdateYieldRuleParams) (YieldRule, error) {
+	row := q.db.QueryRow(ctx, updateYieldRule,
+		arg.Name,
+		arg.RatePlanID,
+		arg.RoomTypeID,
+		arg.StayFrom,
+		arg.StayTo,
+		arg.Weekdays,
+		arg.OccupancyFrom,
+		arg.OccupancyTo,
+		arg.LeadMin,
+		arg.LeadMax,
+		arg.StayMin,
+		arg.StayMax,
+		arg.AdjustmentType,
+		arg.AdjustmentValue,
+		arg.FloorAmount,
+		arg.CapAmount,
+		arg.Priority,
+		arg.IsActive,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i YieldRule
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.RatePlanID,
+		&i.RoomTypeID,
+		&i.StayFrom,
+		&i.StayTo,
+		&i.Weekdays,
+		&i.OccupancyFrom,
+		&i.OccupancyTo,
+		&i.LeadMin,
+		&i.LeadMax,
+		&i.StayMin,
+		&i.StayMax,
+		&i.AdjustmentType,
+		&i.AdjustmentValue,
+		&i.FloorAmount,
+		&i.CapAmount,
+		&i.Priority,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,

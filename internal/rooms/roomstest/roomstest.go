@@ -99,7 +99,7 @@ func Setup(t *testing.T) *Env {
 	avail := availability.NewService(txm)
 	billing := billingconfig.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(billing.SeedProperty) // like production: every property starts with the standard charge codes
-	rt := rates.NewService(txm, c, aw, authz, ten)
+	rt := rates.NewService(txm, c, aw, authz, ten, avail)
 	gs := guests.NewService(txm, c, aw, authz, ten)
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
 	acct := accounting.NewService(txm, c, aw, authz, ten, ia)

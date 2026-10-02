@@ -1331,6 +1331,32 @@ SELECT expect_error('payments are not deleted', '23001', $q$DELETE FROM tax_paym
 SELECT expect_ok('a payment is voided with its reason', $q$UPDATE tax_payments SET status = 'VOIDED', voided_at = now(), void_reason = 'x'$q$);
 SELECT expect_error('a tax journal type exists, an unknown one does not', '23514', $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JVZ', 'TAXES', '2026-10-01', 'x')$q$);
 
+-- Refund methods of a property
+SELECT expect_ok('a property refunds in cash by default', $q$SELECT 1 FROM properties WHERE refund_methods = ARRAY['CASH']$q$);
+SELECT expect_error('a property keeps at least one refund method', '23514', $q$UPDATE properties SET refund_methods = '{}'$q$);
+SELECT expect_error('a refund method is one of the list', '23514', $q$UPDATE properties SET refund_methods = ARRAY['CASH', 'BITCOIN']$q$);
+SELECT expect_error('a refund is not made on the city ledger', '23514', $q$UPDATE properties SET refund_methods = ARRAY['CITY_LEDGER']$q$);
+SELECT expect_ok('a property can refund by several methods', $q$UPDATE properties SET refund_methods = ARRAY['CASH', 'BANK_TRANSFER']$q$);
+
+-- Yield rules
+INSERT INTO yield_rules (tenant_id, property_id, code, name, occupancy_from, adjustment_type, adjustment_value)
+VALUES (tn('ABC'), pr('BALI'), 'BUSY', 'Busy nights', 70, 'PERCENT', 20);
+SELECT expect_error('a yield rule code is unique per property', '23505', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'BUSY', 'again', 'PERCENT', 5)$q$);
+SELECT expect_ok('the same code in another property', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('XYZ'), pr('SG'), 'BUSY', 'Busy nights', 'PERCENT', 5)$q$);
+SELECT expect_error('an adjustment is a percentage or an amount', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 'FIXED', 5)$q$);
+SELECT expect_error('an adjustment changes the price', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 'AMOUNT', 0)$q$);
+SELECT expect_error('a percentage cannot take the price to nothing', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 'PERCENT', -100)$q$);
+SELECT expect_error('a percentage is at most 1000', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 'PERCENT', 1000.5)$q$);
+SELECT expect_error('stay dates are in order', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, stay_from, stay_to, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', '2026-12-01', '2026-11-01', 'PERCENT', 5)$q$);
+SELECT expect_error('an occupancy range is in order', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, occupancy_from, occupancy_to, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 80, 60, 'PERCENT', 5)$q$);
+SELECT expect_error('an occupancy is at most 100', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, occupancy_to, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 101, 'PERCENT', 5)$q$);
+SELECT expect_error('lead days are in order', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, lead_min, lead_max, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 5, 2, 'PERCENT', 5)$q$);
+SELECT expect_error('a stay is at least one night', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, stay_min, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 0, 'PERCENT', 5)$q$);
+SELECT expect_error('weekdays are of the list', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, weekdays, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', ARRAY['FUNDAY'], 'PERCENT', 5)$q$);
+SELECT expect_error('a floor is not above the cap', '23514', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, floor_amount, cap_amount, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 900, 800, 'PERCENT', 5)$q$);
+SELECT expect_error('a rule names a rate plan of its property', '23503', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, rate_plan_id, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 999999, 'PERCENT', 5)$q$);
+SELECT expect_error('a rule names a room type of its property', '23503', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, room_type_id, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 999999, 'PERCENT', 5)$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

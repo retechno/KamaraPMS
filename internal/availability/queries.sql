@@ -111,3 +111,22 @@ SELECT p.id, p.code, p.name, p.meal_plan, p.is_refundable, p.room_charge_code_id
 FROM rate_plans p JOIN charge_codes c ON c.property_id = p.property_id AND c.id = p.room_charge_code_id
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.is_active
 ORDER BY p.code;
+
+-- How full the whole property is on each night: rooms held (confirmed lines and open stays, whatever their type)
+-- against the rooms that can be sold (active, not blocked). The same demand as the inventory above, summed over types.
+-- name: PropertyOccupancy :many
+SELECT d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    ((SELECT count(*) FROM reservation_rooms l
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS booked
+FROM unnest(@dates::text[]) AS d (night)
+ORDER BY d.night;

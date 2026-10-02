@@ -79,7 +79,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	for _, r := range rateRows {
 		ratesBy[r.ReservationRoomID] = append(ratesBy[r.ReservationRoomID], NightRate{
 			Date: r.StayDate, RatePlanID: r.RatePlanID, ChargeCodeID: r.ChargeCodeID, PriceMode: r.PriceMode, BaseRate: r.BaseRate,
-			DiscountAmount: r.DiscountAmount, Amount: r.Amount, IsOverride: r.IsOverride,
+			DiscountAmount: r.DiscountAmount, Amount: r.Amount, IsOverride: r.IsOverride, GridRate: r.GridRate, YieldRules: r.YieldRules,
 		})
 		chargesBy[r.ReservationRoomID] = append(chargesBy[r.ReservationRoomID], billingconfig.NightCharge{
 			ChargeCodeID: r.ChargeCodeID, PriceMode: chargecalc.PriceMode(r.PriceMode), Amount: r.Amount,

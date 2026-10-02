@@ -109,6 +109,7 @@ export const navigation: NavSection[] = [
       { label: 'Companies', to: '/setup/companies', milestone: 'S1' },
       { label: 'Rate plans', to: '/setup/rate-plans', milestone: 'M7' },
       { label: 'Rate grid', to: '/setup/rates', milestone: 'M7' },
+      { label: 'Yield rules', to: '/setup/yield-rules', milestone: 'S4' },
       { label: 'Audit trail', to: '/audit', milestone: 'M15' },
     ],
   },

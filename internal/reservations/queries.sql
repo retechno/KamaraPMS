@@ -83,10 +83,10 @@ RETURNING *;
 -- name: InsertNightRate :exec
 INSERT INTO reservation_room_rates (
     tenant_id, property_id, reservation_room_id, stay_date, rate_plan_id, charge_code_id, price_mode,
-    base_rate, discount_amount, amount, is_override, created_by, updated_by
+    base_rate, discount_amount, amount, is_override, grid_rate, yield_rules, created_by, updated_by
 ) VALUES (
     @tenant_id, @property_id, @line_id, @stay_date, @rate_plan_id, @charge_code_id, @price_mode,
-    sqlc.narg(base_rate), @discount_amount, @amount, @is_override, sqlc.narg(actor_id), sqlc.narg(actor_id)
+    sqlc.narg(base_rate), @discount_amount, @amount, @is_override, sqlc.narg(grid_rate), sqlc.narg(yield_rules), sqlc.narg(actor_id), sqlc.narg(actor_id)
 );
 
 -- name: DeleteNightRates :exec

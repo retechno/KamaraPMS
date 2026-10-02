@@ -80,4 +80,6 @@ type ReservationRoomRate struct {
 	CreatedBy         *int64
 	UpdatedAt         time.Time
 	UpdatedBy         *int64
+	GridRate          *decimal.Decimal
+	YieldRules        []string
 }

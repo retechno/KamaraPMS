@@ -201,6 +201,9 @@ type NightRate struct {
 	DiscountAmount decimal.Decimal  `json:"discount_amount"`
 	Amount         decimal.Decimal  `json:"amount"`
 	IsOverride     bool             `json:"is_override"`
+	// GridRate is the price in the rate grid and YieldRules the codes of the yield rules that moved it to BaseRate.
+	GridRate   *decimal.Decimal `json:"grid_rate"`
+	YieldRules []string         `json:"yield_rules"`
 }
 
 // Estimate is the charge engine's total of a line's nights (advisory).

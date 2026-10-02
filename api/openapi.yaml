@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.36.0
+  version: 0.37.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1151,6 +1151,114 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RatePlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/yield-rules:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listYieldRules
+      summary: List the yield rules in the order they apply
+      description: "Yield rules adjust the price a night is sold at (see `POST` for the conditions). Readable by anyone at the property."
+      tags: [rates]
+      parameters:
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: The rules, lowest priority first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/YieldRuleList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createYieldRule
+      summary: Create a yield rule (rate.manage)
+      description: |
+        A rule matches a night when all its conditions hold (a condition left out always holds): rate plan, room type, stay dates, weekdays, how full the property is that night (`occupancy_from` included, `occupancy_to` excluded, except that 100 includes a full house), days between today and the night, and nights of the stay. Matching rules apply in `priority` order (then oldest first), each to the price the one before left, by a percentage (above -100, at most 1000) or an amount, kept within the rule's own `floor_amount` and `cap_amount`, never below zero and rounded at the currency's decimals.
+        Rules price the nights of bookings made, amended or quoted from now on; a booking keeps the price it was sold at. A night with an override keeps the override. 409 `CODE_TAKEN`; 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`.
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/YieldRuleRequest" }
+      responses:
+        "201":
+          description: The created rule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/YieldRule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/yield-rules/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getYieldRule
+      summary: A yield rule
+      tags: [rates]
+      responses:
+        "200":
+          description: The rule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/YieldRule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateYieldRule
+      summary: Replace a yield rule (rate.manage)
+      description: "The body is the whole rule; the code must be the one it has. 404 `YIELD_RULE_NOT_FOUND`."
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/YieldRuleRequest" }
+      responses:
+        "200":
+          description: The updated rule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/YieldRule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteYieldRule
+      summary: Delete a yield rule (rate.manage)
+      description: Reservations keep the codes of the rules that priced them.
+      tags: [rates]
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-quotes:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getRateQuote
+      summary: What a stay would be priced at today, rule by rule
+      description: "Prices a stay as a booking made now would be: per night the grid price, how full the property is, each rule that moved the price and the price the night is sold at. Nights without a grid price are counted in `missing_nights` and carry no price. Readable by anyone at the property."
+      tags: [rates]
+      parameters:
+        - { name: rate_plan_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: room_type_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: arrival_date, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: departure_date, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The quote.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RateQuote" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -6410,16 +6518,113 @@ components:
         code: { type: string }
         first_name: { type: string }
         last_name: { type: string }
+    YieldRuleRequest:
+      type: object
+      required: [code, name, adjustment_type, adjustment_value]
+      additionalProperties: false
+      properties:
+        code: { type: string, maxLength: 20 }
+        name: { type: string, maxLength: 100 }
+        rate_plan_id: { type: [integer, "null"], format: int64, description: Only this plan; all plans when null. }
+        room_type_id: { type: [integer, "null"], format: int64, description: Only this room type; all types when null. }
+        stay_from: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        stay_to: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        weekdays:
+          type: [array, "null"]
+          items: { type: string, enum: [MON, TUE, WED, THU, FRI, SAT, SUN] }
+        occupancy_from: { type: [string, "null"], description: "Percent of the sellable rooms held that night, included (0 to under 100)." }
+        occupancy_to: { type: [string, "null"], description: "Excluded, except 100 which includes a full house (over 0, at most 100)." }
+        lead_days_min: { type: [integer, "null"], minimum: 0 }
+        lead_days_max: { type: [integer, "null"], minimum: 0 }
+        stay_nights_min: { type: [integer, "null"], minimum: 1 }
+        stay_nights_max: { type: [integer, "null"], minimum: 1 }
+        adjustment_type: { type: string, enum: [PERCENT, AMOUNT] }
+        adjustment_value: { type: string, description: "Signed, not zero. A percentage is above -100 and at most 1000; an amount has at most the currency's decimals." }
+        floor_amount: { type: [string, "null"] }
+        cap_amount: { type: [string, "null"] }
+        priority: { type: integer, minimum: 0, maximum: 10000, default: 100, description: Lower applies first. }
+        is_active: { type: boolean, default: true }
+    YieldRule:
+      type: object
+      required: [id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_days_min, lead_days_max, stay_nights_min, stay_nights_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate_plan_id: { type: [integer, "null"], format: int64 }
+        room_type_id: { type: [integer, "null"], format: int64 }
+        stay_from: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        stay_to: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        weekdays: { type: [array, "null"], items: { type: string, enum: [MON, TUE, WED, THU, FRI, SAT, SUN] } }
+        occupancy_from: { type: [string, "null"] }
+        occupancy_to: { type: [string, "null"] }
+        lead_days_min: { type: [integer, "null"] }
+        lead_days_max: { type: [integer, "null"] }
+        stay_nights_min: { type: [integer, "null"] }
+        stay_nights_max: { type: [integer, "null"] }
+        adjustment_type: { type: string, enum: [PERCENT, AMOUNT] }
+        adjustment_value: { type: string }
+        floor_amount: { type: [string, "null"] }
+        cap_amount: { type: [string, "null"] }
+        priority: { type: integer }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    YieldRuleList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/YieldRule" }
+    RateQuote:
+      type: object
+      required: [rate_plan_id, room_type_id, price_mode, nights, total, grid_total, missing_nights]
+      properties:
+        rate_plan_id: { type: integer, format: int64 }
+        room_type_id: { type: integer, format: int64 }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        total: { type: string, description: The nights that have a price, after the rules. }
+        grid_total: { type: string, description: The same nights at the grid price. }
+        missing_nights: { type: integer }
+        nights:
+          type: array
+          items:
+            type: object
+            required: [date, grid_rate, occupancy_percent, steps, amount]
+            properties:
+              date: { $ref: "#/components/schemas/Date" }
+              grid_rate: { type: [string, "null"] }
+              occupancy_percent: { type: string }
+              amount: { type: [string, "null"] }
+              steps:
+                type: array
+                description: The rules that moved the price, in the order they applied.
+                items:
+                  type: object
+                  required: [code, name, before, after]
+                  properties:
+                    code: { type: string }
+                    name: { type: string }
+                    before: { type: string }
+                    after: { type: string }
     NightRate:
       type: object
-      required: [date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override]
+      required: [date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override, grid_rate, yield_rules]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         rate_plan_id: { type: integer, format: int64 }
         charge_code_id: { type: integer, format: int64 }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
+        grid_rate:
+          description: The price in the rate grid when the snapshot was taken, before the yield rules; null for an override on a night without a grid price.
+          type: [string, "null"]
+        yield_rules:
+          description: The codes of the yield rules that moved the grid price to `base_rate`, in the order they applied; null when none did.
+          type: [array, "null"]
+          items: { type: string }
         base_rate:
-          description: The grid price when the snapshot was taken; null for an override on a night without a grid price.
+          description: The price the night was sold at, the grid price after the yield rules; null for an override on a night without a grid price.
           oneOf:
             - { type: string }
             - { type: "null" }

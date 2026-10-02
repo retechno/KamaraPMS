@@ -81,3 +81,53 @@ SELECT stay_date, amount FROM rates
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND rate_plan_id = @rate_plan_id AND room_type_id = @room_type_id
   AND stay_date >= @arrival AND stay_date < @departure
 ORDER BY stay_date;
+
+-- ---------------------------------------------------------------- yield rules
+
+-- name: CreateYieldRule :one
+INSERT INTO yield_rules (
+    tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to,
+    lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active,
+    created_by, updated_by
+) VALUES (
+    @tenant_id, @property_id, @code, @name, sqlc.narg(rate_plan_id), sqlc.narg(room_type_id), sqlc.narg(stay_from), sqlc.narg(stay_to),
+    sqlc.narg(weekdays), sqlc.narg(occupancy_from), sqlc.narg(occupancy_to), sqlc.narg(lead_min), sqlc.narg(lead_max),
+    sqlc.narg(stay_min), sqlc.narg(stay_max), @adjustment_type, @adjustment_value, sqlc.narg(floor_amount), sqlc.narg(cap_amount),
+    @priority, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id)
+)
+RETURNING *;
+
+-- name: GetYieldRule :one
+SELECT * FROM yield_rules WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetYieldRuleForUpdate :one
+SELECT * FROM yield_rules WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id FOR UPDATE;
+
+-- name: ListYieldRules :many
+SELECT * FROM yield_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+  AND (sqlc.narg(active)::boolean IS NULL OR is_active = sqlc.narg(active)::boolean)
+ORDER BY priority, id;
+
+-- The rules that can apply to a plan and room type (the ones that name another plan or type are left out).
+-- name: ListApplicableYieldRules :many
+SELECT * FROM yield_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active
+  AND (rate_plan_id IS NULL OR rate_plan_id = @rate_plan_id)
+  AND (room_type_id IS NULL OR room_type_id = @room_type_id)
+ORDER BY priority, id;
+
+-- name: UpdateYieldRule :one
+UPDATE yield_rules SET
+    name = @name, rate_plan_id = sqlc.narg(rate_plan_id), room_type_id = sqlc.narg(room_type_id),
+    stay_from = sqlc.narg(stay_from), stay_to = sqlc.narg(stay_to), weekdays = sqlc.narg(weekdays),
+    occupancy_from = sqlc.narg(occupancy_from), occupancy_to = sqlc.narg(occupancy_to),
+    lead_min = sqlc.narg(lead_min), lead_max = sqlc.narg(lead_max), stay_min = sqlc.narg(stay_min), stay_max = sqlc.narg(stay_max),
+    adjustment_type = @adjustment_type, adjustment_value = @adjustment_value,
+    floor_amount = sqlc.narg(floor_amount), cap_amount = sqlc.narg(cap_amount), priority = @priority, is_active = @is_active,
+    updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: DeleteYieldRule :execrows
+DELETE FROM yield_rules WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

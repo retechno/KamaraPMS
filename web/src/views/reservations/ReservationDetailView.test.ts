@@ -12,7 +12,9 @@ let POST = vi.fn()
 let PATCH = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a) } }))
 
-const night = (date: string, amount: string, over = false) => ({ date, rate_plan_id: 1, charge_code_id: 1, price_mode: 'EXCLUSIVE', base_rate: '1000000', discount_amount: '0', amount, is_override: over })
+const night = (date: string, amount: string, over = false, yieldRules: string[] | null = null) => ({
+  date, rate_plan_id: 1, charge_code_id: 1, price_mode: 'EXCLUSIVE', base_rate: yieldRules ? amount : '1000000', grid_rate: '1000000', yield_rules: yieldRules, discount_amount: '0', amount, is_override: over,
+})
 const line = (over: object = {}) => ({
   id: 4, status: 'CONFIRMED', room_type_id: 10, room_type_code: 'DLX', room_id: null, rate_plan_id: 1, rate_plan_code: 'BAR', guest_id: null,
   arrival_date: '2026-10-02', departure_date: '2026-10-04', nights: 2, adult_count: 2, child_count: 0, stay_id: null,
@@ -51,6 +53,14 @@ describe('ReservationDetailView', () => {
     GET = vi.fn()
     POST = vi.fn()
     PATCH = vi.fn()
+  })
+
+  it('names the yield rules that moved a night price', async () => {
+    const w = mountView(reservation({ rooms: [line({ nightly_rates: [night('2026-10-02', '1200000', false, ['BUSY', 'WEEKEND']), night('2026-10-03', '1000000')] })] }))
+    await flushPromises()
+    expect(w.get('[data-testid=yield-2026-10-02]').text()).toContain('BUSY, WEEKEND')
+    expect(w.find('[data-testid=yield-2026-10-03]').exists()).toBe(false)
+    expect(w.get('[data-testid=nights-4]').text()).toContain('1000000') // the grid price stays visible beside the sold one
   })
 
   it('shows the header, the nightly rates with overrides, and the estimate', async () => {

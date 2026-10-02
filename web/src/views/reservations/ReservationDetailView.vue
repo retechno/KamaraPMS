@@ -274,8 +274,11 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <tr v-for="n in line.nightly_rates" :key="n.date">
             <td>{{ n.date }}</td>
             <td class="num">{{ n.amount }}</td>
-            <td class="num">{{ n.base_rate ?? '—' }}</td>
-            <td><small v-if="n.is_override" class="muted">override</small></td>
+            <td class="num">{{ n.grid_rate ?? n.base_rate ?? '—' }}</td>
+            <td>
+              <small v-if="n.is_override" class="muted">override</small>
+              <small v-if="n.yield_rules?.length" class="muted" :data-testid="`yield-${n.date}`" title="Yield rules that moved the grid price">yield: {{ n.yield_rules.join(', ') }}</small>
+            </td>
           </tr>
         </tbody>
         <tfoot>
