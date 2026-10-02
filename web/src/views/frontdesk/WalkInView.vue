@@ -5,6 +5,13 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { FreeRoom, Guest, RatePlan, RoomType } from '@/api/types'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -113,118 +120,87 @@ watch(businessDate, (bd) => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Walk-in</h1>
-    <RouterLink to="/arrivals">Arrivals</RouterLink>
-  </div>
+  <PageHeader :title="t('walkIn.title')">
+    <template #actions><RouterLink to="/arrivals" class="text-sm text-primary hover:underline">{{ t('walkIn.back') }}</RouterLink></template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!allowed" class="muted" data-testid="no-access">Your role at this property does not allow walk-ins (check-in and reservation create are both needed).</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('walkIn.noAccess') }}</p>
 
-  <form v-else class="card" novalidate data-testid="walkin-form" @submit.prevent="submit">
-    <h2>Stay</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Departure</span>
-        <input v-model="form.departure" name="departure" type="date" :min="businessDate" :aria-invalid="!!fieldError('departure_date')" @change="loadRooms" />
-        <small v-if="fieldError('departure_date')" class="error-text">{{ fieldError('departure_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Room type</span>
-        <select v-model.number="form.typeId" name="room_type" @change="loadRooms">
-          <option v-for="t in activeTypes" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Room</span>
-        <select v-model.number="form.roomId" name="room" :disabled="!rooms.length">
-          <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : ' (not ready)' }}</option>
-        </select>
-        <small v-if="!rooms.length" class="muted" data-testid="no-rooms">No free room of this type for these dates.</small>
-        <small v-if="fieldError('room_id')" class="error-text">{{ fieldError('room_id') }}</small>
-      </label>
-      <label class="field">
-        <span>Rate plan</span>
-        <select v-model.number="form.planId" name="rate_plan">
-          <option v-for="p in activePlans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Adults</span>
-        <input v-model.number="form.adults" name="adults" type="number" min="1" :aria-invalid="!!fieldError('adult_count')" />
-        <small v-if="fieldError('adult_count')" class="error-text">{{ fieldError('adult_count') }}</small>
-      </label>
-      <label class="field">
-        <span>Children</span>
-        <input v-model.number="form.children" name="children" type="number" min="0" />
-      </label>
-    </div>
+  <Card v-else>
+    <form novalidate data-testid="walkin-form" @submit.prevent="submit">
+      <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
+      <CardContent>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField :label="t('walkIn.departure')" :error="fieldError('departure_date')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure" name="departure" type="date" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
+          </FormField>
+          <FormField :label="t('walkIn.roomType')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model.number="form.typeId" name="room_type" @change="loadRooms">
+                <option v-for="rt in activeTypes" :key="rt.id" :value="rt.id">{{ rt.code }} · {{ rt.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('walkIn.room')" :error="fieldError('room_id')">
+            <template #default="{ id, invalid }">
+              <NativeSelect :id="id" v-model.number="form.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
+                <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : t('walkIn.notReadyTag') }}</option>
+              </NativeSelect>
+              <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('walkIn.noRooms') }}</small>
+            </template>
+          </FormField>
+          <FormField :label="t('walkIn.ratePlan')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model.number="form.planId" name="rate_plan">
+                <option v-for="p in activePlans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('walkIn.adults')" :error="fieldError('adult_count')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model.number="form.adults" name="adults" type="number" min="1" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('walkIn.children')">
+            <template #default="{ id }"><Input :id="id" v-model.number="form.children" name="children" type="number" min="0" /></template>
+          </FormField>
+        </div>
 
-    <div v-if="notReady" class="alert warning" data-testid="not-ready">
-      Room {{ selected?.room_number }} is {{ selected?.housekeeping_status }}.
-      <template v-if="canOverride">
-        <label class="check"><input v-model="form.override" type="checkbox" name="override" /><span>Use it anyway</span></label>
-        <label v-if="form.override" class="field">
-          <span>Reason</span>
-          <input v-model="form.reason" name="override_reason" maxlength="500" />
-        </label>
-      </template>
-    </div>
+        <div v-if="notReady" class="alert warning mt-4" data-testid="not-ready">
+          {{ t('walkIn.roomIs', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '' }) }}
+          <template v-if="canOverride">
+            <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="form.override" type="checkbox" name="override" class="size-4 accent-primary" /><span>{{ t('walkIn.useAnyway') }}</span></label>
+            <FormField v-if="form.override" class="mt-2 max-w-md" :label="t('walkIn.reason')">
+              <template #default="{ id }"><Input :id="id" v-model="form.reason" name="override_reason" maxlength="500" /></template>
+            </FormField>
+          </template>
+        </div>
 
-    <h2>Guest</h2>
-    <div class="guest-pick">
-      <label class="field grow">
-        <span>Find an existing guest</span>
-        <input v-model="guestQuery" name="guest_q" type="search" placeholder="Name, email, phone or code" @keydown.enter.prevent="findGuests" />
-      </label>
-      <button type="button" data-testid="find-guest" @click="findGuests">Find</button>
-    </div>
-    <ul v-if="guestResults.length" class="picks">
-      <li v-for="g in guestResults" :key="g.id"><button type="button" :data-testid="`guest-${g.code}`" @click="guest = g; guestResults = []">{{ g.code }} · {{ guestLabel(g) }}</button></li>
-    </ul>
-    <p v-if="guest" data-testid="chosen-guest">Guest: <strong>{{ guestLabel(guest) }}</strong> <button type="button" class="link" @click="guest = null">change</button></p>
-    <div v-else class="form-grid">
-      <label class="field">
-        <span>First name</span>
-        <input v-model="newGuest.first_name" name="first_name" />
-      </label>
-      <label class="field">
-        <span>Last name</span>
-        <input v-model="newGuest.last_name" name="last_name" :aria-invalid="!!fieldError('new_guest.last_name')" />
-        <small v-if="fieldError('new_guest.last_name')" class="error-text">{{ fieldError('new_guest.last_name') }}</small>
-      </label>
-    </div>
-    <small v-if="fieldError('guest_id')" class="error-text">{{ fieldError('guest_id') }}</small>
+        <h2 class="mb-2 mt-6 text-base font-semibold">{{ t('walkIn.guest') }}</h2>
+        <div class="flex flex-wrap items-end gap-3">
+          <FormField class="min-w-64 flex-1" :label="t('walkIn.findGuest')">
+            <template #default="{ id }"><Input :id="id" v-model="guestQuery" name="guest_q" type="search" :placeholder="t('walkIn.findPlaceholder')" @keydown.enter.prevent="findGuests" /></template>
+          </FormField>
+          <Button type="button" variant="outline" data-testid="find-guest" @click="findGuests">{{ t('walkIn.find') }}</Button>
+        </div>
+        <ul v-if="guestResults.length" class="m-0 mt-2 flex list-none flex-wrap gap-2 p-0">
+          <li v-for="g in guestResults" :key="g.id"><Button type="button" variant="outline" size="sm" :data-testid="`guest-${g.code}`" @click="guest = g; guestResults = []">{{ g.code }} · {{ guestLabel(g) }}</Button></li>
+        </ul>
+        <p v-if="guest" class="mb-0 mt-3 text-sm" data-testid="chosen-guest">{{ t('walkIn.chosen') }} <strong>{{ guestLabel(guest) }}</strong> <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-primary underline" @click="guest = null">{{ t('walkIn.change') }}</button></p>
+        <div v-else class="mt-3 grid gap-4 sm:grid-cols-2">
+          <FormField :label="t('walkIn.firstName')">
+            <template #default="{ id }"><Input :id="id" v-model="newGuest.first_name" name="first_name" /></template>
+          </FormField>
+          <FormField :label="t('walkIn.lastName')" :error="fieldError('new_guest.last_name')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="newGuest.last_name" name="last_name" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
+        <small v-if="fieldError('guest_id')" role="alert" class="text-xs text-destructive">{{ fieldError('guest_id') }}</small>
 
-    <div class="form-actions">
-      <button type="submit" class="btn-primary" :disabled="busy || form.roomId === null || (notReady && !form.override) || (!guest && !newGuest.last_name.trim())" data-testid="walkin-submit">Check in</button>
-    </div>
-  </form>
+        <div class="mt-4 flex justify-end">
+          <Button type="submit" :disabled="busy || form.roomId === null || (notReady && !form.override) || (!guest && !newGuest.last_name.trim())" data-testid="walkin-submit">{{ t('walkIn.checkIn') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 </template>
-
-<style scoped>
-.guest-pick {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-.grow {
-  flex: 1;
-}
-.picks {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.link {
-  border: 0;
-  background: none;
-  color: var(--accent);
-  padding: 0;
-  text-decoration: underline;
-}
-</style>

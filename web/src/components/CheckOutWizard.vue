@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CheckOutResult, StayDetail } from '@/api/types'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
 
@@ -49,54 +52,45 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <section class="card" data-testid="checkout-wizard">
-    <h2>Check out</h2>
-    <p v-if="error" class="alert" role="alert" data-testid="checkout-error">
-      {{ error.message }} <code>{{ error.code }}</code>
-      <template v-if="error.code === 'FOLIO_NOT_BALANCED'"> Settle the folio, then check out again.</template>
-    </p>
+  <Card class="mb-4" data-testid="checkout-wizard">
+    <CardHeader><CardTitle>{{ t('checkout.title') }}</CardTitle></CardHeader>
+    <CardContent>
+      <p v-if="error" class="alert" role="alert" data-testid="checkout-error">
+        {{ error.message }} <code>{{ error.code }}</code>
+        <template v-if="error.code === 'FOLIO_NOT_BALANCED'"> {{ t('checkout.notBalanced') }}</template>
+      </p>
 
-    <template v-if="step === 'review'">
-      <ol class="steps">
-        <li :class="{ ok: !early || confirmEarly }" data-testid="step-departure">
-          Departure {{ detail.stay.departure_date }}
-          <template v-if="early">
-            is after today: the guest leaves early and the stay ends with tonight's night.
-            <label class="check"><input v-model="confirmEarly" type="checkbox" name="confirm_early" /><span>Confirm early departure</span></label>
-          </template>
-          <template v-else>matches the business date.</template>
-        </li>
-        <li :class="{ ok: !unbalanced.length }" data-testid="step-folios">
-          <template v-if="!unbalanced.length">Every folio is balanced so far. Tonight's room charge, if not yet posted, is added now and must be settled too.</template>
-          <template v-else>
-            Folios with a balance:
-            <span v-for="f in unbalanced" :key="f.id"><RouterLink :to="`/folios/${f.id}`" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ f.balance }}) </span>
-          </template>
-        </li>
-      </ol>
-      <div class="form-actions">
-        <button type="button" class="btn-primary" :disabled="blocked" data-testid="checkout-submit" @click="submit">Check out</button>
-        <button type="button" data-testid="checkout-cancel" @click="emit('cancel')">Cancel</button>
-      </div>
-    </template>
+      <template v-if="step === 'review'">
+        <ol class="m-0 grid gap-2 pl-5">
+          <li :class="{ 'marker:text-primary': !early || confirmEarly }" data-testid="step-departure">
+            {{ t('checkout.departure', { date: detail.stay.departure_date }) }}
+            <template v-if="early">
+              {{ t('checkout.early') }}
+              <label class="ml-2 inline-flex items-center gap-1.5 text-sm"><input v-model="confirmEarly" type="checkbox" name="confirm_early" class="size-4 accent-primary" /><span>{{ t('checkout.confirmEarly') }}</span></label>
+            </template>
+            <template v-else>{{ t('checkout.matches') }}</template>
+          </li>
+          <li :class="{ 'marker:text-primary': !unbalanced.length }" data-testid="step-folios">
+            <template v-if="!unbalanced.length">{{ t('checkout.balanced') }}</template>
+            <template v-else>
+              {{ t('checkout.withBalance') }}
+              <span v-for="f in unbalanced" :key="f.id"><RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ f.balance }}) </span>
+            </template>
+          </li>
+        </ol>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" data-testid="checkout-cancel" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+          <Button type="button" :disabled="blocked" data-testid="checkout-submit" @click="submit">{{ t('checkout.submit') }}</Button>
+        </div>
+      </template>
 
-    <template v-else-if="result">
-      <p data-testid="checkout-done">Checked out. The room is now <strong>{{ result.housekeeping }}</strong>.</p>
-      <ul>
-        <li v-for="c in result.posted_room_charges" :key="c.service_date">Room charge {{ c.service_date }}: {{ c.total }}</li>
-        <li v-for="f in result.folios" :key="f.id">Folio {{ f.folio_number }} {{ f.status }}</li>
-      </ul>
-    </template>
-  </section>
+      <template v-else-if="result">
+        <p class="mt-0" data-testid="checkout-done">{{ t('checkout.done') }} <strong>{{ result.housekeeping }}</strong>.</p>
+        <ul class="m-0 pl-5 text-sm">
+          <li v-for="c in result.posted_room_charges" :key="c.service_date">{{ t('checkout.roomCharge', { date: c.service_date, total: c.total }) }}</li>
+          <li v-for="f in result.folios" :key="f.id">{{ t('checkout.folioStatus', { number: f.folio_number, status: f.status }) }}</li>
+        </ul>
+      </template>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.steps {
-  padding-left: 20px;
-  display: grid;
-  gap: 8px;
-}
-.steps li.ok::marker {
-  color: var(--accent);
-}
-</style>

@@ -3,6 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { ReservationEmails } from '@/api/types'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -18,7 +22,8 @@ const busy = ref(false)
 const pid = computed(() => property.currentId)
 const canResend = computed(() => props.confirmed && !!state.value?.enabled && auth.can('reservation.update', pid.value))
 const waiting = computed(() => state.value?.data.some((e) => e.status === 'QUEUED') ?? false)
-const label: Record<string, string> = { QUEUED: 'Waiting to be sent', SENT: 'Sent', FAILED: 'Not delivered', SKIPPED: 'Not sent' }
+const label = (s: string): string => (['QUEUED', 'SENT', 'FAILED', 'SKIPPED'].includes(s) ? t(`emails.${s}` as 'emails.SENT') : s)
+const variant = (s: string) => ({ QUEUED: 'warning', SENT: 'success', FAILED: 'destructive', SKIPPED: 'outline' })[s] as 'warning' | 'success' | 'destructive' | 'outline'
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -39,7 +44,7 @@ async function resend(): Promise<void> {
   notice.value = ''
   try {
     await api.POST('/api/v1/properties/{propertyId}/reservations/{id}/emails', { params: { path: { propertyId, id: props.reservationId } } })
-    notice.value = 'The confirmation is queued and will be sent in a moment.'
+    notice.value = t('emails.queuedNotice')
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -52,45 +57,27 @@ watch(() => [pid.value, props.reservationId], () => void load(), { immediate: tr
 </script>
 
 <template>
-  <section v-if="state" class="card" data-testid="emails">
-    <div class="head">
-      <h2>E-mail</h2>
-      <button type="button" data-testid="emails-refresh" @click="load">Refresh</button>
-    </div>
-    <p v-if="error" class="alert" role="alert" data-testid="emails-error">{{ error.message }} <code>{{ error.code }}</code></p>
-    <p v-if="notice" class="alert warning" role="status" data-testid="emails-notice">{{ notice }}</p>
-    <p v-if="!state.enabled" class="muted" data-testid="emails-off">E-mail is not set up on this server (an administrator sets PMS_SMTP_HOST), so no confirmation is sent.</p>
-    <p v-else-if="!state.data.length" class="muted" data-testid="emails-none">No e-mail was sent for this reservation. A confirmation goes out when the reservation is confirmed and the booker has an e-mail address.</p>
-    <ul v-else class="list">
-      <li v-for="e in state.data" :key="e.id" :data-testid="`email-${e.id}`">
-        <span class="badge" :class="e.status.toLowerCase()">{{ label[e.status] ?? e.status }}</span>
-        {{ e.to }}
-        <span class="muted"> · {{ e.sent_at ?? e.created_at }}<template v-if="e.attempts > 1"> · {{ e.attempts }} attempts</template></span>
-        <small v-if="e.last_error" class="error-text"> {{ e.last_error }}</small>
-      </li>
-    </ul>
-    <div v-if="canResend" class="form-actions">
-      <button type="button" :disabled="busy || waiting" data-testid="resend" @click="resend">{{ state.data.length ? 'Send again' : 'Send confirmation e-mail' }}</button>
-    </div>
-  </section>
+  <Card v-if="state" class="mb-4" data-testid="emails">
+    <CardHeader class="flex-row items-center justify-between">
+      <CardTitle>{{ t('emails.title') }}</CardTitle>
+      <Button type="button" variant="outline" size="sm" data-testid="emails-refresh" @click="load">{{ t('emails.refresh') }}</Button>
+    </CardHeader>
+    <CardContent>
+      <p v-if="error" class="alert" role="alert" data-testid="emails-error">{{ error.message }} <code>{{ error.code }}</code></p>
+      <p v-if="notice" class="alert warning" role="status" data-testid="emails-notice">{{ notice }}</p>
+      <p v-if="!state.enabled" class="m-0 text-sm text-muted-foreground" data-testid="emails-off">{{ t('emails.off') }}</p>
+      <p v-else-if="!state.data.length" class="m-0 text-sm text-muted-foreground" data-testid="emails-none">{{ t('emails.none') }}</p>
+      <ul v-else class="m-0 grid list-none gap-1.5 p-0 text-sm">
+        <li v-for="e in state.data" :key="e.id" :data-testid="`email-${e.id}`">
+          <Badge :variant="variant(e.status)">{{ label(e.status) }}</Badge>
+          {{ e.to }}
+          <span class="text-muted-foreground"> · {{ e.sent_at ?? e.created_at }}<template v-if="e.attempts > 1"> · {{ t('emails.attempts', { n: e.attempts }) }}</template></span>
+          <small v-if="e.last_error" class="text-destructive"> {{ e.last_error }}</small>
+        </li>
+      </ul>
+      <div v-if="canResend" class="mt-3 flex justify-end">
+        <Button type="button" variant="outline" :disabled="busy || waiting" data-testid="resend" @click="resend">{{ state.data.length ? t('emails.sendAgain') : t('emails.send') }}</Button>
+      </div>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.list {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.badge {
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 12px;
-  background: var(--accent-soft);
-}
-</style>

@@ -6,6 +6,14 @@ import CheckOutWizard from '@/components/CheckOutWizard.vue'
 import StayActions from '@/components/StayActions.vue'
 import type { CheckOutResult, StayDetail } from '@/api/types'
 import { documentPath, openPdf } from '@/utils/documents'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -20,6 +28,13 @@ const reversing = ref(false)
 const reason = ref('')
 const busy = ref(false)
 const checkingOut = ref(false)
+
+type Night = StayDetail['nightly_rates'][number]
+const nightColumns = computed<Column<Night>[]>(() => [
+  { key: 'date', label: t('stay.night') },
+  { key: 'amount', label: t('stay.amount'), align: 'right' },
+  { key: 'posted', label: t('stay.charged') },
+])
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -49,7 +64,7 @@ async function reverse(): Promise<void> {
     await api.POST('/api/v1/properties/{propertyId}/stays/{id}/reverse-check-in', {
       params: { path: { propertyId, id: Number(props.id) } }, body: { version: detail.value.stay.version, reason: reason.value },
     })
-    notice.value = 'Check-in reversed: the room goes back to the reservation and is marked dirty.'
+    notice.value = t('stay.reversed')
     reversing.value = false
     reason.value = ''
     await load()
@@ -78,7 +93,7 @@ async function changed(message: string): Promise<void> {
 }
 
 async function checkedOut(result: CheckOutResult): Promise<void> {
-  notice.value = `Checked out with ${result.posted_room_charges.length} room charge(s) posted.`
+  notice.value = t('stay.checkedOut', { n: result.posted_room_charges.length })
   await load()
 }
 
@@ -86,97 +101,64 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Stay <span v-if="detail">{{ detail.stay.stay_number }}</span></h1>
-    <RouterLink to="/in-house">In-house</RouterLink>
-  </div>
+  <PageHeader :title="detail ? t('stay.title', { number: detail.stay.stay_number }) : t('stay.titlePlain')">
+    <template #actions><RouterLink to="/in-house" class="text-sm text-primary hover:underline">{{ t('stay.back') }}</RouterLink></template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">Your role at this property does not allow viewing stays.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">{{ t('stay.noAccess') }}</p>
 
   <template v-else-if="detail">
-    <section class="card" data-testid="summary">
-      <p>
-        <span class="badge" data-testid="stay-status">{{ detail.stay.status }}</span>
-        {{ detail.guest.first_name }} {{ detail.guest.last_name }} · {{ detail.stay.arrival_date }} &rarr; {{ detail.stay.departure_date }} ·
-        {{ detail.stay.adult_count }} adult(s), {{ detail.stay.child_count }} child(ren) · {{ detail.line.room_type_code }}
-      </p>
-      <p class="muted">
-        Reservation <RouterLink :to="`/reservations/${detail.line.reservation_id}`">{{ detail.line.confirmation_number }}</RouterLink>
-        <template v-for="f in detail.folios" :key="f.id"> · Folio <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> (balance {{ f.balance }})</template>
-      </p>
-      <p v-if="detail.guests.length" class="muted" data-testid="companions">With {{ detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }}</p>
-      <div class="form-actions">
-        <button type="button" data-testid="print-card" @click="printCard">Registration card</button>
-      </div>
-      <div v-if="canCheckOut && !checkingOut" class="form-actions">
-        <button type="button" class="btn-primary" data-testid="checkout" @click="checkingOut = true">Check out</button>
-      </div>
-      <div v-if="canReverse" class="form-actions">
-        <button v-if="!reversing" type="button" data-testid="reverse" @click="reversing = true">Reverse check-in</button>
-      </div>
-      <form v-if="reversing" class="reason" novalidate data-testid="reverse-form" @submit.prevent="reverse">
-        <label class="field">
-          <span>Reason</span>
-          <input v-model="reason" name="reason" maxlength="500" :aria-invalid="!!fieldError('reason')" />
-          <small v-if="fieldError('reason')" class="error-text">{{ fieldError('reason') }}</small>
-        </label>
-        <button type="submit" class="btn-primary" :disabled="busy || !reason.trim()">Reverse</button>
-        <button type="button" @click="reversing = false">Keep</button>
-      </form>
-    </section>
+    <Card class="mb-4" data-testid="summary">
+      <CardContent class="pt-4">
+        <p class="m-0 flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" data-testid="stay-status">{{ detail.stay.status }}</Badge>
+          <span>
+            {{ detail.guest.first_name }} {{ detail.guest.last_name }} · {{ detail.stay.arrival_date }} &rarr; {{ detail.stay.departure_date }} ·
+            {{ t('stay.adults', { n: detail.stay.adult_count, c: detail.stay.child_count }) }} · {{ detail.line.room_type_code }}
+          </span>
+        </p>
+        <p class="mb-0 mt-2 text-sm text-muted-foreground">
+          {{ t('stay.reservation') }} <RouterLink :to="`/reservations/${detail.line.reservation_id}`" class="text-primary hover:underline">{{ detail.line.confirmation_number }}</RouterLink>
+          <template v-for="f in detail.folios" :key="f.id"> · {{ t('stay.folio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ t('stay.balance', { amount: f.balance }) }})</template>
+        </p>
+        <p v-if="detail.guests.length" class="mb-0 mt-2 text-sm text-muted-foreground" data-testid="companions">{{ t('stay.with', { names: detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }) }}</p>
+        <div class="mt-4 flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" data-testid="print-card" @click="printCard">{{ t('stay.registrationCard') }}</Button>
+          <Button v-if="canReverse && !reversing" type="button" variant="outline" data-testid="reverse" @click="reversing = true">{{ t('stay.reverseCheckIn') }}</Button>
+          <Button v-if="canCheckOut && !checkingOut" type="button" data-testid="checkout" @click="checkingOut = true">{{ t('stay.checkOut') }}</Button>
+        </div>
+        <form v-if="reversing" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="reverse-form" @submit.prevent="reverse">
+          <FormField class="w-80" :label="t('stay.reason')" :error="fieldError('reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+          </FormField>
+          <Button type="submit" :disabled="busy || !reason.trim()">{{ t('stay.reverse') }}</Button>
+          <Button type="button" variant="outline" @click="reversing = false">{{ t('stay.keep') }}</Button>
+        </form>
+      </CardContent>
+    </Card>
 
     <CheckOutWizard v-if="checkingOut && detail.stay.status === 'OPEN'" :detail="detail" @cancel="checkingOut = false" @done="checkedOut" />
     <StayActions v-if="!checkingOut" :detail="detail" @changed="changed" />
 
-    <section class="card">
-      <h2>Rooms</h2>
-      <ul data-testid="segments">
-        <li v-for="s in detail.segments" :key="s.id">Room {{ s.room_number }} from {{ s.start_business_date }}<template v-if="s.end_business_date"> to {{ s.end_business_date }}</template><template v-else> (current)</template></li>
-      </ul>
-    </section>
+    <Card class="mb-4">
+      <CardHeader><CardTitle>{{ t('stay.rooms') }}</CardTitle></CardHeader>
+      <CardContent>
+        <ul class="m-0 pl-5 text-sm" data-testid="segments">
+          <li v-for="s in detail.segments" :key="s.id">{{ t('stay.segment', { room: s.room_number, from: s.start_business_date }) }}<template v-if="s.end_business_date">{{ t('stay.segmentTo', { to: s.end_business_date }) }}</template><template v-else>{{ t('stay.segmentCurrent') }}</template></li>
+        </ul>
+      </CardContent>
+    </Card>
 
-    <section class="card">
-      <h2>Nights</h2>
-      <table class="list" data-testid="nights">
-        <thead><tr><th>Night</th><th class="num">Amount</th><th>Charged</th></tr></thead>
-        <tbody>
-          <tr v-for="n in detail.nightly_rates" :key="n.date"><td>{{ n.date }}</td><td class="num">{{ n.amount }}</td><td>{{ n.posted ? 'yes' : 'not yet' }}</td></tr>
-        </tbody>
-      </table>
-    </section>
+    <Card>
+      <CardHeader><CardTitle>{{ t('stay.nights') }}</CardTitle></CardHeader>
+      <CardContent>
+        <DataTable :columns="nightColumns" :rows="detail.nightly_rates" row-key="date" :caption="t('stay.nights')" data-testid="nights">
+          <template #cell-posted="{ row }">{{ row.posted ? t('stay.yes') : t('stay.notYet') }}</template>
+        </DataTable>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.reason {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.badge {
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  background: var(--accent-soft);
-}
-</style>

@@ -4,6 +4,12 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { FreeRoom, Guest, RoomType, StayDetail } from '@/api/types'
+import FormField from '@/components/app/FormField.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -55,7 +61,7 @@ async function loadTypes(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   try {
-    types.value = (await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))).filter((t) => t.is_active)
+    types.value = (await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))).filter((x) => x.is_active)
     move.typeId ||= types.value[0]?.id ?? 0
     await loadRooms()
   } catch (e) {
@@ -91,7 +97,7 @@ async function submitMove(): Promise<void> {
       },
     })
     open.value = ''
-    emit('changed', `Moved to room ${data?.new_segment.room_number ?? ''}; the old room is now dirty.`)
+    emit('changed', t('stayActions.moved', { room: data?.new_segment.room_number ?? '' }))
   } catch (e) {
     fail(e)
     if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') emit('changed', '')
@@ -119,7 +125,7 @@ async function submitDeparture(): Promise<void> {
       params: { path: { propertyId, id: props.detail.stay.id } }, body: { version: props.detail.stay.version, departure_date: departure.value },
     })
     open.value = ''
-    emit('changed', `Departure is now ${departure.value}.`)
+    emit('changed', t('stayActions.departureNow', { date: departure.value }))
   } catch (e) {
     fail(e)
     if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') emit('changed', '')
@@ -155,7 +161,7 @@ async function addGuest(g: Guest): Promise<void> {
     open.value = ''
     guestResults.value = []
     guestQuery.value = ''
-    emit('changed', `${guestLabel(g)} added to the stay.`)
+    emit('changed', t('stayActions.guestAdded', { name: guestLabel(g) }))
   } catch (e) {
     fail(e)
   } finally {
@@ -165,94 +171,80 @@ async function addGuest(g: Guest): Promise<void> {
 </script>
 
 <template>
-  <section v-if="canMove || canChange || canAddGuest" class="card" data-testid="stay-actions">
-    <div class="form-actions">
-      <button v-if="canMove" type="button" data-testid="open-move" @click="show('move')">Move room</button>
-      <button v-if="canChange" type="button" data-testid="open-departure" @click="showDeparture">Extend / shorten</button>
-      <button v-if="canAddGuest" type="button" data-testid="open-guest" @click="show('guest')">Add guest</button>
-    </div>
-    <p v-if="error" class="alert" role="alert" data-testid="action-error">
-      {{ error.message }} <code>{{ error.code }}</code>
-      <template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> Move the guest to another room first.</template>
-    </p>
+  <Card v-if="canMove || canChange || canAddGuest" class="mb-4" data-testid="stay-actions">
+    <CardContent class="pt-4">
+      <div class="flex flex-wrap gap-2">
+        <Button v-if="canMove" type="button" variant="outline" data-testid="open-move" @click="show('move')">{{ t('stayActions.moveRoom') }}</Button>
+        <Button v-if="canChange" type="button" variant="outline" data-testid="open-departure" @click="showDeparture">{{ t('stayActions.extend') }}</Button>
+        <Button v-if="canAddGuest" type="button" variant="outline" data-testid="open-guest" @click="show('guest')">{{ t('stayActions.addGuest') }}</Button>
+      </div>
+      <p v-if="error" class="alert mt-3" role="alert" data-testid="action-error">
+        {{ error.message }} <code>{{ error.code }}</code>
+        <template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> {{ t('stayActions.extensionHint') }}</template>
+      </p>
 
-    <form v-if="open === 'move'" novalidate class="dialog" data-testid="move-form" @submit.prevent="submitMove">
-      <h2>Move to another room</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Room type</span>
-          <select v-model.number="move.typeId" name="room_type" @change="loadRooms">
-            <option v-for="t in types" :key="t.id" :value="t.id">{{ t.code }} · {{ t.name }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Room</span>
-          <select v-model.number="move.roomId" name="room" :disabled="!rooms.length">
-            <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : ' (not ready)' }}</option>
-          </select>
-          <small v-if="!rooms.length" class="muted" data-testid="no-rooms">No free room of this type until {{ until }}.</small>
-          <small v-if="fieldError('room_id')" class="error-text">{{ fieldError('room_id') }}</small>
-        </label>
-        <label class="field">
-          <span>Reason</span>
-          <input v-model="move.reason" name="reason" maxlength="500" :aria-invalid="!!fieldError('reason')" />
-          <small v-if="fieldError('reason')" class="error-text">{{ fieldError('reason') }}</small>
-        </label>
-      </div>
-      <div v-if="notReady" class="alert warning" data-testid="not-ready">
-        Room {{ selected?.room_number }} is {{ selected?.housekeeping_status }}.
-        <template v-if="canOverride">
-          <label class="check"><input v-model="move.override" type="checkbox" name="override" /><span>Use it anyway</span></label>
-          <label v-if="move.override" class="field"><span>Reason</span><input v-model="move.overrideReason" name="override_reason" maxlength="500" /></label>
-        </template>
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn-primary" :disabled="busy || move.roomId === null || !move.reason.trim()">Move</button>
-        <button type="button" @click="open = ''">Cancel</button>
-      </div>
-    </form>
+      <form v-if="open === 'move'" novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="submitMove">
+        <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.moveTitle') }}</h2>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <FormField :label="t('stayActions.roomType')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model.number="move.typeId" name="room_type" @change="loadRooms">
+                <option v-for="rt in types" :key="rt.id" :value="rt.id">{{ rt.code }} · {{ rt.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField :label="t('stayActions.room')" :error="fieldError('room_id')">
+            <template #default="{ id, invalid }">
+              <NativeSelect :id="id" v-model.number="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid">
+                <option v-for="r in rooms" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.housekeeping_status }}{{ isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag') }}</option>
+              </NativeSelect>
+              <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('stayActions.noRooms', { date: until }) }}</small>
+            </template>
+          </FormField>
+          <FormField :label="t('stayActions.reason')" :error="fieldError('reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="move.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
+        <div v-if="notReady" class="alert warning mt-3" data-testid="not-ready">
+          {{ t('stayActions.roomIs', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '' }) }}
+          <template v-if="canOverride">
+            <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="move.override" type="checkbox" name="override" class="size-4 accent-primary" /><span>{{ t('stayActions.useAnyway') }}</span></label>
+            <FormField v-if="move.override" class="mt-2 max-w-md" :label="t('stayActions.reason')">
+              <template #default="{ id }"><Input :id="id" v-model="move.overrideReason" name="override_reason" maxlength="500" /></template>
+            </FormField>
+          </template>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="busy || move.roomId === null || !move.reason.trim()">{{ t('stayActions.move') }}</Button>
+        </div>
+      </form>
 
-    <form v-if="open === 'departure'" novalidate class="dialog" data-testid="departure-form" @submit.prevent="submitDeparture">
-      <h2>Change the departure</h2>
-      <label class="field">
-        <span>Departure</span>
-        <input v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="!!fieldError('departure_date')" />
-        <small v-if="fieldError('departure_date')" class="error-text">{{ fieldError('departure_date') }}</small>
-      </label>
-      <p class="muted">Extra nights are priced from the rate grid. Shortening stops at the last night already charged.</p>
-      <div class="form-actions">
-        <button type="submit" class="btn-primary" :disabled="busy || !departureChanged">Save</button>
-        <button type="button" @click="open = ''">Cancel</button>
-      </div>
-    </form>
+      <form v-if="open === 'departure'" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="submitDeparture">
+        <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.departureTitle') }}</h2>
+        <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
+          <template #default="{ id, invalid }"><Input :id="id" v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
+        </FormField>
+        <p class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="busy || !departureChanged">{{ t('common.save') }}</Button>
+        </div>
+      </form>
 
-    <div v-if="open === 'guest'" class="dialog" data-testid="guest-form">
-      <h2>Add an accompanying guest</h2>
-      <div class="guest-pick">
-        <label class="field grow">
-          <span>Find a guest</span>
-          <input v-model="guestQuery" name="guest_q" type="search" placeholder="Name, email, phone or code" @keydown.enter.prevent="findGuests" />
-        </label>
-        <button type="button" data-testid="find-guest" @click="findGuests">Find</button>
-        <button type="button" @click="open = ''">Cancel</button>
+      <div v-if="open === 'guest'" class="mt-4 border-t border-border pt-4" data-testid="guest-form">
+        <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.guestTitle') }}</h2>
+        <div class="flex flex-wrap items-end gap-3">
+          <FormField class="min-w-64 flex-1" :label="t('stayActions.findGuest')">
+            <template #default="{ id }"><Input :id="id" v-model="guestQuery" name="guest_q" type="search" :placeholder="t('stayActions.findPlaceholder')" @keydown.enter.prevent="findGuests" /></template>
+          </FormField>
+          <Button type="button" variant="outline" data-testid="find-guest" @click="findGuests">{{ t('stayActions.find') }}</Button>
+          <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>
+        </div>
+        <ul v-if="guestResults.length" class="m-0 mt-2 flex list-none flex-wrap gap-2 p-0">
+          <li v-for="g in guestResults" :key="g.id"><Button type="button" variant="outline" size="sm" :disabled="busy" :data-testid="`guest-${g.code}`" @click="addGuest(g)">{{ g.code }} · {{ guestLabel(g) }}</Button></li>
+        </ul>
       </div>
-      <ul v-if="guestResults.length">
-        <li v-for="g in guestResults" :key="g.id"><button type="button" :disabled="busy" :data-testid="`guest-${g.code}`" @click="addGuest(g)">{{ g.code }} · {{ guestLabel(g) }}</button></li>
-      </ul>
-    </div>
-  </section>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.dialog {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-.guest-pick {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-</style>
