@@ -391,7 +391,10 @@ func (s *Service) unclearedFor(ctx context.Context, tenantID, propertyID int64, 
 		if desc == "" {
 			desc = r.JournalDescription
 		}
-		out = append(out, UnclearedLine{JournalLineID: r.ID, Date: r.JournalDate, JournalID: r.JournalID, JournalNumber: r.JournalNumber, JournalType: r.JournalType, Description: desc, Reference: deref(r.SourceRef), Amount: r.Amount})
+		out = append(out, UnclearedLine{
+			JournalLineID: r.ID, Date: r.JournalDate, JournalID: r.JournalID, JournalNumber: r.JournalNumber, JournalType: r.JournalType, Description: desc, Reference: deref(r.SourceRef),
+			Amount: r.Amount, Cleared: r.Cleared, Remaining: r.Amount.Sub(r.Cleared),
+		})
 	}
 	return out, nil
 }

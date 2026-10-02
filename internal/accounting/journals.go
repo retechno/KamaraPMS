@@ -247,6 +247,15 @@ func (r resolver) resolve(role, key string) (target, error) {
 	return r.system(fallback)
 }
 
+// lineLabel is the description of a day close line: what it adds up, its reference and the reference given by the payer.
+func lineLabel(k lineKey, detail string) string {
+	label := sourceLabels[k.sourceType] + " " + k.ref
+	if detail != "" {
+		label += " · " + detail
+	}
+	return label
+}
+
 type lineKey struct {
 	account         int64
 	sourceType, ref string
@@ -295,6 +304,7 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		return false, err
 	}
 	sums := map[lineKey]decimal.Decimal{}
+	details := map[lineKey]string{} // the reference a guest or a bank gave a payment
 	names := map[int64]target{}
 	for _, r := range rows {
 		t, err := res.resolve(r.Role, r.Key)
@@ -304,6 +314,9 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		names[t.id] = t
 		k := lineKey{t.id, r.SourceType, r.SourceRef}
 		sums[k] = sums[k].Add(r.Amount)
+		if r.Detail != "" {
+			details[k] = r.Detail
+		}
 	}
 	keys := make([]lineKey, 0, len(sums))
 	total := decimal.Zero
@@ -345,7 +358,7 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		v := sums[k]
 		line := accountingdb.InsertJournalLineParams{
 			TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: k.account,
-			Description: nullable(sourceLabels[k.sourceType] + " " + k.ref), SourceType: &k.sourceType, SourceRef: &k.ref,
+			Description: nullable(lineLabel(k, details[k])), SourceType: &k.sourceType, SourceRef: &k.ref,
 		}
 		if v.IsPositive() {
 			line.Debit, line.Credit = v, decimal.Zero

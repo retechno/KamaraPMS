@@ -119,7 +119,7 @@ type StatementDetail struct {
 	Summary   Summary         `json:"summary"`
 }
 
-// UnclearedLine is a journal line of the account that no statement has cleared yet.
+// UnclearedLine is a journal line of the account that is not cleared in full yet.
 type UnclearedLine struct {
 	JournalLineID int64           `json:"journal_line_id"`
 	Date          civil.Date      `json:"journal_date"`
@@ -129,6 +129,8 @@ type UnclearedLine struct {
 	Description   string          `json:"description,omitempty"`
 	Reference     string          `json:"reference,omitempty"`
 	Amount        decimal.Decimal `json:"amount"`
+	Cleared       decimal.Decimal `json:"cleared"`
+	Remaining     decimal.Decimal `json:"remaining"`
 }
 
 // ImportInput imports a statement: its period, the balances the bank prints and the lines as CSV.
@@ -142,12 +144,31 @@ type ImportInput struct {
 	CSV            string          `json:"csv"`
 }
 
-// ClearInput matches journal lines with a statement line. Without a statement line the journal lines are cleared on
-// their own: those from before the bank reconciliation started (first statement of the account, dated before it), or
-// ones that offset each other (a voided payment and its reversal).
+// ClearInput matches journal lines with statement lines. Either `journal_line_ids` (each cleared for what is left of it,
+// against `statement_line_id`) or `allocations` (explicit parts: a journal line can be cleared in parts by several
+// statement lines, as when the day close carries the total of several transfers). Without a statement line the journal
+// lines are cleared on their own: those from before the bank reconciliation started (first statement of the account,
+// dated before it), or ones that offset each other (a voided payment and its reversal).
 type ClearInput struct {
-	StatementLineID *int64  `json:"statement_line_id"`
-	JournalLineIDs  []int64 `json:"journal_line_ids"`
+	StatementLineID *int64            `json:"statement_line_id"`
+	JournalLineIDs  []int64           `json:"journal_line_ids"`
+	Allocations     []ClearAllocation `json:"allocations"`
+}
+
+// ClearAllocation clears a part of a journal line against a statement line; without an amount, what is left of it.
+type ClearAllocation struct {
+	StatementLineID *int64           `json:"statement_line_id"`
+	JournalLineID   int64            `json:"journal_line_id"`
+	Amount          *decimal.Decimal `json:"amount"`
+}
+
+// SettleInput settles card or e-wallet payments from a statement line: the acquirer paid the net amount of the line for
+// the payment lines chosen, and kept the difference as its commission.
+type SettleInput struct {
+	AccountKey     string  `json:"account_key"`
+	JournalLineIDs []int64 `json:"journal_line_ids"`
+	FeeAccountID   int64   `json:"fee_account_id"`
+	Description    string  `json:"description"`
 }
 
 // AdjustInput posts what the bank shows and the books lack (a bank fee, interest) against another account.
@@ -170,3 +191,6 @@ type AutoMatchResult struct {
 
 // autoMatchDays is how far apart the dates of a statement line and a journal line of the same amount may be.
 const autoMatchDays = 3
+
+// autoMatchRefDays is how far apart they may be when the journal line carries the reference of the statement line.
+const autoMatchRefDays = 14

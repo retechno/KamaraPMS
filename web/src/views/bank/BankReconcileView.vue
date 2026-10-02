@@ -23,7 +23,8 @@ const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
-const selectedLine = ref<number | null>(null)
+const selectedLines = ref<number[]>([])
+const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, description: '', lines: [] as UnclearedLine[], picked: [] as number[] })
 const picked = ref<number[]>([])
 const adjust = reactive({ open: false, account_id: 0, description: '' })
 const reopening = ref<{ reason: string; asking: boolean } | null>(null)
@@ -35,10 +36,15 @@ const isOpen = computed(() => statement.value?.status === 'OPEN')
 const editable = computed(() => isOpen.value && can('bank.reconcile'))
 const pickedTotal = computed(() => {
   let sum = 0n
-  for (const u of uncleared.value) if (picked.value.includes(u.journal_line_id)) sum += toMilli(u.amount) ?? 0n
+  for (const u of uncleared.value) if (picked.value.includes(u.journal_line_id)) sum += toMilli(u.remaining) ?? 0n
   return sum
 })
-const line = computed(() => statement.value?.lines.find((l) => l.id === selectedLine.value) ?? null)
+const chosenLines = computed(() => (statement.value?.lines ?? []).filter((l) => selectedLines.value.includes(l.id)))
+const neededTotal = computed(() => chosenLines.value.reduce((sum, l) => sum + (toMilli(l.amount) ?? 0n) - (toMilli(l.cleared) ?? 0n), 0n))
+/** The one statement line a line action (post to the books, settle) works on. */
+const line = computed(() => (chosenLines.value.length === 1 ? (chosenLines.value[0] ?? null) : null))
+const settleGross = computed(() => settle.lines.filter((l) => settle.picked.includes(l.journal_line_id)).reduce((sum, l) => sum + (toMilli(l.amount) ?? 0n), 0n))
+const settleNet = computed(() => toMilli(line.value?.amount ?? '0') ?? 0n)
 const chargeable = computed(() => accounts.value.filter((a) => a.is_postable && a.is_active))
 const base = () => ({ path: { propertyId: pid.value as number, id: sid.value } })
 
@@ -51,7 +57,7 @@ async function load(): Promise<void> {
     const res = await api.GET('/api/v1/properties/{propertyId}/bank/statements/{id}/uncleared', { params: base() })
     uncleared.value = res.data?.data ?? []
     picked.value = picked.value.filter((p) => uncleared.value.some((u) => u.journal_line_id === p))
-    if (selectedLine.value !== null && statement.value?.lines.find((l) => l.id === selectedLine.value)?.matched) selectedLine.value = null
+    selectedLines.value = selectedLines.value.filter((id) => statement.value?.lines.find((l) => l.id === id && !l.matched))
     if (can('accounting.view') && !accounts.value.length) accounts.value = await listAccounts(propertyId, { active: true })
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -79,8 +85,37 @@ async function act(run: () => Promise<{ data?: BankStatementDetail }>, done: str
   }
 }
 
+/**
+ * Spreads the journal lines chosen over the statement lines chosen, in order, each taking what it can: a journal line
+ * holding the total of several transfers is cleared in parts by the statement lines, several journal lines can make up
+ * one statement line. Amounts are thousandths, never floats.
+ */
+function allocations(): { statement_line_id: number; journal_line_id: number; amount: string }[] {
+  const left = new Map(uncleared.value.filter((u) => picked.value.includes(u.journal_line_id)).map((u) => [u.journal_line_id, toMilli(u.remaining) ?? 0n]))
+  const out: { statement_line_id: number; journal_line_id: number; amount: string }[] = []
+  for (const l of chosenLines.value) {
+    let need = (toMilli(l.amount) ?? 0n) - (toMilli(l.cleared) ?? 0n)
+    for (const [jid, rem] of left) {
+      if (need === 0n) break
+      if (rem === 0n || (rem > 0n) !== (need > 0n)) continue
+      const take = (rem > 0n ? rem : -rem) < (need > 0n ? need : -need) ? rem : need
+      out.push({ statement_line_id: l.id, journal_line_id: jid, amount: fromMilli(take) })
+      left.set(jid, rem - take)
+      need -= take
+    }
+  }
+  return out
+}
+
 async function match(): Promise<void> {
-  const ok = await act(() => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/clearings', { params: base(), body: { statement_line_id: selectedLine.value, journal_line_ids: picked.value } }), 'Matched.')
+  const parts = chosenLines.value.length ? allocations() : []
+  if (chosenLines.value.length && !parts.length) {
+    error.value = null
+    notice.value = 'Nothing can be matched: the journal lines and the statement lines are on different sides.'
+    return
+  }
+  const body = chosenLines.value.length ? { allocations: parts } : { statement_line_id: null, journal_line_ids: picked.value }
+  const ok = await act(() => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/clearings', { params: base(), body }), 'Matched.')
   if (ok) picked.value = []
 }
 
@@ -116,7 +151,38 @@ async function postAdjust(): Promise<void> {
   )
   if (ok) {
     adjust.open = false
-    selectedLine.value = null
+    selectedLines.value = []
+  }
+}
+
+async function startSettle(): Promise<void> {
+  Object.assign(settle, { open: true, fee_account_id: 0, description: '', picked: [] })
+  await loadSettleLines()
+}
+
+async function loadSettleLines(): Promise<void> {
+  settle.picked = []
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/bank/statements/{id}/settlement-lines', { params: { ...base(), query: { account_key: settle.key as 'CARD' } } })
+    settle.lines = data?.data ?? []
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
+async function postSettle(): Promise<void> {
+  const l = line.value
+  if (!l) return
+  const ok = await act(
+    () => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle', {
+      params: { path: { ...base().path, lineId: l.id } },
+      body: { account_key: settle.key as 'CARD', journal_line_ids: settle.picked, fee_account_id: settle.fee_account_id || undefined, description: settle.description || undefined },
+    }),
+    `Line ${l.line_no} settled.`,
+  )
+  if (ok) {
+    settle.open = false
+    selectedLines.value = []
   }
 }
 
@@ -145,7 +211,7 @@ watch([() => pid.value, sid], () => {
   statement.value = null
   uncleared.value = []
   loaded.value = false
-  selectedLine.value = null
+  selectedLines.value = []
   picked.value = []
   void load()
 }, { immediate: true })
@@ -199,8 +265,8 @@ watch([() => pid.value, sid], () => {
         <table class="list" data-testid="lines">
           <thead><tr><th v-if="editable" /><th>Date</th><th>Detail</th><th class="num">Amount</th><th>Matched with</th></tr></thead>
           <tbody>
-            <tr v-for="l in statement.lines" :key="l.id" :class="{ done: l.matched, selected: selectedLine === l.id }" :data-testid="`line-${l.line_no}`">
-              <td v-if="editable"><input v-model="selectedLine" type="radio" name="line" :value="l.id" :disabled="l.matched" :data-testid="`pick-line-${l.line_no}`" /></td>
+            <tr v-for="l in statement.lines" :key="l.id" :class="{ done: l.matched, selected: selectedLines.includes(l.id) }" :data-testid="`line-${l.line_no}`">
+              <td v-if="editable"><input v-model="selectedLines" type="checkbox" name="line" :value="l.id" :disabled="l.matched" :data-testid="`pick-line-${l.line_no}`" /></td>
               <td>{{ l.line_date }}</td>
               <td>{{ l.description }}<small v-if="l.reference" class="muted"> · {{ l.reference }}</small></td>
               <td class="num">{{ l.amount }}</td>
@@ -215,8 +281,9 @@ watch([() => pid.value, sid], () => {
           </tbody>
         </table>
         <div v-if="editable && line && !line.matched" class="adjust">
-          <button v-if="!adjust.open" type="button" data-testid="adjust-open" @click="startAdjust">Post line {{ line.line_no }} to the books…</button>
-          <form v-else novalidate data-testid="adjust-form" @submit.prevent="postAdjust">
+          <button v-if="!adjust.open && !settle.open" type="button" data-testid="adjust-open" @click="startAdjust">Post line {{ line.line_no }} to the books…</button>
+          <button v-if="!adjust.open && !settle.open && Number(line.amount) > 0" type="button" data-testid="settle-open" @click="startSettle">Settle card or e-wallet payments…</button>
+          <form v-if="adjust.open" novalidate data-testid="adjust-form" @submit.prevent="postAdjust">
             <p class="muted">Posts {{ line.description || `line ${line.line_no}` }} ({{ line.amount }}) against the account you choose, dated {{ line.line_date }}, and matches it.</p>
             <label class="field">
               <span>Account</span>
@@ -229,6 +296,41 @@ watch([() => pid.value, sid], () => {
             <button type="button" @click="adjust.open = false">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="busy || !adjust.account_id" data-testid="adjust-post">Post and match</button>
           </form>
+          <form v-if="settle.open" novalidate data-testid="settle-form" @submit.prevent="postSettle">
+            <p class="muted">The acquirer paid {{ line.amount }} for the payments you choose and kept the difference as commission.</p>
+            <label class="field">
+              <span>Payments of</span>
+              <select v-model="settle.key" name="settle_key" @change="loadSettleLines">
+                <option value="CARD">Card</option>
+                <option value="OTHER_PAYMENT">E-wallet and other</option>
+              </select>
+            </label>
+            <p v-if="!settle.lines.length" class="muted" data-testid="no-settle-lines">No payment is waiting for its settlement.</p>
+            <table v-else class="list" data-testid="settle-lines">
+              <tbody>
+                <tr v-for="u in settle.lines" :key="u.journal_line_id" :data-testid="`settle-${u.journal_line_id}`">
+                  <td><input v-model="settle.picked" type="checkbox" :value="u.journal_line_id" /></td>
+                  <td>{{ u.journal_date }}</td>
+                  <td>{{ u.description }}</td>
+                  <td class="num">{{ u.amount }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-if="settle.picked.length" data-testid="settle-summary">
+              Payments {{ fromMilli(settleGross) }} · paid out {{ fromMilli(settleNet) }} ·
+              <b :class="{ bad: settleGross < settleNet }">commission {{ fromMilli(settleGross - settleNet) }}</b>
+            </p>
+            <label v-if="settleGross > settleNet" class="field">
+              <span>Commission account</span>
+              <select v-model.number="settle.fee_account_id" name="settle_fee">
+                <option :value="0">Choose an account</option>
+                <option v-for="a in chargeable" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option>
+              </select>
+            </label>
+            <label class="field"><span>Description</span><input v-model="settle.description" name="settle_description" maxlength="300" /></label>
+            <button type="button" @click="settle.open = false">Cancel</button>
+            <button type="submit" class="btn-primary" :disabled="busy || !settle.picked.length || settleGross < settleNet || (settleGross > settleNet && !settle.fee_account_id)" data-testid="settle-post">Settle and match</button>
+          </form>
         </div>
       </section>
 
@@ -236,22 +338,23 @@ watch([() => pid.value, sid], () => {
         <h2>Journal lines not cleared yet</h2>
         <p v-if="!uncleared.length" class="muted" data-testid="no-uncleared">Everything in the books up to {{ statement.period_to }} is cleared.</p>
         <table v-else class="list" data-testid="uncleared">
-          <thead><tr><th v-if="editable" /><th>Date</th><th>Journal</th><th>Detail</th><th class="num">Amount</th></tr></thead>
+          <thead><tr><th v-if="editable" /><th>Date</th><th>Journal</th><th>Detail</th><th class="num">Left</th></tr></thead>
           <tbody>
             <tr v-for="u in uncleared" :key="u.journal_line_id" :data-testid="`uncleared-${u.journal_line_id}`">
               <td v-if="editable"><input v-model="picked" type="checkbox" :value="u.journal_line_id" /></td>
               <td>{{ u.journal_date }}</td>
               <td>{{ u.journal_number }}</td>
               <td>{{ u.description }}</td>
-              <td class="num">{{ u.amount }}</td>
+              <td class="num">{{ u.remaining }}<small v-if="u.cleared !== '0'" class="muted"> of {{ u.amount }}</small></td>
             </tr>
           </tbody>
         </table>
         <div v-if="editable && picked.length" class="form-actions">
           <span class="muted" data-testid="picked-total">{{ picked.length }} selected · {{ fromMilli(pickedTotal) }}</span>
-          <button type="button" class="btn-primary" :disabled="busy" data-testid="match" @click="match">{{ selectedLine !== null ? `Match with line ${line?.line_no}` : 'Clear without a statement line' }}</button>
+          <button type="button" class="btn-primary" :disabled="busy" data-testid="match" @click="match">{{ chosenLines.length === 1 ? `Match with line ${chosenLines[0]?.line_no}` : chosenLines.length ? `Match with ${chosenLines.length} lines` : 'Clear without a statement line' }}</button>
         </div>
-        <p v-if="editable && picked.length && selectedLine === null" class="muted">Without a statement line only lines that offset each other, or from before the first statement, can be cleared.</p>
+        <p v-if="editable && picked.length && chosenLines.length > 1" class="muted" data-testid="spread-hint">The journal lines are spread over the {{ chosenLines.length }} statement lines ({{ fromMilli(neededTotal) }} to match), each taking what it can.</p>
+        <p v-if="editable && picked.length && !chosenLines.length" class="muted">Without a statement line only lines that offset each other, or from before the first statement, can be cleared.</p>
       </section>
     </div>
   </template>

@@ -25,15 +25,23 @@ func TestAJournalLineIsClearedOnceAndOnlyAgainstItsOwnAccount(t *testing.T) {
 			payJL = l.JournalLineID
 		}
 	}
-	// a clearing against the wrong amount leaves the line unmatched
-	st, err := f.BankRec.Clear(f.admin, f.propID, first.ID, bankrec.ClearInput{StatementLineID: &pay.ID, JournalLineIDs: []int64{depJL}})
+	// money in cannot be matched with a payment, and a part of a payment leaves the statement line unmatched
+	_, err := f.BankRec.Clear(f.admin, f.propID, first.ID, bankrec.ClearInput{StatementLineID: &pay.ID, JournalLineIDs: []int64{depJL}})
+	wantCode(t, err, "VALIDATION_FAILED")
+	part := dec("-100000")
+	st, err := f.BankRec.Clear(f.admin, f.propID, first.ID, bankrec.ClearInput{Allocations: []bankrec.ClearAllocation{{StatementLineID: &pay.ID, JournalLineID: payJL, Amount: &part}}})
 	must(t, err)
 	if lineOf(t, st, "PLN").Matched || st.Summary.CanReconcile {
-		t.Fatalf("a wrong amount does not match: %+v", lineOf(t, st, "PLN"))
+		t.Fatalf("a part does not match: %+v", lineOf(t, st, "PLN"))
 	}
+	eq(t, "cleared so far", lineOf(t, st, "PLN").Cleared, "-100000")
 	// the same journal line again, for another statement line or in another statement, is refused
+	st, err = f.BankRec.Clear(f.admin, f.propID, first.ID, bankrec.ClearInput{StatementLineID: &dep.ID, JournalLineIDs: []int64{depJL}})
+	must(t, err)
 	_, err = f.BankRec.Clear(f.admin, f.propID, first.ID, bankrec.ClearInput{StatementLineID: &dep.ID, JournalLineIDs: []int64{depJL}})
 	wantCode(t, err, "ALREADY_CLEARED")
+	st, err = f.BankRec.Unclear(f.admin, f.propID, first.ID, st.Clearings[0].ID)
+	must(t, err)
 	st, err = f.BankRec.Unclear(f.admin, f.propID, first.ID, st.Clearings[0].ID)
 	must(t, err)
 	if len(st.Clearings) != 0 || len(f.uncleared(t, first.ID)) != 2 {
@@ -224,14 +232,14 @@ func TestConcurrentMatchingAndReconcilingCannotDoubleUp(t *testing.T) {
 	f := setup(t)
 	f.books(t)
 	st := f.importFirst(t)
-	dep, pay := lineOf(t, st, "guest"), lineOf(t, st, "PLN")
+	dep := lineOf(t, st, "guest")
 	var depJL int64
 	for _, l := range f.uncleared(t, st.ID) {
 		if l.Amount.Equal(dec("1000000")) {
 			depJL = l.JournalLineID
 		}
 	}
-	// two people clear the same journal line against different statement lines
+	// several people clear the same journal line against the same statement line
 	var wg sync.WaitGroup
 	errs := make([]error, 6)
 	for i := range errs {
@@ -239,9 +247,6 @@ func TestConcurrentMatchingAndReconcilingCannotDoubleUp(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			target := dep.ID
-			if i%2 == 1 {
-				target = pay.ID
-			}
 			_, errs[i] = f.BankRec.Clear(f.admin, f.propID, st.ID, bankrec.ClearInput{StatementLineID: &target, JournalLineIDs: []int64{depJL}})
 		}()
 	}

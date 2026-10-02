@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shopspring/decimal"
-
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/platform/apperr"
@@ -35,92 +33,6 @@ func (s *Service) openForWork(ctx context.Context, tenantID, propertyID, stateme
 	}
 	ba, err := s.loadBankAccount(ctx, tenantID, propertyID, st.BankAccountID)
 	return st, ba, err
-}
-
-// Clear matches journal lines of the account with a statement line, or clears them on their own (bank.reconcile); see
-// ClearInput. A journal line is cleared once.
-func (s *Service) Clear(ctx context.Context, propertyID, statementID int64, in ClearInput) (StatementDetail, error) {
-	p, err := s.need(ctx, propertyID, auth.PermBankReconcile)
-	if err != nil {
-		return StatementDetail{}, err
-	}
-	if n := len(in.JournalLineIDs); n < 1 || n > maxClearBatch {
-		return StatementDetail{}, apperr.Invalid("the matching is invalid", fieldErr("journal_line_ids", "INVALID_COUNT", "between 1 and 200 journal lines"))
-	}
-	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
-		day, err := s.days.CurrentBusinessDay(ctx, propertyID)
-		if err != nil {
-			return err
-		}
-		st, ba, err := s.openForWork(ctx, p.TenantID, propertyID, statementID)
-		if err != nil {
-			return err
-		}
-		q := s.q(ctx)
-		if in.StatementLineID != nil {
-			if _, err := q.GetStatementLine(ctx, bankrecdb.GetStatementLineParams{TenantID: p.TenantID, PropertyID: propertyID, StatementID: statementID, ID: *in.StatementLineID}); isNoRows(err) {
-				return apperr.Invalid("the matching is invalid", fieldErr("statement_line_id", "NOT_FOUND", "no such line in this statement"))
-			} else if err != nil {
-				return err
-			}
-		}
-		type item struct {
-			id     int64
-			amount decimal.Decimal
-			date   civil.Date
-		}
-		items := make([]item, 0, len(in.JournalLineIDs))
-		seen := map[int64]bool{}
-		total := decimal.Zero
-		allBefore := true
-		for i, id := range in.JournalLineIDs {
-			at := fmt.Sprintf("journal_line_ids[%d]", i)
-			if seen[id] {
-				return apperr.Invalid("the matching is invalid", fieldErr(at, "DUPLICATE", "the journal line is listed twice"))
-			}
-			seen[id] = true
-			jl, err := q.GetJournalLine(ctx, bankrecdb.GetJournalLineParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
-			switch {
-			case isNoRows(err):
-				return apperr.Invalid("the matching is invalid", fieldErr(at, "NOT_FOUND", "no such journal line in this property"))
-			case err != nil:
-				return err
-			case jl.AccountID != ba.AccountID:
-				return apperr.Invalid("the matching is invalid", fieldErr(at, "NOT_BANK_ACCOUNT", "the journal line is on another account than "+ba.AccountCode))
-			case jl.JournalDate.After(st.PeriodTo):
-				return apperr.Invalid("the matching is invalid", fieldErr(at, "AFTER_STATEMENT", "the journal line is dated after the end of the statement"))
-			}
-			total = total.Add(jl.Amount)
-			allBefore = allBefore && jl.JournalDate.Before(st.PeriodFrom)
-			items = append(items, item{id, jl.Amount, jl.JournalDate})
-		}
-		if in.StatementLineID == nil {
-			prev, perr := q.PreviousStatement(ctx, bankrecdb.PreviousStatementParams{TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: st.BankAccountID, Before: st.PeriodFrom})
-			if perr != nil && !isNoRows(perr) {
-				return perr
-			}
-			first := isNoRows(perr)
-			_ = prev
-			if !total.IsZero() && (!first || !allBefore) {
-				return apperr.Invalid("the matching is invalid", fieldErr("statement_line_id", "REQUIRED",
-					"journal lines are cleared without a statement line only when they offset each other, or when they are from before the first statement"))
-			}
-		}
-		for _, it := range items {
-			if err := q.InsertClearing(ctx, bankrecdb.InsertClearingParams{
-				TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: st.BankAccountID, StatementID: statementID, StatementLineID: in.StatementLineID, JournalLineID: it.id,
-				Amount: it.amount, Now: s.clock.Now(), ActorID: p.ActorID(),
-			}); err != nil {
-				return err
-			}
-		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.cleared", "bank_statement", statementID, nil,
-			map[string]any{"statement_line_id": in.StatementLineID, "journal_lines": len(items), "total": total.String()}))
-	})
-	if err != nil {
-		return StatementDetail{}, err
-	}
-	return s.loadDetail(ctx, p.TenantID, propertyID, statementID)
 }
 
 // Unclear undoes one clearing of a statement that is not reconciled (bank.reconcile).
@@ -197,19 +109,27 @@ func (s *Service) AutoMatch(ctx context.Context, propertyID, statementID int64) 
 			if !l.Cleared.IsZero() {
 				continue
 			}
-			best, bestDist, ties := -1, 1<<30, 0
+			// The nearest journal line of the same amount wins; one that carries the reference of the statement line (the
+			// transfer reference the guest gave) beats one that does not, and may be further away.
+			best, bestScore, ties := -1, 1<<30, 0
+			ref := strings.ToLower(strings.TrimSpace(deref(l.Reference)))
 			for i, c := range pool {
-				if used[c.JournalLineID] || !c.Amount.Equal(l.Amount) {
+				if used[c.JournalLineID] || !c.Remaining.Equal(l.Amount) {
 					continue
 				}
 				d := absDays(l.LineDate, c.Date)
-				if d > autoMatchDays {
+				hit := ref != "" && strings.Contains(strings.ToLower(c.Description+" "+c.Reference), ref)
+				if d > autoMatchDays && (!hit || d > autoMatchRefDays) {
 					continue
 				}
+				score := d
+				if hit {
+					score = d - 1000
+				}
 				switch {
-				case d < bestDist:
-					best, bestDist, ties = i, d, 1
-				case d == bestDist:
+				case score < bestScore:
+					best, bestScore, ties = i, score, 1
+				case score == bestScore:
 					ties++
 				}
 			}
@@ -221,7 +141,7 @@ func (s *Service) AutoMatch(ctx context.Context, propertyID, statementID int64) 
 			used[c.JournalLineID] = true
 			if err := s.q(ctx).InsertClearing(ctx, bankrecdb.InsertClearingParams{
 				TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: st.BankAccountID, StatementID: statementID, StatementLineID: &l.ID, JournalLineID: c.JournalLineID,
-				Amount: c.Amount, Now: s.clock.Now(), ActorID: p.ActorID(),
+				Amount: c.Remaining, Now: s.clock.Now(), ActorID: p.ActorID(),
 			}); err != nil {
 				return err
 			}

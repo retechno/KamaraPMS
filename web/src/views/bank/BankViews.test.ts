@@ -42,7 +42,11 @@ const detail = (over: Record<string, unknown> = {}) => ({
   ],
   ...over,
 })
-const unclearedList = [{ journal_line_id: 102, journal_date: '2026-09-30', journal_id: 7, journal_number: 'JV000003', journal_type: 'MANUAL', description: 'book pay', amount: '-250000' }]
+const unclearedList = [{ journal_line_id: 102, journal_date: '2026-09-30', journal_id: 7, journal_number: 'JV000003', journal_type: 'MANUAL', description: 'book pay', amount: '-250000', cleared: '0', remaining: '-250000' }]
+const settleList = [
+  { journal_line_id: 301, journal_date: '2026-09-30', journal_id: 8, journal_number: 'JV000008', journal_type: 'DAY_CLOSE', description: 'Payment PAY1 · AUTH-1', amount: '400000', cleared: '0', remaining: '400000' },
+  { journal_line_id: 302, journal_date: '2026-09-30', journal_id: 8, journal_number: 'JV000008', journal_type: 'DAY_CLOSE', description: 'Payment PAY2 · AUTH-2', amount: '600000', cleared: '0', remaining: '600000' },
+]
 
 function mountView(component: object, permissions = ['bank.view', 'bank.manage', 'bank.reconcile', 'accounting.view'], props: Record<string, unknown> = {}, path = '/') {
   const pinia = createPinia()
@@ -51,6 +55,7 @@ function mountView(component: object, permissions = ['bank.view', 'bank.manage',
   usePropertyStore().currentId = 7
   GET = vi.fn(async (p: string) => {
     if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
+    if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
     if (p.endsWith('/statements/{id}')) return { data: detail() }
     if (p.endsWith('/statements')) return { data: { data: [statementRow(), statementRow({ id: 4, status: 'RECONCILED', period_from: '2026-08-01', period_to: '2026-08-31', matched_count: 2, line_count: 2, reconciled_at: '2026-09-02T00:00:00Z' })] } }
     if (p.endsWith('/bank/accounts')) return { data: { data: [bank()] } }
@@ -150,8 +155,9 @@ describe('bank views', () => {
     await w.get('[data-testid=match]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/clearings')
-    expect(POST.mock.calls[0]?.[1].body).toEqual({ statement_line_id: 12, journal_line_ids: [102] })
+    expect(POST.mock.calls[0]?.[1].body).toEqual({ allocations: [{ statement_line_id: 12, journal_line_id: 102, amount: '-250000' }] })
     // post the bank fee
+    await w.get('[data-testid=pick-line-2]').setValue(false)
     await w.get('[data-testid=pick-line-3]').setValue(true)
     await w.get('[data-testid=adjust-open]').trigger('click')
     expect((w.get('[data-testid=adjust-post]').element as HTMLButtonElement).disabled).toBe(true)
@@ -162,6 +168,68 @@ describe('bank views', () => {
     expect(call[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust')
     expect(call[1].params.path).toEqual({ propertyId: 7, id: 5, lineId: 13 })
     expect(call[1].body).toEqual({ account_id: 9, description: undefined })
+  })
+
+  it('spreads one journal line over several statement lines, each taking what it needs', async () => {
+    const lines = [
+      { id: 31, line_no: 1, line_date: '2026-09-30', description: 'Transfer 1', amount: '100000', cleared: '0', matched: false, clearings: [] },
+      { id: 32, line_no: 2, line_date: '2026-09-30', description: 'Transfer 2', amount: '200000', cleared: '0', matched: false, clearings: [] },
+      { id: 33, line_no: 3, line_date: '2026-09-30', description: 'Transfer 3', amount: '300000', cleared: '0', matched: false, clearings: [] },
+    ]
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    await flushPromises()
+    const total = { journal_line_id: 201, journal_date: '2026-09-30', journal_id: 9, journal_number: 'JV000009', journal_type: 'DAY_CLOSE', description: 'Payments BANK_TRANSFER', amount: '600000', cleared: '100000', remaining: '500000' }
+    GET.mockImplementation(async (p: string) => (p.endsWith('/uncleared') ? { data: { data: [total] } } : { data: detail({ lines }) }))
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    expect(w.get('[data-testid=uncleared-201]').text()).toContain('500000 of 600000') // what is left of a line cleared in part
+    await w.get('[data-testid=uncleared-201] input').setValue(true)
+    await w.get('[data-testid=pick-line-1]').setValue(true)
+    await w.get('[data-testid=pick-line-2]').setValue(true)
+    expect(w.get('[data-testid=match]').text()).toContain('Match with 2 lines')
+    expect(w.get('[data-testid=spread-hint]').text()).toContain('300000 to match')
+    await w.get('[data-testid=match]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)?.[1].body).toEqual({
+      allocations: [{ statement_line_id: 31, journal_line_id: 201, amount: '100000' }, { statement_line_id: 32, journal_line_id: 201, amount: '200000' }],
+    })
+  })
+
+  it('settles card payments from a statement line net of the commission', async () => {
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    await flushPromises()
+    expect(w.find('[data-testid=settle-open]').exists()).toBe(false) // nothing selected
+    await w.get('[data-testid=pick-line-3]').setValue(true) // money out: no settlement
+    expect(w.find('[data-testid=settle-open]').exists()).toBe(false)
+    await w.get('[data-testid=pick-line-3]').setValue(false)
+    // an unmatched line of money in
+    const lines = detail().lines.map((l) => (l.id === 12 ? { ...l, amount: '980000', description: 'Card settlement' } : l))
+    GET.mockImplementation(async (p: string) => {
+      if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
+      if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
+      return { data: detail({ lines }) }
+    })
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    await w.get('[data-testid=pick-line-2]').setValue(true)
+    await w.get('[data-testid=settle-open]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/settlement-lines') && c[1].params.query.account_key === 'CARD')).toBe(true)
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('[data-testid=settle-301] input').setValue(true)
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true) // the payments chosen are less than was paid out
+    expect(w.get('[data-testid=settle-summary]').text()).toContain('Payments 400000')
+    await w.get('[data-testid=settle-302] input').setValue(true)
+    expect(w.get('[data-testid=settle-summary]').text()).toContain('commission 20000')
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true) // a commission needs its account
+    await w.get('select[name=settle_fee]').setValue(9)
+    await w.get('input[name=settle_description]').setValue('Card settlement 1 Oct')
+    await w.get('[data-testid=settle-form]').trigger('submit')
+    await flushPromises()
+    const call = POST.mock.calls.at(-1) as [string, { params: { path: unknown }; body: unknown }]
+    expect(call[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle')
+    expect(call[1].params.path).toEqual({ propertyId: 7, id: 6, lineId: 12 })
+    expect(call[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, description: 'Card settlement 1 Oct' })
   })
 
   it('undoes a matching, matches automatically and clears lines without a statement line', async () => {

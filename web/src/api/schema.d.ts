@@ -4028,7 +4028,7 @@ export interface paths {
         put?: never;
         /**
          * Match journal lines with a statement line (bank.reconcile)
-         * @description A journal line is cleared once (409 `ALREADY_CLEARED`). Without `statement_line_id` the journal lines are cleared on their own: only when they add up to zero (a payment and its reversal), or, in the first statement of an account, when they are dated before it (the opening balance). 409 `STATEMENT_RECONCILED`.
+         * @description A journal line is cleared up to its amount, in one clearing or in parts by several statement lines (as when the day close of an earlier day carries the total of several transfers): 409 `ALREADY_CLEARED` when nothing is left of it, 422 `EXCEEDS_LINE`, `EXCEEDS_STATEMENT_LINE` and `WRONG_SIDE` for a part that does not fit. Without a statement line the journal lines are cleared on their own, in full: only when they add up to zero (a payment and its reversal), or, in the first statement of an account, when they are dated before it (the opening balance). 409 `STATEMENT_RECONCILED`.
          */
         post: operations["clearJournalLines"];
         delete?: never;
@@ -4142,6 +4142,53 @@ export interface paths {
         put?: never;
         /** Reopen the latest reconciled statement of an account (bank.reconcile, needs approval) */
         post: operations["reopenStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/settlement-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Card or e-wallet payments waiting for their settlement (bank.view)
+         * @description The lines of the card (`CARD`) or e-wallet (`OTHER_PAYMENT`) clearing account, up to the end of the statement, that no settlement has settled.
+         */
+        get: operations["listSettlementLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle card or e-wallet payments from a statement line (bank.reconcile)
+         * @description The acquirer paid the amount of the line (money in) for the payment lines chosen and kept the difference. A BANK journal dated the day of the line debits the bank account with what was paid and the commission account with the difference, and credits the clearing account with the payments; each payment line is settled once (409 `ALREADY_SETTLED`) and the statement line is matched with the bank side. 422 `NET_EXCEEDS_GROSS`, `NOT_MONEY_IN`; a commission needs `fee_account_id`. 409 `LINE_ALREADY_MATCHED`, `PERIOD_CLOSED`.
+         */
+        post: operations["settleFromStatementLine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7555,14 +7602,27 @@ export interface components {
             reference?: string;
             /** @description A debit (money in) is positive. */
             amount: string;
+            /** @description What has been cleared of the line so far */
+            cleared: string;
+            /** @description What is left of the line. */
+            remaining: string;
         };
         UnclearedLineList: {
             data: components["schemas"]["UnclearedLine"][];
         };
+        /** @description Either `journal_line_ids` (each cleared for what is left of it, against `statement_line_id`) or `allocations` (explicit parts). */
         ClearJournalLinesRequest: {
             /** Format: int64 */
             statement_line_id?: number | null;
-            journal_line_ids: number[];
+            journal_line_ids?: number[];
+            allocations?: {
+                /** Format: int64 */
+                statement_line_id?: number | null;
+                /** Format: int64 */
+                journal_line_id: number;
+                /** @description A part of the journal line, on its side and not more than what is left of it or of the statement line; empty means what is left of the journal line. */
+                amount?: string | null;
+            }[];
         };
         AdjustFromLineRequest: {
             /**
@@ -7575,6 +7635,17 @@ export interface components {
         AutoMatchResult: {
             matched: number;
             remaining: number;
+        };
+        SettleRequest: {
+            /** @enum {string} */
+            account_key: "CARD" | "OTHER_PAYMENT";
+            journal_line_ids: number[];
+            /**
+             * Format: int64
+             * @description The account for the commission; needed when the payments add up to more than the line.
+             */
+            fee_account_id?: number;
+            description?: string;
         };
     };
     responses: {
@@ -14336,6 +14407,66 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSettlementLines: {
+        parameters: {
+            query: {
+                account_key: "CARD" | "OTHER_PAYMENT";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The payment lines. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclearedLineList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    settleFromStatementLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettleRequest"];
+            };
+        };
+        responses: {
+            /** @description The statement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

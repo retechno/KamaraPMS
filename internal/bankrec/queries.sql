@@ -99,23 +99,27 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 -- ---------------------------------------------------------------------------------------------------------------
 -- Journal lines and clearings
 
--- The journal lines of an account up to a date that no statement has cleared.
+-- The journal lines of an account up to a date that are not cleared in full (a line can be cleared in parts).
 -- name: UnclearedLines :many
 SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
-       (l.debit - l.credit)::numeric AS amount
+       (l.debit - l.credit)::numeric AS amount,
+       COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)::numeric AS cleared
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date <= @to_date::date
-  AND NOT EXISTS (SELECT 1 FROM bank_clearings c WHERE c.journal_line_id = l.id)
+  AND (l.debit - l.credit) <> COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)
 ORDER BY j.journal_date, l.id
 LIMIT @row_limit;
 
 -- name: UnclearedTotals :one
-SELECT COALESCE(sum(l.debit), 0)::numeric AS money_in, COALESCE(sum(l.credit), 0)::numeric AS money_out, count(*)::int AS lines
-FROM gl_journal_lines l
-JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
-WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date <= @to_date::date
-  AND NOT EXISTS (SELECT 1 FROM bank_clearings c WHERE c.journal_line_id = l.id);
+SELECT COALESCE(sum(GREATEST(r.rem, 0)), 0)::numeric AS money_in, COALESCE(sum(GREATEST(-r.rem, 0)), 0)::numeric AS money_out, count(*)::int AS lines
+FROM (
+    SELECT l.debit - l.credit - COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0) AS rem
+    FROM gl_journal_lines l
+    JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+    WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date <= @to_date::date
+) r
+WHERE r.rem <> 0;
 
 -- name: BookBalance :one
 SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS balance
@@ -131,7 +135,8 @@ JOIN bank_statements s ON s.property_id = c.property_id AND s.id = c.statement_i
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.bank_account_id = @bank_account_id AND s.period_to <= @period_to::date;
 
 -- name: GetJournalLine :one
-SELECT l.id, l.account_id, (l.debit - l.credit)::numeric AS amount, j.journal_date, j.journal_number
+SELECT l.id, l.account_id, (l.debit - l.credit)::numeric AS amount, j.journal_date, j.journal_number,
+       COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)::numeric AS cleared
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.id = @id;
@@ -161,3 +166,38 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND statement_id = @
 -- The line of an account in a journal (the bank side of a journal posted from a statement line).
 -- name: JournalLineOfAccount :one
 SELECT id FROM gl_journal_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND journal_id = @journal_id AND account_id = @account_id ORDER BY line_no LIMIT 1;
+
+-- What is cleared of a statement line so far.
+-- name: LineCleared :one
+SELECT COALESCE(sum(amount), 0)::numeric AS cleared FROM bank_clearings WHERE tenant_id = @tenant_id AND property_id = @property_id AND statement_line_id = @statement_line_id;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Card and e-wallet settlements
+
+-- The lines of a clearing account (card, e-wallet) up to a date that no settlement has settled and that are not the
+-- credit of a settlement themselves.
+-- name: SettlementCandidates :many
+SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
+       (l.debit - l.credit)::numeric AS amount
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date <= @to_date::date
+  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id OR i.settling_line_id = l.id)
+ORDER BY j.journal_date, l.id
+LIMIT @row_limit;
+
+-- name: IsSettledOrSettling :one
+SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = @line_id OR settling_line_id = @line_id)::boolean;
+
+-- name: InsertSettlement :one
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, reference, created_by)
+VALUES (@tenant_id, @property_id, @bank_account_id, @account_key, @journal_id, @gross, @net, @fee, sqlc.narg(reference), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: InsertSettlementItem :exec
+INSERT INTO card_settlement_items (tenant_id, property_id, settlement_id, settled_line_id, settling_line_id, amount)
+VALUES (@tenant_id, @property_id, @settlement_id, @settled_line_id, @settling_line_id, @amount);
+
+-- The account a system key of the books points at.
+-- name: MapAccount :one
+SELECT account_id FROM gl_account_map WHERE tenant_id = @tenant_id AND property_id = @property_id AND map_key = @map_key;

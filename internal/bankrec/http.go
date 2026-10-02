@@ -32,6 +32,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("DELETE "+p+"/statements/{id}/clearings/{clearingId}", httpx.HandlerFunc(h.unclear))
 	mux.Handle("POST "+p+"/statements/{id}/auto-match", httpx.HandlerFunc(h.autoMatch))
 	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/adjust", httpx.HandlerFunc(h.adjust))
+	mux.Handle("GET "+p+"/statements/{id}/settlement-lines", httpx.HandlerFunc(h.settlementLines))
+	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/settle", httpx.HandlerFunc(h.settle))
 	mux.Handle("POST "+p+"/statements/{id}/reconcile", httpx.HandlerFunc(h.reconcile))
 	mux.Handle("POST "+p+"/statements/{id}/reopen", httpx.HandlerFunc(h.reopen))
 }
@@ -276,6 +278,38 @@ func (h *Handler) reopen(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	d, err := h.svc.Reopen(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) settlementLines(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := statementPath(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.SettlementLines(r.Context(), pid, id, strings.ToUpper(r.URL.Query().Get("account_key")))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[UnclearedLine]{Data: list})
+}
+
+func (h *Handler) settle(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := statementPath(r)
+	if err != nil {
+		return err
+	}
+	lid, err := pathID(r, "lineId", apperr.NotFound("STATEMENT_LINE_NOT_FOUND", "the line does not exist in this statement"))
+	if err != nil {
+		return err
+	}
+	var in SettleInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	d, err := h.svc.Settle(r.Context(), pid, id, lid, in)
 	if err != nil {
 		return err
 	}

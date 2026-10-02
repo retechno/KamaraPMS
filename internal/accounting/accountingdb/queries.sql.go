@@ -371,52 +371,52 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 
 const dayActivity = `-- name: DayActivity :many
 
-SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount
+SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount, x.detail::text AS detail
 FROM (
-    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount
+    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount, '' AS detail
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
      GROUP BY COALESCE(g.charge_code, 'UNKNOWN')
     UNION ALL
-    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount)
+    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount), ''
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
      GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN')
     UNION ALL
     SELECT CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE' END, COALESCE(c.gl_account_code, ''),
-           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount)
+           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount), ''
       FROM folio_item_gl g
       JOIN folio_item_components c ON c.property_id = g.property_id AND c.folio_item_id = g.item_id
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
      GROUP BY c.component_type, COALESCE(c.gl_account_code, ''), c.code
     UNION ALL
-    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount)
+    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount), ''
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
      GROUP BY g.is_deposit, g.payment_method
     UNION ALL
-    SELECT 'METHOD', g.payment_method, 'PAYMENT', g.payment_method, -sum(g.signed_amount)
+    SELECT 'METHOD', g.payment_method, 'PAYMENT', COALESCE(g.payment_number, g.payment_method), -sum(g.signed_amount), COALESCE(g.payment_reference, '')
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
-     GROUP BY g.payment_method
+     GROUP BY g.payment_method, COALESCE(g.payment_number, g.payment_method), COALESCE(g.payment_reference, '')
     UNION ALL
-    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.payment_method, sum(r.amount)
+    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.receipt_number, sum(r.amount), COALESCE(r.reference_number, '')
+      FROM city_ledger_receipts r
+     WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
+     GROUP BY r.payment_method, r.receipt_number, COALESCE(r.reference_number, '')
+    UNION ALL
+    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount), ''
       FROM city_ledger_receipts r
      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
      GROUP BY r.payment_method
     UNION ALL
-    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount)
-      FROM city_ledger_receipts r
-     WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
-     GROUP BY r.payment_method
-    UNION ALL
-    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount)
+    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), ''
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
     UNION ALL
-    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount)
+    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), ''
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
@@ -437,6 +437,7 @@ type DayActivityRow struct {
 	SourceType string
 	SourceRef  string
 	Amount     decimal.Decimal
+	Detail     string
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -459,6 +460,7 @@ func (q *Queries) DayActivity(ctx context.Context, arg DayActivityParams) ([]Day
 			&i.SourceType,
 			&i.SourceRef,
 			&i.Amount,
+			&i.Detail,
 		); err != nil {
 			return nil, err
 		}

@@ -208,7 +208,8 @@ func (q *Queries) GetClearing(ctx context.Context, arg GetClearingParams) (GetCl
 }
 
 const getJournalLine = `-- name: GetJournalLine :one
-SELECT l.id, l.account_id, (l.debit - l.credit)::numeric AS amount, j.journal_date, j.journal_number
+SELECT l.id, l.account_id, (l.debit - l.credit)::numeric AS amount, j.journal_date, j.journal_number,
+       COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)::numeric AS cleared
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.id = $3
@@ -226,6 +227,7 @@ type GetJournalLineRow struct {
 	Amount        decimal.Decimal
 	JournalDate   civil.Date
 	JournalNumber string
+	Cleared       decimal.Decimal
 }
 
 func (q *Queries) GetJournalLine(ctx context.Context, arg GetJournalLineParams) (GetJournalLineRow, error) {
@@ -237,6 +239,7 @@ func (q *Queries) GetJournalLine(ctx context.Context, arg GetJournalLineParams) 
 		&i.Amount,
 		&i.JournalDate,
 		&i.JournalNumber,
+		&i.Cleared,
 	)
 	return i, err
 }
@@ -344,6 +347,69 @@ func (q *Queries) InsertClearing(ctx context.Context, arg InsertClearingParams) 
 	return err
 }
 
+const insertSettlement = `-- name: InsertSettlement :one
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, reference, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id
+`
+
+type InsertSettlementParams struct {
+	TenantID      int64
+	PropertyID    int64
+	BankAccountID int64
+	AccountKey    string
+	JournalID     int64
+	Gross         decimal.Decimal
+	Net           decimal.Decimal
+	Fee           decimal.Decimal
+	Reference     *string
+	ActorID       *int64
+}
+
+func (q *Queries) InsertSettlement(ctx context.Context, arg InsertSettlementParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertSettlement,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BankAccountID,
+		arg.AccountKey,
+		arg.JournalID,
+		arg.Gross,
+		arg.Net,
+		arg.Fee,
+		arg.Reference,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertSettlementItem = `-- name: InsertSettlementItem :exec
+INSERT INTO card_settlement_items (tenant_id, property_id, settlement_id, settled_line_id, settling_line_id, amount)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertSettlementItemParams struct {
+	TenantID       int64
+	PropertyID     int64
+	SettlementID   int64
+	SettledLineID  int64
+	SettlingLineID int64
+	Amount         decimal.Decimal
+}
+
+func (q *Queries) InsertSettlementItem(ctx context.Context, arg InsertSettlementItemParams) error {
+	_, err := q.db.Exec(ctx, insertSettlementItem,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.SettlementID,
+		arg.SettledLineID,
+		arg.SettlingLineID,
+		arg.Amount,
+	)
+	return err
+}
+
 const insertStatement = `-- name: InsertStatement :one
 INSERT INTO bank_statements (tenant_id, property_id, bank_account_id, period_from, period_to, opening_balance, closing_balance, note, imported_at, imported_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -411,6 +477,17 @@ func (q *Queries) InsertStatementLine(ctx context.Context, arg InsertStatementLi
 	return err
 }
 
+const isSettledOrSettling = `-- name: IsSettledOrSettling :one
+SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = $1 OR settling_line_id = $1)::boolean
+`
+
+func (q *Queries) IsSettledOrSettling(ctx context.Context, lineID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, isSettledOrSettling, lineID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const journalLineOfAccount = `-- name: JournalLineOfAccount :one
 SELECT id FROM gl_journal_lines WHERE tenant_id = $1 AND property_id = $2 AND journal_id = $3 AND account_id = $4 ORDER BY line_no LIMIT 1
 `
@@ -456,6 +533,24 @@ func (q *Queries) LaterReconciledExists(ctx context.Context, arg LaterReconciled
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const lineCleared = `-- name: LineCleared :one
+SELECT COALESCE(sum(amount), 0)::numeric AS cleared FROM bank_clearings WHERE tenant_id = $1 AND property_id = $2 AND statement_line_id = $3
+`
+
+type LineClearedParams struct {
+	TenantID        int64
+	PropertyID      int64
+	StatementLineID *int64
+}
+
+// What is cleared of a statement line so far.
+func (q *Queries) LineCleared(ctx context.Context, arg LineClearedParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, lineCleared, arg.TenantID, arg.PropertyID, arg.StatementLineID)
+	var cleared decimal.Decimal
+	err := row.Scan(&cleared)
+	return cleared, err
 }
 
 const listBankAccounts = `-- name: ListBankAccounts :many
@@ -727,6 +822,24 @@ func (q *Queries) ListStatements(ctx context.Context, arg ListStatementsParams) 
 	return items, nil
 }
 
+const mapAccount = `-- name: MapAccount :one
+SELECT account_id FROM gl_account_map WHERE tenant_id = $1 AND property_id = $2 AND map_key = $3
+`
+
+type MapAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+	MapKey     string
+}
+
+// The account a system key of the books points at.
+func (q *Queries) MapAccount(ctx context.Context, arg MapAccountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, mapAccount, arg.TenantID, arg.PropertyID, arg.MapKey)
+	var account_id int64
+	err := row.Scan(&account_id)
+	return account_id, err
+}
+
 const markReconciled = `-- name: MarkReconciled :exec
 UPDATE bank_statements SET status = 'RECONCILED', reconciled_at = $1, reconciled_by = $2, reopened_at = NULL, reopened_by = NULL, reopen_reason = NULL
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5
@@ -838,14 +951,87 @@ func (q *Queries) PreviousStatement(ctx context.Context, arg PreviousStatementPa
 	return i, err
 }
 
-const unclearedLines = `-- name: UnclearedLines :many
+const settlementCandidates = `-- name: SettlementCandidates :many
 
 SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
        (l.debit - l.credit)::numeric AS amount
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date <= $4::date
-  AND NOT EXISTS (SELECT 1 FROM bank_clearings c WHERE c.journal_line_id = l.id)
+  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id OR i.settling_line_id = l.id)
+ORDER BY j.journal_date, l.id
+LIMIT $5
+`
+
+type SettlementCandidatesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+	ToDate     civil.Date
+	RowLimit   int32
+}
+
+type SettlementCandidatesRow struct {
+	ID                 int64
+	JournalDate        civil.Date
+	JournalID          int64
+	JournalNumber      string
+	JournalType        string
+	JournalDescription string
+	Description        *string
+	SourceRef          *string
+	Amount             decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Card and e-wallet settlements
+// The lines of a clearing account (card, e-wallet) up to a date that no settlement has settled and that are not the
+// credit of a settlement themselves.
+func (q *Queries) SettlementCandidates(ctx context.Context, arg SettlementCandidatesParams) ([]SettlementCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, settlementCandidates,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AccountID,
+		arg.ToDate,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SettlementCandidatesRow{}
+	for rows.Next() {
+		var i SettlementCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JournalDate,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.JournalType,
+			&i.JournalDescription,
+			&i.Description,
+			&i.SourceRef,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const unclearedLines = `-- name: UnclearedLines :many
+
+SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
+       (l.debit - l.credit)::numeric AS amount,
+       COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)::numeric AS cleared
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date <= $4::date
+  AND (l.debit - l.credit) <> COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0)
 ORDER BY j.journal_date, l.id
 LIMIT $5
 `
@@ -868,11 +1054,12 @@ type UnclearedLinesRow struct {
 	Description        *string
 	SourceRef          *string
 	Amount             decimal.Decimal
+	Cleared            decimal.Decimal
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Journal lines and clearings
-// The journal lines of an account up to a date that no statement has cleared.
+// The journal lines of an account up to a date that are not cleared in full (a line can be cleared in parts).
 func (q *Queries) UnclearedLines(ctx context.Context, arg UnclearedLinesParams) ([]UnclearedLinesRow, error) {
 	rows, err := q.db.Query(ctx, unclearedLines,
 		arg.TenantID,
@@ -898,6 +1085,7 @@ func (q *Queries) UnclearedLines(ctx context.Context, arg UnclearedLinesParams) 
 			&i.Description,
 			&i.SourceRef,
 			&i.Amount,
+			&i.Cleared,
 		); err != nil {
 			return nil, err
 		}
@@ -910,11 +1098,14 @@ func (q *Queries) UnclearedLines(ctx context.Context, arg UnclearedLinesParams) 
 }
 
 const unclearedTotals = `-- name: UnclearedTotals :one
-SELECT COALESCE(sum(l.debit), 0)::numeric AS money_in, COALESCE(sum(l.credit), 0)::numeric AS money_out, count(*)::int AS lines
-FROM gl_journal_lines l
-JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
-WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date <= $4::date
-  AND NOT EXISTS (SELECT 1 FROM bank_clearings c WHERE c.journal_line_id = l.id)
+SELECT COALESCE(sum(GREATEST(r.rem, 0)), 0)::numeric AS money_in, COALESCE(sum(GREATEST(-r.rem, 0)), 0)::numeric AS money_out, count(*)::int AS lines
+FROM (
+    SELECT l.debit - l.credit - COALESCE((SELECT sum(c.amount) FROM bank_clearings c WHERE c.journal_line_id = l.id), 0) AS rem
+    FROM gl_journal_lines l
+    JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+    WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date <= $4::date
+) r
+WHERE r.rem <> 0
 `
 
 type UnclearedTotalsParams struct {
