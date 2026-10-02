@@ -2304,6 +2304,13 @@ export const en = {
     avgHours: 'Avg hours to resolve',
     backlog: 'Open now: {open} ({high} high priority); the oldest has waited {hours} hour(s).',
   },
+  dataTable: {
+    filter: 'Filter…',
+    filterBy: 'Filter {column}',
+    all: 'All',
+    noMatch: 'No row matches the filters.',
+    clearFilters: 'Clear filters',
+  },
   status: {
     PENDING: 'To do',
     DONE: 'Done',

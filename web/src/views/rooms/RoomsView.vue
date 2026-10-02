@@ -37,11 +37,11 @@ const visible = computed(() => {
 })
 
 const columns = computed<Column<Room>[]>(() => [
-  { key: 'room_number', label: t('rooms.room') },
-  { key: 'type', label: t('rooms.type') },
-  { key: 'floor', label: t('rooms.floor') },
-  { key: 'building', label: t('rooms.building') },
-  { key: 'status', label: t('setup.status') },
+  { key: 'room_number', label: t('rooms.room'), sortable: true, filter: 'text' },
+  { key: 'type', label: t('rooms.type'), sortable: true, filter: 'select', filterValue: (r) => typeById.value.get(r.room_type_id)?.code, sortValue: (r) => typeById.value.get(r.room_type_id)?.code },
+  { key: 'floor', label: t('rooms.floor'), sortable: true, filter: 'select' },
+  { key: 'building', label: t('rooms.building'), filter: 'select' },
+  { key: 'status', label: t('setup.status'), filter: 'select', filterValue: (r) => (r.is_active ? t('setup.active') : t('setup.inactive')) },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 

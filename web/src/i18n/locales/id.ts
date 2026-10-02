@@ -2303,6 +2303,13 @@ export const id: Messages = {
     avgHours: 'Rata-rata jam penyelesaian',
     backlog: 'Terbuka sekarang: {open} ({high} prioritas tinggi); yang terlama sudah menunggu {hours} jam.',
   },
+  dataTable: {
+    filter: 'Saring…',
+    filterBy: 'Saring {column}',
+    all: 'Semua',
+    noMatch: 'Tidak ada baris yang cocok dengan saringan.',
+    clearFilters: 'Hapus saringan',
+  },
   status: {
     PENDING: 'Belum',
     DONE: 'Selesai',

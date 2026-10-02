@@ -90,12 +90,12 @@ async function save(): Promise<void> {
 
 const limitText = (c: Company) => (c.credit_limit === null ? t('companies.noLimit') : c.credit_limit === '0' ? t('companies.noCredit') : c.credit_limit)
 const columns = computed<Column<Company>[]>(() => [
-  { key: 'code', label: t('companies.code') },
-  { key: 'name', label: t('companies.name') },
+  { key: 'code', label: t('companies.code'), sortable: true, filter: 'text' as const },
+  { key: 'name', label: t('companies.name'), sortable: true, filter: 'text' as const },
   { key: 'contact', label: t('companies.colContact') },
   { key: 'credit', label: t('companies.colCredit') },
   { key: 'terms', label: t('companies.colTerms') },
-  { key: 'status', label: t('setup.status') },
+  { key: 'status', label: t('setup.status'), filter: 'select' as const, filterValue: (c: Company) => (c.is_active ? t('setup.active') : t('setup.inactive')) },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 

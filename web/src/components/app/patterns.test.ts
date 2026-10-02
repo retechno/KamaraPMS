@@ -268,3 +268,60 @@ describe('DataTable formats amounts and dates in the language of the page', () =
     }
   })
 })
+
+describe('DataTable filters and sorting (TanStack Table)', () => {
+  const rows = [
+    { id: 1, code: '201', type: 'DLX', amount: '1500000', note: 'a' },
+    { id: 2, code: '1001', type: 'STD', amount: '250000', note: '' },
+    { id: 3, code: '202', type: 'DLX', amount: '900000', note: 'c' },
+  ]
+  const columns: Column<(typeof rows)[number]>[] = [
+    { key: 'code', label: 'Room', sortable: true, filter: 'text' },
+    { key: 'type', label: 'Type', filter: 'select' },
+    { key: 'amount', label: 'Amount', sortable: true, format: 'money' },
+    { key: 'note', label: 'Note', sortable: true },
+  ]
+  const order = (w: ReturnType<typeof mount>) => w.findAll('tbody tr').map((r) => r.findAll('td')[0]?.text())
+
+  it('filters a column by text and by choice, and clears the filters', async () => {
+    const w = mount(DataTable, { props: { columns: columns as never, rows, rowKey: 'id' } })
+    expect(w.find('[data-testid=table-filters]').exists()).toBe(true)
+    await w.get('input[name=filter_code]').setValue('20')
+    expect(order(w)).toEqual(['201', '202'])
+    await w.get('select[name=filter_type]').setValue('STD')
+    expect(w.find('[data-testid=table-no-match]').exists()).toBe(true) // 20 and STD match nothing together
+    await w.get('[data-testid=table-clear-filters]').trigger('click')
+    expect(order(w)).toEqual(['201', '1001', '202'])
+    expect((w.get('select[name=filter_type]').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('offers the distinct values as choices and filters on what the cell shows', async () => {
+    const w = mount(DataTable, { props: { columns: [{ key: 'amount', label: 'Amount', format: 'money', filter: 'text' }] as never, rows, rowKey: 'id' } })
+    await w.get('input[name=filter_amount]').setValue('1,500')
+    expect(w.findAll('tbody tr')).toHaveLength(1)
+    const w2 = mount(DataTable, { props: { columns: columns as never, rows, rowKey: 'id' } })
+    expect(w2.findAll('select[name=filter_type] option').map((o) => o.text())).toEqual(['All', 'DLX', 'STD'])
+  })
+
+  it('sorts numbers inside text as numbers, empty values last in both directions', async () => {
+    const w = mount(DataTable, { props: { columns: columns as never, rows, rowKey: 'id' } })
+    await w.get('[data-testid=sort-amount]').trigger('click')
+    expect(order(w)).toEqual(['1001', '202', '201'])
+    await w.get('[data-testid=sort-amount]').trigger('click')
+    expect(order(w)).toEqual(['201', '202', '1001'])
+    await w.get('[data-testid=sort-note]').trigger('click')
+    expect(order(w)).toEqual(['201', '202', '1001']) // the empty note is last
+    await w.get('[data-testid=sort-note]').trigger('click')
+    expect(order(w)).toEqual(['202', '201', '1001']) // and still last when descending
+  })
+
+  it('in manual mode leaves the rows alone and tells what was asked', async () => {
+    const w = mount(DataTable, { props: { columns: columns as never, rows, rowKey: 'id', manual: true } })
+    await w.get('input[name=filter_code]').setValue('zzz')
+    expect(order(w)).toEqual(['201', '1001', '202'])
+    expect(w.emitted('filterChange')?.at(-1)).toEqual([{ code: 'zzz' }])
+    await w.get('[data-testid=sort-code]').trigger('click')
+    expect(w.emitted('sortChange')?.at(-1)).toEqual([{ key: 'code', dir: 'asc' }])
+    expect(order(w)).toEqual(['201', '1001', '202'])
+  })
+})
