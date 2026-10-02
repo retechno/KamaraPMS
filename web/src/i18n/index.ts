@@ -1,6 +1,5 @@
 import { createI18n } from 'vue-i18n'
 import { en, type Messages } from './locales/en'
-import { id } from './locales/id'
 
 export const LOCALES = ['en', 'id'] as const
 export type Locale = (typeof LOCALES)[number]
@@ -19,12 +18,34 @@ function storedLocale(): Locale {
   }
 }
 
+/**
+ * English is part of the application (it is the source of the keys and the fallback); the other languages are separate
+ * files that are downloaded only when someone chooses them (`loadLocale`).
+ */
 export const i18n = createI18n<[Messages], Locale, false>({
   legacy: false,
-  locale: storedLocale(),
+  locale: 'en',
   fallbackLocale: 'en',
-  messages: { en, id },
+  messages: { en } as Record<Locale, Messages>,
 })
+
+const loaders: Record<Locale, () => Promise<Messages>> = {
+  en: async () => en,
+  id: async () => (await import('./locales/id')).id,
+}
+
+/** Downloads the messages of a language, once. */
+export async function loadLocale(locale: Locale): Promise<void> {
+  if (i18n.global.availableLocales.includes(locale)) return
+  i18n.global.setLocaleMessage(locale, await loaders[locale]())
+}
+
+/** Starts the application in the language chosen last time: its messages are there before the first page is drawn. */
+export async function initLocale(): Promise<void> {
+  const locale = storedLocale()
+  await loadLocale(locale)
+  applyLocale(locale)
+}
 
 /**
  * Translates a key outside a component (scripts, stores, tests). Components can also use `$t` in a template or
@@ -39,13 +60,24 @@ export function currentLocale(): Locale {
   return i18n.global.locale.value
 }
 
-/** Switches the language, remembers it on this browser and tells the document (screen readers, hyphenation). */
-export function setLocale(locale: Locale): void {
+function applyLocale(locale: Locale): void {
   i18n.global.locale.value = locale
+  if (typeof document !== 'undefined') document.documentElement.lang = locale
+}
+
+/**
+ * Switches the language, remembers it on this browser and tells the document (screen readers, hyphenation). When the
+ * messages are not downloaded yet it waits for them; the page keeps its language until they are there.
+ */
+export function setLocale(locale: Locale): Promise<void> {
   try {
     localStorage.setItem(STORAGE_KEY, locale)
   } catch {
     // private window or blocked storage: the choice lasts until the page is closed
   }
-  if (typeof document !== 'undefined') document.documentElement.lang = locale
+  if (i18n.global.availableLocales.includes(locale)) {
+    applyLocale(locale)
+    return Promise.resolve()
+  }
+  return loadLocale(locale).then(() => applyLocale(locale))
 }

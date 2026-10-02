@@ -48,7 +48,7 @@ function onSelectProperty(event: Event): void {
 }
 
 function onSelectLocale(event: Event): void {
-  setLocale((event.target as HTMLSelectElement).value as Locale)
+  void setLocale((event.target as HTMLSelectElement).value as Locale)
 }
 
 const selectClass =

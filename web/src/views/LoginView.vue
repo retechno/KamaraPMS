@@ -66,7 +66,7 @@ async function submit(): Promise<void> {
             <template #default="{ id }"><Input :id="id" v-model="form.password" name="password" type="password" autocomplete="current-password" required /></template>
           </FormField>
           <Button type="submit" :disabled="busy">{{ busy ? t('login.signingIn') : t('login.signIn') }}</Button>
-          <NativeSelect :model-value="locale" class="w-auto justify-self-end" :aria-label="t('language.label')" @change="setLocale(($event.target as HTMLSelectElement).value as Locale)">
+          <NativeSelect :model-value="locale" class="w-auto justify-self-end" :aria-label="t('language.label')" @change="void setLocale(($event.target as HTMLSelectElement).value as Locale)">
             <option v-for="l in LOCALES" :key="l" :value="l">{{ t(`language.${l}` as never) }}</option>
           </NativeSelect>
         </CardContent>
