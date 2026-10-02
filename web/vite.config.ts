@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
@@ -13,7 +14,7 @@ export default defineConfig(({ mode }) => {
   const apiTarget = process.env.PMS_API_URL ?? env.PMS_API_URL ?? 'http://127.0.0.1:18080'
 
   return {
-    plugins: [vue()],
+    plugins: [vue(), tailwindcss()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
@@ -28,6 +29,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       include: ['src/**/*.test.ts'],
+      setupFiles: ['src/test/setup.ts'],
     },
   }
 })

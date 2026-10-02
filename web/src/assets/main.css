@@ -1,3 +1,8 @@
+/*
+ * The styles of the pages that are not migrated to the new design system yet (see tailwind.css for the layer order).
+ * They are in the `legacy` layer so that Tailwind utilities on a migrated component always win over them.
+ */
+@layer legacy {
 :root {
   --surface: #ffffff;
   --surface-2: #f6f7f9;
@@ -199,4 +204,5 @@ table.list th {
 }
 table.list tbody tr:hover {
   background: var(--hover);
+}
 }

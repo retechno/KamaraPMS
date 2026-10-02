@@ -1,14 +1,17 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
+import { currentLocale, i18n } from './i18n'
 import { router } from './router'
+import './assets/tailwind.css'
 import './assets/main.css'
 
 import { onSessionLost } from './api/session'
 import { useAuthStore } from './stores/auth'
 
 const pinia = createPinia()
-createApp(App).use(pinia).use(router).mount('#app')
+document.documentElement.lang = currentLocale()
+createApp(App).use(pinia).use(router).use(i18n).mount('#app')
 
 // The server ended the session (logout elsewhere, deactivation, expiry): back to sign-in.
 onSessionLost(() => {

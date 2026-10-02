@@ -1,0 +1,51 @@
+/*
+ * Tailwind CSS v4 for the redesigned UI (docs/architecture: frontend redesign, phase 0).
+ *
+ * Layer order: the pages that have not been migrated yet are styled by main.css, which now lives in the `legacy`
+ * layer. Tailwind's utilities sit above it, so a migrated component can restyle itself with utilities, and the old
+ * global `button`, `.card` and `.field` rules never fight them. Preflight (Tailwind's reset) is NOT imported yet: it
+ * would change the margins and headings of every page that has not been migrated. It comes with the clean-up phase.
+ */
+@layer theme, base, legacy, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+/* Dark follows the system setting, as the existing palette does. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/*
+ * The design tokens are the existing palette (variables of main.css), named the way shadcn-vue components expect.
+ * `inline` makes the utilities read the variable at use, so dark mode changes them without a second definition.
+ */
+@theme inline {
+  --color-background: var(--surface-2);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--hover);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--accent-contrast);
+  --color-success: var(--ok);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
