@@ -1,9 +1,21 @@
 <script setup lang="ts">
+import { ChevronLeft } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { BlockType, Room, RoomBlock } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { i18n, t } from '@/i18n'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { blockColumns, windowDates } from '@/utils/blocks'
@@ -29,6 +41,18 @@ const sortedRooms = computed(() =>
   rooms.value.filter((r) => r.is_active).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true })),
 )
 const roomNumber = (id: number) => rooms.value.find((r) => r.id === id)?.room_number ?? String(id)
+// A calendar date has one weekday whatever the time zone: read it in UTC, in the language of the page.
+const weekday = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(i18n.global.locale.value, { weekday: 'short', timeZone: 'UTC' })
+const isWeekend = (d: string) => [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay())
+
+const blockColumnsDef = computed<Column<RoomBlock>[]>(() => [
+  { key: 'room_id', label: t('roomBlocks.room') },
+  { key: 'block_type', label: t('roomBlocks.type') },
+  { key: 'start_date', label: t('roomBlocks.from') },
+  { key: 'end_date', label: t('roomBlocks.untilCol') },
+  { key: 'reason', label: t('roomBlocks.reason') },
+  ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
+])
 
 const blank = () => ({ room_id: 0, block_type: 'OOO' as BlockType, start_date: '', end_date: '', reason: '' })
 const form = reactive(blank())
@@ -147,235 +171,138 @@ watch(businessDate, (bd) => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Room blocks</h1>
-    <div class="nav">
-      <button type="button" @click="shift(-7)">&larr; Week</button>
-      <button type="button" @click="backToToday">Business date</button>
-      <button type="button" @click="shift(7)">Week &rarr;</button>
-      <select v-model.number="days" aria-label="Days shown" @change="load">
-        <option :value="14">14 days</option>
-        <option :value="28">28 days</option>
-      </select>
-    </div>
-  </div>
+  <PageHeader :title="t('roomBlocks.title')">
+    <template #actions>
+      <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('roomBlocks.week') }}</Button>
+      <Button variant="outline" size="sm" @click="backToToday">{{ t('roomBlocks.businessDate') }}</Button>
+      <Button variant="outline" size="sm" @click="shift(7)">{{ t('roomBlocks.week') }} &rarr;</Button>
+      <NativeSelect v-model.number="days" class="w-28" :aria-label="t('roomBlocks.daysShown')" @change="load">
+        <option :value="14">{{ t('roomBlocks.days', { n: 14 }) }}</option>
+        <option :value="28">{{ t('roomBlocks.days', { n: 28 }) }}</option>
+      </NativeSelect>
+    </template>
+  </PageHeader>
 
   <div v-if="error" class="alert" role="alert" data-testid="form-error">
     {{ error.message }} <code>{{ error.code }}</code>
-    <ul v-if="conflicts.length" class="conflicts" data-testid="conflicts">
+    <ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
       <li v-for="c in conflicts" :key="`${c.type}-${c.id}`">
-        {{ c.type === 'STAY' ? `In-house stay ${c.reference ?? c.id}` : `Reservation line ${c.id}` }}: {{ c.from }} to {{ c.to }}
+        {{ c.type === 'STAY' ? t('roomBlocks.stayConflict', { ref: c.reference ?? c.id }) : t('roomBlocks.lineConflict', { id: c.id }) }}: {{ t('roomBlocks.conflictRange', { from: c.from, to: c.to }) }}
       </li>
     </ul>
   </div>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('roomBlocks.selectProperty') }}</p>
 
-  <section v-else class="card calendar-card">
-    <p v-if="loaded && !sortedRooms.length" class="muted" data-testid="empty">No active rooms yet.</p>
-    <div v-else class="calendar" :style="{ '--days': days }" role="grid" aria-label="Room block calendar">
-      <div class="row head">
-        <div class="label" />
-        <div v-for="d in dates" :key="d" class="day" :class="{ today: d === businessDate }" role="columnheader">
-          {{ d.slice(8) }}<small>{{ d.slice(5, 7) }}</small>
+  <template v-else>
+    <Card class="mb-4 overflow-x-auto">
+      <EmptyState v-if="loaded && !sortedRooms.length" :title="t('roomBlocks.noRooms')" data-testid="empty" />
+      <div v-else class="grid min-w-[640px] text-xs" :style="{ '--days': days }" role="grid" :aria-label="t('roomBlocks.calendar')">
+        <div class="grid grid-cols-[4.5rem_repeat(var(--days),minmax(1.75rem,1fr))] auto-rows-[2.25rem] border-b border-border text-muted-foreground">
+          <div class="col-start-1 row-start-1" />
+          <div
+            v-for="d in dates"
+            :key="d"
+            :class="cn('flex flex-col items-center justify-center leading-tight', isWeekend(d) && 'bg-muted/60', d === businessDate && 'bg-primary/10 text-primary')"
+            role="columnheader"
+          >
+            <small class="text-[10px] uppercase">{{ weekday(d) }}</small>{{ d.slice(8) }}<small>{{ d.slice(5, 7) }}</small>
+          </div>
         </div>
-      </div>
-      <div v-for="row in rows" :key="row.room.id" class="row" role="row" :data-testid="`cal-${row.room.room_number}`">
-        <div class="label" role="rowheader">{{ row.room.room_number }}</div>
-        <button
-          v-for="(d, i) in dates"
-          :key="d"
-          type="button"
-          class="cell"
-          :class="{ today: d === businessDate }"
-          :style="{ gridColumn: i + 2, gridRow: 1 }"
-          :disabled="!canManage"
-          :aria-label="`Block room ${row.room.room_number} from ${d}`"
-          @click="prefill(row.room.id, d)"
-        />
         <div
-          v-for="bar in row.bars"
-          :key="bar.block.id"
-          class="bar"
-          :class="bar.block.block_type.toLowerCase()"
-          :style="{ gridColumn: `${bar.start} / ${bar.end}`, gridRow: 1 }"
-          :title="`${bar.block.block_type}: ${bar.block.reason} (${bar.block.start_date} to ${bar.block.end_date})`"
-          data-testid="bar"
+          v-for="row in rows"
+          :key="row.room.id"
+          class="grid grid-cols-[4.5rem_repeat(var(--days),minmax(1.75rem,1fr))] auto-rows-[1.625rem] border-b border-border"
+          role="row"
+          :data-testid="`cal-${row.room.room_number}`"
         >
-          {{ bar.block.block_type }}
+          <div class="col-start-1 row-start-1 flex items-center pl-2 font-semibold" role="rowheader">{{ row.room.room_number }}</div>
+          <button
+            v-for="(d, i) in dates"
+            :key="d"
+            type="button"
+            :class="cn('cursor-pointer rounded-none border-0 border-l border-border bg-transparent p-0 hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')"
+            :style="{ gridColumn: i + 2, gridRow: 1 }"
+            :disabled="!canManage"
+            :aria-label="t('roomBlocks.blockRoomFrom', { room: row.room.room_number, date: d })"
+            @click="prefill(row.room.id, d)"
+          />
+          <div
+            v-for="bar in row.bars"
+            :key="bar.block.id"
+            :class="cn('pointer-events-none z-[1] mx-px my-[3px] flex items-center rounded-md border px-1.5 font-bold text-foreground', bar.block.block_type === 'OOO' ? 'border-destructive bg-destructive/30' : 'border-warning bg-warning/30')"
+            :style="{ gridColumn: `${bar.start} / ${bar.end}`, gridRow: 1 }"
+            :title="`${bar.block.block_type}: ${bar.block.reason} (${bar.block.start_date} to ${bar.block.end_date})`"
+            data-testid="bar"
+          >
+            {{ bar.block.block_type }}
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </Card>
 
-  <form v-if="canManage && property.currentId !== null" class="card" novalidate data-testid="block-form" @submit.prevent="create">
-    <h2>New block</h2>
-    <div class="form-grid">
-      <label class="field">
-        <span>Room</span>
-        <select v-model="form.room_id" name="room_id" :aria-invalid="!!fieldError('room_id')">
-          <option :value="0" disabled>Select a room</option>
-          <option v-for="r in sortedRooms" :key="r.id" :value="r.id">{{ r.room_number }}</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Type</span>
-        <select v-model="form.block_type" name="block_type">
-          <option value="OOO">Out of order (OOO)</option>
-          <option value="OOS">Out of service (OOS)</option>
-        </select>
-        <small class="hint">Both make the room unsellable.</small>
-      </label>
-      <label class="field">
-        <span>From</span>
-        <input v-model="form.start_date" name="start_date" type="date" :aria-invalid="!!fieldError('start_date')" />
-        <small v-if="fieldError('start_date')" class="error-text">{{ fieldError('start_date') }}</small>
-      </label>
-      <label class="field">
-        <span>Until (not included)</span>
-        <input v-model="form.end_date" name="end_date" type="date" :aria-invalid="!!fieldError('end_date')" />
-        <small v-if="fieldError('end_date')" class="error-text">{{ fieldError('end_date') }}</small>
-      </label>
-      <label class="field wide">
-        <span>Reason</span>
-        <input v-model="form.reason" name="reason" maxlength="500" :aria-invalid="!!fieldError('reason')" />
-        <small v-if="fieldError('reason')" class="error-text">{{ fieldError('reason') }}</small>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn-primary" :disabled="saving">Create block</button>
-    </div>
-  </form>
+    <Card v-if="canManage" class="mb-4">
+      <form novalidate data-testid="block-form" @submit.prevent="create">
+        <CardHeader><CardTitle>{{ t('roomBlocks.newBlock') }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <FormField :label="t('roomBlocks.room')" :error="fieldError('room_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model="form.room_id" name="room_id" :aria-invalid="invalid">
+                  <option :value="0" disabled>{{ t('roomBlocks.selectRoom') }}</option>
+                  <option v-for="r in sortedRooms" :key="r.id" :value="r.id">{{ r.room_number }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('roomBlocks.type')" :hint="t('roomBlocks.unsellable')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.block_type" name="block_type">
+                  <option value="OOO">{{ t('roomBlocks.ooo') }}</option>
+                  <option value="OOS">{{ t('roomBlocks.oos') }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('roomBlocks.from')" :error="fieldError('start_date')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.start_date" name="start_date" type="date" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('roomBlocks.until')" :error="fieldError('end_date')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.end_date" name="end_date" type="date" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-4" :label="t('roomBlocks.reason')" :error="fieldError('reason')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end"><Button type="submit" :disabled="saving">{{ t('roomBlocks.create') }}</Button></div>
+        </CardContent>
+      </form>
+    </Card>
 
-  <section class="card">
-    <h2>Active blocks in view</h2>
-    <p v-if="loaded && !blocks.length" class="muted">No blocks in this period.</p>
-    <table v-else-if="blocks.length" class="list">
-      <thead>
-        <tr>
-          <th>Room</th>
-          <th>Type</th>
-          <th>From</th>
-          <th>Until</th>
-          <th>Reason</th>
-          <th v-if="canManage" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="b in blocks" :key="b.id" :data-testid="`block-${b.id}`">
-          <td><b>{{ roomNumber(b.room_id) }}</b></td>
-          <td>{{ b.block_type }}</td>
-          <td>{{ formatBusinessDate(b.start_date) }}</td>
-          <td>{{ formatBusinessDate(b.end_date) }}</td>
-          <td>{{ b.reason }}</td>
-          <td v-if="canManage"><button type="button" @click="cancelling = b; cancelReason = ''">Release</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+    <Card class="mb-4">
+      <CardHeader><CardTitle>{{ t('roomBlocks.activeInView') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p v-if="loaded && !blocks.length" class="m-0 text-sm text-muted-foreground">{{ t('roomBlocks.noBlocks') }}</p>
+        <DataTable v-else-if="blocks.length" :columns="blockColumnsDef" :rows="blocks" row-key="id" :row-test-id="(b) => `block-${b.id}`" :caption="t('roomBlocks.activeInView')">
+          <template #cell-room_id="{ row: b }"><b>{{ roomNumber(b.room_id) }}</b></template>
+          <template #cell-block_type="{ row: b }"><Badge :variant="b.block_type === 'OOO' ? 'destructive' : 'warning'">{{ b.block_type }}</Badge></template>
+          <template #cell-start_date="{ row: b }">{{ formatBusinessDate(b.start_date) }}</template>
+          <template #cell-end_date="{ row: b }">{{ formatBusinessDate(b.end_date) }}</template>
+          <template #cell-actions="{ row: b }"><Button variant="outline" size="sm" @click="cancelling = b; cancelReason = ''">{{ t('roomBlocks.release') }}</Button></template>
+        </DataTable>
+      </CardContent>
+    </Card>
 
-  <form v-if="cancelling" class="card" novalidate data-testid="cancel-form" @submit.prevent="cancel">
-    <h2>Release block on room {{ roomNumber(cancelling.room_id) }}</h2>
-    <label class="field">
-      <span>Reason</span>
-      <input v-model="cancelReason" name="cancel_reason" maxlength="500" :aria-invalid="!!fieldError('reason')" />
-      <small v-if="fieldError('reason')" class="error-text">{{ fieldError('reason') }}</small>
-    </label>
-    <div class="form-actions">
-      <button type="button" @click="cancelling = null">Keep block</button>
-      <button type="submit" class="btn-primary" :disabled="saving">Release block</button>
-    </div>
-  </form>
+    <Card v-if="cancelling" class="mb-4 border-primary/50">
+      <form novalidate data-testid="cancel-form" @submit.prevent="cancel">
+        <CardHeader><CardTitle>{{ t('roomBlocks.releaseTitle', { room: roomNumber(cancelling.room_id) }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <FormField :label="t('roomBlocks.reason')" :error="fieldError('reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="cancelReason" name="cancel_reason" maxlength="500" :aria-invalid="invalid" /></template>
+          </FormField>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="cancelling = null">{{ t('roomBlocks.keepBlock') }}</Button>
+            <Button type="submit" :disabled="saving">{{ t('roomBlocks.releaseBlock') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+  </template>
 </template>
-
-<style scoped>
-.nav {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.nav select {
-  font: inherit;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-.calendar-card {
-  overflow-x: auto;
-}
-.calendar {
-  display: grid;
-  min-width: 640px;
-  font-size: 12px;
-}
-.row {
-  display: grid;
-  grid-template-columns: 72px repeat(var(--days), minmax(28px, 1fr));
-  grid-auto-rows: 26px;
-  border-bottom: 1px solid var(--border);
-}
-.row.head {
-  grid-auto-rows: 36px;
-  color: var(--text-muted);
-}
-.label {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  padding-left: 6px;
-  font-weight: 600;
-}
-.day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.1;
-}
-.day.today,
-.cell.today {
-  background: var(--accent-soft);
-}
-.cell {
-  border: 0;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-.cell:disabled {
-  cursor: default;
-}
-.cell:hover:not(:disabled) {
-  background: var(--hover);
-}
-.bar {
-  z-index: 1;
-  margin: 3px 1px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  font-weight: 700;
-  color: var(--text);
-  pointer-events: none;
-}
-.bar.ooo {
-  background: color-mix(in srgb, var(--danger) 30%, transparent);
-  border: 1px solid var(--danger);
-}
-.bar.oos {
-  background: color-mix(in srgb, var(--warning) 30%, transparent);
-  border: 1px solid var(--warning);
-}
-.wide {
-  grid-column: 1 / -1;
-}
-.conflicts {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-</style>

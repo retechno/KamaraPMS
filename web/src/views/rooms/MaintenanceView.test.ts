@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import MaintenanceView from './MaintenanceView.vue'
@@ -90,7 +91,7 @@ describe('MaintenanceView', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'the request is invalid', errors: [{ field: 'description', code: 'REQUIRED', message: '1-1000 characters' }] } as never))
     await w.get('[data-testid=request-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('.error-text').text()).toContain('1-1000 characters')
+    expect(w.get('form[data-testid=request-form] [role=alert]').text()).toContain('1-1000 characters')
   })
 
   it('assigns, starts and resolves a request', async () => {
@@ -172,5 +173,40 @@ describe('MaintenanceView', () => {
     const none = await mountView([])
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
+  })
+
+  it('shows priority and status as badges and the category in words', async () => {
+    const w = await mountView()
+    await flushPromises()
+    const lamp = w.get('[data-testid=request-MNT000002]').text()
+    expect(lamp).toContain('Urgent')
+    expect(lamp).toContain('In progress')
+    expect(lamp).toContain('Electrical')
+    expect(w.get('[data-testid=request-MNT000001]').text()).toContain('Plumbing')
+    expect(w.get('[data-testid=request-MNT000001]').text()).toContain('Open')
+  })
+
+  it('opens the detail of a request beside the list and closes nothing else', async () => {
+    const w = await mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=detail]').exists()).toBe(false)
+    await w.get('[data-testid=select-MNT000001]').trigger('click')
+    expect(w.get('[data-testid=detail]').text()).toContain('Shower leaks')
+    expect(w.get('[data-testid=detail]').text()).toContain('Reported 2026-09-30 by Dewi')
+    expect(w.get('[data-testid=request-MNT000001]').classes()).toContain('bg-accent') // the chosen row
+  })
+
+  it('speaks Indonesian, the notice included', async () => {
+    setLocale('id')
+    const w = await mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Perawatan')
+    expect(w.get('[data-testid=new-request]').text()).toBe('Laporkan masalah')
+    expect(w.get('[data-testid=request-MNT000002]').text()).toContain('Mendesak')
+    await w.get('[data-testid=select-MNT000001]').trigger('click')
+    await w.get('[data-testid=start]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=notice]').text()).toBe('Dimulai.')
+    setLocale('en')
   })
 })

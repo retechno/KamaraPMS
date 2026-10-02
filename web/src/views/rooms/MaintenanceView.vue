@@ -4,6 +4,18 @@ import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { HousekeepingBoardRoom, HousekeepingStaffMember, MaintenanceRequest } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -34,10 +46,22 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 const selected = computed(() => rows.value.find((r) => r.id === selectedId.value) ?? null)
 const isOpen = (r: MaintenanceRequest) => r.status === 'OPEN' || r.status === 'IN_PROGRESS'
 const fieldError = (field: string) => error.value?.fieldMessage(field)
-const LABEL: Record<string, string> = { OPEN: 'Open', IN_PROGRESS: 'In progress', RESOLVED: 'Resolved', CANCELLED: 'Cancelled' }
 const CATEGORIES = ['PLUMBING', 'ELECTRICAL', 'AC', 'FURNITURE', 'APPLIANCE', 'OTHER']
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT']
-const where = (r: MaintenanceRequest) => (r.room_number ? `Room ${r.room_number}` : r.location || '')
+const where = (r: MaintenanceRequest) => (r.room_number ? t('maintenance.roomWord', { number: r.room_number }) : r.location || '')
+const categoryLabel = (c: string): string => t(`maintenance.cat${c}` as never)
+const priorityLabel = (p: string): string => t(`maintenance.pr${p}` as never)
+const priorityVariant = (p: string) => (p === 'URGENT' ? ('destructive' as const) : p === 'HIGH' ? ('warning' as const) : p === 'LOW' ? ('secondary' as const) : ('outline' as const))
+
+const columns = computed<Column<MaintenanceRequest>[]>(() => [
+  { key: 'request_number', label: t('maintenance.number'), sortable: true },
+  { key: 'where', label: t('maintenance.where') },
+  { key: 'category', label: t('maintenance.category'), sortable: true },
+  { key: 'priority', label: t('maintenance.priority') },
+  { key: 'description', label: t('maintenance.problem') },
+  { key: 'assignee_name', label: t('maintenance.assignedTo'), sortable: true },
+  { key: 'status', label: t('maintenance.status'), sortable: true },
+])
 
 async function load(more = false): Promise<void> {
   const propertyId = pid.value
@@ -115,7 +139,7 @@ async function report(): Promise<void> {
       },
     })
     creating.value = false
-    notice.value = `Request ${data?.request_number ?? ''} reported.`
+    notice.value = t('maintenance.noticeReported', { number: data?.request_number ?? '' })
     selectedId.value = data?.id ?? null
     filter.view = 'open'
     await load()
@@ -133,11 +157,11 @@ function select(r: MaintenanceRequest): void {
   error.value = null
 }
 
-const assign = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/assign', { params: base(), body: { user_id: action.assignTo || null } }), 'Saved.')
-const start = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/start', { params: base() }), 'Started.')
-const reopen = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/reopen', { params: base() }), 'Reopened.')
+const assign = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/assign', { params: base(), body: { user_id: action.assignTo || null } }), t('maintenance.noticeSaved'))
+const start = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/start', { params: base() }), t('maintenance.noticeStarted'))
+const reopen = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/reopen', { params: base() }), t('maintenance.noticeReopened'))
 const setPriority = (priority: string) =>
-  run(() => api.PATCH('/api/v1/properties/{propertyId}/maintenance-requests/{id}', { params: base(), body: { priority: priority as 'NORMAL' } }), 'Priority changed.')
+  run(() => api.PATCH('/api/v1/properties/{propertyId}/maintenance-requests/{id}', { params: base(), body: { priority: priority as 'NORMAL' } }), t('maintenance.noticePriority'))
 
 async function close(): Promise<void> {
   const r = selected.value
@@ -148,14 +172,14 @@ async function close(): Promise<void> {
     () => (verb === 'resolve'
       ? api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/resolve', { params: base(), body })
       : api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/cancel', { params: base(), body })),
-    verb === 'resolve' ? 'Resolved.' : 'Cancelled.',
+    verb === 'resolve' ? t('maintenance.noticeResolved') : t('maintenance.noticeCancelled'),
   )
   if (!error.value) closing.value = null
 }
 
 const block = () => run(() => api.POST('/api/v1/properties/{propertyId}/maintenance-requests/{id}/block', {
   params: base(), body: { block_type: action.blockType as 'OOO', end_date: action.blockEnd },
-}), 'The room is out of sale.')
+}), t('maintenance.noticeRoomOut'))
 
 const canBlock = computed(() => !!selected.value?.room_id && isOpen(selected.value) && selected.value.block?.status !== 'ACTIVE' && can('maintenance.manage') && can('room_block.manage'))
 
@@ -174,206 +198,190 @@ watch(() => route.query.room, (v) => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Maintenance</h1>
-    <button v-if="can('maintenance.report') && !creating" type="button" class="btn-primary" data-testid="new-request" @click="startNew()">Report a problem</button>
-  </div>
+  <PageHeader :title="t('maintenance.title')">
+    <template #actions>
+      <Button v-if="can('maintenance.report') && !creating" size="sm" data-testid="new-request" @click="startNew()">{{ t('maintenance.report') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="mt-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('maintenance.report')" class="muted" data-testid="no-access">Your role at this property cannot see maintenance requests: the <code>maintenance.report</code> permission is needed.</p>
+  <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <p v-if="pid === null" class="muted">{{ t('maintenance.selectProperty') }}</p>
+  <p v-else-if="!can('maintenance.report')" class="muted" data-testid="no-access">{{ t('maintenance.noAccess') }}</p>
 
   <template v-else>
-    <form v-if="creating" class="card" novalidate data-testid="request-form" @submit.prevent="report">
-      <h2>Report a problem</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span>Room</span>
-          <select v-model.number="form.room_id" name="room_id">
-            <option :value="0">Not a room (give the place)</option>
-            <option v-for="r in roomList" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.room_type_code }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Place</span>
-          <input v-model="form.location" name="location" maxlength="150" placeholder="Lobby, pool, kitchen…" :aria-invalid="!!fieldError('location')" />
-          <small v-if="fieldError('location')" class="error-text">{{ fieldError('location') }}</small>
-        </label>
-        <label class="field">
-          <span>Category</span>
-          <select v-model="form.category" name="category">
-            <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Priority</span>
-          <select v-model="form.priority" name="priority">
-            <option v-for="p in PRIORITIES" :key="p" :value="p">{{ p }}</option>
-          </select>
-        </label>
-        <label class="field wide">
-          <span>What is wrong</span>
-          <input v-model="form.description" name="description" maxlength="1000" :aria-invalid="!!fieldError('description')" />
-          <small v-if="fieldError('description')" class="error-text">{{ fieldError('description') }}</small>
-        </label>
-      </div>
-      <div class="form-actions">
-        <button type="button" @click="creating = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="busy">Report</button>
-      </div>
-    </form>
-
-    <section class="card">
-      <form class="filters" novalidate @submit.prevent="load()">
-        <label class="field">
-          <span>Show</span>
-          <select v-model="filter.view" name="view">
-            <option value="open">Open and in progress</option>
-            <option value="all">Everything</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Category</span>
-          <select v-model="filter.category" name="filter_category">
-            <option value="">Any</option>
-            <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Priority</span>
-          <select v-model="filter.priority" name="filter_priority">
-            <option value="">Any</option>
-            <option v-for="p in PRIORITIES" :key="p" :value="p">{{ p }}</option>
-          </select>
-        </label>
+    <Card v-if="creating" class="mb-4 border-primary/50">
+      <form novalidate data-testid="request-form" @submit.prevent="report">
+        <CardHeader><CardTitle>{{ t('maintenance.report') }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <FormField :label="t('maintenance.room')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="form.room_id" name="room_id">
+                  <option :value="0">{{ t('maintenance.notRoom') }}</option>
+                  <option v-for="r in roomList" :key="r.room_id" :value="r.room_id">{{ r.room_number }} · {{ r.room_type_code }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('maintenance.place')" :error="fieldError('location')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.location" name="location" maxlength="150" :placeholder="t('maintenance.placePlaceholder')" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('maintenance.category')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.category" name="category">
+                  <option v-for="c in CATEGORIES" :key="c" :value="c">{{ categoryLabel(c) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('maintenance.priority')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.priority" name="priority">
+                  <option v-for="p in PRIORITIES" :key="p" :value="p">{{ priorityLabel(p) }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField class="sm:col-span-2" :label="t('maintenance.whatWrong')" :error="fieldError('description')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.description" name="description" maxlength="1000" :aria-invalid="invalid" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="creating = false">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy">{{ t('maintenance.reportButton') }}</Button>
+          </div>
+        </CardContent>
       </form>
-      <p v-if="loaded && !rows.length" class="muted" data-testid="empty">No requests.</p>
-      <table v-else-if="rows.length" class="list" data-testid="requests">
-        <thead><tr><th>Number</th><th>Where</th><th>Category</th><th>Priority</th><th>Problem</th><th>Assigned to</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr v-for="r in rows" :key="r.id" :class="{ chosen: r.id === selectedId, closed: !isOpen(r) }" :data-testid="`request-${r.request_number}`">
-            <td><button type="button" class="link" :data-testid="`select-${r.request_number}`" @click="select(r)">{{ r.request_number }}</button></td>
-            <td>{{ where(r) }}<small v-if="r.block && r.block.status === 'ACTIVE'" class="pill blocked" data-testid="blocked"> {{ r.block.block_type }} until {{ r.block.end_date }}</small></td>
-            <td>{{ r.category }}</td>
-            <td><span class="pill" :class="`pr-${r.priority.toLowerCase()}`">{{ r.priority }}</span></td>
-            <td>{{ r.description }}</td>
-            <td>{{ r.assignee_name || '—' }}</td>
-            <td>{{ LABEL[r.status] }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <button v-if="nextCursor" type="button" data-testid="more" @click="load(true)">Load more</button>
-    </section>
+    </Card>
 
-    <section v-if="selected" class="card" data-testid="detail">
-      <h2>{{ selected.request_number }} · {{ where(selected) }}</h2>
-      <p>{{ selected.description }}</p>
-      <p class="muted">
-        Reported {{ selected.business_date }}<template v-if="selected.reporter_name"> by {{ selected.reporter_name }}</template>.
-        <template v-if="selected.resolution_note"> Note: {{ selected.resolution_note }}</template>
-      </p>
-
-      <template v-if="can('maintenance.manage')">
-        <div v-if="isOpen(selected)" class="filters">
-          <label class="field">
-            <span>Priority</span>
-            <select :value="selected.priority" name="detail_priority" @change="setPriority(($event.target as HTMLSelectElement).value)">
-              <option v-for="p in PRIORITIES" :key="p" :value="p">{{ p }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Assigned to</span>
-            <select v-model.number="action.assignTo" name="assign_to">
-              <option :value="0">Nobody</option>
-              <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
-            </select>
-          </label>
-          <button type="button" :disabled="busy" data-testid="assign" @click="assign">Save assignment</button>
-        </div>
-
-        <div class="form-actions">
-          <button v-if="selected.status === 'OPEN'" type="button" :disabled="busy" data-testid="start" @click="start">Start work</button>
-          <button v-if="isOpen(selected)" type="button" class="btn-primary" :disabled="busy" data-testid="resolve" @click="closing = 'resolve'">Resolve</button>
-          <button v-if="isOpen(selected)" type="button" :disabled="busy" data-testid="cancel" @click="closing = 'cancel'">Cancel request</button>
-          <button v-if="selected.status === 'RESOLVED'" type="button" :disabled="busy" data-testid="reopen" @click="reopen">Reopen</button>
-        </div>
-
-        <form v-if="closing" class="filters" novalidate data-testid="close-form" @submit.prevent="close">
-          <label class="field grow">
-            <span>{{ closing === 'cancel' ? 'Why is it cancelled?' : 'What was done?' }}</span>
-            <input v-model="action.note" name="note" maxlength="1000" :aria-invalid="!!fieldError('note')" />
-            <small v-if="fieldError('note')" class="error-text">{{ fieldError('note') }}</small>
-          </label>
-          <label v-if="selected.block?.status === 'ACTIVE'" class="check">
-            <input v-model="action.releaseBlock" name="release_block" type="checkbox" />
-            <span>Put the room back on sale ({{ selected.block.block_type }} until {{ selected.block.end_date }})</span>
-          </label>
-          <button type="button" @click="closing = null">Back</button>
-          <button type="submit" class="btn-primary" :disabled="busy || (closing === 'cancel' && !action.note.trim())" data-testid="close-submit">
-            {{ closing === 'cancel' ? 'Cancel the request' : 'Mark resolved' }}
-          </button>
+    <div :class="cn('grid items-start gap-4', selected && 'xl:grid-cols-[minmax(0,1fr)_26rem]')">
+      <div class="min-w-0">
+        <form class="mb-3 flex flex-wrap items-end gap-3" novalidate @submit.prevent="load()">
+          <FormField class="w-52" :label="t('maintenance.show')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="filter.view" name="view">
+                <option value="open">{{ t('maintenance.openInProgress') }}</option>
+                <option value="all">{{ t('maintenance.everything') }}</option>
+                <option value="RESOLVED">{{ t('status.RESOLVED') }}</option>
+                <option value="CANCELLED">{{ t('status.CANCELLED') }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField class="w-44" :label="t('maintenance.category')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="filter.category" name="filter_category">
+                <option value="">{{ t('maintenance.any') }}</option>
+                <option v-for="c in CATEGORIES" :key="c" :value="c">{{ categoryLabel(c) }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
+          <FormField class="w-40" :label="t('maintenance.priority')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="filter.priority" name="filter_priority">
+                <option value="">{{ t('maintenance.any') }}</option>
+                <option v-for="p in PRIORITIES" :key="p" :value="p">{{ priorityLabel(p) }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
         </form>
 
-        <form v-if="canBlock" class="filters" novalidate data-testid="block-form" @submit.prevent="block">
-          <label class="field">
-            <span>Take the room out of sale</span>
-            <select v-model="action.blockType" name="block_type">
-              <option value="OOO">Out of order</option>
-              <option value="OOS">Out of service</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Until (not including)</span>
-            <input v-model="action.blockEnd" name="block_end" type="date" :min="businessDate" :aria-invalid="!!fieldError('end_date')" />
-            <small v-if="fieldError('end_date')" class="error-text">{{ fieldError('end_date') }}</small>
-          </label>
-          <button type="submit" :disabled="busy || !action.blockEnd" data-testid="block-room">Block room</button>
-        </form>
-      </template>
-    </section>
+        <DataTable
+          :columns="columns"
+          :rows="rows"
+          row-key="id"
+          :loading="!loaded"
+          :row-test-id="(r) => `request-${r.request_number}`"
+          :row-class="(r) => cn(r.id === selectedId && 'bg-accent', !isOpen(r) && 'closed text-muted-foreground')"
+          :caption="t('maintenance.title')"
+          data-testid="requests"
+        >
+          <template #cell-request_number="{ row: r }">
+            <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-primary underline-offset-2 hover:underline" :data-testid="`select-${r.request_number}`" @click="select(r)">{{ r.request_number }}</button>
+          </template>
+          <template #cell-where="{ row: r }">
+            {{ where(r) }}
+            <Badge v-if="r.block && r.block.status === 'ACTIVE'" variant="warning" class="ml-1" data-testid="blocked">{{ t('maintenance.blockUntil', { type: r.block.block_type, date: r.block.end_date }) }}</Badge>
+          </template>
+          <template #cell-category="{ row: r }">{{ categoryLabel(r.category) }}</template>
+          <template #cell-priority="{ row: r }"><Badge :variant="priorityVariant(r.priority)">{{ priorityLabel(r.priority) }}</Badge></template>
+          <template #cell-assignee_name="{ row: r }">{{ r.assignee_name || '—' }}</template>
+          <template #cell-status="{ row: r }"><StatusBadge domain="work" :status="r.status" /></template>
+          <template #empty><EmptyState :title="t('maintenance.empty')" data-testid="empty" /></template>
+          <template #footer>
+            <div v-if="nextCursor" class="flex justify-center p-3"><Button variant="outline" size="sm" data-testid="more" @click="load(true)">{{ t('maintenance.loadMore') }}</Button></div>
+          </template>
+        </DataTable>
+      </div>
+
+      <Card v-if="selected" data-testid="detail">
+        <CardHeader><CardTitle>{{ selected.request_number }} · {{ where(selected) }}</CardTitle></CardHeader>
+        <CardContent class="flex flex-col gap-4">
+          <div>
+            <p class="m-0 text-sm">{{ selected.description }}</p>
+            <p class="m-0 mt-1 text-sm text-muted-foreground">
+              {{ t('maintenance.reported', { date: selected.business_date }) }}{{ selected.reporter_name ? ` ${t('maintenance.byReporter', { name: selected.reporter_name })}` : '' }}.
+              <template v-if="selected.resolution_note"> {{ t('maintenance.noteLabel', { note: selected.resolution_note }) }}</template>
+            </p>
+          </div>
+
+          <template v-if="can('maintenance.manage')">
+            <div v-if="isOpen(selected)" class="flex flex-wrap items-end gap-3">
+              <FormField class="w-36" :label="t('maintenance.priority')">
+                <template #default="{ id }">
+                  <NativeSelect :id="id" :model-value="selected.priority" name="detail_priority" @change="setPriority(($event.target as HTMLSelectElement).value)">
+                    <option v-for="p in PRIORITIES" :key="p" :value="p">{{ priorityLabel(p) }}</option>
+                  </NativeSelect>
+                </template>
+              </FormField>
+              <FormField class="w-44" :label="t('maintenance.assignedTo')">
+                <template #default="{ id }">
+                  <NativeSelect :id="id" v-model.number="action.assignTo" name="assign_to">
+                    <option :value="0">{{ t('maintenance.nobody') }}</option>
+                    <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
+                  </NativeSelect>
+                </template>
+              </FormField>
+              <Button variant="outline" size="sm" :disabled="busy" data-testid="assign" @click="assign">{{ t('maintenance.saveAssignment') }}</Button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <Button v-if="selected.status === 'OPEN'" variant="outline" size="sm" :disabled="busy" data-testid="start" @click="start">{{ t('maintenance.start') }}</Button>
+              <Button v-if="isOpen(selected)" size="sm" :disabled="busy" data-testid="resolve" @click="closing = 'resolve'">{{ t('maintenance.resolve') }}</Button>
+              <Button v-if="isOpen(selected)" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="closing = 'cancel'">{{ t('maintenance.cancelRequest') }}</Button>
+              <Button v-if="selected.status === 'RESOLVED'" variant="outline" size="sm" :disabled="busy" data-testid="reopen" @click="reopen">{{ t('maintenance.reopen') }}</Button>
+            </div>
+
+            <form v-if="closing" class="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate data-testid="close-form" @submit.prevent="close">
+              <FormField :label="closing === 'cancel' ? t('maintenance.whyCancelled') : t('maintenance.whatDone')" :error="fieldError('note')">
+                <template #default="{ id, invalid }"><Input :id="id" v-model="action.note" name="note" maxlength="1000" :aria-invalid="invalid" /></template>
+              </FormField>
+              <label v-if="selected.block?.status === 'ACTIVE'" class="flex items-center gap-2 text-sm">
+                <input v-model="action.releaseBlock" name="release_block" type="checkbox" />
+                <span>{{ t('maintenance.putBack', { type: selected.block.block_type, date: selected.block.end_date }) }}</span>
+              </label>
+              <div class="flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" @click="closing = null">{{ t('maintenance.back') }}</Button>
+                <Button type="submit" size="sm" :disabled="busy || (closing === 'cancel' && !action.note.trim())" data-testid="close-submit">
+                  {{ closing === 'cancel' ? t('maintenance.cancelTheRequest') : t('maintenance.markResolved') }}
+                </Button>
+              </div>
+            </form>
+
+            <form v-if="canBlock" class="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3" novalidate data-testid="block-form" @submit.prevent="block">
+              <FormField class="w-44" :label="t('maintenance.takeOut')">
+                <template #default="{ id }">
+                  <NativeSelect :id="id" v-model="action.blockType" name="block_type">
+                    <option value="OOO">{{ t('maintenance.ooo') }}</option>
+                    <option value="OOS">{{ t('maintenance.oos') }}</option>
+                  </NativeSelect>
+                </template>
+              </FormField>
+              <FormField class="w-40" :label="t('maintenance.until')" :error="fieldError('end_date')">
+                <template #default="{ id, invalid }"><Input :id="id" v-model="action.blockEnd" name="block_end" type="date" :min="businessDate" :aria-invalid="invalid" /></template>
+              </FormField>
+              <Button type="submit" variant="outline" size="sm" :disabled="busy || !action.blockEnd" data-testid="block-room">{{ t('maintenance.blockRoom') }}</Button>
+            </form>
+          </template>
+        </CardContent>
+      </Card>
+    </div>
   </template>
 </template>
-
-<style scoped>
-.chosen td {
-  background: var(--accent-soft);
-}
-.closed td {
-  color: var(--muted, #6b7280);
-}
-.pill {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 600;
-}
-.pill.blocked {
-  margin-left: 6px;
-  border-color: var(--warning);
-}
-.pr-urgent {
-  border-color: var(--danger);
-  font-weight: 700;
-}
-.pr-high {
-  border-color: var(--warning);
-}
-.link {
-  border: 0;
-  background: none;
-  color: var(--accent);
-  padding: 0;
-  text-decoration: underline;
-}
-.wide {
-  grid-column: 1 / -1;
-}
-.grow {
-  flex: 1;
-}
-</style>

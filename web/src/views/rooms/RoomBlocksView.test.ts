@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import RoomBlocksView from './RoomBlocksView.vue'
@@ -99,5 +100,32 @@ describe('RoomBlocksView', () => {
     expect(w.find('[data-testid=block-form]').exists()).toBe(false)
     expect(w.find('[data-testid=block-9] button').exists()).toBe(false)
     expect(w.find('[data-testid=cal-202] [data-testid=bar]').exists()).toBe(true)
+  })
+
+  it('names the weekday over each date, shades the weekend and highlights the business date', async () => {
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    const heads = w.findAll('[role=columnheader]')
+    expect(heads[0]!.text()).toContain('Thu') // 1 Oct 2026
+    expect(heads[0]!.classes()).toContain('bg-primary/10')
+    expect(heads[2]!.text()).toContain('Sat')
+    expect(heads[2]!.classes()).toContain('bg-muted/60')
+  })
+
+  it('shows the type of a block as a badge in the list, and a calendar bar by type', async () => {
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    expect(w.get('[data-testid=block-9]').text()).toContain('OOO')
+    expect(w.get('[data-testid=cal-202] [data-testid=bar]').classes()).toContain('border-destructive')
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Blokir kamar')
+    expect(w.get('[data-testid=block-form]').text()).toContain('Blokir baru')
+    expect(w.get('[data-testid=block-9] button').text()).toBe('Lepaskan')
+    setLocale('en')
   })
 })

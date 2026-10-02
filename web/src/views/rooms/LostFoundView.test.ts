@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import LostFoundView from './LostFoundView.vue'
@@ -91,7 +92,7 @@ describe('LostFoundView', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'the item is invalid', errors: [{ field: 'description', code: 'REQUIRED', message: '1-500 characters' }] } as never))
     await w.get('[data-testid=item-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('.error-text').text()).toContain('1-500 characters')
+    expect(w.get('form[data-testid=item-form] [role=alert]').text()).toContain('1-500 characters')
     expect(w.find('[data-testid=item-form]').exists()).toBe(true)
   })
 
@@ -154,5 +155,27 @@ describe('LostFoundView', () => {
     const none = mountView([])
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
+  })
+
+  it('shows the status as a badge and the category in words, and opens the detail beside the list', async () => {
+    const w = await mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=item-LF000001]').text()).toContain('Stored')
+    expect(w.get('[data-testid=item-LF000003]').text()).toMatch(/Returned|Disposed/)
+    expect(w.find('[data-testid=detail]').exists()).toBe(false)
+    await w.get('[data-testid=select-LF000001]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=detail]').text()).toContain('LF000001')
+    expect(w.get('[data-testid=item-LF000001]').classes()).toContain('bg-accent')
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = await mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Barang tertinggal')
+    expect(w.get('[data-testid=new-item]').text()).toBe('Catat barang')
+    expect(w.get('[data-testid=item-LF000001]').text()).toContain('Disimpan')
+    setLocale('en')
   })
 })
