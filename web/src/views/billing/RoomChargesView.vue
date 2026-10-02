@@ -3,6 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { RoomChargeItem, RoomChargePostResponse, RoomChargePreview } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
@@ -16,6 +23,18 @@ const error = ref<ApiError | null>(null)
 const busy = ref(false)
 // One key per posting attempt (the run is idempotent anyway; the header is part of the contract).
 let key = newIdempotencyKey()
+
+const columns = computed<Column<RoomChargeItem>[]>(() => [
+  { key: 'stay_number', label: t('roomCharges.stay') },
+  { key: 'guest', label: t('roomCharges.guest') },
+  { key: 'room_number', label: t('roomCharges.room') },
+  { key: 'service_date', label: t('roomCharges.night') },
+  { key: 'room_rate', label: t('roomCharges.rate'), align: 'right' },
+  { key: 'service_charge', label: t('roomCharges.service'), align: 'right' },
+  { key: 'tax', label: t('roomCharges.tax'), align: 'right' },
+  { key: 'total', label: 'Total', align: 'right' },
+  { key: 'status', label: t('roomCharges.status') },
+])
 
 const pid = computed(() => property.currentId)
 const businessDate = computed(() => property.clock?.business_date ?? '')
@@ -69,83 +88,60 @@ watch([pid, businessDate], () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Room charges <span class="muted">{{ businessDate }}</span></h1>
-    <button type="button" :disabled="busy" data-testid="refresh" @click="load">Refresh</button>
-  </div>
+  <PageHeader :title="t('roomCharges.title')" :description="businessDate">
+    <template #actions>
+      <Button type="button" variant="outline" :disabled="busy" data-testid="refresh" @click="load">{{ t('roomCharges.refresh') }}</Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!allowed" class="muted" data-testid="no-access">Your role at this property does not allow posting room charges.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('roomCharges.noAccess') }}</p>
 
   <template v-else-if="preview">
-    <section v-if="outcome" class="card" data-testid="outcome">
-      <h2>Posted</h2>
-      <p>{{ outcome.results.filter((r) => r.status === 'POSTED').length }} night(s) posted,
-        {{ outcome.results.filter((r) => r.status === 'ALREADY_POSTED').length }} already posted,
-        {{ outcome.revalidation.errors.length }} with errors, {{ outcome.revalidation.ready }} still ready.</p>
-      <p v-if="outcome.revalidation.invalid.length" class="alert" data-testid="invalid">
-        {{ outcome.revalidation.invalid.length }} posted night(s) are outside their stay: reverse them on the folio.
-      </p>
-    </section>
+    <Card v-if="outcome" class="mb-4" data-testid="outcome">
+      <CardHeader><CardTitle>{{ t('roomCharges.posted') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p class="m-0 text-sm">
+          {{ t('roomCharges.outcome', {
+            posted: outcome.results.filter((r) => r.status === 'POSTED').length,
+            already: outcome.results.filter((r) => r.status === 'ALREADY_POSTED').length,
+            errors: outcome.revalidation.errors.length,
+            ready: outcome.revalidation.ready,
+          }) }}
+        </p>
+        <p v-if="outcome.revalidation.invalid.length" class="alert mb-0 mt-3" data-testid="invalid">{{ t('roomCharges.invalid', { n: outcome.revalidation.invalid.length }) }}</p>
+      </CardContent>
+    </Card>
 
-    <section class="card">
-      <div class="head">
-        <span data-testid="ready-count">{{ preview.totals.ready_count }} night(s) ready</span>
-        <span>Total <strong data-testid="ready-total">{{ preview.totals.ready_total }}</strong></span>
-        <button v-if="preview.totals.ready_count" type="button" class="btn-primary" :disabled="busy" data-testid="post" @click="post">Post room charges</button>
-      </div>
-      <p v-if="!preview.items.length" class="muted" data-testid="empty">Nobody is in house.</p>
-      <table v-else class="list" data-testid="items">
-        <thead><tr><th>Stay</th><th>Guest</th><th>Room</th><th>Night</th><th class="num">Rate</th><th class="num">Service</th><th class="num">Tax</th><th class="num">Total</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr v-for="i in preview.items" :key="`${i.stay_id}-${i.service_date}`" :data-testid="`item-${i.stay_id}-${i.service_date}`" :class="i.status.toLowerCase()">
-            <td>{{ i.stay_number }}</td>
-            <td>{{ i.guest }}</td>
-            <td>{{ i.room_number || '—' }}</td>
-            <td>{{ i.service_date }} <small v-if="isMissing(i)" class="muted">missing</small></td>
-            <td class="num">{{ i.room_rate }}</td>
-            <td class="num">{{ i.status === 'READY' ? i.service_charge : '' }}</td>
-            <td class="num">{{ i.status === 'READY' ? i.tax : '' }}</td>
-            <td class="num">{{ i.status === 'READY' ? i.total : '' }}</td>
-            <td>{{ i.status }}<small v-if="i.reason" class="muted"> {{ i.reason }}</small></td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-if="problems.length" class="alert" data-testid="problems">{{ problems.length }} night(s) cannot be posted until their problem is fixed.</p>
-      <p v-if="ready.length === 0 && preview.items.length" class="muted">Nothing is due.</p>
-    </section>
+    <Card>
+      <CardContent class="pt-4">
+        <div class="mb-3 flex flex-wrap items-center gap-6">
+          <span data-testid="ready-count">{{ t('roomCharges.readyCount', { n: preview.totals.ready_count }) }}</span>
+          <span>{{ t('roomCharges.total') }} <strong data-testid="ready-total">{{ preview.totals.ready_total }}</strong></span>
+          <Button v-if="preview.totals.ready_count" type="button" :disabled="busy" data-testid="post" @click="post">{{ t('roomCharges.post') }}</Button>
+        </div>
+        <EmptyState v-if="!preview.items.length" :title="t('roomCharges.empty')" data-testid="empty" />
+        <DataTable
+          v-else
+          :columns="columns"
+          :rows="preview.items"
+          :row-key="(i) => `${i.stay_id}-${i.service_date}`"
+          :row-test-id="(i) => `item-${i.stay_id}-${i.service_date}`"
+          :row-class="(i) => (i.status === 'ERROR' ? 'text-destructive' : i.status === 'ALREADY_POSTED' || i.status === 'NOT_APPLICABLE' ? 'text-muted-foreground' : undefined)"
+          :caption="t('roomCharges.title')"
+          data-testid="items"
+        >
+          <template #cell-room_number="{ row }">{{ row.room_number || '—' }}</template>
+          <template #cell-service_date="{ row }">{{ row.service_date }} <small v-if="isMissing(row)" class="text-muted-foreground">{{ t('roomCharges.missing') }}</small></template>
+          <template #cell-service_charge="{ row }">{{ row.status === 'READY' ? row.service_charge : '' }}</template>
+          <template #cell-tax="{ row }">{{ row.status === 'READY' ? row.tax : '' }}</template>
+          <template #cell-total="{ row }">{{ row.status === 'READY' ? row.total : '' }}</template>
+          <template #cell-status="{ row }"><Badge :variant="row.status === 'READY' ? 'success' : row.status === 'ERROR' ? 'destructive' : 'outline'">{{ row.status }}</Badge><small v-if="row.reason" class="text-muted-foreground"> {{ row.reason }}</small></template>
+        </DataTable>
+        <p v-if="problems.length" class="alert mb-0 mt-3" data-testid="problems">{{ t('roomCharges.problems', { n: problems.length }) }}</p>
+        <p v-if="ready.length === 0 && preview.items.length" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('roomCharges.nothingDue') }}</p>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.already_posted td,
-.not_applicable td {
-  color: var(--text-muted);
-}
-.error td {
-  color: var(--danger);
-}
-</style>

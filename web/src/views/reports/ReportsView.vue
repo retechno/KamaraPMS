@@ -2,6 +2,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -86,74 +94,58 @@ watch([key, pid], () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Reports</h1>
-  </div>
+  <PageHeader :title="t('reports.title')" />
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!allowed" class="muted" data-testid="no-access">Your role at this property does not allow viewing reports (the <code>report.view</code> permission).</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('reports.noAccess', { permission: 'report.view' }) }}</p>
 
   <template v-else>
-    <form class="card filters" novalidate data-testid="filters" @submit.prevent="run">
-      <label class="field">
-        <span>Report</span>
-        <select v-model="key" name="report">
-          <option v-for="r in reports" :key="r.key" :value="r.key">{{ r.title }}</option>
-        </select>
-      </label>
-      <template v-if="def.input === 'range'">
-        <label class="field"><span>From</span><input v-model="range.from" name="from" type="date" /></label>
-        <label class="field"><span>To</span><input v-model="range.to" name="to" type="date" /></label>
-      </template>
-      <label v-else-if="def.input === 'date'" class="field"><span>Date</span><input v-model="range.date" name="date" type="date" /></label>
-      <label v-else-if="def.input === 'hours'" class="field"><span>Not clean for at least (hours)</span><input v-model.number="range.minHours" name="min_hours" type="number" min="0" /></label>
-      <button type="submit" class="btn-primary" :disabled="busy" data-testid="run">Run</button>
-      <button type="button" :disabled="busy || !table" data-testid="csv" @click="download">Download CSV</button>
-      <small class="muted hint">{{ def.hint }} Business dates, not calendar dates.</small>
-    </form>
+    <Card class="mb-4">
+      <form class="flex flex-wrap items-end gap-4 p-4" novalidate data-testid="filters" @submit.prevent="run">
+        <FormField class="w-72" :label="t('reports.report')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="key" name="report">
+              <option v-for="r in reports" :key="r.key" :value="r.key">{{ r.title }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <template v-if="def.input === 'range'">
+          <FormField :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
+          <FormField :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+        </template>
+        <FormField v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
+        <FormField v-else-if="def.input === 'hours'" :label="t('reports.minHours')"><template #default="{ id }"><Input :id="id" v-model.number="range.minHours" name="min_hours" type="number" min="0" /></template></FormField>
+        <Button type="submit" :disabled="busy" data-testid="run">{{ t('reports.run') }}</Button>
+        <Button type="button" variant="outline" :disabled="busy || !table" data-testid="csv" @click="download">{{ t('reports.csv') }}</Button>
+        <small class="basis-full text-xs text-muted-foreground">{{ def.hint }} {{ t('reports.businessDates') }}</small>
+      </form>
+    </Card>
 
-    <section v-if="table" class="card" data-testid="result">
-      <p v-if="table.note" class="muted" data-testid="note">{{ table.note }}</p>
-      <p v-if="!table.rows.length" class="muted" data-testid="empty">Nothing to report for this selection.</p>
-      <table v-else class="list">
-        <thead><tr><th v-for="(c, i) in table.columns" :key="c" :class="{ num: table.numeric.includes(i) }">{{ c }}</th></tr></thead>
-        <tbody>
-          <tr v-for="(r, ri) in table.rows" :key="ri">
-            <td v-for="(c, i) in r" :key="i" :class="{ num: table.numeric.includes(i) }">{{ c }}</td>
-          </tr>
-        </tbody>
-        <tfoot v-if="table.footer">
-          <tr data-testid="footer"><th v-for="(c, i) in table.footer" :key="i" :class="{ num: table.numeric.includes(i) }">{{ c }}</th></tr>
-        </tfoot>
-      </table>
-    </section>
+    <Card v-if="table" data-testid="result">
+      <CardContent class="pt-4">
+        <p v-if="table.note" class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="note">{{ table.note }}</p>
+        <EmptyState v-if="!table.rows.length" :title="t('reports.empty')" data-testid="empty" />
+        <div v-else class="overflow-x-auto">
+          <table class="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th v-for="(c, i) in table.columns" :key="c" :class="['whitespace-nowrap border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground', table.numeric.includes(i) ? 'text-right' : 'text-left']">{{ c }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, ri) in table.rows" :key="ri" class="border-b border-border hover:bg-accent/50">
+                <td v-for="(c, i) in r" :key="i" :class="['px-3 py-2', table.numeric.includes(i) && 'text-right tabular-nums']">{{ c }}</td>
+              </tr>
+            </tbody>
+            <tfoot v-if="table.footer">
+              <tr data-testid="footer" class="font-semibold">
+                <th v-for="(c, i) in table.footer" :key="i" :class="['px-3 py-2', table.numeric.includes(i) ? 'text-right tabular-nums' : 'text-left']">{{ c }}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.hint {
-  flex-basis: 100%;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.list .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-</style>

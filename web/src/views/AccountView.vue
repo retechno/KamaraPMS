@@ -2,6 +2,12 @@
 import { reactive, ref } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -30,36 +36,35 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <h1 class="page-title">Account</h1>
-  <section v-if="auth.me" class="card">
-    <h2>{{ auth.me.user.full_name }}</h2>
-    <p class="muted">{{ auth.me.user.email }} · {{ auth.me.tenant.name }} ({{ auth.me.tenant.code }})</p>
-  </section>
+  <PageHeader :title="t('account.title')" />
+  <Card v-if="auth.me" class="mb-4">
+    <CardHeader>
+      <CardTitle>{{ auth.me.user.full_name }}</CardTitle>
+      <p class="m-0 text-sm text-muted-foreground">{{ auth.me.user.email }} · {{ auth.me.tenant.name }} ({{ auth.me.tenant.code }})</p>
+    </CardHeader>
+  </Card>
 
-  <form class="card" novalidate @submit.prevent="submit">
-    <h2>Change password</h2>
-    <p v-if="saved" class="alert warning" role="status">Password changed. Your other sessions were signed out.</p>
-    <p v-if="error && !error.fieldErrors.length" class="alert" role="alert">{{ error.message }}</p>
-    <div class="form-grid">
-      <label class="field">
-        <span>Current password</span>
-        <input v-model="form.current_password" type="password" autocomplete="current-password" :aria-invalid="!!error?.fieldMessage('current_password')" />
-        <small v-if="error?.fieldMessage('current_password')" class="error-text">The current password is incorrect.</small>
-      </label>
-      <label class="field">
-        <span>New password</span>
-        <input v-model="form.new_password" type="password" autocomplete="new-password" :aria-invalid="!!error?.fieldMessage('new_password')" />
-        <small class="hint">At least 12 characters. A few random words make a strong passphrase.</small>
-        <small v-if="error?.fieldMessage('new_password')" class="error-text">{{ error.fieldMessage('new_password') }}</small>
-      </label>
-      <label class="field">
-        <span>Repeat new password</span>
-        <input v-model="form.confirm" type="password" autocomplete="new-password" :aria-invalid="mismatch" />
-        <small v-if="mismatch" class="error-text">The passwords do not match.</small>
-      </label>
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn-primary" :disabled="busy">{{ busy ? 'Saving…' : 'Change password' }}</button>
-    </div>
-  </form>
+  <Card>
+    <form novalidate @submit.prevent="submit">
+      <CardHeader><CardTitle>{{ t('account.changePassword') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p v-if="saved" class="alert warning" role="status">{{ t('account.changed') }}</p>
+        <p v-if="error && !error.fieldErrors.length" class="alert" role="alert">{{ error.message }}</p>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <FormField :label="t('account.current')" :error="error?.fieldMessage('current_password') ? t('account.currentWrong') : undefined">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.current_password" type="password" autocomplete="current-password" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('account.new')" :hint="t('account.newHint')" :error="error?.fieldMessage('new_password')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.new_password" type="password" autocomplete="new-password" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('account.repeat')" :error="mismatch ? t('account.mismatch') : undefined">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.confirm" type="password" autocomplete="new-password" :aria-invalid="invalid" /></template>
+          </FormField>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <Button type="submit" :disabled="busy">{{ busy ? t('account.saving') : t('account.changePassword') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
 </template>

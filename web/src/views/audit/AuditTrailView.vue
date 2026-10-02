@@ -3,6 +3,14 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { AuditLog } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -16,6 +24,15 @@ const loading = ref(false)
 const loaded = ref(false)
 const open = ref<number | null>(null)
 const filter = reactive({ entity_type: '', entity_id: '', user_id: '', action: '', from: '', to: '' })
+
+const columns = computed<Column<AuditLog>[]>(() => [
+  { key: 'created_at', label: t('audit.when') },
+  { key: 'business_date', label: t('audit.businessDate') },
+  { key: 'user', label: t('audit.user') },
+  { key: 'action', label: t('audit.action') },
+  { key: 'entity', label: t('audit.entity') },
+  { key: 'toggle', label: '' },
+])
 
 const pid = computed(() => property.currentId)
 const allowed = computed(() => auth.can('audit.read', pid.value))
@@ -64,89 +81,59 @@ watch(pid, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Audit trail</h1>
-  </div>
+  <PageHeader :title="t('audit.title')" />
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!allowed" class="muted" data-testid="no-access">Your role at this property does not allow reading the audit trail (the <code>audit.read</code> permission).</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('audit.noAccess', { permission: 'audit.read' }) }}</p>
 
   <template v-else>
-    <form class="card filters" novalidate data-testid="filters" @submit.prevent="load()">
-      <label class="field"><span>Entity</span><input v-model="filter.entity_type" name="entity_type" placeholder="stay, folio, tax…" /></label>
-      <label class="field"><span>Entity id</span><input v-model="filter.entity_id" name="entity_id" inputmode="numeric" /></label>
-      <label class="field"><span>Action</span><input v-model="filter.action" name="action" placeholder="stay.checked_in" /></label>
-      <label class="field"><span>User id</span><input v-model="filter.user_id" name="user_id" inputmode="numeric" /></label>
-      <label class="field"><span>From</span><input v-model="filter.from" name="from" type="date" /></label>
-      <label class="field"><span>To</span><input v-model="filter.to" name="to" type="date" /></label>
-      <button type="submit" class="btn-primary" :disabled="loading" data-testid="search">Search</button>
-      <button type="button" :disabled="loading" data-testid="reset" @click="reset">Clear</button>
-    </form>
+    <Card class="mb-4">
+      <form class="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
+        <FormField :label="t('audit.entity')"><template #default="{ id }"><Input :id="id" v-model="filter.entity_type" name="entity_type" :placeholder="t('audit.entityPlaceholder')" /></template></FormField>
+        <FormField :label="t('audit.entityId')"><template #default="{ id }"><Input :id="id" v-model="filter.entity_id" name="entity_id" inputmode="numeric" /></template></FormField>
+        <FormField :label="t('audit.action')"><template #default="{ id }"><Input :id="id" v-model="filter.action" name="action" placeholder="stay.checked_in" /></template></FormField>
+        <FormField :label="t('audit.userId')"><template #default="{ id }"><Input :id="id" v-model="filter.user_id" name="user_id" inputmode="numeric" /></template></FormField>
+        <FormField :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
+        <FormField :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+        <div class="flex items-end gap-2">
+          <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
+          <Button type="button" variant="outline" :disabled="loading" data-testid="reset" @click="reset">{{ t('audit.clear') }}</Button>
+        </div>
+      </form>
+    </Card>
 
-    <section class="card">
-      <p v-if="loaded && !rows.length" class="muted" data-testid="empty">No entries match.</p>
-      <table v-else-if="rows.length" class="list">
-        <thead><tr><th>When</th><th>Business date</th><th>User</th><th>Action</th><th>Entity</th><th /></tr></thead>
-        <tbody>
-          <template v-for="r in rows" :key="r.id">
-            <tr :data-testid="`entry-${r.id}`">
-              <td>{{ time(r.created_at) }}</td>
-              <td>{{ r.business_date ?? '—' }}</td>
-              <td>{{ r.user?.name ?? 'system' }}</td>
-              <td><code>{{ r.action }}</code></td>
-              <td>{{ r.entity_type }} #{{ r.entity_id }}</td>
-              <td><button type="button" :data-testid="`toggle-${r.id}`" :aria-expanded="open === r.id" @click="open = open === r.id ? null : r.id">{{ open === r.id ? 'Hide' : 'Details' }}</button></td>
-            </tr>
-            <tr v-if="open === r.id" :data-testid="`detail-${r.id}`">
-              <td colspan="6">
-                <div class="diff">
-                  <div><h3>Before</h3><pre>{{ pretty(r.old_data) }}</pre></div>
-                  <div><h3>After</h3><pre>{{ pretty(r.new_data) }}</pre></div>
-                </div>
-                <small class="muted">Request {{ r.request_id ?? '—' }}<template v-if="r.ip_address"> · {{ r.ip_address }}</template></small>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <div v-if="nextCursor" class="form-actions">
-        <button type="button" :disabled="loading" data-testid="more" @click="load(true)">Load more</button>
+    <Card>
+      <EmptyState v-if="loaded && !rows.length" :title="t('audit.empty')" data-testid="empty" />
+      <DataTable
+        v-else-if="rows.length"
+        :columns="columns"
+        :rows="rows"
+        row-key="id"
+        :row-test-id="(r) => `entry-${r.id}`"
+        :is-expanded="(r) => open === r.id"
+        :detail-test-id="(r) => `detail-${r.id}`"
+        :caption="t('audit.title')"
+      >
+        <template #cell-created_at="{ row }">{{ time(row.created_at) }}</template>
+        <template #cell-business_date="{ row }">{{ row.business_date ?? '—' }}</template>
+        <template #cell-user="{ row }">{{ row.user?.name ?? t('audit.system') }}</template>
+        <template #cell-action="{ row }"><code>{{ row.action }}</code></template>
+        <template #cell-entity="{ row }">{{ row.entity_type }} #{{ row.entity_id }}</template>
+        <template #cell-toggle="{ row }">
+          <Button type="button" variant="outline" size="sm" :data-testid="`toggle-${row.id}`" :aria-expanded="open === row.id" @click="open = open === row.id ? null : row.id">{{ open === row.id ? t('audit.hide') : t('audit.details') }}</Button>
+        </template>
+        <template #detail="{ row }">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div><h3 class="m-0 mb-1 text-xs font-semibold uppercase text-muted-foreground">{{ t('audit.before') }}</h3><pre class="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{{ pretty(row.old_data) }}</pre></div>
+            <div><h3 class="m-0 mb-1 text-xs font-semibold uppercase text-muted-foreground">{{ t('audit.after') }}</h3><pre class="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{{ pretty(row.new_data) }}</pre></div>
+          </div>
+          <small class="mt-2 block text-muted-foreground">{{ t('audit.request', { id: row.request_id ?? '—' }) }}<template v-if="row.ip_address"> · {{ row.ip_address }}</template></small>
+        </template>
+      </DataTable>
+      <div v-if="nextCursor" class="flex justify-center p-3">
+        <Button type="button" variant="outline" :disabled="loading" data-testid="more" @click="load(true)">{{ t('audit.more') }}</Button>
       </div>
-    </section>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-.diff {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-}
-pre {
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-</style>
