@@ -28,3 +28,17 @@ describe('dates', () => {
     expect(addDays('2028-02-28', 1)).toBe('2028-02-29')
   })
 })
+
+describe('formatBusinessDate in Indonesian', () => {
+  it('names the month in the language of the page', async () => {
+    const { setLocale } = await import('@/i18n')
+    setLocale('id')
+    try {
+      expect(formatBusinessDate('2026-08-17')).toBe('17 Agu 2026')
+      expect(formatBusinessDate('2026-05-01')).toBe('1 Mei 2026')
+    } finally {
+      setLocale('en')
+    }
+    expect(formatBusinessDate('2026-08-17')).toBe('17 Aug 2026')
+  })
+})

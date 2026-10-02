@@ -2,6 +2,7 @@ import type {
   ArrivalsReport, CashierReport, DailySummaryReport, HousekeepingDirtyRoomsReport, HousekeepingProductivityReport, MaintenanceReport, RevenueReport,
   StatisticsReport, StayListReport, TaxReport,
 } from '@/api/types'
+import { t } from '@/i18n'
 
 /** A report as the screen shows it: a title, the inputs it needs, and how its answer becomes a table. */
 export type ReportKey = 'revenue' | 'tax' | 'cashier' | 'statistics' | 'daily-summary' | 'arrivals' | 'departures' | 'in-house' | 'housekeeping-productivity' | 'housekeeping-dirty-rooms' | 'maintenance'
@@ -17,111 +18,114 @@ export interface Table {
 
 export interface ReportDef {
   key: ReportKey
-  title: string
+  /** The title and the hint are read when they are shown, so they follow the language of the moment. */
+  title: () => string
   input: 'range' | 'date' | 'hours' | 'none'
-  hint: string
+  hint: () => string
+  /** Builds the table in the language of the moment: call it again when the language changes. */
   table: (data: never) => Table
 }
 
 const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
+/** The texts of the reports are `reportDefs.<name>`; the names are typed by the language files. */
+const r = (key: string, params?: Record<string, unknown>): string => t(`reportDefs.${key}` as 'reportDefs.total', params as never)
 
 export const reports: ReportDef[] = [
   {
-    key: 'daily-summary', title: 'Daily summary', input: 'date', hint: 'The closing summary of a business date (live for the open day).',
+    key: 'daily-summary', title: () => r('dailySummary'), input: 'date', hint: () => r('dailySummaryHint'),
     table: (d: DailySummaryReport) => {
       const sum = d.summary
-      if (!sum) return { columns: ['Business date', 'Status'], rows: [[d.business_date, d.status]], numeric: [], note: 'This day has no stored summary.' }
+      if (!sum) return { columns: [r('businessDate'), r('status')], rows: [[d.business_date, d.status]], numeric: [], note: r('noSummary') }
       return {
-        columns: ['Measure', 'Value'], numeric: [1], note: d.live ? 'The business day is still open: figures are live.' : undefined,
+        columns: [r('measure'), r('value')], numeric: [1], note: d.live ? r('liveNote') : undefined,
         rows: [
-          ['Business date', d.business_date], ['Status', d.status],
-          ['Rooms (total / out of order / out of service)', `${sum.rooms.total} / ${sum.rooms.out_of_order} / ${sum.rooms.out_of_service}`],
-          ['Occupied rooms', s(sum.rooms.occupied)], ['Room nights sold', s(sum.rooms.sold)],
-          ['Arrivals / departures / no-shows', `${sum.arrivals} / ${sum.departures} / ${sum.no_shows}`],
-          ['Room revenue (net)', sum.room_revenue.net], ['Service charge', sum.room_revenue.service], ['Tax', sum.room_revenue.tax],
-          ['Occupancy %', sum.occupancy_percent], ['ADR', sum.adr], ['RevPAR', sum.revpar],
-          ...sum.payments_by_method.map((m) => [`Payments ${m.method} (net)`, m.net]),
+          [r('businessDate'), d.business_date], [r('status'), d.status],
+          [r('roomsTotals'), `${sum.rooms.total} / ${sum.rooms.out_of_order} / ${sum.rooms.out_of_service}`],
+          [r('occupiedRooms'), s(sum.rooms.occupied)], [r('roomNightsSold'), s(sum.rooms.sold)],
+          [r('arrDepNoShow'), `${sum.arrivals} / ${sum.departures} / ${sum.no_shows}`],
+          [r('roomRevenueNet'), sum.room_revenue.net], [r('serviceCharge'), sum.room_revenue.service], [r('tax'), sum.room_revenue.tax],
+          [r('occupancyPercent'), sum.occupancy_percent], ['ADR', sum.adr], ['RevPAR', sum.revpar],
+          ...sum.payments_by_method.map((m) => [r('paymentsBy', { method: m.method }), m.net]),
         ],
       }
     },
   },
   {
-    key: 'revenue', title: 'Revenue', input: 'range', hint: 'By charge code and revenue account; corrections net out.',
+    key: 'revenue', title: () => r('revenue'), input: 'range', hint: () => r('revenueHint'),
     table: (d: RevenueReport) => ({
-      columns: ['Type', 'Charge code', 'Account', 'Items', 'Net', 'Service', 'Tax', 'Total'], numeric: [3, 4, 5, 6, 7],
+      columns: [r('type'), r('chargeCode'), r('account'), r('items'), r('net'), r('service'), r('tax'), r('total')], numeric: [3, 4, 5, 6, 7],
       rows: d.by_charge_code.map((l) => [l.charge_type, `${l.charge_code} · ${l.name}`, s(l.revenue_account_code), s(l.items), l.net_amount, l.service_charge, l.tax, l.total]),
-      footer: ['Total', '', '', s(d.totals.items), d.totals.net_amount, d.totals.service_charge, d.totals.tax, d.totals.total],
+      footer: [r('total'), '', '', s(d.totals.items), d.totals.net_amount, d.totals.service_charge, d.totals.tax, d.totals.total],
     }),
   },
   {
-    key: 'tax', title: 'Tax and service charges', input: 'range', hint: 'As posted: a rate edited in the range shows as its own line.',
+    key: 'tax', title: () => r('taxTitle'), input: 'range', hint: () => r('taxHint'),
     table: (d: TaxReport) => ({
-      columns: ['Type', 'Code', 'Name', 'Rate %', 'Account', 'Items', 'Base', 'Amount'], numeric: [3, 5, 6, 7],
-      rows: [...d.taxes, ...d.service_charges].map((l) => [l.component_type === 'TAX' ? 'Tax' : 'Service', l.code, l.name, l.rate, s(l.gl_account_code), s(l.items), l.base_amount, l.amount]),
-      footer: ['Tax total', '', '', '', '', '', '', d.tax_total],
-      note: `Service charge total ${d.service_charge_total}.`,
+      columns: [r('type'), r('code'), r('name'), r('ratePercent'), r('account'), r('items'), r('base'), r('amount')], numeric: [3, 5, 6, 7],
+      rows: [...d.taxes, ...d.service_charges].map((l) => [l.component_type === 'TAX' ? r('tax') : r('serviceKind'), l.code, l.name, l.rate, s(l.gl_account_code), s(l.items), l.base_amount, l.amount]),
+      footer: [r('taxTotal'), '', '', '', '', '', '', d.tax_total],
+      note: r('serviceTotalNote', { amount: d.service_charge_total }),
     }),
   },
   {
-    key: 'cashier', title: 'Cashier', input: 'range', hint: 'Payments by business date and method; voids are shown apart.',
+    key: 'cashier', title: () => r('cashier'), input: 'range', hint: () => r('cashierHint'),
     table: (d: CashierReport) => ({
-      columns: ['Business date', 'Method', 'Payments', 'Refunds', 'Net', 'Count', 'Voided'], numeric: [2, 3, 4, 5, 6],
+      columns: [r('businessDate'), r('method'), r('payments'), r('refunds'), r('net'), r('count'), r('voided')], numeric: [2, 3, 4, 5, 6],
       rows: d.lines.map((l) => [l.business_date, l.payment_method, l.payments, l.refunds, l.net, s(l.count), `${l.voided} (${l.voided_count})`]),
-      footer: ['Net', '', '', '', d.net, '', ''],
+      footer: [r('net'), '', '', '', d.net, '', ''],
     }),
   },
   {
-    key: 'statistics', title: 'Occupancy and statistics', input: 'range', hint: 'Closed business days only.',
+    key: 'statistics', title: () => r('statistics'), input: 'range', hint: () => r('statisticsHint'),
     table: (d: StatisticsReport) => ({
-      columns: ['Business date', 'Rooms', 'Occupied', 'Sold', 'Arrivals', 'Departures', 'No-shows', 'Room revenue', 'Occ %', 'ADR', 'RevPAR'], numeric: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      columns: [r('businessDate'), r('rooms'), r('occupied'), r('sold'), r('arrivals'), r('departures'), r('noShows'), r('roomRevenue'), r('occShort'), 'ADR', 'RevPAR'], numeric: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       rows: d.days.map((x) => [x.business_date, `${x.rooms_total - x.rooms_out_of_order}`, s(x.rooms_occupied), s(x.room_nights_sold), s(x.arrivals), s(x.departures), s(x.no_shows), x.room_revenue, x.occupancy_percent, x.adr, x.revpar]),
-      footer: ['Total', s(d.totals.available_room_nights), s(d.totals.occupied_room_nights), s(d.totals.room_nights_sold), '', '', '', d.totals.room_revenue, d.totals.occupancy_percent, d.totals.adr, d.totals.revpar],
+      footer: [r('total'), s(d.totals.available_room_nights), s(d.totals.occupied_room_nights), s(d.totals.room_nights_sold), '', '', '', d.totals.room_revenue, d.totals.occupancy_percent, d.totals.adr, d.totals.revpar],
     }),
   },
   {
-    key: 'arrivals', title: 'Arrivals', input: 'date', hint: 'Every room arriving on the date, whatever became of it.',
+    key: 'arrivals', title: () => r('arrivalsTitle'), input: 'date', hint: () => r('arrivalsHint'),
     table: (d: ArrivalsReport) => ({
-      columns: ['Reservation', 'Status', 'Guest', 'Room type', 'Room', 'Departure', 'Party'], numeric: [],
+      columns: [r('reservation'), r('status'), r('guest'), r('roomType'), r('room'), r('departure'), r('party')], numeric: [],
       rows: d.rows.map((a) => [a.confirmation_number, a.status, a.guest, a.room_type, s(a.room), a.departure_date, `${a.adult_count}+${a.child_count}`]),
     }),
   },
   {
-    key: 'departures', title: 'Departures', input: 'date', hint: 'Stays leaving on the date, open or checked out.',
+    key: 'departures', title: () => r('departuresTitle'), input: 'date', hint: () => r('departuresHint'),
     table: (d: StayListReport) => ({
-      columns: ['Stay', 'Status', 'Guest', 'Room', 'Arrival', 'Departure', 'Balance'], numeric: [6],
+      columns: [r('stay'), r('status'), r('guest'), r('room'), r('arrival'), r('departure'), r('balance')], numeric: [6],
       rows: d.rows.map((x) => [x.stay_number, s(x.status), x.guest, s(x.room), x.arrival_date, x.departure_date, x.balance]),
     }),
   },
   {
-    key: 'in-house', title: 'In-house', input: 'none', hint: 'Open stays with their folio balance.',
+    key: 'in-house', title: () => r('inHouse'), input: 'none', hint: () => r('inHouseHint'),
     table: (d: StayListReport) => ({
-      columns: ['Stay', 'Guest', 'Room', 'Arrival', 'Departure', 'Party', 'Balance'], numeric: [6],
+      columns: [r('stay'), r('guest'), r('room'), r('arrival'), r('departure'), r('party'), r('balance')], numeric: [6],
       rows: d.rows.map((x) => [x.stay_number, x.guest, s(x.room), x.arrival_date, x.departure_date, `${x.adult_count}+${x.child_count}`, x.balance]),
     }),
   },
   {
-    key: 'housekeeping-productivity', title: 'Housekeeping productivity', input: 'range',
-    hint: 'Rooms taken to clean or inspected by hand, and tasks finished, per person. A room cleaned twice counts twice.',
+    key: 'housekeeping-productivity', title: () => r('hkProductivity'), input: 'range', hint: () => r('hkProductivityHint'),
     table: (d: HousekeepingProductivityReport) => ({
-      columns: ['Business date', 'Housekeeper', 'Cleaned', 'Inspected', 'Tasks done', 'Tasks skipped', 'Avg minutes per task'], numeric: [2, 3, 4, 5, 6],
+      columns: [r('businessDate'), r('housekeeper'), r('cleaned'), r('inspected'), r('tasksDone'), r('tasksSkipped'), r('avgMinutes')], numeric: [2, 3, 4, 5, 6],
       rows: d.lines.map((l) => [l.business_date, l.user, s(l.rooms_cleaned), s(l.rooms_inspected), s(l.tasks_done), s(l.tasks_skipped), l.avg_task_minutes]),
-      note: d.people.length ? `Over the range: ${d.people.map((p) => `${p.user} cleaned ${p.rooms_cleaned}, finished ${p.tasks_done} task(s) on ${p.days_worked} day(s)`).join('; ')}.` : undefined,
+      note: d.people.length ? r('overRange', { people: d.people.map((p) => r('person', { user: p.user, cleaned: p.rooms_cleaned, done: p.tasks_done, days: p.days_worked })).join('; ') }) : undefined,
     }),
   },
   {
-    key: 'housekeeping-dirty-rooms', title: 'Rooms not clean yet', input: 'hours', hint: 'Dirty or being cleaned, longest first.',
+    key: 'housekeeping-dirty-rooms', title: () => r('dirtyRooms'), input: 'hours', hint: () => r('dirtyRoomsHint'),
     table: (d: HousekeepingDirtyRoomsReport) => ({
-      columns: ['Room', 'Floor', 'Type', 'Status', 'Since (UTC)', 'Hours', 'Occupancy', 'Priority', 'DND', 'Block'], numeric: [5],
-      rows: d.rows.map((r) => [r.room_number, s(r.floor), r.room_type, r.status, r.since, s(r.hours), r.occupancy, r.priority, r.dnd ? 'yes' : '', s(r.block)]),
+      columns: [r('room'), r('floor'), r('type'), r('status'), r('sinceUtc'), r('hours'), r('occupancy'), r('priority'), 'DND', r('block')], numeric: [5],
+      rows: d.rows.map((x) => [x.room_number, s(x.floor), x.room_type, x.status, x.since, s(x.hours), x.occupancy, x.priority, x.dnd ? r('yes') : '', s(x.block)]),
     }),
   },
   {
-    key: 'maintenance', title: 'Maintenance', input: 'range', hint: 'Requests reported in the range, by category, and how they ended.',
+    key: 'maintenance', title: () => r('maintenance'), input: 'range', hint: () => r('maintenanceHint'),
     table: (d: MaintenanceReport) => ({
-      columns: ['Category', 'Reported', 'Resolved', 'Cancelled', 'Still open', 'Avg hours to resolve'], numeric: [1, 2, 3, 4, 5],
+      columns: [r('category'), r('reported'), r('resolved'), r('cancelled'), r('stillOpen'), r('avgHours')], numeric: [1, 2, 3, 4, 5],
       rows: d.lines.map((l) => [l.category, s(l.reported), s(l.resolved), s(l.cancelled), s(l.still_open), l.avg_hours_to_resolve]),
-      footer: ['Total', s(d.totals.reported), s(d.totals.resolved), s(d.totals.cancelled), s(d.totals.still_open), d.totals.avg_hours_to_resolve],
-      note: `Open now: ${d.backlog.open_now} (${d.backlog.high_priority} high priority); the oldest has waited ${d.backlog.oldest_hours} hour(s).`,
+      footer: [r('total'), s(d.totals.reported), s(d.totals.resolved), s(d.totals.cancelled), s(d.totals.still_open), d.totals.avg_hours_to_resolve],
+      note: r('backlog', { open: d.backlog.open_now, high: d.backlog.high_priority, hours: d.backlog.oldest_hours }),
     }),
   },
 ]

@@ -20,7 +20,8 @@ const property = usePropertyStore()
 
 const key = ref<ReportKey>('revenue')
 const range = reactive({ from: '', to: '', date: '', minHours: 0 })
-const table = ref<Table | null>(null)
+// The answer is kept as the server sent it and laid out on demand, so a change of language re-labels the table.
+const data = ref<unknown>(null)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
 
@@ -28,6 +29,7 @@ const pid = computed(() => property.currentId)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const allowed = computed(() => auth.can('report.view', pid.value))
 const def = computed<ReportDef>(() => reports.find((r) => r.key === key.value) ?? reports[0]!)
+const table = computed<Table | null>(() => (data.value ? def.value.table(data.value as never) : null))
 
 watch(businessDate, (bd) => {
   if (!bd) return
@@ -59,11 +61,10 @@ async function run(): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    const data = await fetchReport()
-    table.value = data ? def.value.table(data as never) : null
+    data.value = (await fetchReport()) ?? null
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
-    table.value = null
+    data.value = null
   } finally {
     busy.value = false
   }
@@ -88,7 +89,7 @@ async function download(): Promise<void> {
 }
 
 watch([key, pid], () => {
-  table.value = null
+  data.value = null
   error.value = null
 })
 </script>
@@ -106,7 +107,7 @@ watch([key, pid], () => {
         <FormField class="w-72" :label="t('reports.report')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="key" name="report">
-              <option v-for="r in reports" :key="r.key" :value="r.key">{{ r.title }}</option>
+              <option v-for="r in reports" :key="r.key" :value="r.key">{{ r.title() }}</option>
             </NativeSelect>
           </template>
         </FormField>
@@ -118,7 +119,7 @@ watch([key, pid], () => {
         <FormField v-else-if="def.input === 'hours'" :label="t('reports.minHours')"><template #default="{ id }"><Input :id="id" v-model.number="range.minHours" name="min_hours" type="number" min="0" /></template></FormField>
         <Button type="submit" :disabled="busy" data-testid="run">{{ t('reports.run') }}</Button>
         <Button type="button" variant="outline" :disabled="busy || !table" data-testid="csv" @click="download">{{ t('reports.csv') }}</Button>
-        <small class="basis-full text-xs text-muted-foreground">{{ def.hint }} {{ t('reports.businessDates') }}</small>
+        <small class="basis-full text-xs text-muted-foreground">{{ def.hint() }} {{ t('reports.businessDates') }}</small>
       </form>
     </Card>
 

@@ -7,13 +7,19 @@
  *   re-render it in the *browser's* zone, so we read the wall-clock parts directly.
  */
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+import { currentLocale, type Locale } from '@/i18n'
 
-/** "2026-09-30" -> "30 Sep 2026". Invalid input is returned unchanged. */
+// Month names are kept in a table, not taken from Intl: the short forms of Intl differ between browsers ("Sep" or "Sept").
+const MONTHS: Record<Locale, string[]> = {
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  id: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+}
+
+/** "2026-09-30" -> "30 Sep 2026" (in the language of the page: "30 Agu 2026"). Invalid input is returned unchanged. */
 export function formatBusinessDate(date: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
   if (!m) return date
-  const month = MONTHS[Number(m[2]) - 1]
+  const month = MONTHS[currentLocale()][Number(m[2]) - 1]
   return month ? `${Number(m[3])} ${month} ${m[1]}` : date
 }
 
