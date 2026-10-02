@@ -3,6 +3,13 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { TrialBalance } from '@/api/types'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -62,61 +69,66 @@ watch(() => pid.value, () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">Trial balance</h1>
-    <div v-if="report" class="head-actions">
-      <button type="button" data-testid="pdf" @click="showPdf">PDF</button>
-      <button type="button" data-testid="export" @click="exportCsv">Export CSV</button>
-    </div>
-  </div>
+  <PageHeader :title="t('statements.trial')">
+    <template #actions>
+      <template v-if="report">
+        <Button type="button" variant="outline" data-testid="pdf" @click="showPdf">{{ t('statements.pdf') }}</Button>
+        <Button type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('statements.export') }}</Button>
+      </template>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="report-error">
     {{ error.message }} <code>{{ error.code }}</code>
     <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
   </p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see the trial balance: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('statements.noAccess', { what: t('statements.whatTrial'), permission: 'accounting.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <label class="field"><span>From</span><input v-model="range.from" name="from" type="date" /></label>
-      <label class="field"><span>To</span><input v-model="range.to" name="to" type="date" /></label>
-      <button type="submit" :disabled="busy" data-testid="apply">Show</button>
-    </form>
-    <section v-if="report" class="card">
-      <p class="muted" data-testid="range">{{ report.from }} to {{ report.to }}</p>
-      <p v-if="!report.rows.length" class="muted" data-testid="empty">No entries up to this date.</p>
-      <table v-else class="list" data-testid="trial-balance">
-        <thead>
-          <tr><th rowspan="2">Account</th><th colspan="2">Opening</th><th colspan="2">Movement</th><th colspan="2">Closing</th></tr>
-          <tr><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Credit</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in report.rows" :key="r.account_id" :data-testid="`row-${r.code}`">
-            <td>{{ r.code }} · {{ r.name }}</td>
-            <td class="num">{{ money(r.opening_debit) }}</td><td class="num">{{ money(r.opening_credit) }}</td>
-            <td class="num">{{ money(r.debit) }}</td><td class="num">{{ money(r.credit) }}</td>
-            <td class="num">{{ money(r.closing_debit) }}</td><td class="num">{{ money(r.closing_credit) }}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr data-testid="totals">
-            <th>Total</th>
-            <th class="num">{{ money(report.totals.opening_debit) }}</th><th class="num">{{ money(report.totals.opening_credit) }}</th>
-            <th class="num">{{ money(report.totals.debit) }}</th><th class="num">{{ money(report.totals.credit) }}</th>
-            <th class="num">{{ money(report.totals.closing_debit) }}</th><th class="num">{{ money(report.totals.closing_credit) }}</th>
-          </tr>
-        </tfoot>
-      </table>
-    </section>
+    <Card class="mb-4">
+      <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
+        <FormField :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
+        <FormField :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+        <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
+      </form>
+    </Card>
+    <Card v-if="report">
+      <CardContent class="pt-4">
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('statements.tbRange', { from: report.from, to: report.to }) }}</p>
+        <EmptyState v-if="!report.rows.length" :title="t('statements.tbEmpty')" data-testid="empty" />
+        <div v-else class="overflow-x-auto">
+          <table class="w-full border-collapse text-sm" data-testid="trial-balance">
+            <thead class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th rowspan="2" class="border-b border-border px-3 py-2 text-left">{{ t('statements.account') }}</th>
+                <th colspan="2" class="px-3 pt-2 text-center">{{ t('statements.opening') }}</th>
+                <th colspan="2" class="px-3 pt-2 text-center">{{ t('statements.movement') }}</th>
+                <th colspan="2" class="px-3 pt-2 text-center">{{ t('statements.closing') }}</th>
+              </tr>
+              <tr class="border-b border-border">
+                <template v-for="n in 3" :key="n">
+                  <th class="px-3 py-1 text-right">{{ t('statements.debit') }}</th><th class="px-3 py-1 text-right">{{ t('statements.credit') }}</th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in report.rows" :key="r.account_id" class="border-b border-border hover:bg-accent/50" :data-testid="`row-${r.code}`">
+                <td class="px-3 py-2">{{ r.code }} · {{ r.name }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ money(r.opening_debit) }}</td><td class="px-3 py-2 text-right tabular-nums">{{ money(r.opening_credit) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ money(r.debit) }}</td><td class="px-3 py-2 text-right tabular-nums">{{ money(r.credit) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ money(r.closing_debit) }}</td><td class="px-3 py-2 text-right tabular-nums">{{ money(r.closing_credit) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr data-testid="totals" class="font-semibold">
+                <th class="px-3 py-2 text-left">{{ t('statements.total') }}</th>
+                <th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.opening_debit) }}</th><th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.opening_credit) }}</th>
+                <th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.debit) }}</th><th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.credit) }}</th>
+                <th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.closing_debit) }}</th><th class="px-3 py-2 text-right tabular-nums">{{ money(report.totals.closing_credit) }}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.head-actions {
-  display: flex;
-  gap: 8px;
-}
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-</style>

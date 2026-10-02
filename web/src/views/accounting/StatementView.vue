@@ -4,6 +4,13 @@ import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { StatementLine } from '@/api/types'
+import EmptyState from '@/components/app/EmptyState.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -16,7 +23,7 @@ const property = usePropertyStore()
 const route = useRoute()
 
 const income = computed(() => route.name === 'accounting-income-statement')
-const title = computed(() => (income.value ? 'Income statement' : 'Balance sheet'))
+const title = computed(() => (income.value ? t('statements.income') : t('statements.balance')))
 const lines = ref<StatementLine[]>([])
 const heading = ref('')
 const imbalance = ref('')
@@ -39,12 +46,12 @@ async function load(): Promise<void> {
         params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } },
       })
       lines.value = data?.lines ?? []
-      heading.value = data ? `${data.from} to ${data.to}` : ''
+      heading.value = data ? t('statements.rangeIncome', { from: data.from, to: data.to }) : ''
       imbalance.value = ''
     } else {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/balance-sheet', { params: { path: { propertyId }, query: { as_of: form.as_of || undefined } } })
       lines.value = data?.lines ?? []
-      heading.value = data ? `As of ${data.as_of}` : ''
+      heading.value = data ? t('statements.rangeBalance', { date: data.as_of }) : ''
       imbalance.value = data && Number(data.difference) !== 0 ? data.difference : ''
     }
   } catch (e) {
@@ -88,41 +95,39 @@ watch([() => pid.value, income], () => {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">{{ title }}</h1>
-    <div v-if="loaded && lines.length" class="head-actions">
-      <button type="button" data-testid="pdf" @click="showPdf">PDF</button>
-      <button type="button" data-testid="export" @click="exportCsv">Export CSV</button>
-    </div>
-  </div>
+  <PageHeader :title="title">
+    <template #actions>
+      <template v-if="loaded && lines.length">
+        <Button type="button" variant="outline" data-testid="pdf" @click="showPdf">{{ t('statements.pdf') }}</Button>
+        <Button type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('statements.export') }}</Button>
+      </template>
+    </template>
+  </PageHeader>
   <p v-if="error" class="alert" role="alert" data-testid="report-error">
     {{ error.message }} <code>{{ error.code }}</code>
     <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
   </p>
-  <p v-if="pid === null" class="muted">Select a property first.</p>
-  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">Your role at this property cannot see financial statements: the <code>accounting.view</code> permission is needed.</p>
+  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('statements.noAccess', { what: t('statements.whatStatements'), permission: 'accounting.view' }) }}</p>
   <template v-else>
-    <form class="filters card" novalidate @submit.prevent="load">
-      <template v-if="income">
-        <label class="field"><span>From</span><input v-model="form.from" name="from" type="date" /></label>
-        <label class="field"><span>To</span><input v-model="form.to" name="to" type="date" /></label>
-      </template>
-      <label v-else class="field"><span>As of</span><input v-model="form.as_of" name="as_of" type="date" /></label>
-      <button type="submit" :disabled="busy" data-testid="apply">Show</button>
-    </form>
-    <section v-if="loaded" class="card">
-      <p class="muted" data-testid="range">{{ heading }}<template v-if="income"> · USALI layout: departments, gross operating profit (GOP), EBITDA, net income</template></p>
-      <p v-if="imbalance" class="alert" data-testid="imbalance">The books are out of balance by {{ imbalance }}.</p>
-      <p v-if="!lines.length" class="muted" data-testid="empty">Nothing is posted yet.</p>
-      <StatementTable v-else :lines="lines" />
-      <p v-if="!income" class="muted">Equity includes the earnings of all periods to date: there is no year-end closing entry.</p>
-    </section>
+    <Card class="mb-4">
+      <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
+        <template v-if="income">
+          <FormField :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
+          <FormField :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+        </template>
+        <FormField v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
+        <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
+      </form>
+    </Card>
+    <Card v-if="loaded">
+      <CardContent class="pt-4">
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template></p>
+        <p v-if="imbalance" class="alert" data-testid="imbalance">{{ t('statements.imbalance', { amount: imbalance }) }}</p>
+        <EmptyState v-if="!lines.length" :title="t('statements.empty')" data-testid="empty" />
+        <StatementTable v-else :lines="lines" />
+        <p v-if="!income" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('statements.equityNote') }}</p>
+      </CardContent>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.head-actions {
-  display: flex;
-  gap: 8px;
-}
-</style>
