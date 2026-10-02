@@ -1,10 +1,19 @@
 <script setup lang="ts">
+import { Search } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { AvailabilitySearch, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import FormField from '@/components/app/FormField.vue'
+import PageHeader from '@/components/app/PageHeader.vue'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -36,12 +45,32 @@ let idempotencyKey = newIdempotencyKey()
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 /** Why a Book button is disabled (empty when it is enabled). */
-function whyNot(t: { available_min: number; fits_occupancy: boolean }, p: { estimate?: unknown; missing_nights?: number }): string {
-  if (t.available_min < 1) return 'No room of this type is left for these dates (add rooms under Setup → Rooms, or change the dates).'
-  if (!t.fits_occupancy) return 'The room type is too small for this party.'
-  if (!p.estimate) return `${p.missing_nights ?? 'Some'} night(s) have no rate: fill them in the Rate grid first.`
+function whyNot(ty: { available_min: number; fits_occupancy: boolean }, p: { estimate?: unknown; missing_nights?: number }): string {
+  if (ty.available_min < 1) return t('newReservation.whyNoRooms')
+  if (!ty.fits_occupancy) return t('newReservation.whyTooSmall')
+  if (!p.estimate) return t('newReservation.whyNoRate', { n: p.missing_nights ?? 0 })
   return ''
 }
+
+// One row per plan of a room type (a type without a plan has a row of its own), so the offers read as a table.
+interface Offer {
+  key: string
+  type: TypeOffer
+  plan: PlanOffer | null
+}
+const offers = computed<Offer[]>(() =>
+  (result.value?.room_types ?? []).flatMap((ty): Offer[] =>
+    ty.rate_plans.length ? ty.rate_plans.map((plan) => ({ key: `${ty.room_type_id}/${plan.id}`, type: ty, plan })) : [{ key: `${ty.room_type_id}/none`, type: ty, plan: null }],
+  ),
+)
+const offerTestId = (o: Offer): string => (o.plan ? `offer-${o.type.code}-${o.plan.code}` : `type-${o.type.code}`)
+const offerColumns = computed<Column<Offer>[]>(() => [
+  { key: 'type', label: t('newReservation.roomType') },
+  { key: 'left', label: t('newReservation.roomsLeft') },
+  { key: 'plan', label: t('newReservation.ratePlan') },
+  { key: 'estimate', label: t('newReservation.estimate'), align: 'right', class: 'tabular-nums' },
+  { key: 'action', label: '', align: 'right' },
+])
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
@@ -161,184 +190,127 @@ async function book(): Promise<void> {
 </script>
 
 <template>
-  <div class="page-head">
-    <h1 class="page-title">New reservation</h1>
-    <RouterLink to="/reservations">Reservations</RouterLink>
-  </div>
+  <PageHeader :title="t('newReservation.title')">
+    <template #actions>
+      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('newReservation.reservations') }}</RouterLink></Button>
+    </template>
+  </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
-  <p v-if="property.currentId === null" class="muted">Select a property first.</p>
-  <p v-else-if="!canRead || !canCreate" class="muted" data-testid="no-access">Your role at this property does not allow creating reservations.</p>
+  <p v-if="property.currentId === null" class="muted">{{ t('newReservation.selectProperty') }}</p>
+  <p v-else-if="!canRead || !canCreate" class="muted" data-testid="no-access">{{ t('newReservation.noAccess') }}</p>
 
   <template v-else>
-    <form class="card search" role="search" novalidate data-testid="search-form" @submit.prevent="runSearch">
-      <label class="field">
-        <span>Arrival</span>
-        <input v-model="search.arrival" name="arrival" type="date" :min="businessDate" :aria-invalid="!!fieldError('arrival_date')" />
-      </label>
-      <label class="field">
-        <span>Departure</span>
-        <input v-model="search.departure" name="departure" type="date" :min="search.arrival" :aria-invalid="!!fieldError('departure_date')" />
-        <small v-if="fieldError('departure_date')" class="error-text">{{ fieldError('departure_date') }}</small>
-      </label>
-      <label class="field small">
-        <span>Adults</span>
-        <input v-model.number="search.adults" name="adults" type="number" min="1" />
-      </label>
-      <label class="field small">
-        <span>Children</span>
-        <input v-model.number="search.children" name="children" type="number" min="0" />
-      </label>
-      <button type="submit" class="btn-primary" :disabled="searching">Search</button>
-    </form>
+    <Card class="mb-4">
+      <form class="flex flex-wrap items-end gap-3 p-4" role="search" novalidate data-testid="search-form" @submit.prevent="runSearch">
+        <FormField class="w-44" :label="t('newReservation.arrival')">
+          <template #default="{ id, invalid }"><Input :id="id" v-model="search.arrival" name="arrival" type="date" :min="businessDate" :aria-invalid="!!fieldError('arrival_date') || invalid" /></template>
+        </FormField>
+        <FormField class="w-44" :label="t('newReservation.departure')" :error="fieldError('departure_date')">
+          <template #default="{ id, invalid }"><Input :id="id" v-model="search.departure" name="departure" type="date" :min="search.arrival" :aria-invalid="invalid" /></template>
+        </FormField>
+        <FormField class="w-24" :label="t('newReservation.adults')">
+          <template #default="{ id }"><Input :id="id" v-model.number="search.adults" name="adults" type="number" min="1" /></template>
+        </FormField>
+        <FormField class="w-24" :label="t('newReservation.children')">
+          <template #default="{ id }"><Input :id="id" v-model.number="search.children" name="children" type="number" min="0" /></template>
+        </FormField>
+        <Button type="submit" :disabled="searching"><Search />{{ t('newReservation.search') }}</Button>
+      </form>
+    </Card>
 
-    <section v-if="result" class="card" data-testid="results">
-      <h2>{{ result.nights.length }} night(s)</h2>
-      <table class="list">
-        <thead>
-          <tr>
-            <th>Room type</th>
-            <th>Rooms left</th>
-            <th>Rate plan</th>
-            <th class="num">Estimate (incl. service and tax)</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="t in result.room_types" :key="t.room_type_id">
-            <tr v-if="!t.rate_plans.length" :data-testid="`type-${t.code}`">
-              <td>{{ t.code }} · {{ t.name }}</td>
-              <td>{{ t.available_min }}</td>
-              <td colspan="3" class="muted">No active rate plan.</td>
-            </tr>
-            <tr v-for="p in t.rate_plans" :key="`${t.room_type_id}/${p.id}`" :data-testid="`offer-${t.code}-${p.code}`">
-              <td>
-                {{ t.code }} · {{ t.name }}
-                <small v-if="!t.fits_occupancy" class="error-text" data-testid="no-fit">does not fit {{ search.adults }} adult(s) and {{ search.children }} child(ren)</small>
-              </td>
-              <td :class="{ soldout: t.available_min < 1 }">{{ t.available_min }}</td>
-              <td>{{ p.code }} <small class="muted">{{ p.price_mode === 'INCLUSIVE' ? 'inclusive' : 'exclusive' }}</small></td>
-              <td class="num">
-                <template v-if="p.estimate">{{ p.estimate.total }}</template>
-                <small v-else class="muted" data-testid="missing">{{ p.missing_nights }} night(s) without a rate</small>
-              </td>
-              <td>
-                <button type="button" :disabled="t.available_min < 1 || !t.fits_occupancy || !p.estimate" :title="whyNot(t, p)" :data-testid="`pick-${t.code}-${p.code}`" @click="pick(t, p)">Book</button>
-              </td>
-            </tr>
+    <Card v-if="result" class="mb-4" data-testid="results">
+      <CardHeader><CardTitle>{{ t('newReservation.nightsHeading', { n: result.nights.length }) }}</CardTitle></CardHeader>
+      <CardContent>
+        <DataTable :columns="offerColumns" :rows="offers" row-key="key" :row-test-id="offerTestId" :caption="t('newReservation.title')">
+          <template #cell-type="{ row: o }">
+            {{ o.type.code }} · {{ o.type.name }}
+            <small v-if="o.plan && !o.type.fits_occupancy" class="ml-1 text-destructive" data-testid="no-fit">{{ t('newReservation.noFit', { adults: search.adults, children: search.children }) }}</small>
           </template>
-        </tbody>
-      </table>
-    </section>
+          <template #cell-left="{ row: o }"><span :class="o.type.available_min < 1 && 'font-semibold text-destructive'">{{ o.type.available_min }}</span></template>
+          <template #cell-plan="{ row: o }">
+            <small v-if="!o.plan" class="text-muted-foreground">{{ t('newReservation.noPlan') }}</small>
+            <template v-else>{{ o.plan.code }} <small class="text-muted-foreground">{{ o.plan.price_mode === 'INCLUSIVE' ? t('newReservation.inclusive') : t('newReservation.exclusive') }}</small></template>
+          </template>
+          <template #cell-estimate="{ row: o }">
+            <template v-if="o.plan">
+              <template v-if="o.plan.estimate">{{ o.plan.estimate.total }}</template>
+              <small v-else class="text-muted-foreground" data-testid="missing">{{ t('newReservation.missing', { n: o.plan.missing_nights ?? 0 }) }}</small>
+            </template>
+          </template>
+          <template #cell-action="{ row: o }">
+            <Button v-if="o.plan" size="sm" :disabled="o.type.available_min < 1 || !o.type.fits_occupancy || !o.plan.estimate" :title="whyNot(o.type, o.plan)" :data-testid="`pick-${o.type.code}-${o.plan.code}`" @click="pick(o.type, o.plan)">{{ t('newReservation.book') }}</Button>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
 
-    <form v-if="picked" class="card" novalidate data-testid="book-form" @submit.prevent="book">
-      <h2>Book {{ picked.type.code }} on {{ picked.plan.code }}</h2>
-      <p class="muted">{{ search.arrival }} to {{ search.departure }}, {{ search.adults }} adult(s), {{ search.children }} child(ren)</p>
+    <Card v-if="picked" class="mb-4 border-primary/50">
+      <form novalidate data-testid="book-form" @submit.prevent="book">
+        <CardHeader>
+          <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>
+        </CardHeader>
+        <CardContent class="flex flex-col gap-4">
+          <div>
+            <div class="flex items-end gap-3">
+              <FormField class="flex-1" :label="t('newReservation.booker')" :error="fieldError('guest_id')">
+                <template #default="{ id }">
+                  <Input :id="id" v-model="guestQuery" name="guest_q" type="search" :placeholder="t('newReservation.bookerPlaceholder')" @keydown.enter.prevent="findGuests" />
+                </template>
+              </FormField>
+              <Button type="button" variant="outline" data-testid="find-guest" @click="findGuests">{{ t('newReservation.find') }}</Button>
+            </div>
+            <ul v-if="guestResults.length" class="m-0 mt-2 flex list-none flex-wrap gap-2 p-0">
+              <li v-for="g in guestResults" :key="g.id">
+                <Button type="button" variant="outline" size="sm" :data-testid="`guest-${g.code}`" @click="guest = g; guestResults = []">{{ g.code }} · {{ guestLabel(g) }}</Button>
+              </li>
+            </ul>
+            <p v-if="guest" class="mb-0 mt-2 text-sm" data-testid="chosen-guest">
+              {{ t('newReservation.chosenBooker') }} <strong>{{ guestLabel(guest) }}</strong> ({{ guest.code }})
+              <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-primary underline" @click="guest = null">{{ t('newReservation.change') }}</button>
+            </p>
+          </div>
 
-      <div class="guest-pick">
-        <label class="field grow">
-          <span>Booker</span>
-          <input v-model="guestQuery" name="guest_q" type="search" placeholder="Search a guest by name, email, phone or code" @keydown.enter.prevent="findGuests" />
-        </label>
-        <button type="button" data-testid="find-guest" @click="findGuests">Find</button>
-      </div>
-      <ul v-if="guestResults.length" class="picks">
-        <li v-for="g in guestResults" :key="g.id">
-          <button type="button" :data-testid="`guest-${g.code}`" @click="guest = g; guestResults = []">{{ g.code }} · {{ guestLabel(g) }}</button>
-        </li>
-      </ul>
-      <p v-if="guest" data-testid="chosen-guest">Booker: <strong>{{ guestLabel(guest) }}</strong> ({{ guest.code }})
-        <button type="button" class="link" @click="guest = null">change</button></p>
-      <small v-if="fieldError('guest_id')" class="error-text">{{ fieldError('guest_id') }}</small>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <FormField :label="t('newReservation.source')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model="form.source" name="source">
+                  <option v-for="s in SOURCES" :key="s" :value="s">{{ s }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField :label="t('newReservation.remarks')">
+              <template #default="{ id }"><Input :id="id" v-model="form.remarks" name="remarks" /></template>
+            </FormField>
+            <FormField v-if="groups.length || form.groupId" :label="t('newReservation.group')" :error="fieldError('booking_group_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.groupId" name="booking_group_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('newReservation.groupNone') }}</option>
+                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ g.arrival_date }} - {{ g.departure_date }})</option>
+                </NativeSelect>
+                <small v-if="chosenGroup" class="text-xs text-muted-foreground" data-testid="group-hint">{{ t('newReservation.groupHint', { from: chosenGroup.arrival_date, to: chosenGroup.departure_date }) }}{{ chosenGroup.company_name ? t('newReservation.groupHintCompany', { company: chosenGroup.company_name }) : '' }}.</small>
+              </template>
+            </FormField>
+            <FormField v-if="companies.length && !form.groupId" :label="t('newReservation.company')" :error="fieldError('company_id')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model.number="form.companyId" name="company_id" :aria-invalid="invalid">
+                  <option :value="0">{{ t('newReservation.companyNone') }}</option>
+                  <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+          </div>
 
-      <div class="form-grid">
-        <label class="field">
-          <span>Source</span>
-          <select v-model="form.source" name="source">
-            <option v-for="s in SOURCES" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Remarks</span>
-          <input v-model="form.remarks" name="remarks" />
-        </label>
-        <label v-if="groups.length || form.groupId" class="field">
-          <span>Group</span>
-          <select v-model.number="form.groupId" name="booking_group_id" :aria-invalid="!!fieldError('booking_group_id')">
-            <option :value="0">None</option>
-            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.code }} · {{ g.name }} ({{ g.arrival_date }} to {{ g.departure_date }})</option>
-          </select>
-          <small v-if="chosenGroup" class="hint" data-testid="group-hint">The stay must lie within {{ chosenGroup.arrival_date }} to {{ chosenGroup.departure_date }}<template v-if="chosenGroup.company_name">; {{ chosenGroup.company_name }} is billed</template>.</small>
-        </label>
-        <label v-if="companies.length && !form.groupId" class="field">
-          <span>Company that is billed</span>
-          <select v-model.number="form.companyId" name="company_id" :aria-invalid="!!fieldError('company_id')">
-            <option :value="0">None (the guest pays)</option>
-            <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.code }} · {{ c.name }}</option>
-          </select>
-        </label>
-      </div>
-      <label class="check">
-        <input v-model="form.confirm" type="checkbox" name="confirm" />
-        <span>Confirm now (holds the room; a draft holds nothing)</span>
-      </label>
-      <div class="form-actions">
-        <button type="submit" class="btn-primary" :disabled="saving">{{ form.confirm ? 'Book and confirm' : 'Save draft' }}</button>
-      </div>
-    </form>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.confirm" type="checkbox" name="confirm" />
+            <span>{{ t('newReservation.confirmNow') }}</span>
+          </label>
+          <div class="flex justify-end">
+            <Button type="submit" :disabled="saving">{{ form.confirm ? t('newReservation.bookAndConfirm') : t('newReservation.saveDraft') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
   </template>
 </template>
-
-<style scoped>
-.search {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.field.small input {
-  width: 80px;
-}
-.grow {
-  flex: 1;
-}
-.list {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.list th,
-.list td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-.soldout {
-  color: var(--danger, #b42318);
-  font-weight: 600;
-}
-.guest-pick {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-.picks {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.link {
-  border: 0;
-  background: none;
-  color: var(--accent);
-  padding: 0;
-  text-decoration: underline;
-}
-</style>

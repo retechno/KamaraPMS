@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import NewReservationView from './NewReservationView.vue'
@@ -106,6 +107,52 @@ describe('NewReservationView', () => {
     expect(w.get('[data-testid=form-error]').text()).toContain('ROOM_TYPE_NOT_AVAILABLE')
     expect(push).not.toHaveBeenCalled()
     expect(w.find('form[data-testid=book-form]').exists()).toBe(true)
+  })
+})
+
+describe('NewReservationView: the offers', () => {
+  async function results(over: object = {}) {
+    const m = mountView()
+    const base = GET.getMockImplementation() as (path: string) => Promise<unknown>
+    GET = vi.fn(async (path: string) => (path.endsWith('/availability') ? { data: { ...search, ...over } } : base(path)))
+    await flushPromises()
+    await m.w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    return m.w
+  }
+
+  it('says why a plan cannot be booked, on the disabled button', async () => {
+    const w = await results()
+    expect(w.get('[data-testid=pick-STD-BAR]').attributes('title')).toContain('No room of this type is left')
+    expect(w.get('[data-testid=pick-DLX-HALF]').attributes('title')).toContain('1 night(s) have no rate')
+    expect(w.get('[data-testid=pick-DLX-BAR]').attributes('title')).toBe('')
+    expect(w.get('[data-testid=offer-STD-BAR]').text()).toContain('0') // rooms left, shown as a warning
+  })
+
+  it('shows a room type without a rate plan, and one that does not fit the party', async () => {
+    const w = await results({
+      room_types: [
+        { room_type_id: 12, code: 'SUI', name: 'Suite', fits_occupancy: true, available_min: 1, per_night: [], rate_plans: [] },
+        { room_type_id: 13, code: 'SGL', name: 'Single', fits_occupancy: false, available_min: 3, per_night: [], rate_plans: [{ id: 1, code: 'BAR', name: 'Best', price_mode: 'INCLUSIVE', nightly: [], missing_nights: 0, estimate: { net: '1', service: '0', tax: '0', total: '500000' } }] },
+      ],
+    })
+    expect(w.get('[data-testid=type-SUI]').text()).toContain('No active rate plan.')
+    expect(w.get('[data-testid=offer-SGL-BAR]').text()).toContain('inclusive')
+    expect(w.get('[data-testid=no-fit]').text()).toContain('does not fit 2 adult(s) and 0 child(ren)')
+    expect(w.get('[data-testid=pick-SGL-BAR]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=pick-SGL-BAR]').attributes('title')).toBe('The room type is too small for this party.')
+  })
+
+  it('speaks Indonesian, down to the booking form', async () => {
+    setLocale('id')
+    const w = await results()
+    expect(w.get('h1').text()).toBe('Reservasi baru')
+    expect(w.get('[data-testid=results]').text()).toContain('2 malam')
+    expect(w.get('[data-testid=offer-DLX-BAR]').text()).toContain('eksklusif')
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    expect(w.get('[data-testid=book-form]').text()).toContain('Pesan DLX dengan BAR')
+    expect(w.get('[data-testid=book-form] button[type=submit]').text()).toBe('Pesan dan konfirmasi')
+    setLocale('en')
   })
 })
 

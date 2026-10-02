@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import TapeChartView from './TapeChartView.vue'
@@ -64,5 +65,38 @@ describe('TapeChartView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('colours a checked-in stay differently, and shows a legend', async () => {
+    const w = mountView()
+    GET.mockResolvedValue({ data: { ...chart, rooms: [{ ...chart.rooms[0]!, bookings: [{ ...booking, status: 'CHECKED_IN' }] }, chart.rooms[1]] } })
+    await w.findAll('button').find((b) => b.text().includes('Business date'))?.trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=bar-101-2026-10-02]').classes()).toContain('bg-success/30')
+    expect(w.get('[data-testid=legend]').text()).toContain('Checked in')
+    expect(w.get('[data-testid=legend]').text()).toContain('Blocked (OOO / OOS)')
+  })
+
+  it('names the weekday over each date and shades the weekend', async () => {
+    const w = mountView()
+    await flushPromises()
+    const heads = w.findAll('thead th').slice(1)
+    expect(heads[0]!.text()).toContain('Thu') // 1 Oct 2026
+    expect(heads[0]!.text()).toContain('01/10')
+    expect(heads[0]!.classes()).toContain('bg-primary/10') // the business date
+    expect(heads[2]!.text()).toContain('Sat')
+    expect(heads[2]!.classes()).toContain('bg-muted/60')
+    expect(heads[4]!.classes()).not.toContain('bg-muted/60') // Monday
+  })
+
+  it('speaks Indonesian', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Tape chart')
+    expect(w.get('[data-testid=unassigned-DLX]').text()).toContain('1 pemesanan')
+    expect(w.get('table').text()).toContain('Belum ditetapkan')
+    expect(w.get('select').findAll('option').map((o) => o.text())).toEqual(['14 hari', '28 hari'])
+    setLocale('en')
   })
 })
