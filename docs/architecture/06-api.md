@@ -678,3 +678,23 @@ Permissions: `payables.view` (read), `payables.manage` (suppliers), `payables.po
 | `GET {P}/payables/aging` | `payables.view` | `as_of` (not after the business date); buckets CURRENT, DAYS_1_30, DAYS_31_60, DAYS_61_90, DAYS_OVER_90 per supplier and in total |
 
 The journal type `PAYABLES` appears in the journal list; the system account map has 12 keys (`ACCOUNTS_PAYABLE` is the new one) and the reconciliation a fourth control.
+
+## 21. Bank reconciliation (after M15)
+Permissions: `bank.view` (read), `bank.manage` (register bank accounts), `bank.reconcile` (import, match, post, reconcile; reopening also needs an approval).
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET/POST {P}/bank/accounts` | read: `bank.view`; write: `bank.manage` | POST `{account_id, name, account_number?, is_active?}`; 409 `BANK_ACCOUNT_EXISTS`; each carries `book_balance`, `reconciled_to`, `open_statements` |
+| `GET/PATCH {P}/bank/accounts/{id}` | read: `bank.view`; write: `bank.manage` | The account of the books never changes |
+| `GET {P}/bank/statements` | `bank.view` | Filters `bank_account_id`, `status` |
+| `POST {P}/bank/statements` | `bank.reconcile` | `{bank_account_id, period_from, period_to, opening_balance, closing_balance, note?, csv}`; 422 with one field error per row (`rows[N].field`), `closing_balance: DOES_NOT_ADD_UP`, `opening_balance: NOT_CONTINUOUS`; 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE` |
+| `GET/DELETE {P}/bank/statements/{id}` | read: `bank.view`; delete: `bank.reconcile` | The detail has `lines` (with `cleared`, `matched`, `clearings`), `clearings` and the `summary` (book balance, uncleared in/out, adjusted bank, difference, `blockers`, `can_reconcile`); delete only while open |
+| `GET {P}/bank/statements/{id}/uncleared` | `bank.view` | The journal lines of the account up to the end of the statement that no statement has cleared |
+| `POST {P}/bank/statements/{id}/clearings` | `bank.reconcile` | `{statement_line_id?, journal_line_ids}`; 409 `ALREADY_CLEARED`, `STATEMENT_RECONCILED`; without a statement line only offsetting or opening lines |
+| `DELETE {P}/bank/statements/{id}/clearings/{clearingId}` | `bank.reconcile` | Undo a matching |
+| `POST {P}/bank/statements/{id}/auto-match` | `bank.reconcile` | `{matched, remaining}` |
+| `POST {P}/bank/statements/{id}/lines/{lineId}/adjust` | `bank.reconcile` | `{account_id, description?}`; posts a BANK journal; 409 `LINE_ALREADY_MATCHED`, `PERIOD_CLOSED` |
+| `POST {P}/bank/statements/{id}/reconcile` | `bank.reconcile` | 409 `STATEMENT_NOT_READY` (context `blockers`) |
+| `POST {P}/bank/statements/{id}/reopen` | `bank.reconcile` + approval | `{reason, approval}`; 409 `STATEMENT_NOT_LATEST`, `STATEMENT_NOT_RECONCILED` |
+
+The journal type `BANK` appears in the journal list.

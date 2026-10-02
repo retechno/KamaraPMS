@@ -26,6 +26,7 @@ type SystemLine struct {
 
 // SystemJournal is a journal of the payables, posted by that module in its own transaction.
 type SystemJournal struct {
+	Type        string // JournalPayables (the default) or JournalBank
 	Date        civil.Date
 	Description string
 	Reference   string
@@ -129,8 +130,15 @@ func (po *Poster) CheckAccount(ctx context.Context, id int64, field string) erro
 // Post writes a balanced journal of type PAYABLES and returns its id and number. The caller has checked the date and
 // the accounts of its own lines (CheckDate, CheckAccount), which Post checks again.
 func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, error) {
+	typ := in.Type
+	if typ == "" {
+		typ = JournalPayables
+	}
+	if typ != JournalPayables && typ != JournalBank {
+		return 0, "", apperr.Internal(fmt.Errorf("a module cannot post a journal of type %s", typ))
+	}
 	if len(in.Lines) < 2 {
-		return 0, "", apperr.Internal(fmt.Errorf("a payables journal has at least two lines"))
+		return 0, "", apperr.Internal(fmt.Errorf("a journal has at least two lines"))
 	}
 	debit, credit := decimal.Zero, decimal.Zero
 	for _, l := range in.Lines {
@@ -153,7 +161,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	}
 	q := po.svc.q(ctx)
 	id, err := q.InsertJournal(ctx, accountingdb.InsertJournalParams{
-		TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalNumber: number, JournalType: JournalPayables, JournalDate: in.Date,
+		TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalNumber: number, JournalType: typ, JournalDate: in.Date,
 		Description: in.Description, Reference: nullable(in.Reference), PostedAt: po.svc.clock.Now(), ActorID: po.p.ActorID(),
 	})
 	if err != nil {
@@ -167,8 +175,8 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 			return 0, "", err
 		}
 	}
-	return id, number, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_posted", "gl_journal", id, nil,
-		map[string]any{"journal_number": number, "journal_date": in.Date, "lines": len(in.Lines), "total": debit.String()}))
+	return id, number, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.module_journal_posted", "gl_journal", id, nil,
+		map[string]any{"journal_number": number, "type": typ, "journal_date": in.Date, "lines": len(in.Lines), "total": debit.String()}))
 }
 
 // Reverse posts the mirror image of a payables journal (a voided bill or payment) dated a given day, in an open month.

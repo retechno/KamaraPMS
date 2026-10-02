@@ -27,6 +27,7 @@ const (
 	JournalReversal = "REVERSAL"
 	JournalClosing  = "CLOSING"
 	JournalPayables = "PAYABLES"
+	JournalBank     = "BANK"
 )
 
 const (

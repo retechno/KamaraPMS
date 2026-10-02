@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.31.0
+  version: 0.32.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -4551,6 +4551,288 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/accounts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBankAccounts
+      summary: The accounts of the books that are reconciled with a bank (bank.view)
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccountList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBankAccount
+      summary: Register an account of the books for reconciliation (bank.manage)
+      description: An active asset account that takes postings, registered once (409 `BANK_ACCOUNT_EXISTS`).
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBankAccountRequest" }
+      responses:
+        "201":
+          description: The bank account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBankAccount
+      summary: One bank account (bank.view)
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateBankAccount
+      summary: Rename a bank account or take it out of use (bank.manage)
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBankAccountRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBankStatements
+      summary: Imported bank statements, newest first (bank.view)
+      tags: [bank]
+      parameters:
+        - { name: bank_account_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, RECONCILED] } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: importBankStatement
+      summary: Import a bank statement (bank.reconcile)
+      description: "The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`."
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportBankStatementRequest" }
+      responses:
+        "201":
+          description: The statement with its lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBankStatement
+      summary: A statement with its lines, matchings and the comparison of the bank with the books (bank.view)
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteBankStatement
+      summary: Delete a statement that is not reconciled (bank.reconcile)
+      tags: [bank]
+      responses:
+        "204":
+          description: Deleted, with its lines and matchings.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/uncleared:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listUnclearedJournalLines
+      summary: The journal lines of the account, up to the end of the statement, that no statement has cleared (bank.view)
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnclearedLineList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/clearings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: clearJournalLines
+      summary: Match journal lines with a statement line (bank.reconcile)
+      description: "A journal line is cleared once (409 `ALREADY_CLEARED`). Without `statement_line_id` the journal lines are cleared on their own: only when they add up to zero (a payment and its reversal), or, in the first statement of an account, when they are dated before it (the opening balance). 409 `STATEMENT_RECONCILED`."
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClearJournalLinesRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/clearings/{clearingId}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: clearingId, in: path, required: true, schema: { type: integer, format: int64 } }
+    delete:
+      operationId: unclearJournalLine
+      summary: Undo a matching (bank.reconcile)
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/auto-match:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: autoMatchStatement
+      summary: Match what can be decided by amount and date (bank.reconcile)
+      description: "Every statement line with nothing matched is matched with the one uncleared journal line of the same amount dated within three days of it (the nearest, when it is the only nearest). The rest is left for a person."
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutoMatchResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lineId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: adjustFromStatementLine
+      summary: Post what the bank shows and the books lack (bank.reconcile)
+      description: "From a line with nothing matched: a BANK journal dated the day of the line, the bank account against the account chosen (a fee, interest), cleared against the line. The date must be in an open accounting period (409 `PERIOD_CLOSED`); 409 `LINE_ALREADY_MATCHED`."
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdjustFromLineRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reconcileStatement
+      summary: Reconcile a statement (bank.reconcile)
+      description: "Needs the statement before it reconciled, every line matched, and the journal lines cleared so far to add up to the closing balance of the bank (409 `STATEMENT_NOT_READY`, `context.blockers`). A reconciled statement is final."
+      tags: [bank]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/reopen:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reopenStatement
+      summary: Reopen the latest reconciled statement of an account (bank.reconcile, needs approval)
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankStatementDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -7755,7 +8037,7 @@ components:
         issues:
           type: array
           items: { $ref: "#/components/schemas/GlCodeIssue" }
-    JournalType: { type: string, enum: [DAY_CLOSE, MANUAL, REVERSAL, CLOSING, PAYABLES] }
+    JournalType: { type: string, enum: [DAY_CLOSE, MANUAL, REVERSAL, CLOSING, PAYABLES, BANK] }
     JournalLine:
       type: object
       required: [line_no, account_id, account_code, account_name, debit, credit]
@@ -8211,3 +8493,162 @@ components:
         suppliers: { type: array, items: { $ref: "#/components/schemas/AgingSupplier" } }
         buckets: { $ref: "#/components/schemas/AgingBucket" }
         total: { type: string }
+    BankAccount:
+      type: object
+      required: [id, account_id, account_code, account_name, name, is_active, book_balance, reconciled_to, open_statements, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        name: { type: string }
+        account_number: { type: string }
+        is_active: { type: boolean }
+        book_balance: { type: string }
+        reconciled_to: { type: string, format: date, nullable: true, description: The end of the latest reconciled statement. }
+        open_statements: { type: integer }
+        created_at: { type: string, format: date-time }
+    BankAccountList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/BankAccount" } }
+    CreateBankAccountRequest:
+      type: object
+      required: [account_id, name]
+      additionalProperties: false
+      properties:
+        account_id: { type: integer, format: int64 }
+        name: { type: string, maxLength: 100 }
+        account_number: { type: string, maxLength: 60 }
+        is_active: { type: boolean, nullable: true }
+    UpdateBankAccountRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        account_number: { type: string, maxLength: 60 }
+        is_active: { type: boolean }
+    BankStatement:
+      type: object
+      required: [id, bank_account_id, bank_name, account_code, period_from, period_to, opening_balance, closing_balance, status, line_count, matched_count, imported_at, reconciled_at]
+      properties:
+        id: { type: integer, format: int64 }
+        bank_account_id: { type: integer, format: int64 }
+        bank_name: { type: string }
+        account_code: { type: string }
+        period_from: { type: string, format: date }
+        period_to: { type: string, format: date }
+        opening_balance: { type: string }
+        closing_balance: { type: string }
+        status: { type: string, enum: [OPEN, RECONCILED] }
+        note: { type: string }
+        line_count: { type: integer }
+        matched_count: { type: integer }
+        imported_at: { type: string, format: date-time }
+        reconciled_at: { type: string, format: date-time, nullable: true }
+        reopen_reason: { type: string }
+    BankStatementList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/BankStatement" } }
+    BankClearing:
+      type: object
+      required: [id, statement_line_id, journal_line_id, amount, journal_date, journal_number, journal_type]
+      properties:
+        id: { type: integer, format: int64 }
+        statement_line_id: { type: integer, format: int64, nullable: true }
+        journal_line_id: { type: integer, format: int64 }
+        amount: { type: string }
+        journal_date: { type: string, format: date }
+        journal_number: { type: string }
+        journal_type: { $ref: "#/components/schemas/JournalType" }
+        description: { type: string }
+    BankStatementLine:
+      type: object
+      required: [id, line_no, line_date, amount, cleared, matched, clearings]
+      properties:
+        id: { type: integer, format: int64 }
+        line_no: { type: integer }
+        line_date: { type: string, format: date }
+        description: { type: string }
+        reference: { type: string }
+        amount: { type: string, description: Money in is positive, money out negative. }
+        cleared: { type: string, description: What the journal lines matched with it add up to. }
+        matched: { type: boolean, description: True when `cleared` equals `amount`. }
+        clearings: { type: array, items: { $ref: "#/components/schemas/BankClearing" } }
+    BankReconciliationSummary:
+      type: object
+      required: [statement_closing, book_balance, cleared_total, uncleared_in, uncleared_out, uncleared_count, unmatched_lines, unmatched_amount, adjusted_bank, difference, blockers, can_reconcile]
+      properties:
+        statement_closing: { type: string }
+        book_balance: { type: string, description: What the account of the books adds up to at the end of the statement. }
+        cleared_total: { type: string, description: The journal lines cleared in this and the earlier statements; the statement reconciles when it equals the closing balance. }
+        uncleared_in: { type: string, description: Money in the books that the bank does not show yet (in transit). }
+        uncleared_out: { type: string, description: Payments in the books that the bank does not show yet (outstanding). }
+        uncleared_count: { type: integer }
+        unmatched_lines: { type: integer }
+        unmatched_amount: { type: string }
+        adjusted_bank: { type: string, description: The closing balance plus money in transit less outstanding payments. }
+        difference: { type: string, description: The adjusted bank balance less the book balance. }
+        blockers: { type: array, items: { type: string } }
+        can_reconcile: { type: boolean }
+    BankStatementDetail:
+      allOf:
+        - $ref: "#/components/schemas/BankStatement"
+        - type: object
+          required: [lines, clearings, summary]
+          properties:
+            lines: { type: array, items: { $ref: "#/components/schemas/BankStatementLine" } }
+            clearings: { type: array, items: { $ref: "#/components/schemas/BankClearing" } }
+            summary: { $ref: "#/components/schemas/BankReconciliationSummary" }
+    ImportBankStatementRequest:
+      type: object
+      required: [bank_account_id, period_from, period_to, opening_balance, closing_balance, csv]
+      additionalProperties: false
+      properties:
+        bank_account_id: { type: integer, format: int64 }
+        period_from: { type: string, format: date }
+        period_to: { type: string, format: date }
+        opening_balance: { type: string }
+        closing_balance: { type: string }
+        note: { type: string, maxLength: 300 }
+        csv: { type: string, description: The lines of the statement as CSV with a header row. }
+    UnclearedLine:
+      type: object
+      required: [journal_line_id, journal_date, journal_id, journal_number, journal_type, amount]
+      properties:
+        journal_line_id: { type: integer, format: int64 }
+        journal_date: { type: string, format: date }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_type: { $ref: "#/components/schemas/JournalType" }
+        description: { type: string }
+        reference: { type: string }
+        amount: { type: string, description: A debit (money in) is positive. }
+    UnclearedLineList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/UnclearedLine" } }
+    ClearJournalLinesRequest:
+      type: object
+      required: [journal_line_ids]
+      additionalProperties: false
+      properties:
+        statement_line_id: { type: integer, format: int64, nullable: true }
+        journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
+    AdjustFromLineRequest:
+      type: object
+      required: [account_id]
+      additionalProperties: false
+      properties:
+        account_id: { type: integer, format: int64, description: The account the bank item belongs to (not the bank account itself). }
+        description: { type: string, maxLength: 300 }
+    AutoMatchResult:
+      type: object
+      required: [matched, remaining]
+      properties:
+        matched: { type: integer }
+        remaining: { type: integer }

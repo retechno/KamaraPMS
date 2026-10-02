@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/availability"
+	"kamarapms/internal/bankrec"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
@@ -76,6 +77,7 @@ type Env struct {
 	Maintenance *maintenance.Service
 	Accounting  *accounting.Service
 	Payables    *payables.Service
+	BankRec     *bankrec.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -112,7 +114,7 @@ func Setup(t *testing.T) *Env {
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
 	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
-		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia)}
+		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia)}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

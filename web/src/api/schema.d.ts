@@ -3906,6 +3906,248 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/bank/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The accounts of the books that are reconciled with a bank (bank.view) */
+        get: operations["listBankAccounts"];
+        put?: never;
+        /**
+         * Register an account of the books for reconciliation (bank.manage)
+         * @description An active asset account that takes postings, registered once (409 `BANK_ACCOUNT_EXISTS`).
+         */
+        post: operations["createBankAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One bank account (bank.view) */
+        get: operations["getBankAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a bank account or take it out of use (bank.manage) */
+        patch: operations["updateBankAccount"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Imported bank statements, newest first (bank.view) */
+        get: operations["listBankStatements"];
+        put?: never;
+        /**
+         * Import a bank statement (bank.reconcile)
+         * @description The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`.
+         */
+        post: operations["importBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A statement with its lines, matchings and the comparison of the bank with the books (bank.view) */
+        get: operations["getBankStatement"];
+        put?: never;
+        post?: never;
+        /** Delete a statement that is not reconciled (bank.reconcile) */
+        delete: operations["deleteBankStatement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/uncleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The journal lines of the account, up to the end of the statement, that no statement has cleared (bank.view) */
+        get: operations["listUnclearedJournalLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/clearings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match journal lines with a statement line (bank.reconcile)
+         * @description A journal line is cleared once (409 `ALREADY_CLEARED`). Without `statement_line_id` the journal lines are cleared on their own: only when they add up to zero (a payment and its reversal), or, in the first statement of an account, when they are dated before it (the opening balance). 409 `STATEMENT_RECONCILED`.
+         */
+        post: operations["clearJournalLines"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/clearings/{clearingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                clearingId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo a matching (bank.reconcile) */
+        delete: operations["unclearJournalLine"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/auto-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match what can be decided by amount and date (bank.reconcile)
+         * @description Every statement line with nothing matched is matched with the one uncleared journal line of the same amount dated within three days of it (the nearest, when it is the only nearest). The rest is left for a person.
+         */
+        post: operations["autoMatchStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post what the bank shows and the books lack (bank.reconcile)
+         * @description From a line with nothing matched: a BANK journal dated the day of the line, the bank account against the account chosen (a fee, interest), cleared against the line. The date must be in an open accounting period (409 `PERIOD_CLOSED`); 409 `LINE_ALREADY_MATCHED`.
+         */
+        post: operations["adjustFromStatementLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile a statement (bank.reconcile)
+         * @description Needs the statement before it reconciled, every line matched, and the journal lines cleared so far to add up to the closing balance of the bank (409 `STATEMENT_NOT_READY`, `context.blockers`). A reconciled statement is final.
+         */
+        post: operations["reconcileStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the latest reconciled statement of an account (bank.reconcile, needs approval) */
+        post: operations["reopenStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6721,7 +6963,7 @@ export interface components {
             issues: components["schemas"]["GlCodeIssue"][];
         };
         /** @enum {string} */
-        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES";
+        JournalType: "DAY_CLOSE" | "MANUAL" | "REVERSAL" | "CLOSING" | "PAYABLES" | "BANK";
         JournalLine: {
             line_no: number;
             /** Format: int64 */
@@ -7169,6 +7411,170 @@ export interface components {
             suppliers: components["schemas"]["AgingSupplier"][];
             buckets: components["schemas"]["AgingBucket"];
             total: string;
+        };
+        BankAccount: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            name: string;
+            account_number?: string;
+            is_active: boolean;
+            book_balance: string;
+            /**
+             * Format: date
+             * @description The end of the latest reconciled statement.
+             */
+            reconciled_to: string | null;
+            open_statements: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BankAccountList: {
+            data: components["schemas"]["BankAccount"][];
+        };
+        CreateBankAccountRequest: {
+            /** Format: int64 */
+            account_id: number;
+            name: string;
+            account_number?: string;
+            is_active?: boolean | null;
+        };
+        UpdateBankAccountRequest: {
+            name?: string;
+            account_number?: string;
+            is_active?: boolean;
+        };
+        BankStatement: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            bank_account_id: number;
+            bank_name: string;
+            account_code: string;
+            /** Format: date */
+            period_from: string;
+            /** Format: date */
+            period_to: string;
+            opening_balance: string;
+            closing_balance: string;
+            /** @enum {string} */
+            status: "OPEN" | "RECONCILED";
+            note?: string;
+            line_count: number;
+            matched_count: number;
+            /** Format: date-time */
+            imported_at: string;
+            /** Format: date-time */
+            reconciled_at: string | null;
+            reopen_reason?: string;
+        };
+        BankStatementList: {
+            data: components["schemas"]["BankStatement"][];
+        };
+        BankClearing: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            statement_line_id: number | null;
+            /** Format: int64 */
+            journal_line_id: number;
+            amount: string;
+            /** Format: date */
+            journal_date: string;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description?: string;
+        };
+        BankStatementLine: {
+            /** Format: int64 */
+            id: number;
+            line_no: number;
+            /** Format: date */
+            line_date: string;
+            description?: string;
+            reference?: string;
+            /** @description Money in is positive */
+            amount: string;
+            /** @description What the journal lines matched with it add up to. */
+            cleared: string;
+            /** @description True when `cleared` equals `amount`. */
+            matched: boolean;
+            clearings: components["schemas"]["BankClearing"][];
+        };
+        BankReconciliationSummary: {
+            statement_closing: string;
+            /** @description What the account of the books adds up to at the end of the statement. */
+            book_balance: string;
+            /** @description The journal lines cleared in this and the earlier statements; the statement reconciles when it equals the closing balance. */
+            cleared_total: string;
+            /** @description Money in the books that the bank does not show yet (in transit). */
+            uncleared_in: string;
+            /** @description Payments in the books that the bank does not show yet (outstanding). */
+            uncleared_out: string;
+            uncleared_count: number;
+            unmatched_lines: number;
+            unmatched_amount: string;
+            /** @description The closing balance plus money in transit less outstanding payments. */
+            adjusted_bank: string;
+            /** @description The adjusted bank balance less the book balance. */
+            difference: string;
+            blockers: string[];
+            can_reconcile: boolean;
+        };
+        BankStatementDetail: components["schemas"]["BankStatement"] & {
+            lines: components["schemas"]["BankStatementLine"][];
+            clearings: components["schemas"]["BankClearing"][];
+            summary: components["schemas"]["BankReconciliationSummary"];
+        };
+        ImportBankStatementRequest: {
+            /** Format: int64 */
+            bank_account_id: number;
+            /** Format: date */
+            period_from: string;
+            /** Format: date */
+            period_to: string;
+            opening_balance: string;
+            closing_balance: string;
+            note?: string;
+            /** @description The lines of the statement as CSV with a header row. */
+            csv: string;
+        };
+        UnclearedLine: {
+            /** Format: int64 */
+            journal_line_id: number;
+            /** Format: date */
+            journal_date: string;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            journal_type: components["schemas"]["JournalType"];
+            description?: string;
+            reference?: string;
+            /** @description A debit (money in) is positive. */
+            amount: string;
+        };
+        UnclearedLineList: {
+            data: components["schemas"]["UnclearedLine"][];
+        };
+        ClearJournalLinesRequest: {
+            /** Format: int64 */
+            statement_line_id?: number | null;
+            journal_line_ids: number[];
+        };
+        AdjustFromLineRequest: {
+            /**
+             * Format: int64
+             * @description The account the bank item belongs to (not the bank account itself).
+             */
+            account_id: number;
+            description?: string;
+        };
+        AutoMatchResult: {
+            matched: number;
+            remaining: number;
         };
     };
     responses: {
@@ -13513,6 +13919,426 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBankAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccountList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBankAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The bank account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateBankAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBankAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankAccount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBankStatements: {
+        parameters: {
+            query?: {
+                bank_account_id?: number;
+                status?: "OPEN" | "RECONCILED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBankStatementRequest"];
+            };
+        };
+        responses: {
+            /** @description The statement with its lines. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, with its lines and matchings. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listUnclearedJournalLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclearedLineList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    clearJournalLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClearJournalLinesRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    unclearJournalLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                clearingId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    autoMatchStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoMatchResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adjustFromStatementLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustFromLineRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reconcileStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reopenStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

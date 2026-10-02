@@ -75,6 +75,13 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Bank',
+    items: [
+      { label: 'Bank accounts', to: '/bank/accounts', milestone: 'S3' },
+      { label: 'Bank statements', to: '/bank/statements', milestone: 'S3' },
+    ],
+  },
+  {
     title: 'End of day',
     items: [
       { label: 'Night audit', to: '/night-audit', milestone: 'M13' },
