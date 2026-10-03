@@ -1,0 +1,32 @@
+# 08. Next features
+
+Ideas that were left out on purpose, with why and what they would touch. A request starts the work (see `README.md`);
+this list only keeps them from being forgotten. Move an item to the README status when it is built.
+
+## Rooms and availability
+
+- **Bed counts per room type** (for example 1 King or 2 Twin in one room type) and **bed type as a sellable variant** with
+  its own stock or rate. Today a bed type is a description: availability is counted per room type, and a room with
+  another bed than the one asked for can still be assigned (see "Bed types" in the README). Touches the availability
+  engine (inventory per type and bed), the search, the rate grid and the calendar. Decide first whether a variant
+  has its own price or only its own stock.
+
+## Free rooms (complimentary and house use)
+
+- **Approval workflow and a cap per period** for rooms given away: for example a monthly limit of free nights per
+  property or per user, and an approval by a manager above it. Today the permission `reservation.complimentary` and a
+  reason are the only controls (see "Complimentary and house use rooms" in the README).
+
+## Reservations and prices
+
+- **Screen for the nightly rate override.** The API already takes `nightly_overrides` (create a reservation, add or
+  amend a room, walk-in; permission `reservation.override_rate`, `frontdesk.rate_change` for a room move), but no
+  screen sets it: the new reservation, the reservation detail and the walk-in forms have no way to change the price of a
+  night. Needs a per-night editor (amount and discount, with the grid price shown beside it) and the permission check
+  in the UI.
+
+## Language
+
+- **Numbers in the Indonesian field errors.** The generic texts leave out the limits the server hint carries ("at
+  most 100 characters"). Needs interpolation per error code from the backend.
+- **The confirmation e-mail** is sent by the server in English; it would take a language per guest or per property.
