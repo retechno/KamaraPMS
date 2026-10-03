@@ -105,7 +105,7 @@ func TestCreatePropertyOpensDayAndSequences(t *testing.T) {
 	if n := e.count(t, `SELECT count(*) FROM business_days WHERE property_id = $1 AND status = 'OPEN'`, p.ID); n != 1 {
 		t.Fatalf("open business days: %d", n)
 	}
-	if n := e.count(t, `SELECT count(*) FROM document_sequences WHERE property_id = $1`, p.ID); n != 13 {
+	if n := e.count(t, `SELECT count(*) FROM document_sequences WHERE property_id = $1`, p.ID); n != 14 {
 		t.Fatalf("sequences: %d", n)
 	}
 	// tenant.created + property.created + business_day.opened, stamped with the business date.

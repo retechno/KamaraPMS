@@ -5275,6 +5275,207 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxInvoices
+      summary: The tax invoices (faktur pajak), newest first (tax.view)
+      tags: [tax]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [ISSUED, VOIDED] } }
+        - { name: from, in: query, schema: { type: string, format: date }, description: The first issue date. }
+        - { name: to, in: query, schema: { type: string, format: date }, description: The last issue date. }
+        - { name: q, in: query, schema: { type: string }, description: "Part of the reference, the name of the buyer or the official number." }
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+      responses:
+        "200":
+          description: The result, without the lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoiceList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: issueTaxInvoice
+      summary: Issue the tax invoice of a city ledger invoice or a closed folio (tax.invoice)
+      description: "Dated the current business date. The property must be PKP on it, the buyer needs a tax number of 15 or 16 digits, and there must be VAT to invoice; otherwise 409 `TAX_INVOICE_NOT_READY` with `context.blockers`. A source has one live invoice: 409 `TAX_INVOICE_EXISTS`. A replacement names the void invoice it replaces: 409 `TAX_INVOICE_REPLACE_INVALID`, `TAX_INVOICE_ALREADY_REPLACED`. The VAT of a city ledger invoice is that of the folios behind it, in the share of each transferred."
+      tags: [tax]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IssueTaxInvoiceRequest" }
+      responses:
+        "201":
+          description: The invoice.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoice" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: previewTaxInvoice
+      summary: What the tax invoice of a source would say and what stops it (tax.invoice)
+      description: Nothing is written. For a folio the buyer is given in `buyer_name`, `buyer_npwp` and `buyer_address`.
+      tags: [tax]
+      parameters:
+        - { name: source_type, in: query, required: true, schema: { type: string, enum: [CITY_LEDGER_INVOICE, FOLIO] } }
+        - { name: id, in: query, required: true, schema: { type: integer, format: int64 }, description: The city ledger invoice or the folio. }
+        - { name: buyer_name, in: query, schema: { type: string } }
+        - { name: buyer_npwp, in: query, schema: { type: string } }
+        - { name: buyer_address, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoicePreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/coverage:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getTaxInvoiceCoverage
+      summary: The VAT collected against the VAT on tax invoices in a range (tax.view)
+      description: Information only. Lists the folios that carry VAT and are on no live tax invoice.
+      tags: [tax]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoiceCoverage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/exports:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listTaxInvoiceExports
+      summary: The batches of tax invoices exported, newest first (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoiceExportList" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: exportTaxInvoices
+      summary: Export the tax invoices issued in a range as a CSV file (tax.invoice)
+      description: "One row per invoice line, void invoices included with their status. The batch is recorded with a hash of the file and returned in the headers `X-Export-Id`, `X-Export-Sha256` and `X-Export-Invoices`. A range can be exported again. 409 `TAX_INVOICE_EXPORT_EMPTY`. The layout is neutral; the layout of the tax authority's system is not built yet."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportTaxInvoicesRequest" }
+      responses:
+        "200":
+          description: The file.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxInvoice
+      summary: One tax invoice with its lines (tax.view)
+      tags: [tax]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoice" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidTaxInvoice
+      summary: Void a tax invoice (tax.invoice, with a reason and an approval)
+      description: "409 `TAX_INVOICE_ALREADY_VOIDED`. Its source can then be invoiced again as a replacement."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The invoice.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoice" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/{id}/djp-number:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setTaxInvoiceDjpNumber
+      summary: Record the official number the tax authority gave the invoice (tax.invoice)
+      description: "Once, on an invoice that is not void; one number belongs to one invoice: 409 `TAX_INVOICE_NUMBER_SET`, `TAX_INVOICE_NUMBER_TAKEN`, `TAX_INVOICE_ALREADY_VOIDED`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxInvoiceDjpNumberRequest" }
+      responses:
+        "200":
+          description: The invoice.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxInvoice" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/invoices/{id}/invoice.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getTaxInvoicePdf
+      summary: A tax invoice as PDF (tax.view)
+      tags: [documents]
+      responses:
+        "200":
+          description: The invoice as issued (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/tax/profiles:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9990,6 +10191,139 @@ components:
         as_of: { type: string, format: date }
         amount: { type: string, description: Above zero. }
         approval: { $ref: "#/components/schemas/Approval" }
+    TaxInvoiceLine:
+      type: object
+      required: [line_no, charge_code, description, base_amount, rate, vat_amount]
+      properties:
+        line_no: { type: integer }
+        charge_code: { type: string }
+        description: { type: string }
+        base_amount: { type: string, description: "The taxable base (DPP)." }
+        rate: { type: string }
+        vat_amount: { type: string }
+    TaxInvoiceParty:
+      type: object
+      required: [name, npwp]
+      properties:
+        name: { type: string }
+        npwp: { type: string, description: "15 or 16 digits." }
+        address: { type: string }
+    TaxInvoiceSeller:
+      type: object
+      required: [name, npwp]
+      properties:
+        name: { type: string }
+        npwp: { type: string }
+        pkp_number: { type: string }
+        address: { type: string }
+        signer_name: { type: string }
+        signer_title: { type: string }
+    TaxInvoice:
+      type: object
+      required: [id, invoice_ref, status, issue_date, source_type, city_ledger_invoice_id, folio_id, seller, buyer, taxable_base, vat_amount, replaces_invoice_id, voided_at, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        invoice_ref: { type: string, description: "The internal number, TXI000001." }
+        status: { type: string, enum: [ISSUED, VOIDED] }
+        issue_date: { type: string, format: date }
+        source_type: { type: string, enum: [CITY_LEDGER_INVOICE, FOLIO] }
+        city_ledger_invoice_id: { type: integer, format: int64, nullable: true }
+        city_ledger_invoice_number: { type: string }
+        folio_id: { type: integer, format: int64, nullable: true }
+        folio_number: { type: string }
+        seller: { $ref: "#/components/schemas/TaxInvoiceSeller" }
+        buyer: { $ref: "#/components/schemas/TaxInvoiceParty" }
+        taxable_base: { type: string }
+        vat_amount: { type: string }
+        djp_number: { type: string, description: "The official number of the tax authority, recorded after the upload." }
+        replaces_invoice_id: { type: integer, format: int64, nullable: true }
+        voided_at: { type: string, format: date-time, nullable: true }
+        void_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/TaxInvoiceLine" }, description: Only when one invoice is read. }
+    TaxInvoiceList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxInvoice" } }
+    IssueTaxInvoiceRequest:
+      type: object
+      required: [source_type]
+      additionalProperties: false
+      properties:
+        source_type: { type: string, enum: [CITY_LEDGER_INVOICE, FOLIO] }
+        city_ledger_invoice_id: { type: integer, format: int64 }
+        folio_id: { type: integer, format: int64 }
+        buyer: { $ref: "#/components/schemas/TaxInvoiceParty" }
+        replaces_invoice_id: { type: integer, format: int64, nullable: true }
+    TaxInvoiceBlocker:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [NOT_PKP, SOURCE_NOT_ISSUED, SOURCE_NOT_CLOSED, BUYER_NAME_REQUIRED, BUYER_NAME_TOO_LONG, BUYER_NPWP_INVALID, BUYER_ADDRESS_TOO_LONG, NO_VAT, NO_BASE] }
+        message: { type: string }
+    TaxInvoicePreview:
+      type: object
+      required: [source_type, source_ref, issue_date, seller, buyer, lines, taxable_base, vat_amount, blockers, ready]
+      properties:
+        source_type: { type: string, enum: [CITY_LEDGER_INVOICE, FOLIO] }
+        source_ref: { type: string }
+        issue_date: { type: string, format: date }
+        seller: { $ref: "#/components/schemas/TaxInvoiceSeller" }
+        buyer: { $ref: "#/components/schemas/TaxInvoiceParty" }
+        lines: { type: array, items: { $ref: "#/components/schemas/TaxInvoiceLine" } }
+        taxable_base: { type: string }
+        vat_amount: { type: string }
+        blockers: { type: array, items: { $ref: "#/components/schemas/TaxInvoiceBlocker" } }
+        ready: { type: boolean }
+    TaxInvoiceDjpNumberRequest:
+      type: object
+      required: [number]
+      additionalProperties: false
+      properties:
+        number: { type: string, maxLength: 40 }
+    ExportTaxInvoicesRequest:
+      type: object
+      required: [from, to]
+      additionalProperties: false
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+    TaxInvoiceExport:
+      type: object
+      required: [id, format, period_start, period_end, invoice_count, file_name, sha256, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        format: { type: string, enum: [CSV] }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        invoice_count: { type: integer }
+        file_name: { type: string }
+        sha256: { type: string }
+        created_at: { type: string, format: date-time }
+    TaxInvoiceExportList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/TaxInvoiceExport" } }
+    TaxInvoiceUncoveredFolio:
+      type: object
+      required: [folio_id, folio_number, status, vat]
+      properties:
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        status: { type: string }
+        vat: { type: string }
+    TaxInvoiceCoverage:
+      type: object
+      required: [from, to, vat_collected, vat_invoiced, difference, uncovered]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        vat_collected: { type: string, description: "The VAT on the folios in the range." }
+        vat_invoiced: { type: string, description: "The VAT on the live tax invoices issued in the range." }
+        difference: { type: string }
+        uncovered: { type: array, items: { $ref: "#/components/schemas/TaxInvoiceUncoveredFolio" } }
     TaxFilingWorksheetLine:
       type: object
       required: [charge_code, rate, items, base_amount, tax_amount]

@@ -381,6 +381,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <div class="flex justify-end gap-1.5">
               <Button v-if="row.status === 'ISSUED' && Number(row.outstanding) > 0 && can('cityledger.receive')" type="button" variant="outline" size="sm" :data-testid="`pay-${row.invoice_number}`" @click="startPay(row)">{{ t('clAccount.pay') }}</Button>
               <Button type="button" variant="outline" size="sm" :data-testid="`print-${row.invoice_number}`" @click="printInvoice(row)">{{ t('clAccount.print') }}</Button>
+              <RouterLink v-if="row.status === 'ISSUED' && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'CITY_LEDGER_INVOICE', id: String(row.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" :data-testid="`tax-invoice-${row.invoice_number}`">{{ t('clAccount.taxInvoice') }}</RouterLink>
               <Button v-if="row.status === 'ISSUED' && can('cityledger.invoice')" type="button" variant="outline" size="sm" :data-testid="`void-${row.invoice_number}`" @click="startVoidInvoice(row)">{{ t('clAccount.void') }}</Button>
             </div>
           </template>

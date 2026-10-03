@@ -326,6 +326,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
         <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
+        <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
         <Button v-if="canPrint && pid !== null" variant="outline" size="sm" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id))">
           <Printer />{{ isOpen ? t('folio.printBill') : t('folio.printInvoice') }}
         </Button>

@@ -149,3 +149,78 @@ Worksheet and return: `input` (claims), `input_claimed`, `credit_brought_forward
 Periods: `payable`, `credit_carried_forward`. Profile: `claims_input_vat`, `opening_credit`. `POST/void
 {P}/tax/profiles/{id}/opening-credit`. The worksheet card shows output, input (by bill), credit brought forward, offset, payable and
 credit carried; the profile form has the flag and the opening credit; the liability page shows the credit.
+
+---
+
+# Step 4: tax invoices (faktur pajak) and the export (approved 2026-10-03, built in migration 00044)
+
+Status: **built as proposed** (decisions of the owner: city ledger invoices and closed folios; every VAT component is on the invoice; no backdating). **The export file is a neutral CSV**: the layout of the tax authority's system (Coretax XML or the older e-Faktur CSV) was not given, so it is not built; it can be added behind `FormatCSV` when the official template is at hand. The original proposal follows.
+
+Only for a property that is PKP on the date of the invoice. The VAT return of step 3 is not
+touched: it keeps reading the VAT collected from the folios, so an invoice never changes a return.
+
+## What exists
+
+Seller data (`property_tax_settings`: NPWP, PKP number, signer; `properties`: name, address), buyer data (`companies.tax_id`, name,
+address), the VAT of every folio item (`folio_item_components`, `component_type = 'TAX'`, base and amount, tax of kind VAT in
+`taxes.tax_kind`), the city ledger invoice (groups transfers of closed folios) and its PDF, the sequence table
+(`document_sequences`), the approval flow and the append-only pattern.
+
+## Proposal
+
+1. **What is invoiced.** A tax invoice is issued for one *source*: a city ledger invoice (the company is the buyer, its NPWP is
+   `companies.tax_id`) or a closed guest folio (the buyer is typed at issue: name, NPWP or NIK, address). Exactly one live tax
+   invoice per source.
+2. **What it says.** One line per VAT component of the folios behind the source: charge, taxable base (DPP), rate, VAT. A city
+   ledger invoice takes the VAT of a folio in proportion to the transfer (`folio VAT x transfer / charged`, the rounding left on the
+   last line); a fully transferred folio, the usual case, is exact. Seller and buyer are copied onto the invoice when it is issued,
+   so a later change of an address or a signer does not rewrite it.
+3. **Numbers.** An internal reference (new sequence `TAX_INVOICE`, `TXI000001`) and the **official number** (`djp_number`), which the
+   tax authority's system gives when the invoice is uploaded: it is recorded afterwards, unique per property, never made up here.
+4. **Void and replace.** A tax invoice goes `ISSUED -> VOIDED` (reason and approval); a replacement is a new invoice that points to
+   the one it replaces (`replaces_invoice_id`) and can only be made once the old one is void. A city ledger invoice with a live tax
+   invoice cannot be voided before it.
+5. **Export.** A batch of the invoices of a period is written as a file and recorded (`tax_invoice_exports`, the invoices in it,
+   a hash of the file), so what was sent can be shown and sent again. The file format is behind one interface and **one format is
+   built first** (to be chosen, see the questions).
+6. **Where the VAT is.** Seller NPWP is required, the buyer's NPWP must be 15 or 16 digits, the VAT must be above zero, and the
+   property must be PKP on the issue date (`SettingsOn`).
+7. **Reconciliation.** A report of the VAT collected in a month against the VAT on tax invoices, with the folios that carry VAT and
+   have no tax invoice (information only; nothing blocks a return).
+
+## Schema (one migration)
+
+- `tax_invoices`: id, tenant, property, `invoice_ref`, `status` (ISSUED, VOIDED), `issue_date` (the business date),
+  `source_type` (CITY_LEDGER_INVOICE, FOLIO) with `city_ledger_invoice_id` or `folio_id` (CHECK: exactly one, composite FKs),
+  seller and buyer snapshots, `taxable_base`, `vat_amount`, `djp_number` (unique per property when set), `replaces_invoice_id`,
+  void columns, `approved_by`, `idempotency_key`. A partial unique index per source where `status = 'ISSUED'`. A guard trigger: only
+  `ISSUED -> VOIDED` and the one-time set of `djp_number`.
+- `tax_invoice_lines`: frozen lines (charge code and name, base, rate, VAT); append-only; a deferred trigger makes the lines add up
+  to the totals of the invoice.
+- `tax_invoice_exports` and `tax_invoice_export_items`: append-only.
+- `document_sequences`: the type `TAX_INVOICE`. New permission `tax.invoice` (issue, void, set the official number, export).
+
+## API and screens
+
+`GET/POST {P}/tax/invoices` (issue, `Idempotency-Key`), `GET {P}/tax/invoices/{id}`, `POST .../void`, `PUT .../djp-number`,
+`GET .../{id}/pdf`, `POST {P}/tax/invoices/exports` (a period, returns the file) and `GET .../exports`, `GET {P}/tax/invoices/coverage`.
+A "Tax invoices" page under Tax (list, filters, status, official number, export of a period), the button "Issue tax invoice" on a
+city ledger invoice and on a closed folio, a PDF of the invoice, and the coverage report.
+
+## Tests and edge cases
+
+Issue for a city ledger invoice and for a folio; the proportional VAT of a partly transferred folio and its rounding; not PKP on the
+date; missing seller or buyer NPWP; one live invoice per source under a race; void and replace; the official number set once and
+unique; a city ledger invoice with a live tax invoice cannot be voided; an export lists each invoice once per batch and can be
+repeated with the same content; the totals and the snapshots do not change when the company or the property changes; tenant
+isolation and permissions.
+
+## Questions for the owner
+
+1. **Scope.** City ledger invoices and closed folios (as above), or city ledger invoices only at first?
+2. **File format.** Which one does the tax authority's system take today for the upload of tax invoices (the XML of Coretax, or the
+   older e-Faktur CSV)? One is built; the other can follow behind the same interface.
+3. **Which VAT lines.** Are all charges that carry a VAT-kind tax on the invoice, or only those the hotel marks as subject to a tax
+   invoice (for example meeting rooms but not the room, whose tax is the hotel tax PB1)? The proposal takes every VAT component.
+4. **Late and past months.** An invoice is dated the business date it is issued; for a supply of an earlier month the invoice is
+   still issued today (no backdating). Agreed?

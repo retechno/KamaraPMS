@@ -38,6 +38,7 @@ const (
 	PermTaxView             Permission = "tax.view"
 	PermTaxManage           Permission = "tax.manage"
 	PermTaxFile             Permission = "tax.file"
+	PermTaxInvoice          Permission = "tax.invoice"
 
 	PermGuestRead                 Permission = "guest.read"
 	PermGuestWrite                Permission = "guest.write"
@@ -118,6 +119,7 @@ var Catalogue = []PermissionInfo{
 	{PermTaxView, "Tax", "View the tax worksheets, the returns filed, the tax payments and what is owed to the tax authority", "S3"},
 	{PermTaxManage, "Tax", "Set up how each tax is filed: the authority, the registration number and the due day", "S3"},
 	{PermTaxFile, "Tax", "File monthly tax returns and record the payments to the tax authority; voiding one needs an approval", "S3"},
+	{PermTaxInvoice, "Tax", "Issue tax invoices (faktur pajak) for city ledger invoices and folios, record the official number, export them and void them (an approval is needed)", "S3"},
 	{PermBankReconcile, "Bank", "Import bank statements, match them with the books, post what the bank shows that the books lack, and reconcile; reopening needs an approval", "S3"},
 
 	{PermGuestRead, "Guests", "View guest profiles", "M4"},

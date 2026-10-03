@@ -1304,6 +1304,17 @@ SELECT expect_error('an opening credit is above zero', '23514',
 SELECT expect_error('a claim is positive and a reversal negative', '23514',
     $q$INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, amount)
        VALUES (tn('ABC'), pr('BALI'), 1, 1, 1, -5)$q$);
+
+-- Tax invoices
+SELECT expect_error('a tax invoice is for exactly one source', '23514',
+    $q$INSERT INTO tax_invoices (tenant_id, property_id, invoice_ref, issue_date, source_type, seller_name, seller_npwp, buyer_name, buyer_npwp, taxable_base, vat_amount)
+       VALUES (tn('ABC'), pr('BALI'), 'TXI9001', '2026-10-01', 'FOLIO', 'Hotel', '012345678901000', 'Buyer', '023456789012000', 100, 10)$q$);
+SELECT expect_error('the buyer has a tax number of 15 or 16 digits', '23514',
+    $q$INSERT INTO tax_invoices (tenant_id, property_id, invoice_ref, issue_date, source_type, folio_id, seller_name, seller_npwp, buyer_name, buyer_npwp, taxable_base, vat_amount)
+       VALUES (tn('ABC'), pr('BALI'), 'TXI9002', '2026-10-01', 'FOLIO', 1, 'Hotel', '012345678901000', 'Buyer', '12345', 100, 10)$q$);
+SELECT expect_error('a tax invoice has VAT above zero', '23514',
+    $q$INSERT INTO tax_invoices (tenant_id, property_id, invoice_ref, issue_date, source_type, folio_id, seller_name, seller_npwp, buyer_name, buyer_npwp, taxable_base, vat_amount)
+       VALUES (tn('ABC'), pr('BALI'), 'TXI9003', '2026-10-01', 'FOLIO', 1, 'Hotel', '012345678901000', 'Buyer', '023456789012000', 100, 0)$q$);
 WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
        VALUES (tn('ABC'), pr('BALI'), 'TXR9001', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
 INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)

@@ -4592,6 +4592,185 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/tax/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The tax invoices (faktur pajak), newest first (tax.view) */
+        get: operations["listTaxInvoices"];
+        put?: never;
+        /**
+         * Issue the tax invoice of a city ledger invoice or a closed folio (tax.invoice)
+         * @description Dated the current business date. The property must be PKP on it, the buyer needs a tax number of 15 or 16 digits, and there must be VAT to invoice; otherwise 409 `TAX_INVOICE_NOT_READY` with `context.blockers`. A source has one live invoice: 409 `TAX_INVOICE_EXISTS`. A replacement names the void invoice it replaces: 409 `TAX_INVOICE_REPLACE_INVALID`, `TAX_INVOICE_ALREADY_REPLACED`. The VAT of a city ledger invoice is that of the folios behind it, in the share of each transferred.
+         */
+        post: operations["issueTaxInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What the tax invoice of a source would say and what stops it (tax.invoice)
+         * @description Nothing is written. For a folio the buyer is given in `buyer_name`, `buyer_npwp` and `buyer_address`.
+         */
+        get: operations["previewTaxInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The VAT collected against the VAT on tax invoices in a range (tax.view)
+         * @description Information only. Lists the folios that carry VAT and are on no live tax invoice.
+         */
+        get: operations["getTaxInvoiceCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The batches of tax invoices exported, newest first (tax.view) */
+        get: operations["listTaxInvoiceExports"];
+        put?: never;
+        /**
+         * Export the tax invoices issued in a range as a CSV file (tax.invoice)
+         * @description One row per invoice line, void invoices included with their status. The batch is recorded with a hash of the file and returned in the headers `X-Export-Id`, `X-Export-Sha256` and `X-Export-Invoices`. A range can be exported again. 409 `TAX_INVOICE_EXPORT_EMPTY`. The layout is neutral; the layout of the tax authority's system is not built yet.
+         */
+        post: operations["exportTaxInvoices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One tax invoice with its lines (tax.view) */
+        get: operations["getTaxInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a tax invoice (tax.invoice, with a reason and an approval)
+         * @description 409 `TAX_INVOICE_ALREADY_VOIDED`. Its source can then be invoiced again as a replacement.
+         */
+        post: operations["voidTaxInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/{id}/djp-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record the official number the tax authority gave the invoice (tax.invoice)
+         * @description Once, on an invoice that is not void; one number belongs to one invoice: 409 `TAX_INVOICE_NUMBER_SET`, `TAX_INVOICE_NUMBER_TAKEN`, `TAX_INVOICE_ALREADY_VOIDED`.
+         */
+        put: operations["setTaxInvoiceDjpNumber"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/invoices/{id}/invoice.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A tax invoice as PDF (tax.view) */
+        get: operations["getTaxInvoicePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tax/profiles": {
         parameters: {
             query?: never;
@@ -8925,6 +9104,141 @@ export interface components {
             /** @description Above zero. */
             amount: string;
             approval: components["schemas"]["Approval"];
+        };
+        TaxInvoiceLine: {
+            line_no: number;
+            charge_code: string;
+            description: string;
+            /** @description The taxable base (DPP). */
+            base_amount: string;
+            rate: string;
+            vat_amount: string;
+        };
+        TaxInvoiceParty: {
+            name: string;
+            /** @description 15 or 16 digits. */
+            npwp: string;
+            address?: string;
+        };
+        TaxInvoiceSeller: {
+            name: string;
+            npwp: string;
+            pkp_number?: string;
+            address?: string;
+            signer_name?: string;
+            signer_title?: string;
+        };
+        TaxInvoice: {
+            /** Format: int64 */
+            id: number;
+            /** @description The internal number, TXI000001. */
+            invoice_ref: string;
+            /** @enum {string} */
+            status: "ISSUED" | "VOIDED";
+            /** Format: date */
+            issue_date: string;
+            /** @enum {string} */
+            source_type: "CITY_LEDGER_INVOICE" | "FOLIO";
+            /** Format: int64 */
+            city_ledger_invoice_id: number | null;
+            city_ledger_invoice_number?: string;
+            /** Format: int64 */
+            folio_id: number | null;
+            folio_number?: string;
+            seller: components["schemas"]["TaxInvoiceSeller"];
+            buyer: components["schemas"]["TaxInvoiceParty"];
+            taxable_base: string;
+            vat_amount: string;
+            /** @description The official number of the tax authority, recorded after the upload. */
+            djp_number?: string;
+            /** Format: int64 */
+            replaces_invoice_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one invoice is read. */
+            lines?: components["schemas"]["TaxInvoiceLine"][];
+        };
+        TaxInvoiceList: {
+            data: components["schemas"]["TaxInvoice"][];
+        };
+        IssueTaxInvoiceRequest: {
+            /** @enum {string} */
+            source_type: "CITY_LEDGER_INVOICE" | "FOLIO";
+            /** Format: int64 */
+            city_ledger_invoice_id?: number;
+            /** Format: int64 */
+            folio_id?: number;
+            buyer?: components["schemas"]["TaxInvoiceParty"];
+            /** Format: int64 */
+            replaces_invoice_id?: number | null;
+        };
+        TaxInvoiceBlocker: {
+            /** @enum {string} */
+            code: "NOT_PKP" | "SOURCE_NOT_ISSUED" | "SOURCE_NOT_CLOSED" | "BUYER_NAME_REQUIRED" | "BUYER_NAME_TOO_LONG" | "BUYER_NPWP_INVALID" | "BUYER_ADDRESS_TOO_LONG" | "NO_VAT" | "NO_BASE";
+            message: string;
+        };
+        TaxInvoicePreview: {
+            /** @enum {string} */
+            source_type: "CITY_LEDGER_INVOICE" | "FOLIO";
+            source_ref: string;
+            /** Format: date */
+            issue_date: string;
+            seller: components["schemas"]["TaxInvoiceSeller"];
+            buyer: components["schemas"]["TaxInvoiceParty"];
+            lines: components["schemas"]["TaxInvoiceLine"][];
+            taxable_base: string;
+            vat_amount: string;
+            blockers: components["schemas"]["TaxInvoiceBlocker"][];
+            ready: boolean;
+        };
+        TaxInvoiceDjpNumberRequest: {
+            number: string;
+        };
+        ExportTaxInvoicesRequest: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
+        TaxInvoiceExport: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            format: "CSV";
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            invoice_count: number;
+            file_name: string;
+            sha256: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxInvoiceExportList: {
+            data: components["schemas"]["TaxInvoiceExport"][];
+        };
+        TaxInvoiceUncoveredFolio: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            status: string;
+            vat: string;
+        };
+        TaxInvoiceCoverage: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @description The VAT on the folios in the range. */
+            vat_collected: string;
+            /** @description The VAT on the live tax invoices issued in the range. */
+            vat_invoiced: string;
+            difference: string;
+            uncovered: components["schemas"]["TaxInvoiceUncoveredFolio"][];
         };
         TaxFilingWorksheetLine: {
             charge_code: string;
@@ -16557,6 +16871,299 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listTaxInvoices: {
+        parameters: {
+            query?: {
+                status?: "ISSUED" | "VOIDED";
+                /** @description The first issue date. */
+                from?: string;
+                /** @description The last issue date. */
+                to?: string;
+                /** @description Part of the reference, the name of the buyer or the official number. */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result, without the lines. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoiceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    issueTaxInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueTaxInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description The invoice. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewTaxInvoice: {
+        parameters: {
+            query: {
+                source_type: "CITY_LEDGER_INVOICE" | "FOLIO";
+                /** @description The city ledger invoice or the folio. */
+                id: number;
+                buyer_name?: string;
+                buyer_npwp?: string;
+                buyer_address?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoicePreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxInvoiceCoverage: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoiceCoverage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTaxInvoiceExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoiceExportList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    exportTaxInvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportTaxInvoicesRequest"];
+            };
+        };
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    voidTaxInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoice"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setTaxInvoiceDjpNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxInvoiceDjpNumberRequest"];
+            };
+        };
+        responses: {
+            /** @description The invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxInvoice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxInvoicePdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoice as issued (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listTaxFilingProfiles: {

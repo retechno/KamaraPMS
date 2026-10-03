@@ -42,6 +42,7 @@ import (
 	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/taxfiling"
+	"kamarapms/internal/taxinvoice"
 	"kamarapms/internal/tenancy"
 )
 
@@ -80,6 +81,7 @@ type Env struct {
 	Payables    *payables.Service
 	BankRec     *bankrec.Service
 	Tax         *taxfiling.Service
+	TaxInvoice  *taxinvoice.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -117,7 +119,8 @@ func Setup(t *testing.T) *Env {
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
 	ten.OnPropertyCreated(rm.SeedProperty) // and the standard bed types
 	taxSvc := taxfiling.NewService(txm, c, aw, authz, ten, acct, ia)
-	return &Env{Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	taxInv := taxinvoice.NewService(txm, c, aw, authz, ten, ia, taxSvc)
+	return &Env{TaxInvoice: taxInv, Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
 }

@@ -37,6 +37,33 @@ export async function openPdf(path: string): Promise<void> {
   }
 }
 
+/**
+ * Downloads a file a POST produces (an export): the body goes as JSON, the answer is saved under the name the server gives. The headers
+ * `X-Export-Invoices` and `X-Export-Sha256` tell what was written.
+ */
+export async function downloadExport(path: string, body: unknown): Promise<{ invoices: string | null; sha256: string | null }> {
+  const res = await authFetch(new Request(new URL(path, window.location.origin).href, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/csv' }, body: JSON.stringify(body) }))
+  if (!res.ok) {
+    let problem: unknown
+    try {
+      problem = await res.json()
+    } catch {
+      problem = undefined
+    }
+    throw toApiError(problem, res.status)
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'export.csv'
+  const url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60 * 1000)
+  return { invoices: res.headers.get('X-Export-Invoices'), sha256: res.headers.get('X-Export-Sha256') }
+}
+
 /** The path of a document of a property. */
 export const documentPath = {
   invoice: (propertyId: number, folioId: number) => `/api/v1/properties/${propertyId}/folios/${folioId}/invoice.pdf`,
@@ -56,6 +83,7 @@ export const documentPath = {
     const qs = q.toString()
     return `/api/v1/properties/${propertyId}/accounting/accounts/${accountId}/ledger.pdf${qs ? `?${qs}` : ''}`
   },
+  taxInvoice: (propertyId: number, invoiceId: number) => `/api/v1/properties/${propertyId}/tax/invoices/${invoiceId}/invoice.pdf`,
   taxReturn: (propertyId: number, returnId: number) => `/api/v1/properties/${propertyId}/tax/returns/${returnId}/return.pdf`,
   taxWorksheet: (propertyId: number, taxId: number, period: string) => `/api/v1/properties/${propertyId}/tax/worksheet.pdf?tax_id=${taxId}&period=${period}`,
   companyInvoice: (propertyId: number, invoiceId: number) => `/api/v1/properties/${propertyId}/city-ledger/invoices/${invoiceId}/invoice.pdf`,

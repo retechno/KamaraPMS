@@ -45,6 +45,7 @@ export const router = createRouter({
     { path: '/accounting/periods', name: 'accounting-periods', component: () => import('@/views/accounting/PeriodsView.vue'), meta: { title: 'Accounting periods' } },
     { path: '/tax/status', name: 'tax-status', component: () => import('@/views/tax/TaxStatusView.vue'), meta: { title: 'PKP status' } },
     { path: '/tax/profiles', name: 'tax-profiles', component: () => import('@/views/tax/TaxProfilesView.vue'), meta: { title: 'Tax filing profiles' } },
+    { path: '/tax/invoices', name: 'tax-invoices', component: () => import('@/views/tax/TaxInvoicesView.vue'), meta: { title: 'Tax invoices' } },
     { path: '/tax/returns', name: 'tax-returns', component: () => import('@/views/tax/TaxReturnsView.vue'), meta: { title: 'Tax returns' } },
     { path: '/tax/liability', name: 'tax-liability', component: () => import('@/views/tax/TaxLiabilityView.vue'), meta: { title: 'Tax owed' } },
     { path: '/bank/accounts', name: 'bank-accounts', component: () => import('@/views/bank/BankAccountsView.vue'), meta: { title: 'Bank accounts' } },

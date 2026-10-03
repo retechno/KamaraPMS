@@ -260,6 +260,8 @@ const (
 	SeqTaxReturn SequenceType = "TAX_RETURN"
 	// SeqTaxPayment numbers the payments to the tax authority.
 	SeqTaxPayment SequenceType = "TAX_PAYMENT"
+	// SeqTaxInvoice numbers the tax invoices (faktur pajak) issued.
+	SeqTaxInvoice SequenceType = "TAX_INVOICE"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -282,6 +284,7 @@ var defaultSequences = []struct {
 	{SeqSupplierPayment, "SPAY"},
 	{SeqTaxReturn, "TXR"},
 	{SeqTaxPayment, "TXP"},
+	{SeqTaxInvoice, "TXI"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }
