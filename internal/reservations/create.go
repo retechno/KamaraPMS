@@ -19,6 +19,7 @@ import (
 // Idempotency-Key: the same key and body returns the stored reservation, the same key with another body is
 // 422 IDEMPOTENCY_KEY_REUSED. Drafts hold no inventory; confirming takes the confirm locks.
 func (s *Service) Create(ctx context.Context, propertyID int64, key string, in CreateInput) (Reservation, error) {
+	ctx = WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationCreate)
 	if err != nil {
 		return Reservation{}, err
@@ -77,6 +78,7 @@ func (s *Service) replay(ctx context.Context, p auth.Principal, propertyID int64
 // and so cannot let the booking take those locks after a sequence). bd is the locked business date. The input
 // is validated and priced as usual; no lock is taken here.
 func (s *Service) CreateHeld(ctx context.Context, propertyID int64, bd civil.Date, in CreateInput) (Reservation, error) {
+	ctx = WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationCreate)
 	if err != nil {
 		return Reservation{}, err
@@ -219,9 +221,9 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 				return err
 			}
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, nil, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, nil, withOverrideAudit(ctx, map[string]any{
 			"confirmation_number": res.ConfirmationNumber, "status": res.Status, "rooms": len(in.Rooms), "source": res.Source,
-		})); err != nil {
+		}))); err != nil {
 			return err
 		}
 		if in.Confirm {

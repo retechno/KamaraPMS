@@ -5856,6 +5856,10 @@ export interface components {
             bed_type_id?: number;
             /** @description Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan. */
             occupancy_reason?: string;
+            /** @description Only when the room is added to an existing reservation: creating a reservation carries the reason and the approval once, on the request, for all its rooms. */
+            rate_override_reason?: string;
+            /** @description Only when the room is added to an existing reservation (see `rate_override_reason`). */
+            rate_override_approval?: components["schemas"]["Approval"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         CreateReservationRequest: {
@@ -5878,6 +5882,10 @@ export interface components {
              * @description The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room)
              */
             booking_group_id?: number | null;
+            /** @description Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used. */
+            rate_override_reason?: string;
+            /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            rate_override_approval?: components["schemas"]["Approval"];
             /** @default false */
             confirm: boolean;
             rooms: components["schemas"]["RoomInput"][];
@@ -5936,6 +5944,10 @@ export interface components {
             bed_type_id?: number;
             /** @description The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason. */
             occupancy_reason?: string;
+            /** @description Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used. */
+            rate_override_reason?: string;
+            /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            rate_override_approval?: components["schemas"]["Approval"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AssignRoomRequest: {
@@ -6540,6 +6552,10 @@ export interface components {
             adult_count: number;
             /** @default 0 */
             child_count: number;
+            /** @description Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used. */
+            rate_override_reason?: string;
+            /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            rate_override_approval?: components["schemas"]["Approval"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
             accompanying_guest_ids?: number[];
             /** @default false */
@@ -6645,6 +6661,10 @@ export interface components {
              */
             version: number;
             departure_date: components["schemas"]["Date"];
+            /** @description Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used. */
+            rate_override_reason?: string;
+            /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            rate_override_approval?: components["schemas"]["Approval"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AddStayGuestRequest: {

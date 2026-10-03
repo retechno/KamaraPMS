@@ -19,11 +19,9 @@ this list only keeps them from being forgotten. Move an item to the README statu
 
 ## Reservations and prices
 
-- **Screen for the nightly rate override.** The API already takes `nightly_overrides` (create a reservation, add or
-  amend a room, walk-in; permission `reservation.override_rate`, `frontdesk.rate_change` for a room move), but no
-  screen sets it: the new reservation, the reservation detail and the walk-in forms have no way to change the price of a
-  night. Needs a per-night editor (amount and discount, with the grid price shown beside it) and the permission check
-  in the UI.
+- **Price editor when a stay is extended.** The rate override screen exists for a new reservation, each room of a
+  reservation and a walk-in; the extension of an in-house stay takes `nightly_overrides` with the same reason and
+  approval in the API, but its screen has no price editor yet.
 
 ## Language
 

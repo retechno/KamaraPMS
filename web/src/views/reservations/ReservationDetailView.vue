@@ -5,10 +5,12 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { BedType, CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import type { Approval, BedType, CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
+import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import ReservationEmails from '@/components/ReservationEmails.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -120,6 +122,37 @@ const saveHeader = () => run(() => api.PATCH('/api/v1/properties/{propertyId}/re
 const saveBed = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
   params: lineParams(line.id), body: { version: version(), bed_type_id: bedPick[line.id] ?? line.bed_type_id ?? 0 },
 }))
+// The price changes being prepared, by line, and the line whose change waits for an approver.
+const rates = reactive<Record<number, RateChange>>({})
+const approvingRate = ref<number | null>(null)
+const rateOf = (lineId: number): RateChange => rates[lineId] ?? { overrides: [], reason: '' }
+const canChangeRate = (line: ReservationRoom): boolean =>
+  can('reservation.override_rate') && can('reservation.update') && (line.status === 'DRAFT' || line.status === 'CONFIRMED') && line.occupancy_kind === 'PAID'
+const nightsOf = (line: ReservationRoom): OverrideNight[] =>
+  line.nightly_rates.map((n) => ({ date: n.date, standard: n.grid_rate ?? n.base_rate ?? n.amount, current: n.amount }))
+
+/** The button of a line: a change that the person cannot approve asks for an approver first. */
+function askRate(line: ReservationRoom): void {
+  if (!can('reservation.override_rate_approve')) {
+    error.value = null
+    approvingRate.value = line.id
+    return
+  }
+  void saveRate(line)
+}
+
+async function saveRate(line: ReservationRoom, approval?: Approval): Promise<void> {
+  const change = rateOf(line.id)
+  await run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+    params: lineParams(line.id),
+    body: { version: version(), nightly_overrides: change.overrides, rate_override_reason: change.reason, rate_override_approval: approval },
+  }))
+  if (!error.value) {
+    delete rates[line.id]
+    approvingRate.value = null
+  }
+}
+
 const reasonPick = reactive<Record<number, string>>({})
 const saveReason = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
   params: lineParams(line.id), body: { version: version(), occupancy_reason: reasonPick[line.id] ?? line.occupancy_reason ?? '' },
@@ -322,6 +355,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <Button type="submit" variant="outline" size="sm" :disabled="busy || !bedChanged(line)" :data-testid="`save-bed-${line.id}`">{{ t('common.save') }}</Button>
           </form>
 
+          <div v-if="canChangeRate(line) && nightsOf(line).length" class="mt-3" :data-testid="`rate-${line.id}`">
+            <RateOverrideSection :model-value="rateOf(line.id)" :nights="nightsOf(line)" @update:model-value="(v) => (rates[line.id] = v)" />
+            <div v-if="rateOf(line.id).overrides.length" class="mt-2 flex justify-end">
+              <Button type="button" size="sm" :disabled="busy || !rateOf(line.id).reason.trim()" :data-testid="`save-rate-${line.id}`" @click="askRate(line)">{{ t('rateOverride.save') }}</Button>
+            </div>
+          </div>
+
           <form v-if="assigning && assigning.lineId === line.id" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
@@ -428,4 +468,14 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </Card>
     </aside>
   </div>
+  <ApprovalDialog
+    v-for="line in (res?.rooms ?? []).filter((l) => l.id === approvingRate)"
+    :key="line.id"
+    :title="t('rateOverride.approvalTitle')"
+    :message="t('rateOverride.approvalMessage')"
+    :busy="busy"
+    :error="error"
+    @approve="(a) => saveRate(line, a)"
+    @cancel="approvingRate = null"
+  />
 </template>

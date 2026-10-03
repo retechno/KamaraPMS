@@ -171,6 +171,7 @@ func TestCreateValidation(t *testing.T) {
 	// nights without a grid price are named
 	e := code(t, try(func(in *reservations.CreateInput) {
 		in.Rooms[0].Arrival, in.Rooms[0].Departure = d("2026-10-20"), d("2026-10-23")
+		in.RateOverrideReason = "agreed with the guest"
 	}), "RATE_NOT_SET")
 	if e.Context["missing_nights"] != 2 {
 		t.Fatalf("missing: %v", e.Context)
@@ -178,14 +179,17 @@ func TestCreateValidation(t *testing.T) {
 	// ... unless overridden (needs the permission)
 	over := func(in *reservations.CreateInput) {
 		in.Rooms[0].Arrival, in.Rooms[0].Departure = d("2026-10-20"), d("2026-10-23")
+		in.RateOverrideReason = "agreed with the guest"
 		in.Rooms[0].Overrides = []reservations.NightOverride{{Date: d("2026-10-21"), Amount: "700000"}, {Date: d("2026-10-22"), Amount: "700000", DiscountAmount: "50000"}}
 	}
 	must(t, try(over))
 	// an override outside the stay, a duplicate and a decimal on a 0-decimal currency are refused
 	wantCode(t, try(func(in *reservations.CreateInput) {
+		in.RateOverrideReason = "x"
 		in.Rooms[0].Overrides = []reservations.NightOverride{{Date: d("2026-10-09"), Amount: "1"}}
 	}), "VALIDATION_FAILED")
 	wantCode(t, try(func(in *reservations.CreateInput) {
+		in.RateOverrideReason = "x"
 		in.Rooms[0].Overrides = []reservations.NightOverride{{Date: d("2026-10-01"), Amount: "10.5"}}
 	}), "VALIDATION_FAILED")
 	// a room of another type cannot be assigned at booking time
@@ -427,6 +431,7 @@ func TestUpgradeConsumesThePhysicalType(t *testing.T) {
 func TestAmendLine(t *testing.T) {
 	f := setup(t)
 	in := f.input(true, f.line(f.std, "2026-10-02", "2026-10-04"))
+	in.RateOverrideReason = "x"
 	in.Rooms[0].Overrides = []reservations.NightOverride{{Date: d("2026-10-02"), Amount: "400000"}}
 	res, err := f.Res.Create(f.admin, f.propID, "", in)
 	must(t, err)

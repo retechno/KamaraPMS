@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/availability"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 )
@@ -77,6 +78,10 @@ type LineInput struct {
 	// OccupancyReason is why the room is given free; required (and only kept) when the rate plan is COMPLIMENTARY or HOUSE_USE.
 	OccupancyReason string          `json:"occupancy_reason,omitempty"`
 	Overrides       []NightOverride `json:"nightly_overrides,omitempty"`
+	// RateOverrideReason and RateOverrideApproval justify the overrides when the line is added to a reservation (creating a
+	// reservation carries them on the CreateInput instead): see requireRateOverrideApproval.
+	RateOverrideReason   string             `json:"rate_override_reason,omitempty"`
+	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval,omitempty"`
 }
 
 // CreateInput creates a draft, optionally confirming it in the same transaction.
@@ -90,11 +95,16 @@ type CreateInput struct {
 	BookingGroupID *int64      `json:"booking_group_id,omitempty"`
 	Rooms          []LineInput `json:"rooms"`
 	Confirm        bool        `json:"confirm"`
+	// RateOverrideReason and RateOverrideApproval justify the nightly rate overrides of the lines: a reason, and the approver's
+	// credentials unless the person holds reservation.override_rate_approve. The approval is never stored.
+	RateOverrideReason   string             `json:"rate_override_reason,omitempty"`
+	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval,omitempty"`
 }
 
 // Hash identifies the request body for idempotent replays.
 func (in CreateInput) Hash() string {
-	b, _ := json.Marshal(in) //nolint:errchkjson // plain structs cannot fail to marshal
+	in.RateOverrideApproval = nil // credentials are never part of what is stored
+	b, _ := json.Marshal(in)      //nolint:errchkjson // plain structs cannot fail to marshal
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -126,6 +136,9 @@ type LinePatch struct {
 	// OccupancyReason changes the reason of a complimentary or house use room.
 	OccupancyReason *string
 	Overrides       []NightOverride
+	// RateOverrideReason and RateOverrideApproval justify the overrides (see CreateInput).
+	RateOverrideReason   string
+	RateOverrideApproval *iam.ApprovalInput
 }
 
 // ListFilter narrows the reservation list.

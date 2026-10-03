@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { FreeRoom, Guest, RatePlan, RoomType } from '@/api/types'
+import type { Approval, FreeRoom, Guest, RatePlan, RoomType } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -31,6 +33,11 @@ const guest = ref<Guest | null>(null)
 const newGuest = reactive({ first_name: '', last_name: '' })
 const form = reactive({ typeId: 0, roomId: null as number | null, planId: 0, departure: '', adults: 1, children: 0, override: false, reason: '', occupancyReason: '' })
 const busy = ref(false)
+// A rate change: the nights whose price is changed, the reason, and the approval (asked for when the person cannot approve).
+const rate = ref<RateChange>({ overrides: [], reason: '' })
+const approving = ref(false)
+const dialogError = ref<ApiError | null>(null)
+const planNights = ref<OverrideNight[]>([])
 const error = ref<ApiError | null>(null)
 let key = newIdempotencyKey()
 
@@ -47,6 +54,8 @@ const selected = computed(() => rooms.value.find((r) => r.room_id === form.roomI
 const isReady = (s: string) => (requiresInspection.value ? s === 'INSPECTED' : s === 'CLEAN' || s === 'INSPECTED')
 const notReady = computed(() => !!selected.value && !isReady(selected.value.housekeeping_status))
 const canOverride = computed(() => auth.can('frontdesk.checkin_unready_room', pid.value))
+const canChangeRate = computed(() => auth.can('reservation.override_rate', pid.value))
+const canApprove = computed(() => auth.can('reservation.override_rate_approve', pid.value))
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 async function loadBase(): Promise<void> {
@@ -91,11 +100,38 @@ async function findGuests(): Promise<void> {
   }
 }
 
-async function submit(): Promise<void> {
+/** The standard price of each night of the chosen room type and plan, for the rate editor. */
+async function loadNights(): Promise<void> {
+  planNights.value = []
+  const propertyId = pid.value
+  if (propertyId === null || !canChangeRate.value || !form.typeId || !form.planId || !businessDate.value || !form.departure || form.departure <= businessDate.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/availability', {
+      params: { path: { propertyId }, query: { arrival: businessDate.value, departure: form.departure, adults: Math.max(1, form.adults), children: form.children } },
+    })
+    const offer = data?.room_types.find((ty) => ty.room_type_id === form.typeId)?.rate_plans.find((p) => p.id === form.planId)
+    planNights.value = (offer?.nightly ?? []).map((n) => ({ date: n.date, standard: n.amount, current: n.amount }))
+  } catch {
+    planNights.value = [] // the editor is optional: without prices it stays away
+  }
+}
+
+/** The button: a price change that the person cannot approve asks for an approver first. */
+function onSubmit(): void {
+  if (rate.value.overrides.length && !canApprove.value) {
+    dialogError.value = null
+    approving.value = true
+    return
+  }
+  void submit()
+}
+
+async function submit(approval?: Approval): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null || form.roomId === null) return
   busy.value = true
   error.value = null
+  dialogError.value = null
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/walk-ins', {
       params: { path: { propertyId }, header: { 'Idempotency-Key': key } },
@@ -104,11 +140,15 @@ async function submit(): Promise<void> {
         room_id: form.roomId, rate_plan_id: form.planId, departure_date: form.departure, adult_count: form.adults, child_count: form.children,
         override_room_not_ready: form.override, override_reason: form.override ? form.reason : undefined,
         occupancy_reason: chosenPlan.value && chosenPlan.value.occupancy_kind !== 'PAID' ? form.occupancyReason : undefined,
+        nightly_overrides: rate.value.overrides.length ? rate.value.overrides : undefined,
+        rate_override_reason: rate.value.overrides.length ? rate.value.reason : undefined,
+        rate_override_approval: rate.value.overrides.length ? approval : undefined,
       },
     })
     if (data) await router.push(`/stays/${data.stay.id}`)
   } catch (e) {
-    error.value = e instanceof ApiError ? e : null
+    if (approval) dialogError.value = e instanceof ApiError ? e : null
+    else error.value = e instanceof ApiError ? e : null
     if (e instanceof ApiError) key = newIdempotencyKey()
   } finally {
     busy.value = false
@@ -116,6 +156,7 @@ async function submit(): Promise<void> {
 }
 
 watch(() => property.currentId, () => void loadBase(), { immediate: true })
+watch(() => [form.typeId, form.planId, form.departure, form.adults, form.children, businessDate.value, canChangeRate.value], () => void loadNights(), { immediate: true })
 watch(businessDate, (bd) => {
   if (bd && !form.departure) {
     form.departure = addDays(bd, 1)
@@ -134,7 +175,7 @@ watch(businessDate, (bd) => {
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('walkIn.noAccess') }}</p>
 
   <Card v-else>
-    <form novalidate data-testid="walkin-form" @submit.prevent="submit">
+    <form novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -182,6 +223,8 @@ watch(businessDate, (bd) => {
           </template>
         </div>
 
+        <RateOverrideSection v-if="canChangeRate && chosenPlan?.occupancy_kind === 'PAID' && planNights.length" v-model="rate" class="mt-4" :nights="planNights" />
+
         <h2 class="mb-2 mt-6 text-base font-semibold">{{ t('walkIn.guest') }}</h2>
         <div class="flex flex-wrap items-end gap-3">
           <FormField class="min-w-64 flex-1" :label="t('walkIn.findGuest')">
@@ -209,4 +252,5 @@ watch(businessDate, (bd) => {
       </CardContent>
     </form>
   </Card>
+  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a)" @cancel="approving = false" />
 </template>

@@ -51,6 +51,7 @@ describe('NewReservationView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+    document.body.innerHTML = ''
   })
 
   it('needs create permission', async () => {
@@ -114,6 +115,64 @@ describe('NewReservationView', () => {
     await w.get('form[data-testid=book-form]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body.rooms[0]).toMatchObject({ rate_plan_id: 9, occupancy_reason: 'Owner guest' })
+  })
+
+  const priced = { ...search, room_types: [{ ...search.room_types[0]!, rate_plans: [{ ...search.room_types[0]!.rate_plans[0]!, nightly: [{ date: '2026-10-02', amount: '1000000' }, { date: '2026-10-03', amount: '1000000' }] }] }] }
+
+  async function pickAndChangeRate(permissions: string[]) {
+    const { w } = mountView(permissions)
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : priced }))
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('[data-testid=override-toggle]').trigger('click')
+    await w.get('input[name=override_amount_2026-10-02]').setValue('800000')
+    await w.get('input[name=rate_override_reason]').setValue('Corporate rate')
+    return w
+  }
+
+  it('does not offer a rate change to someone who may not override', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    GET.mockImplementation(async () => ({ data: priced }))
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    expect(w.find('[data-testid=rate-override]').exists()).toBe(false)
+  })
+
+  it('asks for an approver before it books a changed price, and sends the change with the approval', async () => {
+    const w = await pickAndChangeRate(['reservation.read', 'reservation.create', 'reservation.override_rate'])
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled() // the dialog comes first
+    const email = document.body.querySelector('input[name=approval_email]') as HTMLInputElement
+    const password = document.body.querySelector('input[name=approval_password]') as HTMLInputElement
+    email.value = 'boss@hotel.test'
+    email.dispatchEvent(new Event('input'))
+    password.value = 'secret'
+    password.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    const body = POST.mock.calls[0]?.[1].body
+    expect(body).toMatchObject({ rate_override_reason: 'Corporate rate', rate_override_approval: { email: 'boss@hotel.test', password: 'secret' } })
+    expect(body.rooms[0].nightly_overrides).toEqual([{ date: '2026-10-02', amount: '800000' }])
+  })
+
+  it('books a changed price straight away for someone who may approve it', async () => {
+    const w = await pickAndChangeRate(['reservation.read', 'reservation.create', 'reservation.override_rate', 'reservation.override_rate_approve'])
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=approval-dialog]')).toBeNull()
+    const body = POST.mock.calls[0]?.[1].body
+    expect(body.rate_override_approval).toBeUndefined()
+    expect(body).toMatchObject({ rate_override_reason: 'Corporate rate' })
   })
 
   it('books with a booker and an Idempotency-Key, then opens the reservation', async () => {

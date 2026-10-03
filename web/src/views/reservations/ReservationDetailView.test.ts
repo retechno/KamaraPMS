@@ -268,6 +268,36 @@ describe('ReservationDetailView', () => {
     })
   })
 
+  it('changes the price of the nights, asking for an approver when the person cannot approve', async () => {
+    const perms = [...ALL]
+    const w = mountView(reservation(), perms)
+    await flushPromises()
+    expect(w.find('[data-testid=rate-4]').exists()).toBe(false) // no override permission: no editor
+    const w2 = mountView(reservation(), [...ALL, 'reservation.override_rate'])
+    await flushPromises()
+    await w2.get('[data-testid=rate-4] [data-testid=override-toggle]').trigger('click')
+    await w2.get('input[name=override_amount_2026-10-02]').setValue('800000')
+    expect(w2.find('[data-testid=save-rate-4]').attributes('disabled')).toBeDefined() // a reason first
+    await w2.get('input[name=rate_override_reason]').setValue('Price match')
+    PATCH.mockResolvedValue({ data: reservation() })
+    await w2.get('[data-testid=save-rate-4]').trigger('click')
+    await flushPromises()
+    expect(PATCH).not.toHaveBeenCalled() // the approval dialog comes first
+    const dialog = document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement
+    expect(dialog).not.toBeNull()
+    ;(document.body.querySelector('input[name=approval_email]') as HTMLInputElement).value = 'boss@hotel.test'
+    ;(document.body.querySelector('input[name=approval_email]') as HTMLInputElement).dispatchEvent(new Event('input'))
+    ;(document.body.querySelector('input[name=approval_password]') as HTMLInputElement).value = 'secret'
+    ;(document.body.querySelector('input[name=approval_password]') as HTMLInputElement).dispatchEvent(new Event('input'))
+    await flushPromises()
+    dialog.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+      params: { path: { propertyId: 7, id: 1, lineId: 4 } },
+      body: { version: 2, nightly_overrides: [{ date: '2026-10-02', amount: '800000' }], rate_override_reason: 'Price match', rate_override_approval: { email: 'boss@hotel.test', password: 'secret' } },
+    })
+  })
+
   it('shows no kind or reason form on a paid room', async () => {
     const w = mountView()
     await flushPromises()

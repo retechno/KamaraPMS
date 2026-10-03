@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/httpx"
@@ -330,6 +331,9 @@ type patchRoomRequest struct {
 	// OccupancyReason is the reason of a complimentary or house use room.
 	OccupancyReason *string         `json:"occupancy_reason"`
 	Overrides       []NightOverride `json:"nightly_overrides"`
+	// RateOverrideReason and RateOverrideApproval justify the overrides.
+	RateOverrideReason   string             `json:"rate_override_reason"`
+	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval"`
 }
 
 func (h *Handler) patchRoom(w http.ResponseWriter, r *http.Request) error {

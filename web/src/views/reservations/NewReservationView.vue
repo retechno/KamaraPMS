@@ -5,10 +5,12 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import type { Approval, AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -44,6 +46,13 @@ const error = ref<ApiError | null>(null)
 // One key per booking attempt: submitting twice (a double click, a retry) returns the same reservation.
 let idempotencyKey = newIdempotencyKey()
 
+// A rate change: the nights whose price is changed, the reason, and the approval (asked for when the person cannot approve).
+const rate = ref<RateChange>({ overrides: [], reason: '' })
+const approving = ref(false)
+const dialogError = ref<ApiError | null>(null)
+const canOverride = computed(() => auth.can('reservation.override_rate', property.currentId))
+const canApprove = computed(() => auth.can('reservation.override_rate_approve', property.currentId))
+const overrideNights = computed<OverrideNight[]>(() => (picked.value?.plan.nightly ?? []).map((n) => ({ date: n.date, standard: n.amount, current: n.amount })))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 /** Why a Book button is disabled (empty when it is enabled). */
@@ -153,6 +162,8 @@ async function loadBeds(): Promise<void> {
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
   form.occupancyReason = ''
+  rate.value = { overrides: [], reason: '' }
+  approving.value = false
   idempotencyKey = newIdempotencyKey()
   error.value = null
   void loadLinks()
@@ -170,11 +181,22 @@ async function findGuests(): Promise<void> {
   }
 }
 
-async function book(): Promise<void> {
+/** The button: a price change that the person cannot approve asks for an approver first. */
+function submit(): void {
+  if (rate.value.overrides.length && !canApprove.value) {
+    dialogError.value = null
+    approving.value = true
+    return
+  }
+  void book()
+}
+
+async function book(approval?: Approval): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null || !picked.value) return
   saving.value = true
   error.value = null
+  dialogError.value = null
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/reservations', {
       params: { path: { propertyId }, header: { 'Idempotency-Key': idempotencyKey } },
@@ -185,6 +207,8 @@ async function book(): Promise<void> {
         confirm: form.confirm,
         company_id: form.groupId ? undefined : form.companyId || undefined, // a group brings its own company
         booking_group_id: form.groupId || undefined,
+        rate_override_reason: rate.value.overrides.length ? rate.value.reason : undefined,
+        rate_override_approval: rate.value.overrides.length ? approval : undefined,
         rooms: [{
           room_type_id: picked.value.type.room_type_id,
           rate_plan_id: picked.value.plan.id,
@@ -194,12 +218,14 @@ async function book(): Promise<void> {
           child_count: search.children,
           bed_type_id: form.bedTypeId || undefined,
           occupancy_reason: picked.value.plan.occupancy_kind !== 'PAID' ? form.occupancyReason : undefined,
+          nightly_overrides: rate.value.overrides.length ? rate.value.overrides : undefined,
         }],
       },
     })
     if (data) await router.push(`/reservations/${data.id}`)
   } catch (e) {
-    error.value = e instanceof ApiError ? e : null
+    if (approval) dialogError.value = e instanceof ApiError ? e : null // the dialog shows what the approver got wrong
+    else error.value = e instanceof ApiError ? e : null
     if (e instanceof ApiError) idempotencyKey = newIdempotencyKey() // the server answered: the next submit is a new attempt (a network failure keeps the key, so a retry replays)
   } finally {
     saving.value = false
@@ -264,7 +290,7 @@ async function book(): Promise<void> {
     </Card>
 
     <Card v-if="picked" class="mb-4 border-primary/50">
-      <form novalidate data-testid="book-form" @submit.prevent="book">
+      <form novalidate data-testid="book-form" @submit.prevent="submit">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
           <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>
@@ -327,6 +353,7 @@ async function book(): Promise<void> {
             </FormField>
           </div>
 
+          <RateOverrideSection v-if="canOverride && picked.plan.occupancy_kind === 'PAID' && overrideNights.length" v-model="rate" :nights="overrideNights" />
           <label class="flex items-center gap-2 text-sm">
             <input v-model="form.confirm" type="checkbox" name="confirm" />
             <span>{{ t('newReservation.confirmNow') }}</span>
@@ -337,5 +364,6 @@ async function book(): Promise<void> {
         </CardContent>
       </form>
     </Card>
+    <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
   </template>
 </template>

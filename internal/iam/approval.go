@@ -42,13 +42,19 @@ var errApprovalInvalid = apperr.Unauthorized("APPROVAL_INVALID_CREDENTIALS", "th
 // APPROVAL_INVALID_CREDENTIALS. A valid approver without correction.approve at the property is 403
 // APPROVAL_NOT_PERMITTED. Tenant administrators hold the permission everywhere.
 func (s *Service) VerifyApproval(ctx context.Context, propertyID int64, in *ApprovalInput) (Approval, error) {
+	return s.VerifyApprovalFor(ctx, propertyID, in, auth.PermCorrectionApprove)
+}
+
+// VerifyApprovalFor is VerifyApproval for another kind of approval: the approver must hold perm at the property (a rate
+// override needs reservation.override_rate_approve). The checks, the limits and the errors are the same.
+func (s *Service) VerifyApprovalFor(ctx context.Context, propertyID int64, in *ApprovalInput, perm auth.Permission) (Approval, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return Approval{}, err
 	}
 	if in == nil || strings.TrimSpace(in.Email) == "" || in.Password == "" {
-		return Approval{}, apperr.New(apperr.KindInvalid, "APPROVAL_REQUIRED", "this correction needs an approval: the approver's email and password").
-			WithContext("permission", string(auth.PermCorrectionApprove))
+		return Approval{}, apperr.New(apperr.KindInvalid, "APPROVAL_REQUIRED", "this change needs an approval: the approver's email and password").
+			WithContext("permission", string(perm))
 	}
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	accountKey := fmt.Sprintf("approval|%d|%s", p.TenantID, email)
@@ -98,7 +104,7 @@ func (s *Service) VerifyApproval(ctx context.Context, propertyID int64, in *Appr
 	allowed := user.IsTenantAdmin
 	if !allowed {
 		allowed, err = q.GetGrantPermission(ctx, iamdb.GetGrantPermissionParams{
-			TenantID: p.TenantID, UserID: user.ID, PropertyID: propertyID, PermissionCode: string(auth.PermCorrectionApprove),
+			TenantID: p.TenantID, UserID: user.ID, PropertyID: propertyID, PermissionCode: string(perm),
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			allowed, err = false, nil // no grant at this property
@@ -109,8 +115,8 @@ func (s *Service) VerifyApproval(ctx context.Context, propertyID int64, in *Appr
 	}
 	if !allowed {
 		fail()
-		return Approval{}, apperr.Forbidden("APPROVAL_NOT_PERMITTED", "the approver may not approve corrections at this property").
-			WithContext("permission", string(auth.PermCorrectionApprove))
+		return Approval{}, apperr.Forbidden("APPROVAL_NOT_PERMITTED", "the approver may not approve this at this property").
+			WithContext("permission", string(perm))
 	}
 	s.accounts.reset(accountKey)
 	return Approval{userID: user.ID}, nil

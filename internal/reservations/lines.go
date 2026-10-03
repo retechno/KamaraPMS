@@ -12,6 +12,7 @@ import (
 // AddLine adds a room to a DRAFT or CONFIRMED reservation (reservation.update). On a CONFIRMED reservation
 // the room is created CONFIRMED and goes through the availability check.
 func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int32, in LineInput) (Reservation, error) {
+	ctx = WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
 		return Reservation{}, err
@@ -98,9 +99,9 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, nil, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, nil, withOverrideAudit(ctx, map[string]any{
 			"reservation_room_id": line.ID, "status": status, "room_type_id": in.RoomTypeID, "arrival_date": in.Arrival, "departure_date": in.Departure,
-		})); err != nil {
+		}))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
@@ -113,6 +114,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 // room's own demand. Nights that survive keep their price snapshot; changing the rate plan or room type
 // prices every night again; new nights are priced from the grid.
 func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, patch LinePatch) (Reservation, error) {
+	ctx = WithOverrideApproval(ctx, patch.RateOverrideApproval, patch.RateOverrideReason)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
 		return Reservation{}, err
@@ -250,7 +252,7 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_amended", id,
-			lineSnapshot(old), lineSnapshot(next))); err != nil {
+			lineSnapshot(old), withOverrideAudit(ctx, lineSnapshot(next)))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)

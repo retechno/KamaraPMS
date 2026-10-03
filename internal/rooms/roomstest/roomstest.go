@@ -110,6 +110,7 @@ func Setup(t *testing.T) *Env {
 	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co)
 	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
+	rs.SetApprover(ia)
 	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)
 	na.SetJournaler(acct)
 	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)

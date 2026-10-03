@@ -8,6 +8,7 @@ import (
 
 	"kamarapms/internal/folios"
 	"kamarapms/internal/guests"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/reservations"
@@ -43,7 +44,9 @@ type WalkInInput struct {
 	AdultCount           int                          `json:"adult_count"`
 	ChildCount           int                          `json:"child_count"`
 	NightlyOverrides     []reservations.NightOverride `json:"nightly_overrides"`
-	OccupancyReason      string                       `json:"occupancy_reason"` // why the room is free, on a complimentary or house use plan
+	OccupancyReason      string                       `json:"occupancy_reason"`       // why the room is free, on a complimentary or house use plan
+	RateOverrideReason   string                       `json:"rate_override_reason"`   // why the nightly price is changed (with nightly_overrides)
+	RateOverrideApproval *iam.ApprovalInput           `json:"rate_override_approval"` // the approver's credentials, unless the caller can approve
 	AccompanyingGuestIDs []int64                      `json:"accompanying_guest_ids"`
 	OverrideRoomNotReady bool                         `json:"override_room_not_ready"`
 	OverrideReason       string                       `json:"override_reason"`
@@ -222,9 +225,11 @@ type MoveResult struct {
 
 // ChangeDepartureInput extends, shortens or corrects the departure of an in-house stay.
 type ChangeDepartureInput struct {
-	Version          int32                        `json:"version"`
-	DepartureDate    civil.Date                   `json:"departure_date"`
-	NightlyOverrides []reservations.NightOverride `json:"nightly_overrides"`
+	Version              int32                        `json:"version"`
+	DepartureDate        civil.Date                   `json:"departure_date"`
+	NightlyOverrides     []reservations.NightOverride `json:"nightly_overrides"`
+	RateOverrideReason   string                       `json:"rate_override_reason"`
+	RateOverrideApproval *iam.ApprovalInput           `json:"rate_override_approval"`
 }
 
 // AddGuestInput adds an accompanying guest.

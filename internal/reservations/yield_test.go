@@ -93,7 +93,9 @@ func TestYieldRulesLeaveOverridesAndTheSearchAlone(t *testing.T) {
 	// an override is kept as typed, and still records the grid price
 	line := f.line(f.dlx, "2026-10-04", "2026-10-05")
 	line.Overrides = []reservations.NightOverride{{Date: d("2026-10-04"), Amount: "900000"}}
-	over, err := f.Res.Create(f.admin, f.propID, "", f.input(true, line))
+	overIn := f.input(true, line)
+	overIn.RateOverrideReason = "x"
+	over, err := f.Res.Create(f.admin, f.propID, "", overIn)
 	must(t, err)
 	o := over.Rooms[0].NightlyRates[0]
 	if !o.IsOverride || o.Amount.String() != "900000" || o.GridRate == nil || o.GridRate.String() != "1000000" {

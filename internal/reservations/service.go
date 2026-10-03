@@ -38,6 +38,7 @@ type Service struct {
 	billing     *billingconfig.Service
 	guests      *guests.Service
 	onConfirmed ConfirmedHook
+	approver    Approver
 }
 
 // ConfirmedHook is told, inside the confirming transaction, that a reservation has been confirmed. The e-mail
@@ -385,6 +386,11 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 	if len(overrides) > 0 {
 		if err := s.authz.Require(ctx, propertyID, perm); err != nil {
 			return pricedLine{}, err
+		}
+		if perm == auth.PermReservationOverrideRate { // a booking or an extension: the override needs a reason and an approval
+			if err := s.requireOverrideApproval(ctx, propertyID); err != nil {
+				return pricedLine{}, err
+			}
 		}
 	}
 	for i, o := range overrides {

@@ -70,7 +70,9 @@ func TestComplimentaryAndHouseUseLines(t *testing.T) {
 	over.RatePlanID = comp
 	over.OccupancyReason = "x"
 	over.Overrides = []reservations.NightOverride{{Date: d("2026-10-05"), Amount: "100"}}
-	_, err = f.Res.Create(f.admin, f.propID, "", f.input(true, over))
+	overIn := f.input(true, over)
+	overIn.RateOverrideReason = "x"
+	_, err = f.Res.Create(f.admin, f.propID, "", overIn)
 	if c := code(t, err, "VALIDATION_FAILED"); c.Fields[0].Code != "OVERRIDE_NOT_ALLOWED" {
 		t.Fatalf("fields: %+v", c.Fields)
 	}

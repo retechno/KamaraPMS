@@ -24,6 +24,7 @@ function mountView(permissions = ['frontdesk.checkin', 'reservation.create', 're
     if (path.endsWith('/room-types')) return { data: { data: [{ id: 10, code: 'DLX', name: 'Deluxe', is_active: true }] } }
     if (path.endsWith('/rate-plans')) return { data: { data: [{ id: 3, code: 'BAR', name: 'Best', occupancy_kind: 'PAID', is_active: true }, comp] } }
     if (path.endsWith('/availability/rooms')) return { data: { data: [{ room_id: 21, room_number: '101', housekeeping_status: 'CLEAN' }] } }
+    if (path.endsWith('/availability')) return { data: { room_types: [{ room_type_id: 10, rate_plans: [{ id: 3, nightly: [{ date: '2026-09-30', amount: '1000000' }] }] }] } }
     if (path.endsWith('/guests')) return { data: { data: [{ id: 3, code: 'G1', first_name: 'Siti', last_name: 'Nurhaliza' }] } }
     return { data: {} }
   })
@@ -37,6 +38,7 @@ describe('WalkInView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+    document.body.innerHTML = ''
   })
 
   it('needs both check-in and reservation create permission', async () => {
@@ -60,6 +62,36 @@ describe('WalkInView', () => {
     await w2.get('form[data-testid=walkin-form]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toMatchObject({ rate_plan_id: 4, occupancy_reason: 'Engineer' })
+  })
+
+  it('changes the price of the night with a reason, and the approval of someone who may approve it', async () => {
+    const { w } = mountView(['frontdesk.checkin', 'reservation.create', 'reservation.read', 'reservation.override_rate'])
+    await flushPromises()
+    await w.get('[data-testid=override-toggle]').trigger('click')
+    await w.get('input[name=override_amount_2026-09-30]').setValue('700000')
+    await w.get('input[name=rate_override_reason]').setValue('Walk-in discount')
+    await w.get('input[name=last_name]').setValue('Walker')
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled() // the approval dialog comes first
+    const email = document.body.querySelector('input[name=approval_email]') as HTMLInputElement
+    const password = document.body.querySelector('input[name=approval_password]') as HTMLInputElement
+    email.value = 'boss@hotel.test'
+    email.dispatchEvent(new Event('input'))
+    password.value = 'secret'
+    password.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({
+      nightly_overrides: [{ date: '2026-09-30', amount: '700000' }], rate_override_reason: 'Walk-in discount', rate_override_approval: { email: 'boss@hotel.test', password: 'secret' },
+    })
+  })
+
+  it('offers no rate change without the permission', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=rate-override]').exists()).toBe(false)
   })
 
   it('searches free rooms from the business date and walks in a new guest', async () => {

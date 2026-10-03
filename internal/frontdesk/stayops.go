@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
 )
 
@@ -258,6 +259,7 @@ func roomIssuesError(roomID int64, issues []availability.RoomIssue) error {
 // the overrides. Shortening needs the new date to be after the business date and after every charged night (reverse
 // those first); the nights beyond are dropped. The reservation room keeps its original dates.
 func (s *Service) ChangeDeparture(ctx context.Context, propertyID, stayID int64, in ChangeDepartureInput) (Stay, error) {
+	ctx = reservations.WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason)
 	p, err := s.actor(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
 		return Stay{}, err
@@ -318,7 +320,7 @@ func (s *Service) ChangeDeparture(ctx context.Context, propertyID, stayID int64,
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.departure_changed", stayID,
-			map[string]any{"departure_date": cur}, map[string]any{"departure_date": in.DepartureDate})); err != nil {
+			map[string]any{"departure_date": cur}, mergeAudit(map[string]any{"departure_date": in.DepartureDate}, reservations.OverrideAudit(ctx)))); err != nil {
 			return err
 		}
 		out = toStay(updated, pre.line.ReservationID)
@@ -547,4 +549,12 @@ func (s *Service) checkedOutResult(ctx context.Context, p auth.Principal, proper
 		closed[i] = folios.ClosedFolio{ID: f.ID, FolioNumber: f.FolioNumber, Status: f.Status}
 	}
 	return CheckOutResult{Stay: toStay(st, line.ReservationID), PostedRoomCharges: []roomcharge.Result{}, Folios: closed, Housekeeping: string(housekeeping.Dirty)}, nil
+}
+
+// mergeAudit adds the extra fields (who approved a rate override, and why) to the data of an audit entry.
+func mergeAudit(data, extra map[string]any) map[string]any {
+	for k, v := range extra {
+		data[k] = v
+	}
+	return data
 }

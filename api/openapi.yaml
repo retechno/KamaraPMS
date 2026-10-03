@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.46.0
+  version: 0.47.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -6683,6 +6683,8 @@ components:
         room_id: { type: integer, format: int64, description: Only with confirm; must be a room of the booked type. }
         bed_type_id: { type: integer, format: int64, description: "The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`." }
         occupancy_reason: { type: string, maxLength: 500, description: "Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan." }
+        rate_override_reason: { type: string, maxLength: 500, description: "Only when the room is added to an existing reservation: creating a reservation carries the reason and the approval once, on the request, for all its rooms." }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "Only when the room is added to an existing reservation (see `rate_override_reason`)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6698,6 +6700,8 @@ components:
         remarks: { type: string }
         company_id: { type: [integer, "null"], format: int64, description: The company that is billed; a group's company is inherited. }
         booking_group_id: { type: [integer, "null"], format: int64, description: The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room), the group must be active (409 `GROUP_INACTIVE`). }
+        rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         confirm: { type: boolean, default: false }
         rooms:
           type: array
@@ -6754,6 +6758,8 @@ components:
         child_count: { type: integer, minimum: 0 }
         bed_type_id: { type: integer, format: int64, minimum: 0, description: The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed, even if the bed type has been switched off since. }
         occupancy_reason: { type: string, maxLength: 500, description: "The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason." }
+        rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -7363,6 +7369,8 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
         adult_count: { type: integer, minimum: 1 }
         child_count: { type: integer, minimum: 0, default: 0 }
+        rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -7468,6 +7476,8 @@ components:
       properties:
         version: { type: integer, format: int32, description: The stay's version. }
         departure_date: { $ref: "#/components/schemas/Date" }
+        rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
