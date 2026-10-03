@@ -25,6 +25,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/room-types/{id}", httpx.HandlerFunc(h.getRoomType))
 	mux.Handle("PATCH "+p+"/room-types/{id}", httpx.HandlerFunc(h.updateRoomType))
 
+	mux.Handle("GET "+p+"/bed-types", httpx.HandlerFunc(h.listBedTypes))
+	mux.Handle("POST "+p+"/bed-types", httpx.HandlerFunc(h.createBedType))
+	mux.Handle("PATCH "+p+"/bed-types/{id}", httpx.HandlerFunc(h.updateBedType))
+
 	mux.Handle("GET "+p+"/rooms", httpx.HandlerFunc(h.listRooms))
 	mux.Handle("POST "+p+"/rooms", httpx.HandlerFunc(h.createRoom))
 	mux.Handle("GET "+p+"/rooms/{id}", httpx.HandlerFunc(h.getRoom))
@@ -245,6 +249,78 @@ func (h *Handler) updateRoomType(w http.ResponseWriter, r *http.Request) error {
 }
 
 // ---------------------------------------------------------------------------
+// Bed types
+
+func (h *Handler) listBedTypes(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	active, err := queryBool(r, "active")
+	if err != nil {
+		return err
+	}
+	items, err := h.svc.ListBedTypes(r.Context(), pid, active)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[BedType]{Data: items})
+}
+
+type createBedTypeRequest struct {
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	SortOrder int32  `json:"sort_order"`
+	IsActive  *bool  `json:"is_active"`
+}
+
+func (h *Handler) createBedType(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var req createBedTypeRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	in := BedTypeInput{Code: req.Code, Name: req.Name, SortOrder: req.SortOrder, IsActive: true}
+	if req.IsActive != nil {
+		in.IsActive = *req.IsActive
+	}
+	b, err := h.svc.CreateBedType(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, b)
+}
+
+type patchBedTypeRequest struct {
+	Name      *string `json:"name"`
+	SortOrder *int32  `json:"sort_order"`
+	IsActive  *bool   `json:"is_active"`
+}
+
+func (h *Handler) updateBedType(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(r, errBedTypeNotFound)
+	if err != nil {
+		return err
+	}
+	var req patchBedTypeRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	b, err := h.svc.UpdateBedType(r.Context(), pid, id, BedTypePatch(req))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, b)
+}
+
+// ---------------------------------------------------------------------------
 // Rooms
 
 func (h *Handler) listRooms(w http.ResponseWriter, r *http.Request) error {
@@ -302,6 +378,7 @@ type createRoomRequest struct {
 	RoomTypeID                int64  `json:"room_type_id"`
 	Floor                     string `json:"floor"`
 	Building                  string `json:"building"`
+	BedTypeID                 *int64 `json:"bed_type_id"`
 	IsActive                  *bool  `json:"is_active"`
 	InitialHousekeepingStatus string `json:"initial_housekeeping_status"`
 }
@@ -316,7 +393,7 @@ func (h *Handler) createRoom(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	in := CreateRoomInput{
-		RoomInput:           RoomInput{RoomTypeID: req.RoomTypeID, RoomNumber: req.RoomNumber, Floor: req.Floor, Building: req.Building, IsActive: true},
+		RoomInput:           RoomInput{RoomTypeID: req.RoomTypeID, RoomNumber: req.RoomNumber, Floor: req.Floor, Building: req.Building, BedTypeID: req.BedTypeID, IsActive: true},
 		InitialHousekeeping: housekeeping.Status(req.InitialHousekeepingStatus),
 	}
 	if req.IsActive != nil {
@@ -334,6 +411,7 @@ type patchRoomRequest struct {
 	RoomNumber *string `json:"room_number"`
 	Floor      *string `json:"floor"`
 	Building   *string `json:"building"`
+	BedTypeID  *int64  `json:"bed_type_id"`
 	IsActive   *bool   `json:"is_active"`
 }
 

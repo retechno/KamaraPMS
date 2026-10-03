@@ -23,6 +23,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/availability", httpx.HandlerFunc(h.search))
 	mux.Handle("GET "+p+"/availability/rooms", httpx.HandlerFunc(h.freeRooms))
 	mux.Handle("GET "+p+"/tape-chart", httpx.HandlerFunc(h.tape))
+	mux.Handle("GET "+p+"/availability/calendar", httpx.HandlerFunc(h.calendar))
 	mux.Handle("POST "+p+"/reservations", httpx.HandlerFunc(h.create))
 	mux.Handle("GET "+p+"/reservations", httpx.HandlerFunc(h.list))
 	mux.Handle("GET "+p+"/reservations/{id}", httpx.HandlerFunc(h.get))
@@ -325,6 +326,7 @@ type patchRoomRequest struct {
 	RatePlanID *int64          `json:"rate_plan_id"`
 	Adults     *int            `json:"adult_count"`
 	Children   *int            `json:"child_count"`
+	BedTypeID  *int64          `json:"bed_type_id"`
 	Overrides  []NightOverride `json:"nightly_overrides"`
 }
 
@@ -425,6 +427,24 @@ func (h *Handler) tape(w http.ResponseWriter, r *http.Request) error {
 		return apperr.Invalid("the window is invalid", errs...)
 	}
 	res, err := h.svc.TapeChart(r.Context(), pid, *from, *to)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) calendar(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var errs []apperr.FieldError
+	from, to := queryDate(r, "from", &errs, true), queryDate(r, "to", &errs, true)
+	byBed := r.URL.Query().Get("by_bed") == "true"
+	if len(errs) > 0 {
+		return apperr.Invalid("the window is invalid", errs...)
+	}
+	res, err := h.svc.AvailabilityCalendar(r.Context(), pid, *from, *to, byBed)
 	if err != nil {
 		return err
 	}

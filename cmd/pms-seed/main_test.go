@@ -30,3 +30,23 @@ func TestEveryTypeIsUsedOnce(t *testing.T) {
 		t.Fatalf("%d positions are covered, want 10", len(seen))
 	}
 }
+
+// Every position has a bed type, and a Standard room has Twin or Queen beds.
+func TestBedCodeAt(t *testing.T) {
+	for n := 1; n <= 10; n++ {
+		switch typeCodeAt(n) {
+		case "STD":
+			if c := bedCodeAt(n); c != "TWIN" && c != "QUEEN" {
+				t.Fatalf("position %d: %s", n, c)
+			}
+		case "SUP":
+			if bedCodeAt(n) != "DOUBLE" {
+				t.Fatalf("position %d: %s", n, bedCodeAt(n))
+			}
+		default:
+			if bedCodeAt(n) != "KING" {
+				t.Fatalf("position %d: %s", n, bedCodeAt(n))
+			}
+		}
+	}
+}

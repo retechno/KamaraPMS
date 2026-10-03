@@ -196,7 +196,7 @@ async function addGuest(g: Guest): Promise<void> {
           </FormField>
           <FormField :label="t('stayActions.room')" :error="fieldError('room_id')">
             <template #default="{ id, invalid }">
-              <Combobox :id="id" v-model="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag')}` }))]" />
+              <Combobox :id="id" v-model="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${r.bed_type_name ? ` · ${r.bed_type_name}` : ''}${isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag')}` }))]" />
               <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('stayActions.noRooms', { date: until }) }}</small>
             </template>
           </FormField>

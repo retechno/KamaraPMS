@@ -5,11 +5,12 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import type { BedType, CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import ReservationEmails from '@/components/ReservationEmails.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -33,6 +34,9 @@ const types = ref<RoomType[]>([])
 // The action that is waiting for a reason, and the room-assignment picker.
 const asking = ref<{ kind: 'cancel' | 'cancel-room' | 'no-show'; lineId?: number } | null>(null)
 const reason = ref('')
+const beds = ref<BedType[]>([])
+// The bed a line is being changed to, by line (until it is saved).
+const bedPick = reactive<Record<number, number>>({})
 const assigning = ref<{ lineId: number; typeId: number; rooms: FreeRoom[]; roomId: number | null } | null>(null)
 const header = reactive({ source: 'PHONE', remarks: '' })
 const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
@@ -70,6 +74,7 @@ async function load(): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}', { params: { path: { propertyId, id: Number(props.id) } } })
     if (data) adopt(data)
     types.value = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))
+    if (can('reservation.update')) beds.value = (await api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId }, query: { active: true } } })).data?.data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -112,6 +117,10 @@ const reinstate = () => run(() => api.POST('/api/v1/properties/{propertyId}/rese
 const saveHeader = () => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}', {
   params: base(), body: { version: version(), source: header.source as Reservation['source'], remarks: header.remarks },
 }))
+const saveBed = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+  params: lineParams(line.id), body: { version: version(), bed_type_id: bedPick[line.id] ?? line.bed_type_id ?? 0 },
+}))
+const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type_id ?? 0) !== (line.bed_type_id ?? 0)
 const unassign = (lineId: number) => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room', { params: lineParams(lineId), body: { version: version() } }))
 
 function ask(kind: 'cancel' | 'cancel-room' | 'no-show', lineId?: number): void {
@@ -127,6 +136,13 @@ function submitReason(): Promise<void> {
   if (a.kind === 'cancel') return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/cancel', { params: base(), body }))
   if (a.kind === 'cancel-room') return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel', { params: lineParams(a.lineId as number), body }))
   return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/no-show', { params: lineParams(a.lineId as number), body }))
+}
+
+/** A free room as the picker lists it: its number, its housekeeping status and its bed, with a mark when it is the bed asked for. */
+function roomLabel(r: FreeRoom, line: ReservationRoom): string {
+  const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
+  const mark = line.bed_type_id && r.bed_type_id === line.bed_type_id ? ` ✓ ${t('bedTypes.matches')}` : ''
+  return `${r.room_number} · ${r.housekeeping_status}${bed}${mark}`
 }
 
 async function startAssign(line: ReservationRoom): Promise<void> {
@@ -145,7 +161,10 @@ async function loadFree(): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/rooms', {
       params: { path: { propertyId }, query: { room_type_id: a.typeId, arrival: line.arrival_date < businessDate.value ? businessDate.value : line.arrival_date, departure: line.departure_date } },
     })
-    a.rooms = data?.data ?? []
+    // The rooms that have the bed the guest asked for come first, and the first of them is the one proposed.
+    const rooms = data?.data ?? []
+    const wanted = line.bed_type_id ?? null
+    a.rooms = wanted === null ? rooms : [...rooms.filter((r) => r.bed_type_id === wanted), ...rooms.filter((r) => r.bed_type_id !== wanted)]
     a.roomId = a.rooms[0]?.room_id ?? null
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -233,6 +252,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <span v-else class="text-sm text-muted-foreground">{{ t('reservation.noRoom') }}</span>
           <StatusBadge domain="reservation" :status="line.status" :data-testid="`line-status-${line.id}`" />
           <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
+          <Badge v-if="line.bed_type_code" variant="outline" :data-testid="`bed-${line.id}`">{{ t('bedTypes.bed') }}: {{ line.bed_type_name || line.bed_type_code }}</Badge>
           <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
           <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
         </CardHeader>
@@ -273,6 +293,19 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <Button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" variant="outline" size="sm" class="text-destructive" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">{{ t('reservation.cancelRoom') }}</Button>
           </div>
 
+          <form v-if="beds.length && (line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.update')" class="mt-3 flex flex-wrap items-end gap-3" novalidate :data-testid="`bed-form-${line.id}`" @submit.prevent="saveBed(line)">
+            <FormField class="w-56" :label="t('bedTypes.requested')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" :model-value="bedPick[line.id] ?? line.bed_type_id ?? 0" :name="`bed_${line.id}`" @update:model-value="(v) => (bedPick[line.id] = Number(v))">
+                  <option :value="0">{{ t('bedTypes.noPreference') }}</option>
+                  <option v-if="line.bed_type_id && !beds.some((b) => b.id === line.bed_type_id)" :value="line.bed_type_id">{{ line.bed_type_name }}</option>
+                  <option v-for="b in beds" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <Button type="submit" variant="outline" size="sm" :disabled="busy || !bedChanged(line)" :data-testid="`save-bed-${line.id}`">{{ t('common.save') }}</Button>
+          </form>
+
           <form v-if="assigning && assigning.lineId === line.id" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
@@ -283,7 +316,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </FormField>
             <FormField class="w-52" :label="t('reservation.freeRoom')">
               <template #default="{ id }">
-                <Combobox :id="id" v-model="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length" :options="[...assigning.rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}` }))]" />
+                <Combobox :id="id" v-model="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length" :options="[...assigning.rooms.map((r) => ({ value: r.room_id, label: roomLabel(r, line) }))]" />
                 <small v-if="!assigning.rooms.length" class="text-xs text-muted-foreground" data-testid="no-free-rooms">{{ t('reservation.noFreeRooms', { type: typeCode(assigning.typeId) }) }}</small>
               </template>
             </FormField>

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.37.0
+  version: 0.42.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -474,6 +474,70 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bed-types:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBedTypes
+      summary: The bed types of the property, in their sort order
+      description: |
+        The catalogue a room and a reservation line pick from (King, Queen, Double, Twin, Single, ...). Every property starts with
+        these five; the owner adds more or switches some off. Not paginated.
+      tags: [rooms]
+      parameters:
+        - { name: active, in: query, schema: { type: boolean }, description: Only active or only inactive bed types. }
+      responses:
+        "200":
+          description: The bed types.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BedTypePage" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBedType
+      summary: Add a bed type (room.manage)
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBedTypeRequest" }
+      responses:
+        "201":
+          description: The created bed type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BedType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bed-types/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateBedType
+      summary: Rename a bed type, reorder it or switch it off (room.manage). The code cannot change.
+      description: |
+        A bed type that rooms use can be switched off: the rooms and the reservation lines that have it keep it, it is only
+        no longer offered for a new choice (422 `BED_TYPE_INACTIVE` when someone chooses it).
+      tags: [rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchBedTypeRequest" }
+      responses:
+        "200":
+          description: The updated bed type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BedType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/rooms:
     parameters:
@@ -1678,6 +1742,34 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/availability/calendar:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAvailabilityCalendar
+      summary: Availability of every room type for each night of [from, to) (reservation.read)
+      description: |
+        Read-only and advisory, like a search: only booking decides. The window is after `from` and at most 62 days.
+        Per active room type and night: `sellable` (active rooms without an OOO/OOS block), `blocked` (active rooms that
+        are blocked), `held` (rooms held by CONFIRMED lines and open stays, counted per room type as the availability
+        engine does), `available` (`sellable - held`, negative when the type is oversold) and the occupancy in percent.
+        `totals` adds the types up per night. With `by_bed=true` each room type also lists `beds`: per bed type of its active
+        rooms the same numbers, counted over the rooms with that bed and only the bookings already assigned to a room (a
+        booking without a room may end up in any bed, so it is not counted). The totals stay per room type.
+      tags: [reservations]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: Exclusive. }
+        - { name: by_bed, in: query, required: false, schema: { type: boolean }, description: "true adds `beds` to every room type: the same numbers per bed type of its rooms (see description)." }
+      responses:
+        "200":
+          description: The calendar.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvailabilityCalendar" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/tape-chart:
     parameters:
@@ -5703,15 +5795,50 @@ components:
         base_occupancy: { type: integer, minimum: 1, maximum: 40 }
         sort_order: { type: integer }
         is_active: { type: boolean }
+    BedType:
+      type: object
+      required: [id, code, name, sort_order, is_active, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    BedTypePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/BedType" }
+    CreateBedTypeRequest:
+      type: object
+      required: [code, name]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: "1-20 characters, A-Z 0-9 - _ (upper-cased)." }
+        name: { type: string, maxLength: 60 }
+        sort_order: { type: integer, minimum: -1000, maximum: 1000 }
+        is_active: { type: boolean, default: true }
+    PatchBedTypeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 60 }
+        sort_order: { type: integer, minimum: -1000, maximum: 1000 }
+        is_active: { type: boolean }
     Room:
       type: object
-      required: [id, room_type_id, room_number, is_active, created_at, updated_at]
+      required: [id, room_type_id, room_number, bed_type_id, is_active, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         room_type_id: { type: integer, format: int64 }
         room_number: { type: string }
         floor: { type: string }
         building: { type: string }
+        bed_type_id: { type: [integer, "null"], format: int64, description: The bed type of the room (null when none is recorded). }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -5732,6 +5859,7 @@ components:
         room_type_id: { type: integer, format: int64 }
         floor: { type: string, maxLength: 10 }
         building: { type: string, maxLength: 50 }
+        bed_type_id: { type: integer, format: int64, description: A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off). }
         is_active: { type: boolean, default: true }
         initial_housekeeping_status: { $ref: "#/components/schemas/HousekeepingStatus" }
     PatchRoomRequest:
@@ -5742,6 +5870,7 @@ components:
         room_type_id: { type: integer, format: int64 }
         floor: { type: string, maxLength: 10 }
         building: { type: string, maxLength: 50 }
+        bed_type_id: { type: integer, format: int64, minimum: 0, description: The bed type of the room; 0 takes it off. }
         is_active: { type: boolean }
     BlockType:
       type: string
@@ -5811,6 +5940,7 @@ components:
         room_type_id: { type: integer, format: int64 }
         room_type_code: { type: string }
         room_type_name: { type: string }
+        bed_type_code: { type: string, description: The bed type of the room (absent when none). }
         status: { $ref: "#/components/schemas/HousekeepingStatus" }
         status_updated_at: { type: string, format: date-time }
         occupancy: { $ref: "#/components/schemas/Occupancy" }
@@ -6411,6 +6541,9 @@ components:
         floor: { type: string }
         building: { type: string }
         housekeeping_status: { type: string }
+        bed_type_id: { type: [integer, "null"], format: int64 }
+        bed_type_code: { type: string, description: The bed type of the room, to match it with the request of the guest. }
+        bed_type_name: { type: string }
     NightOverride:
       type: object
       required: [date, amount]
@@ -6431,6 +6564,7 @@ components:
         child_count: { type: integer, minimum: 0, default: 0 }
         guest_id: { type: integer, format: int64, description: The occupant, when different from the booker. }
         room_id: { type: integer, format: int64, description: Only with confirm; must be a room of the booked type. }
+        bed_type_id: { type: integer, format: int64, description: "The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6500,6 +6634,7 @@ components:
         rate_plan_id: { type: integer, format: int64 }
         adult_count: { type: integer, minimum: 1 }
         child_count: { type: integer, minimum: 0 }
+        bed_type_id: { type: integer, format: int64, minimum: 0, description: The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed, even if the bed type has been switched off since. }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6640,6 +6775,9 @@ components:
         status: { type: string, enum: [DRAFT, CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW] }
         room_type_id: { type: integer, format: int64 }
         room_type_code: { type: string }
+        bed_type_id: { type: [integer, "null"], format: int64, description: The bed type the guest asked for. }
+        bed_type_code: { type: string }
+        bed_type_name: { type: string }
         room_id: { type: [integer, "null"], format: int64 }
         room_number: { type: string }
         rate_plan_id: { type: integer, format: int64 }
@@ -6776,6 +6914,68 @@ components:
         bookings:
           type: array
           items: { $ref: "#/components/schemas/TapeBooking" }
+    CalendarNight:
+      type: object
+      required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        sellable: { type: integer }
+        blocked: { type: integer }
+        held: { type: integer }
+        available: { type: integer, description: Sellable minus held; negative when oversold. }
+        occupancy_percent: { type: string, description: Held in percent of sellable, two decimals at most (0 when nothing is sellable). }
+        in_house: { type: integer, description: Rooms of open stays held that night (a part of held). }
+        arrivals: { type: integer, description: Rooms arriving that night - CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is. }
+        reservations: { type: integer, description: Rooms of CONFIRMED lines held that night, not checked in yet (the other part of held; held = in_house + reservations). }
+    AvailabilityCalendar:
+      type: object
+      required: [from, to, room_types, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        room_types:
+          type: array
+          items:
+            type: object
+            required: [room_type_id, code, name, rooms_total, nights]
+            properties:
+              room_type_id: { type: integer, format: int64 }
+              code: { type: string }
+              name: { type: string }
+              rooms_total: { type: integer, description: The active rooms of the type. }
+              nights:
+                type: array
+                items: { $ref: "#/components/schemas/CalendarNight" }
+              beds:
+                type: array
+                description: Only with by_bed=true; in the catalogue order. Bed types the type has no room with are not listed.
+                items:
+                  type: object
+                  required: [bed_type_id, code, name, rooms_total, nights]
+                  properties:
+                    bed_type_id: { type: integer, format: int64 }
+                    code: { type: string }
+                    name: { type: string }
+                    rooms_total: { type: integer, description: The active rooms of the type with this bed. }
+                    nights:
+                      type: array
+                      items: { $ref: "#/components/schemas/CalendarNight" }
+        totals:
+          type: array
+          description: The whole property, one entry per night.
+          items:
+            type: object
+            required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
+            properties:
+              date: { $ref: "#/components/schemas/Date" }
+              sellable: { type: integer }
+              blocked: { type: integer }
+              held: { type: integer }
+              available: { type: integer }
+              occupancy_percent: { type: string }
+              in_house: { type: integer }
+              arrivals: { type: integer }
+              reservations: { type: integer }
     TapeChart:
       type: object
       required: [from, to, rooms, unassigned]
@@ -7217,6 +7417,9 @@ components:
         room_type_code: { type: string }
         room_id: { type: [integer, "null"], format: int64 }
         room_number: { type: string }
+        requested_bed_type_id: { type: [integer, "null"], format: int64 }
+        requested_bed_type_code: { type: string, description: The bed type the guest asked for (absent when none). }
+        room_bed_type_code: { type: string, description: The bed type of the assigned room (absent when none or no room is assigned). }
         housekeeping_status: { type: string, description: The current housekeeping status of the assigned room (absent when no room is assigned). }
         arrival_date: { $ref: "#/components/schemas/Date" }
         departure_date: { $ref: "#/components/schemas/Date" }

@@ -34,6 +34,13 @@ const pid = computed(() => property.currentId)
 const requiresInspection = computed(() => property.current?.require_room_inspection_for_checkin ?? false)
 const activeTypes = computed(() => types.value.filter((t) => t.is_active))
 const selected = computed(() => rooms.value.find((r) => r.room_id === roomId.value))
+/** A free room as the picker lists it: number, housekeeping status and bed (marked when it is the bed asked for), and a note when it is not ready. */
+function roomLabel(r: { room_number: string; housekeeping_status: string; bed_type_id?: number | null; bed_type_name?: string }): string {
+  const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
+  const wanted = props.arrival.requested_bed_type_id
+  const mark = wanted && r.bed_type_id === wanted ? ` ✓ ${t('bedTypes.matches')}` : ''
+  return `${r.room_number} · ${r.housekeeping_status}${bed}${mark}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}`
+}
 const isReady = (status: string) => (requiresInspection.value ? status === 'INSPECTED' : status === 'CLEAN' || status === 'INSPECTED')
 const notReady = computed(() => !!selected.value && !isReady(selected.value.housekeeping_status))
 const canOverride = computed(() => auth.can('frontdesk.checkin_unready_room', pid.value))
@@ -52,6 +59,10 @@ async function loadRooms(): Promise<void> {
     if (props.arrival.room_id && typeId.value === props.arrival.room_type_id && !free.some((r) => r.room_id === props.arrival.room_id)) {
       free.unshift({ room_id: props.arrival.room_id, room_number: props.arrival.room_number ?? String(props.arrival.room_id), housekeeping_status: props.arrival.housekeeping_status ?? 'DIRTY' })
     }
+    // The room already on the line first, then the rooms that have the bed the guest asked for, then the others.
+    const wanted = props.arrival.requested_bed_type_id ?? null
+    const rank = (r: { room_id: number; bed_type_id?: number | null }) => (r.room_id === props.arrival.room_id ? 0 : wanted !== null && r.bed_type_id === wanted ? 1 : 2)
+    free.sort((a, b) => rank(a) - rank(b))
     rooms.value = free
     if (!free.some((r) => r.room_id === roomId.value)) roomId.value = free[0]?.room_id ?? null
   } catch (e) {
@@ -109,7 +120,7 @@ async function submit(): Promise<void> {
       </FormField>
       <FormField :label="t('frontDesk.checkIn.room')" :error="fieldError('room_id')">
         <template #default="{ id, invalid }">
-          <Combobox :id="id" v-model="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}` }))]" />
+          <Combobox :id="id" v-model="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="rooms.map((r) => ({ value: r.room_id, label: roomLabel(r) }))" />
           <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('frontDesk.checkIn.noFreeRoom') }}</small>
         </template>
       </FormField>

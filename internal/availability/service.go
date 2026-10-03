@@ -58,6 +58,86 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 	return out, nil
 }
 
+// Parts splits the demand of a night: rooms of open stays, rooms of CONFIRMED lines, and the rooms that arrive that
+// night (lines arriving plus stays, walk-ins included, whose arrival date it is). Demand = InHouse + Reservations.
+type Parts struct {
+	InHouse, Arrivals, Reservations int
+}
+
+// Breakdown returns the parts of the demand per room type and night.
+func (s *Service) Breakdown(ctx context.Context, tenantID, propertyID int64, typeIDs []int64, dates []civil.Date, bd civil.Date) (map[int64]map[civil.Date]Parts, error) {
+	out := map[int64]map[civil.Date]Parts{}
+	if len(typeIDs) == 0 || len(dates) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).NightBreakdown(ctx, availabilitydb.NightBreakdownParams{
+		TenantID: tenantID, PropertyID: propertyID, BusinessDate: bd, NextDate: bd.AddDays(1), RoomTypeIds: typeIDs, Dates: isoDates(dates),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if out[r.RoomTypeID] == nil {
+			out[r.RoomTypeID] = map[civil.Date]Parts{}
+		}
+		out[r.RoomTypeID][r.Night] = Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}
+	}
+	return out, nil
+}
+
+// RoomBed is a bed type of a room type: the active rooms of the type that have it.
+type RoomBed struct {
+	RoomTypeID, BedTypeID int64
+	Code, Name            string
+	Rooms                 int
+}
+
+// RoomBeds lists the bed types of each room type's active rooms, in the catalogue's order.
+func (s *Service) RoomBeds(ctx context.Context, tenantID, propertyID int64) ([]RoomBed, error) {
+	rows, err := s.q(ctx).ListRoomBeds(ctx, availabilitydb.ListRoomBedsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RoomBed, len(rows))
+	for i, r := range rows {
+		out[i] = RoomBed{RoomTypeID: r.RoomTypeID, BedTypeID: r.BedTypeID, Code: r.Code, Name: r.Name, Rooms: int(r.Rooms)}
+	}
+	return out, nil
+}
+
+// BedNight is one (room type, bed type) pair on one night, counted over the rooms with that bed only.
+type BedNight struct {
+	Sellable, Held int
+	Parts          Parts
+}
+
+// BedKey names a bed type of a room type.
+type BedKey struct{ RoomTypeID, BedTypeID int64 }
+
+// BedInventory counts, per (room type, bed type) pair and night, the rooms without a block and those already held by a
+// room-assigned CONFIRMED line or an open stay. Bookings that have no room yet are not counted.
+func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID int64, dates []civil.Date, bd civil.Date) (map[BedKey]map[civil.Date]BedNight, error) {
+	out := map[BedKey]map[civil.Date]BedNight{}
+	if len(dates) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).BedNightInventory(ctx, availabilitydb.BedNightInventoryParams{
+		TenantID: tenantID, PropertyID: propertyID, BusinessDate: bd, NextDate: bd.AddDays(1),
+		Dates: isoDates(dates),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		k := BedKey{r.RoomTypeID, r.BedTypeID}
+		if out[k] == nil {
+			out[k] = map[civil.Date]BedNight{}
+		}
+		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held), Parts: Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}}
+	}
+	return out, nil
+}
+
 // Occupancy is how full the property is on a night: the rooms held against the rooms that can be sold.
 type Occupancy struct {
 	Sellable int
@@ -254,6 +334,10 @@ type FreeRoom struct {
 	Floor              string `json:"floor,omitempty"`
 	Building           string `json:"building,omitempty"`
 	HousekeepingStatus string `json:"housekeeping_status"`
+	// The bed type of the room, to match it with what a guest asked for (empty when the room has none).
+	BedTypeID   *int64 `json:"bed_type_id"`
+	BedTypeCode string `json:"bed_type_code,omitempty"`
+	BedTypeName string `json:"bed_type_name,omitempty"`
 }
 
 // FreeRooms lists the free specific rooms of a type for [arrival, departure).
@@ -265,7 +349,13 @@ func (s *Service) FreeRooms(ctx context.Context, tenantID, propertyID, roomTypeI
 	}
 	out := make([]FreeRoom, len(rows))
 	for i, r := range rows {
-		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus}
+		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus, BedTypeID: r.BedTypeID}
+		if r.BedTypeCode != nil {
+			out[i].BedTypeCode = *r.BedTypeCode
+		}
+		if r.BedTypeName != nil {
+			out[i].BedTypeName = *r.BedTypeName
+		}
 		if r.Floor != nil {
 			out[i].Floor = *r.Floor
 		}
@@ -295,6 +385,19 @@ func (s *Service) SellableTypes(ctx context.Context, tenantID, propertyID int64)
 	out := make([]SellableType, len(rows))
 	for i, r := range rows {
 		out[i] = SellableType{ID: r.ID, Code: r.Code, Name: r.Name, MaxAdult: int(r.MaxAdult), MaxChild: int(r.MaxChild), MaxOccupancy: int(r.MaxOccupancy)}
+	}
+	return out, nil
+}
+
+// ActiveRoomCounts returns the number of active rooms of each room type.
+func (s *Service) ActiveRoomCounts(ctx context.Context, tenantID, propertyID int64) (map[int64]int, error) {
+	rows, err := s.q(ctx).CountActiveRoomsByType(ctx, availabilitydb.CountActiveRoomsByTypeParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]int, len(rows))
+	for _, r := range rows {
+		out[r.RoomTypeID] = int(r.Rooms)
 	}
 	return out, nil
 }

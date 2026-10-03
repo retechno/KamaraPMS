@@ -7,6 +7,7 @@ import type { Arrival, CheckInResult } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
@@ -93,11 +94,20 @@ watch(() => property.currentId, () => {
       <template #cell-confirmation_number="{ row }">
         <RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number }}</RouterLink>
       </template>
-      <template #cell-guest_name="{ row }">{{ row.guest_name || '—' }}</template>
+      <template #cell-guest_name="{ row }">
+        {{ row.guest_name || '—' }}
+        <Badge v-if="row.requested_bed_type_code" variant="outline" class="ml-1.5" :data-testid="`bed-${row.reservation_room_id}`">{{ t('bedTypes.bed') }}: {{ row.requested_bed_type_code }}</Badge>
+      </template>
       <template #cell-room_number="{ row }">
         <span v-if="row.room_number" class="inline-flex items-center gap-1.5">
           {{ row.room_number }}
           <StatusBadge v-if="row.housekeeping_status" domain="housekeeping" :status="row.housekeeping_status" />
+          <Badge
+            v-if="row.requested_bed_type_code && row.room_bed_type_code"
+            :variant="row.requested_bed_type_code === row.room_bed_type_code ? 'success' : 'warning'"
+            :title="row.requested_bed_type_code === row.room_bed_type_code ? t('bedTypes.matches') : t('bedTypes.differs')"
+            :data-testid="`bed-match-${row.reservation_room_id}`"
+          >{{ row.room_bed_type_code }}</Badge>
         </span>
         <template v-else>—</template>
       </template>

@@ -109,6 +109,7 @@ type BoardRoom struct {
 	RoomTypeID       int64       `json:"room_type_id"`
 	RoomTypeCode     string      `json:"room_type_code"`
 	RoomTypeName     string      `json:"room_type_name"`
+	BedTypeCode      string      `json:"bed_type_code,omitempty"`
 	Status           Status      `json:"status"`
 	StatusUpdatedAt  time.Time   `json:"status_updated_at"`
 	Occupancy        Occupancy   `json:"occupancy"`

@@ -83,6 +83,52 @@ func (in RoomTypeInput) Validate(checkCode bool) []apperr.FieldError {
 	return errs
 }
 
+// BedType is an entry of the property's catalogue of beds (King, Twin, ...). A room has at most one; a reservation line
+// can ask for one.
+type BedType struct {
+	ID        int64     `json:"id"`
+	Code      string    `json:"code"`
+	Name      string    `json:"name"`
+	SortOrder int32     `json:"sort_order"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BedTypeInput is the editable part of a bed type. The code is fixed at creation.
+type BedTypeInput struct {
+	Code      string
+	Name      string
+	SortOrder int32
+	IsActive  bool
+}
+
+// Normalize trims text and upper-cases the code.
+func (in *BedTypeInput) Normalize() {
+	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
+	in.Name = strings.TrimSpace(in.Name)
+}
+
+// Validate mirrors the table constraints so callers get field errors.
+func (in BedTypeInput) Validate(checkCode bool) []apperr.FieldError {
+	var errs []apperr.FieldError
+	add := func(field, code, msg string) {
+		errs = append(errs, apperr.FieldError{Field: field, Code: code, Message: msg})
+	}
+	if checkCode && !codePattern.MatchString(in.Code) {
+		add("code", "INVALID_FORMAT", "1-20 characters: A-Z, 0-9, '-' or '_', starting with a letter or digit")
+	}
+	if in.Name == "" {
+		add("name", "REQUIRED", "")
+	} else if len(in.Name) > 60 {
+		add("name", "TOO_LONG", "at most 60 characters")
+	}
+	if in.SortOrder < -1000 || in.SortOrder > 1000 {
+		add("sort_order", "OUT_OF_RANGE", "between -1000 and 1000")
+	}
+	return errs
+}
+
 // Room is a physical, sellable room.
 type Room struct {
 	ID         int64     `json:"id"`
@@ -90,6 +136,7 @@ type Room struct {
 	RoomNumber string    `json:"room_number"`
 	Floor      string    `json:"floor,omitempty"`
 	Building   string    `json:"building,omitempty"`
+	BedTypeID  *int64    `json:"bed_type_id"`
 	IsActive   bool      `json:"is_active"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -101,6 +148,7 @@ type RoomInput struct {
 	RoomNumber string
 	Floor      string
 	Building   string
+	BedTypeID  *int64 // nil: no bed type recorded
 	IsActive   bool
 }
 

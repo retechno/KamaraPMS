@@ -61,6 +61,9 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err := s.requireGuest(ctx, in.GuestID); err != nil {
 			return err
 		}
+		if err := s.requireBedType(ctx, p.TenantID, propertyID, "bed_type_id", in.BedTypeID, nil); err != nil {
+			return err
+		}
 		decimals, err := s.decimals(ctx, propertyID)
 		if err != nil {
 			return err
@@ -79,7 +82,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		line, err := s.q(ctx).InsertLine(ctx, reservationsdb.InsertLineParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ReservationID: id, GuestID: in.GuestID, RoomTypeID: in.RoomTypeID, RoomID: in.RoomID,
 			RatePlanID: in.RatePlanID, ArrivalDate: in.Arrival, DepartureDate: in.Departure, AdultCount: int16(in.Adults), ChildCount: int16(in.Children), //nolint:gosec // G115: bounded by validateOccupancy
-			Status: status, ActorID: p.ActorID(),
+			RequestedBedTypeID: in.BedTypeID, Status: status, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -151,6 +154,15 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		}
 		if patch.Children != nil {
 			next.ChildCount = int16(*patch.Children) //nolint:gosec // G115: checked by validateOccupancy
+		}
+		if patch.BedTypeID != nil {
+			next.RequestedBedTypeID = patch.BedTypeID
+			if *patch.BedTypeID == 0 {
+				next.RequestedBedTypeID = nil
+			}
+		}
+		if err := s.requireBedType(ctx, p.TenantID, propertyID, "bed_type_id", next.RequestedBedTypeID, old.RequestedBedTypeID); err != nil {
+			return err
 		}
 		typeChanged := next.RoomTypeID != old.RoomTypeID
 		planChanged := next.RatePlanID != old.RatePlanID
@@ -240,6 +252,7 @@ func lineSnapshot(l reservationsdb.ReservationRoom) map[string]any {
 	return map[string]any{
 		"reservation_room_id": l.ID, "room_type_id": l.RoomTypeID, "rate_plan_id": l.RatePlanID, "arrival_date": l.ArrivalDate,
 		"departure_date": l.DepartureDate, "adult_count": l.AdultCount, "child_count": l.ChildCount, "room_id": l.RoomID,
+		"requested_bed_type_id": l.RequestedBedTypeID,
 	}
 }
 

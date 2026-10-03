@@ -421,8 +421,10 @@ SELECT
     COALESCE(f.priority, 'NORMAL')::text AS priority,
     COALESCE(f.dnd, false)::boolean AS dnd,
     COALESCE(f.make_up_requested, false)::boolean AS make_up_requested,
-    f.note AS flag_note
+    f.note AS flag_note,
+    bt.code AS bed_type_code
 FROM rooms r
+LEFT JOIN bed_types bt ON bt.property_id = r.property_id AND bt.id = r.bed_type_id
 JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id
 JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
 LEFT JOIN room_hk_flags f ON f.property_id = r.property_id AND f.room_id = r.id
@@ -461,6 +463,7 @@ type ListHousekeepingBoardRow struct {
 	Dnd                   bool
 	MakeUpRequested       bool
 	FlagNote              *string
+	BedTypeCode           *string
 }
 
 // The board: active rooms with their housekeeping status and derived occupancy for the business date.
@@ -499,6 +502,7 @@ func (q *Queries) ListHousekeepingBoard(ctx context.Context, arg ListHousekeepin
 			&i.Dnd,
 			&i.MakeUpRequested,
 			&i.FlagNote,
+			&i.BedTypeCode,
 		); err != nil {
 			return nil, err
 		}

@@ -47,10 +47,43 @@ SELECT count(*) FROM reservation_rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_type_id = @room_type_id
   AND status = 'CONFIRMED' AND departure_date > @business_date::date;
 
+-- name: CreateBedType :one
+INSERT INTO bed_types (tenant_id, property_id, code, name, sort_order, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @sort_order, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: GetBedType :one
+SELECT * FROM bed_types WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: ListBedTypes :many
+SELECT * FROM bed_types
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+  AND (sqlc.narg(active)::boolean IS NULL OR is_active = sqlc.narg(active)::boolean)
+ORDER BY sort_order, code;
+
+-- name: UpdateBedType :one
+UPDATE bed_types SET name = @name, sort_order = @sort_order, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING *;
+
+-- name: CountRoomsOfBedType :one
+SELECT count(*) FROM rooms WHERE tenant_id = @tenant_id AND property_id = @property_id AND bed_type_id = @bed_type_id;
+
+-- The standard catalogue of a new property; the codes that exist are left alone.
+-- name: SeedBedTypes :one
+WITH ins AS (
+    INSERT INTO bed_types (tenant_id, property_id, code, name, sort_order, created_by, updated_by)
+    SELECT @tenant_id, @property_id, d.code, d.name, d.sort_order, sqlc.narg(actor_id), sqlc.narg(actor_id)
+    FROM (VALUES ('KING', 'King', 10), ('QUEEN', 'Queen', 20), ('DOUBLE', 'Double', 30), ('TWIN', 'Twin', 40), ('SINGLE', 'Single', 50)) AS d (code, name, sort_order)
+    ON CONFLICT (property_id, code) DO NOTHING
+    RETURNING 1
+)
+SELECT count(*) FROM ins;
+
 -- name: CreateRoom :one
-INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_by, updated_by)
+INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, floor, building, bed_type_id, is_active, created_by, updated_by)
 VALUES (
-    @tenant_id, @property_id, @room_type_id, @room_number, sqlc.narg(floor), sqlc.narg(building), @is_active,
+    @tenant_id, @property_id, @room_type_id, @room_number, sqlc.narg(floor), sqlc.narg(building), sqlc.narg(bed_type_id), @is_active,
     sqlc.narg(actor_id), sqlc.narg(actor_id)
 )
 RETURNING *;
@@ -72,6 +105,7 @@ UPDATE rooms SET
     room_number = @room_number,
     floor = sqlc.narg(floor),
     building = sqlc.narg(building),
+    bed_type_id = sqlc.narg(bed_type_id),
     is_active = @is_active,
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id

@@ -71,6 +71,7 @@ export const router = createRouter({
       component: () => import('@/views/rooms/RoomTypesView.vue'),
       meta: { title: 'Room types' },
     },
+    { path: '/setup/bed-types', name: 'bed-types', component: () => import('@/views/rooms/BedTypesView.vue'), meta: { title: 'Bed types' } },
     { path: '/setup/rooms', name: 'rooms', component: () => import('@/views/rooms/RoomsView.vue'), meta: { title: 'Rooms' } },
     { path: '/guests', name: 'guests', component: () => import('@/views/guests/GuestsView.vue'), meta: { title: 'Guests' } },
     {
@@ -104,6 +105,7 @@ export const router = createRouter({
     },
     { path: '/reservations', name: 'reservations', component: () => import('@/views/reservations/ReservationsView.vue'), meta: { title: 'Reservations' } },
     { path: '/reservations/new', name: 'reservation-new', component: () => import('@/views/reservations/NewReservationView.vue'), meta: { title: 'New reservation' } },
+    { path: '/availability', name: 'availability', component: () => import('@/views/reservations/AvailabilityCalendarView.vue'), meta: { title: 'Availability' } },
     { path: '/reservations/tape', name: 'tape-chart', component: () => import('@/views/reservations/TapeChartView.vue'), meta: { title: 'Tape chart' } },
     {
       path: '/reservations/:id(\\d+)',

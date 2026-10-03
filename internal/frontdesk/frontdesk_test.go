@@ -623,3 +623,26 @@ func asApp(err error) (string, bool) {
 	}
 	return "", false
 }
+
+// The detailed calendar splits the held rooms into in-house and reservations, and counts arrivals: the lines that
+// arrive plus the stays (checked in, walk-ins included) whose arrival date it is.
+func TestCalendarParts(t *testing.T) {
+	f := setup(t)
+	a := f.book(t, f.dlx, "2026-09-30", "2026-10-02")
+	_, err := f.checkIn(t, f.admin, a, &f.r101, "cal-1")
+	must(t, err)
+	f.book(t, f.dlx, "2026-09-30", "2026-10-01")
+	f.book(t, f.dlx, "2026-10-01", "2026-10-02")
+
+	cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, roomstest.BD, d("2026-10-02"), false)
+	must(t, err)
+	for i, want := range []struct{ inHouse, arrivals, reservations, held int }{{1, 2, 1, 2}, {1, 1, 1, 2}} {
+		n := cal.RoomTypes[0].Nights[i]
+		if n.InHouse != want.inHouse || n.Arrivals != want.arrivals || n.Reservations != want.reservations || n.Held != want.held {
+			t.Fatalf("night %d: %+v want %+v", i, n, want)
+		}
+		if tot := cal.Totals[i]; tot.InHouse != want.inHouse || tot.Arrivals != want.arrivals || tot.Reservations != want.reservations {
+			t.Fatalf("totals %d: %+v", i, tot)
+		}
+	}
+}

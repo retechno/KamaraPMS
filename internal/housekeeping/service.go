@@ -251,7 +251,7 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 	for _, r := range rows {
 		b := BoardRoom{
 			RoomID: r.RoomID, RoomNumber: r.RoomNumber, Floor: deref(r.Floor), Building: deref(r.Building),
-			RoomTypeID: r.RoomTypeID, RoomTypeCode: r.RoomTypeCode, RoomTypeName: r.RoomTypeName,
+			RoomTypeID: r.RoomTypeID, RoomTypeCode: r.RoomTypeCode, RoomTypeName: r.RoomTypeName, BedTypeCode: deref(r.BedTypeCode),
 			Status: Status(r.HousekeepingStatus), StatusUpdatedAt: r.HousekeepingUpdatedAt,
 			Occupancy: Occupancy(r.Occupancy), AllowedNextState: NextStatuses(Status(r.HousekeepingStatus)),
 			Priority: r.Priority, DND: r.Dnd, MakeUpRequested: r.MakeUpRequested, FlagNote: deref(r.FlagNote),

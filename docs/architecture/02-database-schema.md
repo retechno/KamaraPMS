@@ -429,6 +429,17 @@ Trigger `properties_currency_lock`: raises an exception on changing `currency_co
 | is_active | boolean | NO | |
 | [std] | | | |
 
+#### `bed_types` (P): the catalogue of beds of a property (migration 00037)
+| Column | Type | Null | Constraint / note |
+|---|---|---|---|
+| code | varchar(20) | NO | UK `(property_id, code)`; UK `(property_id, id)` for the composite FKs |
+| name | varchar(60) | NO | |
+| sort_order | int | NO | DEFAULT 0 |
+| is_active | boolean | NO | A switched-off bed type is not offered for a new choice; rooms and lines that have it keep it. |
+| [std] | | | |
+
+Every property starts with `KING`, `QUEEN`, `DOUBLE`, `TWIN`, `SINGLE` (the migration for existing properties, the property creation hook for new ones). A bed type is **a description, not inventory**: availability stays per room type.
+
 #### `rooms` (P)
 | Column | Type | Null | Constraint / note |
 |---|---|---|---|
@@ -436,6 +447,7 @@ Trigger `properties_currency_lock`: raises an exception on changing `currency_co
 | room_number | varchar(20) | NO | UK `(property_id, room_number)` |
 | floor | varchar(10) | YES | |
 | building | varchar(50) | YES | |
+| bed_type_id | bigint | YES | FK `(property_id, bed_type_id) → bed_types`. The bed of the room; NULL when none is recorded. |
 | is_active | boolean | NO | Decommissioning only. **There is no status column.** |
 | [std] | | | |
 
@@ -617,6 +629,7 @@ There is no `is_inclusive` column (rejected).
 | departure_date | date | NO | CHECK `departure_date > arrival_date` |
 | adult_count | smallint | NO | CHECK ≥ 1 |
 | child_count | smallint | NO | CHECK ≥ 0 |
+| requested_bed_type_id | bigint | YES | FK `(property_id, requested_bed_type_id) → bed_types`. The bed the guest asked for: a request, not a hold; any room of the booked type can still be assigned. |
 | status | varchar(12) | NO | CHECK IN (`DRAFT`,`CONFIRMED`,`CHECKED_IN`,`COMPLETED`,`CANCELLED`,`NO_SHOW`) |
 | cancelled_at, cancelled_by, cancellation_reason | | YES | CHECK `(status = 'CANCELLED') = (cancelled_at IS NOT NULL)` |
 | no_show_at, no_show_by | | YES | CHECK `(status = 'NO_SHOW') = (no_show_at IS NOT NULL)` |
@@ -845,7 +858,7 @@ There is no `currency_code` column (rejected).
 |---|---|
 | Tenancy (4) | tenants, properties, business_days, document_sequences |
 | IAM (5) | users, user_sessions, roles, role_permissions, user_properties |
-| Rooms (5) | room_types, rooms, room_housekeeping, housekeeping_logs, room_blocks |
+| Rooms (6) | room_types, bed_types, rooms, room_housekeeping, housekeeping_logs, room_blocks |
 | Guests (1) | guests |
 | Billing config (5) | taxes, service_charges, charge_codes, charge_code_taxes, charge_code_service_charges |
 | Pricing (2) | rate_plans, rates |

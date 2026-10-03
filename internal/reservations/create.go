@@ -155,6 +155,9 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			if err := s.requireGuest(ctx, l.GuestID); err != nil {
 				return err
 			}
+			if err := s.requireBedType(ctx, p.TenantID, propertyID, prefix+"bed_type_id", l.BedTypeID, nil); err != nil {
+				return err
+			}
 			holds[i] = hold{typeID: l.RoomTypeID, roomID: l.RoomID, from: l.Arrival, to: l.Departure}
 		}
 		if len(fields) > 0 {
@@ -195,7 +198,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			line, err := q.InsertLine(ctx, reservationsdb.InsertLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, ReservationID: res.ID, GuestID: l.GuestID, RoomTypeID: l.RoomTypeID, RoomID: l.RoomID,
 				RatePlanID: l.RatePlanID, ArrivalDate: l.Arrival, DepartureDate: l.Departure, AdultCount: int16(l.Adults), ChildCount: int16(l.Children), //nolint:gosec // G115: bounded by validateOccupancy
-				Status: lineStatus, ActorID: p.ActorID(),
+				RequestedBedTypeID: l.BedTypeID, Status: lineStatus, ActorID: p.ActorID(),
 			})
 			if err != nil {
 				return err

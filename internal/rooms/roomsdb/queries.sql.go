@@ -103,13 +103,73 @@ func (q *Queries) CountFutureConfirmedLinesOfType(ctx context.Context, arg Count
 	return count, err
 }
 
+const countRoomsOfBedType = `-- name: CountRoomsOfBedType :one
+SELECT count(*) FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND bed_type_id = $3
+`
+
+type CountRoomsOfBedTypeParams struct {
+	TenantID   int64
+	PropertyID int64
+	BedTypeID  *int64
+}
+
+func (q *Queries) CountRoomsOfBedType(ctx context.Context, arg CountRoomsOfBedTypeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRoomsOfBedType, arg.TenantID, arg.PropertyID, arg.BedTypeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createBedType = `-- name: CreateBedType :one
+INSERT INTO bed_types (tenant_id, property_id, code, name, sort_order, is_active, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+RETURNING id, tenant_id, property_id, code, name, sort_order, is_active, created_at, created_by, updated_at, updated_by
+`
+
+type CreateBedTypeParams struct {
+	TenantID   int64
+	PropertyID int64
+	Code       string
+	Name       string
+	SortOrder  int32
+	IsActive   bool
+	ActorID    *int64
+}
+
+func (q *Queries) CreateBedType(ctx context.Context, arg CreateBedTypeParams) (BedType, error) {
+	row := q.db.QueryRow(ctx, createBedType,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Code,
+		arg.Name,
+		arg.SortOrder,
+		arg.IsActive,
+		arg.ActorID,
+	)
+	var i BedType
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const createRoom = `-- name: CreateRoom :one
-INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_by, updated_by)
+INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, floor, building, bed_type_id, is_active, created_by, updated_by)
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
-    $8, $8
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $9
 )
-RETURNING id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by, bed_type_id
 `
 
 type CreateRoomParams struct {
@@ -119,6 +179,7 @@ type CreateRoomParams struct {
 	RoomNumber string
 	Floor      *string
 	Building   *string
+	BedTypeID  *int64
 	IsActive   bool
 	ActorID    *int64
 }
@@ -131,6 +192,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		arg.RoomNumber,
 		arg.Floor,
 		arg.Building,
+		arg.BedTypeID,
 		arg.IsActive,
 		arg.ActorID,
 	)
@@ -148,6 +210,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.BedTypeID,
 	)
 	return i, err
 }
@@ -269,8 +332,37 @@ func (q *Queries) CreateRoomType(ctx context.Context, arg CreateRoomTypeParams) 
 	return i, err
 }
 
+const getBedType = `-- name: GetBedType :one
+SELECT id, tenant_id, property_id, code, name, sort_order, is_active, created_at, created_by, updated_at, updated_by FROM bed_types WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetBedTypeParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetBedType(ctx context.Context, arg GetBedTypeParams) (BedType, error) {
+	row := q.db.QueryRow(ctx, getBedType, arg.TenantID, arg.PropertyID, arg.ID)
+	var i BedType
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const getRoom = `-- name: GetRoom :one
-SELECT id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by, bed_type_id FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetRoomParams struct {
@@ -295,6 +387,7 @@ func (q *Queries) GetRoom(ctx context.Context, arg GetRoomParams) (Room, error) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.BedTypeID,
 	)
 	return i, err
 }
@@ -431,6 +524,51 @@ func (q *Queries) GetRoomTypeForUpdate(ctx context.Context, arg GetRoomTypeForUp
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const listBedTypes = `-- name: ListBedTypes :many
+SELECT id, tenant_id, property_id, code, name, sort_order, is_active, created_at, created_by, updated_at, updated_by FROM bed_types
+WHERE tenant_id = $1 AND property_id = $2
+  AND ($3::boolean IS NULL OR is_active = $3::boolean)
+ORDER BY sort_order, code
+`
+
+type ListBedTypesParams struct {
+	TenantID   int64
+	PropertyID int64
+	Active     *bool
+}
+
+func (q *Queries) ListBedTypes(ctx context.Context, arg ListBedTypesParams) ([]BedType, error) {
+	rows, err := q.db.Query(ctx, listBedTypes, arg.TenantID, arg.PropertyID, arg.Active)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BedType{}
+	for rows.Next() {
+		var i BedType
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.Code,
+			&i.Name,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRoomBlocks = `-- name: ListRoomBlocks :many
@@ -674,7 +812,7 @@ func (q *Queries) ListRoomTypes(ctx context.Context, arg ListRoomTypesParams) ([
 }
 
 const listRooms = `-- name: ListRooms :many
-SELECT id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by FROM rooms
+SELECT id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by, bed_type_id FROM rooms
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::bigint IS NULL OR room_type_id = $4::bigint)
   AND ($5::boolean IS NULL OR is_active = $5::boolean)
@@ -720,6 +858,7 @@ func (q *Queries) ListRooms(ctx context.Context, arg ListRoomsParams) ([]Room, e
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.BedTypeID,
 		); err != nil {
 			return nil, err
 		}
@@ -731,16 +870,85 @@ func (q *Queries) ListRooms(ctx context.Context, arg ListRoomsParams) ([]Room, e
 	return items, nil
 }
 
+const seedBedTypes = `-- name: SeedBedTypes :one
+WITH ins AS (
+    INSERT INTO bed_types (tenant_id, property_id, code, name, sort_order, created_by, updated_by)
+    SELECT $1, $2, d.code, d.name, d.sort_order, $3, $3
+    FROM (VALUES ('KING', 'King', 10), ('QUEEN', 'Queen', 20), ('DOUBLE', 'Double', 30), ('TWIN', 'Twin', 40), ('SINGLE', 'Single', 50)) AS d (code, name, sort_order)
+    ON CONFLICT (property_id, code) DO NOTHING
+    RETURNING 1
+)
+SELECT count(*) FROM ins
+`
+
+type SeedBedTypesParams struct {
+	TenantID   int64
+	PropertyID int64
+	ActorID    *int64
+}
+
+// The standard catalogue of a new property; the codes that exist are left alone.
+func (q *Queries) SeedBedTypes(ctx context.Context, arg SeedBedTypesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, seedBedTypes, arg.TenantID, arg.PropertyID, arg.ActorID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const updateBedType = `-- name: UpdateBedType :one
+UPDATE bed_types SET name = $1, sort_order = $2, is_active = $3, updated_by = $4
+WHERE tenant_id = $5 AND property_id = $6 AND id = $7
+RETURNING id, tenant_id, property_id, code, name, sort_order, is_active, created_at, created_by, updated_at, updated_by
+`
+
+type UpdateBedTypeParams struct {
+	Name       string
+	SortOrder  int32
+	IsActive   bool
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) UpdateBedType(ctx context.Context, arg UpdateBedTypeParams) (BedType, error) {
+	row := q.db.QueryRow(ctx, updateBedType,
+		arg.Name,
+		arg.SortOrder,
+		arg.IsActive,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i BedType
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const updateRoom = `-- name: UpdateRoom :one
 UPDATE rooms SET
     room_type_id = $1,
     room_number = $2,
     floor = $3,
     building = $4,
-    is_active = $5,
-    updated_by = $6
-WHERE tenant_id = $7 AND property_id = $8 AND id = $9
-RETURNING id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by
+    bed_type_id = $5,
+    is_active = $6,
+    updated_by = $7
+WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+RETURNING id, tenant_id, property_id, room_type_id, room_number, floor, building, is_active, created_at, created_by, updated_at, updated_by, bed_type_id
 `
 
 type UpdateRoomParams struct {
@@ -748,6 +956,7 @@ type UpdateRoomParams struct {
 	RoomNumber string
 	Floor      *string
 	Building   *string
+	BedTypeID  *int64
 	IsActive   bool
 	ActorID    *int64
 	TenantID   int64
@@ -761,6 +970,7 @@ func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (Room, e
 		arg.RoomNumber,
 		arg.Floor,
 		arg.Building,
+		arg.BedTypeID,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,
@@ -781,6 +991,7 @@ func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (Room, e
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.BedTypeID,
 	)
 	return i, err
 }

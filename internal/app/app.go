@@ -85,6 +85,7 @@ func New(d Deps) *App {
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc, availSvc)
+	tenancySvc.OnPropertyCreated(roomsSvc.SeedProperty) // the standard bed types of every new property
 
 	foliosSvc := folios.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, billingSvc, iamSvc)
 	reservationsSvc := reservations.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, ratesSvc, billingSvc, guestsSvc)
