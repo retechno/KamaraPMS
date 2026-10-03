@@ -314,7 +314,8 @@ func (s *Service) Summarize(ctx context.Context, p auth.Principal, propertyID in
 	}
 	sum.Rooms = RoomCounts{
 		Total: int(rooms.Total), OutOfOrder: int(rooms.OutOfOrder), OutOfService: int(rooms.OutOfService),
-		Sellable: int(rooms.Total - rooms.OutOfOrder - rooms.OutOfService), Occupied: int(rooms.Occupied), Sold: int(sold),
+		Sellable: int(rooms.Total - rooms.OutOfOrder - rooms.OutOfService - rooms.HouseUse), Occupied: int(rooms.Occupied - rooms.HouseUse),
+		Complimentary: int(rooms.Complimentary), HouseUse: int(rooms.HouseUse), Sold: int(sold),
 	}
 	if sum.Arrivals, err = s.count(q.SummaryArrivals(ctx, nightauditdb.SummaryArrivalsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})); err != nil {
 		return sum, err
@@ -354,11 +355,11 @@ func (s *Service) Summarize(ctx context.Context, p auth.Principal, propertyID in
 	}
 	sum.CityLedger = CityLedger{Transferred: fixed(cl.Transferred, decimals), Received: fixed(cl.Received, decimals), Outstanding: fixed(cl.Outstanding, decimals)}
 	sort.Slice(sum.PaymentsByMethod, func(i, j int) bool { return sum.PaymentsByMethod[i].Method < sum.PaymentsByMethod[j].Method })
-	available := decimal.NewFromInt(int64(rooms.Total - rooms.OutOfOrder))
+	available := decimal.NewFromInt(int64(rooms.Total - rooms.OutOfOrder - rooms.HouseUse)) // the rooms the hotel uses itself are not available
 	zero := fixed(decimal.Zero, decimals)
 	sum.OccupancyPercent, sum.ADR, sum.RevPAR = "0.00", zero, zero
 	if available.IsPositive() {
-		sum.OccupancyPercent = decimal.NewFromInt(int64(rooms.Occupied)).Mul(decimal.NewFromInt(100)).DivRound(available, 2).StringFixed(2)
+		sum.OccupancyPercent = decimal.NewFromInt(int64(rooms.Occupied-rooms.HouseUse)).Mul(decimal.NewFromInt(100)).DivRound(available, 2).StringFixed(2)
 		sum.RevPAR = fixed(roomNet.DivRound(available, decimals), decimals)
 	}
 	if sold > 0 {

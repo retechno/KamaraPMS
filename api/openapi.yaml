@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.43.0
+  version: 0.44.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -7708,14 +7708,16 @@ components:
         business_date: { $ref: "#/components/schemas/Date" }
         rooms:
           type: object
-          required: [total, out_of_order, out_of_service, sellable, occupied, sold]
+          required: [total, out_of_order, out_of_service, sellable, occupied, complimentary, house_use, sold]
           properties:
             total: { type: integer }
             out_of_order: { type: integer }
             out_of_service: { type: integer }
-            sellable: { type: integer }
-            occupied: { type: integer }
-            sold: { type: integer, description: Room nights charged for the business date. }
+            sellable: { type: integer, description: Total minus out of order, out of service and house use rooms. }
+            occupied: { type: integer, description: Rooms occupied by guests, complimentary ones included; the rooms the hotel uses itself are not occupied. }
+            complimentary: { type: integer, description: Occupied rooms on a COMPLIMENTARY rate plan (a part of occupied). }
+            house_use: { type: integer, description: Rooms occupied on a HOUSE_USE rate plan; they are neither occupied, nor sellable, nor available. }
+            sold: { type: integer, description: Paid room nights charged for the business date (complimentary and house use nights post as zero and are not sold). }
         arrivals: { type: integer }
         departures: { type: integer }
         no_shows: { type: integer }
@@ -7873,14 +7875,16 @@ components:
         net: { $ref: "#/components/schemas/Amount" }
     StatisticsDay:
       type: object
-      required: [business_date, rooms_total, rooms_out_of_order, rooms_sellable, rooms_occupied, room_nights_sold, arrivals, departures, no_shows, room_revenue, occupancy_percent, adr, revpar]
+      required: [business_date, rooms_total, rooms_out_of_order, rooms_sellable, rooms_occupied, rooms_complimentary, rooms_house_use, room_nights_sold, arrivals, departures, no_shows, room_revenue, occupancy_percent, adr, revpar]
       properties:
         business_date: { $ref: "#/components/schemas/Date" }
         rooms_total: { type: integer }
         rooms_out_of_order: { type: integer }
         rooms_sellable: { type: integer }
         rooms_occupied: { type: integer }
-        room_nights_sold: { type: integer }
+        rooms_complimentary: { type: integer, description: A part of rooms_occupied. }
+        rooms_house_use: { type: integer, description: Not occupied, not sellable, not available. }
+        room_nights_sold: { type: integer, description: Paid nights. }
         arrivals: { type: integer }
         departures: { type: integer }
         no_shows: { type: integer }
@@ -7890,11 +7894,13 @@ components:
         revpar: { $ref: "#/components/schemas/Amount" }
     StatisticsTotals:
       type: object
-      required: [days, available_room_nights, occupied_room_nights, room_nights_sold, room_revenue, occupancy_percent, adr, revpar]
+      required: [days, available_room_nights, occupied_room_nights, complimentary_room_nights, house_use_room_nights, room_nights_sold, room_revenue, occupancy_percent, adr, revpar]
       properties:
         days: { type: integer }
-        available_room_nights: { type: integer }
+        available_room_nights: { type: integer, description: Rooms minus out of order and house use rooms, summed over the days. }
         occupied_room_nights: { type: integer }
+        complimentary_room_nights: { type: integer, description: A part of occupied_room_nights. }
+        house_use_room_nights: { type: integer }
         room_nights_sold: { type: integer }
         room_revenue: { $ref: "#/components/schemas/Amount" }
         occupancy_percent: { type: string }
@@ -7965,8 +7971,9 @@ components:
           type: array
           items:
             type: object
-            required: [stay_id, stay_number, confirmation_number, guest, arrival_date, departure_date, adult_count, child_count, balance]
+            required: [stay_id, stay_number, confirmation_number, guest, arrival_date, departure_date, adult_count, child_count, balance, occupancy_kind]
             properties:
+              occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
               stay_id: { type: integer, format: int64 }
               stay_number: { type: string }
               status: { type: string }
@@ -7987,8 +7994,9 @@ components:
           type: array
           items:
             type: object
-            required: [reservation_room_id, confirmation_number, status, guest, room_type, arrival_date, departure_date, adult_count, child_count]
+            required: [reservation_room_id, confirmation_number, status, guest, room_type, arrival_date, departure_date, adult_count, child_count, occupancy_kind]
             properties:
+              occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
               reservation_room_id: { type: integer, format: int64 }
               confirmation_number: { type: string }
               status: { type: string }

@@ -70,7 +70,19 @@ SELECT
         AND NOT EXISTS (SELECT 1 FROM room_blocks o WHERE o.property_id = b.property_id AND o.room_id = b.room_id AND o.status = 'ACTIVE'
                         AND o.block_type = 'OOO' AND o.start_date <= @bd::date AND @bd::date < o.end_date))::int AS out_of_service,
     (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
-      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN')::int AS occupied;
+      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN')::int AS occupied,
+    (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+       JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND rp.occupancy_kind = 'COMPLIMENTARY')::int AS complimentary,
+    (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+       JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND rp.occupancy_kind = 'HOUSE_USE')::int AS house_use;
 
 -- Stays that arrived on the business date.
 -- name: SummaryArrivals :one
@@ -86,11 +98,15 @@ WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status = '
 SELECT count(*)::int FROM audit_logs
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date = @bd::date AND action = 'reservation.no_show';
 
--- Room nights charged by the room posting service for the business date (and not reversed).
+-- Paid room nights charged by the room posting service for the business date (and not reversed): the nights of
+-- complimentary and house use plans post as zero and are not sold.
 -- name: SummaryRoomNights :one
 SELECT count(*)::int FROM folio_items i
+LEFT JOIN stays s ON s.property_id = i.property_id AND s.id = i.stay_id
+LEFT JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+LEFT JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.service_date = @bd::date
-  AND i.transaction_type = 'CHARGE' AND i.source = 'ROOM_POSTING'
+  AND i.transaction_type = 'CHARGE' AND i.source = 'ROOM_POSTING' AND COALESCE(rp.occupancy_kind, 'PAID') = 'PAID'
   AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id);
 
 -- Revenue posted on the business date by charge type (signed, so corrections net out).

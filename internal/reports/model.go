@@ -33,14 +33,14 @@ type DailySummary struct {
 }
 
 func (d DailySummary) CSV() ([]string, [][]string) {
-	h := []string{"business_date", "status", "rooms_total", "rooms_out_of_order", "rooms_out_of_service", "rooms_sellable", "rooms_occupied", "room_nights_sold",
+	h := []string{"business_date", "status", "rooms_total", "rooms_out_of_order", "rooms_out_of_service", "rooms_sellable", "rooms_occupied", "rooms_complimentary", "rooms_house_use", "room_nights_sold",
 		"arrivals", "departures", "no_shows", "room_net", "room_service", "room_tax", "occupancy_percent", "adr", "revpar"}
 	if d.Summary == nil {
 		return h, nil
 	}
 	s := d.Summary
 	return h, [][]string{{d.BusinessDate.String(), d.Status, itoa(s.Rooms.Total), itoa(s.Rooms.OutOfOrder), itoa(s.Rooms.OutOfService), itoa(s.Rooms.Sellable),
-		itoa(s.Rooms.Occupied), itoa(s.Rooms.Sold), itoa(s.Arrivals), itoa(s.Departures), itoa(s.NoShows), s.RoomRevenue.Net, s.RoomRevenue.Service, s.RoomRevenue.Tax,
+		itoa(s.Rooms.Occupied), itoa(s.Rooms.Complimentary), itoa(s.Rooms.HouseUse), itoa(s.Rooms.Sold), itoa(s.Arrivals), itoa(s.Departures), itoa(s.NoShows), s.RoomRevenue.Net, s.RoomRevenue.Service, s.RoomRevenue.Tax,
 		s.OccupancyPercent, s.ADR, s.RevPAR}}
 }
 
@@ -178,7 +178,9 @@ type StatDay struct {
 	OutOfOrder       int        `json:"rooms_out_of_order"`
 	Sellable         int        `json:"rooms_sellable"`
 	Occupied         int        `json:"rooms_occupied"`
-	RoomNightsSold   int        `json:"room_nights_sold"`
+	Complimentary    int        `json:"rooms_complimentary"` // a part of Occupied
+	HouseUse         int        `json:"rooms_house_use"`     // not occupied, not sellable, not available
+	RoomNightsSold   int        `json:"room_nights_sold"`    // paid nights
 	Arrivals         int        `json:"arrivals"`
 	Departures       int        `json:"departures"`
 	NoShows          int        `json:"no_shows"`
@@ -190,14 +192,16 @@ type StatDay struct {
 
 // StatTotals aggregates the range: occupancy over all available room nights, ADR and RevPAR from the summed revenue.
 type StatTotals struct {
-	Days             int    `json:"days"`
-	AvailableNights  int    `json:"available_room_nights"`
-	OccupiedNights   int    `json:"occupied_room_nights"`
-	RoomNightsSold   int    `json:"room_nights_sold"`
-	RoomRevenue      string `json:"room_revenue"`
-	OccupancyPercent string `json:"occupancy_percent"`
-	ADR              string `json:"adr"`
-	RevPAR           string `json:"revpar"`
+	Days                int    `json:"days"`
+	AvailableNights     int    `json:"available_room_nights"`
+	OccupiedNights      int    `json:"occupied_room_nights"`
+	ComplimentaryNights int    `json:"complimentary_room_nights"`
+	HouseUseNights      int    `json:"house_use_room_nights"`
+	RoomNightsSold      int    `json:"room_nights_sold"`
+	RoomRevenue         string `json:"room_revenue"`
+	OccupancyPercent    string `json:"occupancy_percent"`
+	ADR                 string `json:"adr"`
+	RevPAR              string `json:"revpar"`
 }
 
 // Statistics is the occupancy and statistics report over closed days.
@@ -209,10 +213,10 @@ type Statistics struct {
 }
 
 func (r Statistics) CSV() ([]string, [][]string) {
-	h := []string{"business_date", "rooms_total", "rooms_out_of_order", "rooms_sellable", "rooms_occupied", "room_nights_sold", "arrivals", "departures", "no_shows", "room_revenue", "occupancy_percent", "adr", "revpar"}
+	h := []string{"business_date", "rooms_total", "rooms_out_of_order", "rooms_sellable", "rooms_occupied", "rooms_complimentary", "rooms_house_use", "room_nights_sold", "arrivals", "departures", "no_shows", "room_revenue", "occupancy_percent", "adr", "revpar"}
 	var rows [][]string
 	for _, d := range r.Days {
-		rows = append(rows, []string{d.BusinessDate.String(), itoa(d.RoomsTotal), itoa(d.OutOfOrder), itoa(d.Sellable), itoa(d.Occupied), itoa(d.RoomNightsSold),
+		rows = append(rows, []string{d.BusinessDate.String(), itoa(d.RoomsTotal), itoa(d.OutOfOrder), itoa(d.Sellable), itoa(d.Occupied), itoa(d.Complimentary), itoa(d.HouseUse), itoa(d.RoomNightsSold),
 			itoa(d.Arrivals), itoa(d.Departures), itoa(d.NoShows), d.RoomRevenue, d.OccupancyPercent, d.ADR, d.RevPAR})
 	}
 	return h, rows
@@ -233,6 +237,7 @@ type StayRow struct {
 	Adults             int        `json:"adult_count"`
 	Children           int        `json:"child_count"`
 	Balance            string     `json:"balance"`
+	OccupancyKind      string     `json:"occupancy_kind"` // PAID, COMPLIMENTARY or HOUSE_USE
 }
 
 // StayList is the in-house or departures report.
@@ -242,10 +247,10 @@ type StayList struct {
 }
 
 func (r StayList) CSV() ([]string, [][]string) {
-	h := []string{"stay_number", "status", "confirmation_number", "guest", "room", "arrival_date", "departure_date", "adults", "children", "balance"}
+	h := []string{"stay_number", "status", "confirmation_number", "guest", "room", "arrival_date", "departure_date", "adults", "children", "balance", "occupancy_kind"}
 	var rows [][]string
 	for _, s := range r.Rows {
-		rows = append(rows, []string{s.StayNumber, s.Status, s.ConfirmationNumber, s.Guest, s.Room, s.ArrivalDate.String(), s.DepartureDate.String(), itoa(s.Adults), itoa(s.Children), s.Balance})
+		rows = append(rows, []string{s.StayNumber, s.Status, s.ConfirmationNumber, s.Guest, s.Room, s.ArrivalDate.String(), s.DepartureDate.String(), itoa(s.Adults), itoa(s.Children), s.Balance, s.OccupancyKind})
 	}
 	return h, rows
 }
@@ -262,6 +267,7 @@ type ArrivalRow struct {
 	DepartureDate      civil.Date `json:"departure_date"`
 	Adults             int        `json:"adult_count"`
 	Children           int        `json:"child_count"`
+	OccupancyKind      string     `json:"occupancy_kind"`
 }
 
 // ArrivalList is the arrivals report.
@@ -271,10 +277,10 @@ type ArrivalList struct {
 }
 
 func (r ArrivalList) CSV() ([]string, [][]string) {
-	h := []string{"confirmation_number", "status", "guest", "room_type", "room", "arrival_date", "departure_date", "adults", "children"}
+	h := []string{"confirmation_number", "status", "guest", "room_type", "room", "arrival_date", "departure_date", "adults", "children", "occupancy_kind"}
 	var rows [][]string
 	for _, a := range r.Rows {
-		rows = append(rows, []string{a.ConfirmationNumber, a.Status, a.Guest, a.RoomType, a.Room, a.ArrivalDate.String(), a.DepartureDate.String(), itoa(a.Adults), itoa(a.Children)})
+		rows = append(rows, []string{a.ConfirmationNumber, a.Status, a.Guest, a.RoomType, a.Room, a.ArrivalDate.String(), a.DepartureDate.String(), itoa(a.Adults), itoa(a.Children), a.OccupancyKind})
 	}
 	return h, rows
 }

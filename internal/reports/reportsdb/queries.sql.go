@@ -247,8 +247,9 @@ func (q *Queries) ListClosedDaySummaries(ctx context.Context, arg ListClosedDayS
 
 const reportArrivals = `-- name: ReportArrivals :many
 SELECT l.id AS reservation_room_id, res.confirmation_number, l.status, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
-       t.code AS room_type_code, r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name
+       t.code AS room_type_code, r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name, rp.occupancy_kind
 FROM reservation_rooms l
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
 LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
@@ -275,6 +276,7 @@ type ReportArrivalsRow struct {
 	RoomNumber         *string
 	GuestFirstName     *string
 	GuestLastName      *string
+	OccupancyKind      string
 }
 
 func (q *Queries) ReportArrivals(ctx context.Context, arg ReportArrivalsParams) ([]ReportArrivalsRow, error) {
@@ -298,6 +300,7 @@ func (q *Queries) ReportArrivals(ctx context.Context, arg ReportArrivalsParams) 
 			&i.RoomNumber,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.OccupancyKind,
 		); err != nil {
 			return nil, err
 		}
@@ -313,11 +316,12 @@ const reportDepartures = `-- name: ReportDepartures :many
 SELECT s.id AS stay_id, s.stay_number, s.status, s.arrival_date, s.departure_date, res.confirmation_number,
        (SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
          WHERE sr.property_id = s.property_id AND sr.stay_id = s.id ORDER BY sr.start_business_date DESC, sr.id DESC LIMIT 1) AS room_number,
-       g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name, rp.occupancy_kind,
        COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id
                  WHERE f.property_id = s.property_id AND f.stay_id = s.id), 0)::numeric AS balance
 FROM stays s
 JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.departure_date = $3::date AND s.status <> 'CANCELLED'
@@ -340,6 +344,7 @@ type ReportDeparturesRow struct {
 	RoomNumber         string
 	GuestFirstName     *string
 	GuestLastName      string
+	OccupancyKind      string
 	Balance            decimal.Decimal
 }
 
@@ -363,6 +368,7 @@ func (q *Queries) ReportDepartures(ctx context.Context, arg ReportDeparturesPara
 			&i.RoomNumber,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.OccupancyKind,
 			&i.Balance,
 		); err != nil {
 			return nil, err
@@ -581,11 +587,12 @@ func (q *Queries) ReportHousekeepingTasks(ctx context.Context, arg ReportHouseke
 
 const reportInHouse = `-- name: ReportInHouse :many
 SELECT s.id AS stay_id, s.stay_number, res.confirmation_number, s.arrival_date, s.departure_date, s.adult_count, s.child_count,
-       r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name, rp.occupancy_kind,
        COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id
                  WHERE f.property_id = s.property_id AND f.stay_id = s.id), 0)::numeric AS balance
 FROM stays s
 JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 LEFT JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.stay_id = s.id AND sr.check_out_at IS NULL
@@ -610,6 +617,7 @@ type ReportInHouseRow struct {
 	RoomNumber         *string
 	GuestFirstName     *string
 	GuestLastName      string
+	OccupancyKind      string
 	Balance            decimal.Decimal
 }
 
@@ -633,6 +641,7 @@ func (q *Queries) ReportInHouse(ctx context.Context, arg ReportInHouseParams) ([
 			&i.RoomNumber,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.OccupancyKind,
 			&i.Balance,
 		); err != nil {
 			return nil, err

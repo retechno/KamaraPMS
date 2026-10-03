@@ -219,7 +219,7 @@ func (s *Service) Statistics(ctx context.Context, propertyID int64, from, to civ
 		return Statistics{}, err
 	}
 	out := Statistics{From: from, To: to, Days: []StatDay{}}
-	var available, occupied, sold int
+	var available, occupied, sold, complimentary, houseUse int
 	revenue := decimal.Zero
 	for _, r := range rows {
 		sum, ok := parseSummary(r.Summary)
@@ -229,16 +229,18 @@ func (s *Service) Statistics(ctx context.Context, propertyID int64, from, to civ
 		rev, _ := decimal.NewFromString(sum.RoomRevenue.Net)
 		out.Days = append(out.Days, StatDay{
 			BusinessDate: r.BusinessDate, RoomsTotal: sum.Rooms.Total, OutOfOrder: sum.Rooms.OutOfOrder, Sellable: sum.Rooms.Sellable, Occupied: sum.Rooms.Occupied,
-			RoomNightsSold: sum.Rooms.Sold, Arrivals: sum.Arrivals, Departures: sum.Departures, NoShows: sum.NoShows, RoomRevenue: sum.RoomRevenue.Net,
+			Complimentary: sum.Rooms.Complimentary, HouseUse: sum.Rooms.HouseUse, RoomNightsSold: sum.Rooms.Sold, Arrivals: sum.Arrivals, Departures: sum.Departures, NoShows: sum.NoShows, RoomRevenue: sum.RoomRevenue.Net,
 			OccupancyPercent: sum.OccupancyPercent, ADR: sum.ADR, RevPAR: sum.RevPAR,
 		})
-		available += sum.Rooms.Total - sum.Rooms.OutOfOrder
+		available += sum.Rooms.Total - sum.Rooms.OutOfOrder - sum.Rooms.HouseUse // the rooms the hotel uses itself are not available
 		occupied += sum.Rooms.Occupied
+		complimentary += sum.Rooms.Complimentary
+		houseUse += sum.Rooms.HouseUse
 		sold += sum.Rooms.Sold
 		revenue = revenue.Add(rev)
 	}
 	zero := fx(decimal.Zero, decimals)
-	t := StatTotals{Days: len(out.Days), AvailableNights: available, OccupiedNights: occupied, RoomNightsSold: sold, RoomRevenue: fx(revenue, decimals), OccupancyPercent: "0.00", ADR: zero, RevPAR: zero}
+	t := StatTotals{Days: len(out.Days), AvailableNights: available, OccupiedNights: occupied, ComplimentaryNights: complimentary, HouseUseNights: houseUse, RoomNightsSold: sold, RoomRevenue: fx(revenue, decimals), OccupancyPercent: "0.00", ADR: zero, RevPAR: zero}
 	if available > 0 {
 		av := decimal.NewFromInt(int64(available))
 		t.OccupancyPercent = decimal.NewFromInt(int64(occupied)).Mul(decimal.NewFromInt(100)).DivRound(av, 2).StringFixed(2)
@@ -264,7 +266,7 @@ func (s *Service) InHouse(ctx context.Context, propertyID int64) (StayList, erro
 	out := StayList{Rows: []StayRow{}}
 	for _, r := range rows {
 		out.Rows = append(out.Rows, StayRow{StayID: r.StayID, StayNumber: r.StayNumber, Status: "OPEN", ConfirmationNumber: r.ConfirmationNumber, Guest: name(r.GuestFirstName, r.GuestLastName),
-			Room: deref(r.RoomNumber), ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Adults: int(r.AdultCount), Children: int(r.ChildCount), Balance: fx(r.Balance, decimals)})
+			Room: deref(r.RoomNumber), ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Adults: int(r.AdultCount), Children: int(r.ChildCount), Balance: fx(r.Balance, decimals), OccupancyKind: r.OccupancyKind})
 	}
 	return out, nil
 }
@@ -282,7 +284,7 @@ func (s *Service) Departures(ctx context.Context, propertyID int64, on civil.Dat
 	out := StayList{Date: &on, Rows: []StayRow{}}
 	for _, r := range rows {
 		out.Rows = append(out.Rows, StayRow{StayID: r.StayID, StayNumber: r.StayNumber, Status: r.Status, ConfirmationNumber: r.ConfirmationNumber, Guest: name(r.GuestFirstName, r.GuestLastName),
-			Room: r.RoomNumber, ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Balance: fx(r.Balance, decimals)})
+			Room: r.RoomNumber, ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Balance: fx(r.Balance, decimals), OccupancyKind: r.OccupancyKind})
 	}
 	return out, nil
 }
@@ -300,7 +302,7 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, on civil.Date)
 	out := ArrivalList{Date: on, Rows: []ArrivalRow{}}
 	for _, r := range rows {
 		out.Rows = append(out.Rows, ArrivalRow{ReservationRoomID: r.ReservationRoomID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, Guest: name(r.GuestFirstName, deref(r.GuestLastName)),
-			RoomType: r.RoomTypeCode, Room: deref(r.RoomNumber), ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Adults: int(r.AdultCount), Children: int(r.ChildCount)})
+			RoomType: r.RoomTypeCode, Room: deref(r.RoomNumber), ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Adults: int(r.AdultCount), Children: int(r.ChildCount), OccupancyKind: r.OccupancyKind})
 	}
 	return out, nil
 }

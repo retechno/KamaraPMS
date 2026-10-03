@@ -30,6 +30,9 @@ const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v
 /** The texts of the reports are `reportDefs.<name>`; the names are typed by the language files. */
 const r = (key: string, params?: Record<string, unknown>): string => t(`reportDefs.${key}` as 'reportDefs.total', params as never)
 
+/** The kind of a room in a list: nothing for a paid room, the name for a complimentary or house use one. */
+const kind = (k: string): string => (k === 'PAID' ? '' : t(`occupancy.kind_${k}` as 'occupancy.kind_PAID'))
+
 export const reports: ReportDef[] = [
   {
     key: 'daily-summary', title: () => r('dailySummary'), input: 'date', hint: () => r('dailySummaryHint'),
@@ -41,7 +44,7 @@ export const reports: ReportDef[] = [
         rows: [
           [r('businessDate'), d.business_date], [r('status'), d.status],
           [r('roomsTotals'), `${sum.rooms.total} / ${sum.rooms.out_of_order} / ${sum.rooms.out_of_service}`],
-          [r('occupiedRooms'), s(sum.rooms.occupied)], [r('roomNightsSold'), s(sum.rooms.sold)],
+          [r('occupiedRooms'), s(sum.rooms.occupied)], [r('compRooms'), s(sum.rooms.complimentary)], [r('houseUseRooms'), s(sum.rooms.house_use)], [r('roomNightsSold'), s(sum.rooms.sold)],
           [r('arrDepNoShow'), `${sum.arrivals} / ${sum.departures} / ${sum.no_shows}`],
           [r('roomRevenueNet'), sum.room_revenue.net], [r('serviceCharge'), sum.room_revenue.service], [r('tax'), sum.room_revenue.tax],
           [r('occupancyPercent'), sum.occupancy_percent], ['ADR', sum.adr], ['RevPAR', sum.revpar],
@@ -78,30 +81,30 @@ export const reports: ReportDef[] = [
   {
     key: 'statistics', title: () => r('statistics'), input: 'range', hint: () => r('statisticsHint'),
     table: (d: StatisticsReport) => ({
-      columns: [r('businessDate'), r('rooms'), r('occupied'), r('sold'), r('arrivals'), r('departures'), r('noShows'), r('roomRevenue'), r('occShort'), 'ADR', 'RevPAR'], numeric: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-      rows: d.days.map((x) => [x.business_date, `${x.rooms_total - x.rooms_out_of_order}`, s(x.rooms_occupied), s(x.room_nights_sold), s(x.arrivals), s(x.departures), s(x.no_shows), x.room_revenue, x.occupancy_percent, x.adr, x.revpar]),
-      footer: [r('total'), s(d.totals.available_room_nights), s(d.totals.occupied_room_nights), s(d.totals.room_nights_sold), '', '', '', d.totals.room_revenue, d.totals.occupancy_percent, d.totals.adr, d.totals.revpar],
+      columns: [r('businessDate'), r('rooms'), r('occupied'), r('complimentary'), r('houseUse'), r('sold'), r('arrivals'), r('departures'), r('noShows'), r('roomRevenue'), r('occShort'), 'ADR', 'RevPAR'], numeric: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      rows: d.days.map((x) => [x.business_date, `${x.rooms_total - x.rooms_out_of_order - x.rooms_house_use}`, s(x.rooms_occupied), s(x.rooms_complimentary), s(x.rooms_house_use), s(x.room_nights_sold), s(x.arrivals), s(x.departures), s(x.no_shows), x.room_revenue, x.occupancy_percent, x.adr, x.revpar]),
+      footer: [r('total'), s(d.totals.available_room_nights), s(d.totals.occupied_room_nights), s(d.totals.complimentary_room_nights), s(d.totals.house_use_room_nights), s(d.totals.room_nights_sold), '', '', '', d.totals.room_revenue, d.totals.occupancy_percent, d.totals.adr, d.totals.revpar],
     }),
   },
   {
     key: 'arrivals', title: () => r('arrivalsTitle'), input: 'date', hint: () => r('arrivalsHint'),
     table: (d: ArrivalsReport) => ({
-      columns: [r('reservation'), r('status'), r('guest'), r('roomType'), r('room'), r('departure'), r('party')], numeric: [],
-      rows: d.rows.map((a) => [a.confirmation_number, a.status, a.guest, a.room_type, s(a.room), a.departure_date, `${a.adult_count}+${a.child_count}`]),
+      columns: [r('reservation'), r('status'), r('guest'), r('roomType'), r('room'), r('departure'), r('party'), r('kind')], numeric: [],
+      rows: d.rows.map((a) => [a.confirmation_number, a.status, a.guest, a.room_type, s(a.room), a.departure_date, `${a.adult_count}+${a.child_count}`, kind(a.occupancy_kind)]),
     }),
   },
   {
     key: 'departures', title: () => r('departuresTitle'), input: 'date', hint: () => r('departuresHint'),
     table: (d: StayListReport) => ({
-      columns: [r('stay'), r('status'), r('guest'), r('room'), r('arrival'), r('departure'), r('balance')], numeric: [6],
-      rows: d.rows.map((x) => [x.stay_number, s(x.status), x.guest, s(x.room), x.arrival_date, x.departure_date, x.balance]),
+      columns: [r('stay'), r('status'), r('guest'), r('room'), r('arrival'), r('departure'), r('balance'), r('kind')], numeric: [6],
+      rows: d.rows.map((x) => [x.stay_number, s(x.status), x.guest, s(x.room), x.arrival_date, x.departure_date, x.balance, kind(x.occupancy_kind)]),
     }),
   },
   {
     key: 'in-house', title: () => r('inHouse'), input: 'none', hint: () => r('inHouseHint'),
     table: (d: StayListReport) => ({
-      columns: [r('stay'), r('guest'), r('room'), r('arrival'), r('departure'), r('party'), r('balance')], numeric: [6],
-      rows: d.rows.map((x) => [x.stay_number, x.guest, s(x.room), x.arrival_date, x.departure_date, `${x.adult_count}+${x.child_count}`, x.balance]),
+      columns: [r('stay'), r('guest'), r('room'), r('arrival'), r('departure'), r('party'), r('balance'), r('kind')], numeric: [6],
+      rows: d.rows.map((x) => [x.stay_number, x.guest, s(x.room), x.arrival_date, x.departure_date, `${x.adult_count}+${x.child_count}`, x.balance, kind(x.occupancy_kind)]),
     }),
   },
   {

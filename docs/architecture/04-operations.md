@@ -96,7 +96,9 @@ POST {P}/night-audit/run { business_date }
  9. Daily closing calculations → summary jsonb:
     rooms total / OOO / OOS / sellable / occupied, arrivals, departures, no-shows,
     room revenue {net, service, tax} and revenue by charge_type, payments by method,
-    occupancy % (occupied / (total − OOO)), ADR, RevPAR
+    occupancy % (occupied / (total − OOO − house use)), ADR (room revenue / paid room nights), RevPAR (room revenue / available).
+    Complimentary rooms are occupied but not sold; house use rooms are not occupied, not sellable and not available, and
+    their nights (like complimentary ones) post as zero, so they do not dilute the ADR or lower the occupancy
 10. BusinessDayService.CloseAndOpenNext: CLOSED (closed_at, closed_by, summary), INSERT BD+1 OPEN
 11. audit_logs: night_audit.completed
 COMMIT

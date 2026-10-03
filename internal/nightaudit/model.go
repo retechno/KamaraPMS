@@ -107,8 +107,12 @@ type RoomCounts struct {
 	OutOfOrder   int `json:"out_of_order"`
 	OutOfService int `json:"out_of_service"`
 	Sellable     int `json:"sellable"`
-	Occupied     int `json:"occupied"`
-	Sold         int `json:"sold"`
+	// Occupied is the rooms occupied by guests, complimentary ones included; the rooms the hotel uses itself (HouseUse)
+	// are neither occupied nor sellable nor available. Sold is the paid room nights.
+	Occupied      int `json:"occupied"`
+	Complimentary int `json:"complimentary"`
+	HouseUse      int `json:"house_use"`
+	Sold          int `json:"sold"`
 }
 
 // Money is a net, service charge and tax triple.

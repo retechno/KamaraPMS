@@ -6760,9 +6760,15 @@ export interface components {
                 total: number;
                 out_of_order: number;
                 out_of_service: number;
+                /** @description Total minus out of order */
                 sellable: number;
+                /** @description Rooms occupied by guests */
                 occupied: number;
-                /** @description Room nights charged for the business date. */
+                /** @description Occupied rooms on a COMPLIMENTARY rate plan (a part of occupied). */
+                complimentary: number;
+                /** @description Rooms occupied on a HOUSE_USE rate plan; they are neither occupied */
+                house_use: number;
+                /** @description Paid room nights charged for the business date (complimentary and house use nights post as zero and are not sold). */
                 sold: number;
             };
             arrivals: number;
@@ -6881,6 +6887,11 @@ export interface components {
             rooms_out_of_order: number;
             rooms_sellable: number;
             rooms_occupied: number;
+            /** @description A part of rooms_occupied. */
+            rooms_complimentary: number;
+            /** @description Not occupied */
+            rooms_house_use: number;
+            /** @description Paid nights. */
             room_nights_sold: number;
             arrivals: number;
             departures: number;
@@ -6892,8 +6903,12 @@ export interface components {
         };
         StatisticsTotals: {
             days: number;
+            /** @description Rooms minus out of order and house use rooms */
             available_room_nights: number;
             occupied_room_nights: number;
+            /** @description A part of occupied_room_nights. */
+            complimentary_room_nights: number;
+            house_use_room_nights: number;
             room_nights_sold: number;
             room_revenue: components["schemas"]["Amount"];
             occupancy_percent: string;
@@ -6946,6 +6961,7 @@ export interface components {
         StayListReport: {
             date?: components["schemas"]["Date"];
             rows: {
+                occupancy_kind: components["schemas"]["OccupancyKind"];
                 /** Format: int64 */
                 stay_id: number;
                 stay_number: string;
@@ -6963,6 +6979,7 @@ export interface components {
         ArrivalsReport: {
             date: components["schemas"]["Date"];
             rows: {
+                occupancy_kind: components["schemas"]["OccupancyKind"];
                 /** Format: int64 */
                 reservation_room_id: number;
                 confirmation_number: string;

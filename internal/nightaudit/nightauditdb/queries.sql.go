@@ -483,8 +483,11 @@ func (q *Queries) SummaryRevenueByType(ctx context.Context, arg SummaryRevenueBy
 
 const summaryRoomNights = `-- name: SummaryRoomNights :one
 SELECT count(*)::int FROM folio_items i
+LEFT JOIN stays s ON s.property_id = i.property_id AND s.id = i.stay_id
+LEFT JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+LEFT JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.service_date = $3::date
-  AND i.transaction_type = 'CHARGE' AND i.source = 'ROOM_POSTING'
+  AND i.transaction_type = 'CHARGE' AND i.source = 'ROOM_POSTING' AND COALESCE(rp.occupancy_kind, 'PAID') = 'PAID'
   AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
 `
 
@@ -494,7 +497,8 @@ type SummaryRoomNightsParams struct {
 	Bd         civil.Date
 }
 
-// Room nights charged by the room posting service for the business date (and not reversed).
+// Paid room nights charged by the room posting service for the business date (and not reversed): the nights of
+// complimentary and house use plans post as zero and are not sold.
 func (q *Queries) SummaryRoomNights(ctx context.Context, arg SummaryRoomNightsParams) (int32, error) {
 	row := q.db.QueryRow(ctx, summaryRoomNights, arg.TenantID, arg.PropertyID, arg.Bd)
 	var column_1 int32
@@ -515,7 +519,19 @@ SELECT
         AND NOT EXISTS (SELECT 1 FROM room_blocks o WHERE o.property_id = b.property_id AND o.room_id = b.room_id AND o.status = 'ACTIVE'
                         AND o.block_type = 'OOO' AND o.start_date <= $3::date AND $3::date < o.end_date))::int AS out_of_service,
     (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
-      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN')::int AS occupied
+      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN')::int AS occupied,
+    (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+       JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND rp.occupancy_kind = 'COMPLIMENTARY')::int AS complimentary,
+    (SELECT count(DISTINCT sr.room_id) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+       JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND rp.occupancy_kind = 'HOUSE_USE')::int AS house_use
 `
 
 type SummaryRoomsParams struct {
@@ -525,10 +541,12 @@ type SummaryRoomsParams struct {
 }
 
 type SummaryRoomsRow struct {
-	Total        int32
-	OutOfOrder   int32
-	OutOfService int32
-	Occupied     int32
+	Total         int32
+	OutOfOrder    int32
+	OutOfService  int32
+	Occupied      int32
+	Complimentary int32
+	HouseUse      int32
 }
 
 // ---------------------------------------------------------------- closing summary
@@ -540,6 +558,8 @@ func (q *Queries) SummaryRooms(ctx context.Context, arg SummaryRoomsParams) (Sum
 		&i.OutOfOrder,
 		&i.OutOfService,
 		&i.Occupied,
+		&i.Complimentary,
+		&i.HouseUse,
 	)
 	return i, err
 }
