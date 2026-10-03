@@ -2984,6 +2984,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/city-ledger/overdue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The invoices past their due date, by company (cityledger.read)
+         * @description Issued invoices that still owe something and whose due date is before the current business date, with the days overdue, the bucket (1-30, 31-60,
+         *     61-90, 90+), what each owes (total less receipts, credit notes and write-offs), the interest the late fee of the property comes to (shown only,
+         *     never posted) and the last reminder that listed the invoice. `next_level` is the level of the reminder a company is due (1 to 3).
+         */
+        get: operations["getCityLedgerOverdue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/settings/late-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The late fee shown on overdue invoices (cityledger.read) */
+        get: operations["getCityLedgerLateFee"];
+        /**
+         * Set the late fee (cityledger.reminder)
+         * @description A percent per month (0 to 100, at most 4 decimals) on what an overdue invoice owes, a month being 30 days, after some days of grace (0 to 365). It only changes the interest the overdue list shows.
+         */
+        put: operations["setCityLedgerLateFee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The reminders sent to a company, newest first (cityledger.read) */
+        get: operations["listCityLedgerReminders"];
+        put?: never;
+        /**
+         * Record a payment reminder sent to a company (cityledger.reminder)
+         * @description Level 1, 2 or 3, listing the given invoices (every overdue invoice of the company by default) with what each owes today and the interest, frozen.
+         *     It does not touch the books. 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE` (`context.invoice_ids`).
+         */
+        post: operations["createCityLedgerReminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/reminders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One reminder with its invoices (cityledger.read) */
+        get: operations["getCityLedgerReminder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/reminders/{id}/reminder.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The letter of a payment reminder as PDF (cityledger.read) */
+        get: operations["getCityLedgerReminderPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}": {
         parameters: {
             query?: never;
@@ -8070,6 +8185,88 @@ export interface components {
             account_id: number;
             reason: string;
             approval: components["schemas"]["Approval"];
+        };
+        CityLedgerLateFee: {
+            /** @description A percent per month, 0 to 100; 0 is off. */
+            monthly_rate: string;
+            grace_days: number;
+        };
+        CityLedgerReminderRef: {
+            number: string;
+            date: components["schemas"]["Date"];
+            level: number;
+        };
+        CityLedgerOverdueInvoice: {
+            /** Format: int64 */
+            invoice_id: number;
+            invoice_number: string;
+            invoice_date: components["schemas"]["Date"];
+            due_date: components["schemas"]["Date"];
+            days_overdue: number;
+            /** @enum {string} */
+            bucket: "1-30" | "31-60" | "61-90" | "90+";
+            total: string;
+            /** @description Total less receipts, credit notes and write-offs. */
+            outstanding: string;
+            /** @description The late fee as of today; shown only. */
+            interest: string;
+            last_reminder: components["schemas"]["CityLedgerReminderRef"] | null;
+        };
+        CityLedgerOverdueCompany: {
+            /** Format: int64 */
+            company_id: number;
+            code: string;
+            name: string;
+            outstanding: string;
+            interest: string;
+            oldest_days_overdue: number;
+            /** @description The level of the reminder the company is due. */
+            next_level: number;
+            invoices: components["schemas"]["CityLedgerOverdueInvoice"][];
+        };
+        CityLedgerOverdue: {
+            as_of: components["schemas"]["Date"];
+            outstanding: string;
+            interest: string;
+            late_fee: components["schemas"]["CityLedgerLateFee"];
+            companies: components["schemas"]["CityLedgerOverdueCompany"][];
+        };
+        CityLedgerReminderItem: {
+            /** Format: int64 */
+            invoice_id: number;
+            invoice_number: string;
+            invoice_date: components["schemas"]["Date"];
+            due_date: components["schemas"]["Date"];
+            outstanding: string;
+            days_overdue: number;
+            interest: string;
+        };
+        CityLedgerReminder: {
+            /** Format: int64 */
+            id: number;
+            /** @description REM000001. */
+            number: string;
+            /** Format: int64 */
+            company_id: number;
+            level: number;
+            reminder_date: components["schemas"]["Date"];
+            note?: string;
+            total_outstanding: string;
+            total_interest: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            created_by: number | null;
+            items: components["schemas"]["CityLedgerReminderItem"][];
+        };
+        CityLedgerReminderList: {
+            data: components["schemas"]["CityLedgerReminder"][];
+        };
+        CreateCityLedgerReminderRequest: {
+            level: number;
+            note?: string;
+            /** @description The overdue invoices to list; every overdue invoice of the company when empty. */
+            invoice_ids?: number[];
         };
         CityLedgerStatementLine: {
             date: components["schemas"]["Date"];
@@ -14528,6 +14725,192 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerOverdue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerOverdue"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerLateFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The late fee; a rate of 0 is off. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerLateFee"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    setCityLedgerLateFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CityLedgerLateFee"];
+            };
+        };
+        responses: {
+            /** @description The late fee. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerLateFee"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerReminders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reminders with the invoices they listed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReminderList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCityLedgerReminder: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCityLedgerReminderRequest"];
+            };
+        };
+        responses: {
+            /** @description The reminder. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReminder"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reminder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReminder"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerReminderPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The letter (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getCityLedgerInvoice: {

@@ -27,6 +27,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/companies/{id}/statement.pdf", httpx.HandlerFunc(h.statement))
 	mux.Handle("GET "+p+"/city-ledger/invoices/{id}/invoice.pdf", httpx.HandlerFunc(h.serve(h.svc.CompanyInvoice)))
 	mux.Handle("GET "+p+"/city-ledger/adjustments/{id}/credit-note.pdf", httpx.HandlerFunc(h.serve(h.svc.CreditNotePDF)))
+	mux.Handle("GET "+p+"/city-ledger/reminders/{id}/reminder.pdf", httpx.HandlerFunc(h.serve(h.svc.ReminderPDF)))
 	h.registerAccounting(mux)
 	h.registerTax(mux)
 	h.registerTaxInvoice(mux)

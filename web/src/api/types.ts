@@ -138,6 +138,10 @@ export type CityLedgerStatementLine = Schemas['CityLedgerStatementLine']
 export type CityLedgerAging = Schemas['CityLedgerAging']
 
 export type CityLedgerInvoice = Schemas['CityLedgerInvoice']
+export type CityLedgerOverdue = Schemas['CityLedgerOverdue']
+export type CityLedgerOverdueCompany = Schemas['CityLedgerOverdueCompany']
+export type CityLedgerLateFee = Schemas['CityLedgerLateFee']
+export type CityLedgerReminder = Schemas['CityLedgerReminder']
 export type CityLedgerInvoiceLine = Schemas['CityLedgerInvoiceLine']
 export type CityLedgerCandidate = Schemas['CityLedgerCandidate']
 

@@ -297,6 +297,27 @@ func (q *Queries) GetInvoiceByKey(ctx context.Context, arg GetInvoiceByKeyParams
 	return i, err
 }
 
+const getLateFee = `-- name: GetLateFee :one
+SELECT monthly_rate, grace_days FROM city_ledger_late_fee_settings WHERE tenant_id = $1 AND property_id = $2
+`
+
+type GetLateFeeParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type GetLateFeeRow struct {
+	MonthlyRate decimal.Decimal
+	GraceDays   int16
+}
+
+func (q *Queries) GetLateFee(ctx context.Context, arg GetLateFeeParams) (GetLateFeeRow, error) {
+	row := q.db.QueryRow(ctx, getLateFee, arg.TenantID, arg.PropertyID)
+	var i GetLateFeeRow
+	err := row.Scan(&i.MonthlyRate, &i.GraceDays)
+	return i, err
+}
+
 const getReceipt = `-- name: GetReceipt :one
 SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -367,6 +388,37 @@ func (q *Queries) GetReceiptByKey(ctx context.Context, arg GetReceiptByKeyParams
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.ApprovedBy,
+	)
+	return i, err
+}
+
+const getReminderByKey = `-- name: GetReminderByKey :one
+SELECT id, tenant_id, property_id, reminder_number, company_id, level, reminder_date, note, total_outstanding, total_interest, idempotency_key, created_at, created_by FROM city_ledger_reminders WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetReminderByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetReminderByKey(ctx context.Context, arg GetReminderByKeyParams) (CityLedgerReminder, error) {
+	row := q.db.QueryRow(ctx, getReminderByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i CityLedgerReminder
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.ReminderNumber,
+		&i.CompanyID,
+		&i.Level,
+		&i.ReminderDate,
+		&i.Note,
+		&i.TotalOutstanding,
+		&i.TotalInterest,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -711,6 +763,89 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 	return i, err
 }
 
+const insertReminder = `-- name: InsertReminder :one
+INSERT INTO city_ledger_reminders (tenant_id, property_id, reminder_number, company_id, level, reminder_date, note, total_outstanding, total_interest, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, tenant_id, property_id, reminder_number, company_id, level, reminder_date, note, total_outstanding, total_interest, idempotency_key, created_at, created_by
+`
+
+type InsertReminderParams struct {
+	TenantID         int64
+	PropertyID       int64
+	ReminderNumber   string
+	CompanyID        int64
+	Level            int16
+	ReminderDate     civil.Date
+	Note             *string
+	TotalOutstanding decimal.Decimal
+	TotalInterest    decimal.Decimal
+	IdempotencyKey   *string
+	ActorID          *int64
+}
+
+func (q *Queries) InsertReminder(ctx context.Context, arg InsertReminderParams) (CityLedgerReminder, error) {
+	row := q.db.QueryRow(ctx, insertReminder,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReminderNumber,
+		arg.CompanyID,
+		arg.Level,
+		arg.ReminderDate,
+		arg.Note,
+		arg.TotalOutstanding,
+		arg.TotalInterest,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var i CityLedgerReminder
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.ReminderNumber,
+		&i.CompanyID,
+		&i.Level,
+		&i.ReminderDate,
+		&i.Note,
+		&i.TotalOutstanding,
+		&i.TotalInterest,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const insertReminderItem = `-- name: InsertReminderItem :exec
+INSERT INTO city_ledger_reminder_items (tenant_id, property_id, reminder_id, company_id, invoice_id, outstanding, days_overdue, interest)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertReminderItemParams struct {
+	TenantID    int64
+	PropertyID  int64
+	ReminderID  int64
+	CompanyID   int64
+	InvoiceID   int64
+	Outstanding decimal.Decimal
+	DaysOverdue int32
+	Interest    decimal.Decimal
+}
+
+func (q *Queries) InsertReminderItem(ctx context.Context, arg InsertReminderItemParams) error {
+	_, err := q.db.Exec(ctx, insertReminderItem,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReminderID,
+		arg.CompanyID,
+		arg.InvoiceID,
+		arg.Outstanding,
+		arg.DaysOverdue,
+		arg.Interest,
+	)
+	return err
+}
+
 const invoiceAdjusted = `-- name: InvoiceAdjusted :many
 SELECT a.invoice_id, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'CREDIT_NOTE'), 0)::numeric AS credited, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'WRITE_OFF'), 0)::numeric AS written_off
 FROM city_ledger_adjustments a
@@ -779,6 +914,53 @@ func (q *Queries) InvoicePaid(ctx context.Context, arg InvoicePaidParams) ([]Inv
 	for rows.Next() {
 		var i InvoicePaidRow
 		if err := rows.Scan(&i.InvoiceID, &i.Paid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lastRemindersOfInvoices = `-- name: LastRemindersOfInvoices :many
+SELECT DISTINCT ON (it.invoice_id) it.invoice_id, m.reminder_number, m.reminder_date, m.level
+FROM city_ledger_reminder_items it
+JOIN city_ledger_reminders m ON m.property_id = it.property_id AND m.id = it.reminder_id
+WHERE it.tenant_id = $1 AND it.property_id = $2 AND it.invoice_id = ANY ($3::bigint[])
+ORDER BY it.invoice_id, m.id DESC
+`
+
+type LastRemindersOfInvoicesParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceIds []int64
+}
+
+type LastRemindersOfInvoicesRow struct {
+	InvoiceID      int64
+	ReminderNumber string
+	ReminderDate   civil.Date
+	Level          int16
+}
+
+// The latest reminder that listed each of the invoices.
+func (q *Queries) LastRemindersOfInvoices(ctx context.Context, arg LastRemindersOfInvoicesParams) ([]LastRemindersOfInvoicesRow, error) {
+	rows, err := q.db.Query(ctx, lastRemindersOfInvoices, arg.TenantID, arg.PropertyID, arg.InvoiceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LastRemindersOfInvoicesRow{}
+	for rows.Next() {
+		var i LastRemindersOfInvoicesRow
+		if err := rows.Scan(
+			&i.InvoiceID,
+			&i.ReminderNumber,
+			&i.ReminderDate,
+			&i.Level,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1282,6 +1464,78 @@ func (q *Queries) ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]C
 	return items, nil
 }
 
+const listOverdueInvoices = `-- name: ListOverdueInvoices :many
+
+SELECT i.id, i.invoice_number, i.company_id, c.code AS company_code, c.name AS company_name, i.invoice_date, i.due_date, i.total,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_receipt_allocations a JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
+                  WHERE a.property_id = i.property_id AND a.invoice_id = i.id), 0)::numeric AS paid,
+       COALESCE((SELECT sum(x.amount) FROM city_ledger_adjustments x WHERE x.property_id = i.property_id AND x.invoice_id = i.id AND x.status = 'POSTED'), 0)::numeric AS adjusted
+FROM city_ledger_invoices i
+JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.status = 'ISSUED' AND i.due_date < $3::date
+  AND ($4::bigint IS NULL OR i.company_id = $4::bigint)
+ORDER BY c.code, i.due_date, i.id
+`
+
+type ListOverdueInvoicesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+	CompanyID  *int64
+}
+
+type ListOverdueInvoicesRow struct {
+	ID            int64
+	InvoiceNumber string
+	CompanyID     int64
+	CompanyCode   string
+	CompanyName   string
+	InvoiceDate   civil.Date
+	DueDate       civil.Date
+	Total         decimal.Decimal
+	Paid          decimal.Decimal
+	Adjusted      decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Overdue invoices, reminders and the late fee
+// Issued invoices whose due date is before a date, with what is taken off them (the amounts that are still owed are worked out by the caller).
+func (q *Queries) ListOverdueInvoices(ctx context.Context, arg ListOverdueInvoicesParams) ([]ListOverdueInvoicesRow, error) {
+	rows, err := q.db.Query(ctx, listOverdueInvoices,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AsOf,
+		arg.CompanyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOverdueInvoicesRow{}
+	for rows.Next() {
+		var i ListOverdueInvoicesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvoiceNumber,
+			&i.CompanyID,
+			&i.CompanyCode,
+			&i.CompanyName,
+			&i.InvoiceDate,
+			&i.DueDate,
+			&i.Total,
+			&i.Paid,
+			&i.Adjusted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReceipts = `-- name: ListReceipts :many
 SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by FROM city_ledger_receipts
 WHERE tenant_id = $1 AND property_id = $2 AND company_id = $3
@@ -1323,6 +1577,114 @@ func (q *Queries) ListReceipts(ctx context.Context, arg ListReceiptsParams) ([]C
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.ApprovedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReminderItems = `-- name: ListReminderItems :many
+SELECT it.reminder_id, it.invoice_id, i.invoice_number, i.invoice_date, i.due_date, it.outstanding, it.days_overdue, it.interest
+FROM city_ledger_reminder_items it
+JOIN city_ledger_invoices i ON i.property_id = it.property_id AND i.id = it.invoice_id
+WHERE it.tenant_id = $1 AND it.property_id = $2 AND it.reminder_id = ANY ($3::bigint[])
+ORDER BY it.reminder_id, i.due_date, i.id
+`
+
+type ListReminderItemsParams struct {
+	TenantID    int64
+	PropertyID  int64
+	ReminderIds []int64
+}
+
+type ListReminderItemsRow struct {
+	ReminderID    int64
+	InvoiceID     int64
+	InvoiceNumber string
+	InvoiceDate   civil.Date
+	DueDate       civil.Date
+	Outstanding   decimal.Decimal
+	DaysOverdue   int32
+	Interest      decimal.Decimal
+}
+
+func (q *Queries) ListReminderItems(ctx context.Context, arg ListReminderItemsParams) ([]ListReminderItemsRow, error) {
+	rows, err := q.db.Query(ctx, listReminderItems, arg.TenantID, arg.PropertyID, arg.ReminderIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReminderItemsRow{}
+	for rows.Next() {
+		var i ListReminderItemsRow
+		if err := rows.Scan(
+			&i.ReminderID,
+			&i.InvoiceID,
+			&i.InvoiceNumber,
+			&i.InvoiceDate,
+			&i.DueDate,
+			&i.Outstanding,
+			&i.DaysOverdue,
+			&i.Interest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReminders = `-- name: ListReminders :many
+SELECT id, tenant_id, property_id, reminder_number, company_id, level, reminder_date, note, total_outstanding, total_interest, idempotency_key, created_at, created_by FROM city_ledger_reminders
+WHERE tenant_id = $1 AND property_id = $2
+  AND ($3::bigint IS NULL OR id = $3::bigint)
+  AND ($4::bigint IS NULL OR company_id = $4::bigint)
+ORDER BY reminder_date DESC, id DESC
+`
+
+type ListRemindersParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         *int64
+	CompanyID  *int64
+}
+
+func (q *Queries) ListReminders(ctx context.Context, arg ListRemindersParams) ([]CityLedgerReminder, error) {
+	rows, err := q.db.Query(ctx, listReminders,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.CompanyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CityLedgerReminder{}
+	for rows.Next() {
+		var i CityLedgerReminder
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.ReminderNumber,
+			&i.CompanyID,
+			&i.Level,
+			&i.ReminderDate,
+			&i.Note,
+			&i.TotalOutstanding,
+			&i.TotalInterest,
+			&i.IdempotencyKey,
+			&i.CreatedAt,
+			&i.CreatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -1532,6 +1894,31 @@ func (q *Queries) UnattachedTransferNotes(ctx context.Context, arg UnattachedTra
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertLateFee = `-- name: UpsertLateFee :exec
+INSERT INTO city_ledger_late_fee_settings (tenant_id, property_id, monthly_rate, grace_days, updated_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (property_id) DO UPDATE SET monthly_rate = EXCLUDED.monthly_rate, grace_days = EXCLUDED.grace_days, updated_by = EXCLUDED.updated_by
+`
+
+type UpsertLateFeeParams struct {
+	TenantID    int64
+	PropertyID  int64
+	MonthlyRate decimal.Decimal
+	GraceDays   int16
+	ActorID     *int64
+}
+
+func (q *Queries) UpsertLateFee(ctx context.Context, arg UpsertLateFeeParams) error {
+	_, err := q.db.Exec(ctx, upsertLateFee,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.MonthlyRate,
+		arg.GraceDays,
+		arg.ActorID,
+	)
+	return err
 }
 
 const voidAdjustment = `-- name: VoidAdjustment :exec

@@ -1400,6 +1400,20 @@ SELECT expect_error('a rule names a rate plan of its property', '23503', $q$INSE
 SELECT expect_error('a rule names a room type of its property', '23503', $q$INSERT INTO yield_rules (tenant_id, property_id, code, name, room_type_id, adjustment_type, adjustment_value) VALUES (tn('ABC'), pr('BALI'), 'Y1', 'x', 999999, 'PERCENT', 5)$q$);
 
 ------------------------------------------------------------------------------------------
+-- City ledger reminders and the late fee
+------------------------------------------------------------------------------------------
+SELECT expect_error('a reminder is of level 1 to 3', '23514',
+    $q$INSERT INTO city_ledger_reminders (tenant_id, property_id, reminder_number, company_id, level, reminder_date, total_outstanding)
+       VALUES (tn('ABC'), pr('BALI'), 'REM9001', 1, 4, '2026-10-01', 100)$q$);
+SELECT expect_error('a reminder asks something that is owed', '23514',
+    $q$INSERT INTO city_ledger_reminders (tenant_id, property_id, reminder_number, company_id, level, reminder_date, total_outstanding)
+       VALUES (tn('ABC'), pr('BALI'), 'REM9002', 1, 1, '2026-10-01', 0)$q$);
+SELECT expect_error('a late fee is a percent from 0 to 100', '23514',
+    $q$INSERT INTO city_ledger_late_fee_settings (tenant_id, property_id, monthly_rate) VALUES (tn('ABC'), pr('BALI'), 101)$q$);
+SELECT expect_error('the days of grace are at most 365', '23514',
+    $q$INSERT INTO city_ledger_late_fee_settings (tenant_id, property_id, monthly_rate, grace_days) VALUES (tn('ABC'), pr('BALI'), 3, 400)$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

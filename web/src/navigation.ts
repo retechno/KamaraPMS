@@ -61,6 +61,7 @@ export const navigation: NavSection[] = [
       { id: 'cashier', to: '/cashier' },
       { id: 'roomCharges', to: '/room-charges' },
       { id: 'cityLedger', to: '/city-ledger' },
+      { id: 'cityLedgerOverdue', to: '/city-ledger/overdue' },
     ],
   },
   {

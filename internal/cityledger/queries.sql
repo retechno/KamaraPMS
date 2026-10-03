@@ -251,3 +251,60 @@ SELECT id, code, rate, is_active, gl_account_code, tax_kind FROM taxes WHERE ten
 -- The tax invoices (faktur pajak) of an invoice that are not void.
 -- name: CountLiveTaxInvoices :one
 SELECT count(*)::int FROM tax_invoices WHERE tenant_id = @tenant_id AND property_id = @property_id AND city_ledger_invoice_id = @invoice_id AND status = 'ISSUED';
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Overdue invoices, reminders and the late fee
+
+-- Issued invoices whose due date is before a date, with what is taken off them (the amounts that are still owed are worked out by the caller).
+-- name: ListOverdueInvoices :many
+SELECT i.id, i.invoice_number, i.company_id, c.code AS company_code, c.name AS company_name, i.invoice_date, i.due_date, i.total,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_receipt_allocations a JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
+                  WHERE a.property_id = i.property_id AND a.invoice_id = i.id), 0)::numeric AS paid,
+       COALESCE((SELECT sum(x.amount) FROM city_ledger_adjustments x WHERE x.property_id = i.property_id AND x.invoice_id = i.id AND x.status = 'POSTED'), 0)::numeric AS adjusted
+FROM city_ledger_invoices i
+JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.status = 'ISSUED' AND i.due_date < @as_of::date
+  AND (sqlc.narg(company_id)::bigint IS NULL OR i.company_id = sqlc.narg(company_id)::bigint)
+ORDER BY c.code, i.due_date, i.id;
+
+-- The latest reminder that listed each of the invoices.
+-- name: LastRemindersOfInvoices :many
+SELECT DISTINCT ON (it.invoice_id) it.invoice_id, m.reminder_number, m.reminder_date, m.level
+FROM city_ledger_reminder_items it
+JOIN city_ledger_reminders m ON m.property_id = it.property_id AND m.id = it.reminder_id
+WHERE it.tenant_id = @tenant_id AND it.property_id = @property_id AND it.invoice_id = ANY (@invoice_ids::bigint[])
+ORDER BY it.invoice_id, m.id DESC;
+
+-- name: InsertReminder :one
+INSERT INTO city_ledger_reminders (tenant_id, property_id, reminder_number, company_id, level, reminder_date, note, total_outstanding, total_interest, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @reminder_number, @company_id, @level, @reminder_date, sqlc.narg(note), @total_outstanding, @total_interest, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: InsertReminderItem :exec
+INSERT INTO city_ledger_reminder_items (tenant_id, property_id, reminder_id, company_id, invoice_id, outstanding, days_overdue, interest)
+VALUES (@tenant_id, @property_id, @reminder_id, @company_id, @invoice_id, @outstanding, @days_overdue, @interest);
+
+-- name: ListReminders :many
+SELECT * FROM city_ledger_reminders
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+  AND (sqlc.narg(id)::bigint IS NULL OR id = sqlc.narg(id)::bigint)
+  AND (sqlc.narg(company_id)::bigint IS NULL OR company_id = sqlc.narg(company_id)::bigint)
+ORDER BY reminder_date DESC, id DESC;
+
+-- name: ListReminderItems :many
+SELECT it.reminder_id, it.invoice_id, i.invoice_number, i.invoice_date, i.due_date, it.outstanding, it.days_overdue, it.interest
+FROM city_ledger_reminder_items it
+JOIN city_ledger_invoices i ON i.property_id = it.property_id AND i.id = it.invoice_id
+WHERE it.tenant_id = @tenant_id AND it.property_id = @property_id AND it.reminder_id = ANY (@reminder_ids::bigint[])
+ORDER BY it.reminder_id, i.due_date, i.id;
+
+-- name: GetReminderByKey :one
+SELECT * FROM city_ledger_reminders WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: GetLateFee :one
+SELECT monthly_rate, grace_days FROM city_ledger_late_fee_settings WHERE tenant_id = @tenant_id AND property_id = @property_id;
+
+-- name: UpsertLateFee :exec
+INSERT INTO city_ledger_late_fee_settings (tenant_id, property_id, monthly_rate, grace_days, updated_by)
+VALUES (@tenant_id, @property_id, @monthly_rate, @grace_days, sqlc.narg(actor_id))
+ON CONFLICT (property_id) DO UPDATE SET monthly_rate = EXCLUDED.monthly_rate, grace_days = EXCLUDED.grace_days, updated_by = EXCLUDED.updated_by;

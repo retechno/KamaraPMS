@@ -92,6 +92,7 @@ const (
 	PermCityLedgerInvoice    Permission = "cityledger.invoice"
 	PermCityLedgerCreditNote Permission = "cityledger.credit_note"
 	PermCityLedgerWriteOff   Permission = "cityledger.write_off"
+	PermCityLedgerReminder   Permission = "cityledger.reminder"
 
 	PermAuditRead Permission = "audit.read"
 )
@@ -174,6 +175,7 @@ var Catalogue = []PermissionInfo{
 	{PermCityLedgerReceive, "Accounts", "Record and void what a company pays against its account", "S1"},
 	{PermCityLedgerInvoice, "Accounts", "Issue and void invoices to a company for checked-out transfers", "S1"},
 	{PermCityLedgerCreditNote, "Accounts", "Make and void credit notes to a company, against an invoice or a transfer (an approval is needed)", "S1"},
+	{PermCityLedgerReminder, "Accounts", "Record payment reminders sent to companies for overdue invoices, and set the late fee shown on them", "S1"},
 	{PermCityLedgerWriteOff, "Accounts", "Write off what an invoice of a company still owes, and void a write-off (an approval is needed)", "S1"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},

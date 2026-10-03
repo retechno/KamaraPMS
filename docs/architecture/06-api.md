@@ -722,6 +722,13 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `GET {P}/city-ledger/accounts/{id}/adjustments` | `cityledger.read` | The credit notes and write-offs of a company, newest first, with the lines of the credit notes |
 | `POST {P}/city-ledger/credit-notes` | `cityledger.credit_note` + approval | `Idempotency-Key` required; `{invoice_id | payment_id, reason, lines: [{description, account_id (revenue), net_amount, tax_id?}], approval}`: against an issued invoice (409 `ADJUSTMENT_EXCEEDS_INVOICE`) or a transfer not on an invoice (409 `ADJUSTMENT_EXCEEDS_TRANSFER`, `TRANSFER_ON_INVOICE`); journal Dr allowance and tax payable, Cr CITY_LEDGER on the business date; the invoice later made from a transfer asks the net |
 | `POST {P}/city-ledger/write-offs` | `cityledger.write_off` + approval | `Idempotency-Key` required; `{invoice_id, amount, account_id (expense or 1240), reason, approval}`; 409 `ADJUSTMENT_EXCEEDS_INVOICE`; no tax effect |
+| `GET {P}/city-ledger/overdue` | `cityledger.read` | The overdue invoices by company: days overdue, bucket, owed, interest, last reminder, `next_level` of the company, and the late fee in use |
+| `GET {P}/city-ledger/settings/late-fee` | `cityledger.read` | `{monthly_rate, grace_days}`; a rate of 0 is off |
+| `PUT {P}/city-ledger/settings/late-fee` | `cityledger.reminder` | `{monthly_rate (0-100, 4 decimals), grace_days (0-365)}`; only changes the interest shown |
+| `GET {P}/city-ledger/accounts/{id}/reminders` | `cityledger.read` | The reminders sent to a company, newest first, with their items |
+| `POST {P}/city-ledger/accounts/{id}/reminders` | `cityledger.reminder` | `Idempotency-Key` required; `{level 1-3, note?, invoice_ids?}` (every overdue invoice by default); freezes what each owes today; 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE`; no journal |
+| `GET {P}/city-ledger/reminders/{id}` | `cityledger.read` | One reminder; 404 `REMINDER_NOT_FOUND` |
+| `GET {P}/city-ledger/reminders/{id}/reminder.pdf` | `cityledger.read` | The letter (First, Second or Final reminder), the interest column only when there is interest |
 | `GET {P}/city-ledger/adjustments/{id}` | `cityledger.read` | One credit note or write-off |
 | `POST {P}/city-ledger/adjustments/{id}/void` | the permission of its kind + approval | `{reason, approval}`: reverses its journal on the business date; 409 `ADJUSTMENT_ALREADY_VOIDED`, `ADJUSTMENT_ON_INVOICE` |
 | `GET {P}/city-ledger/adjustments/{id}/credit-note.pdf` | `cityledger.read` | The credit note as a document (a write-off has none: 409 `NOT_A_CREDIT_NOTE`) |

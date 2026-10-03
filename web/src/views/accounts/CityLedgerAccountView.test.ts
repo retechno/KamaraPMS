@@ -47,6 +47,7 @@ const invoices = [
 
 /** What the mock answers for the credit notes and write-offs of the company; a test that needs some sets it before it mounts. */
 let adjustmentList: unknown[] = []
+let reminderList: unknown[] = []
 
 function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
   const pinia = createPinia()
@@ -57,6 +58,7 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'city
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/adjustments')) return { data: { data: adjustmentList } }
+    if (path.endsWith('/reminders')) return { data: { data: reminderList } }
     if (path.endsWith('/aging')) return { data: aging }
     if (path.endsWith('/statement')) return { data: statement }
     if (path.endsWith('/receipts')) return { data: { data: receipts } }
@@ -367,5 +369,18 @@ describe('CityLedgerAccountView', () => {
     expect(w.find('[data-testid=credit-CINV000001]').exists()).toBe(false)
     expect(w.find('[data-testid=writeoff-CINV000001]').exists()).toBe(false)
     expect(w.find('[data-testid=credit-transfer-PAY000041]').exists()).toBe(false)
+  })
+
+  it('lists the payment reminders sent to the company and prints one', async () => {
+    reminderList = [
+      { id: 91, number: 'REM000001', company_id: 1, level: 2, reminder_date: '2026-09-30', total_outstanding: '400000', total_interest: '2000', created_at: '2026-09-30T01:00:00Z', created_by: 5, items: [{ invoice_id: 51, invoice_number: 'CINV000001', invoice_date: '2026-09-01', due_date: '2026-09-15', outstanding: '400000', days_overdue: 15, interest: '2000' }] },
+    ]
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=reminder-REM000001]').text()).toContain('CINV000001')
+    expect(w.get('[data-testid=reminder-REM000001]').text()).toContain('400,000')
+    await w.get('[data-testid=reminders] [data-testid=print-REM000001]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/city-ledger/reminders/91/reminder.pdf')
+    reminderList = []
   })
 })

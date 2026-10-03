@@ -99,6 +99,7 @@ export const router = createRouter({
       meta: { title: 'Group' },
     },
     { path: '/city-ledger', name: 'city-ledger', component: () => import('@/views/accounts/CityLedgerView.vue'), meta: { title: 'City ledger' } },
+    { path: '/city-ledger/overdue', name: 'city-ledger-overdue', component: () => import('@/views/accounts/CityLedgerOverdueView.vue'), meta: { title: 'Overdue invoices' } },
     {
       path: '/city-ledger/:id(\\d+)',
       name: 'city-ledger-account',

@@ -1,6 +1,6 @@
 # Credit notes, write-offs and overdue follow-up (proposal, not approved)
 
-Status: **approved 2026-10-03. Built so far: credit notes (against an invoice or a transfer), write-offs, balances, statement, aging, books, PDF, screens (migration 00045). The tax of a credit note in the return, the books check, the liability report and the tax invoice is built too. To build: the overdue list, reminders and the interest shown.** Item 2 of the finance order in `08-backlog.md`. Customer side first (the city ledger); the supplier
+Status: **approved 2026-10-03. Built so far: credit notes (against an invoice or a transfer), write-offs, balances, statement, aging, books, PDF, screens (migration 00045). The tax of a credit note in the return, the books check, the liability report and the tax invoice is built too. The overdue list, the payment reminders (levels 1 to 3, with a PDF letter) and the late fee shown as interest are built too (migration 00046): phase 1 is complete.** Item 2 of the finance order in `08-backlog.md`. Customer side first (the city ledger); the supplier
 side follows in a second phase (see "Phase 2" below).
 
 ## What exists today (read from the code, 2026-10-03)

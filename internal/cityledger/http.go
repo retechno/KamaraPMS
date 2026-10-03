@@ -37,6 +37,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/write-offs", httpx.HandlerFunc(h.createWriteOff))
 	mux.Handle("GET "+p+"/adjustments/{id}", httpx.HandlerFunc(h.adjustment))
 	mux.Handle("POST "+p+"/adjustments/{id}/void", httpx.HandlerFunc(h.voidAdjustment))
+	mux.Handle("GET "+p+"/overdue", httpx.HandlerFunc(h.overdue))
+	mux.Handle("GET "+p+"/settings/late-fee", httpx.HandlerFunc(h.lateFee))
+	mux.Handle("PUT "+p+"/settings/late-fee", httpx.HandlerFunc(h.setLateFee))
+	mux.Handle("GET "+p+"/accounts/{id}/reminders", httpx.HandlerFunc(h.reminders))
+	mux.Handle("POST "+p+"/accounts/{id}/reminders", httpx.HandlerFunc(h.createReminder))
+	mux.Handle("GET "+p+"/reminders/{id}", httpx.HandlerFunc(h.reminder))
 }
 
 func ids(r *http.Request) (propertyID, id int64, err error) {
@@ -360,4 +366,88 @@ func (h *Handler) voidAdjustment(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, a)
+}
+
+func (h *Handler) overdue(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	o, err := h.svc.OverdueList(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, o)
+}
+
+func (h *Handler) lateFee(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	lf, err := h.svc.GetLateFee(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, lf)
+}
+
+func (h *Handler) setLateFee(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in LateFeeInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	lf, err := h.svc.SetLateFee(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, lf)
+}
+
+func (h *Handler) reminders(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Reminders(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Reminder]{Data: list})
+}
+
+func (h *Handler) reminder(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	rm, err := h.svc.GetReminder(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, rm)
+}
+
+func (h *Handler) createReminder(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in ReminderInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	rm, err := h.svc.CreateReminder(r.Context(), pid, id, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, rm)
 }

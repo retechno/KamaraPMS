@@ -266,6 +266,8 @@ const (
 	SeqCreditNote SequenceType = "CREDIT_NOTE"
 	// SeqWriteOff numbers the write-offs of what companies owe.
 	SeqWriteOff SequenceType = "WRITE_OFF"
+	// SeqReminder numbers the payment reminders sent to companies.
+	SeqReminder SequenceType = "REMINDER"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -291,6 +293,7 @@ var defaultSequences = []struct {
 	{SeqTaxInvoice, "TXI"},
 	{SeqCreditNote, "CN"},
 	{SeqWriteOff, "WO"},
+	{SeqReminder, "REM"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }

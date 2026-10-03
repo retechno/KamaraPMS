@@ -87,6 +87,7 @@ export const documentPath = {
   taxReturn: (propertyId: number, returnId: number) => `/api/v1/properties/${propertyId}/tax/returns/${returnId}/return.pdf`,
   taxWorksheet: (propertyId: number, taxId: number, period: string) => `/api/v1/properties/${propertyId}/tax/worksheet.pdf?tax_id=${taxId}&period=${period}`,
   creditNote: (propertyId: number, adjustmentId: number) => `/api/v1/properties/${propertyId}/city-ledger/adjustments/${adjustmentId}/credit-note.pdf`,
+  reminder: (propertyId: number, reminderId: number) => `/api/v1/properties/${propertyId}/city-ledger/reminders/${reminderId}/reminder.pdf`,
   companyInvoice: (propertyId: number, invoiceId: number) => `/api/v1/properties/${propertyId}/city-ledger/invoices/${invoiceId}/invoice.pdf`,
   companyStatement: (propertyId: number, companyId: number, from?: string, to?: string) => {
     const q = new URLSearchParams()

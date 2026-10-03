@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
@@ -99,4 +100,39 @@ func TestCreditNoteDocumentAndTheInvoiceThatTakesItOff(t *testing.T) {
 	if s := pdfText(t, doc); !strings.Contains(s, "Written off") || !strings.Contains(s, "IDR 59,000") {
 		t.Error("the invoice shows what was written off and what is left")
 	}
+}
+
+func TestReminderLetter(t *testing.T) {
+	f := setup(t)
+	co, err := f.Companies.Create(f.admin, f.propID, companies.Input{Code: "ACME", Name: "Acme Corp", Address: "Jl. Bisnis 9", City: "Jakarta", TaxID: "99.888.777.6", PaymentTermsDays: 0, IsActive: true})
+	must(t, err)
+	tr, err := f.Folios.Transfer(f.admin, f.propID, f.stay.Folio.ID, "t1", folios.TransferInput{CompanyID: co.ID, Amount: "72100"})
+	must(t, err)
+	if _, err := f.Pool.Exec(context.Background(), `UPDATE stays SET status = 'CHECKED_OUT', actual_check_out_at = now() WHERE id = $1`, f.stay.Stay.ID); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := f.CityLedger.CreateInvoice(f.admin, f.propID, co.ID, "i1", cityledger.InvoiceInput{PaymentIDs: []int64{tr.Payment.ID}})
+	must(t, err)
+	_, err = f.CityLedger.SetLateFee(f.admin, f.propID, cityledger.LateFeeInput{MonthlyRate: "3", GraceDays: 0})
+	must(t, err)
+	day, err := f.Tenancy.CurrentBusinessDay(f.admin, f.propID)
+	must(t, err)
+	f.Clock.Set(time.Date(day.BusinessDate.Year(), day.BusinessDate.Month(), day.BusinessDate.Day(), 17, 30, 0, 0, time.UTC).AddDate(0, 0, 1))
+	_, err = f.Audit.Run(f.admin, f.propID, day.BusinessDate)
+	must(t, err)
+	rem, err := f.CityLedger.CreateReminder(f.admin, f.propID, co.ID, "r1", cityledger.ReminderInput{Level: 2, Note: "Please call us"})
+	must(t, err)
+	doc, err := f.Docs.ReminderPDF(f.admin, f.propID, rem.ID)
+	must(t, err)
+	s := pdfText(t, doc)
+	for _, want := range []string{"PAYMENT REMINDER", "Second reminder", rem.Number, "Acme Corp", "99.888.777.6", inv.InvoiceNumber, "72,100", "Interest", "Please call us", "past their due date"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the reminder lacks %q", want)
+		}
+	}
+	if doc.Filename != "reminder-"+rem.Number+".pdf" {
+		t.Errorf("filename: %s", doc.Filename)
+	}
+	_, err = f.Docs.ReminderPDF(f.admin, f.propID, 99999)
+	wantCode(t, err, "REMINDER_NOT_FOUND")
 }

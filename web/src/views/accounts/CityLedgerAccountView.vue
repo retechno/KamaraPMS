@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, CityLedgerAccount, CityLedgerAdjustment, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerStatement, GlAccount } from '@/api/types'
+import type { Approval, CityLedgerAccount, CityLedgerAdjustment, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerReminder, CityLedgerStatement, GlAccount } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -32,6 +32,7 @@ const receipts = ref<CityLedgerReceipt[]>([])
 const candidates = ref<CityLedgerCandidate[]>([])
 const invoices = ref<CityLedgerInvoice[]>([])
 const adjustments = ref<CityLedgerAdjustment[]>([])
+const reminders = ref<CityLedgerReminder[]>([])
 const chart = ref<GlAccount[]>([])
 const taxes = ref<{ id: number; code: string; name: string; rate: string; is_active: boolean }[]>([])
 const picked = ref<number[]>([])
@@ -81,7 +82,7 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const query = { from: period.from || undefined, to: period.to || undefined }
-    const [a, g, s, r, c, v, j] = await Promise.all([
+    const [a, g, s, r, c, v, j, m] = await Promise.all([
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/aging', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/statement', { params: { ...base(), query } }),
@@ -89,6 +90,7 @@ async function load(): Promise<void> {
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoice-candidates', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoices', { params: base() }),
       api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/adjustments', { params: base() }),
+      api.GET('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/reminders', { params: base() }),
     ])
     account.value = a.data ?? null
     aging.value = g.data ?? null
@@ -97,6 +99,7 @@ async function load(): Promise<void> {
     candidates.value = c.data?.data ?? []
     invoices.value = v.data?.data ?? []
     adjustments.value = j.data?.data ?? []
+    reminders.value = m.data?.data ?? []
     picked.value = picked.value.filter((id) => candidates.value.some((x) => x.payment_id === id && x.invoiceable))
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -180,6 +183,24 @@ const invoiceColumns = computed<Column<CityLedgerInvoice>[]>(() => [
   { key: 'actions', label: '', align: 'right' },
 ])
 
+const reminderColumns = computed<Column<CityLedgerReminder>[]>(() => [
+  { key: 'reminder_date', label: t('clReminders.date'), format: 'date' as const },
+  { key: 'number', label: t('clReminders.number') },
+  { key: 'level', label: t('clReminders.level') },
+  { key: 'items', label: t('clReminders.invoices') },
+  { key: 'total_outstanding', label: t('clReminders.outstanding'), align: 'right', format: 'money' as const },
+  { key: 'total_interest', label: t('clReminders.interest'), align: 'right', format: 'money' as const },
+  { key: 'actions', label: '', align: 'right' },
+])
+async function printReminder(rem: CityLedgerReminder): Promise<void> {
+  if (pid.value === null) return
+  error.value = null
+  try {
+    await openPdf(documentPath.reminder(pid.value, rem.id))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
 const adjustmentColumns = computed<Column<CityLedgerAdjustment>[]>(() => [
   { key: 'business_date', label: t('clAccount.date'), format: 'date' as const },
   { key: 'number', label: t('clAccount.number') },
@@ -590,6 +611,18 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <template #cell-actions="{ row }">
             <Button v-if="row.kind === 'CREDIT_NOTE'" type="button" variant="outline" size="sm" :data-testid="`print-${row.number}`" @click="printCreditNote(row)">{{ t('clAccount.print') }}</Button>
             <Button v-if="row.status === 'POSTED' && can(row.kind === 'WRITE_OFF' ? 'cityledger.write_off' : 'cityledger.credit_note')" type="button" variant="outline" size="sm" :data-testid="`void-${row.number}`" @click="startVoidAdjustment(row)">{{ t('clAccount.void') }}</Button>
+          </template>
+        </DataTable>
+      </CardContent>
+    </Card>
+
+    <Card v-if="reminders.length" class="mb-4" data-testid="reminders">
+      <CardHeader><CardTitle>{{ t('clReminders.title') }}</CardTitle></CardHeader>
+      <CardContent>
+        <DataTable :columns="reminderColumns" :rows="reminders" row-key="id" :row-test-id="(x) => `reminder-${x.number}`" :caption="t('clReminders.title')">
+          <template #cell-items="{ row }">{{ row.items.map((i) => i.invoice_number).join(', ') }}</template>
+          <template #cell-actions="{ row }">
+            <Button type="button" variant="outline" size="sm" :data-testid="`print-${row.number}`" @click="printReminder(row)">{{ t('clReminders.print') }}</Button>
           </template>
         </DataTable>
       </CardContent>

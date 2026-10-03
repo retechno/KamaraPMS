@@ -3469,6 +3469,130 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/overdue:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getCityLedgerOverdue
+      summary: The invoices past their due date, by company (cityledger.read)
+      description: |
+        Issued invoices that still owe something and whose due date is before the current business date, with the days overdue, the bucket (1-30, 31-60,
+        61-90, 90+), what each owes (total less receipts, credit notes and write-offs), the interest the late fee of the property comes to (shown only,
+        never posted) and the last reminder that listed the invoice. `next_level` is the level of the reminder a company is due (1 to 3).
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerOverdue" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/settings/late-fee:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getCityLedgerLateFee
+      summary: The late fee shown on overdue invoices (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The late fee; a rate of 0 is off.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerLateFee" }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setCityLedgerLateFee
+      summary: Set the late fee (cityledger.reminder)
+      description: A percent per month (0 to 100, at most 4 decimals) on what an overdue invoice owes, a month being 30 days, after some days of grace (0 to 365). It only changes the interest the overdue list shows.
+      tags: [city-ledger]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CityLedgerLateFee" }
+      responses:
+        "200":
+          description: The late fee.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerLateFee" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}/reminders:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listCityLedgerReminders
+      summary: The reminders sent to a company, newest first (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The reminders with the invoices they listed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReminderList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCityLedgerReminder
+      summary: Record a payment reminder sent to a company (cityledger.reminder)
+      description: |
+        Level 1, 2 or 3, listing the given invoices (every overdue invoice of the company by default) with what each owes today and the interest, frozen.
+        It does not touch the books. 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE` (`context.invoice_ids`).
+      tags: [city-ledger]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCityLedgerReminderRequest" }
+      responses:
+        "201":
+          description: The reminder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReminder" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/reminders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerReminder
+      summary: One reminder with its invoices (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The reminder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerReminder" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/reminders/{id}/reminder.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerReminderPdf
+      summary: The letter of a payment reminder as PDF (cityledger.read)
+      tags: [documents]
+      responses:
+        "200":
+          description: The letter (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/city-ledger/invoices/{id}:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9051,6 +9175,94 @@ components:
         account_id: { type: integer, format: int64, description: An expense account or the allowance for doubtful accounts 1240. }
         reason: { type: string, maxLength: 500 }
         approval: { $ref: "#/components/schemas/Approval" }
+    CityLedgerLateFee:
+      type: object
+      required: [monthly_rate, grace_days]
+      additionalProperties: false
+      properties:
+        monthly_rate: { type: string, description: "A percent per month, 0 to 100; 0 is off." }
+        grace_days: { type: integer, minimum: 0, maximum: 365 }
+    CityLedgerReminderRef:
+      type: object
+      required: [number, date, level]
+      properties:
+        number: { type: string }
+        date: { $ref: "#/components/schemas/Date" }
+        level: { type: integer }
+    CityLedgerOverdueInvoice:
+      type: object
+      required: [invoice_id, invoice_number, invoice_date, due_date, days_overdue, bucket, total, outstanding, interest, last_reminder]
+      properties:
+        invoice_id: { type: integer, format: int64 }
+        invoice_number: { type: string }
+        invoice_date: { $ref: "#/components/schemas/Date" }
+        due_date: { $ref: "#/components/schemas/Date" }
+        days_overdue: { type: integer }
+        bucket: { type: string, enum: ["1-30", "31-60", "61-90", "90+"] }
+        total: { type: string }
+        outstanding: { type: string, description: "Total less receipts, credit notes and write-offs." }
+        interest: { type: string, description: "The late fee as of today; shown only." }
+        last_reminder: { oneOf: [{ $ref: "#/components/schemas/CityLedgerReminderRef" }, { type: "null" }] }
+    CityLedgerOverdueCompany:
+      type: object
+      required: [company_id, code, name, outstanding, interest, oldest_days_overdue, next_level, invoices]
+      properties:
+        company_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        outstanding: { type: string }
+        interest: { type: string }
+        oldest_days_overdue: { type: integer }
+        next_level: { type: integer, minimum: 1, maximum: 3, description: The level of the reminder the company is due. }
+        invoices: { type: array, items: { $ref: "#/components/schemas/CityLedgerOverdueInvoice" } }
+    CityLedgerOverdue:
+      type: object
+      required: [as_of, outstanding, interest, late_fee, companies]
+      properties:
+        as_of: { $ref: "#/components/schemas/Date" }
+        outstanding: { type: string }
+        interest: { type: string }
+        late_fee: { $ref: "#/components/schemas/CityLedgerLateFee" }
+        companies: { type: array, items: { $ref: "#/components/schemas/CityLedgerOverdueCompany" } }
+    CityLedgerReminderItem:
+      type: object
+      required: [invoice_id, invoice_number, invoice_date, due_date, outstanding, days_overdue, interest]
+      properties:
+        invoice_id: { type: integer, format: int64 }
+        invoice_number: { type: string }
+        invoice_date: { $ref: "#/components/schemas/Date" }
+        due_date: { $ref: "#/components/schemas/Date" }
+        outstanding: { type: string }
+        days_overdue: { type: integer }
+        interest: { type: string }
+    CityLedgerReminder:
+      type: object
+      required: [id, number, company_id, level, reminder_date, total_outstanding, total_interest, created_at, created_by, items]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string, description: "REM000001." }
+        company_id: { type: integer, format: int64 }
+        level: { type: integer, minimum: 1, maximum: 3 }
+        reminder_date: { $ref: "#/components/schemas/Date" }
+        note: { type: string }
+        total_outstanding: { type: string }
+        total_interest: { type: string }
+        created_at: { type: string, format: date-time }
+        created_by: { type: [integer, "null"], format: int64 }
+        items: { type: array, items: { $ref: "#/components/schemas/CityLedgerReminderItem" } }
+    CityLedgerReminderList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/CityLedgerReminder" } }
+    CreateCityLedgerReminderRequest:
+      type: object
+      required: [level]
+      additionalProperties: false
+      properties:
+        level: { type: integer, minimum: 1, maximum: 3 }
+        note: { type: string, maxLength: 500 }
+        invoice_ids: { type: array, maxItems: 200, items: { type: integer, format: int64 }, description: The overdue invoices to list; every overdue invoice of the company when empty. }
     CityLedgerStatementLine:
       type: object
       required: [date, kind, number, description, status, debit, credit, balance]

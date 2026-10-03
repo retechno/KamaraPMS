@@ -77,3 +77,19 @@ type CityLedgerReceipt struct {
 	CreatedBy       *int64
 	ApprovedBy      *int64
 }
+
+type CityLedgerReminder struct {
+	ID               int64
+	TenantID         int64
+	PropertyID       int64
+	ReminderNumber   string
+	CompanyID        int64
+	Level            int16
+	ReminderDate     civil.Date
+	Note             *string
+	TotalOutstanding decimal.Decimal
+	TotalInterest    decimal.Decimal
+	IdempotencyKey   *string
+	CreatedAt        time.Time
+	CreatedBy        *int64
+}
