@@ -659,11 +659,14 @@ func (q *Queries) LastPostedNight(ctx context.Context, arg LastPostedNightParams
 const listArrivals = `-- name: ListArrivals :many
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
-       g.first_name AS guest_first_name, g.last_name AS guest_last_name
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       l.requested_bed_type_id, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
 LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
+LEFT JOIN bed_types rbt ON rbt.property_id = l.property_id AND rbt.id = l.requested_bed_type_id
+LEFT JOIN bed_types abt ON abt.property_id = r.property_id AND abt.id = r.bed_type_id
 LEFT JOIN room_housekeeping hk ON hk.property_id = l.property_id AND hk.room_id = l.room_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.arrival_date = $3
@@ -677,23 +680,26 @@ type ListArrivalsParams struct {
 }
 
 type ListArrivalsRow struct {
-	LineID             int64
-	ReservationID      int64
-	ConfirmationNumber string
-	ReservationVersion int32
-	RoomTypeID         int64
-	RoomTypeCode       string
-	RoomID             *int64
-	RoomNumber         *string
-	HousekeepingStatus *string
-	ArrivalDate        civil.Date
-	DepartureDate      civil.Date
-	AdultCount         int16
-	ChildCount         int16
-	LineGuestID        *int64
-	BookerID           *int64
-	GuestFirstName     *string
-	GuestLastName      *string
+	LineID               int64
+	ReservationID        int64
+	ConfirmationNumber   string
+	ReservationVersion   int32
+	RoomTypeID           int64
+	RoomTypeCode         string
+	RoomID               *int64
+	RoomNumber           *string
+	HousekeepingStatus   *string
+	ArrivalDate          civil.Date
+	DepartureDate        civil.Date
+	AdultCount           int16
+	ChildCount           int16
+	LineGuestID          *int64
+	BookerID             *int64
+	GuestFirstName       *string
+	GuestLastName        *string
+	RequestedBedTypeID   *int64
+	RequestedBedTypeCode *string
+	RoomBedTypeCode      *string
 }
 
 // CONFIRMED rooms arriving on a date (the arrivals list).
@@ -724,6 +730,9 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			&i.BookerID,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.RequestedBedTypeID,
+			&i.RequestedBedTypeCode,
+			&i.RoomBedTypeCode,
 		); err != nil {
 			return nil, err
 		}

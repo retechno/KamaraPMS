@@ -473,6 +473,25 @@ func requireActiveType(t reservationsdb.GetRoomTypesForBookingRow) error {
 	return nil
 }
 
+// requireBedType checks a requested bed type: it must exist in the property, and be active unless it is the one the line
+// already has (a request made while the bed type was on offer stays valid after it is switched off). A nil request is no request.
+func (s *Service) requireBedType(ctx context.Context, tenantID, propertyID int64, field string, next, current *int64) error {
+	if next == nil || (current != nil && *current == *next) {
+		return nil
+	}
+	rows, err := s.q(ctx).ListBedTypeBriefs(ctx, reservationsdb.ListBedTypeBriefsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*next}})
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return apperr.Invalid("the bed type is invalid", fieldErr(field, "BED_TYPE_NOT_FOUND", "the bed type does not exist in this property"))
+	}
+	if !rows[0].IsActive {
+		return apperr.Invalid("the bed type is invalid", fieldErr(field, "BED_TYPE_INACTIVE", "choose an active bed type"))
+	}
+	return nil
+}
+
 func (s *Service) requireGuest(ctx context.Context, id *int64) error {
 	if id == nil {
 		return nil

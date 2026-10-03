@@ -104,6 +104,7 @@ export const navigation: NavSection[] = [
       { id: 'users', to: '/setup/users', adminOnly: true },
       { id: 'roles', to: '/setup/roles', adminOnly: true },
       { id: 'roomTypes', to: '/setup/room-types' },
+      { id: 'bedTypes', to: '/setup/bed-types' },
       { id: 'roomsSetup', to: '/setup/rooms' },
       { id: 'taxesService', to: '/setup/taxes' },
       { id: 'chargeCodes', to: '/setup/charge-codes' },

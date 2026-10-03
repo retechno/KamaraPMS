@@ -81,9 +81,11 @@ func (q *Queries) ListActiveRoomBlocks(ctx context.Context, arg ListActiveRoomBl
 }
 
 const listFreeRooms = `-- name: ListFreeRooms :many
-SELECT r.id AS room_id, r.room_number, r.floor, r.building, coalesce(h.status, 'DIRTY')::text AS housekeeping_status
+SELECT r.id AS room_id, r.room_number, r.floor, r.building, coalesce(h.status, 'DIRTY')::text AS housekeeping_status,
+       r.bed_type_id, bt.code AS bed_type_code, bt.name AS bed_type_name
 FROM rooms r
 LEFT JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
+LEFT JOIN bed_types bt ON bt.property_id = r.property_id AND bt.id = r.bed_type_id
 WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = $3 AND r.is_active
   AND NOT EXISTS (SELECT 1 FROM room_blocks b
                    WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
@@ -115,6 +117,9 @@ type ListFreeRoomsRow struct {
 	Floor              *string
 	Building           *string
 	HousekeepingStatus string
+	BedTypeID          *int64
+	BedTypeCode        *string
+	BedTypeName        *string
 }
 
 // Free specific rooms of a type for [arrival, departure), with their housekeeping status.
@@ -141,6 +146,9 @@ func (q *Queries) ListFreeRooms(ctx context.Context, arg ListFreeRoomsParams) ([
 			&i.Floor,
 			&i.Building,
 			&i.HousekeepingStatus,
+			&i.BedTypeID,
+			&i.BedTypeCode,
+			&i.BedTypeName,
 		); err != nil {
 			return nil, err
 		}

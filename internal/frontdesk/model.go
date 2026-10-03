@@ -153,6 +153,10 @@ type Arrival struct {
 	RoomTypeCode       string `json:"room_type_code"`
 	RoomID             *int64 `json:"room_id"`
 	RoomNumber         string `json:"room_number,omitempty"`
+	// RequestedBedType is the bed type the guest asked for; RoomBedType is the bed type of the assigned room (each empty when none).
+	RequestedBedTypeID   *int64 `json:"requested_bed_type_id"`
+	RequestedBedTypeCode string `json:"requested_bed_type_code,omitempty"`
+	RoomBedTypeCode      string `json:"room_bed_type_code,omitempty"`
 	// HousekeepingStatus is the current status of the assigned room (empty when no room is assigned).
 	HousekeepingStatus string     `json:"housekeeping_status,omitempty"`
 	ArrivalDate        civil.Date `json:"arrival_date"`

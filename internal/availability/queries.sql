@@ -82,9 +82,11 @@ ORDER BY s.id;
 
 -- Free specific rooms of a type for [arrival, departure), with their housekeeping status.
 -- name: ListFreeRooms :many
-SELECT r.id AS room_id, r.room_number, r.floor, r.building, coalesce(h.status, 'DIRTY')::text AS housekeeping_status
+SELECT r.id AS room_id, r.room_number, r.floor, r.building, coalesce(h.status, 'DIRTY')::text AS housekeeping_status,
+       r.bed_type_id, bt.code AS bed_type_code, bt.name AS bed_type_name
 FROM rooms r
 LEFT JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
+LEFT JOIN bed_types bt ON bt.property_id = r.property_id AND bt.id = r.bed_type_id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.room_type_id = @room_type_id AND r.is_active
   AND NOT EXISTS (SELECT 1 FROM room_blocks b
                    WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'

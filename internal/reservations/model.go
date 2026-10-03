@@ -64,15 +64,17 @@ type NightOverride struct {
 
 // LineInput is one room line of a booking.
 type LineInput struct {
-	RoomTypeID int64           `json:"room_type_id"`
-	RatePlanID int64           `json:"rate_plan_id"`
-	Arrival    civil.Date      `json:"arrival_date"`
-	Departure  civil.Date      `json:"departure_date"`
-	Adults     int             `json:"adult_count"`
-	Children   int             `json:"child_count"`
-	GuestID    *int64          `json:"guest_id,omitempty"`
-	RoomID     *int64          `json:"room_id,omitempty"`
-	Overrides  []NightOverride `json:"nightly_overrides,omitempty"`
+	RoomTypeID int64      `json:"room_type_id"`
+	RatePlanID int64      `json:"rate_plan_id"`
+	Arrival    civil.Date `json:"arrival_date"`
+	Departure  civil.Date `json:"departure_date"`
+	Adults     int        `json:"adult_count"`
+	Children   int        `json:"child_count"`
+	GuestID    *int64     `json:"guest_id,omitempty"`
+	RoomID     *int64     `json:"room_id,omitempty"`
+	// BedTypeID is the bed type the guest asks for: a request, not a reservation of inventory.
+	BedTypeID *int64          `json:"bed_type_id,omitempty"`
+	Overrides []NightOverride `json:"nightly_overrides,omitempty"`
 }
 
 // CreateInput creates a draft, optionally confirming it in the same transaction.
@@ -117,7 +119,9 @@ type LinePatch struct {
 	RatePlanID *int64
 	Adults     *int
 	Children   *int
-	Overrides  []NightOverride
+	// BedTypeID changes the requested bed type; 0 takes the request off.
+	BedTypeID *int64
+	Overrides []NightOverride
 }
 
 // ListFilter narrows the reservation list.
@@ -220,6 +224,9 @@ type Line struct {
 	Status             string      `json:"status"`
 	RoomTypeID         int64       `json:"room_type_id"`
 	RoomTypeCode       string      `json:"room_type_code"`
+	BedTypeID          *int64      `json:"bed_type_id"`
+	BedTypeCode        string      `json:"bed_type_code,omitempty"`
+	BedTypeName        string      `json:"bed_type_name,omitempty"`
 	RoomID             *int64      `json:"room_id"`
 	RoomNumber         string      `json:"room_number,omitempty"`
 	RatePlanID         int64       `json:"rate_plan_id"`

@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { HousekeepingStatus, Room, RoomType } from '@/api/types'
+import type { BedType, HousekeepingStatus, Room, RoomType } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -22,6 +22,7 @@ const property = usePropertyStore()
 
 const rooms = ref<Room[]>([])
 const types = ref<RoomType[]>([])
+const beds = ref<BedType[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const saving = ref(false)
@@ -29,6 +30,9 @@ const editing = ref<Room | 'new' | null>(null)
 const typeFilter = ref('')
 
 const canManage = computed(() => auth.can('room.manage', property.currentId))
+const bedById = computed(() => new Map(beds.value.map((b) => [b.id, b])))
+// The beds a room can be given: the active ones, and the one it has when that has been switched off since.
+const bedChoices = computed(() => beds.value.filter((b) => b.is_active || (editing.value !== 'new' && editing.value?.bed_type_id === b.id)))
 const typeById = computed(() => new Map(types.value.map((t) => [t.id, t])))
 const assignable = computed(() => types.value.filter((t) => t.is_active || (editing.value !== 'new' && editing.value?.room_type_id === t.id)))
 const visible = computed(() => {
@@ -39,6 +43,7 @@ const visible = computed(() => {
 const columns = computed<Column<Room>[]>(() => [
   { key: 'room_number', label: t('rooms.room'), sortable: true, filter: 'text' },
   { key: 'type', label: t('rooms.type'), sortable: true, filter: 'select', filterValue: (r) => typeById.value.get(r.room_type_id)?.code, sortValue: (r) => typeById.value.get(r.room_type_id)?.code },
+  { key: 'bed', label: t('bedTypes.bed'), sortable: true, filter: 'select', filterValue: (r) => bedById.value.get(r.bed_type_id ?? 0)?.name, sortValue: (r) => bedById.value.get(r.bed_type_id ?? 0)?.name },
   { key: 'floor', label: t('rooms.floor'), sortable: true, filter: 'select' },
   { key: 'building', label: t('rooms.building'), filter: 'select' },
   { key: 'status', label: t('setup.status'), filter: 'select', filterValue: (r) => (r.is_active ? t('setup.active') : t('setup.inactive')) },
@@ -50,6 +55,7 @@ const blank = () => ({
   room_type_id: 0,
   floor: '',
   building: '',
+  bed_type_id: 0,
   is_active: true,
   initial_housekeeping_status: 'DIRTY' as HousekeepingStatus,
 })
@@ -66,19 +72,22 @@ async function load(): Promise<void> {
   const propertyId = property.currentId
   rooms.value = []
   types.value = []
+  beds.value = []
   loaded.value = false
   if (propertyId === null) return
   try {
-    const [t, r] = await Promise.all([
+    const [t, r, bedList] = await Promise.all([
       fetchAll((cursor) =>
         api.GET('/api/v1/properties/{propertyId}/room-types', { params: { path: { propertyId }, query: { limit: 200, cursor } } }),
       ),
       fetchAll((cursor) =>
         api.GET('/api/v1/properties/{propertyId}/rooms', { params: { path: { propertyId }, query: { limit: 200, cursor } } }),
       ),
+      api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId } } }),
     ])
     types.value = t
     rooms.value = r
+    beds.value = bedList.data?.data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -93,7 +102,7 @@ function startNew(): void {
 }
 
 function startEdit(r: Room): void {
-  Object.assign(form, blank(), { ...r, floor: r.floor ?? '', building: r.building ?? '' })
+  Object.assign(form, blank(), { ...r, floor: r.floor ?? '', building: r.building ?? '', bed_type_id: r.bed_type_id ?? 0 })
   error.value = null
   editing.value = r
 }
@@ -112,6 +121,7 @@ async function save(): Promise<void> {
           room_type_id: Number(form.room_type_id),
           floor: form.floor || undefined,
           building: form.building || undefined,
+          bed_type_id: Number(form.bed_type_id) || undefined,
           is_active: form.is_active,
           initial_housekeeping_status: form.initial_housekeeping_status,
         },
@@ -124,6 +134,7 @@ async function save(): Promise<void> {
           room_type_id: Number(form.room_type_id),
           floor: form.floor,
           building: form.building,
+          bed_type_id: Number(form.bed_type_id),
           is_active: form.is_active,
         },
       })
@@ -182,6 +193,14 @@ watch(() => property.currentId, load, { immediate: true })
               </NativeSelect>
             </template>
           </FormField>
+          <FormField :label="t('bedTypes.bed')" :error="fieldError('bed_type_id')">
+            <template #default="{ id, invalid }">
+              <NativeSelect :id="id" v-model.number="form.bed_type_id" name="bed_type_id" :aria-invalid="invalid">
+                <option :value="0">{{ t('bedTypes.none') }}</option>
+                <option v-for="b in bedChoices" :key="b.id" :value="b.id">{{ b.name }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
           <FormField :label="t('rooms.floor')">
             <template #default="{ id }"><Input :id="id" v-model="form.floor" name="floor" /></template>
           </FormField>
@@ -215,6 +234,7 @@ watch(() => property.currentId, load, { immediate: true })
       <DataTable v-else-if="rooms.length" :columns="columns" :rows="visible" row-key="id" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('rooms.title')">
         <template #cell-room_number="{ row }"><b>{{ row.room_number }}</b></template>
         <template #cell-type="{ row }">{{ typeById.get(row.room_type_id)?.code }}</template>
+        <template #cell-bed="{ row }">{{ bedById.get(row.bed_type_id ?? 0)?.name ?? '—' }}</template>
         <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
         <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
       </DataTable>

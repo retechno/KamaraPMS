@@ -54,6 +54,20 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	for _, pl := range plans {
 		planCode[pl.ID] = pl.Code
 	}
+	bedIDs := make([]int64, 0, len(lines))
+	for _, l := range lines {
+		if l.RequestedBedTypeID != nil {
+			bedIDs = append(bedIDs, *l.RequestedBedTypeID)
+		}
+	}
+	beds, err := q.ListBedTypeBriefs(ctx, reservationsdb.ListBedTypeBriefsParams{TenantID: tenantID, PropertyID: propertyID, Ids: bedIDs})
+	if err != nil {
+		return Reservation{}, err
+	}
+	bedBy := map[int64]reservationsdb.ListBedTypeBriefsRow{}
+	for _, b := range beds {
+		bedBy[b.ID] = b
+	}
 	rooms, err := q.ListRoomNumbers(ctx, reservationsdb.ListRoomNumbersParams{PropertyID: propertyID, Ids: roomIDs})
 	if err != nil {
 		return Reservation{}, err
@@ -131,6 +145,10 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 			DepartureDate: l.DepartureDate, Nights: l.ArrivalDate.DaysUntil(l.DepartureDate), AdultCount: int(l.AdultCount),
 			ChildCount: int(l.ChildCount), CancelledAt: l.CancelledAt, CancellationReason: deref(l.CancellationReason), NoShowAt: l.NoShowAt,
 			NightlyRates: ratesBy[l.ID],
+		}
+		if l.RequestedBedTypeID != nil {
+			line.BedTypeID = l.RequestedBedTypeID
+			line.BedTypeCode, line.BedTypeName = bedBy[*l.RequestedBedTypeID].Code, bedBy[*l.RequestedBedTypeID].Name
 		}
 		if line.NightlyRates == nil {
 			line.NightlyRates = []NightRate{}

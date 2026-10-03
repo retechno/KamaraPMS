@@ -375,6 +375,54 @@ export interface paths {
         patch: operations["updateRoomType"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/bed-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The bed types of the property, in their sort order
+         * @description The catalogue a room and a reservation line pick from (King, Queen, Double, Twin, Single, ...). Every property starts with
+         *     these five; the owner adds more or switches some off. Not paginated.
+         */
+        get: operations["listBedTypes"];
+        put?: never;
+        /** Add a bed type (room.manage) */
+        post: operations["createBedType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bed-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename a bed type, reorder it or switch it off (room.manage). The code cannot change.
+         * @description A bed type that rooms use can be switched off: the rooms and the reservation lines that have it keep it, it is only
+         *     no longer offered for a new choice (422 `BED_TYPE_INACTIVE` when someone chooses it).
+         */
+        patch: operations["updateBedType"];
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/rooms": {
         parameters: {
             query?: never;
@@ -1396,6 +1444,7 @@ export interface paths {
         /**
          * Post a signed adjustment on the current business date (folio.adjust, needs approval)
          * @description Needs the `approval` block (docs 06-api.md §14.1). The engine runs on a signed amount, so taxes and service charges follow the sign. A replay of the same Idempotency-Key returns the stored item and does not ask for approval again.
+         *     **An adjustment corrects what is already posted on the folio.** The charge code must have a posted net above zero on this folio (its charges, adjustments and reversals added up; a reversed charge nets out): otherwise 409 `ADJUSTMENT_NOTHING_POSTED`, and the thing to do is post a charge. A credit cannot take that net below zero: 409 `ADJUSTMENT_EXCEEDS_POSTED` with `context.posted`. An increase of what is posted is allowed. A ROOM code is adjustable once the night audit (or the room charges screen) has posted room charges on the folio.
          */
         post: operations["postFolioAdjustment"];
         delete?: never;
@@ -4900,6 +4949,34 @@ export interface components {
             sort_order?: number;
             is_active?: boolean;
         };
+        BedType: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            sort_order: number;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        BedTypePage: {
+            data: components["schemas"]["BedType"][];
+        };
+        CreateBedTypeRequest: {
+            /** @description 1-20 characters, A-Z 0-9 - _ (upper-cased). */
+            code: string;
+            name: string;
+            sort_order?: number;
+            /** @default true */
+            is_active: boolean;
+        };
+        PatchBedTypeRequest: {
+            name?: string;
+            sort_order?: number;
+            is_active?: boolean;
+        };
         Room: {
             /** Format: int64 */
             id: number;
@@ -4908,6 +4985,11 @@ export interface components {
             room_number: string;
             floor?: string;
             building?: string;
+            /**
+             * Format: int64
+             * @description The bed type of the room (null when none is recorded).
+             */
+            bed_type_id: number | null;
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -4924,6 +5006,11 @@ export interface components {
             room_type_id: number;
             floor?: string;
             building?: string;
+            /**
+             * Format: int64
+             * @description A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off).
+             */
+            bed_type_id?: number;
             /** @default true */
             is_active: boolean;
             initial_housekeeping_status?: components["schemas"]["HousekeepingStatus"];
@@ -4934,6 +5021,11 @@ export interface components {
             room_type_id?: number;
             floor?: string;
             building?: string;
+            /**
+             * Format: int64
+             * @description The bed type of the room; 0 takes it off.
+             */
+            bed_type_id?: number;
             is_active?: boolean;
         };
         /**
@@ -5001,6 +5093,8 @@ export interface components {
             room_type_id: number;
             room_type_code: string;
             room_type_name: string;
+            /** @description The bed type of the room (absent when none). */
+            bed_type_code?: string;
             status: components["schemas"]["HousekeepingStatus"];
             /** Format: date-time */
             status_updated_at: string;
@@ -5521,6 +5615,11 @@ export interface components {
             floor?: string;
             building?: string;
             housekeeping_status: string;
+            /** Format: int64 */
+            bed_type_id?: number | null;
+            /** @description The bed type of the room */
+            bed_type_code?: string;
+            bed_type_name?: string;
         };
         NightOverride: {
             date: components["schemas"]["Date"];
@@ -5548,6 +5647,11 @@ export interface components {
              * @description Only with confirm; must be a room of the booked type.
              */
             room_id?: number;
+            /**
+             * Format: int64
+             * @description The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`.
+             */
+            bed_type_id?: number;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         CreateReservationRequest: {
@@ -5621,6 +5725,11 @@ export interface components {
             rate_plan_id?: number;
             adult_count?: number;
             child_count?: number;
+            /**
+             * Format: int64
+             * @description The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed
+             */
+            bed_type_id?: number;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AssignRoomRequest: {
@@ -5759,6 +5868,13 @@ export interface components {
             /** Format: int64 */
             room_type_id: number;
             room_type_code: string;
+            /**
+             * Format: int64
+             * @description The bed type the guest asked for.
+             */
+            bed_type_id?: number | null;
+            bed_type_code?: string;
+            bed_type_name?: string;
             /** Format: int64 */
             room_id: number | null;
             room_number?: string;
@@ -6332,6 +6448,12 @@ export interface components {
             /** Format: int64 */
             room_id: number | null;
             room_number?: string;
+            /** Format: int64 */
+            requested_bed_type_id?: number | null;
+            /** @description The bed type the guest asked for (absent when none). */
+            requested_bed_type_code?: string;
+            /** @description The bed type of the assigned room (absent when none or no room is assigned). */
+            room_bed_type_code?: string;
             /** @description The current housekeeping status of the assigned room (absent when no room is assigned). */
             housekeeping_status?: string;
             arrival_date: components["schemas"]["Date"];
@@ -9143,6 +9265,93 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBedTypes: {
+        parameters: {
+            query?: {
+                /** @description Only active or only inactive bed types. */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bed types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BedTypePage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createBedType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBedTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description The created bed type. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BedType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBedType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchBedTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated bed type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BedType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

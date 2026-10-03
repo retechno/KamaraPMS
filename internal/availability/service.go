@@ -254,6 +254,10 @@ type FreeRoom struct {
 	Floor              string `json:"floor,omitempty"`
 	Building           string `json:"building,omitempty"`
 	HousekeepingStatus string `json:"housekeeping_status"`
+	// The bed type of the room, to match it with what a guest asked for (empty when the room has none).
+	BedTypeID   *int64 `json:"bed_type_id"`
+	BedTypeCode string `json:"bed_type_code,omitempty"`
+	BedTypeName string `json:"bed_type_name,omitempty"`
 }
 
 // FreeRooms lists the free specific rooms of a type for [arrival, departure).
@@ -265,7 +269,13 @@ func (s *Service) FreeRooms(ctx context.Context, tenantID, propertyID, roomTypeI
 	}
 	out := make([]FreeRoom, len(rows))
 	for i, r := range rows {
-		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus}
+		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus, BedTypeID: r.BedTypeID}
+		if r.BedTypeCode != nil {
+			out[i].BedTypeCode = *r.BedTypeCode
+		}
+		if r.BedTypeName != nil {
+			out[i].BedTypeName = *r.BedTypeName
+		}
 		if r.Floor != nil {
 			out[i].Floor = *r.Floor
 		}

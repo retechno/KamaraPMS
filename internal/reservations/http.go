@@ -325,6 +325,7 @@ type patchRoomRequest struct {
 	RatePlanID *int64          `json:"rate_plan_id"`
 	Adults     *int            `json:"adult_count"`
 	Children   *int            `json:"child_count"`
+	BedTypeID  *int64          `json:"bed_type_id"`
 	Overrides  []NightOverride `json:"nightly_overrides"`
 }
 

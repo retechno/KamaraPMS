@@ -71,6 +71,7 @@ export const router = createRouter({
       component: () => import('@/views/rooms/RoomTypesView.vue'),
       meta: { title: 'Room types' },
     },
+    { path: '/setup/bed-types', name: 'bed-types', component: () => import('@/views/rooms/BedTypesView.vue'), meta: { title: 'Bed types' } },
     { path: '/setup/rooms', name: 'rooms', component: () => import('@/views/rooms/RoomsView.vue'), meta: { title: 'Rooms' } },
     { path: '/guests', name: 'guests', component: () => import('@/views/guests/GuestsView.vue'), meta: { title: 'Guests' } },
     {
