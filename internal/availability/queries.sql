@@ -45,6 +45,12 @@ JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
 WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
   AND r.room_type_id = @room_type_id;
 
+-- The active rooms of each room type, for the availability calendar (blocked = this minus sellable).
+-- name: CountActiveRoomsByType :many
+SELECT room_type_id, count(*)::int AS rooms FROM rooms
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active
+GROUP BY room_type_id;
+
 -- name: GetRoomForCheck :one
 SELECT id, room_type_id, room_number, is_active FROM rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

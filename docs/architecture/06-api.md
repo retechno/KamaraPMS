@@ -321,6 +321,11 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Idempotency (implemented):** the key and a body hash are stored on the reservation; a replay returns the reservation, a different body with the same key is 422 `IDEMPOTENCY_KEY_REUSED`.
 - **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks (L2, L3) before the sequence.
 
+**GET `{P}/availability/calendar?from&to`** (`reservation.read`)
+- **Purpose:** the availability of every active room type for each night of `[from, to)`, as a grid: `sellable`, `blocked`, `held`, `available` (`sellable - held`, negative when oversold) and `occupancy_percent` per type and night, and `totals` per night. At most 62 days.
+- **Rules:** read-only and advisory (only booking decides); the numbers are the availability engine's own (`NightInventory`), so the calendar can never disagree with a booking attempt. Inactive rooms count nowhere; blocked rooms are `blocked`, not `sellable`.
+- **TX:** R
+
 **GET `{P}/tape-chart?from&to`** (`reservation.read`)
 - **Purpose:** the read-only tape chart: active rooms with the CONFIRMED and CHECKED_IN lines and active blocks touching `[from, to)`, plus lines without a room per room type. At most 62 days.
 - **TX:** R

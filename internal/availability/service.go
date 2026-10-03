@@ -309,6 +309,19 @@ func (s *Service) SellableTypes(ctx context.Context, tenantID, propertyID int64)
 	return out, nil
 }
 
+// ActiveRoomCounts returns the number of active rooms of each room type.
+func (s *Service) ActiveRoomCounts(ctx context.Context, tenantID, propertyID int64) (map[int64]int, error) {
+	rows, err := s.q(ctx).CountActiveRoomsByType(ctx, availabilitydb.CountActiveRoomsByTypeParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]int, len(rows))
+	for _, r := range rows {
+		out[r.RoomTypeID] = int(r.Rooms)
+	}
+	return out, nil
+}
+
 // SellablePlan is an active rate plan as offered by a search.
 type SellablePlan struct {
 	ID        int64

@@ -11,6 +11,43 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const countActiveRoomsByType = `-- name: CountActiveRoomsByType :many
+SELECT room_type_id, count(*)::int AS rooms FROM rooms
+WHERE tenant_id = $1 AND property_id = $2 AND is_active
+GROUP BY room_type_id
+`
+
+type CountActiveRoomsByTypeParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type CountActiveRoomsByTypeRow struct {
+	RoomTypeID int64
+	Rooms      int32
+}
+
+// The active rooms of each room type, for the availability calendar (blocked = this minus sellable).
+func (q *Queries) CountActiveRoomsByType(ctx context.Context, arg CountActiveRoomsByTypeParams) ([]CountActiveRoomsByTypeRow, error) {
+	rows, err := q.db.Query(ctx, countActiveRoomsByType, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveRoomsByTypeRow{}
+	for rows.Next() {
+		var i CountActiveRoomsByTypeRow
+		if err := rows.Scan(&i.RoomTypeID, &i.Rooms); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRoomForCheck = `-- name: GetRoomForCheck :one
 SELECT id, room_type_id, room_number, is_active FROM rooms
 WHERE tenant_id = $1 AND property_id = $2 AND id = $3

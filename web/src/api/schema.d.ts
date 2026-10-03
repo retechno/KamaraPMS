@@ -1342,6 +1342,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/availability/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Availability of every room type for each night of [from, to) (reservation.read)
+         * @description Read-only and advisory, like a search: only booking decides. The window is after `from` and at most 62 days.
+         *     Per active room type and night: `sellable` (active rooms without an OOO/OOS block), `blocked` (active rooms that
+         *     are blocked), `held` (rooms held by CONFIRMED lines and open stays, counted per room type as the availability
+         *     engine does), `available` (`sellable - held`, negative when the type is oversold) and the occupancy in percent.
+         *     `totals` adds the types up per night.
+         */
+        get: operations["getAvailabilityCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tape-chart": {
         parameters: {
             query?: never;
@@ -6013,6 +6039,38 @@ export interface components {
             room_type_id: number;
             room_type_code: string;
             bookings: components["schemas"]["TapeBooking"][];
+        };
+        CalendarNight: {
+            date: components["schemas"]["Date"];
+            sellable: number;
+            blocked: number;
+            held: number;
+            /** @description Sellable minus held; negative when oversold. */
+            available: number;
+            /** @description Held in percent of sellable */
+            occupancy_percent: string;
+        };
+        AvailabilityCalendar: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            room_types: {
+                /** Format: int64 */
+                room_type_id: number;
+                code: string;
+                name: string;
+                /** @description The active rooms of the type. */
+                rooms_total: number;
+                nights: components["schemas"]["CalendarNight"][];
+            }[];
+            /** @description The whole property, one entry per night. */
+            totals: {
+                date: components["schemas"]["Date"];
+                sellable: number;
+                blocked: number;
+                held: number;
+                available: number;
+                occupancy_percent: string;
+            }[];
         };
         TapeChart: {
             from: components["schemas"]["Date"];
@@ -10981,6 +11039,35 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAvailabilityCalendar: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description Exclusive. */
+                to: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The calendar. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityCalendar"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
