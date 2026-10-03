@@ -31,7 +31,7 @@ const types = [{ id: 10, code: 'DLX', is_active: true }, { id: 11, code: 'STD', 
 
 const ALL = ['payment.post', 'reservation.read', 'reservation.create', 'reservation.update', 'reservation.cancel', 'reservation.reinstate', 'nightaudit.no_show']
 
-function mountView(res: object = reservation(), permissions = ALL) {
+function mountView(res: object = reservation(), permissions = ALL, answers: Record<string, unknown> = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -39,6 +39,7 @@ function mountView(res: object = reservation(), permissions = ALL) {
   property.currentId = 7
   property.clock = { business_date: '2026-10-01' } as never
   GET = vi.fn(async (path: string) => {
+    for (const [suffix, answer] of Object.entries(answers)) if (path.endsWith(suffix)) return { data: answer }
     if (path.endsWith('/room-types')) return { data: { data: types } }
     if (path.endsWith('/availability/rooms')) return { data: { data: [{ room_id: 21, room_number: '101', housekeeping_status: 'CLEAN' }] } }
     return { data: res }
@@ -228,5 +229,47 @@ describe('ReservationDetailView', () => {
     expect(w.get('[data-testid=summary]').text()).toContain('Perkiraan total (kamar aktif)')
     expect(w.get('header [data-testid=cancel]').text()).toBe('Batalkan reservasi')
     setLocale('en')
+  })
+
+  it('shows the bed that was asked for, changes it and takes it off', async () => {
+    const beds = { data: [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }] }
+    const w = mountView(reservation({ rooms: [line({ bed_type_id: 5, bed_type_code: 'KING', bed_type_name: 'King' })] }), ALL, { '/bed-types': beds })
+    await flushPromises()
+    expect(w.get('[data-testid=bed-4]').text()).toContain('King')
+    expect(w.findAll('select[name=bed_4] option').map((o) => o.text())).toEqual(['No preference', 'King', 'Twin'])
+    expect((w.get('[data-testid=save-bed-4]').element as HTMLButtonElement).disabled).toBe(true) // nothing changed yet
+    PATCH.mockResolvedValue({ data: reservation({ rooms: [line({ bed_type_id: 6, bed_type_code: 'TWIN', bed_type_name: 'Twin' })] }) })
+    await w.get('select[name=bed_4]').setValue(6)
+    await w.get('[data-testid=bed-form-4]').trigger('submit')
+    await flushPromises()
+    expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+      params: { path: { propertyId: 7, id: 1, lineId: 4 } }, body: { version: 2, bed_type_id: 6 },
+    })
+    expect(w.get('[data-testid=bed-4]').text()).toContain('Twin')
+    await w.get('select[name=bed_4]').setValue(0)
+    await w.get('[data-testid=bed-form-4]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[1]?.[1].body).toMatchObject({ bed_type_id: 0 })
+  })
+
+  it('lists the rooms with the bed that was asked for first, and marks them', async () => {
+    const free = { data: [
+      { room_id: 21, room_number: '101', housekeeping_status: 'CLEAN', bed_type_id: 6, bed_type_name: 'Twin' },
+      { room_id: 22, room_number: '102', housekeeping_status: 'CLEAN', bed_type_id: 5, bed_type_name: 'King' },
+      { room_id: 23, room_number: '103', housekeeping_status: 'DIRTY' },
+    ] }
+    const w = mountView(reservation({ rooms: [line({ bed_type_id: 5, bed_type_code: 'KING', bed_type_name: 'King' })] }), ALL, { '/availability/rooms': free })
+    await flushPromises()
+    await w.get('[data-testid=assign-4]').trigger('click')
+    await flushPromises()
+    expect(w.findAll('select[name=assign_room] option').map((o) => o.text())).toEqual(['102 · CLEAN · King ✓ matches the request', '101 · CLEAN · Twin', '103 · DIRTY'])
+    expect((w.get('select[name=assign_room]').element as HTMLSelectElement).value).toBe('22') // the matching room is proposed
+  })
+
+  it('offers no bed change to a role that cannot update the reservation', async () => {
+    const w = mountView(reservation({ rooms: [line({ bed_type_id: 5, bed_type_code: 'KING', bed_type_name: 'King' })] }), ['reservation.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=bed-4]').text()).toContain('King')
+    expect(w.find('[data-testid=bed-form-4]').exists()).toBe(false)
   })
 })

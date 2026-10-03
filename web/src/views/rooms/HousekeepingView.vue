@@ -219,6 +219,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
     <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
       <template #cell-room_number="{ row: r }">
         <b>{{ r.room_number }}</b>
+        <Badge v-if="r.bed_type_code" variant="outline" class="ml-1.5" data-testid="bed">{{ r.bed_type_code }}</Badge>
         <small v-if="r.floor || r.building" class="ml-1 text-muted-foreground">{{ [r.building, r.floor && t('housekeeping.floorWord', { floor: r.floor })].filter(Boolean).join(', ') }}</small>
       </template>
       <template #cell-status="{ row: r }"><StatusBadge domain="housekeeping" :status="r.status" :label="label(r.status)" data-testid="status" /></template>

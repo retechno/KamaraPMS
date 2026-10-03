@@ -133,8 +133,13 @@ There are no endpoints to open or close days directly. That only happens through
 - **Rules:** deactivation is rejected while there are active rooms of the type or future CONFIRMED lines.
 - **TX:** master pattern
 
+**GET / POST `{P}/bed-types`, PATCH `{P}/bed-types/{id}`** (write: `room.manage`; GET: any access to the property)
+- **Request:** `{ code, name, sort_order?, is_active? }`; PATCH: `{ name?, sort_order?, is_active? }` (the code is fixed). GET takes `active` and is not paginated; it lists in `sort_order, code`.
+- **Rules:** codes are unique per property (409 `CODE_TAKEN`). A bed type can be switched off while rooms use it: they keep it, but choosing it anew is 422 `BED_TYPE_INACTIVE`. A bed type of another property is 404 `BED_TYPE_NOT_FOUND` (path) or 422 `BED_TYPE_NOT_FOUND` (field). Every property starts with King, Queen, Double, Twin and Single.
+- **TX:** master pattern (no row locks: nothing is counted per bed type)
+
 **GET / POST `{P}/rooms`, GET / PATCH `{P}/rooms/{id}`** (write: `room.manage`)
-- **Request:** `{ room_number, room_type_id, floor?, building?, is_active?, initial_housekeeping_status? }`
+- **Request:** `{ room_number, room_type_id, floor?, building?, bed_type_id?, is_active?, initial_housekeeping_status? }`; PATCH `bed_type_id: 0` takes the bed type off.
 - **Rules:**
   - Creating a room also creates its `room_housekeeping` row (default DIRTY).
   - Changing `room_type_id` or setting `is_active = false` is rejected if there's an open segment or a future CONFIRMED assigned line, or if either type would be oversold.
@@ -309,7 +314,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `{P}/reservations`** ⓘ (`reservation.create`)
 - **Purpose:** create a draft, optionally confirming it at once.
-- **Request:** `{ guest_id?, source, market?, special_request?, remarks?, rooms: [{ room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, guest_id?, room_id?, nightly_overrides?: [{date, amount, discount_amount?}] }], confirm?: false }`
+- **Request:** `{ guest_id?, source, market?, special_request?, remarks?, rooms: [{ room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, guest_id?, room_id?, bed_type_id?, nightly_overrides?: [{date, amount, discount_amount?}] }], confirm?: false }`
 - **Response 201:** the reservation (as in GET).
 - **Validation:** Step 14 §14.2 "Create". Overrides need `reservation.override_rate`. `room_id` requires `confirm: true`.
 - **Rules:** creates the DRAFT and snapshots the nightly rows. `confirm: true` runs **confirm** in the same transaction.
@@ -357,8 +362,8 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **PATCH `{P}/reservations/{id}/rooms/{lineId}`** (`reservation.update`)
 - **Purpose:** amend a line.
-- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, nightly_overrides? }`
-- **Rules:** only DRAFT or CONFIRMED lines. Availability is re-checked excluding the line itself. Surviving nights keep their snapshot.
+- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, bed_type_id?, nightly_overrides? }`; `bed_type_id: 0` takes the request off.
+- **Rules:** only DRAFT or CONFIRMED lines. `bed_type_id` is the bed the guest asks for (see §5: 422 `BED_TYPE_NOT_FOUND` / `BED_TYPE_INACTIVE`); a request that was valid stays valid when it is not changed, even if the bed type was switched off since. It does not touch availability. Availability is re-checked excluding the line itself. Surviving nights keep their snapshot.
 - **TX:** `T[L1, L2 (old and new type), L3 (assigned room), L4]`
 
 **POST `…/rooms/{lineId}/cancel`**

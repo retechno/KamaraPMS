@@ -5,7 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { AvailabilitySearch, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import type { AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -34,7 +34,8 @@ const picked = ref<{ type: TypeOffer; plan: PlanOffer } | null>(null)
 const guestQuery = ref('')
 const guestResults = ref<Guest[]>([])
 const guest = ref<Guest | null>(null)
-const form = reactive({ source: 'PHONE' as ReservationSource, confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
+const beds = ref<BedType[]>([])
+const form = reactive({ source: 'PHONE' as ReservationSource, bedTypeId: 0, confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
 const companies = ref<Company[]>([])
 const groups = ref<Group[]>([])
 const chosenGroup = computed(() => groups.value.find((g) => g.id === form.groupId))
@@ -137,11 +138,24 @@ async function loadLinks(): Promise<void> {
   }
 }
 
+// The beds a guest can ask for. Optional: a role that cannot list them books without.
+async function loadBeds(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || beds.value.length) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId }, query: { active: true } } })
+    beds.value = data?.data ?? []
+  } catch {
+    beds.value = []
+  }
+}
+
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
   idempotencyKey = newIdempotencyKey()
   error.value = null
   void loadLinks()
+  void loadBeds()
 }
 
 async function findGuests(): Promise<void> {
@@ -177,6 +191,7 @@ async function book(): Promise<void> {
           departure_date: search.departure,
           adult_count: search.adults,
           child_count: search.children,
+          bed_type_id: form.bedTypeId || undefined,
         }],
       },
     })
@@ -278,6 +293,14 @@ async function book(): Promise<void> {
               <template #default="{ id }">
                 <NativeSelect :id="id" v-model="form.source" name="source">
                   <option v-for="s in SOURCES" :key="s" :value="s">{{ s }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="beds.length" :label="t('bedTypes.requested')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="form.bedTypeId" name="bed_type_id">
+                  <option :value="0">{{ t('bedTypes.noPreference') }}</option>
+                  <option v-for="b in beds" :key="b.id" :value="b.id">{{ b.name }}</option>
                 </NativeSelect>
               </template>
             </FormField>

@@ -174,4 +174,37 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     expect(inSheet('[data-testid=upgrade-note]')).toBe(true)
   })
+
+  it('shows the bed the guest asked for, and whether the assigned room has it', async () => {
+    const { w } = mountView(undefined, [
+      arrival({ requested_bed_type_id: 5, requested_bed_type_code: 'KING', room_id: 21, room_number: '101', room_bed_type_code: 'KING', housekeeping_status: 'CLEAN' }),
+      arrival({ reservation_room_id: 5, reservation_id: 10, confirmation_number: 'RES000010', requested_bed_type_id: 5, requested_bed_type_code: 'KING', room_id: 22, room_number: '102', room_bed_type_code: 'TWIN', housekeeping_status: 'CLEAN' }),
+      arrival({ reservation_room_id: 6, reservation_id: 11, confirmation_number: 'RES000011' }),
+    ])
+    await flushPromises()
+    expect(w.get('[data-testid=bed-4]').text()).toContain('King'.toUpperCase())
+    expect(w.get('[data-testid=bed-match-4]').attributes('title')).toBe('matches the request')
+    expect(w.get('[data-testid=bed-match-5]').attributes('title')).toBe('another bed than asked')
+    expect(w.find('[data-testid=bed-6]').exists()).toBe(false) // no request: no badge
+  })
+
+  it('proposes a room with the requested bed first at check-in', async () => {
+    const { w } = mountView(undefined, [arrival({ requested_bed_type_id: 5, requested_bed_type_code: 'KING' })])
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => {
+      if (path.endsWith('/availability/rooms')) {
+        return { data: { data: [
+          { room_id: 21, room_number: '101', housekeeping_status: 'CLEAN', bed_type_id: 6, bed_type_name: 'Twin' },
+          { room_id: 22, room_number: '102', housekeeping_status: 'CLEAN', bed_type_id: 5, bed_type_name: 'King' },
+        ] } }
+      }
+      if (path.endsWith('/room-types')) return { data: { data: types } }
+      return { data: {} }
+    })
+    await w.get('[data-testid=open-4]').trigger('click')
+    await flushPromises()
+    const options = Array.from(document.body.querySelectorAll('select[name=room] option')).map((o) => o.textContent)
+    expect(options).toEqual(['102 · CLEAN · King ✓ matches the request', '101 · CLEAN · Twin'])
+    expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('22')
+  })
 })

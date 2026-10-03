@@ -30,6 +30,8 @@ const search = {
 }
 const siti = { id: 3, code: 'GST000001', first_name: 'Siti', last_name: 'Nurhaliza' }
 
+const beds = [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }]
+
 function mountView(permissions = ['reservation.read', 'reservation.create']) {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -37,7 +39,7 @@ function mountView(permissions = ['reservation.read', 'reservation.create']) {
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-10-02' } as never
-  GET = vi.fn(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : search }))
+  GET = vi.fn(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : search }))
   POST = vi.fn().mockResolvedValue({ data: { id: 42 } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   const push = vi.spyOn(router, 'push')
@@ -73,6 +75,24 @@ describe('NewReservationView', () => {
     expect(w.get('[data-testid=pick-DLX-HALF]').attributes('disabled')).toBeDefined() // incomplete grid
     expect(w.get('[data-testid=offer-DLX-HALF]').get('[data-testid=missing]').text()).toContain('1 night(s) without a rate')
     expect(w.get('[data-testid=pick-STD-BAR]').attributes('disabled')).toBeDefined() // sold out
+  })
+
+  it('sends the bed that was asked for with the room', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    expect(w.findAll('select[name=bed_type_id] option').map((o) => o.text())).toEqual(['No preference', 'King', 'Twin'])
+    await w.get('select[name=bed_type_id]').setValue(6)
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body.rooms[0]).toMatchObject({ room_type_id: 10, bed_type_id: 6 })
   })
 
   it('books with a booker and an Idempotency-Key, then opens the reservation', async () => {
@@ -213,4 +233,5 @@ describe('NewReservationView: company and group', () => {
     expect(m.w.find('select[name=company_id]').exists()).toBe(false)
     expect(m.w.find('select[name=booking_group_id]').exists()).toBe(false)
   })
+
 })

@@ -5,7 +5,8 @@
 //	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
-// floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states.
+// floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
+// (Standard: Twin or Queen, Superior: Double, Deluxe and Suite: King). Rooms that exist without a bed type get one.
 //
 // rates: creates the rate plan (Room Only, sold through the ROOM charge code) when the property lacks it and fills the
 // grid of every room type for the next days from the business date: a weekday price and a higher weekend price
@@ -210,8 +211,18 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 		typeID[spec.code] = t.ID
 	}
 
+	// The bed types of the property, by code (a property that was created before they existed has them from the migration).
+	bedList, err := rm.ListBedTypes(ctx, propertyID, nil)
+	if err != nil {
+		return err
+	}
+	bedID := map[string]int64{}
+	for _, b := range bedList {
+		bedID[b.Code] = b.ID
+	}
+
 	// Rooms that exist, by number.
-	have := map[string]bool{}
+	have := map[string]rooms.Room{}
 	var after int64
 	for {
 		page, err := rm.ListRooms(ctx, propertyID, after, rooms.RoomFilter{}, 200)
@@ -219,7 +230,7 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 			return err
 		}
 		for _, r := range page {
-			have[r.RoomNumber] = true
+			have[r.RoomNumber] = r
 			after = r.ID
 		}
 		if len(page) < 200 {
@@ -227,12 +238,24 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 		}
 	}
 
-	created, skipped := 0, 0
+	created, skipped, bedsSet := 0, 0, 0
 	for f := 1; f <= floors; f++ {
 		for n := 1; n <= perFloor; n++ {
 			number := strconv.Itoa(f*100 + n)
-			if have[number] {
+			var bed *int64
+			if id, ok := bedID[bedCodeAt(n)]; ok {
+				bed = &id
+			}
+			if room, ok := have[number]; ok {
 				skipped++
+				if room.BedTypeID == nil && bed != nil {
+					bedsSet++
+					if !dryRun {
+						if _, err := rm.UpdateRoom(ctx, propertyID, room.ID, rooms.RoomPatch{BedTypeID: bed}); err != nil {
+							return fmt.Errorf("room %s: %w", number, err)
+						}
+					}
+				}
 				continue
 			}
 			if dryRun {
@@ -240,7 +263,7 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 				continue
 			}
 			_, err := rm.CreateRoom(ctx, propertyID, rooms.CreateRoomInput{
-				RoomInput:           rooms.RoomInput{RoomTypeID: typeID[typeCodeAt(n)], RoomNumber: number, Floor: strconv.Itoa(f), IsActive: true},
+				RoomInput:           rooms.RoomInput{RoomTypeID: typeID[typeCodeAt(n)], RoomNumber: number, Floor: strconv.Itoa(f), BedTypeID: bed, IsActive: true},
 				InitialHousekeeping: states[(f*7+n)%len(states)],
 			})
 			if err != nil {
@@ -253,7 +276,7 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 	if dryRun {
 		verb = "would create"
 	}
-	fmt.Printf("%s %d rooms in %s/%s (%d already existed)\n", verb, created, e.tenant.Code, propertyCode, skipped)
+	fmt.Printf("%s %d rooms in %s/%s (%d already existed, %d of them got a bed type)\n", verb, created, e.tenant.Code, propertyCode, skipped, bedsSet)
 	return nil
 }
 
@@ -344,6 +367,22 @@ func seedRates(e *env, propertyCode, planCode string, days int, dryRun bool) err
 	}
 	fmt.Printf("wrote %d prices in %s/%s (plan %s)\n", written, e.tenant.Code, propertyCode, planCode)
 	return nil
+}
+
+// bedCodeAt is the bed type of the room at a position on a floor: the first two Standard rooms have Twin beds, the other
+// two a Queen; Superior rooms a Double; Deluxe rooms and the Suite a King.
+func bedCodeAt(position int) string {
+	switch typeCodeAt(position) {
+	case "STD":
+		if position <= 2 {
+			return "TWIN"
+		}
+		return "QUEEN"
+	case "SUP":
+		return "DOUBLE"
+	default:
+		return "KING"
+	}
 }
 
 func typeCodeAt(position int) string {
