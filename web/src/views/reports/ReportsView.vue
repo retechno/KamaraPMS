@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -43,7 +43,10 @@ function query(format?: 'csv'): Record<string, string | undefined> {
   if (def.value.input === 'range') Object.assign(q, { from: range.from, to: range.to })
   if (def.value.input === 'date') q.date = range.date
   if (def.value.input === 'hours') q.min_hours = String(Math.max(0, Math.trunc(Number(range.minHours) || 0)))
-  if (format) q.format = format
+  if (format) {
+    q.format = format
+    q.lang = currentLocale() // the column names of the CSV follow the language of the page
+  }
   return q
 }
 

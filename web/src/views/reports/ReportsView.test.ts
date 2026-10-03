@@ -75,7 +75,7 @@ describe('ReportsView', () => {
     GET.mockResolvedValue({ data: 'charge_type,charge_code\nROOM,ROOM\n' })
     await w.get('[data-testid=csv]').trigger('click')
     await flushPromises()
-    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ parseAs: 'text', params: { query: { from: '2026-09-24', to: '2026-09-30', format: 'csv' } } })
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ parseAs: 'text', params: { query: { from: '2026-09-24', to: '2026-09-30', format: 'csv', lang: 'en' } } })
     expect(click).toHaveBeenCalledTimes(1)
   })
 

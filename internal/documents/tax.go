@@ -23,7 +23,7 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 	if err != nil {
 		return Document{}, err
 	}
-	m := func(v decimal.Decimal) string { return money(v, dc.decimals) }
+	m := func(v decimal.Decimal) string { return dc.lang.Money(v, dc.decimals) }
 	var rows [][]string
 	for _, l := range lines {
 		rows = append(rows, []string{l.ChargeCode, l.ChargeName, rateLabel(l.Rate), strconv.Itoa(l.Items), m(l.Base), m(l.Tax)})
@@ -31,13 +31,13 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 	rows = append(rows, []string{"", "Total", "", "", m(base), m(tax)})
 	pairs := [][2]string{
 		{"Tax", prof.TaxName}, {"Authority", prof.Authority}, {"Registration number", prof.RegistrationNumber}, {"Currency", dc.prop.CurrencyCode},
-		{"Period", fmtDate(start) + " - " + fmtDate(end)}, {"Due", fmtDate(due)},
+		{"Period", dc.lang.Date(start) + " - " + dc.lang.Date(end)}, {"Due", dc.lang.Date(due)},
 	}
 	subtitle := "Worksheet (not filed)"
 	var notes []string
 	if ret != nil {
 		subtitle = ret.Number
-		pairs = append(pairs, [2]string{"Filed on", fmtDate(ret.FiledOn)}, [2]string{"Filing reference", ret.FilingReference})
+		pairs = append(pairs, [2]string{"Filed on", dc.lang.Date(ret.FiledOn)}, [2]string{"Filing reference", ret.FilingReference})
 		if ret.Status == taxfiling.ReturnVoided {
 			notes = append(notes, "VOIDED: "+ret.VoidReason)
 		}
@@ -45,7 +45,7 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 			if p.Status != "POSTED" {
 				continue
 			}
-			line := "Paid " + m(p.Amount) + " on " + fmtDate(p.PaymentDate) + " (" + p.PaymentMethod + ")"
+			line := "Paid " + m(p.Amount) + " on " + dc.lang.Date(p.PaymentDate) + " (" + p.PaymentMethod + ")"
 			if p.ReferenceNumber != "" {
 				line += ", reference " + p.ReferenceNumber
 			}
@@ -57,7 +57,7 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 		notes = append(notes, "Outstanding: "+m(ret.Outstanding))
 	}
 	d := FinancialDoc{
-		Hotel: dc.hotel, Printed: dc.printed, Title: title, Subtitle: subtitle, Pairs: pairs,
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Title: title, Subtitle: subtitle, Pairs: pairs,
 		Cols: []col{{24, "Charge code", "L"}, {56, "Charged as", "L"}, {20, "Rate", "R"}, {16, "Items", "R"}, {32, "Taxable base", "R"}, {32, "Tax", "R"}},
 		Rows: rows, Bold: map[int]bool{len(rows) - 1: true}, Notes: notes,
 	}
@@ -123,7 +123,7 @@ func (h *Handler) registerTax(mux *http.ServeMux) {
 		if err != nil {
 			return apperr.Invalid("the request is invalid", apperr.FieldError{Field: "period", Code: "INVALID_DATE", Message: "the first day of the month, as YYYY-MM-DD"})
 		}
-		doc, err := h.svc.TaxWorksheetPDF(r.Context(), pid, taxID, period)
+		doc, err := h.svc.TaxWorksheetPDF(langCtx(r), pid, taxID, period)
 		if err != nil {
 			return err
 		}

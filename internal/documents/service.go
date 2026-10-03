@@ -57,6 +57,7 @@ type docContext struct {
 	prop     tenancy.Property
 	decimals int32
 	printed  string
+	lang     Lang
 }
 
 func (s *Service) context(ctx context.Context, propertyID int64) (docContext, error) {
@@ -68,10 +69,11 @@ func (s *Service) context(ctx context.Context, propertyID int64) (docContext, er
 	if err != nil {
 		return docContext{}, err
 	}
+	lang := LangFrom(ctx)
 	return docContext{
 		hotel: Hotel{Name: prop.Name, Address: prop.Address, City: prop.City, Country: prop.CountryCode, Phone: prop.Phone, Email: prop.Email, TaxID: prop.TaxID, Footer: prop.DocumentFooter},
-		prop:  prop, decimals: prop.CurrencyDecimals,
-		printed: "Printed " + fmtTime(s.clock.Now(), prop.Location()) + "  ·  business date " + fmtDate(day.BusinessDate),
+		prop:  prop, decimals: prop.CurrencyDecimals, lang: lang,
+		printed: lang.T("Printed ") + lang.Time(s.clock.Now(), prop.Location()) + lang.T("  ·  business date ") + lang.Date(day.BusinessDate),
 	}, nil
 }
 
@@ -90,7 +92,7 @@ func (s *Service) party(ctx context.Context, guestID *int64, fallback string) Pa
 	p.Address, p.City, p.Email, p.Phone = v.Address, v.City, v.Email, v.Phone
 	p.Nationality, p.IDType, p.IDNumber = v.Nationality, v.IDType, v.IDNumber
 	if v.DateOfBirth != nil {
-		p.DateOfBirth = fmtDate(*v.DateOfBirth)
+		p.DateOfBirth = LangFrom(ctx).Date(*v.DateOfBirth)
 	}
 	return p
 }
@@ -143,7 +145,7 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 		return Document{}, err
 	}
 	d := InvoiceData{
-		Hotel: dc.hotel, Printed: dc.printed, Number: f.FolioNumber, Final: f.Status == "CLOSED", Currency: dc.prop.CurrencyCode,
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: f.FolioNumber, Final: f.Status == "CLOSED", Currency: dc.prop.CurrencyCode,
 		Booking: res.ConfirmationNumber, Arrival: res.ArrivalDate, Departure: res.DepartureDate,
 		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)),
 	}
@@ -172,7 +174,7 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	for _, it := range f.Items {
 		debit, credit := dec(it.Debit), dec(it.Credit)
 		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: it.Description,
-			Debit: money(debit, dc.decimals), Credit: money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
+			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
 		switch it.TransactionType {
 		case "PAYMENT", "REFUND":
 			payments = payments.Add(credit.Sub(debit))
@@ -195,11 +197,11 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 			}
 		}
 	}
-	d.Summary = append(d.Summary, Amount{"Charges (net)", money(net, dc.decimals)})
+	d.Summary = append(d.Summary, Amount{"Charges (net)", dc.lang.Money(net, dc.decimals)})
 	for _, typ := range []string{"SERVICE_CHARGE", "TAX"} {
 		for _, k := range order {
 			if k.typ == typ {
-				d.Summary = append(d.Summary, Amount{parts[k].label, money(parts[k].amount, dc.decimals)})
+				d.Summary = append(d.Summary, Amount{parts[k].label, dc.lang.Money(parts[k].amount, dc.decimals)})
 			}
 		}
 	}
@@ -208,7 +210,7 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	if balance.IsNegative() {
 		label = "Balance (credit)"
 	}
-	d.Summary = append(d.Summary, Amount{"Total charges", money(charges, dc.decimals)}, Amount{"Payments received", money(payments, dc.decimals)}, Amount{label, money(balance, dc.decimals)})
+	d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
 	pdf, err := RenderInvoice(d)
 	if err != nil {
 		return Document{}, err
@@ -239,7 +241,7 @@ func (s *Service) RegistrationCard(ctx context.Context, propertyID, stayID int64
 		name = strings.TrimSpace(st.Guest.FirstName + " " + st.Guest.LastName)
 	}
 	d := CardData{
-		Hotel: dc.hotel, Printed: dc.printed, Number: st.Stay.StayNumber, Booking: res.ConfirmationNumber, Guest: s.party(ctx, &st.Stay.GuestID, name),
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: st.Stay.StayNumber, Booking: res.ConfirmationNumber, Guest: s.party(ctx, &st.Stay.GuestID, name),
 		RoomType: st.Line.RoomTypeCode, Arrival: st.Stay.ArrivalDate, Departure: st.Stay.DepartureDate, Nights: st.Stay.ArrivalDate.DaysUntil(st.Stay.DepartureDate),
 		CheckInTime: dc.prop.CheckInTime.String(), CheckOutTime: dc.prop.CheckOutTime.String(), Adults: st.Stay.AdultCount, Children: st.Stay.ChildCount,
 		Currency: dc.prop.CurrencyCode, SpecialNeeds: res.SpecialRequest, Terms: registrationTerms,
@@ -255,7 +257,7 @@ func (s *Service) RegistrationCard(ctx context.Context, propertyID, stayID int64
 		}
 	}
 	if len(st.NightlyRates) > 0 {
-		d.NightlyRate = money(dec(st.NightlyRates[0].Amount), dc.decimals)
+		d.NightlyRate = dc.lang.Money(dec(st.NightlyRates[0].Amount), dc.decimals)
 	}
 	for _, g := range st.Guests {
 		d.Companions = append(d.Companions, strings.TrimSpace(g.FirstName+" "+g.LastName))
@@ -286,13 +288,13 @@ func (s *Service) Receipt(ctx context.Context, propertyID, paymentID int64) (Doc
 		return Document{}, err
 	}
 	d := ReceiptData{
-		Hotel: dc.hotel, Printed: dc.printed, Number: pay.PaymentNumber, Refund: pay.PaymentType == "REFUND", Voided: pay.Status == "VOIDED",
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: pay.PaymentNumber, Refund: pay.PaymentType == "REFUND", Voided: pay.Status == "VOIDED",
 		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)), Folio: f.FolioNumber, Booking: res.ConfirmationNumber, Date: pay.BusinessDate,
 		At: pay.PaidAt.In(dc.prop.Location()).Format("15:04"), Method: methodLabel(pay.PaymentMethod), Reference: pay.ReferenceNumber,
-		Currency: dc.prop.CurrencyCode, Amount: money(dec(pay.Amount), dc.decimals), Remarks: pay.Remarks,
+		Currency: dc.prop.CurrencyCode, Amount: dc.lang.Money(dec(pay.Amount), dc.decimals), Remarks: pay.Remarks,
 	}
 	if pay.VoidedAt != nil {
-		d.VoidNote = "Cancelled on " + fmtTime(*pay.VoidedAt, dc.prop.Location())
+		d.VoidNote = "Cancelled on " + dc.lang.Time(*pay.VoidedAt, dc.prop.Location())
 		if pay.VoidReason != "" {
 			d.VoidNote += ": " + pay.VoidReason
 		}
@@ -334,7 +336,7 @@ func (s *Service) Confirmation(ctx context.Context, propertyID, reservationID in
 		return Document{}, err
 	}
 	d := ConfirmationData{
-		Hotel: dc.hotel, Printed: dc.printed, Number: res.ConfirmationNumber, Status: statusLabel(res.DisplayStatus), Guest: s.party(ctx, res.GuestID, guestName(res.Guest)),
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: res.ConfirmationNumber, Status: statusLabel(res.DisplayStatus), Guest: s.party(ctx, res.GuestID, guestName(res.Guest)),
 		Booked: res.ReservationDate, Currency: dc.prop.CurrencyCode, CheckInTime: dc.prop.CheckInTime.String(), CheckOutTime: dc.prop.CheckOutTime.String(), Request: res.SpecialRequest,
 	}
 	total := decimal.Zero
@@ -344,9 +346,9 @@ func (s *Service) Confirmation(ctx context.Context, propertyID, reservationID in
 		}
 		total = total.Add(l.Estimate.Total)
 		d.Rooms = append(d.Rooms, BookedRoom{RoomType: l.RoomTypeCode, RatePlan: l.RatePlanCode, Arrival: l.ArrivalDate, Departure: l.DepartureDate, Nights: l.Nights,
-			Guests: strconv.Itoa(l.AdultCount) + " adult(s)" + childText(l.ChildCount), Estimate: money(l.Estimate.Total, dc.decimals)})
+			Guests: strconv.Itoa(l.AdultCount) + " adult(s)" + childText(l.ChildCount), Estimate: dc.lang.Money(l.Estimate.Total, dc.decimals)})
 	}
-	d.Total = money(total, dc.decimals)
+	d.Total = dc.lang.Money(total, dc.decimals)
 	pdf, err := RenderConfirmation(d)
 	if err != nil {
 		return Document{}, err
@@ -395,24 +397,24 @@ func (s *Service) CompanyStatement(ctx context.Context, propertyID, companyID in
 	period := "All movements"
 	switch {
 	case from != nil && to != nil:
-		period = fmtDate(*from) + " to " + fmtDate(*to)
+		period = dc.lang.Date(*from) + " to " + dc.lang.Date(*to)
 	case from != nil:
-		period = "From " + fmtDate(*from)
+		period = "From " + dc.lang.Date(*from)
 	case to != nil:
-		period = "Up to " + fmtDate(*to)
+		period = "Up to " + dc.lang.Date(*to)
 	}
 	zero := dec("0")
 	side := func(v string) string {
 		if d := dec(v); d.Equal(zero) {
 			return ""
 		}
-		return money(dec(v), dc.decimals)
+		return dc.lang.Money(dec(v), dc.decimals)
 	}
 	d := StatementData{
-		Hotel: dc.hotel, Printed: dc.printed, Company: Party{Name: co.Name, Address: co.Address, City: co.City}, Code: co.Code, TaxID: co.TaxID,
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Company: Party{Name: co.Name, Address: co.Address, City: co.City}, Code: co.Code, TaxID: co.TaxID,
 		Period: period, Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode,
-		Opening: money(dec(st.OpeningBalance), dc.decimals), Debit: money(dec(st.TotalDebit), dc.decimals), Credit: money(dec(st.TotalCredit), dc.decimals),
-		Closing: money(dec(st.ClosingBalance), dc.decimals), AgingAsOf: fmtDate(ag.AsOf),
+		Opening: dc.lang.Money(dec(st.OpeningBalance), dc.decimals), Debit: dc.lang.Money(dec(st.TotalDebit), dc.decimals), Credit: dc.lang.Money(dec(st.TotalCredit), dc.decimals),
+		Closing: dc.lang.Money(dec(st.ClosingBalance), dc.decimals), AgingAsOf: dc.lang.Date(ag.AsOf),
 	}
 	for _, l := range st.Lines {
 		desc := l.Description
@@ -421,11 +423,11 @@ func (s *Service) CompanyStatement(ctx context.Context, propertyID, companyID in
 		}
 		d.Lines = append(d.Lines, StatementLine{
 			Date: l.Date, Number: l.Number, Description: desc, Reference: l.Reference, Status: l.Status,
-			Debit: side(l.Debit), Credit: side(l.Credit), Balance: money(dec(l.Balance), dc.decimals),
+			Debit: side(l.Debit), Credit: side(l.Credit), Balance: dc.lang.Money(dec(l.Balance), dc.decimals),
 		})
 	}
 	for _, b := range ag.Buckets {
-		d.Aging = append(d.Aging, [2]string{b.Label + " days", money(dec(b.Amount), dc.decimals)})
+		d.Aging = append(d.Aging, [2]string{b.Label + " days", dc.lang.Money(dec(b.Amount), dc.decimals)})
 	}
 	pdf, err := RenderStatement(d)
 	if err != nil {
@@ -450,23 +452,23 @@ func (s *Service) CompanyInvoice(ctx context.Context, propertyID, invoiceID int6
 		return Document{}, err
 	}
 	d := CompanyInvoiceData{
-		Hotel: dc.hotel, Printed: dc.printed, Number: inv.InvoiceNumber, Voided: inv.Status == cityledger.InvoiceVoided,
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: inv.InvoiceNumber, Voided: inv.Status == cityledger.InvoiceVoided,
 		Company: Party{Name: co.Name, Address: co.Address, City: co.City}, TaxID: co.TaxID, Date: inv.InvoiceDate, Due: inv.DueDate,
-		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: money(dec(inv.Total), dc.decimals), Paid: money(dec(inv.Paid), dc.decimals), Balance: money(dec(inv.Outstanding), dc.decimals), Notes: inv.Notes,
+		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: dc.lang.Money(dec(inv.Total), dc.decimals), Paid: dc.lang.Money(dec(inv.Paid), dc.decimals), Balance: dc.lang.Money(dec(inv.Outstanding), dc.decimals), Notes: inv.Notes,
 	}
 	if inv.VoidedAt != nil {
-		d.VoidNote = "Cancelled on " + fmtTime(*inv.VoidedAt, dc.prop.Location())
+		d.VoidNote = "Cancelled on " + dc.lang.Time(*inv.VoidedAt, dc.prop.Location())
 		if inv.VoidReason != "" {
 			d.VoidNote += ": " + inv.VoidReason
 		}
 	}
 	for _, l := range inv.Lines {
-		line := CompanyInvoiceLine{Guest: l.GuestName, Rooms: l.RoomNumbers, Folio: l.FolioNumber, Reference: l.Reference, Amount: money(dec(l.Amount), dc.decimals)}
+		line := CompanyInvoiceLine{Guest: l.GuestName, Rooms: l.RoomNumbers, Folio: l.FolioNumber, Reference: l.Reference, Amount: dc.lang.Money(dec(l.Amount), dc.decimals)}
 		if l.CheckedOutAt != nil {
-			line.CheckedOut = fmtDate(civil.DateOf(l.CheckedOutAt.In(dc.prop.Location())))
+			line.CheckedOut = dc.lang.Date(civil.DateOf(l.CheckedOutAt.In(dc.prop.Location())))
 		}
 		if l.ArrivalDate != nil && l.DepartureDate != nil {
-			line.Stay = fmtDate(*l.ArrivalDate) + " - " + fmtDate(*l.DepartureDate)
+			line.Stay = dc.lang.Date(*l.ArrivalDate) + " - " + dc.lang.Date(*l.DepartureDate)
 		}
 		d.Lines = append(d.Lines, line)
 	}

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { documentPath, openPdf } from './documents'
 
 let authFetch = vi.fn()
@@ -24,6 +25,20 @@ describe('openPdf', () => {
     const req = authFetch.mock.calls[0]?.[0] as Request
     expect(new URL(req.url, 'http://x').pathname).toBe('/api/v1/properties/7/folios/12/invoice.pdf')
     expect(tab.location.href).toBe('blob:doc')
+  })
+
+  it('asks for the document in the language of the page', async () => {
+    authFetch.mockImplementation(() => Promise.resolve(new Response('%PDF-1.3', { status: 200 })))
+    await openPdf(documentPath.taxWorksheet(7, 2, '2026-09-01'))
+    expect(new URL((authFetch.mock.calls[0]?.[0] as Request).url).searchParams.get('lang')).toBe('en')
+    expect(new URL((authFetch.mock.calls[0]?.[0] as Request).url).searchParams.get('tax_id')).toBe('2') // the other parameters stay
+    try {
+      await setLocale('id')
+      await openPdf(documentPath.invoice(7, 12))
+      expect(new URL((authFetch.mock.calls[1]?.[0] as Request).url).searchParams.get('lang')).toBe('id')
+    } finally {
+      await setLocale('en')
+    }
   })
 
   it('closes the tab and throws the problem when the server refuses', async () => {

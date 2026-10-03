@@ -40,7 +40,7 @@ func (h *Handler) serve(render func(ctx context.Context, propertyID, id int64) (
 		if err != nil || id < 1 {
 			return apperr.NotFound("NOT_FOUND", "no such document")
 		}
-		doc, err := render(r.Context(), pid, id)
+		doc, err := render(langCtx(r), pid, id)
 		if err != nil {
 			return err
 		}
@@ -61,7 +61,7 @@ func (h *Handler) statement(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	doc, err := h.svc.CompanyStatement(r.Context(), pid, id, from, to)
+	doc, err := h.svc.CompanyStatement(langCtx(r), pid, id, from, to)
 	if err != nil {
 		return err
 	}

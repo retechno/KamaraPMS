@@ -28,6 +28,7 @@ type Amount struct{ Label, Value string }
 // change and says so.
 type InvoiceData struct {
 	Hotel     Hotel
+	Lang      Lang
 	Printed   string
 	Number    string
 	Final     bool
@@ -48,12 +49,12 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 	if !d.Final {
 		title = "GUEST BILL (not final)"
 	}
-	g := newPage(d.Hotel, title, d.Printed)
+	g := newPage(d.Hotel, d.Lang, title, d.Printed)
 	g.title(title, d.Number)
 	g.pairs([][2]string{
 		{"Guest", d.Guest.Name}, {"Reservation", d.Booking},
 		{"Address", d.Guest.addressLine()}, {"Stay", d.Stay},
-		{"Room", d.Room}, {"Stay dates", fmtDate(d.Arrival) + " to " + fmtDate(d.Departure)},
+		{"Room", d.Room}, {"Stay dates", g.lang.Date(d.Arrival) + " to " + g.lang.Date(d.Departure)},
 	})
 	g.section("Charges and payments (" + d.Currency + ")")
 	rows := make([][]string, 0, len(d.Lines))
@@ -65,7 +66,7 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 		if l.CreditSet {
 			credit = l.Credit
 		}
-		rows = append(rows, []string{fmtDate(l.Date), l.Description, debit, credit})
+		rows = append(rows, []string{g.lang.Date(l.Date), l.Description, debit, credit})
 	}
 	g.table([]col{{24, "Date", "L"}, {86, "Description", "L"}, {35, "Debit", "R"}, {35, "Credit", "R"}}, rows)
 	items := make([][2]string, len(d.Summary))
@@ -84,6 +85,7 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 // CardData is the registration card of a stay.
 type CardData struct {
 	Hotel        Hotel
+	Lang         Lang
 	Printed      string
 	Number       string // the stay number
 	Booking      string
@@ -107,7 +109,7 @@ type CardData struct {
 
 // RenderRegistrationCard draws the card the guest signs at check-in.
 func RenderRegistrationCard(d CardData) ([]byte, error) {
-	g := newPage(d.Hotel, "Registration card", d.Printed)
+	g := newPage(d.Hotel, d.Lang, "Registration card", d.Printed)
 	g.title("REGISTRATION CARD", d.Number)
 	g.section("Stay")
 	rate := d.NightlyRate
@@ -116,7 +118,7 @@ func RenderRegistrationCard(d CardData) ([]byte, error) {
 	}
 	g.pairs([][2]string{
 		{"Reservation", d.Booking}, {"Room", strings.Join(nonEmpty(d.Room, d.RoomType), "  ·  ")},
-		{"Arrival", fmtDate(d.Arrival) + "  (check-in from " + d.CheckInTime + ")"}, {"Departure", fmtDate(d.Departure) + "  (check-out by " + d.CheckOutTime + ")"},
+		{"Arrival", g.lang.Date(d.Arrival) + "  (check-in from " + d.CheckInTime + ")"}, {"Departure", g.lang.Date(d.Departure) + "  (check-out by " + d.CheckOutTime + ")"},
 		{"Nights", itoa(d.Nights)}, {"Guests", itoa(d.Adults) + " adult(s), " + itoa(d.Children) + " child(ren)"},
 		{"Rate plan", d.RatePlan}, {"Rate", rate},
 	})
@@ -148,6 +150,7 @@ func RenderRegistrationCard(d CardData) ([]byte, error) {
 // ReceiptData is a payment or a refund.
 type ReceiptData struct {
 	Hotel     Hotel
+	Lang      Lang
 	Printed   string
 	Number    string
 	Refund    bool
@@ -174,7 +177,7 @@ func RenderReceipt(d ReceiptData) ([]byte, error) {
 	if d.Refund {
 		title, label = "REFUND RECEIPT", "Amount refunded"
 	}
-	g := newPage(d.Hotel, title, d.Printed)
+	g := newPage(d.Hotel, d.Lang, title, d.Printed)
 	g.title(title, d.Number)
 	if d.Voided {
 		g.stamp("VOID - this payment was cancelled")
@@ -190,7 +193,7 @@ func RenderReceipt(d ReceiptData) ([]byte, error) {
 		who = "Refunded to"
 	}
 	g.pairs([][2]string{
-		{who, d.Guest.Name}, {"Date", fmtDate(d.Date) + "  " + d.At},
+		{who, d.Guest.Name}, {"Date", g.lang.Date(d.Date) + "  " + d.At},
 		{"Folio", d.Folio}, {"Reservation", d.Booking},
 		{"Method", d.Method}, {"Reference", d.Reference},
 	})
@@ -226,6 +229,7 @@ type BookedRoom struct {
 // ConfirmationData is a reservation confirmation letter.
 type ConfirmationData struct {
 	Hotel        Hotel
+	Lang         Lang
 	Printed      string
 	Number       string
 	Status       string
@@ -241,16 +245,16 @@ type ConfirmationData struct {
 
 // RenderConfirmation draws the confirmation sent to the guest.
 func RenderConfirmation(d ConfirmationData) ([]byte, error) {
-	g := newPage(d.Hotel, "Reservation confirmation", d.Printed)
+	g := newPage(d.Hotel, d.Lang, "Reservation confirmation", d.Printed)
 	g.title("RESERVATION CONFIRMATION", d.Number)
 	g.pairs([][2]string{
 		{"Guest", d.Guest.Name}, {"Status", d.Status},
-		{"Booked on", fmtDate(d.Booked)}, {"Check-in / check-out", "from " + d.CheckInTime + " / by " + d.CheckOutTime},
+		{"Booked on", g.lang.Date(d.Booked)}, {"Check-in / check-out", "from " + d.CheckInTime + " / by " + d.CheckOutTime},
 	})
 	g.section("Your rooms")
 	rows := make([][]string, 0, len(d.Rooms))
 	for _, r := range d.Rooms {
-		rows = append(rows, []string{r.RoomType, r.RatePlan, fmtDate(r.Arrival), fmtDate(r.Departure), itoa(r.Nights), r.Guests, r.Estimate})
+		rows = append(rows, []string{r.RoomType, r.RatePlan, g.lang.Date(r.Arrival), g.lang.Date(r.Departure), itoa(r.Nights), r.Guests, r.Estimate})
 	}
 	g.table([]col{{30, "Room type", "L"}, {24, "Rate plan", "L"}, {25, "Arrival", "L"}, {25, "Departure", "L"}, {12, "Nights", "R"}, {24, "Guests", "L"}, {40, "Estimate (" + d.Currency + ")", "R"}}, rows)
 	g.totals([][2]string{{"Estimated total", d.Total}})
@@ -279,6 +283,7 @@ type StatementLine struct {
 // StatementData is a company's city ledger statement for a period.
 type StatementData struct {
 	Hotel     Hotel
+	Lang      Lang
 	Printed   string
 	Company   Party
 	Code      string
@@ -298,7 +303,7 @@ type StatementData struct {
 // RenderStatement draws the statement of account of a company: transfers owed (debit), receipts (credit) and the
 // balance after each, with the aging of what is still open. Voided lines are listed and marked, and do not count.
 func RenderStatement(d StatementData) ([]byte, error) {
-	g := newPage(d.Hotel, "STATEMENT OF ACCOUNT", d.Printed)
+	g := newPage(d.Hotel, d.Lang, "STATEMENT OF ACCOUNT", d.Printed)
 	g.title("STATEMENT OF ACCOUNT", d.Code)
 	g.pairs([][2]string{
 		{"Company", d.Company.Name}, {"Period", d.Period},
@@ -312,7 +317,7 @@ func RenderStatement(d StatementData) ([]byte, error) {
 		if l.Status == "VOIDED" {
 			desc += " (voided)"
 		}
-		rows = append(rows, []string{fmtDate(l.Date), l.Number, desc, l.Reference, l.Debit, l.Credit, l.Balance})
+		rows = append(rows, []string{g.lang.Date(l.Date), l.Number, desc, l.Reference, l.Debit, l.Credit, l.Balance})
 	}
 	g.table([]col{
 		{23, "Date", "L"}, {25, "Number", "L"}, {42, "Description", "L"}, {30, "Reference", "L"},
@@ -351,6 +356,7 @@ type CompanyInvoiceLine struct {
 // CompanyInvoiceData is an invoice to a company for the stays it is billed.
 type CompanyInvoiceData struct {
 	Hotel    Hotel
+	Lang     Lang
 	Printed  string
 	Number   string
 	Voided   bool
@@ -370,7 +376,7 @@ type CompanyInvoiceData struct {
 
 // RenderCompanyInvoice draws an invoice to a company. A voided invoice is stamped, so it cannot pass for a valid one.
 func RenderCompanyInvoice(d CompanyInvoiceData) ([]byte, error) {
-	g := newPage(d.Hotel, "INVOICE", d.Printed)
+	g := newPage(d.Hotel, d.Lang, "INVOICE", d.Printed)
 	g.title("INVOICE", d.Number)
 	if d.Voided {
 		g.stamp("VOID - this invoice was cancelled")
@@ -382,8 +388,8 @@ func RenderCompanyInvoice(d CompanyInvoiceData) ([]byte, error) {
 		g.p.Ln(2)
 	}
 	g.pairs([][2]string{
-		{"Bill to", d.Company.Name}, {"Invoice date", fmtDate(d.Date)},
-		{"Address", d.Company.addressLine()}, {"Due date", fmtDate(d.Due)},
+		{"Bill to", d.Company.Name}, {"Invoice date", g.lang.Date(d.Date)},
+		{"Address", d.Company.addressLine()}, {"Due date", g.lang.Date(d.Due)},
 		{"Tax ID", d.TaxID}, {"Payment terms", d.Terms},
 	})
 	g.p.Ln(3)

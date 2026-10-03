@@ -7,6 +7,7 @@ import (
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/csvlang"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/tenancy"
 )
@@ -150,6 +151,7 @@ func respond(w http.ResponseWriter, r *http.Request, res any) error {
 			return apperr.Invalid("the query is invalid", apperr.FieldError{Field: "format", Code: "INVALID_VALUE", Message: "json"})
 		}
 		header, rows := t.CSV()
+		header = csvlang.Header(r, header)
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="report.csv"`)
 		w.Header().Set("Cache-Control", "no-store")

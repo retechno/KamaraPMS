@@ -5,6 +5,7 @@ import (
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/csvlang"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/tenancy"
 )
@@ -51,6 +52,8 @@ func (h *Handler) trialBalance(w http.ResponseWriter, r *http.Request) error {
 		}
 		t := tb.Totals
 		rows = append(rows, []string{"", "Total", "", t.OpeningDebit.String(), t.OpeningCredit.String(), t.Debit.String(), t.Credit.String(), t.ClosingDebit.String(), t.ClosingCredit.String()})
+		rows[0] = csvlang.Header(r, rows[0])
+		rows[len(rows)-1][1] = csvlang.Word(r, "Total")
 		return writeCSV(w, "trial-balance-"+tb.To.String()+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, tb)
@@ -75,6 +78,8 @@ func (h *Handler) ledger(w http.ResponseWriter, r *http.Request) error {
 		for _, x := range gl.Lines {
 			rows = append(rows, []string{x.Date.String(), x.JournalNumber, x.JournalType, x.Description, x.SourceType, x.SourceRef, x.Debit.String(), x.Credit.String(), x.Balance.String()})
 		}
+		rows[0] = csvlang.Header(r, rows[0])
+		rows[1][3] = csvlang.Word(r, "Opening balance")
 		return writeCSV(w, "ledger-"+gl.Account.Code+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, gl)
@@ -114,7 +119,9 @@ func (h *Handler) incomeStatement(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	if wantsCSV(r) {
-		return writeCSV(w, "income-statement-"+is.To.String()+".csv", statementCSV(is.Lines))
+		rows := statementCSV(is.Lines)
+		rows[0] = csvlang.Header(r, rows[0])
+		return writeCSV(w, "income-statement-"+is.To.String()+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, is)
 }
@@ -133,7 +140,9 @@ func (h *Handler) balanceSheet(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if wantsCSV(r) {
-		return writeCSV(w, "balance-sheet-"+bs.AsOf.String()+".csv", statementCSV(bs.Lines))
+		rows := statementCSV(bs.Lines)
+		rows[0] = csvlang.Header(r, rows[0])
+		return writeCSV(w, "balance-sheet-"+bs.AsOf.String()+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, bs)
 }

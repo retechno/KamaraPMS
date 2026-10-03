@@ -19,6 +19,7 @@ import (
 // sheet. Bold rows are totals and subtotals.
 type FinancialDoc struct {
 	Hotel    Hotel
+	Lang     Lang
 	Printed  string
 	Title    string
 	Subtitle string
@@ -31,7 +32,7 @@ type FinancialDoc struct {
 
 // RenderFinancial draws a report of the books.
 func RenderFinancial(d FinancialDoc) ([]byte, error) {
-	g := newPage(d.Hotel, d.Title, d.Printed)
+	g := newPage(d.Hotel, d.Lang, d.Title, d.Printed)
 	g.title(d.Title, d.Subtitle)
 	g.pairs(d.Pairs)
 	g.p.Ln(3)
@@ -49,20 +50,20 @@ func (s *Service) financial(ctx context.Context, propertyID int64, title, subtit
 		return FinancialDoc{}, dc, err
 	}
 	return FinancialDoc{
-		Hotel: dc.hotel, Printed: dc.printed, Title: title, Subtitle: subtitle, Pairs: [][2]string{{"Period", period}, {"Currency", dc.prop.CurrencyCode}},
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Title: title, Subtitle: subtitle, Pairs: [][2]string{{"Period", period}, {"Currency", dc.prop.CurrencyCode}},
 		Cols: cols, Rows: rows, Bold: bold, Notes: notes,
 	}, dc, nil
 }
 
 // blankZero prints an amount, or nothing for zero, so the columns of a statement stay readable.
-func blankZero(d decimal.Decimal, decimals int32) string {
+func blankZero(l Lang, d decimal.Decimal, decimals int32) string {
 	if d.IsZero() {
 		return ""
 	}
-	return money(d, decimals)
+	return l.Money(d, decimals)
 }
 
-func statementRows(lines []accounting.StatementLine, decimals int32) ([][]string, map[int]bool) {
+func statementRows(lang Lang, lines []accounting.StatementLine, decimals int32) ([][]string, map[int]bool) {
 	var rows [][]string
 	bold := map[int]bool{}
 	for _, l := range lines {
@@ -73,18 +74,18 @@ func statementRows(lines []accounting.StatementLine, decimals int32) ([][]string
 		case "GROUP":
 			if len(l.Accounts) == 1 { // one account: its line is the group
 				a := l.Accounts[0]
-				rows = append(rows, []string{a.Code, l.Title + " - " + a.Name, blankZero(a.Amount, decimals)})
+				rows = append(rows, []string{a.Code, l.Title + " - " + a.Name, blankZero(lang, a.Amount, decimals)})
 				continue
 			}
 			rows = append(rows, []string{"", l.Title, ""})
 			for _, a := range l.Accounts {
-				rows = append(rows, []string{a.Code, "    " + a.Name, blankZero(a.Amount, decimals)})
+				rows = append(rows, []string{a.Code, "    " + a.Name, blankZero(lang, a.Amount, decimals)})
 			}
 			bold[len(rows)] = true
-			rows = append(rows, []string{"", "Total " + l.Title, money(l.Amount, decimals)})
+			rows = append(rows, []string{"", "Total " + l.Title, lang.Money(l.Amount, decimals)})
 		default:
 			bold[len(rows)] = true
-			rows = append(rows, []string{"", l.Title, money(l.Amount, decimals)})
+			rows = append(rows, []string{"", l.Title, lang.Money(l.Amount, decimals)})
 		}
 	}
 	return rows, bold
@@ -102,8 +103,8 @@ func (s *Service) IncomeStatementPDF(ctx context.Context, propertyID int64, from
 	if err != nil {
 		return Document{}, err
 	}
-	rows, bold := statementRows(is.Lines, dc.decimals)
-	d, _, err := s.financial(ctx, propertyID, "INCOME STATEMENT", "USALI layout", fmtDate(is.From)+" - "+fmtDate(is.To), statementCols, rows, bold)
+	rows, bold := statementRows(dc.lang, is.Lines, dc.decimals)
+	d, _, err := s.financial(ctx, propertyID, "INCOME STATEMENT", "USALI layout", dc.lang.Date(is.From)+" - "+dc.lang.Date(is.To), statementCols, rows, bold)
 	if err != nil {
 		return Document{}, err
 	}
@@ -121,12 +122,12 @@ func (s *Service) BalanceSheetPDF(ctx context.Context, propertyID int64, asOf *c
 	if err != nil {
 		return Document{}, err
 	}
-	rows, bold := statementRows(bs.Lines, dc.decimals)
+	rows, bold := statementRows(dc.lang, bs.Lines, dc.decimals)
 	notes := []string{"Equity includes the earnings of all periods to date: there is no year-end closing entry."}
 	if !bs.Difference.IsZero() {
-		notes = append(notes, "WARNING: the books are out of balance by "+money(bs.Difference, dc.decimals)+".")
+		notes = append(notes, "WARNING: the books are out of balance by "+dc.lang.Money(bs.Difference, dc.decimals)+".")
 	}
-	d, _, err := s.financial(ctx, propertyID, "BALANCE SHEET", "As of "+fmtDate(bs.AsOf), "As of "+fmtDate(bs.AsOf), statementCols, rows, bold, notes...)
+	d, _, err := s.financial(ctx, propertyID, "BALANCE SHEET", "As of "+dc.lang.Date(bs.AsOf), "As of "+dc.lang.Date(bs.AsOf), statementCols, rows, bold, notes...)
 	if err != nil {
 		return Document{}, err
 	}
@@ -144,7 +145,7 @@ func (s *Service) TrialBalancePDF(ctx context.Context, propertyID int64, from, t
 	if err != nil {
 		return Document{}, err
 	}
-	m := func(v decimal.Decimal) string { return blankZero(v, dc.decimals) }
+	m := func(v decimal.Decimal) string { return blankZero(dc.lang, v, dc.decimals) }
 	var rows [][]string
 	for _, r := range tb.Rows {
 		rows = append(rows, []string{r.Code + " " + r.Name, m(r.OpeningDebit), m(r.OpeningCredit), m(r.Debit), m(r.Credit), m(r.ClosingDebit), m(r.ClosingCredit)})
@@ -152,7 +153,7 @@ func (s *Service) TrialBalancePDF(ctx context.Context, propertyID int64, from, t
 	t := tb.Totals
 	rows = append(rows, []string{"Total", m(t.OpeningDebit), m(t.OpeningCredit), m(t.Debit), m(t.Credit), m(t.ClosingDebit), m(t.ClosingCredit)})
 	cols := []col{{48, "Account", "L"}, {22, "Open Dr", "R"}, {22, "Open Cr", "R"}, {22, "Debit", "R"}, {22, "Credit", "R"}, {22, "Close Dr", "R"}, {22, "Close Cr", "R"}}
-	d, _, err := s.financial(ctx, propertyID, "TRIAL BALANCE", "", fmtDate(tb.From)+" - "+fmtDate(tb.To), cols, rows, map[int]bool{len(rows) - 1: true})
+	d, _, err := s.financial(ctx, propertyID, "TRIAL BALANCE", "", dc.lang.Date(tb.From)+" - "+dc.lang.Date(tb.To), cols, rows, map[int]bool{len(rows) - 1: true})
 	if err != nil {
 		return Document{}, err
 	}
@@ -170,18 +171,18 @@ func (s *Service) LedgerPDF(ctx context.Context, propertyID, accountID int64, fr
 	if err != nil {
 		return Document{}, err
 	}
-	m := func(v decimal.Decimal) string { return blankZero(v, dc.decimals) }
-	rows := [][]string{{fmtDate(gl.From), "", "Opening balance", "", "", money(gl.Opening, dc.decimals)}}
+	m := func(v decimal.Decimal) string { return blankZero(dc.lang, v, dc.decimals) }
+	rows := [][]string{{dc.lang.Date(gl.From), "", "Opening balance", "", "", dc.lang.Money(gl.Opening, dc.decimals)}}
 	for _, l := range gl.Lines {
-		rows = append(rows, []string{fmtDate(l.Date), l.JournalNumber, l.Description, m(l.Debit), m(l.Credit), money(l.Balance, dc.decimals)})
+		rows = append(rows, []string{dc.lang.Date(l.Date), l.JournalNumber, l.Description, m(l.Debit), m(l.Credit), dc.lang.Money(l.Balance, dc.decimals)})
 	}
-	rows = append(rows, []string{"", "", "Closing balance", m(gl.Debit), m(gl.Credit), money(gl.Closing, dc.decimals)})
+	rows = append(rows, []string{"", "", "Closing balance", m(gl.Debit), m(gl.Credit), dc.lang.Money(gl.Closing, dc.decimals)})
 	cols := []col{{22, "Date", "L"}, {24, "Journal", "L"}, {56, "Detail", "L"}, {26, "Debit", "R"}, {26, "Credit", "R"}, {26, "Balance", "R"}}
 	var notes []string
 	if gl.Truncated {
 		notes = append(notes, "Only the first entries are listed: narrow the range.")
 	}
-	d, _, err := s.financial(ctx, propertyID, "GENERAL LEDGER", gl.Account.Code+" "+gl.Account.Name, fmtDate(gl.From)+" - "+fmtDate(gl.To), cols, rows, map[int]bool{len(rows) - 1: true}, notes...)
+	d, _, err := s.financial(ctx, propertyID, "GENERAL LEDGER", gl.Account.Code+" "+gl.Account.Name, dc.lang.Date(gl.From)+" - "+dc.lang.Date(gl.To), cols, rows, map[int]bool{len(rows) - 1: true}, notes...)
 	if err != nil {
 		return Document{}, err
 	}
@@ -201,7 +202,7 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 			if err != nil {
 				return err
 			}
-			doc, err := render(r.Context(), pid, from, to)
+			doc, err := render(langCtx(r), pid, from, to)
 			if err != nil {
 				return err
 			}
@@ -219,7 +220,7 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 		if err != nil {
 			return err
 		}
-		doc, err := h.svc.BalanceSheetPDF(r.Context(), pid, asOf)
+		doc, err := h.svc.BalanceSheetPDF(langCtx(r), pid, asOf)
 		if err != nil {
 			return err
 		}
@@ -238,7 +239,7 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 		if err != nil {
 			return err
 		}
-		doc, err := h.svc.LedgerPDF(r.Context(), pid, id, from, to)
+		doc, err := h.svc.LedgerPDF(langCtx(r), pid, id, from, to)
 		if err != nil {
 			return err
 		}

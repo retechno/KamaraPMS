@@ -1887,7 +1887,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/daily-summary": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -1909,7 +1912,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/revenue": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -1931,7 +1937,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/tax": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -1953,7 +1962,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/cashier": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -1975,7 +1987,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/free-rooms": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -1997,7 +2012,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/free-rooms-by-reason": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2019,7 +2037,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/free-rooms-by-kind": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2041,7 +2062,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/statistics": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2063,7 +2087,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/arrivals": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2085,7 +2112,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/departures": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2107,7 +2137,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/in-house": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2168,7 +2201,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/folios/{id}/invoice.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2191,7 +2227,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/stays/{id}/registration-card.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2214,7 +2253,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/payments/{id}/receipt.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2237,7 +2279,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reservations/{id}/confirmation.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2441,7 +2486,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/companies/{id}/statement.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -2799,7 +2847,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/invoice.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3329,7 +3380,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/housekeeping-productivity": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3351,7 +3405,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/housekeeping-dirty-rooms": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3373,7 +3430,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/reports/maintenance": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3674,7 +3734,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/trial-balance": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3696,7 +3759,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3719,7 +3785,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/income-statement": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3741,7 +3810,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/balance-sheet": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3785,7 +3857,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/trial-balance.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3804,7 +3879,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3824,7 +3902,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/income-statement.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -3843,7 +3924,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/accounting/balance-sheet.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -4700,7 +4784,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/tax/returns/{id}/return.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -4720,7 +4807,10 @@ export interface paths {
     };
     "/api/v1/properties/{propertyId}/tax/worksheet.pdf": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -8789,6 +8879,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+        Lang: "en" | "id";
         PropertyId: number;
         Id: number;
         LineId: number;
@@ -11979,6 +12071,8 @@ export interface operations {
     getDailySummaryReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 date: components["schemas"]["Date"];
                 /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
                 format?: "json" | "csv";
@@ -12009,6 +12103,8 @@ export interface operations {
     getRevenueReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12041,6 +12137,8 @@ export interface operations {
     getTaxReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12073,6 +12171,8 @@ export interface operations {
     getCashierReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12105,6 +12205,8 @@ export interface operations {
     getFreeRoomsReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12137,6 +12239,8 @@ export interface operations {
     getFreeRoomsByReasonReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12169,6 +12273,8 @@ export interface operations {
     getFreeRoomsByKindReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12201,6 +12307,8 @@ export interface operations {
     getStatisticsReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -12233,6 +12341,8 @@ export interface operations {
     getArrivalsReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 date: components["schemas"]["Date"];
                 /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
                 format?: "json" | "csv";
@@ -12263,6 +12373,8 @@ export interface operations {
     getDeparturesReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 date: components["schemas"]["Date"];
                 /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
                 format?: "json" | "csv";
@@ -12293,6 +12405,8 @@ export interface operations {
     getInHouseReport: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
                 format?: "json" | "csv";
             };
@@ -12393,7 +12507,10 @@ export interface operations {
     };
     getInvoicePdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -12418,7 +12535,10 @@ export interface operations {
     };
     getRegistrationCardPdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -12443,7 +12563,10 @@ export interface operations {
     };
     getReceiptPdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -12468,7 +12591,10 @@ export interface operations {
     };
     getConfirmationPdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -12810,6 +12936,8 @@ export interface operations {
     getCompanyStatementPdf: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from?: components["schemas"]["Date"];
                 to?: components["schemas"]["Date"];
             };
@@ -13362,7 +13490,10 @@ export interface operations {
     };
     getCityLedgerInvoicePdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -14185,6 +14316,8 @@ export interface operations {
     getHousekeepingProductivityReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -14217,6 +14350,8 @@ export interface operations {
     getHousekeepingDirtyRoomsReport: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 min_hours?: number;
                 /** @description csv answers a text/csv file; text that could be read as a spreadsheet formula is prefixed with an apostrophe. */
                 format?: "json" | "csv";
@@ -14247,6 +14382,8 @@ export interface operations {
     getMaintenanceReport: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from: components["schemas"]["Date"];
                 /** @description On or after from; at most 366 days. */
                 to: components["schemas"]["Date"];
@@ -14765,6 +14902,8 @@ export interface operations {
     getTrialBalance: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 /** @description Start of the range; the first day of the current business month by default. */
                 from?: string;
                 /** @description End of the range (included); the current business date by default. */
@@ -14797,6 +14936,8 @@ export interface operations {
     getGeneralLedger: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 /** @description Start of the range; the first day of the current business month by default. */
                 from?: string;
                 /** @description End of the range (included); the current business date by default. */
@@ -14830,6 +14971,8 @@ export interface operations {
     getIncomeStatement: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 /** @description Start of the range; the first day of the current business month by default. */
                 from?: string;
                 /** @description End of the range (included); the current business date by default. */
@@ -14862,6 +15005,8 @@ export interface operations {
     getBalanceSheet: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 /** @description The business date; the current business date by default. */
                 as_of?: string;
                 /** @description `csv` answers the report as a CSV file. */
@@ -14920,6 +15065,8 @@ export interface operations {
     getTrialBalancePdf: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from?: string;
                 to?: string;
             };
@@ -14948,6 +15095,8 @@ export interface operations {
     getGeneralLedgerPdf: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from?: string;
                 to?: string;
             };
@@ -14977,6 +15126,8 @@ export interface operations {
     getIncomeStatementPdf: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 from?: string;
                 to?: string;
             };
@@ -15005,6 +15156,8 @@ export interface operations {
     getBalanceSheetPdf: {
         parameters: {
             query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 as_of?: string;
             };
             header?: never;
@@ -16439,7 +16592,10 @@ export interface operations {
     };
     getTaxReturnPdf: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -16465,6 +16621,8 @@ export interface operations {
     getTaxWorksheetPdf: {
         parameters: {
             query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
                 tax_id: number;
                 period: string;
             };

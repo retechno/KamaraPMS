@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/go-pdf/fpdf"
-
-	"kamarapms/internal/platform/civil"
 )
 
 // Hotel is the letterhead.
@@ -87,21 +85,22 @@ type page struct {
 	tr      func(string) string
 	hotel   Hotel
 	printed string
+	lang    Lang
 }
 
 // newPage starts an A4 document with the hotel letterhead. printed is the "printed on" text of the footer.
-func newPage(h Hotel, title, printed string) *page {
+func newPage(h Hotel, lang Lang, title, printed string) *page {
 	p := fpdf.New("P", "mm", "A4", "")
 	p.SetMargins(margin, margin, margin)
 	p.SetAutoPageBreak(false, 0)
 	p.SetCatalogSort(true)
 	p.SetCompression(compressPDF)
 	p.SetCreationDate(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) // the bytes depend on the content only
-	p.SetTitle(title, true)
+	p.SetTitle(lang.T(title), true)
 	p.SetCreator("KamaraPMS", true)
 	p.AliasNbPages("")
 	translate := p.UnicodeTranslatorFromDescriptor("")
-	g := &page{p: p, tr: func(s string) string { return latin1(translate(s)) }, hotel: h, printed: printed}
+	g := &page{p: p, tr: func(s string) string { return latin1(translate(s)) }, hotel: h, printed: printed, lang: lang}
 	p.SetFooterFunc(g.footer)
 	p.AddPage()
 	g.letterhead()
@@ -173,7 +172,7 @@ func (g *page) letterhead() {
 	g.color(muted)
 	g.font("", 9)
 	for _, l := range g.hotel.lines() {
-		g.p.CellFormat(bodyW, 4.2, g.tr(l), "", 1, "L", false, 0, "")
+		g.p.CellFormat(bodyW, 4.2, g.tr(g.lang.T(l)), "", 1, "L", false, 0, "")
 	}
 	g.p.Ln(2)
 	g.p.SetDrawColor(accent[0], accent[1], accent[2])
@@ -199,7 +198,7 @@ func (g *page) footer() {
 	g.font("", 7.5)
 	g.p.SetY(-9)
 	g.p.CellFormat(bodyW/2, 4, g.tr(g.printed), "", 0, "L", false, 0, "")
-	g.p.CellFormat(bodyW/2, 4, g.tr("Page "+itoa(g.p.PageNo())+" of {nb}"), "", 0, "R", false, 0, "")
+	g.p.CellFormat(bodyW/2, 4, g.tr(g.lang.T("Page "+itoa(g.p.PageNo())+" of {nb}")), "", 0, "R", false, 0, "")
 	g.color(ink)
 }
 
@@ -207,7 +206,7 @@ func (g *page) footer() {
 func (g *page) title(title, number string) {
 	g.font("B", 14)
 	g.color(ink)
-	g.p.CellFormat(bodyW*0.6, 8, g.tr(title), "", 0, "L", false, 0, "")
+	g.p.CellFormat(bodyW*0.6, 8, g.tr(g.lang.T(title)), "", 0, "L", false, 0, "")
 	g.font("B", 11)
 	g.p.CellFormat(bodyW*0.4, 8, g.tr(number), "", 1, "R", false, 0, "")
 	g.p.Ln(1)
@@ -223,11 +222,11 @@ func (g *page) pairs(items [][2]string) {
 			g.p.SetXY(margin+float64(j)*half, y)
 			g.font("", 8)
 			g.color(muted)
-			g.p.CellFormat(half-2, 3.8, g.tr(items[i+j][0]), "", 2, "L", false, 0, "")
+			g.p.CellFormat(half-2, 3.8, g.tr(g.lang.T(items[i+j][0])), "", 2, "L", false, 0, "")
 			g.font("B", 10)
 			g.color(ink)
 			g.p.SetX(margin + float64(j)*half)
-			lines := g.split(g.tr(blank(items[i+j][1])), half-4)
+			lines := g.split(g.tr(blank(g.lang.T(items[i+j][1]))), half-4)
 			for _, l := range lines {
 				g.p.CellFormat(half-2, 4.6, l, "", 2, "L", false, 0, "")
 			}
@@ -251,7 +250,7 @@ func (g *page) section(s string) {
 	g.p.Ln(2)
 	g.font("B", 10)
 	g.color(accent)
-	g.p.CellFormat(bodyW, 6, g.tr(strings.ToUpper(s)), "", 1, "L", false, 0, "")
+	g.p.CellFormat(bodyW, 6, g.tr(strings.ToUpper(g.lang.T(s))), "", 1, "L", false, 0, "")
 	g.color(ink)
 }
 
@@ -265,7 +264,7 @@ func (g *page) tableB(cols []col, rows [][]string, bold func(row int) bool) {
 		g.p.SetFillColor(band[0], band[1], band[2])
 		g.font("B", 8.5)
 		for i, c := range cols {
-			g.p.CellFormat(c.w, 6.5, g.tr(c.head), "", boolInt(i == len(cols)-1), c.align, true, 0, "")
+			g.p.CellFormat(c.w, 6.5, g.tr(g.lang.T(c.head)), "", boolInt(i == len(cols)-1), c.align, true, 0, "")
 		}
 	}
 	head()
@@ -278,7 +277,7 @@ func (g *page) tableB(cols []col, rows [][]string, bold func(row int) bool) {
 			if i < len(r) {
 				s = r[i]
 			}
-			wrapped[i] = g.split(g.tr(s), c.w-2)
+			wrapped[i] = g.split(g.tr(g.lang.Word(s)), c.w-2)
 			if len(wrapped[i]) == 0 {
 				wrapped[i] = []string{""}
 			}
@@ -343,7 +342,7 @@ func (g *page) totals(items [][2]string) {
 			g.p.AddPage()
 		}
 		g.p.SetX(margin + bodyW*0.5)
-		g.p.CellFormat(bodyW*0.3, 5.6, g.tr(it[0]), "", 0, "L", false, 0, "")
+		g.p.CellFormat(bodyW*0.3, 5.6, g.tr(g.lang.T(it[0])), "", 0, "L", false, 0, "")
 		g.p.CellFormat(bodyW*0.2, 5.6, g.tr(it[1]), "", 1, "R", false, 0, "")
 	}
 }
@@ -351,7 +350,7 @@ func (g *page) totals(items [][2]string) {
 // note prints a wrapped paragraph.
 func (g *page) note(s string, style string, size float64) {
 	g.font(style, size)
-	g.paragraph(s, 4.4)
+	g.paragraph(g.lang.T(s), 4.4)
 }
 
 // signature prints a signature line with a caption.
@@ -362,14 +361,14 @@ func (g *page) signature(x, y, w float64, caption string) {
 	g.p.SetXY(x, y+1)
 	g.font("", 8)
 	g.color(muted)
-	g.p.CellFormat(w, 4, g.tr(caption), "", 0, "L", false, 0, "")
+	g.p.CellFormat(w, 4, g.tr(g.lang.T(caption)), "", 0, "L", false, 0, "")
 	g.color(ink)
 }
 
 func (g *page) stamp(s string) {
 	g.font("B", 18)
 	g.color(alert)
-	g.p.CellFormat(bodyW, 10, g.tr(s), "", 1, "C", false, 0, "")
+	g.p.CellFormat(bodyW, 10, g.tr(g.lang.T(s)), "", 1, "C", false, 0, "")
 	g.color(ink)
 }
 
@@ -393,16 +392,3 @@ func itoa(n int) string {
 }
 
 var monthShort = [...]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-
-// fmtDate prints a business date as "30 Sep 2026".
-func fmtDate(d civil.Date) string {
-	if d.IsZero() {
-		return "-"
-	}
-	return itoa(d.Day()) + " " + monthShort[d.Month()-1] + " " + itoa(d.Year())
-}
-
-// fmtTime prints an instant in the property's time zone.
-func fmtTime(t time.Time, loc *time.Location) string {
-	return t.In(loc).Format("02 Jan 2006 15:04")
-}

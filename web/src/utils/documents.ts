@@ -1,5 +1,6 @@
 import { toApiError } from '@/api/problem'
 import { authFetch } from '@/api/session'
+import { currentLocale } from '@/i18n'
 
 /**
  * Opens a PDF document in a new tab. The documents need the access token, which only lives in memory, so a plain
@@ -9,7 +10,10 @@ import { authFetch } from '@/api/session'
 export async function openPdf(path: string): Promise<void> {
   const tab = window.open('', '_blank')
   try {
-    const res = await authFetch(new Request(new URL(path, window.location.origin).href, { headers: { Accept: 'application/pdf' } }))
+    // the document is written in the language of the page
+    const target = new URL(path, window.location.origin)
+    target.searchParams.set('lang', currentLocale())
+    const res = await authFetch(new Request(target.href, { headers: { Accept: 'application/pdf' } }))
     if (!res.ok) {
       let body: unknown
       try {
