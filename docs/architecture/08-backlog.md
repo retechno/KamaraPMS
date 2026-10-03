@@ -11,7 +11,7 @@ this list only keeps them from being forgotten. Move an item to the README statu
   engine (inventory per type and bed), the search, the rate grid and the calendar. Decide first whether a variant
   has its own price or only its own stock.
 
-## Finance (recommended order, 2026-10-03)
+## Finance (recommended order, 2026-10-03; item 1 started: PKP settings built, see 09-pkp-input-vat.md)
 
 What exists: folios, payments and corrections with approval, the cashier report, the city ledger with invoices and
 their payments, the chart of accounts, journals and periods, fiscal years, the statements and the control accounts,

@@ -117,6 +117,8 @@ type Tax struct {
 	Name         string `json:"name"`
 	Rate         string `json:"rate"`
 	TaxOnService bool   `json:"tax_on_service"`
+	// TaxKind is VAT, LOCAL (the hotel tax, PB1) or OTHER; only VAT takes part in the PKP rules.
+	TaxKind string `json:"tax_kind"`
 	// GLAccountCode is the tax payable account in the chart of accounts (optional, a code, never an id).
 	GLAccountCode *string   `json:"gl_account_code"`
 	IsActive      bool      `json:"is_active"`
@@ -133,6 +135,7 @@ type TaxInput struct {
 	Name          string
 	Rate          string
 	TaxOnService  bool
+	TaxKind       string // "" = LOCAL
 	GLAccountCode string // "" = none
 	IsActive      bool
 }
@@ -142,8 +145,19 @@ func (in *TaxInput) Normalize() {
 	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
 	in.Name = strings.TrimSpace(in.Name)
 	in.Rate = strings.TrimSpace(in.Rate)
+	in.TaxKind = strings.ToUpper(strings.TrimSpace(in.TaxKind))
+	if in.TaxKind == "" {
+		in.TaxKind = TaxKindLocal
+	}
 	in.GLAccountCode = normalizeGL(in.GLAccountCode)
 }
+
+// Tax kinds.
+const (
+	TaxKindVAT   = "VAT"
+	TaxKindLocal = "LOCAL"
+	TaxKindOther = "OTHER"
+)
 
 // Validate checks the input.
 func (in TaxInput) Validate(checkCode bool) []apperr.FieldError {
@@ -153,6 +167,9 @@ func (in TaxInput) Validate(checkCode bool) []apperr.FieldError {
 	}
 	errs = append(errs, validateName(in.Name)...)
 	errs = append(errs, validateGL(in.GLAccountCode)...)
+	if k := in.TaxKind; k != TaxKindVAT && k != TaxKindLocal && k != TaxKindOther {
+		errs = append(errs, fieldErr("tax_kind", "INVALID_VALUE", "VAT, LOCAL (the hotel tax) or OTHER"))
+	}
 	return append(errs, validateRate(in.Rate)...)
 }
 

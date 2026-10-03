@@ -57,4 +57,5 @@ type Tax struct {
 	UpdatedAt     time.Time
 	UpdatedBy     *int64
 	GlAccountCode *string
+	TaxKind       string
 }

@@ -9,6 +9,7 @@ import FormField from '@/components/app/FormField.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -26,6 +27,7 @@ interface Item {
   rate: string
   is_active: boolean
   tax_on_service?: boolean
+  tax_kind?: 'VAT' | 'LOCAL' | 'OTHER'
   gl_account_code: string | null
 }
 
@@ -48,11 +50,11 @@ const columns = computed<Column<Item>[]>(() => [
   { key: 'name', label: t('rateItems.name') },
   { key: 'rate', label: t('rateItems.colRate') },
   { key: 'account', label: t('rateItems.colAccount') },
-  ...(isTax.value ? [{ key: 'tax_on_service', label: t('rateItems.colOnService') }] : []),
+  ...(isTax.value ? [{ key: 'tax_kind', label: t('rateItems.colKind') }, { key: 'tax_on_service', label: t('rateItems.colOnService') }] : []),
   { key: 'status', label: t('setup.status') },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
-const blank = () => ({ code: '', name: '', rate: '', tax_on_service: false, gl_account_code: '', is_active: true })
+const blank = () => ({ code: '', name: '', rate: '', tax_on_service: false, tax_kind: 'LOCAL', gl_account_code: '', is_active: true })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
@@ -80,7 +82,7 @@ function startNew(): void {
 }
 
 function startEdit(i: Item): void {
-  Object.assign(form, blank(), { code: i.code, name: i.name, rate: i.rate, tax_on_service: i.tax_on_service ?? false, gl_account_code: i.gl_account_code ?? '', is_active: i.is_active })
+  Object.assign(form, blank(), { code: i.code, name: i.name, rate: i.rate, tax_on_service: i.tax_on_service ?? false, tax_kind: i.tax_kind ?? 'LOCAL', gl_account_code: i.gl_account_code ?? '', is_active: i.is_active })
   error.value = null
   notice.value = ''
   editing.value = i
@@ -97,7 +99,7 @@ async function save(): Promise<void> {
       saved = isTax.value
         ? (await api.POST('/api/v1/properties/{propertyId}/taxes', {
             params: { path: { propertyId } },
-            body: { code: form.code, name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, gl_account_code: form.gl_account_code || undefined, is_active: form.is_active },
+            body: { code: form.code, name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, tax_kind: form.tax_kind as 'LOCAL', gl_account_code: form.gl_account_code || undefined, is_active: form.is_active },
           })).data
         : (await api.POST('/api/v1/properties/{propertyId}/service-charges', {
             params: { path: { propertyId } },
@@ -108,7 +110,7 @@ async function save(): Promise<void> {
       saved = isTax.value
         ? (await api.PATCH('/api/v1/properties/{propertyId}/taxes/{id}', {
             params: { path: { propertyId, id } },
-            body: { name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, gl_account_code: form.gl_account_code, is_active: form.is_active },
+            body: { name: form.name, rate: form.rate, tax_on_service: form.tax_on_service, tax_kind: form.tax_kind as 'LOCAL', gl_account_code: form.gl_account_code, is_active: form.is_active },
           })).data
         : (await api.PATCH('/api/v1/properties/{propertyId}/service-charges/{id}', {
             params: { path: { propertyId, id } },
@@ -153,6 +155,11 @@ watch(() => property.currentId, load, { immediate: true })
           <FormField :label="isTax ? t('rateItems.taxAccount') : t('rateItems.serviceAccount')" :hint="t('rateItems.accountHint')" :error="fieldError('gl_account_code')">
             <template #default="{ id, invalid }"><GlAccountInput :id="id" v-model="form.gl_account_code" :kind="isTax ? 'TAX' : 'SERVICE_CHARGE'" :invalid="invalid" /></template>
           </FormField>
+          <FormField v-if="isTax" :label="t('rateItems.kind')" :hint="t('rateItems.kindHint')" :error="fieldError('tax_kind')">
+            <template #default="{ id, invalid }">
+              <Combobox :id="id" v-model="form.tax_kind" name="tax_kind" :aria-invalid="invalid" :options="[{ value: 'LOCAL', label: t('rateItems.kind_LOCAL') }, { value: 'VAT', label: t('rateItems.kind_VAT') }, { value: 'OTHER', label: t('rateItems.kind_OTHER') }]" />
+            </template>
+          </FormField>
           <label v-if="isTax" class="flex items-center gap-2 self-end pb-2 text-sm">
             <input v-model="form.tax_on_service" name="tax_on_service" type="checkbox" class="size-4 accent-primary" />
             <span>{{ t('rateItems.taxOnService') }}</span>
@@ -173,6 +180,7 @@ watch(() => property.currentId, load, { immediate: true })
         <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
         <template #cell-rate="{ row }">{{ Number(row.rate) }}%</template>
         <template #cell-account="{ row }"><span data-testid="account">{{ accountLabel(row.gl_account_code) }}</span></template>
+        <template #cell-tax_kind="{ row }">{{ t(`rateItems.kind_${row.tax_kind ?? 'LOCAL'}`) }}</template>
         <template #cell-tax_on_service="{ row }">{{ row.tax_on_service ? t('common.yes') : t('common.no') }}</template>
         <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
         <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>

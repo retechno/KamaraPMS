@@ -90,6 +90,7 @@ export const navigation: NavSection[] = [
       { id: 'supplierBills', to: '/payables/bills', group: 'payables' },
       { id: 'supplierPayments', to: '/payables/payments', group: 'payables' },
       { id: 'payablesAging', to: '/payables/aging', group: 'payables' },
+      { id: 'taxStatus', to: '/tax/status', group: 'tax' },
       { id: 'filingProfiles', to: '/tax/profiles', group: 'tax' },
       { id: 'taxReturns', to: '/tax/returns', group: 'tax' },
       { id: 'taxOwed', to: '/tax/liability', group: 'tax' },

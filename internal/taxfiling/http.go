@@ -24,6 +24,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/profiles", httpx.HandlerFunc(h.createProfile))
 	mux.Handle("GET "+p+"/profiles/{id}", httpx.HandlerFunc(h.profile))
 	mux.Handle("PATCH "+p+"/profiles/{id}", httpx.HandlerFunc(h.updateProfile))
+	mux.Handle("GET "+p+"/settings", httpx.HandlerFunc(h.settings))
+	mux.Handle("POST "+p+"/settings", httpx.HandlerFunc(h.changeSettings))
 	mux.Handle("GET "+p+"/periods", httpx.HandlerFunc(h.periods))
 	mux.Handle("GET "+p+"/worksheet", httpx.HandlerFunc(h.worksheet))
 	mux.Handle("GET "+p+"/returns", httpx.HandlerFunc(h.returns))
@@ -137,6 +139,34 @@ func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, pr)
+}
+
+func (h *Handler) settings(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.Settings(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) changeSettings(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in SettingsInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	v, err := h.svc.ChangeSettings(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, v)
 }
 
 func (h *Handler) periods(w http.ResponseWriter, r *http.Request) error {

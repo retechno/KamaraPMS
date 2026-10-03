@@ -283,6 +283,23 @@ func (q *Queries) FindTaxPaymentByKey(ctx context.Context, arg FindTaxPaymentByK
 	return id, err
 }
 
+const firstTaxSettingsID = `-- name: FirstTaxSettingsID :one
+SELECT id FROM property_tax_settings WHERE tenant_id = $1 AND property_id = $2 ORDER BY effective_from, id LIMIT 1
+`
+
+type FirstTaxSettingsIDParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The first row of a property always exists: the changes of the settings lock it.
+func (q *Queries) FirstTaxSettingsID(ctx context.Context, arg FirstTaxSettingsIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, firstTaxSettingsID, arg.TenantID, arg.PropertyID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const gLCollected = `-- name: GLCollected :one
 SELECT COALESCE(sum(l.credit - l.debit), 0)::numeric AS collected
 FROM gl_journal_lines l
@@ -472,6 +489,48 @@ func (q *Queries) InsertTaxPayment(ctx context.Context, arg InsertTaxPaymentPara
 		arg.Remarks,
 		arg.JournalID,
 		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertTaxSettings = `-- name: InsertTaxSettings :one
+INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, npwp, pkp_number, pkp_confirmed_on, input_vat_treatment, signer_name, signer_title, approved_by, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12)
+RETURNING id
+`
+
+type InsertTaxSettingsParams struct {
+	TenantID          int64
+	PropertyID        int64
+	EffectiveFrom     civil.Date
+	IsPkp             bool
+	Npwp              *string
+	PkpNumber         *string
+	PkpConfirmedOn    *civil.Date
+	InputVatTreatment string
+	SignerName        *string
+	SignerTitle       *string
+	ApprovedBy        *int64
+	ActorID           *int64
+}
+
+func (q *Queries) InsertTaxSettings(ctx context.Context, arg InsertTaxSettingsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertTaxSettings,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.EffectiveFrom,
+		arg.IsPkp,
+		arg.Npwp,
+		arg.PkpNumber,
+		arg.PkpConfirmedOn,
+		arg.InputVatTreatment,
+		arg.SignerName,
+		arg.SignerTitle,
+		arg.ApprovedBy,
 		arg.ActorID,
 	)
 	var id int64
@@ -775,6 +834,67 @@ func (q *Queries) ListTaxPayments(ctx context.Context, arg ListTaxPaymentsParams
 			&i.VoidJournalID,
 			&i.VoidedAt,
 			&i.VoidReason,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaxSettings = `-- name: ListTaxSettings :many
+
+SELECT id, effective_from, is_pkp, npwp, pkp_number, pkp_confirmed_on, input_vat_treatment, signer_name, signer_title, approved_by, created_at
+FROM property_tax_settings
+WHERE tenant_id = $1 AND property_id = $2
+ORDER BY effective_from DESC, id DESC
+`
+
+type ListTaxSettingsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListTaxSettingsRow struct {
+	ID                int64
+	EffectiveFrom     civil.Date
+	IsPkp             bool
+	Npwp              *string
+	PkpNumber         *string
+	PkpConfirmedOn    *civil.Date
+	InputVatTreatment string
+	SignerName        *string
+	SignerTitle       *string
+	ApprovedBy        *int64
+	CreatedAt         time.Time
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// PKP settings (append-only history of the tax status of the property)
+func (q *Queries) ListTaxSettings(ctx context.Context, arg ListTaxSettingsParams) ([]ListTaxSettingsRow, error) {
+	rows, err := q.db.Query(ctx, listTaxSettings, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaxSettingsRow{}
+	for rows.Next() {
+		var i ListTaxSettingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EffectiveFrom,
+			&i.IsPkp,
+			&i.Npwp,
+			&i.PkpNumber,
+			&i.PkpConfirmedOn,
+			&i.InputVatTreatment,
+			&i.SignerName,
+			&i.SignerTitle,
+			&i.ApprovedBy,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

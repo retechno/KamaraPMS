@@ -73,6 +73,7 @@ var (
 	Suppliers        = LockTable{"suppliers", LevelPayables}
 	BankAccounts     = LockTable{"bank_accounts", LevelBank}
 	TaxProfiles      = LockTable{"tax_filing_profiles", LevelTax}
+	TaxSettings      = LockTable{"property_tax_settings", LevelTax}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with

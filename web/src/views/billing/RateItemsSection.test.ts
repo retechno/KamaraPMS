@@ -51,7 +51,7 @@ describe('RateItemsSection', () => {
     await flushPromises()
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/taxes', {
       params: { path: { propertyId: 7 } },
-      body: { code: 'CITY', name: 'City tax', rate: '1.5', tax_on_service: false, is_active: true },
+      body: { code: 'CITY', name: 'City tax', rate: '1.5', tax_on_service: false, tax_kind: 'LOCAL', is_active: true },
     })
   })
 
@@ -82,7 +82,7 @@ describe('RateItemsSection', () => {
     await flushPromises()
     expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/taxes/{id}', {
       params: { path: { propertyId: 7, id: 1 } },
-      body: { name: 'VAT', rate: '12', tax_on_service: true, gl_account_code: '2.1.05', is_active: true },
+      body: { name: 'VAT', rate: '12', tax_on_service: true, tax_kind: 'LOCAL', gl_account_code: '2.1.05', is_active: true },
     })
     expect(w.get('[data-testid=notice]').text()).toContain('3 in-house stay(s)')
   })

@@ -189,3 +189,22 @@ SELECT x.return_id, COALESCE(sum(x.amount), 0)::numeric AS paid
 FROM tax_payments x LEFT JOIN gl_journals xv ON xv.property_id = x.property_id AND xv.id = x.void_journal_id
 WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.payment_date <= @as_of::date AND (x.status = 'POSTED' OR xv.journal_date > @as_of::date)
 GROUP BY x.return_id;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- PKP settings (append-only history of the tax status of the property)
+
+-- name: ListTaxSettings :many
+SELECT id, effective_from, is_pkp, npwp, pkp_number, pkp_confirmed_on, input_vat_treatment, signer_name, signer_title, approved_by, created_at
+FROM property_tax_settings
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+ORDER BY effective_from DESC, id DESC;
+
+-- The first row of a property always exists: the changes of the settings lock it.
+-- name: FirstTaxSettingsID :one
+SELECT id FROM property_tax_settings WHERE tenant_id = @tenant_id AND property_id = @property_id ORDER BY effective_from, id LIMIT 1;
+
+-- name: InsertTaxSettings :one
+INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, npwp, pkp_number, pkp_confirmed_on, input_vat_treatment, signer_name, signer_title, approved_by, created_by)
+VALUES (@tenant_id, @property_id, @effective_from, @is_pkp, sqlc.narg(npwp), sqlc.narg(pkp_number), sqlc.narg(pkp_confirmed_on), @input_vat_treatment,
+        sqlc.narg(signer_name), sqlc.narg(signer_title), sqlc.narg(approved_by), sqlc.narg(actor_id))
+RETURNING id;

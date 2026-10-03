@@ -8,8 +8,8 @@ SELECT seed_charge_codes(@tenant_id::bigint, @property_id::bigint, sqlc.narg(act
 -- ---------------------------------------------------------------- taxes
 
 -- name: CreateTax :one
-INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, gl_account_code, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, @rate, @tax_on_service, sqlc.narg(gl_account_code), @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO taxes (tenant_id, property_id, code, name, rate, tax_on_service, tax_kind, gl_account_code, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @rate, @tax_on_service, @tax_kind, sqlc.narg(gl_account_code), @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetTax :one
@@ -26,7 +26,7 @@ ORDER BY id
 LIMIT @row_limit;
 
 -- name: UpdateTax :one
-UPDATE taxes SET name = @name, rate = @rate, tax_on_service = @tax_on_service, gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
+UPDATE taxes SET name = @name, rate = @rate, tax_on_service = @tax_on_service, tax_kind = @tax_kind, gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 

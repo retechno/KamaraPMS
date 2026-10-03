@@ -111,6 +111,7 @@ type createTaxRequest struct {
 	Name         string `json:"name"`
 	Rate         string `json:"rate"`
 	TaxOnService bool   `json:"tax_on_service"`
+	TaxKind      string `json:"tax_kind"`
 	GLAccount    string `json:"gl_account_code"`
 	IsActive     *bool  `json:"is_active"`
 }
@@ -124,7 +125,7 @@ func (h *Handler) createTax(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	in := TaxInput{Code: req.Code, Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive}
+	in := TaxInput{Code: req.Code, Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, TaxKind: req.TaxKind, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive}
 	t, err := h.svc.CreateTax(r.Context(), pid, in)
 	if err != nil {
 		return err
@@ -136,6 +137,7 @@ type patchTaxRequest struct {
 	Name         *string `json:"name"`
 	Rate         *string `json:"rate"`
 	TaxOnService *bool   `json:"tax_on_service"`
+	TaxKind      *string `json:"tax_kind"`
 	GLAccount    *string `json:"gl_account_code"`
 	IsActive     *bool   `json:"is_active"`
 }
@@ -153,7 +155,7 @@ func (h *Handler) updateTax(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	t, err := h.svc.UpdateTax(r.Context(), pid, id, TaxPatch{Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
+	t, err := h.svc.UpdateTax(r.Context(), pid, id, TaxPatch{Name: req.Name, Rate: req.Rate, TaxOnService: req.TaxOnService, TaxKind: req.TaxKind, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
 	if err != nil {
 		return err
 	}

@@ -4566,6 +4566,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/tax/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The PKP status of the property and its history (tax.view)
+         * @description `current` is the status in force on the business date; `history` lists every change, newest first. A property starts as not PKP with its input VAT as an expense.
+         */
+        get: operations["getTaxSettings"];
+        put?: never;
+        /**
+         * Add a change of the PKP status (tax.manage)
+         * @description The history only moves forward: 409 `TAX_SETTINGS_NOT_NEWER` when the date is not after the latest change. A change that begins before the business date needs an `approval` (422 `APPROVAL_REQUIRED`). A property that is not PKP cannot claim input VAT (`CREDITABLE`); a PKP property needs its NPWP. Without `input_vat_treatment` it is `CREDITABLE` for a PKP property and `EXPENSE` otherwise. Documents already posted keep the status they were posted under.
+         */
+        post: operations["changeTaxSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tax/profiles": {
         parameters: {
             query?: never;
@@ -5510,6 +5536,7 @@ export interface components {
             rate: components["schemas"]["Percent"];
             /** @description The tax is also levied on the service charges. */
             tax_on_service: boolean;
+            tax_kind: components["schemas"]["TaxKind"];
             /** @description Tax payable account of the chart of accounts, copied onto the ledger when an item is posted. */
             gl_account_code: components["schemas"]["GlAccountCode"];
             is_active: boolean;
@@ -5520,6 +5547,11 @@ export interface components {
             /** @description Only on an update that changed the rate. Open stays that will be charged at the new rate from now on. */
             affected_open_stays?: number;
         };
+        /**
+         * @description VAT takes part in the PKP rules (input VAT, tax invoices); LOCAL is the hotel tax (PB1) and OTHER anything else, which never do.
+         * @enum {string}
+         */
+        TaxKind: "VAT" | "LOCAL" | "OTHER";
         TaxPage: {
             data: components["schemas"]["Tax"][];
             next_cursor?: string;
@@ -5531,6 +5563,8 @@ export interface components {
             rate: components["schemas"]["Percent"];
             /** @default false */
             tax_on_service: boolean;
+            /** @default LOCAL */
+            tax_kind: components["schemas"]["TaxKind"];
             /** @description Account code (A-Z 0-9 . - _ : /, at most 30 characters, upper-cased). Optional. */
             gl_account_code?: string;
             /** @default true */
@@ -5540,6 +5574,7 @@ export interface components {
             name?: string;
             rate?: components["schemas"]["Percent"];
             tax_on_service?: boolean;
+            tax_kind?: components["schemas"]["TaxKind"];
             /** @description An account code, or an empty string to clear it. */
             gl_account_code?: string;
             is_active?: boolean;
@@ -8730,6 +8765,49 @@ export interface components {
              */
             fee_account_id?: number;
             description?: string;
+        };
+        /**
+         * @description How the VAT paid on purchases is treated. CREDITABLE is claimed against the VAT collected (PKP only), EXPENSE is added to the cost of the purchase, DEFERRED is kept apart and not claimed.
+         * @enum {string}
+         */
+        InputVatTreatment: "CREDITABLE" | "EXPENSE" | "DEFERRED";
+        TaxSettings: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date */
+            effective_from: string;
+            is_pkp: boolean;
+            npwp?: string;
+            pkp_number?: string;
+            /** Format: date */
+            pkp_confirmed_on?: string;
+            input_vat_treatment: components["schemas"]["InputVatTreatment"];
+            signer_name?: string;
+            signer_title?: string;
+            /**
+             * Format: int64
+             * @description The approver of a backdated change.
+             */
+            approved_by?: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TaxSettingsView: {
+            current: components["schemas"]["TaxSettings"];
+            history: components["schemas"]["TaxSettings"][];
+        };
+        ChangeTaxSettingsRequest: {
+            /** Format: date */
+            effective_from: string;
+            is_pkp: boolean;
+            npwp?: string;
+            pkp_number?: string;
+            /** Format: date */
+            pkp_confirmed_on?: string | null;
+            input_vat_treatment?: components["schemas"]["InputVatTreatment"];
+            signer_name?: string;
+            signer_title?: string;
+            approval?: components["schemas"]["Approval"];
         };
         TaxFilingProfile: {
             /** Format: int64 */
@@ -16299,6 +16377,61 @@ export interface operations {
                     "application/json": components["schemas"]["BankStatementDetail"];
                 };
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getTaxSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxSettingsView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    changeTaxSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeTaxSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description The status after the change. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxSettingsView"];
+                };
+            };
+            401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

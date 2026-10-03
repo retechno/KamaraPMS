@@ -719,6 +719,7 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 
 | Method and path | Permission | Notes |
 |---|---|---|
+| `GET/POST {P}/tax/settings` | read: `tax.view`; write: `tax.manage` | The PKP status of the property: GET gives `{current, history}` (the status in force on the business date and every change, newest first). POST adds a change `{effective_from, is_pkp, npwp?, pkp_number?, pkp_confirmed_on?, input_vat_treatment?, signer_name?, signer_title?, approval?}`; the history only moves forward (409 `TAX_SETTINGS_NOT_NEWER`), a change that begins before the business date needs an `approval` (422 `APPROVAL_REQUIRED`), a property that is not PKP cannot use `CREDITABLE` and a PKP property needs its `npwp` (422 `VALIDATION_FAILED`) |
 | `GET/POST {P}/tax/profiles` | read: `tax.view`; write: `tax.manage` | POST `{tax_id, authority, registration_number?, due_day?, is_active?}`; 409 `TAX_PROFILE_EXISTS` |
 | `GET/PATCH {P}/tax/profiles/{id}` | read: `tax.view`; write: `tax.manage` | The tax never changes |
 | `GET {P}/tax/periods?tax_id=` | `tax.view` | The months from the start of the books: `tax_amount`, `status` (OPEN, READY, FILED), `paid`, `outstanding`, `overdue` |

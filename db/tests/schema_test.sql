@@ -1284,6 +1284,15 @@ INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALU
 SELECT expect_error('a tax is filed with one profile', '23505', $q$INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), 'again')$q$);
 SELECT expect_error('a profile is for a tax of its property', '23503', $q$INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('SG') ORDER BY id LIMIT 1), 'x')$q$);
 SELECT expect_error('a due day within the month', '23514', $q$UPDATE tax_filing_profiles SET due_day = 31$q$);
+
+-- PKP settings and the kind of a tax
+SELECT expect_error('a tax is VAT, LOCAL or OTHER', '23514', $q$UPDATE taxes SET tax_kind = 'SALES'$q$);
+SELECT expect_error('every property has its first tax status', '23505', $q$INSERT INTO property_tax_settings (tenant_id, property_id, effective_from) VALUES (tn('ABC'), pr('BALI'), '2000-01-01')$q$);
+SELECT expect_error('a property that is not PKP cannot claim input VAT', '23514', $q$INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', false, 'CREDITABLE')$q$);
+SELECT expect_error('a PKP property has its tax number', '23514', $q$INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', true, 'CREDITABLE')$q$);
+SELECT expect_error('an input VAT treatment is one of three', '23514', $q$INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', 'SOMETIMES')$q$);
+INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, npwp, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', true, '01.234.567.8-901.000', 'CREDITABLE');
+SELECT expect_error('the tax status history is append-only', '23001', $q$UPDATE property_tax_settings SET is_pkp = false$q$);
 WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
        VALUES (tn('ABC'), pr('BALI'), 'TXR9001', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
 INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)

@@ -30,7 +30,7 @@ func orNotFound(err error, nf *apperr.Error) error {
 }
 
 func toTax(t billingconfigdb.Tax) Tax {
-	return Tax{ID: t.ID, Code: t.Code, Name: t.Name, Rate: FormatRate(t.Rate), TaxOnService: t.TaxOnService, GLAccountCode: t.GlAccountCode, IsActive: t.IsActive,
+	return Tax{ID: t.ID, Code: t.Code, Name: t.Name, Rate: FormatRate(t.Rate), TaxOnService: t.TaxOnService, TaxKind: t.TaxKind, GLAccountCode: t.GlAccountCode, IsActive: t.IsActive,
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 }
 

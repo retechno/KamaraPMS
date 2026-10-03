@@ -43,6 +43,7 @@ export const router = createRouter({
     { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
     { path: '/accounting/journals', name: 'accounting-journals', component: () => import('@/views/accounting/JournalsView.vue'), meta: { title: 'Journals' } },
     { path: '/accounting/periods', name: 'accounting-periods', component: () => import('@/views/accounting/PeriodsView.vue'), meta: { title: 'Accounting periods' } },
+    { path: '/tax/status', name: 'tax-status', component: () => import('@/views/tax/TaxStatusView.vue'), meta: { title: 'PKP status' } },
     { path: '/tax/profiles', name: 'tax-profiles', component: () => import('@/views/tax/TaxProfilesView.vue'), meta: { title: 'Tax filing profiles' } },
     { path: '/tax/returns', name: 'tax-returns', component: () => import('@/views/tax/TaxReturnsView.vue'), meta: { title: 'Tax returns' } },
     { path: '/tax/liability', name: 'tax-liability', component: () => import('@/views/tax/TaxLiabilityView.vue'), meta: { title: 'Tax owed' } },

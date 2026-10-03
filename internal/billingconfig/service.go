@@ -132,7 +132,7 @@ func (s *Service) CreateTax(ctx context.Context, propertyID int64, in TaxInput) 
 		}
 		row, err := s.q(ctx).CreateTax(ctx, billingconfigdb.CreateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, Rate: rate,
-			TaxOnService: in.TaxOnService, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
+			TaxOnService: in.TaxOnService, TaxKind: in.TaxKind, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -148,6 +148,7 @@ type TaxPatch struct {
 	Name          *string
 	Rate          *string
 	TaxOnService  *bool
+	TaxKind       *string
 	GLAccountCode *string // "" clears it
 	IsActive      *bool
 }
@@ -171,10 +172,11 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 			return orNotFound(err, errTaxNotFound())
 		}
 		before := toTax(row)
-		in := TaxInput{Code: before.Code, Name: before.Name, Rate: before.Rate, TaxOnService: before.TaxOnService, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
+		in := TaxInput{Code: before.Code, Name: before.Name, Rate: before.Rate, TaxOnService: before.TaxOnService, TaxKind: before.TaxKind, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
 		apply(&in.Name, patch.Name)
 		apply(&in.Rate, patch.Rate)
 		apply(&in.TaxOnService, patch.TaxOnService)
+		apply(&in.TaxKind, patch.TaxKind)
 		apply(&in.GLAccountCode, patch.GLAccountCode)
 		apply(&in.IsActive, patch.IsActive)
 		in.Normalize()
@@ -194,7 +196,7 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 		}
 		updated, err := q.UpdateTax(ctx, billingconfigdb.UpdateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate,
-			TaxOnService: in.TaxOnService, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
+			TaxOnService: in.TaxOnService, TaxKind: in.TaxKind, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
