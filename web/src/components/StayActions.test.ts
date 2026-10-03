@@ -68,6 +68,41 @@ describe('StayActions', () => {
     expect(w.emitted('changed')?.[0]?.[0]).toContain('2026-10-05')
   })
 
+  it('prices the extra nights of an extension, with a reason and the approval of someone who may approve it', async () => {
+    document.body.innerHTML = ''
+    const w = mountActions([...all, 'reservation.override_rate'], detail({ line: { id: 11, reservation_id: 4 } }))
+    GET.mockImplementation((path: string) => {
+      if (path.endsWith('/reservations/{id}')) return Promise.resolve({ data: { rooms: [{ id: 11, room_type_id: 1, rate_plan_id: 3 }] } })
+      if (path.endsWith('/availability')) return Promise.resolve({ data: { room_types: [{ room_type_id: 1, rate_plans: [{ id: 3, nightly: [{ date: '2026-10-02', amount: '1000000' }, { date: '2026-10-03', amount: '1000000' }] }] }] } })
+      return Promise.resolve({ data: { data: [] } })
+    })
+    await w.get('[data-testid=open-departure]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=rate-override]').exists()).toBe(false) // nothing to price until the stay is longer
+    await w.get('input[name=departure]').setValue('2026-10-04')
+    await flushPromises()
+    expect(GET.mock.calls.find((c) => String(c[0]).endsWith('/availability'))?.[1]).toMatchObject({ params: { query: { arrival: '2026-10-02', departure: '2026-10-04' } } })
+    await w.get('[data-testid=override-toggle]').trigger('click')
+    await w.get('input[name=override_amount_2026-10-03]').setValue('800000')
+    await w.get('input[name=rate_override_reason]').setValue('Extension offer')
+    await w.get('form[data-testid=departure-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled() // the approval dialog comes first
+    const email = document.body.querySelector('input[name=approval_email]') as HTMLInputElement
+    const password = document.body.querySelector('input[name=approval_password]') as HTMLInputElement
+    email.value = 'boss@hotel.test'
+    email.dispatchEvent(new Event('input'))
+    password.value = 'secret'
+    password.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(JSON.parse(JSON.stringify(POST.mock.calls[0]?.[1].body))).toEqual({ // plain data: the body holds reactive proxies
+      version: 3, departure_date: '2026-10-04', nightly_overrides: [{ date: '2026-10-03', amount: '800000' }], rate_override_reason: 'Extension offer',
+      rate_override_approval: { email: 'boss@hotel.test', password: 'secret' },
+    })
+  })
+
   it('adds an accompanying guest found by search', async () => {
     const w = mountActions()
     await w.get('[data-testid=open-guest]').trigger('click')

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { FreeRoom, Guest, RoomType, StayDetail } from '@/api/types'
+import type { Approval, FreeRoom, Guest, RoomType, StayDetail } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
+import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -113,22 +115,84 @@ const departureChanged = computed(() => !!departure.value && departure.value !==
 
 function showDeparture(): void {
   departure.value = props.detail.stay.departure_date
+  rate.value = { overrides: [], reason: '' }
   show('departure')
+  void loadLine()
 }
 
-async function submitDeparture(): Promise<void> {
+// A stay that is extended can have its extra nights priced differently: the editor shows the standard price of those
+// nights (from the plan of the booking), and a change needs a reason and an approval like any rate change.
+const rate = ref<RateChange>({ overrides: [], reason: '' })
+const extraNights = ref<OverrideNight[]>([])
+const approving = ref(false)
+const dialogError = ref<ApiError | null>(null)
+const line = ref<{ typeId: number; planId: number } | null>(null)
+const canChangeRate = computed(() => auth.can('reservation.override_rate', pid.value))
+const canApprove = computed(() => auth.can('reservation.override_rate_approve', pid.value))
+const extending = computed(() => !!departure.value && departure.value > props.detail.stay.departure_date)
+
+async function loadLine(): Promise<void> {
+  line.value = null
+  const propertyId = pid.value
+  if (propertyId === null || !canChangeRate.value || !auth.can('reservation.read', propertyId)) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}', { params: { path: { propertyId, id: props.detail.line.reservation_id } } })
+    const l = data?.rooms.find((r) => r.id === props.detail.line.id)
+    if (l) line.value = { typeId: l.room_type_id, planId: l.rate_plan_id }
+  } catch {
+    line.value = null // the editor is optional
+  }
+  await loadExtraNights()
+}
+
+async function loadExtraNights(): Promise<void> {
+  extraNights.value = []
+  const propertyId = pid.value
+  if (propertyId === null || !line.value || !extending.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/availability', {
+      params: { path: { propertyId }, query: { arrival: props.detail.stay.departure_date, departure: departure.value, adults: Math.max(1, props.detail.stay.adult_count), children: props.detail.stay.child_count } },
+    })
+    const offer = data?.room_types.find((ty) => ty.room_type_id === line.value?.typeId)?.rate_plans.find((p) => p.id === line.value?.planId)
+    extraNights.value = (offer?.nightly ?? []).map((n) => ({ date: n.date, standard: n.amount, current: n.amount }))
+  } catch {
+    extraNights.value = []
+  }
+}
+
+watch(departure, () => void loadExtraNights())
+
+/** The button: a price change that the person cannot approve asks for an approver first. */
+function onSubmitDeparture(): void {
+  if (extending.value && rate.value.overrides.length && !canApprove.value) {
+    dialogError.value = null
+    approving.value = true
+    return
+  }
+  void submitDeparture()
+}
+
+async function submitDeparture(approval?: Approval): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   busy.value = true
   error.value = null
+  dialogError.value = null
+  const changed = extending.value && rate.value.overrides.length > 0
   try {
     await api.POST('/api/v1/properties/{propertyId}/stays/{id}/change-departure', {
-      params: { path: { propertyId, id: props.detail.stay.id } }, body: { version: props.detail.stay.version, departure_date: departure.value },
+      params: { path: { propertyId, id: props.detail.stay.id } },
+      body: {
+        version: props.detail.stay.version, departure_date: departure.value,
+        nightly_overrides: changed ? rate.value.overrides : undefined, rate_override_reason: changed ? rate.value.reason : undefined, rate_override_approval: changed ? approval : undefined,
+      },
     })
     open.value = ''
+    approving.value = false
     emit('changed', t('stayActions.departureNow', { date: departure.value }))
   } catch (e) {
-    fail(e)
+    if (approval) dialogError.value = e instanceof ApiError ? e : null
+    else fail(e)
     if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') emit('changed', '')
   } finally {
     busy.value = false
@@ -219,12 +283,13 @@ async function addGuest(g: Guest): Promise<void> {
         </div>
       </form>
 
-      <form v-if="open === 'departure'" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="submitDeparture">
+      <form v-if="open === 'departure'" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="onSubmitDeparture">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.departureTitle') }}</h2>
         <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
           <template #default="{ id, invalid }"><Input :id="id" v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
         </FormField>
         <p class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
+        <RateOverrideSection v-if="canChangeRate && extending && extraNights.length" v-model="rate" class="mt-3" :nights="extraNights" />
         <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>
           <Button type="submit" :disabled="busy || !departureChanged">{{ t('common.save') }}</Button>
@@ -246,4 +311,5 @@ async function addGuest(g: Guest): Promise<void> {
       </div>
     </CardContent>
   </Card>
+  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submitDeparture(a)" @cancel="approving = false" />
 </template>

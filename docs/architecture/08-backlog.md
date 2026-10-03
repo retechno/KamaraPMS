@@ -17,12 +17,6 @@ this list only keeps them from being forgotten. Move an item to the README statu
   property or per user, and an approval by a manager above it. Today the permission `reservation.complimentary` and a
   reason are the only controls (see "Complimentary and house use rooms" in the README).
 
-## Reservations and prices
-
-- **Price editor when a stay is extended.** The rate override screen exists for a new reservation, each room of a
-  reservation and a walk-in; the extension of an in-house stay takes `nightly_overrides` with the same reason and
-  approval in the API, but its screen has no price editor yet.
-
 ## Language
 
 - **Numbers in the Indonesian field errors.** The generic texts leave out the limits the server hint carries ("at
