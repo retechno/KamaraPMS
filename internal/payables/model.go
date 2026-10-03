@@ -87,6 +87,10 @@ type BillLine struct {
 	AccountName string          `json:"account_name"`
 	Description string          `json:"description,omitempty"`
 	Amount      decimal.Decimal `json:"amount"`
+	// VATAmount is the VAT paid on the line (on top of Amount) and VATTreatment how it was booked on the bill date:
+	// CREDITABLE, EXPENSE or DEFERRED (empty when there is no VAT).
+	VATAmount    decimal.Decimal `json:"vat_amount"`
+	VATTreatment string          `json:"vat_treatment,omitempty"`
 }
 
 // Payment statuses of a bill, derived from what has been paid.
@@ -127,6 +131,7 @@ type BillLineInput struct {
 	AccountID   int64           `json:"account_id"`
 	Description string          `json:"description"`
 	Amount      decimal.Decimal `json:"amount"`
+	VATAmount   decimal.Decimal `json:"vat_amount"` // the VAT paid on the line, on top of Amount; zero when there is none
 }
 
 // BillInput enters a supplier bill. The due date defaults to the bill date plus the supplier's payment terms.

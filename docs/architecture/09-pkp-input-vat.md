@@ -1,6 +1,6 @@
 # PKP and input VAT (design, proposal for approval)
 
-Status: **step 1 built (migration 00041): PKP settings, the kind of a tax, the "PKP status" page. Steps 2 to 4 are not built.**
+Status: **steps 1 and 2 built (migrations 00041 and 00042): PKP settings, the kind of a tax, the "PKP status" page; input VAT on supplier bills with the account 1425 (`INPUT_VAT`). Steps 3 and 4 are not built.** Step 2 differs from the design in one thing: `suppliers.is_pkp` is left out (it was only a hint); the VAT of a line is entered as an amount, there is no rate.
 Step 1 of the finance order in `08-backlog.md`. Built as designed, with these differences: the settings live in the `taxfiling` module
 (`settings.go`) and not in a module of their own; every property gets its first row (not PKP, input VAT as an expense, from 2000-01-01) from the
 migration and from a trigger on `properties`, so the change always has a row to lock (`db.TaxSettings`, level of the tax); a change must begin

@@ -37,7 +37,7 @@ const notice = ref('')
 const busy = ref(false)
 const filter = reactive({ supplier: Number(route.query.supplier) || 0, status: '', open_only: false, q: '', from: '', to: '' })
 const creating = ref(false)
-const form = reactive({ supplier_id: 0, invoice: '', bill_date: '', due_date: '', description: '', lines: [] as { account_id: number; description: string; amount: string }[] })
+const form = reactive({ supplier_id: 0, invoice: '', bill_date: '', due_date: '', description: '', lines: [] as { account_id: number; description: string; amount: string; vat_amount: string }[] })
 const voiding = ref<{ reason: string; asking: boolean } | null>(null)
 let postKey = newIdempotencyKey()
 
@@ -49,6 +49,9 @@ const total = computed(() => {
   let sum = 0n
   let valid = true
   for (const l of form.lines) {
+    const vat = l.vat_amount.trim() === '' ? 0n : toMilli(l.vat_amount)
+    if (vat === null || vat < 0n) valid = false
+    else if (l.amount.trim() !== '') sum += vat
     if (l.amount.trim() === '') continue
     const n = toMilli(l.amount)
     if (n === null || n <= 0n) valid = false
@@ -113,7 +116,7 @@ async function open(b: Bill): Promise<void> {
 
 function startNew(): void {
   Object.assign(form, { supplier_id: filter.supplier || 0, invoice: '', bill_date: '', due_date: '', description: '' })
-  form.lines = [{ account_id: 0, description: '', amount: '' }]
+  form.lines = [{ account_id: 0, description: '', amount: '', vat_amount: '' }]
   applyDefaultAccount()
   error.value = null
   postKey = newIdempotencyKey()
@@ -138,7 +141,7 @@ async function post(): Promise<void> {
       params: { path: { propertyId }, header: { 'Idempotency-Key': postKey } },
       body: {
         supplier_id: form.supplier_id, supplier_invoice_number: form.invoice, bill_date: form.bill_date, due_date: form.due_date || null, description: form.description || undefined,
-        lines: form.lines.map((l) => ({ account_id: l.account_id, description: l.description || undefined, amount: l.amount.trim() })),
+        lines: form.lines.map((l) => ({ account_id: l.account_id, description: l.description || undefined, amount: l.amount.trim(), vat_amount: l.vat_amount.trim() || undefined })),
       },
     })
     postKey = newIdempotencyKey()
@@ -224,6 +227,7 @@ watch(() => pid.value, () => {
                 <th class="py-1.5 pr-3 font-medium">{{ t('payables.chargedTo') }}</th>
                 <th class="px-3 font-medium">{{ t('payables.detail') }}</th>
                 <th class="px-3 text-right font-medium">{{ t('payables.amount') }}</th>
+                <th class="px-3 text-right font-medium">{{ t('payables.vat') }}</th>
                 <th />
               </tr>
             </thead>
@@ -238,17 +242,22 @@ watch(() => pid.value, () => {
                   <Input v-model="l.amount" class="text-right" :name="`amount_${i}`" inputmode="decimal" :aria-invalid="!!fieldError(`lines[${i}].amount`)" />
                   <small v-if="fieldError(`lines[${i}].amount`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].amount`) }}</small>
                 </td>
+                <td>
+                  <Input v-model="l.vat_amount" class="text-right" :name="`vat_${i}`" inputmode="decimal" :aria-invalid="!!fieldError(`lines[${i}].vat_amount`)" />
+                  <small v-if="fieldError(`lines[${i}].vat_amount`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].vat_amount`) }}</small>
+                </td>
                 <td><Button v-if="form.lines.length > 1" type="button" variant="outline" size="sm" :data-testid="`remove-line-${i}`" @click="form.lines.splice(i, 1)">{{ t('payables.remove') }}</Button></td>
               </tr>
             </tbody>
             <tfoot>
               <tr class="border-t border-border">
                 <td class="pt-2">
-                  <Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, description: '', amount: '' })">{{ t('payables.addLine') }}</Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, description: '', amount: '', vat_amount: '' })">{{ t('payables.addLine') }}</Button>
                   <small class="ml-2 text-xs text-muted-foreground">{{ t('payables.taxLineHint') }}</small>
                 </td>
                 <td class="pt-2 text-right"><b>{{ t('payables.total') }}</b></td>
                 <td class="pt-2 pr-3 text-right tabular-nums" data-testid="bill-total"><b>{{ $money(fromMilli(total.sum)) }}</b></td>
+                <td />
                 <td />
               </tr>
             </tfoot>
@@ -310,13 +319,17 @@ watch(() => pid.value, () => {
             <template v-if="opened">
               <p v-if="opened.description" class="mb-2 mt-0 text-sm text-muted-foreground">{{ opened.description }}</p>
               <table class="w-full border-collapse text-sm">
-                <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('payables.account') }}</th><th class="px-3 font-medium">{{ t('payables.detail') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.amount') }}</th></tr></thead>
+                <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('payables.account') }}</th><th class="px-3 font-medium">{{ t('payables.detail') }}</th><th class="px-3 text-right font-medium">{{ t('payables.amount') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.vat') }}</th></tr></thead>
                 <tbody>
                   <tr v-for="l in opened.lines" :key="l.line_no" class="border-b border-border">
                     <td class="py-1 pr-3">{{ l.line_no }}</td>
                     <td class="px-3">{{ l.account_code }} · {{ l.account_name }}</td>
                     <td class="px-3"><small class="text-muted-foreground">{{ l.description }}</small></td>
-                    <td class="pl-3 text-right tabular-nums">{{ $money(l.amount) }}</td>
+                    <td class="px-3 text-right tabular-nums">{{ $money(l.amount) }}</td>
+                    <td class="pl-3 text-right tabular-nums" :data-testid="`line-vat-${l.line_no}`">
+                      <template v-if="l.vat_treatment">{{ $money(l.vat_amount) }} <small class="text-muted-foreground">{{ t(`payables.vat_${l.vat_treatment}`) }}</small></template>
+                      <template v-else>—</template>
+                    </td>
                   </tr>
                 </tbody>
               </table>

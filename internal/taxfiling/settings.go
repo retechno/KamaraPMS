@@ -102,6 +102,25 @@ func (s *Service) Settings(ctx context.Context, propertyID int64) (SettingsView,
 	return SettingsView{Current: cur, History: history}, nil
 }
 
+// SettingsOnDate is the tax status of the property on a date, read under a share lock on the settings so a change cannot
+// slip in while a document of that date is being posted. It joins the ambient transaction (lock level of the tax).
+func (s *Service) SettingsOnDate(ctx context.Context, tenantID, propertyID int64, d civil.Date) (TaxSettings, error) {
+	q := s.q(ctx)
+	first, err := q.FirstTaxSettingsID(ctx, taxfilingdb.FirstTaxSettingsIDParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return TaxSettings{}, err
+	}
+	if err := db.LockRows(ctx, db.TaxSettings, db.ForShare, propertyID, []int64{first}); err != nil {
+		return TaxSettings{}, err
+	}
+	history, err := s.settingsHistory(ctx, tenantID, propertyID)
+	if err != nil {
+		return TaxSettings{}, err
+	}
+	on, _ := SettingsOn(history, d)
+	return on, nil
+}
+
 func validateSettings(in SettingsInput) []apperr.FieldError {
 	var fields []apperr.FieldError
 	for _, l := range []struct {

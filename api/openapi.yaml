@@ -9149,7 +9149,7 @@ components:
       type: object
       required: [map_key, meaning, account_id, account_code, account_name, account_type]
       properties:
-        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE] }
+        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE, INPUT_VAT] }
         meaning: { type: string }
         account_id: { type: integer, format: int64 }
         account_code: { type: string }
@@ -9490,7 +9490,9 @@ components:
         account_code: { type: string }
         account_name: { type: string }
         description: { type: string }
-        amount: { type: string }
+        amount: { type: string, description: The cost of the line, without its VAT. }
+        vat_amount: { type: string, description: "The VAT paid on the line, on top of the amount; zero when there is none." }
+        vat_treatment: { $ref: "#/components/schemas/InputVatTreatment", description: How the VAT was booked, frozen on the bill date from the PKP status of the property. Absent when there is no VAT. }
     Bill:
       type: object
       required: [id, bill_number, supplier_id, supplier_code, supplier_name, supplier_invoice_number, bill_date, due_date, total, paid, outstanding, status, payment_status, journal_id, journal_number, void_journal_id, voided_at, created_at]
@@ -9543,6 +9545,7 @@ components:
               account_id: { type: integer, format: int64 }
               description: { type: string, maxLength: 300 }
               amount: { type: string, description: "Above zero, at the property's decimals." }
+              vat_amount: { type: string, description: "The VAT paid on the line, on top of the amount (zero or more, at the property's decimals). Booked on the input VAT account, or added to the cost of the line, as the PKP status of the property on the bill date says. The total of the bill is the amounts plus their VAT." }
     OpenBill:
       type: object
       required: [bill_id, bill_number, supplier_invoice_number, bill_date, due_date, total, outstanding]

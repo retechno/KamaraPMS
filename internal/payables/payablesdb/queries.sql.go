@@ -246,18 +246,20 @@ func (q *Queries) InsertBill(ctx context.Context, arg InsertBillParams) (int64, 
 }
 
 const insertBillLine = `-- name: InsertBillLine :exec
-INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, description, amount)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, description, amount, vat_amount, vat_treatment)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertBillLineParams struct {
-	TenantID    int64
-	PropertyID  int64
-	BillID      int64
-	LineNo      int32
-	AccountID   int64
-	Description *string
-	Amount      decimal.Decimal
+	TenantID     int64
+	PropertyID   int64
+	BillID       int64
+	LineNo       int32
+	AccountID    int64
+	Description  *string
+	Amount       decimal.Decimal
+	VatAmount    decimal.Decimal
+	VatTreatment *string
 }
 
 func (q *Queries) InsertBillLine(ctx context.Context, arg InsertBillLineParams) error {
@@ -269,6 +271,8 @@ func (q *Queries) InsertBillLine(ctx context.Context, arg InsertBillLineParams) 
 		arg.AccountID,
 		arg.Description,
 		arg.Amount,
+		arg.VatAmount,
+		arg.VatTreatment,
 	)
 	return err
 }
@@ -417,7 +421,7 @@ func (q *Queries) ListAllocations(ctx context.Context, arg ListAllocationsParams
 }
 
 const listBillLines = `-- name: ListBillLines :many
-SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount, l.vat_amount, l.vat_treatment
 FROM supplier_bill_lines l
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.bill_id = $3
@@ -431,12 +435,14 @@ type ListBillLinesParams struct {
 }
 
 type ListBillLinesRow struct {
-	LineNo      int32
-	AccountID   int64
-	AccountCode string
-	AccountName string
-	Description *string
-	Amount      decimal.Decimal
+	LineNo       int32
+	AccountID    int64
+	AccountCode  string
+	AccountName  string
+	Description  *string
+	Amount       decimal.Decimal
+	VatAmount    decimal.Decimal
+	VatTreatment *string
 }
 
 func (q *Queries) ListBillLines(ctx context.Context, arg ListBillLinesParams) ([]ListBillLinesRow, error) {
@@ -455,6 +461,8 @@ func (q *Queries) ListBillLines(ctx context.Context, arg ListBillLinesParams) ([
 			&i.AccountName,
 			&i.Description,
 			&i.Amount,
+			&i.VatAmount,
+			&i.VatTreatment,
 		); err != nil {
 			return nil, err
 		}

@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -86,7 +87,7 @@ func (s *Service) loadBill(ctx context.Context, tenantID, propertyID, id int64) 
 	}
 	b.Lines = make([]BillLine, 0, len(lines))
 	for _, l := range lines {
-		b.Lines = append(b.Lines, BillLine{LineNo: l.LineNo, AccountID: l.AccountID, AccountCode: l.AccountCode, AccountName: l.AccountName, Description: deref(l.Description), Amount: l.Amount})
+		b.Lines = append(b.Lines, BillLine{LineNo: l.LineNo, AccountID: l.AccountID, AccountCode: l.AccountCode, AccountName: l.AccountName, Description: deref(l.Description), Amount: l.Amount, VATAmount: l.VatAmount, VATTreatment: deref(l.VatTreatment)})
 	}
 	return b, nil
 }
@@ -123,13 +124,19 @@ func validateBill(in BillInput, decimals int32) (decimal.Decimal, []apperr.Field
 		case !l.Amount.Equal(l.Amount.Round(decimals)):
 			fields = append(fields, fieldErr(at("amount"), "TOO_PRECISE", fmt.Sprintf("at most %d decimals", decimals)))
 		}
+		switch {
+		case l.VATAmount.IsNegative():
+			fields = append(fields, fieldErr(at("vat_amount"), "NEGATIVE", "zero or more"))
+		case !l.VATAmount.Equal(l.VATAmount.Round(decimals)):
+			fields = append(fields, fieldErr(at("vat_amount"), "TOO_PRECISE", fmt.Sprintf("at most %d decimals", decimals)))
+		}
 		if l.AccountID < 1 {
 			fields = append(fields, fieldErr(at("account_id"), "REQUIRED", "choose the account it is charged to"))
 		}
 		if len([]rune(l.Description)) > 300 {
 			fields = append(fields, fieldErr(at("description"), "TOO_LONG", "at most 300 characters"))
 		}
-		total = total.Add(l.Amount)
+		total = total.Add(l.Amount).Add(l.VATAmount)
 	}
 	return total, fields
 }
@@ -199,6 +206,21 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 		if err := po.CheckDate(ctx, in.BillDate, "bill_date"); err != nil {
 			return err
 		}
+		// How the VAT of the bill is treated is the PKP status of the property on the bill date, frozen on each line.
+		status, err := s.tax.SettingsOnDate(ctx, p.TenantID, propertyID, in.BillDate)
+		if err != nil {
+			return err
+		}
+		treatment := status.InputVATTreatment
+		var inputVAT int64
+		for _, l := range in.Lines {
+			if l.VATAmount.IsPositive() && treatment != taxfiling.InputVATExpense {
+				if inputVAT, err = po.SystemAccount(ctx, accounting.KeyInputVAT); err != nil {
+					return err
+				}
+				break
+			}
+		}
 		payable, err := po.SystemAccount(ctx, accounting.KeyAccountsPayable)
 		if err != nil {
 			return err
@@ -233,7 +255,14 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			if d == "" {
 				d = "Invoice " + inv + " " + sup.Name
 			}
-			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: l.Amount, Description: d, SourceType: "AP_BILL", SourceRef: number})
+			cost := l.Amount
+			if treatment == taxfiling.InputVATExpense {
+				cost = cost.Add(l.VATAmount) // the VAT is part of what the purchase cost
+			}
+			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: cost, Description: d, SourceType: "AP_BILL", SourceRef: number})
+			if l.VATAmount.IsPositive() && treatment != taxfiling.InputVATExpense {
+				jl = append(jl, accounting.SystemLine{AccountID: inputVAT, Debit: l.VATAmount, Description: "VAT " + d, SourceType: "AP_BILL", SourceRef: number})
+			}
 		}
 		jl = append(jl, accounting.SystemLine{AccountID: payable, Credit: total, Description: "Invoice " + inv + " " + sup.Name, SourceType: "AP_BILL", SourceRef: number})
 		jid, jnum, err := po.Post(ctx, accounting.SystemJournal{Date: in.BillDate, Description: "Bill " + number + " " + sup.Code + " " + inv, Reference: number, Lines: jl})
@@ -248,15 +277,20 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			return err
 		}
 		for i, l := range in.Lines {
+			var lineTreatment *string
+			if l.VATAmount.IsPositive() {
+				lineTreatment = &treatment
+			}
 			if err := q.InsertBillLine(ctx, payablesdb.InsertBillLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, BillID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Description: nullable(l.Description), Amount: l.Amount,
+				VatAmount: l.VATAmount, VatTreatment: lineTreatment,
 			}); err != nil {
 				return err
 			}
 		}
 		*out = id
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.bill_posted", "supplier_bill", id, nil,
-			map[string]any{"bill_number": number, "supplier": sup.Code, "invoice": inv, "total": total.String(), "journal": jnum}))
+			map[string]any{"bill_number": number, "supplier": sup.Code, "invoice": inv, "total": total.String(), "vat": vatOf(in.Lines).String(), "vat_treatment": treatment, "journal": jnum}))
 	})
 }
 
@@ -349,4 +383,13 @@ func (s *Service) OpenBills(ctx context.Context, propertyID, supplierID int64) (
 		}
 	}
 	return out, nil
+}
+
+// vatOf is the VAT paid on the lines of a bill.
+func vatOf(lines []BillLineInput) decimal.Decimal {
+	v := decimal.Zero
+	for _, l := range lines {
+		v = v.Add(l.VATAmount)
+	}
+	return v
 }

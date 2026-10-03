@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -35,11 +36,12 @@ type Service struct {
 	days  *tenancy.Service
 	acct  *accounting.Service
 	iam   *iam.Service
+	tax   *taxfiling.Service // the PKP status on the date of a bill (how its input VAT is treated)
 }
 
 // NewService wires the service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, acct *accounting.Service, iamSvc *iam.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, acct: acct, iam: iamSvc}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, acct *accounting.Service, iamSvc *iam.Service, tax *taxfiling.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, acct: acct, iam: iamSvc, tax: tax}
 }
 
 func (s *Service) q(ctx context.Context) *payablesdb.Queries { return payablesdb.New(s.txm.DB(ctx)) }

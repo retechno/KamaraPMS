@@ -147,6 +147,39 @@ describe('payables views', () => {
     expect(init.body).toEqual({ reason: 'duplicate', approval: { email: 'a@b.c', password: 'pw' } })
   })
 
+  it('enters the VAT of a line apart from its amount, the total adding both', async () => {
+    const w = await mountView(BillsView)
+    await flushPromises()
+    await w.get('[data-testid=new-bill]').trigger('click')
+    await w.get('select[name=supplier_id]').setValue(1)
+    await w.get('input[name=invoice]').setValue('INV-88')
+    await w.get('input[name=bill_date]').setValue('2026-09-30')
+    await w.get('input[name=amount_0]').setValue('1000000')
+    await w.get('input[name=vat_0]').setValue('110000')
+    expect(w.get('[data-testid=bill-total]').text()).toBe('1,110,000')
+    await w.get('input[name=vat_0]').setValue('-5')
+    expect((w.get('[data-testid=bill-post]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=vat_0]').setValue('110000')
+    await w.get('[data-testid=bill-form]').trigger('submit')
+    await flushPromises()
+    expect((POST.mock.calls[0] as [string, { body: { lines: unknown[] } }])[1].body.lines).toEqual([{ account_id: 5, description: undefined, amount: '1000000', vat_amount: '110000' }])
+  })
+
+  it('shows the VAT of the lines of an opened bill with how it was booked', async () => {
+    const w = await mountView(BillsView)
+    await flushPromises()
+    GET = vi.fn(async (path: string) => {
+      if (path.endsWith('/bills/{id}')) return { data: bill(1, 'BILL000001', { lines: [{ line_no: 1, account_id: 5, account_code: '6510', account_name: 'Electricity', amount: '1000000', vat_amount: '110000', vat_treatment: 'CREDITABLE' }, { line_no: 2, account_id: 5, account_code: '6510', account_name: 'Electricity', amount: '5000', vat_amount: '0' }] }) }
+      if (path.endsWith('/bills')) return { data: { data: bills } }
+      return { data: { data: [] } }
+    })
+    await w.get('[data-testid=bill-BILL000001]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=line-vat-1]').text()).toContain('110,000')
+    expect(w.get('[data-testid=line-vat-1]').text()).toContain('claimed')
+    expect(w.get('[data-testid=line-vat-2]').text()).toBe('—')
+  })
+
   it('filters bills on the server, starting from the supplier in the address', async () => {
     const w = await mountView(BillsView, undefined, '/payables/bills?supplier=1')
     await flushPromises()

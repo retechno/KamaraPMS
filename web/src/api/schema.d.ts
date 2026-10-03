@@ -8093,7 +8093,7 @@ export interface components {
         };
         GlAccountMapEntry: {
             /** @enum {string} */
-            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE";
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE" | "INPUT_VAT";
             meaning: string;
             /** Format: int64 */
             account_id: number;
@@ -8417,7 +8417,12 @@ export interface components {
             account_code: string;
             account_name: string;
             description?: string;
+            /** @description The cost of the line */
             amount: string;
+            /** @description The VAT paid on the line, on top of the amount; zero when there is none. */
+            vat_amount?: string;
+            /** @description How the VAT was booked */
+            vat_treatment?: components["schemas"]["InputVatTreatment"];
         };
         Bill: {
             /** Format: int64 */
@@ -8471,6 +8476,8 @@ export interface components {
                 description?: string;
                 /** @description Above zero, at the property's decimals. */
                 amount: string;
+                /** @description The VAT paid on the line, on top of the amount (zero or more, at the property's decimals). Booked on the input VAT account, or added to the cost of the line, as the PKP status of the property on the bill date says. The total of the bill is the amounts plus their VAT. */
+                vat_amount?: string;
             }[];
         };
         OpenBill: {

@@ -104,7 +104,7 @@ func New(d Deps) *App {
 	notifierSvc := notifications.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, documentsSvc, reservationsSvc, d.Mail)
 	reservationsSvc.SetConfirmedHook(notifierSvc)
 	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)
-	payablesSvc := payables.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
+	payablesSvc := payables.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc, taxSvc)
 	bankrecSvc := bankrec.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
 	lostFoundSvc := lostfound.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
