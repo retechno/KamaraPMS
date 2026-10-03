@@ -30,6 +30,7 @@ export const navigation: NavSection[] = [
       { id: 'dashboard', to: '/' },
       { id: 'reservations', to: '/reservations' },
       { id: 'tapeChart', to: '/reservations/tape' },
+      { id: 'availability', to: '/availability' },
       { id: 'arrivals', to: '/arrivals' },
       { id: 'inHouse', to: '/in-house' },
       { id: 'departures', to: '/departures' },

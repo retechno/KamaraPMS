@@ -70,6 +70,7 @@ export type CreateReservationRequest = Schemas['CreateReservationRequest']
 export type CancelResult = Schemas['CancelResult']
 export type NightRate = Schemas['NightRate']
 export type TapeChart = Schemas['TapeChart']
+export type AvailabilityCalendar = Schemas['AvailabilityCalendar']
 export type TapeBooking = Schemas['TapeBooking']
 
 export type Folio = Schemas['Folio']

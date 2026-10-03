@@ -105,6 +105,7 @@ export const router = createRouter({
     },
     { path: '/reservations', name: 'reservations', component: () => import('@/views/reservations/ReservationsView.vue'), meta: { title: 'Reservations' } },
     { path: '/reservations/new', name: 'reservation-new', component: () => import('@/views/reservations/NewReservationView.vue'), meta: { title: 'New reservation' } },
+    { path: '/availability', name: 'availability', component: () => import('@/views/reservations/AvailabilityCalendarView.vue'), meta: { title: 'Availability' } },
     { path: '/reservations/tape', name: 'tape-chart', component: () => import('@/views/reservations/TapeChartView.vue'), meta: { title: 'Tape chart' } },
     {
       path: '/reservations/:id(\\d+)',
