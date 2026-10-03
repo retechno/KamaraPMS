@@ -2847,6 +2847,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The credit notes and write-offs of a company, newest first, with the lines of the credit notes (cityledger.read) */
+        get: operations["listCityLedgerAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/credit-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a credit note to a company (cityledger.credit_note, with an approval)
+         * @description Against an issued invoice (at most what it still owes: 409 `ADJUSTMENT_EXCEEDS_INVOICE`) or against a transfer that is not on an invoice
+         *     (at most what the transfer says: 409 `ADJUSTMENT_EXCEEDS_TRANSFER`; 409 `TRANSFER_ON_INVOICE` when it is on one). The invoice later made from such
+         *     a transfer asks the net amount. Each line is booked on a revenue account (the allowance) with an optional tax of the property, taken at its rate on the net
+         *     amount. The journal is made when the note is: Dr the allowance and the tax payable, Cr the city ledger, on the business date. The company row is locked.
+         */
+        post: operations["createCityLedgerCreditNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/write-offs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write off what an invoice still owes (cityledger.write_off, with an approval)
+         * @description All or part of what an issued invoice still owes: 409 `ADJUSTMENT_EXCEEDS_INVOICE`. Dr the account that bears it (an expense account such as the bad debt
+         *     expense, or the allowance for doubtful accounts 1240), Cr the city ledger. The tax is not touched.
+         */
+        post: operations["createCityLedgerWriteOff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/adjustments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One credit note or write-off (cityledger.read) */
+        get: operations["getCityLedgerAdjustment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/credit-note.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A credit note to a company as PDF (cityledger.read)
+         * @description A write-off is internal and has no document (409 `NOT_A_CREDIT_NOTE`).
+         */
+        get: operations["getCityLedgerCreditNotePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a credit note or a write-off (the permission of its kind, with an approval)
+         * @description Its journal is reversed on the current business date and what it took off is owed again. 409 `ADJUSTMENT_ALREADY_VOIDED`, `ADJUSTMENT_ON_INVOICE` (a credit note of a transfer that is on an invoice now: void the invoice first).
+         */
+        post: operations["voidCityLedgerAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/city-ledger/invoices/{id}": {
         parameters: {
             query?: never;
@@ -7298,6 +7435,8 @@ export interface components {
             city_ledger: {
                 transferred: components["schemas"]["Amount"];
                 received: components["schemas"]["Amount"];
+                /** @description What the credit notes and write-offs of the day took off what companies owe. */
+                adjusted?: components["schemas"]["Amount"];
                 /** @description What companies owe at the end of the day. */
                 outstanding: components["schemas"]["Amount"];
             };
@@ -7784,7 +7923,9 @@ export interface components {
             transferred: string;
             /** @description Posted receipts. */
             received: string;
-            /** @description transferred minus received. */
+            /** @description What posted credit notes and write-offs took off. */
+            adjusted: string;
+            /** @description transferred minus received minus adjusted. */
             balance: string;
             /** @description What can still be transferred within the limit; null without a limit. */
             available: string | null;
@@ -7827,10 +7968,113 @@ export interface components {
         CityLedgerReceiptList: {
             data: components["schemas"]["CityLedgerReceipt"][];
         };
+        CityLedgerCreditNoteLine: {
+            line_no: number;
+            description: string;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            net_amount: string;
+            /** Format: int64 */
+            tax_id: number | null;
+            tax_code?: string;
+            tax_rate: string | null;
+            tax_amount: string;
+            /** @description The net amount and its tax. */
+            total: string;
+        };
+        CityLedgerAdjustment: {
+            /** Format: int64 */
+            id: number;
+            /** @description CN000001 or WO000001. */
+            number: string;
+            /** @enum {string} */
+            kind: "CREDIT_NOTE" | "WRITE_OFF";
+            /** Format: int64 */
+            company_id: number;
+            /** Format: int64 */
+            invoice_id: number | null;
+            invoice_number?: string;
+            /**
+             * Format: int64
+             * @description The transfer a credit note was made against.
+             */
+            payment_id: number | null;
+            payment_number?: string;
+            /** @description The credit note with its tax; the write-off. */
+            amount: string;
+            business_date: components["schemas"]["Date"];
+            reason: string;
+            /** @description The account a write-off is charged to. */
+            debit_account_code?: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /**
+             * Format: int64
+             * @description The invoice made from the transfer of a credit note; it asks the net amount.
+             */
+            attached_invoice_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** Format: int64 */
+            created_by: number | null;
+            /** @description The lines of a credit note. */
+            lines?: components["schemas"]["CityLedgerCreditNoteLine"][];
+        };
+        CityLedgerAdjustmentList: {
+            data: components["schemas"]["CityLedgerAdjustment"][];
+        };
+        CreateCityLedgerCreditNoteRequest: {
+            /**
+             * Format: int64
+             * @description An issued invoice; exactly one of the invoice and the transfer.
+             */
+            invoice_id?: number | null;
+            /**
+             * Format: int64
+             * @description A transfer to a company that is not on an invoice.
+             */
+            payment_id?: number | null;
+            reason: string;
+            lines: {
+                description: string;
+                /**
+                 * Format: int64
+                 * @description A revenue account (the allowance of revenue).
+                 */
+                account_id: number;
+                net_amount: string;
+                /**
+                 * Format: int64
+                 * @description A tax of the property
+                 */
+                tax_id?: number | null;
+            }[];
+            approval: components["schemas"]["Approval"];
+        };
+        CreateCityLedgerWriteOffRequest: {
+            /** Format: int64 */
+            invoice_id: number;
+            amount: string;
+            /**
+             * Format: int64
+             * @description An expense account or the allowance for doubtful accounts 1240.
+             */
+            account_id: number;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
         CityLedgerStatementLine: {
             date: components["schemas"]["Date"];
             /** @enum {string} */
-            kind: "TRANSFER" | "RECEIPT";
+            kind: "TRANSFER" | "RECEIPT" | "CREDIT_NOTE" | "WRITE_OFF";
             number: string;
             description: string;
             reference?: string;
@@ -7887,8 +8131,12 @@ export interface components {
         CityLedgerCandidate: components["schemas"]["CityLedgerInvoiceLine"] & {
             /** @description The state of the stay behind the folio; empty when the folio has no stay. */
             stay_status: string;
-            /** @description True when the guest has checked out. */
+            /** @description True when the guest has checked out and the credit notes of the transfer do not take off all of it. */
             invoiceable: boolean;
+            /** @description What credit notes made against the transfer took off. */
+            credited: string;
+            /** @description The amount less the credit notes; what an invoice asks. */
+            net: string;
         };
         CityLedgerCandidateList: {
             data: components["schemas"]["CityLedgerCandidate"][];
@@ -7901,13 +8149,28 @@ export interface components {
             company_id: number;
             invoice_date: components["schemas"]["Date"];
             due_date: components["schemas"]["Date"];
+            /** @description The transfers less the credit notes of those transfers that were attached when the invoice was made. */
             total: string;
+            /** @description The transfers on the invoice. */
+            subtotal: string;
+            /** @description What credit notes made against the invoice took off. */
+            credited: string;
+            /** @description What write-offs of the invoice took off. */
+            written_off: string;
+            /** @description The credit notes of the transfers on the invoice; only on the detail and on creation. */
+            attached_credits?: {
+                /** Format: int64 */
+                id: number;
+                number: string;
+                payment_number: string;
+                amount: string;
+            }[];
             /** @description What posted receipts have allocated to the invoice. */
             paid: string;
-            /** @description Total less paid; 0 once voided. */
+            /** @description Total less paid */
             outstanding: string;
             /** @enum {string} */
-            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOID";
+            payment_status: "UNPAID" | "PARTIAL" | "PAID" | "CREDITED" | "WRITTEN_OFF" | "VOID";
             notes?: string;
             /** @enum {string} */
             status: "ISSUED" | "VOIDED";
@@ -14083,6 +14346,183 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCityLedgerAdjustments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The adjustments, voided ones too. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAdjustmentList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCityLedgerCreditNote: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCityLedgerCreditNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The credit note. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAdjustment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createCityLedgerWriteOff: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCityLedgerWriteOffRequest"];
+            };
+        };
+        responses: {
+            /** @description The write-off. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAdjustment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The adjustment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAdjustment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCityLedgerCreditNotePdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The credit note (inline, never cached); a void one is stamped. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    voidCityLedgerAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided adjustment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerAdjustment"];
+                };
+            };
+            401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

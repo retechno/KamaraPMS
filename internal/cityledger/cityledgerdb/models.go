@@ -11,6 +11,31 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+type CityLedgerAdjustment struct {
+	ID               int64
+	TenantID         int64
+	PropertyID       int64
+	AdjustmentNumber string
+	Kind             string
+	CompanyID        int64
+	InvoiceID        *int64
+	PaymentID        *int64
+	Amount           decimal.Decimal
+	BusinessDate     civil.Date
+	Reason           string
+	DebitAccountID   *int64
+	Status           string
+	JournalID        int64
+	VoidJournalID    *int64
+	VoidedAt         *time.Time
+	VoidedBy         *int64
+	VoidReason       *string
+	ApprovedBy       *int64
+	IdempotencyKey   *string
+	CreatedAt        time.Time
+	CreatedBy        *int64
+}
+
 type CityLedgerInvoice struct {
 	ID             int64
 	TenantID       int64

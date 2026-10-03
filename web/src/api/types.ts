@@ -133,6 +133,7 @@ export type GroupMember = Schemas['GroupMember']
 export type CityLedgerAccount = Schemas['CityLedgerAccount']
 export type CityLedgerReceipt = Schemas['CityLedgerReceipt']
 export type CityLedgerStatement = Schemas['CityLedgerStatement']
+export type CityLedgerAdjustment = Schemas['CityLedgerAdjustment']
 export type CityLedgerStatementLine = Schemas['CityLedgerStatementLine']
 export type CityLedgerAging = Schemas['CityLedgerAging']
 

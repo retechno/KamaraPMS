@@ -458,6 +458,18 @@ func (s *Service) CompanyInvoice(ctx context.Context, propertyID, invoiceID int6
 		Company: Party{Name: co.Name, Address: co.Address, City: co.City}, TaxID: co.TaxID, Date: inv.InvoiceDate, Due: inv.DueDate,
 		Terms: strconv.Itoa(co.PaymentTermsDays) + " days", Currency: dc.prop.CurrencyCode, Total: dc.lang.Money(dec(inv.Total), dc.decimals), Paid: dc.lang.Money(dec(inv.Paid), dc.decimals), Balance: dc.lang.Money(dec(inv.Outstanding), dc.decimals), Notes: inv.Notes,
 	}
+	if len(inv.AttachedCredits) > 0 {
+		d.Subtotal = dc.lang.Money(dec(inv.Subtotal), dc.decimals)
+		for _, c := range inv.AttachedCredits {
+			d.Credits = append(d.Credits, CompanyInvoiceCredit{Number: c.Number, Transfer: c.PaymentNumber, Amount: dc.lang.Money(dec(c.Amount), dc.decimals)})
+		}
+	}
+	if dec(inv.Credited).IsPositive() {
+		d.Credited = dc.lang.Money(dec(inv.Credited), dc.decimals)
+	}
+	if dec(inv.WrittenOff).IsPositive() {
+		d.WrittenOff = dc.lang.Money(dec(inv.WrittenOff), dc.decimals)
+	}
 	if inv.VoidedAt != nil {
 		d.VoidNote = "Cancelled on " + dc.lang.Time(*inv.VoidedAt, dc.prop.Location())
 		if inv.VoidReason != "" {

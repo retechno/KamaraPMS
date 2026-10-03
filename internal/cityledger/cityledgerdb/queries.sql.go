@@ -13,10 +13,75 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const attachedNotes = `-- name: AttachedNotes :many
+SELECT a.id, a.adjustment_number, a.amount, p.payment_number
+FROM city_ledger_adjustment_invoices x
+JOIN city_ledger_adjustments a ON a.property_id = x.property_id AND a.id = x.adjustment_id
+JOIN payments p ON p.property_id = a.property_id AND p.id = a.payment_id
+WHERE x.tenant_id = $1 AND x.property_id = $2 AND x.invoice_id = $3 AND x.released_at IS NULL
+ORDER BY a.id
+`
+
+type AttachedNotesParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  int64
+}
+
+type AttachedNotesRow struct {
+	ID               int64
+	AdjustmentNumber string
+	Amount           decimal.Decimal
+	PaymentNumber    string
+}
+
+func (q *Queries) AttachedNotes(ctx context.Context, arg AttachedNotesParams) ([]AttachedNotesRow, error) {
+	rows, err := q.db.Query(ctx, attachedNotes, arg.TenantID, arg.PropertyID, arg.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AttachedNotesRow{}
+	for rows.Next() {
+		var i AttachedNotesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdjustmentNumber,
+			&i.Amount,
+			&i.PaymentNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countLiveAdjustmentsOfInvoice = `-- name: CountLiveAdjustmentsOfInvoice :one
+SELECT count(*)::int FROM city_ledger_adjustments WHERE tenant_id = $1 AND property_id = $2 AND invoice_id = $3 AND status = 'POSTED'
+`
+
+type CountLiveAdjustmentsOfInvoiceParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  *int64
+}
+
+func (q *Queries) CountLiveAdjustmentsOfInvoice(ctx context.Context, arg CountLiveAdjustmentsOfInvoiceParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveAdjustmentsOfInvoice, arg.TenantID, arg.PropertyID, arg.InvoiceID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active, c.email, c.phone, c.address, c.contact_name,
        COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
-       COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received
+       COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
 FROM companies c
 WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.id = $3
 `
@@ -40,6 +105,7 @@ type GetAccountRow struct {
 	ContactName      *string
 	Transferred      decimal.Decimal
 	Received         decimal.Decimal
+	Adjusted         decimal.Decimal
 }
 
 func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (GetAccountRow, error) {
@@ -58,6 +124,87 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (GetAcco
 		&i.ContactName,
 		&i.Transferred,
 		&i.Received,
+		&i.Adjusted,
+	)
+	return i, err
+}
+
+const getAdjustment = `-- name: GetAdjustment :one
+SELECT id, tenant_id, property_id, adjustment_number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, debit_account_id, status, journal_id, void_journal_id, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by FROM city_ledger_adjustments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetAdjustmentParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetAdjustment(ctx context.Context, arg GetAdjustmentParams) (CityLedgerAdjustment, error) {
+	row := q.db.QueryRow(ctx, getAdjustment, arg.TenantID, arg.PropertyID, arg.ID)
+	var i CityLedgerAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AdjustmentNumber,
+		&i.Kind,
+		&i.CompanyID,
+		&i.InvoiceID,
+		&i.PaymentID,
+		&i.Amount,
+		&i.BusinessDate,
+		&i.Reason,
+		&i.DebitAccountID,
+		&i.Status,
+		&i.JournalID,
+		&i.VoidJournalID,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getAdjustmentByKey = `-- name: GetAdjustmentByKey :one
+SELECT id, tenant_id, property_id, adjustment_number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, debit_account_id, status, journal_id, void_journal_id, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by FROM city_ledger_adjustments WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetAdjustmentByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetAdjustmentByKey(ctx context.Context, arg GetAdjustmentByKeyParams) (CityLedgerAdjustment, error) {
+	row := q.db.QueryRow(ctx, getAdjustmentByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i CityLedgerAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AdjustmentNumber,
+		&i.Kind,
+		&i.CompanyID,
+		&i.InvoiceID,
+		&i.PaymentID,
+		&i.Amount,
+		&i.BusinessDate,
+		&i.Reason,
+		&i.DebitAccountID,
+		&i.Status,
+		&i.JournalID,
+		&i.VoidJournalID,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -206,6 +353,117 @@ func (q *Queries) GetReceiptByKey(ctx context.Context, arg GetReceiptByKeyParams
 	return i, err
 }
 
+const getTransfer = `-- name: GetTransfer :one
+SELECT id, payment_number, company_id, amount, status, payment_type, payment_method FROM payments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetTransferParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetTransferRow struct {
+	ID            int64
+	PaymentNumber string
+	CompanyID     *int64
+	Amount        decimal.Decimal
+	Status        string
+	PaymentType   string
+	PaymentMethod string
+}
+
+// A transfer to a company, as a credit note needs to know it.
+func (q *Queries) GetTransfer(ctx context.Context, arg GetTransferParams) (GetTransferRow, error) {
+	row := q.db.QueryRow(ctx, getTransfer, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetTransferRow
+	err := row.Scan(
+		&i.ID,
+		&i.PaymentNumber,
+		&i.CompanyID,
+		&i.Amount,
+		&i.Status,
+		&i.PaymentType,
+		&i.PaymentMethod,
+	)
+	return i, err
+}
+
+const insertAdjustment = `-- name: InsertAdjustment :one
+
+INSERT INTO city_ledger_adjustments (tenant_id, property_id, adjustment_number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, debit_account_id,
+                                     journal_id, approved_by, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15)
+RETURNING id, tenant_id, property_id, adjustment_number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, debit_account_id, status, journal_id, void_journal_id, voided_at, voided_by, void_reason, approved_by, idempotency_key, created_at, created_by
+`
+
+type InsertAdjustmentParams struct {
+	TenantID         int64
+	PropertyID       int64
+	AdjustmentNumber string
+	Kind             string
+	CompanyID        int64
+	InvoiceID        *int64
+	PaymentID        *int64
+	Amount           decimal.Decimal
+	BusinessDate     civil.Date
+	Reason           string
+	DebitAccountID   *int64
+	JournalID        int64
+	ApprovedBy       *int64
+	IdempotencyKey   *string
+	ActorID          *int64
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Credit notes and write-offs
+func (q *Queries) InsertAdjustment(ctx context.Context, arg InsertAdjustmentParams) (CityLedgerAdjustment, error) {
+	row := q.db.QueryRow(ctx, insertAdjustment,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AdjustmentNumber,
+		arg.Kind,
+		arg.CompanyID,
+		arg.InvoiceID,
+		arg.PaymentID,
+		arg.Amount,
+		arg.BusinessDate,
+		arg.Reason,
+		arg.DebitAccountID,
+		arg.JournalID,
+		arg.ApprovedBy,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var i CityLedgerAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AdjustmentNumber,
+		&i.Kind,
+		&i.CompanyID,
+		&i.InvoiceID,
+		&i.PaymentID,
+		&i.Amount,
+		&i.BusinessDate,
+		&i.Reason,
+		&i.DebitAccountID,
+		&i.Status,
+		&i.JournalID,
+		&i.VoidJournalID,
+		&i.VoidedAt,
+		&i.VoidedBy,
+		&i.VoidReason,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const insertAllocation = `-- name: InsertAllocation :exec
 INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -228,6 +486,61 @@ func (q *Queries) InsertAllocation(ctx context.Context, arg InsertAllocationPara
 		arg.InvoiceID,
 		arg.CompanyID,
 		arg.Amount,
+	)
+	return err
+}
+
+const insertAttachment = `-- name: InsertAttachment :exec
+INSERT INTO city_ledger_adjustment_invoices (tenant_id, property_id, adjustment_id, invoice_id) VALUES ($1, $2, $3, $4)
+`
+
+type InsertAttachmentParams struct {
+	TenantID     int64
+	PropertyID   int64
+	AdjustmentID int64
+	InvoiceID    int64
+}
+
+func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentParams) error {
+	_, err := q.db.Exec(ctx, insertAttachment,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AdjustmentID,
+		arg.InvoiceID,
+	)
+	return err
+}
+
+const insertCreditNoteLine = `-- name: InsertCreditNoteLine :exec
+INSERT INTO city_ledger_credit_note_lines (tenant_id, property_id, adjustment_id, line_no, description, account_id, net_amount, tax_id, tax_rate, tax_amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertCreditNoteLineParams struct {
+	TenantID     int64
+	PropertyID   int64
+	AdjustmentID int64
+	LineNo       int32
+	Description  string
+	AccountID    int64
+	NetAmount    decimal.Decimal
+	TaxID        *int64
+	TaxRate      *decimal.Decimal
+	TaxAmount    decimal.Decimal
+}
+
+func (q *Queries) InsertCreditNoteLine(ctx context.Context, arg InsertCreditNoteLineParams) error {
+	_, err := q.db.Exec(ctx, insertCreditNoteLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AdjustmentID,
+		arg.LineNo,
+		arg.Description,
+		arg.AccountID,
+		arg.NetAmount,
+		arg.TaxID,
+		arg.TaxRate,
+		arg.TaxAmount,
 	)
 	return err
 }
@@ -380,6 +693,45 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 	return i, err
 }
 
+const invoiceAdjusted = `-- name: InvoiceAdjusted :many
+SELECT a.invoice_id, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'CREDIT_NOTE'), 0)::numeric AS credited, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'WRITE_OFF'), 0)::numeric AS written_off
+FROM city_ledger_adjustments a
+WHERE a.property_id = $1 AND a.status = 'POSTED' AND a.invoice_id = ANY ($2::bigint[])
+GROUP BY a.invoice_id
+`
+
+type InvoiceAdjustedParams struct {
+	PropertyID int64
+	InvoiceIds []int64
+}
+
+type InvoiceAdjustedRow struct {
+	InvoiceID  *int64
+	Credited   decimal.Decimal
+	WrittenOff decimal.Decimal
+}
+
+// What posted credit notes and write-offs have taken off invoices (those made against the invoice itself).
+func (q *Queries) InvoiceAdjusted(ctx context.Context, arg InvoiceAdjustedParams) ([]InvoiceAdjustedRow, error) {
+	rows, err := q.db.Query(ctx, invoiceAdjusted, arg.PropertyID, arg.InvoiceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvoiceAdjustedRow{}
+	for rows.Next() {
+		var i InvoiceAdjustedRow
+		if err := rows.Scan(&i.InvoiceID, &i.Credited, &i.WrittenOff); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const invoicePaid = `-- name: InvoicePaid :many
 SELECT a.invoice_id, sum(a.amount)::numeric AS paid
 FROM city_ledger_receipt_allocations a
@@ -420,16 +772,17 @@ func (q *Queries) InvoicePaid(ctx context.Context, arg InvoicePaidParams) ([]Inv
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received
+SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received, a.adjusted
 FROM (
     SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active,
            COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
-           COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received
+           COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
+           COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
     FROM companies c
     WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.id > $3
       AND ($4::text IS NULL OR c.code ILIKE '%' || $4::text || '%' OR c.name ILIKE '%' || $4::text || '%')
 ) a
-WHERE (NOT $5::boolean OR a.transferred - a.received > 0)
+WHERE (NOT $5::boolean OR a.transferred - a.received - a.adjusted > 0)
 ORDER BY a.id
 LIMIT $6
 `
@@ -452,6 +805,7 @@ type ListAccountsRow struct {
 	IsActive         bool
 	Transferred      decimal.Decimal
 	Received         decimal.Decimal
+	Adjusted         decimal.Decimal
 }
 
 // Accounts: every company with what was transferred to it and what it paid back (posted rows only).
@@ -480,6 +834,102 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]L
 			&i.IsActive,
 			&i.Transferred,
 			&i.Received,
+			&i.Adjusted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAdjustments = `-- name: ListAdjustments :many
+SELECT a.id, a.adjustment_number, a.kind, a.company_id, a.invoice_id, i.invoice_number, a.payment_id, p.payment_number, a.amount, a.business_date, a.reason,
+       a.debit_account_id, da.code AS debit_account_code, a.status, a.journal_id, jn.journal_number, a.voided_at, a.void_reason, a.approved_by, a.created_by, a.created_at,
+       COALESCE((SELECT x.invoice_id FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL), 0)::bigint AS attached_invoice_id
+FROM city_ledger_adjustments a
+JOIN gl_journals jn ON jn.property_id = a.property_id AND jn.id = a.journal_id
+LEFT JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
+LEFT JOIN payments p ON p.property_id = a.property_id AND p.id = a.payment_id
+LEFT JOIN gl_accounts da ON da.property_id = a.property_id AND da.id = a.debit_account_id
+WHERE a.tenant_id = $1 AND a.property_id = $2
+  AND ($3::bigint IS NULL OR a.id = $3::bigint)
+  AND ($4::bigint IS NULL OR a.company_id = $4::bigint)
+ORDER BY a.business_date DESC, a.id DESC
+`
+
+type ListAdjustmentsParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         *int64
+	CompanyID  *int64
+}
+
+type ListAdjustmentsRow struct {
+	ID                int64
+	AdjustmentNumber  string
+	Kind              string
+	CompanyID         int64
+	InvoiceID         *int64
+	InvoiceNumber     *string
+	PaymentID         *int64
+	PaymentNumber     *string
+	Amount            decimal.Decimal
+	BusinessDate      civil.Date
+	Reason            string
+	DebitAccountID    *int64
+	DebitAccountCode  *string
+	Status            string
+	JournalID         int64
+	JournalNumber     string
+	VoidedAt          *time.Time
+	VoidReason        *string
+	ApprovedBy        *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	AttachedInvoiceID int64
+}
+
+func (q *Queries) ListAdjustments(ctx context.Context, arg ListAdjustmentsParams) ([]ListAdjustmentsRow, error) {
+	rows, err := q.db.Query(ctx, listAdjustments,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.CompanyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdjustmentsRow{}
+	for rows.Next() {
+		var i ListAdjustmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdjustmentNumber,
+			&i.Kind,
+			&i.CompanyID,
+			&i.InvoiceID,
+			&i.InvoiceNumber,
+			&i.PaymentID,
+			&i.PaymentNumber,
+			&i.Amount,
+			&i.BusinessDate,
+			&i.Reason,
+			&i.DebitAccountID,
+			&i.DebitAccountCode,
+			&i.Status,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.VoidedAt,
+			&i.VoidReason,
+			&i.ApprovedBy,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.AttachedInvoiceID,
 		); err != nil {
 			return nil, err
 		}
@@ -537,8 +987,71 @@ func (q *Queries) ListCompanyAllocations(ctx context.Context, arg ListCompanyAll
 	return items, nil
 }
 
+const listCreditNoteLines = `-- name: ListCreditNoteLines :many
+SELECT l.adjustment_id, l.line_no, l.description, l.account_id, ga.code AS account_code, ga.name AS account_name, l.net_amount, l.tax_id, t.code AS tax_code, l.tax_rate, l.tax_amount
+FROM city_ledger_credit_note_lines l
+JOIN gl_accounts ga ON ga.property_id = l.property_id AND ga.id = l.account_id
+LEFT JOIN taxes t ON t.property_id = l.property_id AND t.id = l.tax_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.adjustment_id = ANY ($3::bigint[])
+ORDER BY l.adjustment_id, l.line_no
+`
+
+type ListCreditNoteLinesParams struct {
+	TenantID      int64
+	PropertyID    int64
+	AdjustmentIds []int64
+}
+
+type ListCreditNoteLinesRow struct {
+	AdjustmentID int64
+	LineNo       int32
+	Description  string
+	AccountID    int64
+	AccountCode  string
+	AccountName  string
+	NetAmount    decimal.Decimal
+	TaxID        *int64
+	TaxCode      *string
+	TaxRate      *decimal.Decimal
+	TaxAmount    decimal.Decimal
+}
+
+func (q *Queries) ListCreditNoteLines(ctx context.Context, arg ListCreditNoteLinesParams) ([]ListCreditNoteLinesRow, error) {
+	rows, err := q.db.Query(ctx, listCreditNoteLines, arg.TenantID, arg.PropertyID, arg.AdjustmentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditNoteLinesRow{}
+	for rows.Next() {
+		var i ListCreditNoteLinesRow
+		if err := rows.Scan(
+			&i.AdjustmentID,
+			&i.LineNo,
+			&i.Description,
+			&i.AccountID,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.NetAmount,
+			&i.TaxID,
+			&i.TaxCode,
+			&i.TaxRate,
+			&i.TaxAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listInvoiceCandidates = `-- name: ListInvoiceCandidates :many
 SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = p.property_id AND a.payment_id = p.id AND a.status = 'POSTED'
+                  AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)), 0)::numeric AS credited,
        f.folio_number, r.confirmation_number,
        COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
        s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
@@ -571,6 +1084,7 @@ type ListInvoiceCandidatesRow struct {
 	BusinessDate       civil.Date
 	Amount             decimal.Decimal
 	ReferenceNumber    *string
+	Credited           decimal.Decimal
 	FolioNumber        string
 	ConfirmationNumber string
 	StayNumber         string
@@ -604,6 +1118,7 @@ func (q *Queries) ListInvoiceCandidates(ctx context.Context, arg ListInvoiceCand
 			&i.BusinessDate,
 			&i.Amount,
 			&i.ReferenceNumber,
+			&i.Credited,
 			&i.FolioNumber,
 			&i.ConfirmationNumber,
 			&i.StayNumber,
@@ -862,6 +1377,21 @@ func (q *Queries) ListTransfers(ctx context.Context, arg ListTransfersParams) ([
 	return items, nil
 }
 
+const releaseAttachments = `-- name: ReleaseAttachments :exec
+UPDATE city_ledger_adjustment_invoices SET released_at = $1::timestamptz WHERE property_id = $2 AND invoice_id = $3 AND released_at IS NULL
+`
+
+type ReleaseAttachmentsParams struct {
+	Now        time.Time
+	PropertyID int64
+	InvoiceID  int64
+}
+
+func (q *Queries) ReleaseAttachments(ctx context.Context, arg ReleaseAttachmentsParams) error {
+	_, err := q.db.Exec(ctx, releaseAttachments, arg.Now, arg.PropertyID, arg.InvoiceID)
+	return err
+}
+
 const releaseInvoiceLines = `-- name: ReleaseInvoiceLines :exec
 UPDATE city_ledger_invoice_lines SET released_at = $1::timestamptz
 WHERE property_id = $2 AND invoice_id = $3 AND released_at IS NULL
@@ -875,6 +1405,142 @@ type ReleaseInvoiceLinesParams struct {
 
 func (q *Queries) ReleaseInvoiceLines(ctx context.Context, arg ReleaseInvoiceLinesParams) error {
 	_, err := q.db.Exec(ctx, releaseInvoiceLines, arg.Now, arg.PropertyID, arg.InvoiceID)
+	return err
+}
+
+const taxForCreditNote = `-- name: TaxForCreditNote :one
+SELECT id, code, rate, is_active, gl_account_code FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type TaxForCreditNoteParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type TaxForCreditNoteRow struct {
+	ID            int64
+	Code          string
+	Rate          decimal.Decimal
+	IsActive      bool
+	GlAccountCode *string
+}
+
+func (q *Queries) TaxForCreditNote(ctx context.Context, arg TaxForCreditNoteParams) (TaxForCreditNoteRow, error) {
+	row := q.db.QueryRow(ctx, taxForCreditNote, arg.TenantID, arg.PropertyID, arg.ID)
+	var i TaxForCreditNoteRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Rate,
+		&i.IsActive,
+		&i.GlAccountCode,
+	)
+	return i, err
+}
+
+const transferCredited = `-- name: TransferCredited :one
+SELECT COALESCE(sum(amount), 0)::numeric AS credited FROM city_ledger_adjustments
+WHERE tenant_id = $1 AND property_id = $2 AND payment_id = $3 AND status = 'POSTED'
+`
+
+type TransferCreditedParams struct {
+	TenantID   int64
+	PropertyID int64
+	PaymentID  *int64
+}
+
+// All the credit notes posted against a transfer, attached to an invoice or not.
+func (q *Queries) TransferCredited(ctx context.Context, arg TransferCreditedParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, transferCredited, arg.TenantID, arg.PropertyID, arg.PaymentID)
+	var credited decimal.Decimal
+	err := row.Scan(&credited)
+	return credited, err
+}
+
+const transferOnLiveInvoice = `-- name: TransferOnLiveInvoice :one
+SELECT count(*)::int FROM city_ledger_invoice_lines WHERE property_id = $1 AND payment_id = $2 AND released_at IS NULL
+`
+
+type TransferOnLiveInvoiceParams struct {
+	PropertyID int64
+	PaymentID  int64
+}
+
+func (q *Queries) TransferOnLiveInvoice(ctx context.Context, arg TransferOnLiveInvoiceParams) (int32, error) {
+	row := q.db.QueryRow(ctx, transferOnLiveInvoice, arg.PropertyID, arg.PaymentID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const unattachedTransferNotes = `-- name: UnattachedTransferNotes :many
+SELECT a.id, a.payment_id, a.amount FROM city_ledger_adjustments a
+WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.payment_id = ANY ($3::bigint[]) AND a.status = 'POSTED'
+  AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)
+ORDER BY a.id
+`
+
+type UnattachedTransferNotesParams struct {
+	TenantID   int64
+	PropertyID int64
+	PaymentIds []int64
+}
+
+type UnattachedTransferNotesRow struct {
+	ID        int64
+	PaymentID *int64
+	Amount    decimal.Decimal
+}
+
+// The credit notes of transfers that no invoice has taken yet.
+func (q *Queries) UnattachedTransferNotes(ctx context.Context, arg UnattachedTransferNotesParams) ([]UnattachedTransferNotesRow, error) {
+	rows, err := q.db.Query(ctx, unattachedTransferNotes, arg.TenantID, arg.PropertyID, arg.PaymentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UnattachedTransferNotesRow{}
+	for rows.Next() {
+		var i UnattachedTransferNotesRow
+		if err := rows.Scan(&i.ID, &i.PaymentID, &i.Amount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const voidAdjustment = `-- name: VoidAdjustment :exec
+UPDATE city_ledger_adjustments SET status = 'VOIDED', voided_at = $1::timestamptz, voided_by = $2, void_reason = $3, void_journal_id = $4, approved_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
+`
+
+type VoidAdjustmentParams struct {
+	Now           time.Time
+	ActorID       *int64
+	Reason        *string
+	VoidJournalID *int64
+	ApprovedBy    *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) VoidAdjustment(ctx context.Context, arg VoidAdjustmentParams) error {
+	_, err := q.db.Exec(ctx, voidAdjustment,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.VoidJournalID,
+		arg.ApprovedBy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
 	return err
 }
 

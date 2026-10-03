@@ -44,6 +44,7 @@ type Poster struct {
 	today      civil.Date
 	res        *resolver
 	byID       map[int64]accountingdb.ListAccountsRow
+	allowed    map[string]bool // control accounts this poster may post to
 }
 
 // BeginPosting locks the accounting settings of the property in share mode and returns the poster. The caller has the
@@ -78,6 +79,37 @@ func (po *Poster) load(ctx context.Context) error {
 		po.byID[a.ID] = a
 	}
 	return nil
+}
+
+// AllowControl lets this poster post to one control account that only the day close posts to otherwise (the city ledger, for the credit
+// notes and the write-offs). Nothing wider: it names the key.
+func (po *Poster) AllowControl(key string) {
+	if po.allowed == nil {
+		po.allowed = map[string]bool{}
+	}
+	po.allowed[key] = true
+}
+
+// AccountInfo is the code, the name and the type of an account of the property.
+func (po *Poster) AccountInfo(ctx context.Context, id int64) (code, name, accountType string, ok bool, err error) {
+	if err := po.load(ctx); err != nil {
+		return "", "", "", false, err
+	}
+	a, found := po.byID[id]
+	return a.Code, a.Name, a.AccountType, found, nil
+}
+
+// TaxPayableAccount is the account a tax is owed on: the account of the tax when it is an active liability account that takes postings,
+// else the TAX_PAYABLE system account, which is where the day close put it.
+func (po *Poster) TaxPayableAccount(ctx context.Context, code string) (int64, error) {
+	if err := po.load(ctx); err != nil {
+		return 0, err
+	}
+	if a, ok := po.res.byCode[code]; ok && code != "" && a.IsActive && a.IsPostable && a.AccountType == TypeLiability {
+		return a.ID, nil
+	}
+	t, err := po.res.system(KeyTaxPayable)
+	return t.id, err
 }
 
 // SystemAccount is the account of a system key (ACCOUNTS_PAYABLE, CASH, BANK_TRANSFER, ...).
@@ -117,8 +149,8 @@ func (po *Poster) CheckAccount(ctx context.Context, id int64, field string) erro
 		return apperr.Invalid("the account is invalid", fieldErr(field, "INACTIVE", "the account is inactive"))
 	}
 	for _, k := range controlKeys {
-		if k == KeyAccountsPayable {
-			continue // the payables post to it themselves
+		if k == KeyAccountsPayable || po.allowed[k] {
+			continue // the payables post to it themselves, and a module may be allowed one more control account
 		}
 		if e, ok := po.res.byKey[k]; ok && e.AccountID == id {
 			return apperr.Invalid("the account is invalid", fieldErr(field, "CONTROL_ACCOUNT", "only the day close posts to this account"))
@@ -134,7 +166,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	if typ == "" {
 		typ = JournalPayables
 	}
-	if typ != JournalPayables && typ != JournalBank && typ != JournalTax {
+	if typ != JournalPayables && typ != JournalBank && typ != JournalTax && typ != JournalReceivables {
 		return 0, "", apperr.Internal(fmt.Errorf("a module cannot post a journal of type %s", typ))
 	}
 	if len(in.Lines) < 2 {
@@ -186,7 +218,7 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 		return 0, err
 	}
 	switch {
-	case orig.Type != JournalPayables && orig.Type != JournalTax:
+	case orig.Type != JournalPayables && orig.Type != JournalTax && orig.Type != JournalReceivables:
 		return 0, apperr.Conflict("JOURNAL_NOT_REVERSIBLE", "only the journal of a bill or a payment is reversed here")
 	case orig.ReversedByID != nil:
 		return 0, apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already")

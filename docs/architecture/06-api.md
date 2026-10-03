@@ -719,6 +719,12 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 
 | Method and path | Permission | Notes |
 |---|---|---|
+| `GET {P}/city-ledger/accounts/{id}/adjustments` | `cityledger.read` | The credit notes and write-offs of a company, newest first, with the lines of the credit notes |
+| `POST {P}/city-ledger/credit-notes` | `cityledger.credit_note` + approval | `Idempotency-Key` required; `{invoice_id | payment_id, reason, lines: [{description, account_id (revenue), net_amount, tax_id?}], approval}`: against an issued invoice (409 `ADJUSTMENT_EXCEEDS_INVOICE`) or a transfer not on an invoice (409 `ADJUSTMENT_EXCEEDS_TRANSFER`, `TRANSFER_ON_INVOICE`); journal Dr allowance and tax payable, Cr CITY_LEDGER on the business date; the invoice later made from a transfer asks the net |
+| `POST {P}/city-ledger/write-offs` | `cityledger.write_off` + approval | `Idempotency-Key` required; `{invoice_id, amount, account_id (expense or 1240), reason, approval}`; 409 `ADJUSTMENT_EXCEEDS_INVOICE`; no tax effect |
+| `GET {P}/city-ledger/adjustments/{id}` | `cityledger.read` | One credit note or write-off |
+| `POST {P}/city-ledger/adjustments/{id}/void` | the permission of its kind + approval | `{reason, approval}`: reverses its journal on the business date; 409 `ADJUSTMENT_ALREADY_VOIDED`, `ADJUSTMENT_ON_INVOICE` |
+| `GET {P}/city-ledger/adjustments/{id}/credit-note.pdf` | `cityledger.read` | The credit note as a document (a write-off has none: 409 `NOT_A_CREDIT_NOTE`) |
 | `GET/POST {P}/tax/invoices` | read: `tax.view`; issue: `tax.invoice` | Tax invoices (faktur pajak) of a PKP property. GET filters `status`, `from`, `to`, `q`, `limit` (no lines). POST `{source_type: CITY_LEDGER_INVOICE or FOLIO, city_ledger_invoice_id | folio_id, buyer? (a folio), replaces_invoice_id?}` with `Idempotency-Key`: dated the business date; 409 `TAX_INVOICE_NOT_READY` (context `blockers`: NOT_PKP, SOURCE_NOT_ISSUED, SOURCE_NOT_CLOSED, BUYER_*, NO_VAT, NO_BASE), `TAX_INVOICE_EXISTS`, `TAX_INVOICE_REPLACE_INVALID`, `TAX_INVOICE_ALREADY_REPLACED` |
 | `GET {P}/tax/invoices/preview?source_type=&id=` | `tax.invoice` | What the invoice would say and what stops it; nothing is written (for a folio `buyer_name`, `buyer_npwp`, `buyer_address`) |
 | `GET {P}/tax/invoices/coverage?from=&to=` | `tax.view` | VAT collected against VAT on live invoices, and the folios with VAT and no invoice (information only) |

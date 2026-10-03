@@ -109,7 +109,7 @@ func Setup(t *testing.T) *Env {
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
 	co := companies.NewService(txm, c, aw, authz, ten)
 	fo.SetCompanyGate(co)
-	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co)
+	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co, acct)
 	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
 	rs.SetApprover(ia)

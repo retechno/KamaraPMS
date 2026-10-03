@@ -262,6 +262,10 @@ const (
 	SeqTaxPayment SequenceType = "TAX_PAYMENT"
 	// SeqTaxInvoice numbers the tax invoices (faktur pajak) issued.
 	SeqTaxInvoice SequenceType = "TAX_INVOICE"
+	// SeqCreditNote numbers the credit notes to companies.
+	SeqCreditNote SequenceType = "CREDIT_NOTE"
+	// SeqWriteOff numbers the write-offs of what companies owe.
+	SeqWriteOff SequenceType = "WRITE_OFF"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -285,6 +289,8 @@ var defaultSequences = []struct {
 	{SeqTaxReturn, "TXR"},
 	{SeqTaxPayment, "TXP"},
 	{SeqTaxInvoice, "TXI"},
+	{SeqCreditNote, "CN"},
+	{SeqWriteOff, "WO"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }

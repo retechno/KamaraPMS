@@ -33,7 +33,9 @@ type Account struct {
 	PaymentTermsDays int     `json:"payment_terms_days"`
 	Transferred      string  `json:"transferred"`
 	Received         string  `json:"received"`
-	Balance          string  `json:"balance"`
+	// Adjusted is what posted credit notes and write-offs took off; the balance is transferred less received less adjusted.
+	Adjusted string `json:"adjusted"`
+	Balance  string `json:"balance"`
 	// Available is what can still be transferred within the credit limit (null: unlimited).
 	Available *string `json:"available"`
 }
@@ -96,7 +98,7 @@ type VoidInput struct {
 // StatementLine is a transfer (debit) or a receipt (credit) with the running balance of the posted lines.
 type StatementLine struct {
 	Date               civil.Date `json:"date"`
-	Kind               string     `json:"kind"` // TRANSFER or RECEIPT
+	Kind               string     `json:"kind"` // TRANSFER, RECEIPT, CREDIT_NOTE or WRITE_OFF
 	Number             string     `json:"number"`
 	Description        string     `json:"description"`
 	Reference          string     `json:"reference,omitempty"`

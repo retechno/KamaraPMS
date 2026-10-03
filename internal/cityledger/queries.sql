@@ -1,22 +1,24 @@
 -- Accounts: every company with what was transferred to it and what it paid back (posted rows only).
 -- name: ListAccounts :many
-SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received
+SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received, a.adjusted
 FROM (
     SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active,
            COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
-           COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received
+           COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
+           COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
     FROM companies c
     WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id > @after_id
       AND (sqlc.narg(q)::text IS NULL OR c.code ILIKE '%' || sqlc.narg(q)::text || '%' OR c.name ILIKE '%' || sqlc.narg(q)::text || '%')
 ) a
-WHERE (NOT @owing::boolean OR a.transferred - a.received > 0)
+WHERE (NOT @owing::boolean OR a.transferred - a.received - a.adjusted > 0)
 ORDER BY a.id
 LIMIT @row_limit;
 
 -- name: GetAccount :one
 SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active, c.email, c.phone, c.address, c.contact_name,
        COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
-       COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received
+       COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
 FROM companies c
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id = @id;
 
@@ -63,6 +65,8 @@ RETURNING *;
 -- whose guest has checked out can be invoiced. ids narrows the list to the transfers an invoice asks for.
 -- name: ListInvoiceCandidates :many
 SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = p.property_id AND a.payment_id = p.id AND a.status = 'POSTED'
+                  AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)), 0)::numeric AS credited,
        f.folio_number, r.confirmation_number,
        COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
        s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
@@ -150,3 +154,96 @@ FROM city_ledger_receipt_allocations a
 JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.company_id = @company_id
 ORDER BY a.receipt_id, a.invoice_id;
+
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Credit notes and write-offs
+
+-- name: InsertAdjustment :one
+INSERT INTO city_ledger_adjustments (tenant_id, property_id, adjustment_number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, debit_account_id,
+                                     journal_id, approved_by, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @adjustment_number, @kind, @company_id, sqlc.narg(invoice_id), sqlc.narg(payment_id), @amount, @business_date, @reason, sqlc.narg(debit_account_id),
+        @journal_id, sqlc.narg(approved_by), sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: InsertCreditNoteLine :exec
+INSERT INTO city_ledger_credit_note_lines (tenant_id, property_id, adjustment_id, line_no, description, account_id, net_amount, tax_id, tax_rate, tax_amount)
+VALUES (@tenant_id, @property_id, @adjustment_id, @line_no, @description, @account_id, @net_amount, sqlc.narg(tax_id), sqlc.narg(tax_rate), @tax_amount);
+
+-- name: GetAdjustment :one
+SELECT * FROM city_ledger_adjustments WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetAdjustmentByKey :one
+SELECT * FROM city_ledger_adjustments WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListAdjustments :many
+SELECT a.id, a.adjustment_number, a.kind, a.company_id, a.invoice_id, i.invoice_number, a.payment_id, p.payment_number, a.amount, a.business_date, a.reason,
+       a.debit_account_id, da.code AS debit_account_code, a.status, a.journal_id, jn.journal_number, a.voided_at, a.void_reason, a.approved_by, a.created_by, a.created_at,
+       COALESCE((SELECT x.invoice_id FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL), 0)::bigint AS attached_invoice_id
+FROM city_ledger_adjustments a
+JOIN gl_journals jn ON jn.property_id = a.property_id AND jn.id = a.journal_id
+LEFT JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
+LEFT JOIN payments p ON p.property_id = a.property_id AND p.id = a.payment_id
+LEFT JOIN gl_accounts da ON da.property_id = a.property_id AND da.id = a.debit_account_id
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
+  AND (sqlc.narg(id)::bigint IS NULL OR a.id = sqlc.narg(id)::bigint)
+  AND (sqlc.narg(company_id)::bigint IS NULL OR a.company_id = sqlc.narg(company_id)::bigint)
+ORDER BY a.business_date DESC, a.id DESC;
+
+-- name: ListCreditNoteLines :many
+SELECT l.adjustment_id, l.line_no, l.description, l.account_id, ga.code AS account_code, ga.name AS account_name, l.net_amount, l.tax_id, t.code AS tax_code, l.tax_rate, l.tax_amount
+FROM city_ledger_credit_note_lines l
+JOIN gl_accounts ga ON ga.property_id = l.property_id AND ga.id = l.account_id
+LEFT JOIN taxes t ON t.property_id = l.property_id AND t.id = l.tax_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.adjustment_id = ANY (@adjustment_ids::bigint[])
+ORDER BY l.adjustment_id, l.line_no;
+
+-- name: VoidAdjustment :exec
+UPDATE city_ledger_adjustments SET status = 'VOIDED', voided_at = @now::timestamptz, voided_by = sqlc.narg(actor_id), void_reason = @reason, void_journal_id = @void_journal_id, approved_by = sqlc.narg(approved_by)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- What posted credit notes and write-offs have taken off invoices (those made against the invoice itself).
+-- name: InvoiceAdjusted :many
+SELECT a.invoice_id, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'CREDIT_NOTE'), 0)::numeric AS credited, COALESCE(sum(a.amount) FILTER (WHERE a.kind = 'WRITE_OFF'), 0)::numeric AS written_off
+FROM city_ledger_adjustments a
+WHERE a.property_id = @property_id AND a.status = 'POSTED' AND a.invoice_id = ANY (@invoice_ids::bigint[])
+GROUP BY a.invoice_id;
+
+-- All the credit notes posted against a transfer, attached to an invoice or not.
+-- name: TransferCredited :one
+SELECT COALESCE(sum(amount), 0)::numeric AS credited FROM city_ledger_adjustments
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND payment_id = @payment_id AND status = 'POSTED';
+
+-- The credit notes of transfers that no invoice has taken yet.
+-- name: UnattachedTransferNotes :many
+SELECT a.id, a.payment_id, a.amount FROM city_ledger_adjustments a
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.payment_id = ANY (@payment_ids::bigint[]) AND a.status = 'POSTED'
+  AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)
+ORDER BY a.id;
+
+-- name: InsertAttachment :exec
+INSERT INTO city_ledger_adjustment_invoices (tenant_id, property_id, adjustment_id, invoice_id) VALUES (@tenant_id, @property_id, @adjustment_id, @invoice_id);
+
+-- name: ReleaseAttachments :exec
+UPDATE city_ledger_adjustment_invoices SET released_at = @now::timestamptz WHERE property_id = @property_id AND invoice_id = @invoice_id AND released_at IS NULL;
+
+-- name: AttachedNotes :many
+SELECT a.id, a.adjustment_number, a.amount, p.payment_number
+FROM city_ledger_adjustment_invoices x
+JOIN city_ledger_adjustments a ON a.property_id = x.property_id AND a.id = x.adjustment_id
+JOIN payments p ON p.property_id = a.property_id AND p.id = a.payment_id
+WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.invoice_id = @invoice_id AND x.released_at IS NULL
+ORDER BY a.id;
+
+-- name: CountLiveAdjustmentsOfInvoice :one
+SELECT count(*)::int FROM city_ledger_adjustments WHERE tenant_id = @tenant_id AND property_id = @property_id AND invoice_id = @invoice_id AND status = 'POSTED';
+
+-- A transfer to a company, as a credit note needs to know it.
+-- name: GetTransfer :one
+SELECT id, payment_number, company_id, amount, status, payment_type, payment_method FROM payments WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: TransferOnLiveInvoice :one
+SELECT count(*)::int FROM city_ledger_invoice_lines WHERE property_id = @property_id AND payment_id = @payment_id AND released_at IS NULL;
+
+-- name: TaxForCreditNote :one
+SELECT id, code, rate, is_active, gl_account_code FROM taxes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

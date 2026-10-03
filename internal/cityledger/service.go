@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/cityledger/cityledgerdb"
 	"kamarapms/internal/companies"
@@ -31,11 +32,12 @@ type Service struct {
 	days      *tenancy.Service
 	iam       *iam.Service
 	companies *companies.Service
+	acct      *accounting.Service
 }
 
 // NewService wires the service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, i *iam.Service, co *companies.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: i, companies: co}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, i *iam.Service, co *companies.Service, acct *accounting.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: i, companies: co, acct: acct}
 }
 
 func (s *Service) q(ctx context.Context) *cityledgerdb.Queries {
@@ -92,11 +94,11 @@ func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string
 	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_receipt", EntityID: id, Old: old, New: updated}
 }
 
-func account(id int64, code, name string, active bool, limit *decimal.Decimal, terms int16, transferred, received decimal.Decimal, decimals int32) Account {
-	balance := transferred.Sub(received)
+func account(id int64, code, name string, active bool, limit *decimal.Decimal, terms int16, transferred, received, adjusted decimal.Decimal, decimals int32) Account {
+	balance := transferred.Sub(received).Sub(adjusted)
 	a := Account{
 		CompanyID: id, Code: code, Name: name, IsActive: active, PaymentTermsDays: int(terms),
-		Transferred: transferred.StringFixed(decimals), Received: received.StringFixed(decimals), Balance: balance.StringFixed(decimals),
+		Transferred: transferred.StringFixed(decimals), Received: received.StringFixed(decimals), Adjusted: adjusted.StringFixed(decimals), Balance: balance.StringFixed(decimals),
 	}
 	if limit != nil {
 		l := limit.StringFixed(decimals)
@@ -125,7 +127,7 @@ func (s *Service) Accounts(ctx context.Context, propertyID, afterID int64, owing
 	}
 	out := make([]Account, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, decimals))
+		out = append(out, account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, decimals))
 	}
 	return out, nil
 }
@@ -151,7 +153,7 @@ func (s *Service) loadAccount(ctx context.Context, tenantID, propertyID, company
 	if err != nil {
 		return Account{}, err
 	}
-	return account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, decimals), nil
+	return account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, decimals), nil
 }
 
 // GetAccount is one company's account.
@@ -230,6 +232,10 @@ func (s *Service) Statement(ctx context.Context, propertyID, companyID int64, fr
 	if err != nil {
 		return Statement{}, err
 	}
+	adjustments, err := q.ListAdjustments(ctx, cityledgerdb.ListAdjustmentsParams{TenantID: p.TenantID, PropertyID: propertyID, CompanyID: &companyID})
+	if err != nil {
+		return Statement{}, err
+	}
 	type entry struct {
 		date  civil.Date
 		order int
@@ -262,7 +268,27 @@ func (s *Service) Statement(ctx context.Context, propertyID, companyID int64, fr
 		e.line.Credit = r.Amount.StringFixed(decimals)
 		all = append(all, e)
 	}
-	// Date, then transfers before receipts, then id: a stable order the running balance follows.
+	for _, a := range adjustments {
+		desc := "Credit note"
+		if a.Kind == KindWriteOff {
+			desc = "Write-off"
+		}
+		if a.InvoiceNumber != nil {
+			desc += " · invoice " + *a.InvoiceNumber
+		} else if a.PaymentNumber != nil {
+			desc += " · transfer " + *a.PaymentNumber
+		}
+		e := entry{date: a.BusinessDate, order: 2, id: a.ID, line: StatementLine{
+			Date: a.BusinessDate, Kind: a.Kind, Number: a.AdjustmentNumber, Description: desc, Reference: a.Reason, Status: a.Status,
+		}}
+		if a.Status == AdjustmentPosted {
+			e.cred = a.Amount
+		}
+		e.line.Debit = decimal.Zero.StringFixed(decimals)
+		e.line.Credit = a.Amount.StringFixed(decimals)
+		all = append(all, e)
+	}
+	// Date, then transfers before receipts and adjustments, then id: a stable order the running balance follows.
 	sort.SliceStable(all, func(i, j int) bool {
 		return less(all[i].date, all[i].order, all[i].id, all[j].date, all[j].order, all[j].id)
 	})
@@ -330,7 +356,11 @@ func (s *Service) Aging(ctx context.Context, propertyID, companyID int64) (Aging
 	if err != nil {
 		return Aging{}, err
 	}
-	buckets := ageTransfers(ts, received, day.BusinessDate)
+	adjusted, err := decimal.NewFromString(acc.Adjusted)
+	if err != nil {
+		return Aging{}, err
+	}
+	buckets := ageTransfers(ts, received.Add(adjusted), day.BusinessDate) // credit notes and write-offs settle the oldest transfers like receipts
 	out := Aging{AsOf: day.BusinessDate, Total: acc.Balance}
 	for i, label := range agingLabels {
 		out.Buckets = append(out.Buckets, AgingBucket{Label: label, Amount: buckets[i].StringFixed(decimals)})
@@ -581,6 +611,10 @@ func (s *Service) allocate(ctx context.Context, p auth.Principal, propertyID, co
 	if err != nil {
 		return err
 	}
+	adjusted, err := s.adjustedOf(ctx, propertyID, ids)
+	if err != nil {
+		return err
+	}
 	q := s.q(ctx)
 	for _, a := range list {
 		inv, err := q.GetInvoice(ctx, cityledgerdb.GetInvoiceParams{TenantID: p.TenantID, PropertyID: propertyID, ID: a.invoiceID})
@@ -593,7 +627,7 @@ func (s *Service) allocate(ctx context.Context, p auth.Principal, propertyID, co
 		if inv.Status != InvoiceIssued {
 			return apperr.Conflict("INVOICE_NOT_PAYABLE", "a voided invoice cannot be paid").WithContext("invoice_id", a.invoiceID)
 		}
-		outstanding := inv.Total.Sub(paid[a.invoiceID])
+		outstanding := inv.Total.Sub(paid[a.invoiceID]).Sub(adjusted[a.invoiceID].credited).Sub(adjusted[a.invoiceID].writtenOff)
 		if a.amount.GreaterThan(outstanding) {
 			return apperr.Conflict("ALLOCATION_EXCEEDS_INVOICE", "the payment is more than the invoice still owes").
 				WithContext("invoice_id", a.invoiceID).WithContext("outstanding", outstanding.StringFixed(decimals))

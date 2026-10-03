@@ -372,6 +372,17 @@ type CompanyInvoiceData struct {
 	Paid     string
 	Balance  string
 	Notes    string
+	// Subtotal is the transfers on the invoice; Credits are the credit notes of those transfers that the invoice took off when it was made. Credited and WrittenOff
+	// are what credit notes and write-offs made against the invoice itself took off (empty when none).
+	Subtotal   string
+	Credits    []CompanyInvoiceCredit
+	Credited   string
+	WrittenOff string
+}
+
+// CompanyInvoiceCredit is a credit note taken off the transfer of an invoice.
+type CompanyInvoiceCredit struct {
+	Number, Transfer, Amount string
 }
 
 // RenderCompanyInvoice draws an invoice to a company. A voided invoice is stamped, so it cannot pass for a valid one.
@@ -401,7 +412,22 @@ func RenderCompanyInvoice(d CompanyInvoiceData) ([]byte, error) {
 		{22, "Check-out", "L"}, {38, "Guest", "L"}, {16, "Room", "L"}, {34, "Stay", "L"},
 		{24, "Folio", "L"}, {22, "Reference", "L"}, {24, "Amount", "R"},
 	}, rows)
-	g.totals([][2]string{{"Total", d.Total}, {"Paid", d.Paid}, {"Balance due", d.Currency + " " + d.Balance}})
+	var totals [][2]string
+	if len(d.Credits) > 0 {
+		totals = append(totals, [2]string{"Transfers", d.Subtotal})
+		for _, c := range d.Credits {
+			totals = append(totals, [2]string{"Credit note " + c.Number + " (" + c.Transfer + ")", "-" + c.Amount})
+		}
+	}
+	totals = append(totals, [2]string{"Total", d.Total}, [2]string{"Paid", d.Paid})
+	if d.Credited != "" {
+		totals = append(totals, [2]string{"Credit notes", "-" + d.Credited})
+	}
+	if d.WrittenOff != "" {
+		totals = append(totals, [2]string{"Written off", "-" + d.WrittenOff})
+	}
+	totals = append(totals, [2]string{"Balance due", d.Currency + " " + d.Balance})
+	g.totals(totals)
 	if d.Notes != "" {
 		g.p.Ln(3)
 		g.note("Note: "+d.Notes, "", 9)

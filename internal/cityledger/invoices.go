@@ -51,6 +51,9 @@ type Candidate struct {
 	InvoiceLine
 	StayStatus  string `json:"stay_status"`
 	Invoiceable bool   `json:"invoiceable"`
+	// Credited is what credit notes made against the transfer took off; the invoice asks the amount less that.
+	Credited string `json:"credited"`
+	Net      string `json:"net"`
 }
 
 // Invoice is an invoice to a company; Lines is filled on the detail view only.
@@ -68,10 +71,24 @@ type Invoice struct {
 	CreatedBy     *int64     `json:"created_by"`
 	ApprovedBy    *int64     `json:"approved_by"`
 	// Paid is what posted receipts have allocated to the invoice; Outstanding is Total less Paid (0 once voided).
-	Paid          string        `json:"paid"`
-	Outstanding   string        `json:"outstanding"`
-	PaymentStatus string        `json:"payment_status"` // UNPAID, PARTIAL, PAID or VOID
-	Lines         []InvoiceLine `json:"lines,omitempty"`
+	Paid          string `json:"paid"`
+	Outstanding   string `json:"outstanding"`
+	PaymentStatus string `json:"payment_status"` // UNPAID, PARTIAL, PAID, CREDITED, WRITTEN_OFF or VOID
+	// Subtotal is the transfers on the invoice; the Total is that less the credit notes of those transfers that were attached when the invoice was made
+	// (AttachedCredits). Credited and WrittenOff are what credit notes and write-offs made against the invoice itself have taken off.
+	Subtotal        string           `json:"subtotal"`
+	Credited        string           `json:"credited"`
+	WrittenOff      string           `json:"written_off"`
+	AttachedCredits []AttachedCredit `json:"attached_credits,omitempty"`
+	Lines           []InvoiceLine    `json:"lines,omitempty"`
+}
+
+// AttachedCredit is the credit note of a transfer that is on an invoice.
+type AttachedCredit struct {
+	ID            int64  `json:"id"`
+	Number        string `json:"number"`
+	PaymentNumber string `json:"payment_number"`
+	Amount        string `json:"amount"`
 }
 
 // InvoiceInput asks for one invoice over the given transfers.
@@ -88,24 +105,30 @@ func errInvoiceNotFound() *apperr.Error {
 	return apperr.NotFound("INVOICE_NOT_FOUND", "the invoice does not exist in this property")
 }
 
-func invoiceView(i cityledgerdb.CityLedgerInvoice, paid decimal.Decimal, decimals int32) Invoice {
+func invoiceView(i cityledgerdb.CityLedgerInvoice, paid decimal.Decimal, adj adjustedAmounts, decimals int32) Invoice {
 	out := Invoice{
 		ID: i.ID, InvoiceNumber: i.InvoiceNumber, CompanyID: i.CompanyID, InvoiceDate: i.InvoiceDate, DueDate: i.DueDate, Total: i.Total.StringFixed(decimals),
 		Notes: deref(i.Notes), Status: i.Status, VoidedAt: i.VoidedAt, VoidReason: deref(i.VoidReason), CreatedBy: i.CreatedBy, ApprovedBy: i.ApprovedBy,
 	}
+	settled := paid.Add(adj.credited).Add(adj.writtenOff)
 	switch {
 	case i.Status == InvoiceVoided:
 		out.PaymentStatus, paid = "VOID", decimal.Zero
-	case paid.GreaterThanOrEqual(i.Total):
+	case settled.GreaterThanOrEqual(i.Total) && adj.writtenOff.IsPositive():
+		out.PaymentStatus = "WRITTEN_OFF"
+	case settled.GreaterThanOrEqual(i.Total) && !paid.IsPositive():
+		out.PaymentStatus = "CREDITED"
+	case settled.GreaterThanOrEqual(i.Total):
 		out.PaymentStatus = "PAID"
-	case paid.IsPositive():
+	case settled.IsPositive():
 		out.PaymentStatus = "PARTIAL"
 	default:
 		out.PaymentStatus = "UNPAID"
 	}
 	out.Paid = paid.StringFixed(decimals)
+	out.Subtotal, out.Credited, out.WrittenOff = i.Total.StringFixed(decimals), adj.credited.StringFixed(decimals), adj.writtenOff.StringFixed(decimals)
 	if i.Status == InvoiceIssued {
-		out.Outstanding = decimal.Max(i.Total.Sub(paid), decimal.Zero).StringFixed(decimals)
+		out.Outstanding = decimal.Max(i.Total.Sub(settled), decimal.Zero).StringFixed(decimals)
 	} else {
 		out.Outstanding = decimal.Zero.StringFixed(decimals)
 	}
@@ -128,6 +151,26 @@ func (s *Service) paidOf(ctx context.Context, propertyID int64, ids []int64) (ma
 	return out, nil
 }
 
+type adjustedAmounts struct{ credited, writtenOff decimal.Decimal }
+
+// adjustedOf returns what posted credit notes and write-offs made against each of the invoices have taken off.
+func (s *Service) adjustedOf(ctx context.Context, propertyID int64, ids []int64) (map[int64]adjustedAmounts, error) {
+	out := map[int64]adjustedAmounts{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).InvoiceAdjusted(ctx, cityledgerdb.InvoiceAdjustedParams{PropertyID: propertyID, InvoiceIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if r.InvoiceID != nil {
+			out[*r.InvoiceID] = adjustedAmounts{r.Credited, r.WrittenOff}
+		}
+	}
+	return out, nil
+}
+
 func candidate(r cityledgerdb.ListInvoiceCandidatesRow, decimals int32) Candidate {
 	return Candidate{
 		InvoiceLine: InvoiceLine{
@@ -135,7 +178,8 @@ func candidate(r cityledgerdb.ListInvoiceCandidatesRow, decimals int32) Candidat
 			StayNumber: r.StayNumber, GuestName: r.GuestName, RoomNumbers: r.RoomNumbers, ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate,
 			CheckedOutAt: r.CheckedOutAt, Reference: deref(r.ReferenceNumber), Amount: r.Amount.StringFixed(decimals),
 		},
-		StayStatus: r.StayStatus, Invoiceable: r.StayStatus == "CHECKED_OUT",
+		StayStatus: r.StayStatus, Invoiceable: r.StayStatus == "CHECKED_OUT" && r.Amount.GreaterThan(r.Credited),
+		Credited: r.Credited.StringFixed(decimals), Net: r.Amount.Sub(r.Credited).StringFixed(decimals),
 	}
 }
 
@@ -189,9 +233,13 @@ func (s *Service) Invoices(ctx context.Context, propertyID, companyID int64) ([]
 	if err != nil {
 		return nil, err
 	}
+	adjusted, err := s.adjustedOf(ctx, propertyID, invoiceIDs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Invoice, len(rows))
 	for i, r := range rows {
-		out[i] = invoiceView(r, paid[r.ID], decimals)
+		out[i] = invoiceView(r, paid[r.ID], adjusted[r.ID], decimals)
 	}
 	return out, nil
 }
@@ -213,7 +261,23 @@ func (s *Service) loadInvoice(ctx context.Context, tenantID, propertyID, id int6
 	if err != nil {
 		return Invoice{}, err
 	}
-	out := invoiceView(row, paid[id], decimals)
+	adjusted, err := s.adjustedOf(ctx, propertyID, []int64{id})
+	if err != nil {
+		return Invoice{}, err
+	}
+	out := invoiceView(row, paid[id], adjusted[id], decimals)
+	notes, err := q.AttachedNotes(ctx, cityledgerdb.AttachedNotesParams{TenantID: tenantID, PropertyID: propertyID, InvoiceID: id})
+	if err != nil {
+		return Invoice{}, err
+	}
+	subtotal := decimal.Zero
+	for _, l := range lines {
+		subtotal = subtotal.Add(l.Amount)
+	}
+	out.Subtotal = subtotal.StringFixed(decimals)
+	for _, n := range notes {
+		out.AttachedCredits = append(out.AttachedCredits, AttachedCredit{ID: n.ID, Number: n.AdjustmentNumber, PaymentNumber: n.PaymentNumber, Amount: n.Amount.StringFixed(decimals)})
+	}
 	out.Lines = make([]InvoiceLine, len(lines))
 	for i, l := range lines {
 		out.Lines[i] = InvoiceLine{
@@ -326,9 +390,13 @@ func (s *Service) CreateInvoice(ctx context.Context, propertyID, companyID int64
 				if len(waiting) > 0 {
 					return apperr.Conflict("STAY_NOT_CHECKED_OUT", "only transfers of guests who have checked out can be invoiced").WithContext("payment_ids", waiting)
 				}
+				// the invoice asks the net: what the transfers say less the credit notes made against them
 				total := decimal.Zero
 				for _, r := range rows {
-					total = total.Add(r.Amount)
+					total = total.Add(r.Amount).Sub(r.Credited)
+				}
+				if !total.IsPositive() {
+					return apperr.Conflict("NOTHING_TO_INVOICE", "the credit notes take off all that these transfers say: there is nothing to invoice")
 				}
 				number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqCityLedgerInvoice)
 				if err != nil {
@@ -343,6 +411,15 @@ func (s *Service) CreateInvoice(ctx context.Context, propertyID, companyID int64
 				}
 				for _, r := range rows {
 					if err := q.InsertInvoiceLine(ctx, cityledgerdb.InsertInvoiceLineParams{TenantID: p.TenantID, PropertyID: propertyID, InvoiceID: inv.ID, PaymentID: r.ID, Amount: r.Amount}); err != nil {
+						return err
+					}
+				}
+				notes, err := q.UnattachedTransferNotes(ctx, cityledgerdb.UnattachedTransferNotesParams{TenantID: p.TenantID, PropertyID: propertyID, PaymentIds: ids})
+				if err != nil {
+					return err
+				}
+				for _, n := range notes {
+					if err := q.InsertAttachment(ctx, cityledgerdb.InsertAttachmentParams{TenantID: p.TenantID, PropertyID: propertyID, AdjustmentID: n.ID, InvoiceID: inv.ID}); err != nil {
 						return err
 					}
 				}
@@ -402,6 +479,11 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 		if cur.Status != InvoiceIssued {
 			return apperr.Conflict("INVOICE_ALREADY_VOIDED", "the invoice is already voided")
 		}
+		if n, err := q.CountLiveAdjustmentsOfInvoice(ctx, cityledgerdb.CountLiveAdjustmentsOfInvoiceParams{TenantID: p.TenantID, PropertyID: propertyID, InvoiceID: &id}); err != nil {
+			return err
+		} else if n > 0 {
+			return apperr.Conflict("INVOICE_HAS_ADJUSTMENTS", "credit notes or write-offs are made against this invoice: void them first").WithContext("adjustments", n)
+		}
 		paid, err := s.paidOf(ctx, propertyID, []int64{id})
 		if err != nil {
 			return err
@@ -415,6 +497,9 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 			return err
 		}
 		if err := q.ReleaseInvoiceLines(ctx, cityledgerdb.ReleaseInvoiceLinesParams{PropertyID: propertyID, InvoiceID: id, Now: now}); err != nil {
+			return err
+		}
+		if err := q.ReleaseAttachments(ctx, cityledgerdb.ReleaseAttachmentsParams{PropertyID: propertyID, InvoiceID: id, Now: now}); err != nil {
 			return err
 		}
 		if out, err = s.loadInvoice(ctx, p.TenantID, propertyID, id, decimals); err != nil {

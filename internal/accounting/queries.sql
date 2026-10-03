@@ -305,6 +305,10 @@ SELECT
         AND g.business_date <= @as_of::date)::numeric AS city_transferred,
     (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
       WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @as_of::date)::numeric AS city_received,
+    -- credit notes and write-offs made by the date; one voided after the date still counts
+    (SELECT COALESCE(sum(a.amount), 0) FROM city_ledger_adjustments a LEFT JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+      WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.business_date <= @as_of::date
+        AND (a.status = 'POSTED' OR vj.journal_date > @as_of::date))::numeric AS city_adjusted,
     -- Payables: bills entered by the date less payments made by the date; a bill or payment voided after the date still counts.
     (SELECT COALESCE(sum(b.total), 0) FROM supplier_bills b LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
       WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.bill_date <= @as_of::date

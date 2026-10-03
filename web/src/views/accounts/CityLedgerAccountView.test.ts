@@ -18,7 +18,7 @@ vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POS
 
 const account = {
   company_id: 1, code: 'ACME', name: 'Acme Corp', is_active: true, credit_limit: '1000000', payment_terms_days: 30, transferred: '300000', received: '100000',
-  balance: '200000', available: '800000',
+  adjusted: '0', balance: '200000', available: '800000',
 }
 const aging = { as_of: '2026-09-30', total: '200000', buckets: [{ label: '0-30', amount: '200000' }, { label: '31-60', amount: '0' }, { label: '61-90', amount: '0' }, { label: '90+', amount: '0' }] }
 const statement = {
@@ -35,15 +35,18 @@ const receipts = [
 ]
 
 const candidates = [
-  { payment_id: 41, payment_number: 'PAY000041', business_date: '2026-09-29', folio_number: 'FOL000041', confirmation_number: 'RES1', guest_name: 'Siti', room_numbers: '101', checked_out_at: '2026-09-30T05:00:00Z', amount: '300000', stay_status: 'CHECKED_OUT', invoiceable: true },
-  { payment_id: 42, payment_number: 'PAY000042', business_date: '2026-09-30', folio_number: 'FOL000042', confirmation_number: 'RES2', guest_name: 'Andi', room_numbers: '102', checked_out_at: null, amount: '50000', stay_status: 'OPEN', invoiceable: false },
-  { payment_id: 43, payment_number: 'PAY000043', business_date: '2026-09-30', folio_number: 'FOL000043', confirmation_number: 'RES3', guest_name: 'Budi', room_numbers: '103', checked_out_at: '2026-09-30T06:00:00Z', amount: '200000', stay_status: 'CHECKED_OUT', invoiceable: true },
+  { payment_id: 41, payment_number: 'PAY000041', business_date: '2026-09-29', folio_number: 'FOL000041', confirmation_number: 'RES1', guest_name: 'Siti', room_numbers: '101', checked_out_at: '2026-09-30T05:00:00Z', amount: '300000', credited: '0', net: '300000', stay_status: 'CHECKED_OUT', invoiceable: true },
+  { payment_id: 42, payment_number: 'PAY000042', business_date: '2026-09-30', folio_number: 'FOL000042', confirmation_number: 'RES2', guest_name: 'Andi', room_numbers: '102', checked_out_at: null, amount: '50000', credited: '0', net: '50000', stay_status: 'OPEN', invoiceable: false },
+  { payment_id: 43, payment_number: 'PAY000043', business_date: '2026-09-30', folio_number: 'FOL000043', confirmation_number: 'RES3', guest_name: 'Budi', room_numbers: '103', checked_out_at: '2026-09-30T06:00:00Z', amount: '200000', credited: '0', net: '200000', stay_status: 'CHECKED_OUT', invoiceable: true },
 ]
 const invoices = [
   { id: 51, invoice_number: 'CINV000001', company_id: 1, invoice_date: '2026-09-30', due_date: '2026-10-30', total: '500000', paid: '100000', outstanding: '400000', payment_status: 'PARTIAL', status: 'ISSUED' },
   { id: 50, invoice_number: 'CINV000000', company_id: 1, invoice_date: '2026-09-20', due_date: '2026-10-20', total: '10', paid: '0', outstanding: '0', payment_status: 'VOID', status: 'VOIDED' },
   { id: 49, invoice_number: 'CINV-PAID', company_id: 1, invoice_date: '2026-09-10', due_date: '2026-10-10', total: '7', paid: '7', outstanding: '0', payment_status: 'PAID', status: 'ISSUED' },
 ]
+
+/** What the mock answers for the credit notes and write-offs of the company; a test that needs some sets it before it mounts. */
+let adjustmentList: unknown[] = []
 
 function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
   const pinia = createPinia()
@@ -53,6 +56,7 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'city
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn(async (path: string) => {
+    if (path.endsWith('/adjustments')) return { data: { data: adjustmentList } }
     if (path.endsWith('/aging')) return { data: aging }
     if (path.endsWith('/statement')) return { data: statement }
     if (path.endsWith('/receipts')) return { data: { data: receipts } }
@@ -70,6 +74,7 @@ describe('CityLedgerAccountView', () => {
     document.body.innerHTML = ''
     GET = vi.fn()
     POST = vi.fn()
+    adjustmentList = []
     openPdf = vi.fn().mockResolvedValue(undefined)
     document.body.innerHTML = ''
   })
@@ -252,5 +257,115 @@ describe('CityLedgerAccountView', () => {
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  const clerk = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice', 'cityledger.credit_note', 'cityledger.write_off']
+
+  it('makes a credit note against an invoice: lines, the total, then an approval', async () => {
+    const w = mountView(clerk)
+    await flushPromises()
+    expect(w.find('[data-testid=credit-CINV000000]').exists()).toBe(false) // voided
+    expect(w.find('[data-testid=credit-CINV-PAID]').exists()).toBe(false) // nothing outstanding
+    await w.get('[data-testid=credit-CINV000001]').trigger('click')
+    await flushPromises()
+    expect((w.get('[data-testid=adjust-continue]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=line_description_0]').setValue('Room rate dispute')
+    await w.get('input[name=line_account_0]').setValue('55')
+    await w.get('input[name=line_net_0]').setValue('100000')
+    await w.get('[data-testid=add-line]').trigger('click')
+    await w.get('input[name=line_description_1]').setValue('Breakfast')
+    await w.get('input[name=line_account_1]').setValue('56')
+    await w.get('input[name=line_net_1]').setValue('20000')
+    expect(w.get('[data-testid=adjust-total]').text()).toBe('120,000')
+    await w.get('input[name=adjust_reason]').setValue('settled after the invoice')
+    await w.get('[data-testid=adjust-form] form').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    const [path, init] = POST.mock.calls.at(-1) as [string, { params: { header: Record<string, string> }; body: unknown }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/city-ledger/credit-notes')
+    expect(init.params.header['Idempotency-Key']).toBeTruthy()
+    expect(init.body).toEqual({
+      invoice_id: 51, payment_id: undefined, reason: 'settled after the invoice', approval: { email: 'clerk@hotel.com', password: 'secret' },
+      lines: [{ description: 'Room rate dispute', account_id: 55, net_amount: '100000', tax_id: undefined }, { description: 'Breakfast', account_id: 56, net_amount: '20000', tax_id: undefined }],
+    })
+    expect(w.get('[data-testid=notice]').text()).toContain('The credit note is made')
+    expect(w.find('[data-testid=adjust-form]').exists()).toBe(false)
+  })
+
+  it('makes a credit note against a transfer that is not on an invoice yet', async () => {
+    const w = mountView(clerk)
+    await flushPromises()
+    await w.get('[data-testid=credit-transfer-PAY000041]').trigger('click')
+    await w.get('input[name=line_description_0]').setValue('Charge corrected')
+    await w.get('input[name=line_account_0]').setValue('55')
+    await w.get('input[name=line_net_0]').setValue('100000')
+    await w.get('input[name=adjust_reason]').setValue('500,000 became 400,000')
+    await w.get('[data-testid=adjust-form] form').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    const body = (POST.mock.calls.at(-1) as [string, { body: Record<string, unknown> }])[1].body
+    expect(body).toMatchObject({ payment_id: 41, reason: '500,000 became 400,000' })
+    expect(body.invoice_id).toBeUndefined()
+  })
+
+  it('shows what a credit note took off a transfer and what the invoice will ask', async () => {
+    const original = candidates[0]
+    candidates[0] = { ...candidates[0]!, credited: '100000', net: '200000' } as never
+    const w = mountView(clerk)
+    await flushPromises()
+    expect(w.get('[data-testid=credited-PAY000041]').text()).toContain('100,000')
+    expect(w.get('[data-testid=credited-PAY000041]').text()).toContain('200,000')
+    candidates[0] = original as never
+  })
+
+  it('writes off what an invoice still owes, charged to an account, with a reason and an approval', async () => {
+    const w = mountView(clerk)
+    await flushPromises()
+    await w.get('[data-testid=writeoff-CINV000001]').trigger('click')
+    expect((w.get('input[name=writeoff_amount]').element as HTMLInputElement).value).toBe('400000') // all that is owed
+    await w.get('input[name=writeoff_amount]').setValue('150000')
+    await w.get('input[name=writeoff_account]').setValue('66')
+    await w.get('input[name=adjust_reason]').setValue('the company is closed')
+    await w.get('[data-testid=adjust-form] form').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)?.[0]).toBe('/api/v1/properties/{propertyId}/city-ledger/write-offs')
+    expect((POST.mock.calls.at(-1) as [string, { body: unknown }])[1].body).toEqual({ invoice_id: 51, amount: '150000', account_id: 66, reason: 'the company is closed', approval: { email: 'clerk@hotel.com', password: 'secret' } })
+    expect(w.get('[data-testid=notice]').text()).toContain('The write-off is made')
+  })
+
+  it('lists the credit notes and write-offs and voids a posted one with an approval', async () => {
+    adjustmentList = [
+      { id: 71, number: 'CN000001', kind: 'CREDIT_NOTE', company_id: 1, invoice_id: 51, invoice_number: 'CINV000001', amount: '110000', business_date: '2026-09-30', reason: 'x', status: 'POSTED', attached_invoice_id: null },
+      { id: 72, number: 'WO000001', kind: 'WRITE_OFF', company_id: 1, invoice_id: 51, invoice_number: 'CINV000001', amount: '5000', business_date: '2026-09-29', reason: 'y', status: 'VOIDED', attached_invoice_id: null },
+    ]
+    const w = mountView(clerk)
+    await flushPromises()
+    expect(w.get('[data-testid=adjustment-CN000001]').text()).toContain('110,000')
+    expect(w.get('[data-testid=adjustment-WO000001]').classes()).toContain('line-through')
+    expect(w.find('[data-testid=adjustments] [data-testid=void-WO000001]').exists()).toBe(false) // already voided
+    await w.get('[data-testid=adjustments] [data-testid=print-CN000001]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/city-ledger/adjustments/71/credit-note.pdf')
+    expect(w.find('[data-testid=print-WO000001]').exists()).toBe(false) // a write-off has no document
+    await w.get('[data-testid=adjustments] [data-testid=void-CN000001]').trigger('click')
+    await w.get('input[name=void_reason]').setValue('wrong')
+    await w.get('[data-testid=void-continue]').trigger('click')
+    await dlg('input[name=approval_password]').setValue('secret')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/void', {
+      params: { path: { propertyId: 7, id: 71 } }, body: { reason: 'wrong', approval: { email: 'clerk@hotel.com', password: 'secret' } },
+    })
+  })
+
+  it('does not offer a credit note or a write-off without the permission', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=credit-CINV000001]').exists()).toBe(false)
+    expect(w.find('[data-testid=writeoff-CINV000001]').exists()).toBe(false)
+    expect(w.find('[data-testid=credit-transfer-PAY000041]').exists()).toBe(false)
   })
 })

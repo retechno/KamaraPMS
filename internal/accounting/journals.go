@@ -29,6 +29,8 @@ const (
 	JournalPayables = "PAYABLES"
 	JournalBank     = "BANK"
 	JournalTax      = "TAX"
+	// JournalReceivables is a credit note or a write-off of the city ledger.
+	JournalReceivables = "RECEIVABLES"
 )
 
 const (

@@ -99,7 +99,7 @@ func New(d Deps) *App {
 	frontdeskSvc := frontdesk.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, guestsSvc, hkSvc, reservationsSvc, foliosSvc, roomChargeSvc)
 	companiesSvc := companies.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	foliosSvc.SetCompanyGate(companiesSvc)
-	cityLedgerSvc := cityledger.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, companiesSvc)
+	cityLedgerSvc := cityledger.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, companiesSvc, accountingSvc)
 	taxSvc := taxfiling.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
 	taxInvoiceSvc := taxinvoice.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, taxSvc)
 	documentsSvc := documents.NewService(d.Clock, tenancySvc, foliosSvc, frontdeskSvc, reservationsSvc, guestsSvc, cityLedgerSvc, companiesSvc, accountingSvc, taxSvc, taxInvoiceSvc)

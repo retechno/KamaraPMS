@@ -141,6 +141,8 @@ type MethodTotal struct {
 type CityLedger struct {
 	Transferred string `json:"transferred"`
 	Received    string `json:"received"`
+	// Adjusted is what credit notes and write-offs of the day took off what companies owe.
+	Adjusted    string `json:"adjusted,omitempty"`
 	Outstanding string `json:"outstanding"`
 }
 

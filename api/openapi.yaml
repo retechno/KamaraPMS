@@ -3335,6 +3335,140 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/accounts/{id}/adjustments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listCityLedgerAdjustments
+      summary: The credit notes and write-offs of a company, newest first, with the lines of the credit notes (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The adjustments, voided ones too.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAdjustmentList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/credit-notes:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: createCityLedgerCreditNote
+      summary: Make a credit note to a company (cityledger.credit_note, with an approval)
+      description: |
+        Against an issued invoice (at most what it still owes: 409 `ADJUSTMENT_EXCEEDS_INVOICE`) or against a transfer that is not on an invoice
+        (at most what the transfer says: 409 `ADJUSTMENT_EXCEEDS_TRANSFER`; 409 `TRANSFER_ON_INVOICE` when it is on one). The invoice later made from such
+        a transfer asks the net amount. Each line is booked on a revenue account (the allowance) with an optional tax of the property, taken at its rate on the net
+        amount. The journal is made when the note is: Dr the allowance and the tax payable, Cr the city ledger, on the business date. The company row is locked.
+      tags: [city-ledger]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCityLedgerCreditNoteRequest" }
+      responses:
+        "201":
+          description: The credit note.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAdjustment" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/write-offs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: createCityLedgerWriteOff
+      summary: Write off what an invoice still owes (cityledger.write_off, with an approval)
+      description: |
+        All or part of what an issued invoice still owes: 409 `ADJUSTMENT_EXCEEDS_INVOICE`. Dr the account that bears it (an expense account such as the bad debt
+        expense, or the allowance for doubtful accounts 1240), Cr the city ledger. The tax is not touched.
+      tags: [city-ledger]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCityLedgerWriteOffRequest" }
+      responses:
+        "201":
+          description: The write-off.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAdjustment" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/adjustments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerAdjustment
+      summary: One credit note or write-off (cityledger.read)
+      tags: [city-ledger]
+      responses:
+        "200":
+          description: The adjustment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAdjustment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/credit-note.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCityLedgerCreditNotePdf
+      summary: A credit note to a company as PDF (cityledger.read)
+      description: A write-off is internal and has no document (409 `NOT_A_CREDIT_NOTE`).
+      tags: [documents]
+      responses:
+        "200":
+          description: The credit note (inline, never cached); a void one is stamped.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidCityLedgerAdjustment
+      summary: Void a credit note or a write-off (the permission of its kind, with an approval)
+      description: "Its journal is reversed on the current business date and what it took off is owed again. 409 `ADJUSTMENT_ALREADY_VOIDED`, `ADJUSTMENT_ON_INVOICE` (a credit note of a transfer that is on an invoice now: void the invoice first)."
+      tags: [city-ledger]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The voided adjustment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CityLedgerAdjustment" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/city-ledger/invoices/{id}:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8222,6 +8356,7 @@ components:
           properties:
             transferred: { $ref: "#/components/schemas/Amount" }
             received: { $ref: "#/components/schemas/Amount" }
+            adjusted: { $ref: "#/components/schemas/Amount", description: What the credit notes and write-offs of the day took off what companies owe. }
             outstanding: { $ref: "#/components/schemas/Amount", description: What companies owe at the end of the day. }
         occupancy_percent: { type: string, description: Occupied rooms over rooms that are not out of order. }
         adr: { $ref: "#/components/schemas/Amount" }
@@ -8783,7 +8918,7 @@ components:
         amount: { type: string }
     CityLedgerAccount:
       type: object
-      required: [company_id, code, name, is_active, credit_limit, payment_terms_days, transferred, received, balance, available]
+      required: [company_id, code, name, is_active, credit_limit, payment_terms_days, transferred, received, adjusted, balance, available]
       properties:
         company_id: { type: integer, format: int64 }
         code: { type: string }
@@ -8793,7 +8928,8 @@ components:
         payment_terms_days: { type: integer }
         transferred: { type: string, description: Posted transfers from folios. }
         received: { type: string, description: Posted receipts. }
-        balance: { type: string, description: transferred minus received. }
+        adjusted: { type: string, description: What posted credit notes and write-offs took off. }
+        balance: { type: string, description: transferred minus received minus adjusted. }
         available: { type: [string, "null"], description: What can still be transferred within the limit; null without a limit. }
     CityLedgerAccountPage:
       type: object
@@ -8838,12 +8974,89 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/CityLedgerReceipt" }
+    CityLedgerCreditNoteLine:
+      type: object
+      required: [line_no, description, account_id, account_code, account_name, net_amount, tax_id, tax_rate, tax_amount, total]
+      properties:
+        line_no: { type: integer }
+        description: { type: string }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        net_amount: { type: string }
+        tax_id: { type: [integer, "null"], format: int64 }
+        tax_code: { type: string }
+        tax_rate: { type: [string, "null"] }
+        tax_amount: { type: string }
+        total: { type: string, description: The net amount and its tax. }
+    CityLedgerAdjustment:
+      type: object
+      required: [id, number, kind, company_id, invoice_id, payment_id, amount, business_date, reason, status, journal_id, journal_number, attached_invoice_id, voided_at, approved_by, created_by]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string, description: "CN000001 or WO000001." }
+        kind: { type: string, enum: [CREDIT_NOTE, WRITE_OFF] }
+        company_id: { type: integer, format: int64 }
+        invoice_id: { type: [integer, "null"], format: int64 }
+        invoice_number: { type: string }
+        payment_id: { type: [integer, "null"], format: int64, description: The transfer a credit note was made against. }
+        payment_number: { type: string }
+        amount: { type: string, description: The credit note with its tax; the write-off. }
+        business_date: { $ref: "#/components/schemas/Date" }
+        reason: { type: string }
+        debit_account_code: { type: string, description: The account a write-off is charged to. }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        attached_invoice_id: { type: [integer, "null"], format: int64, description: The invoice made from the transfer of a credit note; it asks the net amount. }
+        voided_at: { type: [string, "null"], format: date-time }
+        void_reason: { type: string }
+        approved_by: { type: [integer, "null"], format: int64 }
+        created_by: { type: [integer, "null"], format: int64 }
+        lines: { type: array, items: { $ref: "#/components/schemas/CityLedgerCreditNoteLine" }, description: The lines of a credit note. }
+    CityLedgerAdjustmentList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/CityLedgerAdjustment" } }
+    CreateCityLedgerCreditNoteRequest:
+      type: object
+      required: [reason, lines, approval]
+      additionalProperties: false
+      properties:
+        invoice_id: { type: [integer, "null"], format: int64, description: An issued invoice; exactly one of the invoice and the transfer. }
+        payment_id: { type: [integer, "null"], format: int64, description: A transfer to a company that is not on an invoice. }
+        reason: { type: string, maxLength: 500 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            required: [description, account_id, net_amount]
+            additionalProperties: false
+            properties:
+              description: { type: string, maxLength: 200 }
+              account_id: { type: integer, format: int64, description: A revenue account (the allowance of revenue). }
+              net_amount: { type: string }
+              tax_id: { type: [integer, "null"], format: int64, description: A tax of the property, taken at its rate on the net amount. }
+        approval: { $ref: "#/components/schemas/Approval" }
+    CreateCityLedgerWriteOffRequest:
+      type: object
+      required: [invoice_id, amount, account_id, reason, approval]
+      additionalProperties: false
+      properties:
+        invoice_id: { type: integer, format: int64 }
+        amount: { type: string }
+        account_id: { type: integer, format: int64, description: An expense account or the allowance for doubtful accounts 1240. }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
     CityLedgerStatementLine:
       type: object
       required: [date, kind, number, description, status, debit, credit, balance]
       properties:
         date: { $ref: "#/components/schemas/Date" }
-        kind: { type: string, enum: [TRANSFER, RECEIPT] }
+        kind: { type: string, enum: [TRANSFER, RECEIPT, CREDIT_NOTE, WRITE_OFF] }
         number: { type: string }
         description: { type: string }
         reference: { type: string }
@@ -8903,10 +9116,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/CityLedgerInvoiceLine"
         - type: object
-          required: [stay_status, invoiceable]
+          required: [stay_status, invoiceable, credited, net]
           properties:
             stay_status: { type: string, description: "The state of the stay behind the folio; empty when the folio has no stay." }
-            invoiceable: { type: boolean, description: True when the guest has checked out. }
+            invoiceable: { type: boolean, description: True when the guest has checked out and the credit notes of the transfer do not take off all of it. }
+            credited: { type: string, description: What credit notes made against the transfer took off. }
+            net: { type: string, description: The amount less the credit notes; what an invoice asks. }
     CityLedgerCandidateList:
       type: object
       required: [data]
@@ -8916,17 +9131,31 @@ components:
           items: { $ref: "#/components/schemas/CityLedgerCandidate" }
     CityLedgerInvoice:
       type: object
-      required: [id, invoice_number, company_id, invoice_date, due_date, total, status, voided_at, created_by, approved_by, paid, outstanding, payment_status]
+      required: [id, invoice_number, company_id, invoice_date, due_date, total, subtotal, credited, written_off, status, voided_at, created_by, approved_by, paid, outstanding, payment_status]
       properties:
         id: { type: integer, format: int64 }
         invoice_number: { type: string }
         company_id: { type: integer, format: int64 }
         invoice_date: { $ref: "#/components/schemas/Date" }
         due_date: { $ref: "#/components/schemas/Date" }
-        total: { type: string }
+        total: { type: string, description: The transfers less the credit notes of those transfers that were attached when the invoice was made. }
+        subtotal: { type: string, description: The transfers on the invoice. }
+        credited: { type: string, description: What credit notes made against the invoice took off. }
+        written_off: { type: string, description: What write-offs of the invoice took off. }
+        attached_credits:
+          type: array
+          description: The credit notes of the transfers on the invoice; only on the detail and on creation.
+          items:
+            type: object
+            required: [id, number, payment_number, amount]
+            properties:
+              id: { type: integer, format: int64 }
+              number: { type: string }
+              payment_number: { type: string }
+              amount: { type: string }
         paid: { type: string, description: What posted receipts have allocated to the invoice. }
-        outstanding: { type: string, description: Total less paid; 0 once voided. }
-        payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, VOID] }
+        outstanding: { type: string, description: Total less paid, credited and written off; 0 once voided. }
+        payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, CREDITED, WRITTEN_OFF, VOID] }
         notes: { type: string }
         status: { type: string, enum: [ISSUED, VOIDED] }
         voided_at: { type: [string, "null"], format: date-time }

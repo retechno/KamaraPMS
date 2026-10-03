@@ -32,6 +32,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/accounts/{id}/invoices", httpx.HandlerFunc(h.createInvoice))
 	mux.Handle("GET "+p+"/invoices/{id}", httpx.HandlerFunc(h.invoice))
 	mux.Handle("POST "+p+"/invoices/{id}/void", httpx.HandlerFunc(h.voidInvoice))
+	mux.Handle("GET "+p+"/accounts/{id}/adjustments", httpx.HandlerFunc(h.adjustments))
+	mux.Handle("POST "+p+"/credit-notes", httpx.HandlerFunc(h.createCreditNote))
+	mux.Handle("POST "+p+"/write-offs", httpx.HandlerFunc(h.createWriteOff))
+	mux.Handle("GET "+p+"/adjustments/{id}", httpx.HandlerFunc(h.adjustment))
+	mux.Handle("POST "+p+"/adjustments/{id}/void", httpx.HandlerFunc(h.voidAdjustment))
 }
 
 func ids(r *http.Request) (propertyID, id int64, err error) {
@@ -267,4 +272,92 @@ func (h *Handler) voidInvoice(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, inv)
+}
+
+func (h *Handler) adjustments(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Adjustments(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Adjustment]{Data: list})
+}
+
+func (h *Handler) adjustment(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	a, err := h.svc.GetAdjustment(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, a)
+}
+
+func idempotencyKey(r *http.Request) (string, error) {
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return "", apperr.BadRequest("IDEMPOTENCY_KEY_REQUIRED", "the Idempotency-Key header is required")
+	}
+	return key, nil
+}
+
+func (h *Handler) createCreditNote(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in CreditNoteInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	a, err := h.svc.CreateCreditNote(r.Context(), pid, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, a)
+}
+
+func (h *Handler) createWriteOff(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in WriteOffInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	a, err := h.svc.CreateWriteOff(r.Context(), pid, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, a)
+}
+
+func (h *Handler) voidAdjustment(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in VoidInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	a, err := h.svc.VoidAdjustment(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, a)
 }

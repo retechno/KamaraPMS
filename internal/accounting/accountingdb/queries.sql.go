@@ -157,6 +157,10 @@ SELECT
         AND g.business_date <= $3::date)::numeric AS city_transferred,
     (SELECT COALESCE(sum(r.amount), 0) FROM city_ledger_receipts r
       WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.status = 'POSTED' AND r.business_date <= $3::date)::numeric AS city_received,
+    -- credit notes and write-offs made by the date; one voided after the date still counts
+    (SELECT COALESCE(sum(a.amount), 0) FROM city_ledger_adjustments a LEFT JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+      WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.business_date <= $3::date
+        AND (a.status = 'POSTED' OR vj.journal_date > $3::date))::numeric AS city_adjusted,
     -- Payables: bills entered by the date less payments made by the date; a bill or payment voided after the date still counts.
     (SELECT COALESCE(sum(b.total), 0) FROM supplier_bills b LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
       WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.bill_date <= $3::date
@@ -177,6 +181,7 @@ type ControlSourcesRow struct {
 	DepositsHeld    decimal.Decimal
 	CityTransferred decimal.Decimal
 	CityReceived    decimal.Decimal
+	CityAdjusted    decimal.Decimal
 	BillsEntered    decimal.Decimal
 	PaymentsMade    decimal.Decimal
 }
@@ -190,6 +195,7 @@ func (q *Queries) ControlSources(ctx context.Context, arg ControlSourcesParams) 
 		&i.DepositsHeld,
 		&i.CityTransferred,
 		&i.CityReceived,
+		&i.CityAdjusted,
 		&i.BillsEntered,
 		&i.PaymentsMade,
 	)

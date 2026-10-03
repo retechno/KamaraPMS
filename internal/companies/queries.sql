@@ -28,9 +28,10 @@ UPDATE companies SET
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 
--- Open balance of a company: transfers still owed less receipts (used to refuse deactivating an account that owes).
+-- Open balance of a company: transfers still owed less receipts and the credit notes and write-offs (used to refuse deactivating an account that owes).
 -- name: CompanyOwes :one
 SELECT (
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = @property_id AND p.company_id = @id AND p.status = 'POSTED'), 0)
   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.company_id = @id AND r.status = 'POSTED'), 0)
+  - COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = @property_id AND a.company_id = @id AND a.status = 'POSTED'), 0)
 )::numeric AS balance;

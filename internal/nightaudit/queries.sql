@@ -133,10 +133,12 @@ FROM (
 GROUP BY payment_method
 ORDER BY payment_method;
 
--- Receivables of the day: moved to company accounts, paid back, and what is owed at the end of the day.
+-- Receivables of the day: moved to company accounts, paid back, credited or written off, and what is owed at the end of the day.
 -- name: SummaryCityLedger :one
 SELECT
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = @property_id AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date = @bd::date), 0)::numeric AS transferred,
     COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date = @bd::date), 0)::numeric AS received,
     (COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = @property_id AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date <= @bd::date), 0)
-   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @bd::date), 0))::numeric AS outstanding;
+   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @bd::date), 0)
+   - COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = @property_id AND a.status = 'POSTED' AND a.business_date <= @bd::date), 0))::numeric AS outstanding,
+    COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = @property_id AND a.status = 'POSTED' AND a.business_date = @bd::date), 0)::numeric AS adjusted;

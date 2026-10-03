@@ -325,7 +325,9 @@ SELECT
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date = $2::date), 0)::numeric AS transferred,
     COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.status = 'POSTED' AND r.business_date = $2::date), 0)::numeric AS received,
     (COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.company_id IS NOT NULL AND p.status = 'POSTED' AND p.business_date <= $2::date), 0)
-   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.status = 'POSTED' AND r.business_date <= $2::date), 0))::numeric AS outstanding
+   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.status = 'POSTED' AND r.business_date <= $2::date), 0)
+   - COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = $1 AND a.status = 'POSTED' AND a.business_date <= $2::date), 0))::numeric AS outstanding,
+    COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = $1 AND a.status = 'POSTED' AND a.business_date = $2::date), 0)::numeric AS adjusted
 `
 
 type SummaryCityLedgerParams struct {
@@ -337,13 +339,19 @@ type SummaryCityLedgerRow struct {
 	Transferred decimal.Decimal
 	Received    decimal.Decimal
 	Outstanding decimal.Decimal
+	Adjusted    decimal.Decimal
 }
 
-// Receivables of the day: moved to company accounts, paid back, and what is owed at the end of the day.
+// Receivables of the day: moved to company accounts, paid back, credited or written off, and what is owed at the end of the day.
 func (q *Queries) SummaryCityLedger(ctx context.Context, arg SummaryCityLedgerParams) (SummaryCityLedgerRow, error) {
 	row := q.db.QueryRow(ctx, summaryCityLedger, arg.PropertyID, arg.Bd)
 	var i SummaryCityLedgerRow
-	err := row.Scan(&i.Transferred, &i.Received, &i.Outstanding)
+	err := row.Scan(
+		&i.Transferred,
+		&i.Received,
+		&i.Outstanding,
+		&i.Adjusted,
+	)
 	return i, err
 }
 

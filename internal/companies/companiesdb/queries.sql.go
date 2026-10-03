@@ -15,6 +15,7 @@ const companyOwes = `-- name: CompanyOwes :one
 SELECT (
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.company_id = $2 AND p.status = 'POSTED'), 0)
   - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = $1 AND r.company_id = $2 AND r.status = 'POSTED'), 0)
+  - COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = $1 AND a.company_id = $2 AND a.status = 'POSTED'), 0)
 )::numeric AS balance
 `
 
@@ -23,7 +24,7 @@ type CompanyOwesParams struct {
 	ID         *int64
 }
 
-// Open balance of a company: transfers still owed less receipts (used to refuse deactivating an account that owes).
+// Open balance of a company: transfers still owed less receipts and the credit notes and write-offs (used to refuse deactivating an account that owes).
 func (q *Queries) CompanyOwes(ctx context.Context, arg CompanyOwesParams) (decimal.Decimal, error) {
 	row := q.db.QueryRow(ctx, companyOwes, arg.PropertyID, arg.ID)
 	var balance decimal.Decimal

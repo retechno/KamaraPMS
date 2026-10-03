@@ -84,12 +84,14 @@ const (
 
 	PermReportView Permission = "report.view"
 
-	PermCompanyManage      Permission = "company.manage"
-	PermGroupManage        Permission = "group.manage"
-	PermCityLedgerRead     Permission = "cityledger.read"
-	PermCityLedgerTransfer Permission = "cityledger.transfer"
-	PermCityLedgerReceive  Permission = "cityledger.receive"
-	PermCityLedgerInvoice  Permission = "cityledger.invoice"
+	PermCompanyManage        Permission = "company.manage"
+	PermGroupManage          Permission = "group.manage"
+	PermCityLedgerRead       Permission = "cityledger.read"
+	PermCityLedgerTransfer   Permission = "cityledger.transfer"
+	PermCityLedgerReceive    Permission = "cityledger.receive"
+	PermCityLedgerInvoice    Permission = "cityledger.invoice"
+	PermCityLedgerCreditNote Permission = "cityledger.credit_note"
+	PermCityLedgerWriteOff   Permission = "cityledger.write_off"
 
 	PermAuditRead Permission = "audit.read"
 )
@@ -171,6 +173,8 @@ var Catalogue = []PermissionInfo{
 	{PermCityLedgerTransfer, "Accounts", "Transfer a guest folio balance to a company's city ledger account", "S1"},
 	{PermCityLedgerReceive, "Accounts", "Record and void what a company pays against its account", "S1"},
 	{PermCityLedgerInvoice, "Accounts", "Issue and void invoices to a company for checked-out transfers", "S1"},
+	{PermCityLedgerCreditNote, "Accounts", "Make and void credit notes to a company, against an invoice or a transfer (an approval is needed)", "S1"},
+	{PermCityLedgerWriteOff, "Accounts", "Write off what an invoice of a company still owes, and void a write-off (an approval is needed)", "S1"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }
