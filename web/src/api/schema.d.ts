@@ -7153,7 +7153,7 @@ export interface components {
             forecast: {
                 date: components["schemas"]["Date"];
                 rooms_sellable: number;
-                /** @description Rooms held by confirmed reservations and open stays. */
+                /** @description Rooms held by confirmed reservations and open stays */
                 rooms_booked: number;
                 occupancy_percent: string;
             }[];

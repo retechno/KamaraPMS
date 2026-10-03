@@ -80,3 +80,20 @@ func TestSummaryCountsComplimentaryAndHouseUse(t *testing.T) {
 		t.Fatalf("arrivals: %+v", arr.Rows)
 	}
 }
+
+// The forecast of the dashboard leaves the rooms the hotel uses itself out of both the booked and the sellable rooms,
+// like the closing summary, so they do not lower the occupancy ahead.
+func TestForecastLeavesHouseUseOut(t *testing.T) {
+	f := setup(t)
+	r103 := f.Room(t, f.admin, f.propID, f.dlx.ID, "103", housekeeping.Clean)
+	house := f.freePlan(t, "HOUSE", "HOUSE_USE")
+	f.stay(t, f.r101, "2026-10-02")
+	f.stayOn(t, house, r103, "2026-10-02", "Staff")
+
+	dash, err := f.Reports.Dashboard(f.admin, f.propID)
+	must(t, err)
+	// 3 rooms, one used by the hotel: 2 can be sold and 1 of them is booked
+	if fc := dash.Forecast[0]; fc.Sellable != 2 || fc.Booked != 1 || fc.OccupancyPercent != "50.00" {
+		t.Fatalf("forecast: %+v", fc)
+	}
+}

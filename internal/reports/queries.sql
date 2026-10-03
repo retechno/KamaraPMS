@@ -170,24 +170,41 @@ JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
 GROUP BY h.status;
 
--- Rooms sold per night ahead, whatever their type: sellable rooms (active, not blocked) against the rooms held by
--- confirmed lines and open stays (the same demand as the availability inventory).
+-- Rooms booked per night ahead, whatever their type: sellable rooms (active, not blocked) against the rooms held by
+-- confirmed lines and open stays (the same demand as the availability inventory). Rooms held for house use are neither
+-- booked nor sellable, as in the closing summary, so they do not lower the forecast occupancy.
 -- name: DashboardForecast :many
-SELECT d.night::date AS night,
-    (SELECT count(*) FROM rooms r
-      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
-        AND NOT EXISTS (SELECT 1 FROM room_blocks b
-                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
-                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
-    ((SELECT count(*) FROM reservation_rooms l
-       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
-         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
-     + (SELECT count(*) FROM stay_rooms sr
-         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
-        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS booked
-FROM unnest(@dates::text[]) AS d (night)
-ORDER BY d.night;
+SELECT h.night::date AS night,
+    (h.sellable - h.house)::int AS sellable,
+    (h.held - h.house)::int AS booked
+FROM (
+    SELECT d.night::date AS night,
+        (SELECT count(*) FROM rooms r
+          WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
+            AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                             WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                               AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+        ((SELECT count(*) FROM reservation_rooms l
+           WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+             AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+         + (SELECT count(*) FROM stay_rooms sr
+             JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+            WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+              AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS held,
+        ((SELECT count(*) FROM reservation_rooms l
+           JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+           WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND rp.occupancy_kind = 'HOUSE_USE'
+             AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+         + (SELECT count(*) FROM stay_rooms sr
+             JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+             JOIN reservation_rooms sl ON sl.property_id = s.property_id AND sl.id = s.reservation_room_id
+             JOIN rate_plans srp ON srp.property_id = sl.property_id AND srp.id = sl.rate_plan_id
+            WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+              AND srp.occupancy_kind = 'HOUSE_USE'
+              AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS house
+    FROM unnest(@dates::text[]) AS d (night)
+) h
+ORDER BY h.night;
 
 -- The reference rate plan of the property (the plan whose grid price values complimentary and house use nights).
 -- name: GetReferenceRatePlan :one

@@ -8116,7 +8116,7 @@ components:
             properties:
               date: { $ref: "#/components/schemas/Date" }
               rooms_sellable: { type: integer }
-              rooms_booked: { type: integer, description: Rooms held by confirmed reservations and open stays. }
+              rooms_booked: { type: integer, description: Rooms held by confirmed reservations and open stays, house use rooms left out. }
               occupancy_percent: { type: string }
     StayListReport:
       type: object
