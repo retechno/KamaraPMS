@@ -11,6 +11,87 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const bedNightInventory = `-- name: BedNightInventory :many
+SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = $3)::int AS rooms,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = $3
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = $3
+        AND (EXISTS (SELECT 1 FROM reservation_rooms l
+                      WHERE l.property_id = r.property_id AND l.room_id = r.id AND l.status = 'CONFIRMED'
+                        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+          OR EXISTS (SELECT 1 FROM stay_rooms sr
+                      JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+                      WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+                        AND $4::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $5::date))))::int AS held
+FROM unnest($6::bigint[]) AS t (room_type_id)
+CROSS JOIN unnest($7::text[]) AS d (night)
+ORDER BY t.room_type_id, d.night
+`
+
+type BedNightInventoryParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BedTypeID    *int64
+	BusinessDate civil.Date
+	NextDate     civil.Date
+	RoomTypeIds  []int64
+	Dates        []string
+}
+
+type BedNightInventoryRow struct {
+	RoomTypeID int64
+	Night      civil.Date
+	Rooms      int32
+	Sellable   int32
+	Held       int32
+}
+
+// The same per room type and night, but only for the rooms with one bed type, and only the rooms already assigned:
+// rooms = active rooms with the bed, sellable = those without an active block, held = those held by a CONFIRMED line
+// assigned to them or by an open stay. Bookings without a room are not counted (they may end up in any bed).
+func (q *Queries) BedNightInventory(ctx context.Context, arg BedNightInventoryParams) ([]BedNightInventoryRow, error) {
+	rows, err := q.db.Query(ctx, bedNightInventory,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BedTypeID,
+		arg.BusinessDate,
+		arg.NextDate,
+		arg.RoomTypeIds,
+		arg.Dates,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BedNightInventoryRow{}
+	for rows.Next() {
+		var i BedNightInventoryRow
+		if err := rows.Scan(
+			&i.RoomTypeID,
+			&i.Night,
+			&i.Rooms,
+			&i.Sellable,
+			&i.Held,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countActiveRoomsByType = `-- name: CountActiveRoomsByType :many
 SELECT room_type_id, count(*)::int AS rooms FROM rooms
 WHERE tenant_id = $1 AND property_id = $2 AND is_active

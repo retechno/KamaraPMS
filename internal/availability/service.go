@@ -58,6 +58,34 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 	return out, nil
 }
 
+// BedNight is one room type on one night counted only over the rooms with one bed type.
+type BedNight struct {
+	Rooms, Sellable, Held int
+}
+
+// BedInventory counts, per room type and night, the active rooms with the bed type, those without a block and those
+// already held by a room-assigned CONFIRMED line or an open stay. Bookings that have no room yet are not counted.
+func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID, bedTypeID int64, typeIDs []int64, dates []civil.Date, bd civil.Date) (map[int64]map[civil.Date]BedNight, error) {
+	out := map[int64]map[civil.Date]BedNight{}
+	if len(typeIDs) == 0 || len(dates) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).BedNightInventory(ctx, availabilitydb.BedNightInventoryParams{
+		TenantID: tenantID, PropertyID: propertyID, BedTypeID: &bedTypeID, BusinessDate: bd, NextDate: bd.AddDays(1),
+		RoomTypeIds: typeIDs, Dates: isoDates(dates),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if out[r.RoomTypeID] == nil {
+			out[r.RoomTypeID] = map[civil.Date]BedNight{}
+		}
+		out[r.RoomTypeID][r.Night] = BedNight{Rooms: int(r.Rooms), Sellable: int(r.Sellable), Held: int(r.Held)}
+	}
+	return out, nil
+}
+
 // Occupancy is how full the property is on a night: the rooms held against the rooms that can be sold.
 type Occupancy struct {
 	Sellable int

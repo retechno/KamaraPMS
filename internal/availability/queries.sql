@@ -29,6 +29,34 @@ FROM unnest(@room_type_ids::bigint[]) AS t (room_type_id)
 CROSS JOIN unnest(@dates::text[]) AS d (night)
 ORDER BY t.room_type_id, d.night;
 
+-- The same per room type and night, but only for the rooms with one bed type, and only the rooms already assigned:
+-- rooms = active rooms with the bed, sellable = those without an active block, held = those held by a CONFIRMED line
+-- assigned to them or by an open stay. Bookings without a room are not counted (they may end up in any bed).
+-- name: BedNightInventory :many
+SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = @bed_type_id)::int AS rooms,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = @bed_type_id
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.room_type_id = t.room_type_id
+        AND r.is_active AND r.bed_type_id = @bed_type_id
+        AND (EXISTS (SELECT 1 FROM reservation_rooms l
+                      WHERE l.property_id = r.property_id AND l.room_id = r.id AND l.status = 'CONFIRMED'
+                        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+          OR EXISTS (SELECT 1 FROM stay_rooms sr
+                      JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+                      WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+                        AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date))))::int AS held
+FROM unnest(@room_type_ids::bigint[]) AS t (room_type_id)
+CROSS JOIN unnest(@dates::text[]) AS d (night)
+ORDER BY t.room_type_id, d.night;
+
 -- The last date any CONFIRMED line or open stay holds a room of the type (demand ends there).
 -- name: MaxLineDeparture :one
 SELECT coalesce(max(l.departure_date), '1900-01-01'::date)::date AS last_departure

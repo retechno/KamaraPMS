@@ -27,7 +27,7 @@ function mountView(permissions = ['reservation.read'], data: unknown = calendar)
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-10-01' } as never
-  GET = vi.fn().mockResolvedValue({ data })
+  GET = vi.fn((url: string) => Promise.resolve({ data: url.endsWith('/bed-types') ? { data: [{ id: 3, code: 'KING', name: 'King' }] } : data }))
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(AvailabilityCalendarView, { global: { plugins: [pinia, router] } })
 }
@@ -49,6 +49,16 @@ describe('AvailabilityCalendarView', () => {
     expect(w.get('[data-testid=cell-DLX-2026-10-01]').attributes('title')).toContain('1 held of 2 sellable')
     expect(w.get('[data-testid=totals-2026-10-01]').text()).toContain('1')
     expect(w.get('[data-testid=occupancy-2026-10-01]').text()).toBe('50%')
+  })
+
+  it('filters by bed type and tells what is counted', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=bed-note]').exists()).toBe(false)
+    await w.get('select[name=bed_type_id]').setValue('3')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-01', bed_type_id: 3 } } })
+    expect(w.find('[data-testid=bed-note]').exists()).toBe(true)
   })
 
   it('moves the window by a week', async () => {

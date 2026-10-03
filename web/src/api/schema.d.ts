@@ -11048,6 +11048,8 @@ export interface operations {
                 from: components["schemas"]["Date"];
                 /** @description Exclusive. */
                 to: components["schemas"]["Date"];
+                /** @description Only the rooms with this bed type, and only the bookings already assigned to a room; room types without such a room are left out. 422 BED_TYPE_NOT_FOUND for an unknown bed type. */
+                bed_type_id?: number;
             };
             header?: never;
             path: {

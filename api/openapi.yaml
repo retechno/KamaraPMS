@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.39.0
+  version: 0.40.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1759,6 +1759,7 @@ paths:
       parameters:
         - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
         - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: Exclusive. }
+        - { name: bed_type_id, in: query, required: false, schema: { type: integer, format: int64 }, description: "Only the rooms with this bed type, and only the bookings already assigned to a room; room types without such a room are left out. 422 BED_TYPE_NOT_FOUND for an unknown bed type." }
       responses:
         "200":
           description: The calendar.

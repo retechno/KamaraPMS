@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AvailabilityCalendar } from '@/api/types'
+import type { AvailabilityCalendar, BedType } from '@/api/types'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -32,6 +32,8 @@ const days = ref(14)
 const start = ref('')
 const calendar = ref<AvailabilityCalendar | null>(null)
 const error = ref<ApiError | null>(null)
+const beds = ref<BedType[]>([])
+const bedTypeId = ref('') // '' = every bed
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const businessDate = computed(() => property.clock?.business_date ?? '')
@@ -49,11 +51,24 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/calendar', {
-      params: { path: { propertyId }, query: { from: start.value, to: addDays(start.value, days.value) } },
+      params: { path: { propertyId }, query: { from: start.value, to: addDays(start.value, days.value), bed_type_id: bedTypeId.value ? Number(bedTypeId.value) : undefined } },
     })
     calendar.value = data ?? null
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+// The beds to filter by. Optional: without them the calendar still works for every bed.
+async function loadBeds(): Promise<void> {
+  const propertyId = property.currentId
+  beds.value = []
+  if (propertyId === null || !canRead.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId } } })
+    beds.value = data?.data ?? []
+  } catch {
+    beds.value = []
   }
 }
 
@@ -76,7 +91,9 @@ function tone(n: Night): string {
 watch(() => property.currentId, () => {
   start.value = ''
   calendar.value = null
+  bedTypeId.value = ''
   void load()
+  void loadBeds()
 }, { immediate: true })
 watch(businessDate, () => {
   if (!calendar.value) void load()
@@ -89,6 +106,10 @@ watch(businessDate, () => {
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('availabilityCalendar.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('availabilityCalendar.businessDate') }}</Button>
       <Button variant="outline" size="sm" @click="shift(7)">{{ t('availabilityCalendar.week') }} &rarr;</Button>
+      <NativeSelect v-if="beds.length" v-model="bedTypeId" name="bed_type_id" class="w-36" :aria-label="t('availabilityCalendar.bedType')" @change="load">
+        <option value="">{{ t('availabilityCalendar.allBeds') }}</option>
+        <option v-for="b in beds" :key="b.id" :value="String(b.id)">{{ b.name }}</option>
+      </NativeSelect>
       <NativeSelect v-model.number="days" class="w-28" :aria-label="t('availabilityCalendar.daysShown')" @change="load">
         <option :value="14">{{ t('availabilityCalendar.days', { n: 14 }) }}</option>
         <option :value="28">{{ t('availabilityCalendar.days', { n: 28 }) }}</option>
@@ -103,6 +124,7 @@ watch(businessDate, () => {
 
   <template v-else-if="calendar">
     <p class="mb-3 text-xs text-muted-foreground" data-testid="legend">{{ t('availabilityCalendar.legend') }}</p>
+    <p v-if="bedTypeId" class="notice" data-testid="bed-note">{{ t('availabilityCalendar.bedNote') }}</p>
     <p v-if="calendar.room_types.length === 0" class="muted" data-testid="empty">{{ t('availabilityCalendar.empty') }}</p>
 
     <Card v-else class="overflow-x-auto">
