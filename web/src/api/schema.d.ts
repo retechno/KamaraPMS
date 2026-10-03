@@ -6051,6 +6051,12 @@ export interface components {
             available: number;
             /** @description Held in percent of sellable */
             occupancy_percent: string;
+            /** @description Rooms of open stays held that night (a part of held). */
+            in_house: number;
+            /** @description Rooms arriving that night - CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is. */
+            arrivals: number;
+            /** @description Rooms of CONFIRMED lines held that night */
+            reservations: number;
         };
         AvailabilityCalendar: {
             from: components["schemas"]["Date"];
@@ -6082,6 +6088,9 @@ export interface components {
                 held: number;
                 available: number;
                 occupancy_percent: string;
+                in_house: number;
+                arrivals: number;
+                reservations: number;
             }[];
         };
         TapeChart: {

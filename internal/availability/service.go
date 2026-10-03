@@ -58,6 +58,33 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 	return out, nil
 }
 
+// Parts splits the demand of a night: rooms of open stays, rooms of CONFIRMED lines, and the rooms that arrive that
+// night (lines arriving plus stays, walk-ins included, whose arrival date it is). Demand = InHouse + Reservations.
+type Parts struct {
+	InHouse, Arrivals, Reservations int
+}
+
+// Breakdown returns the parts of the demand per room type and night.
+func (s *Service) Breakdown(ctx context.Context, tenantID, propertyID int64, typeIDs []int64, dates []civil.Date, bd civil.Date) (map[int64]map[civil.Date]Parts, error) {
+	out := map[int64]map[civil.Date]Parts{}
+	if len(typeIDs) == 0 || len(dates) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).NightBreakdown(ctx, availabilitydb.NightBreakdownParams{
+		TenantID: tenantID, PropertyID: propertyID, BusinessDate: bd, NextDate: bd.AddDays(1), RoomTypeIds: typeIDs, Dates: isoDates(dates),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if out[r.RoomTypeID] == nil {
+			out[r.RoomTypeID] = map[civil.Date]Parts{}
+		}
+		out[r.RoomTypeID][r.Night] = Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}
+	}
+	return out, nil
+}
+
 // RoomBed is a bed type of a room type: the active rooms of the type that have it.
 type RoomBed struct {
 	RoomTypeID, BedTypeID int64
@@ -81,6 +108,7 @@ func (s *Service) RoomBeds(ctx context.Context, tenantID, propertyID int64) ([]R
 // BedNight is one (room type, bed type) pair on one night, counted over the rooms with that bed only.
 type BedNight struct {
 	Sellable, Held int
+	Parts          Parts
 }
 
 // BedKey names a bed type of a room type.
@@ -105,7 +133,7 @@ func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID int64, 
 		if out[k] == nil {
 			out[k] = map[civil.Date]BedNight{}
 		}
-		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held)}
+		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held), Parts: Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}}
 	}
 	return out, nil
 }

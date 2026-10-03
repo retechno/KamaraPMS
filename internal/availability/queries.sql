@@ -29,6 +29,35 @@ FROM unnest(@room_type_ids::bigint[]) AS t (room_type_id)
 CROSS JOIN unnest(@dates::text[]) AS d (night)
 ORDER BY t.room_type_id, d.night;
 
+-- The parts of demand per room type and night, for the detailed availability calendar: in_house = rooms of open stays,
+-- reservations = CONFIRMED lines (not checked in yet), so demand = in_house + reservations; arrivals = rooms that
+-- arrive that night: CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is.
+-- name: NightBreakdown :many
+SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
+    (SELECT count(*) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND sroom.room_type_id = t.room_type_id
+        AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date))::int AS in_house,
+    ((SELECT count(*) FROM reservation_rooms l
+        LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+         AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id AND l.arrival_date = d.night::date)
+     + (SELECT count(*) FROM stays s
+         JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.id = (SELECT min(x.id) FROM stay_rooms x WHERE x.property_id = s.property_id AND x.stay_id = s.id)
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status <> 'CANCELLED' AND s.arrival_date = d.night::date
+          AND sroom.room_type_id = t.room_type_id))::int AS arrivals,
+    (SELECT count(*) FROM reservation_rooms l
+       LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+      WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+        AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
+FROM unnest(@room_type_ids::bigint[]) AS t (room_type_id)
+CROSS JOIN unnest(@dates::text[]) AS d (night)
+ORDER BY t.room_type_id, d.night;
+
 -- The same per (room type, bed type) pair of the active rooms with a bed, per night, counting only the rooms with that bed: sellable = active rooms
 -- with the bed and without an active block, held = those held by a CONFIRMED line assigned to them or by an open
 -- stay. Bookings without a room are not counted (they may end up in any bed).
@@ -49,7 +78,27 @@ SELECT t.room_type_id::bigint AS room_type_id, t.bed_type_id::bigint AS bed_type
           OR EXISTS (SELECT 1 FROM stay_rooms sr
                       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
                       WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-                        AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date))))::int AS held
+                        AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date))))::int AS held,
+    (SELECT count(*) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+      WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id
+        AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date))::int AS in_house,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+         AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id AND l.arrival_date = d.night::date)
+     + (SELECT count(*) FROM stays s
+         JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.id = (SELECT min(x.id) FROM stay_rooms x WHERE x.property_id = s.property_id AND x.stay_id = s.id)
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status <> 'CANCELLED' AND s.arrival_date = d.night::date
+          AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id))::int AS arrivals,
+    (SELECT count(*) FROM reservation_rooms l
+       JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+      WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+        AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
 FROM (SELECT DISTINCT room_type_id, bed_type_id FROM rooms
        WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active AND bed_type_id IS NOT NULL) AS t
 CROSS JOIN unnest(@dates::text[]) AS d (night)

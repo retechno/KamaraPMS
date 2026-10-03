@@ -11,6 +11,7 @@ vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } })
 
 const night = (date: string, sellable: number, held: number, blocked = 0) => ({
   date, sellable, held, blocked, available: sellable - held, occupancy_percent: sellable ? String(Math.round((held / sellable) * 100)) : '0',
+  in_house: 0, arrivals: 0, reservations: held,
 })
 const calendar = {
   from: '2026-10-01', to: '2026-10-15',
@@ -35,6 +36,12 @@ function mountView(permissions = ['reservation.read'], data: unknown = calendar)
 describe('AvailabilityCalendarView', () => {
   beforeEach(() => {
     GET = vi.fn()
+    document.body.innerHTML = ''
+    try {
+      localStorage.clear()
+    } catch {
+      // not available
+    }
   })
 
   it('loads 14 nights from the business date and shows what is left per room type and night', async () => {
@@ -64,11 +71,34 @@ describe('AvailabilityCalendarView', () => {
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-01', by_bed: true } } })
     expect(w.find('[data-testid=bed-note]').exists()).toBe(true)
-    expect(w.get('[data-testid=bed-row-DLX-KING]').text()).toContain('King')
+    expect(w.get('[data-testid=row-DLX-KING]').text()).toContain('King')
     expect(w.get('[data-testid=cell-DLX-KING-2026-10-01]').text()).toBe('0')
     expect(w.get('[data-testid=cell-DLX-TWIN-2026-10-01]').text()).toBe('1')
     // the room type row and the totals are unchanged
     expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('1')
+  })
+
+  it('shows several metrics, chosen in a popover, as one row each under the room type', async () => {
+    const w = mountView(['reservation.read'], { ...calendar, room_types: [{ ...calendar.room_types[0], nights: [{ ...night('2026-10-01', 2, 1), in_house: 1, arrivals: 2, reservations: 0 }, night('2026-10-02', 2, 2), night('2026-10-03', 1, 2, 1)] }] })
+    await flushPromises()
+    await w.get('[data-testid=metrics-trigger]').trigger('click')
+    await flushPromises()
+    const box = (name: string) => document.body.querySelector(`input[name=${name}]`) as HTMLInputElement
+    box('metric_in_house').click()
+    box('metric_arrivals').click()
+    await flushPromises()
+    expect(w.find('[data-testid=row-DLX-available]').exists()).toBe(true)
+    expect(w.get('[data-testid=cell-DLX-in_house-2026-10-01]').text()).toBe('1')
+    expect(w.get('[data-testid=cell-DLX-arrivals-2026-10-01]').text()).toBe('2')
+    expect(w.find('[data-testid=row-DLX-held]').exists()).toBe(false)
+    expect(localStorage.getItem('availability-calendar-metrics')).toBe('["available","in_house","arrivals"]')
+    // the last metric cannot be switched off
+    box('metric_available').click()
+    box('metric_in_house').click()
+    box('metric_arrivals').click()
+    await flushPromises()
+    // arrivals is the only one left: back to the compact view, with the arrivals in the type row
+    expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('2')
   })
 
   it('moves the window by a week', async () => {

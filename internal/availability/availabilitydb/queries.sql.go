@@ -28,7 +28,27 @@ SELECT t.room_type_id::bigint AS room_type_id, t.bed_type_id::bigint AS bed_type
           OR EXISTS (SELECT 1 FROM stay_rooms sr
                       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
                       WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-                        AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date))))::int AS held
+                        AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date))))::int AS held,
+    (SELECT count(*) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id
+        AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date))::int AS in_house,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+         AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id AND l.arrival_date = d.night::date)
+     + (SELECT count(*) FROM stays s
+         JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.id = (SELECT min(x.id) FROM stay_rooms x WHERE x.property_id = s.property_id AND x.stay_id = s.id)
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status <> 'CANCELLED' AND s.arrival_date = d.night::date
+          AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id))::int AS arrivals,
+    (SELECT count(*) FROM reservation_rooms l
+       JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+      WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+        AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
 FROM (SELECT DISTINCT room_type_id, bed_type_id FROM rooms
        WHERE tenant_id = $1 AND property_id = $2 AND is_active AND bed_type_id IS NOT NULL) AS t
 CROSS JOIN unnest($5::text[]) AS d (night)
@@ -44,11 +64,14 @@ type BedNightInventoryParams struct {
 }
 
 type BedNightInventoryRow struct {
-	RoomTypeID int64
-	BedTypeID  int64
-	Night      civil.Date
-	Sellable   int32
-	Held       int32
+	RoomTypeID   int64
+	BedTypeID    int64
+	Night        civil.Date
+	Sellable     int32
+	Held         int32
+	InHouse      int32
+	Arrivals     int32
+	Reservations int32
 }
 
 // The same per (room type, bed type) pair of the active rooms with a bed, per night, counting only the rooms with that bed: sellable = active rooms
@@ -75,6 +98,9 @@ func (q *Queries) BedNightInventory(ctx context.Context, arg BedNightInventoryPa
 			&i.Night,
 			&i.Sellable,
 			&i.Held,
+			&i.InHouse,
+			&i.Arrivals,
+			&i.Reservations,
 		); err != nil {
 			return nil, err
 		}
@@ -632,6 +658,86 @@ func (q *Queries) MaxStayDeparture(ctx context.Context, arg MaxStayDeparturePara
 	var last_departure civil.Date
 	err := row.Scan(&last_departure)
 	return last_departure, err
+}
+
+const nightBreakdown = `-- name: NightBreakdown :many
+SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
+    (SELECT count(*) FROM stay_rooms sr
+       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+       JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+      WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+        AND sroom.room_type_id = t.room_type_id
+        AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date))::int AS in_house,
+    ((SELECT count(*) FROM reservation_rooms l
+        LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+         AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id AND l.arrival_date = d.night::date)
+     + (SELECT count(*) FROM stays s
+         JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.id = (SELECT min(x.id) FROM stay_rooms x WHERE x.property_id = s.property_id AND x.stay_id = s.id)
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status <> 'CANCELLED' AND s.arrival_date = d.night::date
+          AND sroom.room_type_id = t.room_type_id))::int AS arrivals,
+    (SELECT count(*) FROM reservation_rooms l
+       LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+      WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+        AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
+FROM unnest($5::bigint[]) AS t (room_type_id)
+CROSS JOIN unnest($6::text[]) AS d (night)
+ORDER BY t.room_type_id, d.night
+`
+
+type NightBreakdownParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	NextDate     civil.Date
+	RoomTypeIds  []int64
+	Dates        []string
+}
+
+type NightBreakdownRow struct {
+	RoomTypeID   int64
+	Night        civil.Date
+	InHouse      int32
+	Arrivals     int32
+	Reservations int32
+}
+
+// The parts of demand per room type and night, for the detailed availability calendar: in_house = rooms of open stays,
+// reservations = CONFIRMED lines (not checked in yet), so demand = in_house + reservations; arrivals = rooms that
+// arrive that night: CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is.
+func (q *Queries) NightBreakdown(ctx context.Context, arg NightBreakdownParams) ([]NightBreakdownRow, error) {
+	rows, err := q.db.Query(ctx, nightBreakdown,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.NextDate,
+		arg.RoomTypeIds,
+		arg.Dates,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NightBreakdownRow{}
+	for rows.Next() {
+		var i NightBreakdownRow
+		if err := rows.Scan(
+			&i.RoomTypeID,
+			&i.Night,
+			&i.InHouse,
+			&i.Arrivals,
+			&i.Reservations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const nightInventory = `-- name: NightInventory :many

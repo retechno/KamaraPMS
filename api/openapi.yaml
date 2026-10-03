@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.41.0
+  version: 0.42.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -6916,7 +6916,7 @@ components:
           items: { $ref: "#/components/schemas/TapeBooking" }
     CalendarNight:
       type: object
-      required: [date, sellable, blocked, held, available, occupancy_percent]
+      required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         sellable: { type: integer }
@@ -6924,6 +6924,9 @@ components:
         held: { type: integer }
         available: { type: integer, description: Sellable minus held; negative when oversold. }
         occupancy_percent: { type: string, description: Held in percent of sellable, two decimals at most (0 when nothing is sellable). }
+        in_house: { type: integer, description: Rooms of open stays held that night (a part of held). }
+        arrivals: { type: integer, description: Rooms arriving that night - CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is. }
+        reservations: { type: integer, description: Rooms of CONFIRMED lines held that night, not checked in yet (the other part of held; held = in_house + reservations). }
     AvailabilityCalendar:
       type: object
       required: [from, to, room_types, totals]
@@ -6962,7 +6965,7 @@ components:
           description: The whole property, one entry per night.
           items:
             type: object
-            required: [date, sellable, blocked, held, available, occupancy_percent]
+            required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
             properties:
               date: { $ref: "#/components/schemas/Date" }
               sellable: { type: integer }
@@ -6970,6 +6973,9 @@ components:
               held: { type: integer }
               available: { type: integer }
               occupancy_percent: { type: string }
+              in_house: { type: integer }
+              arrivals: { type: integer }
+              reservations: { type: integer }
     TapeChart:
       type: object
       required: [from, to, rooms, unassigned]

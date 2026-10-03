@@ -22,6 +22,10 @@ type CalendarNight struct {
 	Held             int             `json:"held"`
 	Available        int             `json:"available"`
 	OccupancyPercent decimal.Decimal `json:"occupancy_percent"`
+	// The parts of Held (Held = InHouse + Reservations) and the rooms arriving that night; see availability.Parts.
+	InHouse      int `json:"in_house"`
+	Arrivals     int `json:"arrivals"`
+	Reservations int `json:"reservations"`
 }
 
 // CalendarType is the nights of one active room type.
@@ -52,6 +56,9 @@ type CalendarTotal struct {
 	Held             int             `json:"held"`
 	Available        int             `json:"available"`
 	OccupancyPercent decimal.Decimal `json:"occupancy_percent"`
+	InHouse          int             `json:"in_house"`
+	Arrivals         int             `json:"arrivals"`
+	Reservations     int             `json:"reservations"`
 }
 
 // Calendar is the availability of every active room type over a window of nights [From, To).
@@ -95,6 +102,10 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	if err != nil {
 		return Calendar{}, err
 	}
+	parts, err := s.avail.Breakdown(ctx, p.TenantID, propertyID, typeIDs, nights, day.BusinessDate)
+	if err != nil {
+		return Calendar{}, err
+	}
 	totals, err := s.avail.ActiveRoomCounts(ctx, p.TenantID, propertyID)
 	if err != nil {
 		return Calendar{}, err
@@ -113,20 +124,24 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	for i, d := range nights {
 		out.Totals[i].Date = d
 	}
-	night := func(d civil.Date, rooms, sellable, held int) CalendarNight {
+	night := func(d civil.Date, rooms, sellable, held int, pt availability.Parts) CalendarNight {
 		occ := availability.Occupancy{Sellable: sellable, Booked: held}
-		return CalendarNight{Date: d, Sellable: sellable, Blocked: rooms - sellable, Held: held, Available: sellable - held, OccupancyPercent: occ.Percent()}
+		return CalendarNight{Date: d, Sellable: sellable, Blocked: rooms - sellable, Held: held, Available: sellable - held, OccupancyPercent: occ.Percent(), InHouse: pt.InHouse, Arrivals: pt.Arrivals, Reservations: pt.Reservations}
 	}
 	for _, t := range types {
 		ct := CalendarType{RoomTypeID: t.ID, Code: t.Code, Name: t.Name, RoomsTotal: totals[t.ID], Nights: make([]CalendarNight, len(nights))}
 		for i, d := range nights {
 			n := inv[t.ID][d]
-			ct.Nights[i] = night(d, ct.RoomsTotal, n.Sellable, n.Demand)
+			pt := parts[t.ID][d]
+			ct.Nights[i] = night(d, ct.RoomsTotal, n.Sellable, n.Demand, pt)
 			tot := &out.Totals[i]
 			tot.Sellable += n.Sellable
 			tot.Blocked += ct.RoomsTotal - n.Sellable
 			tot.Held += n.Demand
 			tot.Available += n.Sellable - n.Demand
+			tot.InHouse += pt.InHouse
+			tot.Arrivals += pt.Arrivals
+			tot.Reservations += pt.Reservations
 		}
 		for _, b := range beds {
 			if b.RoomTypeID != t.ID {
@@ -135,7 +150,7 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 			cb := CalendarBed{BedTypeID: b.BedTypeID, Code: b.Code, Name: b.Name, RoomsTotal: b.Rooms, Nights: make([]CalendarNight, len(nights))}
 			for i, d := range nights {
 				n := bedInv[availability.BedKey{RoomTypeID: t.ID, BedTypeID: b.BedTypeID}][d]
-				cb.Nights[i] = night(d, b.Rooms, n.Sellable, n.Held)
+				cb.Nights[i] = night(d, b.Rooms, n.Sellable, n.Held, n.Parts)
 			}
 			ct.Beds = append(ct.Beds, cb)
 		}
