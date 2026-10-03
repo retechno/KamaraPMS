@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.47.0
+  version: 0.48.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -474,6 +474,52 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/free-night-quotas:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listFreeNightQuotas
+      summary: The monthly limits of free nights (reservation.read)
+      description: A kind without an entry has no limit. The limit is checked when a complimentary or house use room is booked.
+      tags: [reservations]
+      responses:
+        "200":
+          description: The quotas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/FreeNightQuota" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/free-night-quotas/{kind}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [COMPLIMENTARY, HOUSE_USE] } }
+    put:
+      operationId: setFreeNightQuota
+      summary: Set or remove the monthly limit of free nights of a kind (rate.manage)
+      description: "`monthly_nights: null` removes the limit. It limits the rooms booked from now on; what is booked already stays."
+      tags: [reservations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monthly_nights]
+              additionalProperties: false
+              properties:
+                monthly_nights: { type: [integer, "null"], minimum: 0, maximum: 100000 }
+      responses:
+        "204": { description: Done. }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/bed-types:
     parameters:
@@ -6478,6 +6524,12 @@ components:
       type: string
       enum: [RO, BB, HB, FB, AI]
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+    FreeNightQuota:
+      type: object
+      required: [occupancy_kind, monthly_nights]
+      properties:
+        occupancy_kind: { type: string, enum: [COMPLIMENTARY, HOUSE_USE] }
+        monthly_nights: { type: integer }
     OccupancyKind:
       type: string
       enum: [PAID, COMPLIMENTARY, HOUSE_USE]
@@ -6685,6 +6737,8 @@ components:
         occupancy_reason: { type: string, maxLength: 500, description: "Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan." }
         rate_override_reason: { type: string, maxLength: 500, description: "Only when the room is added to an existing reservation: creating a reservation carries the reason and the approval once, on the request, for all its rooms." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "Only when the room is added to an existing reservation (see `rate_override_reason`)." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6702,6 +6756,8 @@ components:
         booking_group_id: { type: [integer, "null"], format: int64, description: The group; the stays must lie within its dates (422 `OUTSIDE_GROUP_DATES` on the room), the group must be active (409 `GROUP_INACTIVE`). }
         rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
         confirm: { type: boolean, default: false }
         rooms:
           type: array
@@ -6760,6 +6816,8 @@ components:
         occupancy_reason: { type: string, maxLength: 500, description: "The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason." }
         rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -7371,6 +7429,8 @@ components:
         child_count: { type: integer, minimum: 0, default: 0 }
         rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -7478,6 +7538,8 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
         rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
+        exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }

@@ -375,6 +375,51 @@ export interface paths {
         patch: operations["updateRoomType"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/free-night-quotas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The monthly limits of free nights (reservation.read)
+         * @description A kind without an entry has no limit. The limit is checked when a complimentary or house use room is booked.
+         */
+        get: operations["listFreeNightQuotas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/free-night-quotas/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                kind: "COMPLIMENTARY" | "HOUSE_USE";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or remove the monthly limit of free nights of a kind (rate.manage)
+         * @description `monthly_nights: null` removes the limit. It limits the rooms booked from now on; what is booked already stays.
+         */
+        put: operations["setFreeNightQuota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/bed-types": {
         parameters: {
             query?: never;
@@ -5662,6 +5707,11 @@ export interface components {
          * @enum {string}
          */
         MealPlan: "RO" | "BB" | "HB" | "FB" | "AI";
+        FreeNightQuota: {
+            /** @enum {string} */
+            occupancy_kind: "COMPLIMENTARY" | "HOUSE_USE";
+            monthly_nights: number;
+        };
         /**
          * @description Of a rate plan. COMPLIMENTARY (a guest who does not pay) and HOUSE_USE (a room used by the hotel) are priced at
          *     zero: every night costs 0 without a grid rate, price overrides are refused (422 `OVERRIDE_NOT_ALLOWED`), and the
@@ -5860,6 +5910,10 @@ export interface components {
             rate_override_reason?: string;
             /** @description Only when the room is added to an existing reservation (see `rate_override_reason`). */
             rate_override_approval?: components["schemas"]["Approval"];
+            /** @description The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            occupancy_approval?: components["schemas"]["Approval"];
+            /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
+            exceed_free_quota?: boolean;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         CreateReservationRequest: {
@@ -5886,6 +5940,10 @@ export interface components {
             rate_override_reason?: string;
             /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
             rate_override_approval?: components["schemas"]["Approval"];
+            /** @description The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            occupancy_approval?: components["schemas"]["Approval"];
+            /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
+            exceed_free_quota?: boolean;
             /** @default false */
             confirm: boolean;
             rooms: components["schemas"]["RoomInput"][];
@@ -5948,6 +6006,10 @@ export interface components {
             rate_override_reason?: string;
             /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
             rate_override_approval?: components["schemas"]["Approval"];
+            /** @description The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            occupancy_approval?: components["schemas"]["Approval"];
+            /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
+            exceed_free_quota?: boolean;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AssignRoomRequest: {
@@ -6556,6 +6618,10 @@ export interface components {
             rate_override_reason?: string;
             /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
             rate_override_approval?: components["schemas"]["Approval"];
+            /** @description The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            occupancy_approval?: components["schemas"]["Approval"];
+            /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
+            exceed_free_quota?: boolean;
             nightly_overrides?: components["schemas"]["NightOverride"][];
             accompanying_guest_ids?: number[];
             /** @default false */
@@ -6665,6 +6731,10 @@ export interface components {
             rate_override_reason?: string;
             /** @description The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
             rate_override_approval?: components["schemas"]["Approval"];
+            /** @description The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not). */
+            occupancy_approval?: components["schemas"]["Approval"];
+            /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
+            exceed_free_quota?: boolean;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AddStayGuestRequest: {
@@ -9613,6 +9683,62 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFreeNightQuotas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quotas. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FreeNightQuota"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setFreeNightQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                kind: "COMPLIMENTARY" | "HOUSE_USE";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monthly_nights: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

@@ -494,7 +494,7 @@ func (s *Service) WalkIn(ctx context.Context, propertyID int64, key string, in W
 				// Create, confirm and assign in one go, under the locks taken above. The rows it writes are ours and
 				// need no further locks.
 				res, err := s.res.CreateHeld(ctx, propertyID, bd, reservations.CreateInput{
-					RateOverrideReason: in.RateOverrideReason, RateOverrideApproval: in.RateOverrideApproval,
+					RateOverrideReason: in.RateOverrideReason, RateOverrideApproval: in.RateOverrideApproval, OccupancyApproval: in.OccupancyApproval, ExceedFreeQuota: in.ExceedFreeQuota,
 					GuestID: &guestID, Source: "WALK_IN", Confirm: true, Rooms: []reservations.LineInput{{
 						RoomTypeID: room.RoomTypeID, RatePlanID: in.RatePlanID, Arrival: bd, Departure: in.DepartureDate, Adults: in.AdultCount, Children: in.ChildCount,
 						RoomID: &in.RoomID, Overrides: in.NightlyOverrides, OccupancyReason: in.OccupancyReason,

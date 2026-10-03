@@ -5,7 +5,10 @@ import (
 	"testing"
 
 	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/iam"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/rooms/roomstest"
 )
 
 // A walk-in on a complimentary plan needs the reason and the permission, and costs nothing.
@@ -32,4 +35,15 @@ func TestWalkInComplimentary(t *testing.T) {
 	in.RoomID = f.r102.ID
 	_, err = f.Front.WalkIn(clerk, f.propID, "c3", in)
 	wantCode(t, err, "PERMISSION_DENIED")
+
+	// a clerk who may book free rooms but not approve them needs the manager's credentials
+	booker := f.User(t, f.tenantID, f.propID, auth.PermFrontdeskCheckin, auth.PermReservationCreate, auth.PermReservationRead, auth.PermGuestRead, auth.PermReservationComplimentary)
+	_, managerEmail := f.Account(t, f.tenantID, f.propID, auth.PermReservationComplimentaryApprove)
+	in.RoomID = f.r102.ID
+	_, err = f.Front.WalkIn(booker, f.propID, "c4", in)
+	wantCode(t, err, "APPROVAL_REQUIRED")
+	in.OccupancyApproval = &iam.ApprovalInput{Email: managerEmail, Password: roomstest.Password}
+	if _, err := f.Front.WalkIn(booker, f.propID, "c5", in); err != nil && !apperr.IsCode(err, "ROOM_NOT_READY") {
+		t.Fatalf("approved walk-in: %v", err)
+	}
 }

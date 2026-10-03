@@ -47,6 +47,8 @@ type WalkInInput struct {
 	OccupancyReason      string                       `json:"occupancy_reason"`       // why the room is free, on a complimentary or house use plan
 	RateOverrideReason   string                       `json:"rate_override_reason"`   // why the nightly price is changed (with nightly_overrides)
 	RateOverrideApproval *iam.ApprovalInput           `json:"rate_override_approval"` // the approver's credentials, unless the caller can approve
+	OccupancyApproval    *iam.ApprovalInput           `json:"occupancy_approval"`     // the manager's credentials for a complimentary or house use room, unless the caller can approve
+	ExceedFreeQuota      bool                         `json:"exceed_free_quota"`      // takes the month over the quota of free nights, knowingly
 	AccompanyingGuestIDs []int64                      `json:"accompanying_guest_ids"`
 	OverrideRoomNotReady bool                         `json:"override_room_not_ready"`
 	OverrideReason       string                       `json:"override_reason"`

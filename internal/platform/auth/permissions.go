@@ -47,15 +47,16 @@ const (
 	PermBillingConfigManage Permission = "billing_config.manage"
 	PermRateManage          Permission = "rate.manage"
 
-	PermReservationRead            Permission = "reservation.read"
-	PermReservationCreate          Permission = "reservation.create"
-	PermReservationUpdate          Permission = "reservation.update"
-	PermReservationCancel          Permission = "reservation.cancel"
-	PermReservationReinstate       Permission = "reservation.reinstate"
-	PermReservationOverrideRate    Permission = "reservation.override_rate"
-	PermReservationUpgrade         Permission = "reservation.upgrade"
-	PermReservationComplimentary   Permission = "reservation.complimentary"
-	PermReservationOverrideApprove Permission = "reservation.override_rate_approve"
+	PermReservationRead                 Permission = "reservation.read"
+	PermReservationCreate               Permission = "reservation.create"
+	PermReservationUpdate               Permission = "reservation.update"
+	PermReservationCancel               Permission = "reservation.cancel"
+	PermReservationReinstate            Permission = "reservation.reinstate"
+	PermReservationOverrideRate         Permission = "reservation.override_rate"
+	PermReservationUpgrade              Permission = "reservation.upgrade"
+	PermReservationComplimentary        Permission = "reservation.complimentary"
+	PermReservationOverrideApprove      Permission = "reservation.override_rate_approve"
+	PermReservationComplimentaryApprove Permission = "reservation.complimentary_approve"
 
 	PermFrontdeskCheckin            Permission = "frontdesk.checkin"
 	PermFrontdeskCheckinUnreadyRoom Permission = "frontdesk.checkin_unready_room"
@@ -136,6 +137,7 @@ var Catalogue = []PermissionInfo{
 	{PermReservationUpgrade, "Reservations", "Assign upgraded rooms", "M8"},
 	{PermReservationComplimentary, "Reservations", "Book complimentary and house use rooms", "M8"},
 	{PermReservationOverrideApprove, "Reservations", "Approve nightly rate overrides (own credentials, or as the person who enters one)", "M8"},
+	{PermReservationComplimentaryApprove, "Reservations", "Approve complimentary and house use rooms, and going over the monthly quota of free nights", "M8"},
 
 	{PermFrontdeskCheckin, "Front desk", "Check guests in (including walk-ins)", "M10"},
 	{PermFrontdeskCheckinUnreadyRoom, "Front desk", "Check in to a room that is not clean/inspected", "M10"},

@@ -11,12 +11,6 @@ this list only keeps them from being forgotten. Move an item to the README statu
   engine (inventory per type and bed), the search, the rate grid and the calendar. Decide first whether a variant
   has its own price or only its own stock.
 
-## Free rooms (complimentary and house use)
-
-- **Approval workflow and a cap per period** for rooms given away: for example a monthly limit of free nights per
-  property or per user, and an approval by a manager above it. Today the permission `reservation.complimentary` and a
-  reason are the only controls (see "Complimentary and house use rooms" in the README).
-
 ## Language
 
 - **Numbers in the Indonesian field errors.** The generic texts leave out the limits the server hint carries ("at

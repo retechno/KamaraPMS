@@ -51,6 +51,16 @@ const rate = ref<RateChange>({ overrides: [], reason: '' })
 const approving = ref(false)
 const dialogError = ref<ApiError | null>(null)
 const canOverride = computed(() => auth.can('reservation.override_rate', property.currentId))
+const canApproveFree = computed(() => auth.can('reservation.complimentary_approve', property.currentId))
+const exceedQuota = ref(false)
+const isFree = computed(() => !!picked.value && picked.value.plan.occupancy_kind !== 'PAID')
+/** The monthly quota of free nights this booking would go over: what the server says, to show and to confirm. */
+const quotaOver = computed(() => {
+  const e = error.value
+  if (e?.code !== 'FREE_NIGHT_QUOTA_EXCEEDED') return null
+  const c = e.context as Record<string, unknown>
+  return { kind: String(c.occupancy_kind ?? ''), quota: Number(c.quota), month: String(c.month ?? '').slice(0, 7), used: Number(c.used), requested: Number(c.requested) }
+})
 const canApprove = computed(() => auth.can('reservation.override_rate_approve', property.currentId))
 const overrideNights = computed<OverrideNight[]>(() => (picked.value?.plan.nightly ?? []).map((n) => ({ date: n.date, standard: n.amount, current: n.amount })))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
@@ -164,6 +174,7 @@ function pick(type: TypeOffer, plan: PlanOffer): void {
   form.occupancyReason = ''
   rate.value = { overrides: [], reason: '' }
   approving.value = false
+  exceedQuota.value = false
   idempotencyKey = newIdempotencyKey()
   error.value = null
   void loadLinks()
@@ -183,7 +194,7 @@ async function findGuests(): Promise<void> {
 
 /** The button: a price change that the person cannot approve asks for an approver first. */
 function submit(): void {
-  if (rate.value.overrides.length && !canApprove.value) {
+  if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value)) {
     dialogError.value = null
     approving.value = true
     return
@@ -209,6 +220,8 @@ async function book(approval?: Approval): Promise<void> {
         booking_group_id: form.groupId || undefined,
         rate_override_reason: rate.value.overrides.length ? rate.value.reason : undefined,
         rate_override_approval: rate.value.overrides.length ? approval : undefined,
+        occupancy_approval: isFree.value ? approval : undefined,
+        exceed_free_quota: exceedQuota.value || undefined,
         rooms: [{
           room_type_id: picked.value.type.room_type_id,
           rate_plan_id: picked.value.plan.id,
@@ -224,8 +237,14 @@ async function book(approval?: Approval): Promise<void> {
     })
     if (data) await router.push(`/reservations/${data.id}`)
   } catch (e) {
-    if (approval) dialogError.value = e instanceof ApiError ? e : null // the dialog shows what the approver got wrong
-    else error.value = e instanceof ApiError ? e : null
+    if (e instanceof ApiError && e.code === 'FREE_NIGHT_QUOTA_EXCEEDED') {
+      approving.value = false // the page shows the quota and asks whether to go over it
+      error.value = e
+    } else if (approval) {
+      dialogError.value = e instanceof ApiError ? e : null // the dialog shows what the approver got wrong
+    } else {
+      error.value = e instanceof ApiError ? e : null
+    }
     if (e instanceof ApiError) idempotencyKey = newIdempotencyKey() // the server answered: the next submit is a new attempt (a network failure keeps the key, so a retry replays)
   } finally {
     saving.value = false
@@ -353,6 +372,10 @@ async function book(approval?: Approval): Promise<void> {
             </FormField>
           </div>
 
+          <div v-if="quotaOver" class="alert warning" role="alert" data-testid="quota-warning">
+            {{ t('freeQuotas.over', { kind: t(`occupancy.kind_${quotaOver.kind}`), quota: quotaOver.quota, month: quotaOver.month, used: quotaOver.used, requested: quotaOver.requested }) }}
+            <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="exceedQuota" type="checkbox" name="exceed_free_quota" class="size-4 accent-primary" /><span>{{ t('freeQuotas.goOver') }}</span></label>
+          </div>
           <RateOverrideSection v-if="canOverride && picked.plan.occupancy_kind === 'PAID' && overrideNights.length" v-model="rate" :nights="overrideNights" />
           <label class="flex items-center gap-2 text-sm">
             <input v-model="form.confirm" type="checkbox" name="confirm" />
@@ -364,6 +387,6 @@ async function book(approval?: Approval): Promise<void> {
         </CardContent>
       </form>
     </Card>
-    <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
+    <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
   </template>
 </template>

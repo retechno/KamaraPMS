@@ -351,7 +351,7 @@ type pricedLine struct {
 // occupancyReason applies the rule of complimentary and house use rooms to a priced line. A PAID line keeps no
 // reason. Any other kind needs a reason, and booking it (a new line, or a changed plan) needs
 // reservation.complimentary. It returns the reason to store.
-func (s *Service) occupancyReason(ctx context.Context, propertyID int64, prefix, kind, reason string, booking bool) (*string, error) {
+func (s *Service) occupancyReason(ctx context.Context, propertyID, tenantID int64, prefix, kind, reason string, booking bool, arrival, departure civil.Date, excludeLine *int64) (*string, error) {
 	if kind == rates.KindPaid {
 		return nil, nil
 	}
@@ -366,6 +366,11 @@ func (s *Service) occupancyReason(ctx context.Context, propertyID int64, prefix,
 		return nil, apperr.Invalid("the room is invalid", fieldErr(prefix+"occupancy_reason", "REQUIRED", "say why the room is complimentary or for house use"))
 	case len([]rune(reason)) > 500:
 		return nil, apperr.Invalid("the room is invalid", fieldErr(prefix+"occupancy_reason", "TOO_LONG", "at most 500 characters"))
+	}
+	if booking { // the approval of a manager and the monthly quota, once the room is known to be valid
+		if err := s.requireFreeRoom(ctx, propertyID, tenantID, kind, arrival, departure, excludeLine); err != nil {
+			return nil, err
+		}
 	}
 	return &reason, nil
 }

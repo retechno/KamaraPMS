@@ -25,6 +25,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/availability/rooms", httpx.HandlerFunc(h.freeRooms))
 	mux.Handle("GET "+p+"/tape-chart", httpx.HandlerFunc(h.tape))
 	mux.Handle("GET "+p+"/availability/calendar", httpx.HandlerFunc(h.calendar))
+	h.registerQuotas(mux)
 	mux.Handle("POST "+p+"/reservations", httpx.HandlerFunc(h.create))
 	mux.Handle("GET "+p+"/reservations", httpx.HandlerFunc(h.list))
 	mux.Handle("GET "+p+"/reservations/{id}", httpx.HandlerFunc(h.get))
@@ -334,6 +335,8 @@ type patchRoomRequest struct {
 	// RateOverrideReason and RateOverrideApproval justify the overrides.
 	RateOverrideReason   string             `json:"rate_override_reason"`
 	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval"`
+	OccupancyApproval    *iam.ApprovalInput `json:"occupancy_approval"`
+	ExceedFreeQuota      bool               `json:"exceed_free_quota"`
 }
 
 func (h *Handler) patchRoom(w http.ResponseWriter, r *http.Request) error {

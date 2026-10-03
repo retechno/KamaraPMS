@@ -52,7 +52,7 @@ describe('WalkInView', () => {
     const { w } = mountView()
     await flushPromises()
     expect(w.findAll('select[name=rate_plan] option').map((o) => o.text())).toEqual(['BAR · Best'])
-    const { w: w2 } = mountView(['frontdesk.checkin', 'reservation.create', 'reservation.read', 'reservation.complimentary'])
+    const { w: w2 } = mountView(['frontdesk.checkin', 'reservation.create', 'reservation.read', 'reservation.complimentary', 'reservation.complimentary_approve'])
     await flushPromises()
     expect(w2.findAll('select[name=rate_plan] option').map((o) => o.text())).toEqual(['BAR · Best', 'COMP · Complimentary (Complimentary)'])
     expect(w2.find('input[name=occupancy_reason]').exists()).toBe(false)

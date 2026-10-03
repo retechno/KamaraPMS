@@ -53,7 +53,7 @@ func TestComplimentaryAndHouseUseLines(t *testing.T) {
 	clerk := f.User(t, f.tenantID, f.propID, auth.PermGuestRead, auth.PermReservationRead, auth.PermReservationCreate, auth.PermReservationUpdate)
 	_, err = f.Res.Create(clerk, f.propID, "", f.input(true, noReason))
 	wantCode(t, err, "PERMISSION_DENIED")
-	manager := f.User(t, f.tenantID, f.propID, auth.PermGuestRead, auth.PermReservationRead, auth.PermReservationCreate, auth.PermReservationUpdate, auth.PermReservationComplimentary)
+	manager := f.User(t, f.tenantID, f.propID, auth.PermGuestRead, auth.PermReservationRead, auth.PermReservationCreate, auth.PermReservationUpdate, auth.PermReservationComplimentary, auth.PermReservationComplimentaryApprove)
 	if _, err := f.Res.Create(manager, f.propID, "", f.input(true, noReason)); err != nil {
 		t.Fatalf("who may give rooms away can: %v", err)
 	}

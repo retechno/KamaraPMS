@@ -206,6 +206,56 @@ func (q *Queries) ConfirmReservation(ctx context.Context, arg ConfirmReservation
 	return i, err
 }
 
+const countFreeNights = `-- name: CountFreeNights :one
+SELECT count(*)::int FROM reservation_room_rates n
+JOIN reservation_rooms l ON l.property_id = n.property_id AND l.id = n.reservation_room_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+WHERE n.tenant_id = $1 AND n.property_id = $2 AND rp.occupancy_kind = $3
+  AND l.status IN ('CONFIRMED', 'CHECKED_IN', 'COMPLETED')
+  AND n.stay_date >= $4::date AND n.stay_date < $5::date
+  AND ($6::bigint IS NULL OR l.id <> $6::bigint)
+`
+
+type CountFreeNightsParams struct {
+	TenantID      int64
+	PropertyID    int64
+	OccupancyKind string
+	FromDate      civil.Date
+	ToDate        civil.Date
+	ExcludeLineID *int64
+}
+
+// The free nights of a kind in [from_date, to_date) that the quota counts: the nightly snapshot of CONFIRMED, CHECKED_IN
+// and COMPLETED lines on a plan of that kind (a line leaves the count with exclude_line_id when it is being amended).
+func (q *Queries) CountFreeNights(ctx context.Context, arg CountFreeNightsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countFreeNights,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OccupancyKind,
+		arg.FromDate,
+		arg.ToDate,
+		arg.ExcludeLineID,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deleteFreeNightQuota = `-- name: DeleteFreeNightQuota :exec
+DELETE FROM free_night_quotas WHERE tenant_id = $1 AND property_id = $2 AND occupancy_kind = $3
+`
+
+type DeleteFreeNightQuotaParams struct {
+	TenantID      int64
+	PropertyID    int64
+	OccupancyKind string
+}
+
+func (q *Queries) DeleteFreeNightQuota(ctx context.Context, arg DeleteFreeNightQuotaParams) error {
+	_, err := q.db.Exec(ctx, deleteFreeNightQuota, arg.TenantID, arg.PropertyID, arg.OccupancyKind)
+	return err
+}
+
 const deleteNightRate = `-- name: DeleteNightRate :exec
 DELETE FROM reservation_room_rates WHERE property_id = $1 AND reservation_room_id = $2 AND stay_date = $3
 `
@@ -255,6 +305,24 @@ func (q *Queries) DeleteNightRatesOutside(ctx context.Context, arg DeleteNightRa
 		arg.Departure,
 	)
 	return err
+}
+
+const getFreeNightQuota = `-- name: GetFreeNightQuota :one
+SELECT monthly_nights FROM free_night_quotas
+WHERE tenant_id = $1 AND property_id = $2 AND occupancy_kind = $3
+`
+
+type GetFreeNightQuotaParams struct {
+	TenantID      int64
+	PropertyID    int64
+	OccupancyKind string
+}
+
+func (q *Queries) GetFreeNightQuota(ctx context.Context, arg GetFreeNightQuotaParams) (int32, error) {
+	row := q.db.QueryRow(ctx, getFreeNightQuota, arg.TenantID, arg.PropertyID, arg.OccupancyKind)
+	var monthly_nights int32
+	err := row.Scan(&monthly_nights)
+	return monthly_nights, err
 }
 
 const getLine = `-- name: GetLine :one
@@ -770,6 +838,41 @@ func (q *Queries) ListBedTypeBriefs(ctx context.Context, arg ListBedTypeBriefsPa
 			&i.Name,
 			&i.IsActive,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFreeNightQuotas = `-- name: ListFreeNightQuotas :many
+SELECT occupancy_kind, monthly_nights FROM free_night_quotas
+WHERE tenant_id = $1 AND property_id = $2 ORDER BY occupancy_kind
+`
+
+type ListFreeNightQuotasParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListFreeNightQuotasRow struct {
+	OccupancyKind string
+	MonthlyNights int32
+}
+
+func (q *Queries) ListFreeNightQuotas(ctx context.Context, arg ListFreeNightQuotasParams) ([]ListFreeNightQuotasRow, error) {
+	rows, err := q.db.Query(ctx, listFreeNightQuotas, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFreeNightQuotasRow{}
+	for rows.Next() {
+		var i ListFreeNightQuotasRow
+		if err := rows.Scan(&i.OccupancyKind, &i.MonthlyNights); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1781,4 +1884,29 @@ func (q *Queries) UpdateReservationHeader(ctx context.Context, arg UpdateReserva
 		&i.BookingGroupID,
 	)
 	return i, err
+}
+
+const upsertFreeNightQuota = `-- name: UpsertFreeNightQuota :exec
+INSERT INTO free_night_quotas (tenant_id, property_id, occupancy_kind, monthly_nights, updated_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (property_id, occupancy_kind) DO UPDATE SET monthly_nights = EXCLUDED.monthly_nights, updated_by = EXCLUDED.updated_by, updated_at = now()
+`
+
+type UpsertFreeNightQuotaParams struct {
+	TenantID      int64
+	PropertyID    int64
+	OccupancyKind string
+	MonthlyNights int32
+	ActorID       *int64
+}
+
+func (q *Queries) UpsertFreeNightQuota(ctx context.Context, arg UpsertFreeNightQuotaParams) error {
+	_, err := q.db.Exec(ctx, upsertFreeNightQuota,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OccupancyKind,
+		arg.MonthlyNights,
+		arg.ActorID,
+	)
+	return err
 }

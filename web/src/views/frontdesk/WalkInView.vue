@@ -56,6 +56,16 @@ const notReady = computed(() => !!selected.value && !isReady(selected.value.hous
 const canOverride = computed(() => auth.can('frontdesk.checkin_unready_room', pid.value))
 const canChangeRate = computed(() => auth.can('reservation.override_rate', pid.value))
 const canApprove = computed(() => auth.can('reservation.override_rate_approve', pid.value))
+const canApproveFree = computed(() => auth.can('reservation.complimentary_approve', pid.value))
+const exceedQuota = ref(false)
+const isFree = computed(() => !!chosenPlan.value && chosenPlan.value.occupancy_kind !== 'PAID')
+/** The monthly quota of free nights this walk-in would go over: what the server says, to show and to confirm. */
+const quotaOver = computed(() => {
+  const e = error.value
+  if (e?.code !== 'FREE_NIGHT_QUOTA_EXCEEDED') return null
+  const c = e.context as Record<string, unknown>
+  return { kind: String(c.occupancy_kind ?? ''), quota: Number(c.quota), month: String(c.month ?? '').slice(0, 7), used: Number(c.used), requested: Number(c.requested) }
+})
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 async function loadBase(): Promise<void> {
@@ -118,7 +128,7 @@ async function loadNights(): Promise<void> {
 
 /** The button: a price change that the person cannot approve asks for an approver first. */
 function onSubmit(): void {
-  if (rate.value.overrides.length && !canApprove.value) {
+  if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value)) {
     dialogError.value = null
     approving.value = true
     return
@@ -143,12 +153,20 @@ async function submit(approval?: Approval): Promise<void> {
         nightly_overrides: rate.value.overrides.length ? rate.value.overrides : undefined,
         rate_override_reason: rate.value.overrides.length ? rate.value.reason : undefined,
         rate_override_approval: rate.value.overrides.length ? approval : undefined,
+        occupancy_approval: isFree.value ? approval : undefined,
+        exceed_free_quota: exceedQuota.value || undefined,
       },
     })
     if (data) await router.push(`/stays/${data.stay.id}`)
   } catch (e) {
-    if (approval) dialogError.value = e instanceof ApiError ? e : null
-    else error.value = e instanceof ApiError ? e : null
+    if (e instanceof ApiError && e.code === 'FREE_NIGHT_QUOTA_EXCEEDED') {
+      approving.value = false // the page shows the quota and asks whether to go over it
+      error.value = e
+    } else if (approval) {
+      dialogError.value = e instanceof ApiError ? e : null
+    } else {
+      error.value = e instanceof ApiError ? e : null
+    }
     if (e instanceof ApiError) key = newIdempotencyKey()
   } finally {
     busy.value = false
@@ -223,6 +241,11 @@ watch(businessDate, (bd) => {
           </template>
         </div>
 
+        <div v-if="quotaOver" class="alert warning" role="alert" data-testid="quota-warning">
+          {{ t('freeQuotas.over', { kind: t(`occupancy.kind_${quotaOver.kind}`), quota: quotaOver.quota, month: quotaOver.month, used: quotaOver.used, requested: quotaOver.requested }) }}
+          <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="exceedQuota" type="checkbox" name="exceed_free_quota" class="size-4 accent-primary" /><span>{{ t('freeQuotas.goOver') }}</span></label>
+        </div>
+
         <RateOverrideSection v-if="canChangeRate && chosenPlan?.occupancy_kind === 'PAID' && planNights.length" v-model="rate" class="mt-4" :nights="planNights" />
 
         <h2 class="mb-2 mt-6 text-base font-semibold">{{ t('walkIn.guest') }}</h2>
@@ -252,5 +275,5 @@ watch(businessDate, (bd) => {
       </CardContent>
     </form>
   </Card>
-  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a)" @cancel="approving = false" />
+  <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a)" @cancel="approving = false" />
 </template>

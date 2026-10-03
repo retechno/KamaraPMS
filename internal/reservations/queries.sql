@@ -228,3 +228,30 @@ ORDER BY start_date, id;
 SELECT * FROM reservation_rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[])
 ORDER BY id;
+
+-- name: ListFreeNightQuotas :many
+SELECT occupancy_kind, monthly_nights FROM free_night_quotas
+WHERE tenant_id = @tenant_id AND property_id = @property_id ORDER BY occupancy_kind;
+
+-- name: GetFreeNightQuota :one
+SELECT monthly_nights FROM free_night_quotas
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND occupancy_kind = @occupancy_kind;
+
+-- name: UpsertFreeNightQuota :exec
+INSERT INTO free_night_quotas (tenant_id, property_id, occupancy_kind, monthly_nights, updated_by)
+VALUES (@tenant_id, @property_id, @occupancy_kind, @monthly_nights, sqlc.narg(actor_id))
+ON CONFLICT (property_id, occupancy_kind) DO UPDATE SET monthly_nights = EXCLUDED.monthly_nights, updated_by = EXCLUDED.updated_by, updated_at = now();
+
+-- name: DeleteFreeNightQuota :exec
+DELETE FROM free_night_quotas WHERE tenant_id = @tenant_id AND property_id = @property_id AND occupancy_kind = @occupancy_kind;
+
+-- The free nights of a kind in [from_date, to_date) that the quota counts: the nightly snapshot of CONFIRMED, CHECKED_IN
+-- and COMPLETED lines on a plan of that kind (a line leaves the count with exclude_line_id when it is being amended).
+-- name: CountFreeNights :one
+SELECT count(*)::int FROM reservation_room_rates n
+JOIN reservation_rooms l ON l.property_id = n.property_id AND l.id = n.reservation_room_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+WHERE n.tenant_id = @tenant_id AND n.property_id = @property_id AND rp.occupancy_kind = @occupancy_kind
+  AND l.status IN ('CONFIRMED', 'CHECKED_IN', 'COMPLETED')
+  AND n.stay_date >= @from_date::date AND n.stay_date < @to_date::date
+  AND (sqlc.narg(exclude_line_id)::bigint IS NULL OR l.id <> sqlc.narg(exclude_line_id)::bigint);

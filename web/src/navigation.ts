@@ -111,6 +111,7 @@ export const navigation: NavSection[] = [
       { id: 'chargeCodes', to: '/setup/charge-codes' },
       { id: 'companies', to: '/setup/companies' },
       { id: 'ratePlans', to: '/setup/rate-plans' },
+      { id: 'freeQuotas', to: '/setup/free-quotas' },
       { id: 'rateGrid', to: '/setup/rates' },
       { id: 'yieldRules', to: '/setup/yield-rules' },
       { id: 'auditTrail', to: '/audit' },

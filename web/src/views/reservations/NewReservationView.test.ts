@@ -98,7 +98,7 @@ describe('NewReservationView', () => {
   })
 
   it('asks for the reason when the plan is complimentary, and sends it', async () => {
-    const { w } = mountView()
+    const { w } = mountView(['reservation.read', 'reservation.create', 'reservation.complimentary', 'reservation.complimentary_approve'])
     await flushPromises()
     GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0], rate_plans: [...search.room_types[0]!.rate_plans, freePlan] }] } }))
     await w.get('form[data-testid=search-form]').trigger('submit')
@@ -135,6 +135,66 @@ describe('NewReservationView', () => {
     await w.get('input[name=rate_override_reason]').setValue('Corporate rate')
     return w
   }
+
+  async function pickFree(permissions: string[]) {
+    const { w } = mountView(permissions)
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0]!, rate_plans: [freePlan] }] } }))
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-COMP]').trigger('click')
+    await w.get('input[name=occupancy_reason]').setValue('Owner guest')
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    return w
+  }
+
+  async function approveInDialog() {
+    const email = document.body.querySelector('input[name=approval_email]') as HTMLInputElement
+    const password = document.body.querySelector('input[name=approval_password]') as HTMLInputElement
+    email.value = 'boss@hotel.test'
+    email.dispatchEvent(new Event('input'))
+    password.value = 'secret'
+    password.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+  }
+
+  it('asks a manager to approve a free room, unless the person may approve it', async () => {
+    const w = await pickFree(['reservation.read', 'reservation.create', 'reservation.complimentary'])
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled() // the dialog comes first
+    expect(document.body.textContent).toContain('manager')
+    await approveInDialog()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ occupancy_approval: { email: 'boss@hotel.test', password: 'secret' } })
+    document.body.innerHTML = ''
+    POST.mockClear()
+    const self = await pickFree(['reservation.read', 'reservation.create', 'reservation.complimentary', 'reservation.complimentary_approve'])
+    await self.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=approval-dialog]')).toBeNull()
+    expect(POST.mock.calls[0]?.[1].body.occupancy_approval).toBeUndefined()
+  })
+
+  it('shows the quota of free nights it would go over, and goes over it only when asked to', async () => {
+    const w = await pickFree(['reservation.read', 'reservation.create', 'reservation.complimentary', 'reservation.complimentary_approve'])
+    POST.mockRejectedValueOnce(new ApiError({
+      type: 't', title: 'Conflict', status: 409, code: 'FREE_NIGHT_QUOTA_EXCEEDED', detail: 'over',
+      context: { occupancy_kind: 'COMPLIMENTARY', month: '2026-10-01', quota: 3, used: 2, requested: 2 },
+    }))
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=quota-warning]').text()).toContain('quota of 3 nights')
+    expect(w.get('[data-testid=quota-warning]').text()).toContain('2026-10')
+    await w.get('input[name=exceed_free_quota]').setValue(true)
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[1]?.[1].body).toMatchObject({ exceed_free_quota: true })
+  })
 
   it('does not offer a rate change to someone who may not override', async () => {
     const { w } = mountView()

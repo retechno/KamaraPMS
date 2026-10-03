@@ -82,6 +82,10 @@ type LineInput struct {
 	// reservation carries them on the CreateInput instead): see requireRateOverrideApproval.
 	RateOverrideReason   string             `json:"rate_override_reason,omitempty"`
 	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval,omitempty"`
+	// OccupancyApproval and ExceedFreeQuota are the approval of a complimentary or house use room added to a reservation (see
+	// CreateInput).
+	OccupancyApproval *iam.ApprovalInput `json:"occupancy_approval,omitempty"`
+	ExceedFreeQuota   bool               `json:"exceed_free_quota,omitempty"`
 }
 
 // CreateInput creates a draft, optionally confirming it in the same transaction.
@@ -99,12 +103,17 @@ type CreateInput struct {
 	// credentials unless the person holds reservation.override_rate_approve. The approval is never stored.
 	RateOverrideReason   string             `json:"rate_override_reason,omitempty"`
 	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval,omitempty"`
+	// OccupancyApproval is the approval of the complimentary and house use rooms of the request: the credentials of a user
+	// holding reservation.complimentary_approve (not needed when the caller holds it). ExceedFreeQuota says the request
+	// knowingly takes a month over the quota of free nights.
+	OccupancyApproval *iam.ApprovalInput `json:"occupancy_approval,omitempty"`
+	ExceedFreeQuota   bool               `json:"exceed_free_quota,omitempty"`
 }
 
 // Hash identifies the request body for idempotent replays.
 func (in CreateInput) Hash() string {
-	in.RateOverrideApproval = nil // credentials are never part of what is stored
-	b, _ := json.Marshal(in)      //nolint:errchkjson // plain structs cannot fail to marshal
+	in.RateOverrideApproval, in.OccupancyApproval = nil, nil // credentials are never part of what is stored
+	b, _ := json.Marshal(in)                                 //nolint:errchkjson // plain structs cannot fail to marshal
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -139,6 +148,9 @@ type LinePatch struct {
 	// RateOverrideReason and RateOverrideApproval justify the overrides (see CreateInput).
 	RateOverrideReason   string
 	RateOverrideApproval *iam.ApprovalInput
+	// OccupancyApproval and ExceedFreeQuota: see CreateInput (moving a line to a free plan, or changing the dates of one).
+	OccupancyApproval *iam.ApprovalInput
+	ExceedFreeQuota   bool
 }
 
 // ListFilter narrows the reservation list.
