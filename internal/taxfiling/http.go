@@ -26,6 +26,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("PATCH "+p+"/profiles/{id}", httpx.HandlerFunc(h.updateProfile))
 	mux.Handle("GET "+p+"/settings", httpx.HandlerFunc(h.settings))
 	mux.Handle("POST "+p+"/settings", httpx.HandlerFunc(h.changeSettings))
+	mux.Handle("POST "+p+"/profiles/{id}/opening-credit", httpx.HandlerFunc(h.setOpeningCredit))
+	mux.Handle("POST "+p+"/profiles/{id}/opening-credit/void", httpx.HandlerFunc(h.voidOpeningCredit))
 	mux.Handle("GET "+p+"/periods", httpx.HandlerFunc(h.periods))
 	mux.Handle("GET "+p+"/worksheet", httpx.HandlerFunc(h.worksheet))
 	mux.Handle("GET "+p+"/returns", httpx.HandlerFunc(h.returns))
@@ -167,6 +169,38 @@ func (h *Handler) changeSettings(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusCreated, v)
+}
+
+func (h *Handler) setOpeningCredit(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r, errProfileNotFound())
+	if err != nil {
+		return err
+	}
+	var in OpeningCreditInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	pr, err := h.svc.SetOpeningCredit(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, pr)
+}
+
+func (h *Handler) voidOpeningCredit(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r, errProfileNotFound())
+	if err != nil {
+		return err
+	}
+	var in VoidInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	pr, err := h.svc.VoidOpeningCredit(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, pr)
 }
 
 func (h *Handler) periods(w http.ResponseWriter, r *http.Request) error {

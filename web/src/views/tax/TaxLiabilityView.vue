@@ -31,6 +31,7 @@ const columns = computed<Column<TaxRow>[]>(() => [
   { key: 'collected', label: t('taxLiability.collected'), align: 'right', format: 'money' as const },
   { key: 'filed', label: t('taxLiability.onReturns'), align: 'right', format: 'money' as const },
   { key: 'unfiled', label: t('taxLiability.unfiled'), align: 'right', format: 'money' as const },
+  { key: 'credit', label: t('taxLiability.credit'), align: 'right' },
   { key: 'paid', label: t('taxLiability.paid'), align: 'right', format: 'money' as const },
   { key: 'owed', label: t('taxLiability.owed'), align: 'right', format: 'money' as const },
   { key: 'overdue', label: t('taxLiability.overdue') },
@@ -90,6 +91,7 @@ watch(() => pid.value, () => {
                 <small class="text-muted-foreground"> · {{ row.authority }} · {{ t('taxLiability.account', { code: row.account_code }) }}</small>
               </template>
               <template #cell-unfiled="{ row }">{{ money(row.unfiled) }}</template>
+              <template #cell-credit="{ row }">{{ Number(row.credit_available) ? $money(row.credit_available) : '' }}</template>
               <template #cell-owed="{ row }"><b>{{ $money(row.owed) }}</b></template>
               <template #cell-overdue="{ row }">
                 <span v-if="row.overdue_unfiled_months" class="mr-2 text-destructive" data-testid="overdue-unfiled">{{ t('taxLiability.monthsNotFiled', { n: row.overdue_unfiled_months }) }}</span>

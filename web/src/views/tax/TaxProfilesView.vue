@@ -3,7 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { TaxFilingProfile } from '@/api/types'
+import type { Approval, TaxFilingProfile } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -26,6 +27,7 @@ interface TaxRow {
   name: string
   rate: string
   is_active: boolean
+  tax_kind?: string
 }
 
 const profiles = ref<TaxFilingProfile[]>([])
@@ -35,7 +37,15 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const editing = ref<TaxFilingProfile | 'new' | null>(null)
-const form = reactive({ tax_id: 0, authority: '', registration_number: '', due_day: '15', is_active: true })
+const form = reactive({ tax_id: 0, authority: '', registration_number: '', due_day: '15', is_active: true, claims_input_vat: false })
+/** The opening VAT credit: set (as of a date, an amount) or void (a reason), each with an approval. */
+const credit = ref<{ mode: 'set' | 'void'; profile: TaxFilingProfile; as_of: string; amount: string; reason: string; asking: boolean } | null>(null)
+const dialogError = ref<ApiError | null>(null)
+const isVat = computed(() => {
+  if (editing.value === null) return false
+  if (editing.value === 'new') return taxes.value.find((x) => x.id === form.tax_id)?.tax_kind === 'VAT'
+  return editing.value.tax_kind === 'VAT'
+})
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -45,6 +55,7 @@ const columns = computed<Column<TaxFilingProfile>[]>(() => [
   { key: 'authority', label: t('taxProfiles.authority') },
   { key: 'registration_number', label: t('taxProfiles.registration') },
   { key: 'due_day', label: t('taxProfiles.due') },
+  { key: 'vat', label: t('taxProfiles.inputVat') },
   { key: 'status', label: t('taxProfiles.status') },
   { key: 'actions', label: '', align: 'right' },
 ])
@@ -71,13 +82,13 @@ async function load(): Promise<void> {
 }
 
 function startNew(): void {
-  Object.assign(form, { tax_id: 0, authority: '', registration_number: '', due_day: '15', is_active: true })
+  Object.assign(form, { tax_id: 0, authority: '', registration_number: '', due_day: '15', is_active: true, claims_input_vat: false })
   error.value = null
   editing.value = 'new'
 }
 
 function startEdit(p: TaxFilingProfile): void {
-  Object.assign(form, { tax_id: p.tax_id, authority: p.authority, registration_number: p.registration_number ?? '', due_day: String(p.due_day), is_active: p.is_active })
+  Object.assign(form, { tax_id: p.tax_id, authority: p.authority, registration_number: p.registration_number ?? '', due_day: String(p.due_day), is_active: p.is_active, claims_input_vat: p.claims_input_vat })
   error.value = null
   editing.value = p
 }
@@ -92,12 +103,12 @@ async function save(): Promise<void> {
     if (editing.value === 'new') {
       await api.POST('/api/v1/properties/{propertyId}/tax/profiles', {
         params: { path: { propertyId } },
-        body: { tax_id: form.tax_id, authority: form.authority, registration_number: form.registration_number || undefined, due_day: Number(form.due_day), is_active: form.is_active },
+        body: { tax_id: form.tax_id, authority: form.authority, registration_number: form.registration_number || undefined, due_day: Number(form.due_day), is_active: form.is_active, claims_input_vat: isVat.value ? form.claims_input_vat : undefined },
       })
     } else {
       await api.PATCH('/api/v1/properties/{propertyId}/tax/profiles/{id}', {
         params: { path: { propertyId, id: editing.value.id } },
-        body: { authority: form.authority, registration_number: form.registration_number, due_day: Number(form.due_day), is_active: form.is_active },
+        body: { authority: form.authority, registration_number: form.registration_number, due_day: Number(form.due_day), is_active: form.is_active, claims_input_vat: form.claims_input_vat },
       })
     }
     notice.value = t('taxProfiles.saved')
@@ -105,6 +116,32 @@ async function save(): Promise<void> {
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  } finally {
+    busy.value = false
+  }
+}
+
+function startCredit(mode: 'set' | 'void', profile: TaxFilingProfile): void {
+  error.value = null
+  notice.value = ''
+  credit.value = { mode, profile, as_of: '', amount: '', reason: '', asking: false }
+}
+
+async function confirmCredit(approval: Approval): Promise<void> {
+  const propertyId = pid.value
+  const c = credit.value
+  if (propertyId === null || c === null) return
+  busy.value = true
+  dialogError.value = null
+  try {
+    const path = { propertyId, id: c.profile.id }
+    if (c.mode === 'set') await api.POST('/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit', { params: { path }, body: { as_of: c.as_of, amount: c.amount.trim(), approval } })
+    else await api.POST('/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit/void', { params: { path }, body: { reason: c.reason.trim(), approval } })
+    notice.value = c.mode === 'set' ? t('taxProfiles.creditSet') : t('taxProfiles.creditVoided')
+    credit.value = null
+    await load()
+  } catch (e) {
+    dialogError.value = e instanceof ApiError ? e : null
   } finally {
     busy.value = false
   }
@@ -154,10 +191,38 @@ watch(() => pid.value, () => {
             <label class="flex items-center gap-2 self-end pb-2 text-sm">
               <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" /><span>{{ t('taxProfiles.filedCheck') }}</span>
             </label>
+            <label v-if="isVat" class="flex items-center gap-2 self-end pb-2 text-sm" :title="t('taxProfiles.claimsHint')">
+              <input v-model="form.claims_input_vat" name="claims_input_vat" type="checkbox" class="size-4 accent-primary" /><span>{{ t('taxProfiles.claimsInputVat') }}</span>
+            </label>
           </div>
           <div class="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
             <Button type="submit" :disabled="busy || (editing === 'new' && !form.tax_id) || !form.authority.trim()">{{ t('common.save') }}</Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
+    <Card v-if="credit && !credit.asking" class="mb-4">
+      <form novalidate data-testid="credit-form" @submit.prevent="credit.asking = true">
+        <CardHeader><CardTitle>{{ credit.mode === 'set' ? t('taxProfiles.creditSetTitle', { code: credit.profile.tax_code }) : t('taxProfiles.creditVoidTitle', { code: credit.profile.tax_code }) }}</CardTitle></CardHeader>
+        <CardContent>
+          <p class="mt-0 text-sm text-muted-foreground">{{ credit.mode === 'set' ? t('taxProfiles.creditSetHint') : t('taxProfiles.creditVoidHint') }}</p>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <template v-if="credit.mode === 'set'">
+              <FormField :label="t('taxProfiles.creditAsOf')" :error="fieldError('as_of')">
+                <template #default="{ id, invalid }"><Input :id="id" v-model="credit.as_of" name="as_of" type="date" :aria-invalid="invalid" /></template>
+              </FormField>
+              <FormField :label="t('taxProfiles.creditAmount')" :error="fieldError('amount')">
+                <template #default="{ id, invalid }"><Input :id="id" v-model="credit.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+              </FormField>
+            </template>
+            <FormField v-else :label="t('taxProfiles.creditReason')">
+              <template #default="{ id }"><Input :id="id" v-model="credit.reason" name="reason" maxlength="500" /></template>
+            </FormField>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="credit = null">{{ t('common.cancel') }}</Button>
+            <Button type="submit" :disabled="busy || (credit.mode === 'set' ? !credit.as_of || !credit.amount.trim() : !credit.reason.trim())" data-testid="credit-ask">{{ t('taxProfiles.creditContinue') }}</Button>
           </div>
         </CardContent>
       </form>
@@ -168,14 +233,21 @@ watch(() => pid.value, () => {
         <template #cell-tax="{ row }"><b>{{ row.tax_code }}</b> · {{ row.tax_name }} <small class="text-muted-foreground">{{ Number(row.tax_rate) }}%</small></template>
         <template #cell-registration_number="{ row }">{{ row.registration_number ?? '—' }}</template>
         <template #cell-due_day="{ row }">{{ t('taxProfiles.dayN', { n: row.due_day }) }}</template>
+        <template #cell-vat="{ row }">
+          <Badge v-if="row.claims_input_vat" variant="success" data-testid="claims">{{ t('taxProfiles.claims') }}</Badge>
+          <small v-if="Number(row.opening_credit)" class="block text-muted-foreground" data-testid="opening-credit">{{ t('taxProfiles.openingCredit', { amount: $money(row.opening_credit) }) }}</small>
+        </template>
         <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('taxProfiles.filed') : t('taxProfiles.notFiled') }}</Badge></template>
         <template #cell-actions="{ row }">
           <div class="flex items-center justify-end gap-2">
             <RouterLink :to="{ path: '/tax/returns', query: { tax: String(row.tax_id) } }" class="text-sm text-primary hover:underline">{{ t('taxProfiles.returns') }}</RouterLink>
+            <Button v-if="can('tax.manage') && row.claims_input_vat && !Number(row.opening_credit)" type="button" variant="outline" size="sm" :data-testid="`credit-${row.tax_code}`" @click="startCredit('set', row)">{{ t('taxProfiles.setOpeningCredit') }}</Button>
+            <Button v-if="can('tax.manage') && Number(row.opening_credit)" type="button" variant="outline" size="sm" :data-testid="`void-credit-${row.tax_code}`" @click="startCredit('void', row)">{{ t('taxProfiles.voidOpeningCredit') }}</Button>
             <Button v-if="can('tax.manage')" type="button" variant="outline" size="sm" :data-testid="`edit-${row.tax_code}`" @click="startEdit(row)">{{ t('common.edit') }}</Button>
           </div>
         </template>
       </DataTable>
     </Card>
   </template>
+  <ApprovalDialog v-if="credit?.asking" :title="t('taxProfiles.approveCredit')" :busy="busy" :error="dialogError" @approve="confirmCredit" @cancel="credit = null; dialogError = null" />
 </template>

@@ -339,12 +339,12 @@ func (s *Service) Liability(ctx context.Context, propertyID int64, asOf *civil.D
 		return Liability{}, err
 	}
 	type fp struct {
-		filed, paid decimal.Decimal
-		n           int
+		filed, offset, paid decimal.Decimal
+		n                   int
 	}
 	filed := map[int64]fp{}
 	for _, r := range filedRows {
-		filed[r.TaxID] = fp{r.Filed, r.Paid, int(r.Returns)}
+		filed[r.TaxID] = fp{r.Filed, r.Offsets, r.Paid, int(r.Returns)}
 	}
 	paidBy, err := q.PaidByReturnToDate(ctx, taxfilingdb.PaidByReturnToDateParams{TenantID: p.TenantID, PropertyID: propertyID, AsOf: at})
 	if err != nil {
@@ -372,15 +372,21 @@ func (s *Service) Liability(ctx context.Context, propertyID int64, asOf *civil.D
 			TaxID: prof.TaxID, TaxCode: prof.TaxCode, TaxName: prof.TaxName, Authority: prof.Authority, AccountCode: code, Collected: collected[prof.TaxID], Filed: f.filed,
 			Paid: f.paid, ReturnsFiled: f.n, RegistrationNum: prof.RegistrationNumber,
 		}
+		line.Offset = f.offset
 		line.Unfiled = line.Collected.Sub(line.Filed)
-		line.Owed = line.Collected.Sub(line.Paid)
+		line.Owed = line.Collected.Sub(line.Offset).Sub(line.Paid)
+		line.CreditAvailable = prof.OpeningCredit
+		var latest civil.Date
 		have := map[civil.Date]bool{}
 		for _, r := range returns {
 			if r.TaxID != prof.TaxID || r.FiledOn.After(at) {
 				continue
 			}
 			have[r.PeriodStart] = true
-			if out := r.Tax.Sub(paidOf[r.ID]); r.DueDate.Before(at) && out.IsPositive() {
+			if r.PeriodStart.After(latest) {
+				latest, line.CreditAvailable = r.PeriodStart, r.CreditCarriedForward
+			}
+			if out := r.Payable.Sub(paidOf[r.ID]); r.DueDate.Before(at) && out.IsPositive() {
 				line.OverdueUnpaid = line.OverdueUnpaid.Add(out)
 			}
 		}

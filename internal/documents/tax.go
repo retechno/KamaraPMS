@@ -18,7 +18,7 @@ func rateLabel(r decimal.Decimal) string { return r.StringFixed(2) + "%" }
 
 // taxDoc draws the worksheet of a month of a tax: the base and the tax by charge code and rate, with the figures of the
 // filing and the payments when it has been filed.
-func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, prof taxfiling.Profile, start, end, due civil.Date, lines []taxfiling.WorksheetLine, base, tax decimal.Decimal, ret *taxfiling.Return, filename string) (Document, error) {
+func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, prof taxfiling.Profile, start, end, due civil.Date, lines []taxfiling.WorksheetLine, base, tax decimal.Decimal, off taxfiling.VATOffset, input []taxfiling.InputClaim, ret *taxfiling.Return, filename string) (Document, error) {
 	dc, err := s.context(ctx, propertyID)
 	if err != nil {
 		return Document{}, err
@@ -35,6 +35,18 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 	}
 	subtitle := "Worksheet (not filed)"
 	var notes []string
+	// the input VAT claimed against the tax collected, and the credit carried from month to month (a return of the VAT tax)
+	if len(input) > 0 || !off.CreditBroughtForward.IsZero() || !off.CreditCarriedForward.IsZero() {
+		for _, c := range input {
+			label := "Input VAT: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
+			if c.Reversal {
+				label = "Input VAT taken back: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
+			}
+			notes = append(notes, label+" "+m(c.Amount))
+		}
+		notes = append(notes, "Input VAT claimed: "+m(off.InputClaimed), "Credit brought forward: "+m(off.CreditBroughtForward), "Offset against the tax: "+m(off.Offset),
+			"Payable: "+m(off.Payable), "Credit carried forward: "+m(off.CreditCarriedForward))
+	}
 	if ret != nil {
 		subtitle = ret.Number
 		pairs = append(pairs, [2]string{"Filed on", dc.lang.Date(ret.FiledOn)}, [2]string{"Filing reference", ret.FilingReference})
@@ -81,7 +93,7 @@ func (s *Service) TaxReturnPDF(ctx context.Context, propertyID, returnID int64) 
 			prof = p
 		}
 	}
-	return s.taxDoc(ctx, propertyID, "TAX RETURN", prof, ret.PeriodStart, ret.PeriodEnd, ret.DueDate, ret.Lines, ret.Base, ret.Tax, &ret, "tax-return-"+ret.Number+".pdf")
+	return s.taxDoc(ctx, propertyID, "TAX RETURN", prof, ret.PeriodStart, ret.PeriodEnd, ret.DueDate, ret.Lines, ret.Base, ret.Tax, ret.VATOffset, ret.Input, &ret, "tax-return-"+ret.Number+".pdf")
 }
 
 // TaxWorksheetPDF is the worksheet of a month of a tax, filed or not (tax.view).
@@ -93,7 +105,7 @@ func (s *Service) TaxWorksheetPDF(ctx context.Context, propertyID, taxID int64, 
 	if ws.Return != nil {
 		return s.TaxReturnPDF(ctx, propertyID, ws.Return.ID)
 	}
-	return s.taxDoc(ctx, propertyID, "TAX WORKSHEET", ws.Profile, ws.PeriodStart, ws.PeriodEnd, ws.DueDate, ws.Lines, ws.Base, ws.Tax, nil, "tax-worksheet-"+ws.Profile.TaxCode+"-"+monthKey(start)+".pdf")
+	return s.taxDoc(ctx, propertyID, "TAX WORKSHEET", ws.Profile, ws.PeriodStart, ws.PeriodEnd, ws.DueDate, ws.Lines, ws.Base, ws.Tax, ws.VATOffset, ws.Input, nil, "tax-worksheet-"+ws.Profile.TaxCode+"-"+monthKey(start)+".pdf")
 }
 
 func monthKey(d civil.Date) string {

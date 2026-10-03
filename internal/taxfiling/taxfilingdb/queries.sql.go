@@ -86,6 +86,63 @@ func (q *Queries) AccountingStart(ctx context.Context, arg AccountingStartParams
 	return start_date, err
 }
 
+const claimableBillLines = `-- name: ClaimableBillLines :many
+SELECT l.bill_id, l.line_no, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date, l.vat_amount
+FROM supplier_bill_lines l
+JOIN supplier_bills b ON b.property_id = l.property_id AND b.id = l.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.vat_treatment = 'CREDITABLE' AND l.vat_amount > 0
+  AND b.status = 'POSTED' AND b.bill_date <= $3::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims c WHERE c.property_id = l.property_id AND c.bill_id = l.bill_id AND c.line_no = l.line_no
+                   AND c.released_at IS NULL AND c.reverses_claim_id IS NULL)
+ORDER BY b.bill_date, b.id, l.line_no
+`
+
+type ClaimableBillLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	ToDate     civil.Date
+}
+
+type ClaimableBillLinesRow struct {
+	BillID                int64
+	LineNo                int32
+	BillNumber            string
+	SupplierInvoiceNumber string
+	SupplierName          string
+	BillDate              civil.Date
+	VatAmount             decimal.Decimal
+}
+
+// Lines of bills with VAT to claim: creditable, not voided, dated up to the end of the month, and not claimed by a live return yet.
+func (q *Queries) ClaimableBillLines(ctx context.Context, arg ClaimableBillLinesParams) ([]ClaimableBillLinesRow, error) {
+	rows, err := q.db.Query(ctx, claimableBillLines, arg.TenantID, arg.PropertyID, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimableBillLinesRow{}
+	for rows.Next() {
+		var i ClaimableBillLinesRow
+		if err := rows.Scan(
+			&i.BillID,
+			&i.LineNo,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.SupplierName,
+			&i.BillDate,
+			&i.VatAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const collectedBetween = `-- name: CollectedBetween :one
 SELECT COALESCE(sum(k.amount), 0)::numeric AS tax
 FROM folio_item_components k
@@ -158,6 +215,48 @@ func (q *Queries) CollectedToDate(ctx context.Context, arg CollectedToDateParams
 	return items, nil
 }
 
+const countLaterLiveReturns = `-- name: CountLaterLiveReturns :one
+SELECT count(*)::int FROM tax_returns
+WHERE tenant_id = $1 AND property_id = $2 AND tax_id = $3 AND status = 'FILED' AND period_start > $4::date
+`
+
+type CountLaterLiveReturnsParams struct {
+	TenantID    int64
+	PropertyID  int64
+	TaxID       int64
+	PeriodStart civil.Date
+}
+
+func (q *Queries) CountLaterLiveReturns(ctx context.Context, arg CountLaterLiveReturnsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLaterLiveReturns,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.PeriodStart,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countLiveClaimsOfTax = `-- name: CountLiveClaimsOfTax :one
+SELECT count(*)::int FROM tax_return_input_claims c JOIN tax_returns r ON r.property_id = c.property_id AND r.id = c.return_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND r.tax_id = $3 AND c.released_at IS NULL
+`
+
+type CountLiveClaimsOfTaxParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+}
+
+func (q *Queries) CountLiveClaimsOfTax(ctx context.Context, arg CountLiveClaimsOfTaxParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveClaimsOfTax, arg.TenantID, arg.PropertyID, arg.TaxID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countLivePayments = `-- name: CountLivePayments :one
 SELECT count(*)::int FROM tax_payments WHERE tenant_id = $1 AND property_id = $2 AND return_id = $3 AND status = 'POSTED'
 `
@@ -170,6 +269,23 @@ type CountLivePaymentsParams struct {
 
 func (q *Queries) CountLivePayments(ctx context.Context, arg CountLivePaymentsParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countLivePayments, arg.TenantID, arg.PropertyID, arg.ReturnID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countLiveReturnsOfTax = `-- name: CountLiveReturnsOfTax :one
+SELECT count(*)::int FROM tax_returns WHERE tenant_id = $1 AND property_id = $2 AND tax_id = $3 AND status = 'FILED'
+`
+
+type CountLiveReturnsOfTaxParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+}
+
+func (q *Queries) CountLiveReturnsOfTax(ctx context.Context, arg CountLiveReturnsOfTaxParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveReturnsOfTax, arg.TenantID, arg.PropertyID, arg.TaxID)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -202,7 +318,7 @@ func (q *Queries) CountPostedDays(ctx context.Context, arg CountPostedDaysParams
 }
 
 const filedAndPaidToDate = `-- name: FiledAndPaidToDate :many
-SELECT r.tax_id, COALESCE(sum(r.tax_amount), 0)::numeric AS filed, count(*)::int AS returns,
+SELECT r.tax_id, COALESCE(sum(r.tax_amount), 0)::numeric AS filed, COALESCE(sum(r.offset_amount), 0)::numeric AS offsets, count(*)::int AS returns,
        COALESCE(sum((SELECT COALESCE(sum(x.amount), 0) FROM tax_payments x LEFT JOIN gl_journals xv ON xv.property_id = x.property_id AND xv.id = x.void_journal_id
                       WHERE x.property_id = r.property_id AND x.return_id = r.id AND x.payment_date <= $1::date AND (x.status = 'POSTED' OR xv.journal_date > $1::date))), 0)::numeric AS paid
 FROM tax_returns r
@@ -219,6 +335,7 @@ type FiledAndPaidToDateParams struct {
 type FiledAndPaidToDateRow struct {
 	TaxID   int64
 	Filed   decimal.Decimal
+	Offsets decimal.Decimal
 	Returns int32
 	Paid    decimal.Decimal
 }
@@ -236,6 +353,7 @@ func (q *Queries) FiledAndPaidToDate(ctx context.Context, arg FiledAndPaidToDate
 		if err := rows.Scan(
 			&i.TaxID,
 			&i.Filed,
+			&i.Offsets,
 			&i.Returns,
 			&i.Paid,
 		); err != nil {
@@ -330,9 +448,70 @@ func (q *Queries) GLCollected(ctx context.Context, arg GLCollectedParams) (decim
 	return collected, err
 }
 
+const insertClaim = `-- name: InsertClaim :exec
+INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, amount, reverses_claim_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type InsertClaimParams struct {
+	TenantID        int64
+	PropertyID      int64
+	ReturnID        int64
+	BillID          int64
+	LineNo          int32
+	Amount          decimal.Decimal
+	ReversesClaimID *int64
+}
+
+func (q *Queries) InsertClaim(ctx context.Context, arg InsertClaimParams) error {
+	_, err := q.db.Exec(ctx, insertClaim,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReturnID,
+		arg.BillID,
+		arg.LineNo,
+		arg.Amount,
+		arg.ReversesClaimID,
+	)
+	return err
+}
+
+const insertOpeningCredit = `-- name: InsertOpeningCredit :one
+INSERT INTO tax_opening_credits (tenant_id, property_id, tax_id, as_of, amount, journal_id, approved_by, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id
+`
+
+type InsertOpeningCreditParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+	AsOf       civil.Date
+	Amount     decimal.Decimal
+	JournalID  int64
+	ApprovedBy *int64
+	ActorID    *int64
+}
+
+func (q *Queries) InsertOpeningCredit(ctx context.Context, arg InsertOpeningCreditParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertOpeningCredit,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.AsOf,
+		arg.Amount,
+		arg.JournalID,
+		arg.ApprovedBy,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertProfile = `-- name: InsertProfile :one
-INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority, registration_number, due_day, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority, registration_number, due_day, is_active, claims_input_vat, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 RETURNING id
 `
 
@@ -344,6 +523,7 @@ type InsertProfileParams struct {
 	RegistrationNumber *string
 	DueDay             int16
 	IsActive           bool
+	ClaimsInputVat     bool
 	ActorID            *int64
 }
 
@@ -356,6 +536,7 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (i
 		arg.RegistrationNumber,
 		arg.DueDay,
 		arg.IsActive,
+		arg.ClaimsInputVat,
 		arg.ActorID,
 	)
 	var id int64
@@ -366,28 +547,31 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (i
 const insertReturn = `-- name: InsertReturn :one
 
 INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on, filing_reference, notes,
-                         filed_at, filed_by, idempotency_key)
+                         filed_at, filed_by, idempotency_key, input_claimed, credit_brought_forward, offset_journal_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15)
+        $12, $13, $14, $15, $16, $17, $18)
 RETURNING id
 `
 
 type InsertReturnParams struct {
-	TenantID        int64
-	PropertyID      int64
-	ReturnNumber    string
-	TaxID           int64
-	PeriodStart     civil.Date
-	PeriodEnd       civil.Date
-	DueDate         civil.Date
-	BaseAmount      decimal.Decimal
-	TaxAmount       decimal.Decimal
-	FiledOn         civil.Date
-	FilingReference *string
-	Notes           *string
-	Now             time.Time
-	ActorID         *int64
-	IdempotencyKey  *string
+	TenantID             int64
+	PropertyID           int64
+	ReturnNumber         string
+	TaxID                int64
+	PeriodStart          civil.Date
+	PeriodEnd            civil.Date
+	DueDate              civil.Date
+	BaseAmount           decimal.Decimal
+	TaxAmount            decimal.Decimal
+	FiledOn              civil.Date
+	FilingReference      *string
+	Notes                *string
+	Now                  time.Time
+	ActorID              *int64
+	IdempotencyKey       *string
+	InputClaimed         decimal.Decimal
+	CreditBroughtForward decimal.Decimal
+	OffsetJournalID      *int64
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -409,6 +593,9 @@ func (q *Queries) InsertReturn(ctx context.Context, arg InsertReturnParams) (int
 		arg.Now,
 		arg.ActorID,
 		arg.IdempotencyKey,
+		arg.InputClaimed,
+		arg.CreditBroughtForward,
+		arg.OffsetJournalID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -541,7 +728,8 @@ func (q *Queries) InsertTaxSettings(ctx context.Context, arg InsertTaxSettingsPa
 const listProfiles = `-- name: ListProfiles :many
 
 
-SELECT p.id, p.tax_id, t.code AS tax_code, t.name AS tax_name, t.rate AS tax_rate, t.gl_account_code, p.authority, p.registration_number, p.due_day, p.is_active, p.created_at
+SELECT p.id, p.tax_id, t.code AS tax_code, t.name AS tax_name, t.rate AS tax_rate, t.tax_kind, t.gl_account_code, p.authority, p.registration_number, p.due_day, p.is_active, p.claims_input_vat, p.created_at,
+       COALESCE((SELECT sum(c.amount) FROM tax_opening_credits c WHERE c.property_id = p.property_id AND c.tax_id = p.tax_id AND c.status = 'POSTED'), 0)::numeric AS opening_credit
 FROM tax_filing_profiles p
 JOIN taxes t ON t.property_id = p.property_id AND t.id = p.tax_id
 WHERE p.tenant_id = $1 AND p.property_id = $2
@@ -563,12 +751,15 @@ type ListProfilesRow struct {
 	TaxCode            string
 	TaxName            string
 	TaxRate            decimal.Decimal
+	TaxKind            string
 	GlAccountCode      *string
 	Authority          string
 	RegistrationNumber *string
 	DueDay             int16
 	IsActive           bool
+	ClaimsInputVat     bool
 	CreatedAt          time.Time
+	OpeningCredit      decimal.Decimal
 }
 
 // Tax filing (sqlc): filing profiles, monthly returns with their worksheet lines, and tax payments. Every query is scoped by
@@ -595,12 +786,72 @@ func (q *Queries) ListProfiles(ctx context.Context, arg ListProfilesParams) ([]L
 			&i.TaxCode,
 			&i.TaxName,
 			&i.TaxRate,
+			&i.TaxKind,
 			&i.GlAccountCode,
 			&i.Authority,
 			&i.RegistrationNumber,
 			&i.DueDay,
 			&i.IsActive,
+			&i.ClaimsInputVat,
 			&i.CreatedAt,
+			&i.OpeningCredit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReturnClaims = `-- name: ListReturnClaims :many
+SELECT c.id, c.bill_id, c.line_no, c.amount, c.reverses_claim_id, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+FROM tax_return_input_claims c
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.return_id = $3
+ORDER BY b.bill_date, b.id, c.line_no, c.id
+`
+
+type ListReturnClaimsParams struct {
+	TenantID   int64
+	PropertyID int64
+	ReturnID   int64
+}
+
+type ListReturnClaimsRow struct {
+	ID                    int64
+	BillID                int64
+	LineNo                int32
+	Amount                decimal.Decimal
+	ReversesClaimID       *int64
+	BillNumber            string
+	SupplierInvoiceNumber string
+	SupplierName          string
+	BillDate              civil.Date
+}
+
+func (q *Queries) ListReturnClaims(ctx context.Context, arg ListReturnClaimsParams) ([]ListReturnClaimsRow, error) {
+	rows, err := q.db.Query(ctx, listReturnClaims, arg.TenantID, arg.PropertyID, arg.ReturnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReturnClaimsRow{}
+	for rows.Next() {
+		var i ListReturnClaimsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BillID,
+			&i.LineNo,
+			&i.Amount,
+			&i.ReversesClaimID,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.SupplierName,
+			&i.BillDate,
 		); err != nil {
 			return nil, err
 		}
@@ -663,7 +914,8 @@ func (q *Queries) ListReturnLines(ctx context.Context, arg ListReturnLinesParams
 
 const listReturns = `-- name: ListReturns :many
 SELECT r.id, r.return_number, r.tax_id, t.code AS tax_code, t.name AS tax_name, r.period_start, r.period_end, r.due_date, r.base_amount, r.tax_amount, r.status, r.filed_on,
-       r.filing_reference, r.notes, r.filed_at, r.voided_at, r.void_reason,
+       r.filing_reference, r.notes, r.filed_at, r.voided_at, r.void_reason, r.input_claimed, r.credit_brought_forward, COALESCE(r.offset_amount, 0)::numeric AS offset_amount, COALESCE(r.payable_amount, 0)::numeric AS payable_amount, COALESCE(r.credit_carried_forward, 0)::numeric AS credit_carried_forward,
+       r.offset_journal_id,
        COALESCE((SELECT sum(x.amount) FROM tax_payments x WHERE x.property_id = r.property_id AND x.return_id = r.id AND x.status = 'POSTED'), 0)::numeric AS paid
 FROM tax_returns r
 JOIN taxes t ON t.property_id = r.property_id AND t.id = r.tax_id
@@ -685,24 +937,30 @@ type ListReturnsParams struct {
 }
 
 type ListReturnsRow struct {
-	ID              int64
-	ReturnNumber    string
-	TaxID           int64
-	TaxCode         string
-	TaxName         string
-	PeriodStart     civil.Date
-	PeriodEnd       civil.Date
-	DueDate         civil.Date
-	BaseAmount      decimal.Decimal
-	TaxAmount       decimal.Decimal
-	Status          string
-	FiledOn         civil.Date
-	FilingReference *string
-	Notes           *string
-	FiledAt         time.Time
-	VoidedAt        *time.Time
-	VoidReason      *string
-	Paid            decimal.Decimal
+	ID                   int64
+	ReturnNumber         string
+	TaxID                int64
+	TaxCode              string
+	TaxName              string
+	PeriodStart          civil.Date
+	PeriodEnd            civil.Date
+	DueDate              civil.Date
+	BaseAmount           decimal.Decimal
+	TaxAmount            decimal.Decimal
+	Status               string
+	FiledOn              civil.Date
+	FilingReference      *string
+	Notes                *string
+	FiledAt              time.Time
+	VoidedAt             *time.Time
+	VoidReason           *string
+	InputClaimed         decimal.Decimal
+	CreditBroughtForward decimal.Decimal
+	OffsetAmount         decimal.Decimal
+	PayableAmount        decimal.Decimal
+	CreditCarriedForward decimal.Decimal
+	OffsetJournalID      *int64
+	Paid                 decimal.Decimal
 }
 
 func (q *Queries) ListReturns(ctx context.Context, arg ListReturnsParams) ([]ListReturnsRow, error) {
@@ -739,6 +997,12 @@ func (q *Queries) ListReturns(ctx context.Context, arg ListReturnsParams) ([]Lis
 			&i.FiledAt,
 			&i.VoidedAt,
 			&i.VoidReason,
+			&i.InputClaimed,
+			&i.CreditBroughtForward,
+			&i.OffsetAmount,
+			&i.PayableAmount,
+			&i.CreditCarriedForward,
+			&i.OffsetJournalID,
 			&i.Paid,
 		); err != nil {
 			return nil, err
@@ -948,6 +1212,38 @@ func (q *Queries) MapAccountCode(ctx context.Context, arg MapAccountCodeParams) 
 	return code, err
 }
 
+const openingCreditOfTax = `-- name: OpeningCreditOfTax :one
+SELECT id, amount, as_of, journal_id, created_at FROM tax_opening_credits
+WHERE tenant_id = $1 AND property_id = $2 AND tax_id = $3 AND status = 'POSTED'
+`
+
+type OpeningCreditOfTaxParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+}
+
+type OpeningCreditOfTaxRow struct {
+	ID        int64
+	Amount    decimal.Decimal
+	AsOf      civil.Date
+	JournalID int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) OpeningCreditOfTax(ctx context.Context, arg OpeningCreditOfTaxParams) (OpeningCreditOfTaxRow, error) {
+	row := q.db.QueryRow(ctx, openingCreditOfTax, arg.TenantID, arg.PropertyID, arg.TaxID)
+	var i OpeningCreditOfTaxRow
+	err := row.Scan(
+		&i.ID,
+		&i.Amount,
+		&i.AsOf,
+		&i.JournalID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const paidByReturnToDate = `-- name: PaidByReturnToDate :many
 SELECT x.return_id, COALESCE(sum(x.amount), 0)::numeric AS paid
 FROM tax_payments x LEFT JOIN gl_journals xv ON xv.property_id = x.property_id AND xv.id = x.void_journal_id
@@ -987,6 +1283,41 @@ func (q *Queries) PaidByReturnToDate(ctx context.Context, arg PaidByReturnToDate
 	return items, nil
 }
 
+const previousLiveReturn = `-- name: PreviousLiveReturn :one
+
+SELECT id, period_start, COALESCE(credit_carried_forward, 0)::numeric AS credit_carried_forward FROM tax_returns
+WHERE tenant_id = $1 AND property_id = $2 AND tax_id = $3 AND status = 'FILED' AND period_start < $4::date
+ORDER BY period_start DESC LIMIT 1
+`
+
+type PreviousLiveReturnParams struct {
+	TenantID    int64
+	PropertyID  int64
+	TaxID       int64
+	PeriodStart civil.Date
+}
+
+type PreviousLiveReturnRow struct {
+	ID                   int64
+	PeriodStart          civil.Date
+	CreditCarriedForward decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The credit chain, the input VAT claims and the opening credit
+// The live return of the month before (the latest one that starts earlier): its credit carried is the credit brought forward.
+func (q *Queries) PreviousLiveReturn(ctx context.Context, arg PreviousLiveReturnParams) (PreviousLiveReturnRow, error) {
+	row := q.db.QueryRow(ctx, previousLiveReturn,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.PeriodStart,
+	)
+	var i PreviousLiveReturnRow
+	err := row.Scan(&i.ID, &i.PeriodStart, &i.CreditCarriedForward)
+	return i, err
+}
+
 const profileOfReturn = `-- name: ProfileOfReturn :one
 SELECT p.id FROM tax_filing_profiles p JOIN tax_returns r ON r.property_id = p.property_id AND r.tax_id = p.tax_id
 WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.id = $3
@@ -1003,6 +1334,28 @@ func (q *Queries) ProfileOfReturn(ctx context.Context, arg ProfileOfReturnParams
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const releaseClaims = `-- name: ReleaseClaims :exec
+UPDATE tax_return_input_claims SET released_at = $1
+WHERE tenant_id = $2 AND property_id = $3 AND return_id = $4 AND released_at IS NULL
+`
+
+type ReleaseClaimsParams struct {
+	Now        *time.Time
+	TenantID   int64
+	PropertyID int64
+	ReturnID   int64
+}
+
+func (q *Queries) ReleaseClaims(ctx context.Context, arg ReleaseClaimsParams) error {
+	_, err := q.db.Exec(ctx, releaseClaims,
+		arg.Now,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReturnID,
+	)
+	return err
 }
 
 const returnOfPayment = `-- name: ReturnOfPayment :one
@@ -1022,8 +1375,74 @@ func (q *Queries) ReturnOfPayment(ctx context.Context, arg ReturnOfPaymentParams
 	return return_id, err
 }
 
+const reversibleClaims = `-- name: ReversibleClaims :many
+SELECT c.id, c.bill_id, c.line_no, c.amount, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+FROM tax_return_input_claims c
+JOIN tax_returns r ON r.property_id = c.property_id AND r.id = c.return_id
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND r.tax_id = $3 AND c.released_at IS NULL AND c.reverses_claim_id IS NULL
+  AND b.status = 'VOIDED' AND vj.journal_date <= $4::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = c.property_id AND x.reverses_claim_id = c.id AND x.released_at IS NULL)
+ORDER BY b.bill_date, b.id, c.line_no
+`
+
+type ReversibleClaimsParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+	ToDate     civil.Date
+}
+
+type ReversibleClaimsRow struct {
+	ID                    int64
+	BillID                int64
+	LineNo                int32
+	Amount                decimal.Decimal
+	BillNumber            string
+	SupplierInvoiceNumber string
+	SupplierName          string
+	BillDate              civil.Date
+}
+
+// Live claims of this tax whose bill was voided on or before the end of the month and that no live return reverses yet.
+func (q *Queries) ReversibleClaims(ctx context.Context, arg ReversibleClaimsParams) ([]ReversibleClaimsRow, error) {
+	rows, err := q.db.Query(ctx, reversibleClaims,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReversibleClaimsRow{}
+	for rows.Next() {
+		var i ReversibleClaimsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BillID,
+			&i.LineNo,
+			&i.Amount,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.SupplierName,
+			&i.BillDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const taxOfProperty = `-- name: TaxOfProperty :one
-SELECT id, code, is_active FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, code, is_active, tax_kind FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type TaxOfPropertyParams struct {
@@ -1036,18 +1455,24 @@ type TaxOfPropertyRow struct {
 	ID       int64
 	Code     string
 	IsActive bool
+	TaxKind  string
 }
 
 func (q *Queries) TaxOfProperty(ctx context.Context, arg TaxOfPropertyParams) (TaxOfPropertyRow, error) {
 	row := q.db.QueryRow(ctx, taxOfProperty, arg.TenantID, arg.PropertyID, arg.ID)
 	var i TaxOfPropertyRow
-	err := row.Scan(&i.ID, &i.Code, &i.IsActive)
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.IsActive,
+		&i.TaxKind,
+	)
 	return i, err
 }
 
 const updateProfile = `-- name: UpdateProfile :exec
-UPDATE tax_filing_profiles SET authority = $1, registration_number = $2, due_day = $3, is_active = $4, updated_by = $5
-WHERE tenant_id = $6 AND property_id = $7 AND id = $8
+UPDATE tax_filing_profiles SET authority = $1, registration_number = $2, due_day = $3, is_active = $4, claims_input_vat = $5, updated_by = $6
+WHERE tenant_id = $7 AND property_id = $8 AND id = $9
 `
 
 type UpdateProfileParams struct {
@@ -1055,6 +1480,7 @@ type UpdateProfileParams struct {
 	RegistrationNumber *string
 	DueDay             int16
 	IsActive           bool
+	ClaimsInputVat     bool
 	ActorID            *int64
 	TenantID           int64
 	PropertyID         int64
@@ -1067,6 +1493,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) er
 		arg.RegistrationNumber,
 		arg.DueDay,
 		arg.IsActive,
+		arg.ClaimsInputVat,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -1075,19 +1502,51 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) er
 	return err
 }
 
+const voidOpeningCredit = `-- name: VoidOpeningCredit :exec
+UPDATE tax_opening_credits SET status = 'VOIDED', voided_at = $1, voided_by = $2, void_reason = $3, void_journal_id = $4, approved_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
+`
+
+type VoidOpeningCreditParams struct {
+	Now           *time.Time
+	ActorID       *int64
+	Reason        *string
+	VoidJournalID *int64
+	ApprovedBy    *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) VoidOpeningCredit(ctx context.Context, arg VoidOpeningCreditParams) error {
+	_, err := q.db.Exec(ctx, voidOpeningCredit,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.VoidJournalID,
+		arg.ApprovedBy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const voidReturn = `-- name: VoidReturn :exec
-UPDATE tax_returns SET status = 'VOIDED', voided_at = $1, voided_by = $2, void_reason = $3, approved_by = $4
-WHERE tenant_id = $5 AND property_id = $6 AND id = $7
+UPDATE tax_returns SET status = 'VOIDED', voided_at = $1, voided_by = $2, void_reason = $3, approved_by = $4,
+       offset_void_journal_id = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
 `
 
 type VoidReturnParams struct {
-	Now        *time.Time
-	ActorID    *int64
-	Reason     *string
-	ApprovedBy *int64
-	TenantID   int64
-	PropertyID int64
-	ID         int64
+	Now                 *time.Time
+	ActorID             *int64
+	Reason              *string
+	ApprovedBy          *int64
+	OffsetVoidJournalID *int64
+	TenantID            int64
+	PropertyID          int64
+	ID                  int64
 }
 
 func (q *Queries) VoidReturn(ctx context.Context, arg VoidReturnParams) error {
@@ -1096,6 +1555,7 @@ func (q *Queries) VoidReturn(ctx context.Context, arg VoidReturnParams) error {
 		arg.ActorID,
 		arg.Reason,
 		arg.ApprovedBy,
+		arg.OffsetVoidJournalID,
 		arg.TenantID,
 		arg.PropertyID,
 		arg.ID,

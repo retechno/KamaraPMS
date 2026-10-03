@@ -17,22 +17,24 @@ const openPdf = vi.fn()
 vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 
 const profile = (over: Record<string, unknown> = {}) => ({
-  id: 1, tax_id: 9, tax_code: 'PB1', tax_name: 'Hotel tax (PB1)', tax_rate: '10', gl_account_code: '2410', authority: 'Bapenda Badung', registration_number: 'P.2.01', due_day: 15, is_active: true,
+  id: 1, tax_id: 9, tax_code: 'PB1', tax_name: 'Hotel tax (PB1)', tax_rate: '10', tax_kind: 'LOCAL', gl_account_code: '2410', authority: 'Bapenda Badung', registration_number: 'P.2.01', due_day: 15, is_active: true, claims_input_vat: false, opening_credit: '0',
   created_at: '2026-09-30T00:00:00Z', ...over,
 })
-const taxes = [{ id: 9, code: 'PB1', name: 'Hotel tax', rate: '10', is_active: true }, { id: 10, code: 'VAT', name: 'VAT', rate: '11', is_active: true }, { id: 11, code: 'OLD', name: 'Old', rate: '5', is_active: false }]
+const taxes = [{ id: 9, code: 'PB1', name: 'Hotel tax', rate: '10', is_active: true, tax_kind: 'LOCAL' }, { id: 10, code: 'VAT', name: 'VAT', rate: '11', is_active: true, tax_kind: 'VAT' }, { id: 11, code: 'OLD', name: 'Old', rate: '5', is_active: false, tax_kind: 'LOCAL' }]
+/** The profiles the mock answers with; a test that needs others sets this before it mounts. */
+let profileList: () => unknown[] = () => [profile()]
 const period = (start: string, over: Record<string, unknown> = {}) => ({
-  period_start: start, period_end: start.slice(0, 8) + '28', due_date: '2026-10-15', tax_amount: '220000', status: 'READY', return_id: null, paid: '0', outstanding: '0', overdue: false, ...over,
+  period_start: start, period_end: start.slice(0, 8) + '28', due_date: '2026-10-15', tax_amount: '220000', payable: '0', credit_carried_forward: '0', status: 'READY', return_id: null, paid: '0', outstanding: '0', overdue: false, ...over,
 })
 const periods = [period('2026-10-01', { status: 'OPEN', due_date: '2026-11-15', tax_amount: '0' }), period('2026-09-01'), period('2026-08-01', { status: 'FILED', return_id: 4, paid: '120000', outstanding: '100000', overdue: true })]
 const worksheet = (over: Record<string, unknown> = {}) => ({
   profile: profile(), period_start: '2026-09-01', period_end: '2026-09-30', due_date: '2026-10-15', base_amount: '2200000', tax_amount: '220000', gl_collected: '220000', difference: '0', days: 1, posted_days: 1,
-  ready: true, blockers: [], return: null,
+  ready: true, blockers: [], return: null, claims_input_vat: false, input: [], input_claimed: '0', credit_brought_forward: '0', offset: '0', payable: '220000', credit_carried_forward: '0',
   lines: [{ charge_code: 'ROOM', charge_name: 'Room', rate: '10', items: 1, base_amount: '1000000', tax_amount: '100000' }, { charge_code: 'MINIBAR', rate: '10', items: 3, base_amount: '1200000', tax_amount: '120000' }],
   ...over,
 })
 const filedReturn = (over: Record<string, unknown> = {}) => ({
-  id: 4, return_number: 'TXR000001', tax_id: 9, tax_code: 'PB1', tax_name: 'PB1', period_start: '2026-08-01', period_end: '2026-08-31', due_date: '2026-09-15', base_amount: '2200000', tax_amount: '220000',
+  id: 4, return_number: 'TXR000001', tax_id: 9, tax_code: 'PB1', tax_name: 'PB1', period_start: '2026-08-01', period_end: '2026-08-31', due_date: '2026-09-15', base_amount: '2200000', tax_amount: '220000', input_claimed: '0', credit_brought_forward: '0', offset: '0', payable: '220000', credit_carried_forward: '0', offset_journal_id: null,
   status: 'FILED', filed_on: '2026-09-02', filing_reference: 'SPTPD-0826', filed_at: '2026-09-02T00:00:00Z', voided_at: null, paid: '120000', outstanding: '100000', payment_status: 'PARTIAL', overdue: true,
   lines: [], payments: [{ id: 21, payment_number: 'TXP000001', return_id: 4, payment_date: '2026-09-10', amount: '120000', penalty: '3000', payment_method: 'BANK_TRANSFER', reference_number: 'NTPN-1', status: 'POSTED' }], ...over,
 })
@@ -44,13 +46,13 @@ function mountView(component: object, permissions = ['tax.view', 'tax.manage', '
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
   GET = vi.fn(async (p: string) => {
-    if (p.endsWith('/tax/profiles')) return { data: { data: [profile()] } }
+    if (p.endsWith('/tax/profiles')) return { data: { data: profileList() } }
     if (p.endsWith('/taxes')) return { data: { data: taxes } }
     if (p.endsWith('/tax/periods')) return { data: { data: periods } }
     if (p.endsWith('/tax/worksheet')) return { data: worksheet() }
     if (p.endsWith('/tax/returns/{id}')) return { data: filedReturn() }
     if (p.endsWith('/tax/liability')) {
-      return { data: { as_of: '2026-10-01', owed: '100000', taxes: [{ tax_id: 9, tax_code: 'PB1', tax_name: 'PB1', authority: 'Bapenda', account_code: '2410', collected: '440000', filed: '220000', unfiled: '220000', paid: '340000', owed: '100000', overdue_unfiled_months: 1, overdue_unpaid: '100000', returns_filed: 1 }], accounts: [{ account_code: '2410', books: '100000', owed: '100000', difference: '0' }] } }
+      return { data: { as_of: '2026-10-01', owed: '100000', taxes: [{ tax_id: 9, tax_code: 'PB1', tax_name: 'PB1', authority: 'Bapenda', account_code: '2410', collected: '440000', filed: '220000', offset: '0', credit_available: '0', unfiled: '220000', paid: '340000', owed: '100000', overdue_unfiled_months: 1, overdue_unpaid: '100000', returns_filed: 1 }], accounts: [{ account_code: '2410', books: '100000', owed: '100000', difference: '0' }] } }
     }
     return { data: { data: accounts } }
   })
@@ -69,6 +71,7 @@ describe('tax views', () => {
     POST = vi.fn()
     PATCH = vi.fn()
     openPdf.mockReset()
+    profileList = () => [profile()]
   })
 
   it('sets up how a tax is filed, offering only taxes that are not set up', async () => {
@@ -82,7 +85,7 @@ describe('tax views', () => {
     await w.get('input[name=due_day]').setValue('20')
     await w.get('[data-testid=profile-form]').trigger('submit')
     await flushPromises()
-    expect(POST.mock.calls[0]?.[1].body).toEqual({ tax_id: 10, authority: 'KPP Pratama', registration_number: undefined, due_day: 20, is_active: true })
+    expect(POST.mock.calls[0]?.[1].body).toEqual({ tax_id: 10, authority: 'KPP Pratama', registration_number: undefined, due_day: 20, is_active: true, claims_input_vat: false })
     await w.get('[data-testid=edit-PB1]').trigger('click')
     PATCH.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'VALIDATION_FAILED', detail: 'invalid', errors: [{ field: 'due_day', code: 'OUT_OF_RANGE', message: 'a day between 1 and 28' }] } as never))
     await w.get('input[name=due_day]').setValue('31')
@@ -207,5 +210,84 @@ describe('tax views', () => {
       expect(none.find('[data-testid=no-access]').exists()).toBe(true)
       expect(GET).not.toHaveBeenCalled()
     }
+  })
+
+  it('shows the offset of the input VAT against the VAT collected, with the claims by bill and the credit carried', async () => {
+    const vatWorksheet = worksheet({
+      profile: profile({ tax_code: 'PPN', tax_kind: 'VAT', claims_input_vat: true }), claims_input_vat: true, tax_amount: '12000', gl_collected: '12000',
+      input: [
+        { bill_id: 3, line_no: 1, bill_number: 'BILL000003', supplier_invoice_number: 'INV-B', supplier_name: 'PLN', bill_date: '2026-09-20', amount: '3000', reversal: false },
+        { bill_id: 2, line_no: 1, bill_number: 'BILL000002', supplier_invoice_number: 'INV-A', supplier_name: 'PLN', bill_date: '2026-08-20', amount: '-1000', reversal: true },
+      ],
+      input_claimed: '2000', credit_brought_forward: '5000', offset: '7000', payable: '5000', credit_carried_forward: '0',
+    })
+    const w = await mountView(TaxReturnsView, undefined, '/tax/returns?tax=9')
+    await flushPromises()
+    GET.mockImplementation(async (p: string) => (p.endsWith('/tax/worksheet') ? { data: vatWorksheet } : p.endsWith('/tax/periods') ? { data: { data: periods } } : { data: { data: [profile()] } }))
+    await w.get('[data-testid=period-2026-09-01]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=offset-output]').text()).toBe('12,000')
+    expect(w.get('[data-testid=offset-input]').text()).toBe('2,000')
+    expect(w.get('[data-testid=offset-bf]').text()).toBe('5,000')
+    expect(w.get('[data-testid=offset-offset]').text()).toBe('7,000')
+    expect(w.get('[data-testid=offset-payable]').text()).toBe('5,000')
+    expect(w.get('[data-testid=offset-cf]').text()).toBe('0')
+    expect(w.get('[data-testid=input-claims]').text()).toContain('BILL000003')
+    expect(w.get('[data-testid=input-claims]').text()).toContain('taken back')
+  })
+
+  it('does not show the offset for a tax that has no input VAT and no credit', async () => {
+    const w = await mountView(TaxReturnsView, undefined, '/tax/returns?tax=9')
+    await flushPromises()
+    await w.get('[data-testid=period-2026-09-01]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=offset]').exists()).toBe(false)
+  })
+
+  it('a new profile of a VAT tax can claim the input VAT, a tax of another kind cannot', async () => {
+    const w = await mountView(TaxProfilesView)
+    await flushPromises()
+    await w.get('[data-testid=new-profile]').trigger('click')
+    expect(w.find('input[name=claims_input_vat]').exists()).toBe(false)
+    await w.get('select[name=tax_id]').setValue(10)
+    expect(w.find('input[name=claims_input_vat]').exists()).toBe(true)
+    await w.get('input[name=claims_input_vat]').setValue(true)
+    await w.get('input[name=authority]').setValue('KPP Pratama')
+    await w.get('[data-testid=profile-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ tax_id: 10, claims_input_vat: true })
+  })
+
+  it('sets and voids the opening credit of the profile that claims, each with an approval', async () => {
+    profileList = () => [profile({ id: 2, tax_id: 10, tax_code: 'VAT', tax_kind: 'VAT', claims_input_vat: true })]
+    const w = await mountView(TaxProfilesView)
+    await flushPromises()
+    expect(w.find('[data-testid=claims]').exists()).toBe(true)
+    await w.get('[data-testid=credit-VAT]').trigger('click')
+    expect((w.get('[data-testid=credit-ask]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=as_of]').setValue('2026-09-30')
+    await w.get('input[name=amount]').setValue('7000')
+    await w.get('[data-testid=credit-form]').trigger('submit')
+    expect(w.find('[data-testid=approval]').exists()).toBe(true)
+    w.findComponent({ name: 'ApprovalDialog' }).vm.$emit('approve', { email: 'a@b.c', password: 'pw' })
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit')
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7, id: 2 } }, body: { as_of: '2026-09-30', amount: '7000', approval: { email: 'a@b.c', password: 'pw' } } })
+    expect(w.get('[data-testid=notice]').text()).toBe('The opening credit is set.')
+  })
+
+  it('voids an opening credit with a reason', async () => {
+    profileList = () => [profile({ id: 2, tax_id: 10, tax_code: 'VAT', tax_kind: 'VAT', claims_input_vat: true, opening_credit: '7000' })]
+    const w = await mountView(TaxProfilesView)
+    await flushPromises()
+    expect(w.get('[data-testid=opening-credit]').text()).toContain('7,000')
+    expect(w.find('[data-testid=credit-VAT]').exists()).toBe(false)
+    await w.get('[data-testid=void-credit-VAT]').trigger('click')
+    await w.get('input[name=reason]').setValue('wrong amount')
+    await w.get('[data-testid=credit-form]').trigger('submit')
+    w.findComponent({ name: 'ApprovalDialog' }).vm.$emit('approve', { email: 'a@b.c', password: 'pw' })
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit/void')
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ reason: 'wrong amount' })
   })
 })

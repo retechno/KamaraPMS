@@ -1293,6 +1293,17 @@ SELECT expect_error('a PKP property has its tax number', '23514', $q$INSERT INTO
 SELECT expect_error('an input VAT treatment is one of three', '23514', $q$INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', 'SOMETIMES')$q$);
 INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pkp, npwp, input_vat_treatment) VALUES (tn('ABC'), pr('BALI'), '2027-01-01', true, '01.234.567.8-901.000', 'CREDITABLE');
 SELECT expect_error('the tax status history is append-only', '23001', $q$UPDATE property_tax_settings SET is_pkp = false$q$);
+
+-- The offset of the input VAT and the credit carried forward
+SELECT expect_error('a return starts with the credit the month before carried', '23514',
+    $q$INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on, credit_brought_forward)
+       VALUES (tn('ABC'), pr('BALI'), 'TXR9005', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2027-03-01', '2027-03-31', '2027-04-15', 100, 10, '2027-04-02', 5)$q$);
+SELECT expect_error('an opening credit is above zero', '23514',
+    $q$INSERT INTO tax_opening_credits (tenant_id, property_id, tax_id, as_of, amount, journal_id)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 0, 1)$q$);
+SELECT expect_error('a claim is positive and a reversal negative', '23514',
+    $q$INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, amount)
+       VALUES (tn('ABC'), pr('BALI'), 1, 1, 1, -5)$q$);
 WITH r AS (INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on)
        VALUES (tn('ABC'), pr('BALI'), 'TXR9001', (SELECT id FROM taxes WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', '2026-10-31', '2026-11-15', 1000, 100, '2026-11-02') RETURNING id)
 INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount)

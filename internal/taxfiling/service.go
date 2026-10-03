@@ -102,8 +102,8 @@ func retryOnDuplicate(key string, run func() error) error {
 
 func toProfile(r taxfilingdb.ListProfilesRow) Profile {
 	return Profile{
-		ID: r.ID, TaxID: r.TaxID, TaxCode: r.TaxCode, TaxName: r.TaxName, TaxRate: r.TaxRate, GLAccountCode: deref(r.GlAccountCode), Authority: r.Authority,
-		RegistrationNumber: deref(r.RegistrationNumber), DueDay: int(r.DueDay), IsActive: r.IsActive, CreatedAt: r.CreatedAt,
+		ID: r.ID, TaxID: r.TaxID, TaxCode: r.TaxCode, TaxName: r.TaxName, TaxRate: r.TaxRate, TaxKind: r.TaxKind, GLAccountCode: deref(r.GlAccountCode), Authority: r.Authority,
+		RegistrationNumber: deref(r.RegistrationNumber), DueDay: int(r.DueDay), IsActive: r.IsActive, ClaimsInputVAT: r.ClaimsInputVat, OpeningCredit: r.OpeningCredit, CreatedAt: r.CreatedAt,
 	}
 }
 
@@ -189,6 +189,7 @@ func (s *Service) CreateProfile(ctx context.Context, propertyID int64, in Profil
 	if fields := validateProfile(in.Authority, in.RegistrationNumber, dueDay); len(fields) > 0 {
 		return Profile{}, apperr.Invalid("the filing profile is invalid", fields...)
 	}
+	claims := in.ClaimsInputVAT != nil && *in.ClaimsInputVAT
 	var id int64
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		day, err := s.days.CurrentBusinessDay(ctx, propertyID)
@@ -202,9 +203,12 @@ func (s *Service) CreateProfile(ctx context.Context, propertyID int64, in Profil
 		if err != nil {
 			return err
 		}
+		if claims && tax.TaxKind != "VAT" {
+			return apperr.Invalid("the filing profile is invalid", fieldErr("claims_input_vat", "NOT_VAT", "only the profile of a VAT tax claims input VAT"))
+		}
 		id, err = s.q(ctx).InsertProfile(ctx, taxfilingdb.InsertProfileParams{
 			TenantID: p.TenantID, PropertyID: propertyID, TaxID: in.TaxID, Authority: strings.TrimSpace(in.Authority), RegistrationNumber: nullable(in.RegistrationNumber),
-			DueDay: int16(dueDay), IsActive: in.IsActive == nil || *in.IsActive, ActorID: p.ActorID(), //nolint:gosec // G115: validated to 1..28
+			DueDay: int16(dueDay), IsActive: in.IsActive == nil || *in.IsActive, ClaimsInputVat: claims, ActorID: p.ActorID(), //nolint:gosec // G115: validated to 1..28
 		})
 		if err != nil {
 			return err
@@ -235,7 +239,7 @@ func (s *Service) UpdateProfile(ctx context.Context, propertyID, id int64, patch
 		if err != nil {
 			return err
 		}
-		authority, registration, dueDay, active := cur.Authority, cur.RegistrationNumber, cur.DueDay, cur.IsActive
+		authority, registration, dueDay, active, claims := cur.Authority, cur.RegistrationNumber, cur.DueDay, cur.IsActive, cur.ClaimsInputVAT
 		if patch.Authority != nil {
 			authority = strings.TrimSpace(*patch.Authority)
 		}
@@ -248,11 +252,26 @@ func (s *Service) UpdateProfile(ctx context.Context, propertyID, id int64, patch
 		if patch.IsActive != nil {
 			active = *patch.IsActive
 		}
+		if patch.ClaimsInputVAT != nil {
+			claims = *patch.ClaimsInputVAT
+		}
+		if claims && !cur.ClaimsInputVAT && cur.TaxKind != "VAT" {
+			return apperr.Invalid("the filing profile is invalid", fieldErr("claims_input_vat", "NOT_VAT", "only the profile of a VAT tax claims input VAT"))
+		}
+		if !claims && cur.ClaimsInputVAT {
+			n, err := s.q(ctx).CountLiveClaimsOfTax(ctx, taxfilingdb.CountLiveClaimsOfTaxParams{TenantID: p.TenantID, PropertyID: propertyID, TaxID: cur.TaxID})
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return apperr.Conflict("TAX_CLAIMS_IN_USE", "the returns of this tax have claimed input VAT: void them first").WithContext("claims", n)
+			}
+		}
 		if fields := validateProfile(authority, registration, dueDay); len(fields) > 0 {
 			return apperr.Invalid("the filing profile is invalid", fields...)
 		}
 		if err := s.q(ctx).UpdateProfile(ctx, taxfilingdb.UpdateProfileParams{
-			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Authority: authority, RegistrationNumber: nullable(registration), DueDay: int16(dueDay), IsActive: active, ActorID: p.ActorID(), //nolint:gosec // G115: validated to 1..28
+			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Authority: authority, RegistrationNumber: nullable(registration), DueDay: int16(dueDay), IsActive: active, ClaimsInputVat: claims, ActorID: p.ActorID(), //nolint:gosec // G115: validated to 1..28
 		}); err != nil {
 			return err
 		}
@@ -279,11 +298,23 @@ func (s *Service) worksheet(ctx context.Context, tenantID, propertyID int64, pro
 	if err != nil {
 		return Worksheet{}, err
 	}
-	w := Worksheet{Profile: prof, PeriodStart: start, PeriodEnd: end, DueDate: dueDate(start, prof.DueDay), Lines: []WorksheetLine{}, Blockers: []string{}}
+	w := Worksheet{Profile: prof, PeriodStart: start, PeriodEnd: end, DueDate: dueDate(start, prof.DueDay), Lines: []WorksheetLine{}, Input: []InputClaim{}, ClaimsInputVAT: prof.ClaimsInputVAT, Blockers: []string{}}
 	for _, r := range rows {
 		w.Lines = append(w.Lines, WorksheetLine{ChargeCode: r.ChargeCode, ChargeName: r.ChargeName, Rate: r.Rate, Items: int(r.Items), Base: r.Base, Tax: r.Tax})
 		w.Base, w.Tax = w.Base.Add(r.Base), w.Tax.Add(r.Tax)
 	}
+	if w.Input, err = s.inputClaims(ctx, tenantID, propertyID, prof, end); err != nil {
+		return Worksheet{}, err
+	}
+	input := decimal.Zero
+	for _, c := range w.Input {
+		input = input.Add(c.Amount)
+	}
+	bf, err := s.creditBroughtForward(ctx, tenantID, propertyID, prof.TaxID, start)
+	if err != nil {
+		return Worksheet{}, err
+	}
+	w.VATOffset = offsetOf(w.Tax, input, bf)
 	w.GLCollected, err = q.GLCollected(ctx, taxfilingdb.GLCollectedParams{TenantID: tenantID, PropertyID: propertyID, TaxCode: &prof.TaxCode, FromDate: start, ToDate: end})
 	if err != nil {
 		return Worksheet{}, err
@@ -398,6 +429,7 @@ func (s *Service) Periods(ctx context.Context, propertyID, taxID int64) ([]Perio
 		if r, ok := byStart[start]; ok {
 			id := r.ID
 			per.Status, per.ReturnID, per.Tax, per.Paid, per.Outstanding, per.Overdue = "FILED", &id, r.Tax, r.Paid, r.Outstanding, r.Overdue
+			per.Payable, per.CreditCarriedForward = r.Payable, r.CreditCarriedForward
 		} else {
 			tax, err := q.CollectedBetween(ctx, taxfilingdb.CollectedBetweenParams{TenantID: p.TenantID, PropertyID: propertyID, TaxID: &taxID, FromDate: start, ToDate: end})
 			if err != nil {
@@ -434,13 +466,14 @@ func toReturn(r taxfilingdb.ListReturnsRow, today civil.Date) Return {
 	ret := Return{
 		ID: r.ID, Number: r.ReturnNumber, TaxID: r.TaxID, TaxCode: r.TaxCode, TaxName: r.TaxName, PeriodStart: r.PeriodStart, PeriodEnd: r.PeriodEnd, DueDate: r.DueDate,
 		Base: r.BaseAmount, Tax: r.TaxAmount, Status: r.Status, FiledOn: r.FiledOn, FilingReference: deref(r.FilingReference), Notes: deref(r.Notes), FiledAt: r.FiledAt,
-		VoidedAt: r.VoidedAt, VoidReason: deref(r.VoidReason), Paid: r.Paid,
+		VoidedAt: r.VoidedAt, VoidReason: deref(r.VoidReason), Paid: r.Paid, OffsetJournalID: r.OffsetJournalID,
+		VATOffset: VATOffset{InputClaimed: r.InputClaimed, CreditBroughtForward: r.CreditBroughtForward, Offset: r.OffsetAmount, Payable: r.PayableAmount, CreditCarriedForward: r.CreditCarriedForward},
 	}
 	if r.Status == ReturnVoided {
 		ret.PaymentStatus, ret.Paid = PayVoided, decimal.Zero
 		return ret
 	}
-	ret.Outstanding = r.TaxAmount.Sub(r.Paid)
+	ret.Outstanding = r.PayableAmount.Sub(r.Paid)
 	switch {
 	case ret.Outstanding.IsZero():
 		ret.PaymentStatus = PayPaid
@@ -511,6 +544,9 @@ func (s *Service) loadReturn(ctx context.Context, tenantID, propertyID, id int64
 	for _, l := range lines {
 		ret.Lines = append(ret.Lines, WorksheetLine{ChargeCode: l.ChargeCode, ChargeName: deref(l.ChargeName), Rate: l.Rate, Items: int(l.Items), Base: l.BaseAmount, Tax: l.TaxAmount})
 	}
+	if ret.Input, err = s.loadClaims(ctx, tenantID, propertyID, id); err != nil {
+		return Return{}, err
+	}
 	ret.Payments, err = s.listPayments(ctx, tenantID, propertyID, nil, &id, "", 0)
 	return ret, err
 }
@@ -552,6 +588,10 @@ func (s *Service) FileReturn(ctx context.Context, propertyID int64, in FileInput
 func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID int64, in FileInput, key string, out *int64) error {
 	return s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+		if err != nil {
+			return err
+		}
+		po, err := s.acct.BeginPosting(ctx, propertyID) // accounting settings (46) before the tax profile (49)
 		if err != nil {
 			return err
 		}
@@ -608,10 +648,18 @@ func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID i
 		if err != nil {
 			return err
 		}
+		var offsetJournal *int64
+		if !w.Offset.IsZero() {
+			jid, err := s.postOffset(ctx, po, p.TenantID, propertyID, prof, w, number, filedOn)
+			if err != nil {
+				return err
+			}
+			offsetJournal = &jid
+		}
 		id, err := q.InsertReturn(ctx, taxfilingdb.InsertReturnParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ReturnNumber: number, TaxID: in.TaxID, PeriodStart: w.PeriodStart, PeriodEnd: w.PeriodEnd, DueDate: w.DueDate,
 			BaseAmount: w.Base, TaxAmount: w.Tax, FiledOn: filedOn, FilingReference: nullable(in.FilingReference), Notes: nullable(in.Notes), Now: s.clock.Now(), ActorID: p.ActorID(),
-			IdempotencyKey: nullable(key),
+			IdempotencyKey: nullable(key), InputClaimed: w.InputClaimed, CreditBroughtForward: w.CreditBroughtForward, OffsetJournalID: offsetJournal,
 		})
 		if err != nil {
 			return err
@@ -624,9 +672,19 @@ func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID i
 				return err
 			}
 		}
+		for _, c := range w.Input {
+			var reverses *int64
+			if c.Reversal {
+				reverses = ptr(c.reversesID)
+			}
+			if err := q.InsertClaim(ctx, taxfilingdb.InsertClaimParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id, BillID: c.BillID, LineNo: int32(c.LineNo), Amount: c.Amount, ReversesClaimID: reverses}); err != nil { //nolint:gosec // G115: a line number
+				return err
+			}
+		}
 		*out = id
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_filed", "tax_return", id, nil,
-			map[string]any{"return_number": number, "tax": prof.TaxCode, "period": monthLabel(in.PeriodStart), "base": w.Base.String(), "tax_amount": w.Tax.String(), "reference": in.FilingReference}))
+			map[string]any{"return_number": number, "tax": prof.TaxCode, "period": monthLabel(in.PeriodStart), "base": w.Base.String(), "tax_amount": w.Tax.String(), "reference": in.FilingReference,
+				"input_claimed": w.InputClaimed.String(), "credit_brought_forward": w.CreditBroughtForward.String(), "offset": w.Offset.String(), "payable": w.Payable.String(), "credit_carried_forward": w.CreditCarriedForward.String()}))
 	})
 }
 
@@ -651,6 +709,10 @@ func (s *Service) VoidReturn(ctx context.Context, propertyID, id int64, in VoidI
 			return err
 		}
 		today = day.BusinessDate
+		po, err := s.acct.BeginPosting(ctx, propertyID) // accounting settings (46) before the tax profile (49)
+		if err != nil {
+			return err
+		}
 		q := s.q(ctx)
 		profID, err := q.ProfileOfReturn(ctx, taxfilingdb.ProfileOfReturnParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id})
 		if isNoRows(err) {
@@ -676,8 +738,25 @@ func (s *Service) VoidReturn(ctx context.Context, propertyID, id int64, in VoidI
 		if n > 0 {
 			return apperr.Conflict("TAX_RETURN_HAS_PAYMENTS", "a return with payments cannot be voided: void its payments first").WithContext("payments", n)
 		}
+		// the credit carried goes on to the next month, so only the latest return of a tax can be voided
+		if n, err := q.CountLaterLiveReturns(ctx, taxfilingdb.CountLaterLiveReturnsParams{TenantID: p.TenantID, PropertyID: propertyID, TaxID: ret.TaxID, PeriodStart: ret.PeriodStart}); err != nil {
+			return err
+		} else if n > 0 {
+			return apperr.Conflict("TAX_RETURN_NOT_LATEST", "a return of a later month is filed: void the latest return first").WithContext("returns", n)
+		}
 		by := approval.UserID()
-		if err := q.VoidReturn(ctx, taxfilingdb.VoidReturnParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason, ApprovedBy: &by}); err != nil {
+		var offsetVoid *int64
+		if ret.OffsetJournalID != nil {
+			rj, err := po.Reverse(ctx, *ret.OffsetJournalID, day.BusinessDate, reason, by)
+			if err != nil {
+				return err
+			}
+			offsetVoid = &rj
+		}
+		if err := q.ReleaseClaims(ctx, taxfilingdb.ReleaseClaimsParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id, Now: ptr(s.clock.Now())}); err != nil {
+			return err
+		}
+		if err := q.VoidReturn(ctx, taxfilingdb.VoidReturnParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason, ApprovedBy: &by, OffsetVoidJournalID: offsetVoid}); err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_voided", "tax_return", id,

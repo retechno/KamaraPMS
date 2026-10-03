@@ -4615,6 +4615,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the VAT credit the hotel starts with (tax.manage, with an approval)
+         * @description Journal Dr input VAT, Cr opening balance equity (3900). Only for a tax of kind VAT, before its first return is filed, and once: 409 `TAX_OPENING_CREDIT_LOCKED`, `TAX_OPENING_CREDIT_EXISTS`, `OPENING_EQUITY_ACCOUNT_MISSING`.
+         */
+        post: operations["setTaxOpeningCredit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void the opening credit (tax.manage, with a reason and an approval)
+         * @description Its journal is reversed on the current business date. Only before the first return of the tax is filed: 409 `TAX_OPENING_CREDIT_LOCKED`; 404 `TAX_OPENING_CREDIT_NOT_FOUND`.
+         */
+        post: operations["voidTaxOpeningCredit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tax/profiles/{id}": {
         parameters: {
             query?: never;
@@ -8826,6 +8872,10 @@ export interface components {
             tax_rate: string;
             /** @description The account the tax is owed on */
             gl_account_code?: string;
+            tax_kind?: components["schemas"]["TaxKind"];
+            claims_input_vat?: boolean;
+            /** @description The VAT credit the hotel started with (zero when none). */
+            opening_credit?: string;
             authority: string;
             registration_number?: string;
             /** @description The day of the next month the return and the payment are due. */
@@ -8844,12 +8894,37 @@ export interface components {
             registration_number?: string;
             due_day?: number | null;
             is_active?: boolean | null;
+            /** @description Set on the profile of the VAT tax whose returns claim the input VAT of the supplier bills (one per property; only a tax of kind VAT). 422 `NOT_VAT`, 409 `TAX_CLAIMS_TAKEN`. */
+            claims_input_vat?: boolean | null;
         };
         UpdateTaxFilingProfileRequest: {
             authority?: string;
             registration_number?: string;
             due_day?: number;
             is_active?: boolean;
+            /** @description Taking it off is refused while returns have claimed input VAT: 409 `TAX_CLAIMS_IN_USE`. */
+            claims_input_vat?: boolean;
+        };
+        TaxFilingInputClaim: {
+            /** Format: int64 */
+            bill_id: number;
+            line_no: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            supplier_name: string;
+            /** Format: date */
+            bill_date: string;
+            /** @description The VAT of the bill line; negative on a reversal. */
+            amount: string;
+            /** @description The claim of a bill voided after it was claimed, taken back. */
+            reversal: boolean;
+        };
+        TaxFilingOpeningCreditRequest: {
+            /** Format: date */
+            as_of: string;
+            /** @description Above zero. */
+            amount: string;
+            approval: components["schemas"]["Approval"];
         };
         TaxFilingWorksheetLine: {
             charge_code: string;
@@ -8871,6 +8946,19 @@ export interface components {
             lines: components["schemas"]["TaxFilingWorksheetLine"][];
             base_amount: string;
             tax_amount: string;
+            claims_input_vat: boolean;
+            /** @description What the return of the month would claim: the creditable VAT of the bills not claimed yet, and the claims of bills voided since (negative). */
+            input: components["schemas"]["TaxFilingInputClaim"][];
+            /** @description The input VAT claimed on the return (the bills of the month, less the claims taken back). Zero for a tax that is not the one that claims. */
+            input_claimed: string;
+            /** @description The VAT credit the month starts with (what the month before carried, or the opening credit). */
+            credit_brought_forward: string;
+            /** @description As much of the input VAT and the credit as the tax collected: least(tax_amount, input_claimed + credit_brought_forward). */
+            offset: string;
+            /** @description What is paid to the authority: the tax collected less the offset. A return is paid up to it. */
+            payable: string;
+            /** @description What the next month starts with. */
+            credit_carried_forward: string;
             /** @description What the day close journals credited for the tax in the month. */
             gl_collected: string;
             /** @description The tax on the folios less what the books credited. */
@@ -8889,6 +8977,10 @@ export interface components {
             /** Format: date */
             due_date: string;
             tax_amount: string;
+            /** @description Of a filed month; zero otherwise. */
+            payable: string;
+            /** @description Of a filed month; zero otherwise. */
+            credit_carried_forward: string;
             /** @enum {string} */
             status: "OPEN" | "READY" | "FILED";
             /** Format: int64 */
@@ -8953,7 +9045,23 @@ export interface components {
             /** Format: date */
             due_date: string;
             base_amount: string;
+            /** @description The tax collected in the month (the output tax). */
             tax_amount: string;
+            /** @description The input VAT claimed on the return (the bills of the month, less the claims taken back). Zero for a tax that is not the one that claims. */
+            input_claimed: string;
+            /** @description The VAT credit the month starts with (what the month before carried, or the opening credit). */
+            credit_brought_forward: string;
+            /** @description As much of the input VAT and the credit as the tax collected: least(tax_amount, input_claimed + credit_brought_forward). */
+            offset: string;
+            /** @description What is paid to the authority: the tax collected less the offset. A return is paid up to it. */
+            payable: string;
+            /** @description What the next month starts with. */
+            credit_carried_forward: string;
+            /**
+             * Format: int64
+             * @description The journal that settles the VAT collected against the input VAT; none without an offset.
+             */
+            offset_journal_id: number | null;
             /** @enum {string} */
             status: "FILED" | "VOIDED";
             /** Format: date */
@@ -8970,6 +9078,8 @@ export interface components {
             /** @enum {string} */
             payment_status: "UNPAID" | "PARTIAL" | "PAID" | "VOIDED";
             overdue: boolean;
+            /** @description Only when one return is read. */
+            input?: components["schemas"]["TaxFilingInputClaim"][];
             /** @description Only when one return is read. */
             lines?: components["schemas"]["TaxFilingWorksheetLine"][];
             /** @description Only when one return is read. */
@@ -9019,9 +9129,13 @@ export interface components {
             account_code: string;
             collected: string;
             filed: string;
+            /** @description What the filed returns offset against the VAT collected. */
+            offset: string;
+            /** @description The VAT credit the next month starts with. */
+            credit_available: string;
             unfiled: string;
             paid: string;
-            /** @description What was collected less what was paid. */
+            /** @description What was collected less what the filed returns offset and what was paid. */
             owed: string;
             overdue_unfiled_months: number;
             overdue_unpaid: string;
@@ -16493,6 +16607,70 @@ export interface operations {
                     "application/json": components["schemas"]["TaxFilingProfile"];
                 };
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setTaxOpeningCredit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxFilingOpeningCreditRequest"];
+            };
+        };
+        responses: {
+            /** @description The profile, with its opening credit. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidTaxOpeningCredit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxFilingProfile"];
+                };
+            };
+            401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

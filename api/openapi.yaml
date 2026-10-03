@@ -5310,6 +5310,56 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: setTaxOpeningCredit
+      summary: Set the VAT credit the hotel starts with (tax.manage, with an approval)
+      description: "Journal Dr input VAT, Cr opening balance equity (3900). Only for a tax of kind VAT, before its first return is filed, and once: 409 `TAX_OPENING_CREDIT_LOCKED`, `TAX_OPENING_CREDIT_EXISTS`, `OPENING_EQUITY_ACCOUNT_MISSING`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxFilingOpeningCreditRequest" }
+      responses:
+        "201":
+          description: The profile, with its opening credit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/tax/profiles/{id}/opening-credit/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidTaxOpeningCredit
+      summary: Void the opening credit (tax.manage, with a reason and an approval)
+      description: "Its journal is reversed on the current business date. Only before the first return of the tax is filed: 409 `TAX_OPENING_CREDIT_LOCKED`; 404 `TAX_OPENING_CREDIT_NOT_FOUND`."
+      tags: [tax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxFilingProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/tax/profiles/{id}:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9887,6 +9937,9 @@ components:
         tax_name: { type: string }
         tax_rate: { type: string }
         gl_account_code: { type: string, description: The account the tax is owed on, when the tax has one. }
+        tax_kind: { $ref: "#/components/schemas/TaxKind" }
+        claims_input_vat: { type: boolean }
+        opening_credit: { type: string, description: "The VAT credit the hotel started with (zero when none)." }
         authority: { type: string }
         registration_number: { type: string }
         due_day: { type: integer, minimum: 1, maximum: 28, description: The day of the next month the return and the payment are due. }
@@ -9907,6 +9960,7 @@ components:
         registration_number: { type: string, maxLength: 60 }
         due_day: { type: integer, minimum: 1, maximum: 28, nullable: true }
         is_active: { type: boolean, nullable: true }
+        claims_input_vat: { type: boolean, nullable: true, description: "Set on the profile of the VAT tax whose returns claim the input VAT of the supplier bills (one per property; only a tax of kind VAT). 422 `NOT_VAT`, 409 `TAX_CLAIMS_TAKEN`." }
     UpdateTaxFilingProfileRequest:
       type: object
       additionalProperties: false
@@ -9915,6 +9969,27 @@ components:
         registration_number: { type: string, maxLength: 60 }
         due_day: { type: integer, minimum: 1, maximum: 28 }
         is_active: { type: boolean }
+        claims_input_vat: { type: boolean, description: "Taking it off is refused while returns have claimed input VAT: 409 `TAX_CLAIMS_IN_USE`." }
+    TaxFilingInputClaim:
+      type: object
+      required: [bill_id, line_no, bill_number, supplier_invoice_number, supplier_name, bill_date, amount, reversal]
+      properties:
+        bill_id: { type: integer, format: int64 }
+        line_no: { type: integer }
+        bill_number: { type: string }
+        supplier_invoice_number: { type: string }
+        supplier_name: { type: string }
+        bill_date: { type: string, format: date }
+        amount: { type: string, description: "The VAT of the bill line; negative on a reversal." }
+        reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back." }
+    TaxFilingOpeningCreditRequest:
+      type: object
+      required: [as_of, amount, approval]
+      additionalProperties: false
+      properties:
+        as_of: { type: string, format: date }
+        amount: { type: string, description: Above zero. }
+        approval: { $ref: "#/components/schemas/Approval" }
     TaxFilingWorksheetLine:
       type: object
       required: [charge_code, rate, items, base_amount, tax_amount]
@@ -9927,7 +10002,7 @@ components:
         tax_amount: { type: string }
     TaxFilingWorksheet:
       type: object
-      required: [profile, period_start, period_end, due_date, lines, base_amount, tax_amount, gl_collected, difference, days, posted_days, ready, blockers, return]
+      required: [profile, period_start, period_end, due_date, lines, base_amount, tax_amount, claims_input_vat, input, input_claimed, credit_brought_forward, offset, payable, credit_carried_forward, gl_collected, difference, days, posted_days, ready, blockers, return]
       properties:
         profile: { $ref: "#/components/schemas/TaxFilingProfile" }
         period_start: { type: string, format: date }
@@ -9936,6 +10011,13 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/TaxFilingWorksheetLine" } }
         base_amount: { type: string }
         tax_amount: { type: string }
+        claims_input_vat: { type: boolean }
+        input: { type: array, items: { $ref: "#/components/schemas/TaxFilingInputClaim" }, description: "What the return of the month would claim: the creditable VAT of the bills not claimed yet, and the claims of bills voided since (negative)." }
+        input_claimed: { type: string, description: "The input VAT claimed on the return (the bills of the month, less the claims taken back). Zero for a tax that is not the one that claims." }
+        credit_brought_forward: { type: string, description: "The VAT credit the month starts with (what the month before carried, or the opening credit)." }
+        offset: { type: string, description: "As much of the input VAT and the credit as the tax collected: least(tax_amount, input_claimed + credit_brought_forward)." }
+        payable: { type: string, description: "What is paid to the authority: the tax collected less the offset. A return is paid up to it." }
+        credit_carried_forward: { type: string, description: "What the next month starts with." }
         gl_collected: { type: string, description: What the day close journals credited for the tax in the month. }
         difference: { type: string, description: The tax on the folios less what the books credited. }
         days: { type: integer }
@@ -9945,12 +10027,14 @@ components:
         return: { allOf: [{ $ref: "#/components/schemas/TaxFilingReturn" }], nullable: true }
     TaxFilingPeriod:
       type: object
-      required: [period_start, period_end, due_date, tax_amount, status, return_id, paid, outstanding, overdue]
+      required: [period_start, period_end, due_date, tax_amount, payable, credit_carried_forward, status, return_id, paid, outstanding, overdue]
       properties:
         period_start: { type: string, format: date }
         period_end: { type: string, format: date }
         due_date: { type: string, format: date }
         tax_amount: { type: string }
+        payable: { type: string, description: "Of a filed month; zero otherwise." }
+        credit_carried_forward: { type: string, description: "Of a filed month; zero otherwise." }
         status: { type: string, enum: [OPEN, READY, FILED] }
         return_id: { type: integer, format: int64, nullable: true }
         paid: { type: string }
@@ -9993,7 +10077,7 @@ components:
         data: { type: array, items: { $ref: "#/components/schemas/TaxFilingPayment" } }
     TaxFilingReturn:
       type: object
-      required: [id, return_number, tax_id, tax_code, tax_name, period_start, period_end, due_date, base_amount, tax_amount, status, filed_on, filed_at, voided_at, paid, outstanding, payment_status, overdue]
+      required: [id, return_number, tax_id, tax_code, tax_name, period_start, period_end, due_date, base_amount, tax_amount, input_claimed, credit_brought_forward, offset, payable, credit_carried_forward, offset_journal_id, status, filed_on, filed_at, voided_at, paid, outstanding, payment_status, overdue]
       properties:
         id: { type: integer, format: int64 }
         return_number: { type: string }
@@ -10004,7 +10088,13 @@ components:
         period_end: { type: string, format: date }
         due_date: { type: string, format: date }
         base_amount: { type: string }
-        tax_amount: { type: string }
+        tax_amount: { type: string, description: "The tax collected in the month (the output tax)." }
+        input_claimed: { type: string, description: "The input VAT claimed on the return (the bills of the month, less the claims taken back). Zero for a tax that is not the one that claims." }
+        credit_brought_forward: { type: string, description: "The VAT credit the month starts with (what the month before carried, or the opening credit)." }
+        offset: { type: string, description: "As much of the input VAT and the credit as the tax collected: least(tax_amount, input_claimed + credit_brought_forward)." }
+        payable: { type: string, description: "What is paid to the authority: the tax collected less the offset. A return is paid up to it." }
+        credit_carried_forward: { type: string, description: "What the next month starts with." }
+        offset_journal_id: { type: integer, format: int64, nullable: true, description: "The journal that settles the VAT collected against the input VAT; none without an offset." }
         status: { type: string, enum: [FILED, VOIDED] }
         filed_on: { type: string, format: date }
         filing_reference: { type: string }
@@ -10016,6 +10106,7 @@ components:
         outstanding: { type: string }
         payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, VOIDED] }
         overdue: { type: boolean }
+        input: { type: array, items: { $ref: "#/components/schemas/TaxFilingInputClaim" }, description: Only when one return is read. }
         lines: { type: array, items: { $ref: "#/components/schemas/TaxFilingWorksheetLine" }, description: Only when one return is read. }
         payments: { type: array, items: { $ref: "#/components/schemas/TaxFilingPayment" }, description: Only when one return is read. }
     TaxFilingReturnList:
@@ -10047,7 +10138,7 @@ components:
         remarks: { type: string, maxLength: 500 }
     TaxFilingLiabilityLine:
       type: object
-      required: [tax_id, tax_code, tax_name, account_code, collected, filed, unfiled, paid, owed, overdue_unfiled_months, overdue_unpaid, returns_filed]
+      required: [tax_id, tax_code, tax_name, account_code, collected, filed, offset, credit_available, unfiled, paid, owed, overdue_unfiled_months, overdue_unpaid, returns_filed]
       properties:
         tax_id: { type: integer, format: int64 }
         tax_code: { type: string }
@@ -10056,9 +10147,11 @@ components:
         account_code: { type: string }
         collected: { type: string }
         filed: { type: string }
+        offset: { type: string, description: "What the filed returns offset against the VAT collected." }
+        credit_available: { type: string, description: "The VAT credit the next month starts with." }
         unfiled: { type: string }
         paid: { type: string }
-        owed: { type: string, description: What was collected less what was paid. }
+        owed: { type: string, description: "What was collected less what the filed returns offset and what was paid." }
         overdue_unfiled_months: { type: integer }
         overdue_unpaid: { type: string }
         returns_filed: { type: integer }

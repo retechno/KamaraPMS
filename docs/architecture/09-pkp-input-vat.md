@@ -1,6 +1,6 @@
 # PKP and input VAT (design, proposal for approval)
 
-Status: **steps 1 and 2 built (migrations 00041 and 00042): PKP settings, the kind of a tax, the "PKP status" page; input VAT on supplier bills with the account 1425 (`INPUT_VAT`). Steps 3 and 4 are not built.** Step 2 differs from the design in one thing: `suppliers.is_pkp` is left out (it was only a hint); the VAT of a line is entered as an amount, there is no rate.
+Status: **steps 1, 2 and 3 built (migrations 00041, 00042 and 00043): PKP settings, the kind of a tax, the "PKP status" page; input VAT on supplier bills with the account 1425 (`INPUT_VAT`); the input side of the monthly VAT return with the credit carried forward. Step 4 (tax invoices) is not built.** Step 2 differs from the design in one thing: `suppliers.is_pkp` is left out (it was only a hint); the VAT of a line is entered as an amount, there is no rate.
 Step 1 of the finance order in `08-backlog.md`. Built as designed, with these differences: the settings live in the `taxfiling` module
 (`settings.go`) and not in a module of their own; every property gets its first row (not PKP, input VAT as an expense, from 2000-01-01) from the
 migration and from a trigger on `properties`, so the change always has a row to lock (`db.TaxSettings`, level of the tax); a change must begin
@@ -96,3 +96,56 @@ for non-PKP, tenant isolation, append-only trigger, and a race of two bills and 
 - Confirm that PB1 (local hotel tax) never takes part in the offset, only VAT.
 - Do you want `deferred` as a third choice, or only `creditable` and `expense`? It costs one more journal path.
 - Prefix and numbering of tax invoices (step 4) and the e-Faktur format version to target.
+
+---
+
+# Step 3: the input side of the monthly VAT return and the credit carried forward (approved 2026-10-03)
+
+Decisions of the owner: a **running balance chain** on the returns (no credit ledger); the offset is **journaled when the return
+is filed**; **no refund (restitution) of a credit** to cash in this step; late and voided bills follow the claim rules below;
+an **opening credit** for hotels that start with one is part of this step.
+
+## The arithmetic of a return of the VAT tax
+
+    available       = credit_brought_forward + input_claimed
+    offset_amount   = least(tax_amount, available)          (tax_amount = the output VAT of the month)
+    payable_amount  = tax_amount - offset_amount             (what is paid to the authority)
+    credit_carried  = available - offset_amount              (what the next month starts with)
+
+Month A: output 10,000,000, input 15,000,000, brought forward 0 gives offset 10,000,000, payable 0, carried 5,000,000.
+Month B: output 12,000,000, input 3,000,000, brought forward 5,000,000 gives offset 8,000,000, payable 4,000,000, carried 0.
+`available` can be negative (more claimed input was reversed than there is credit): the offset is then negative, the payable
+exceeds the output and the credit carried is 0. Other taxes (PB1) have all of this at zero and `payable = tax_amount`.
+
+## Schema (migration 00043)
+
+- `tax_returns` gets `input_claimed`, `credit_brought_forward`, `offset_amount`, `payable_amount`, `credit_carried_forward`,
+  `offset_journal_id`, `offset_void_journal_id`. `tax_amount` keeps meaning the output tax. One CHECK holds the arithmetic above, so a
+  frozen return cannot disagree with itself. Existing returns are backfilled once (`payable_amount = tax_amount`).
+- A trigger on insert: `credit_brought_forward` equals the credit carried by the live return of the month before (or the opening
+  credit when there is none), and no live return of a later month exists. This is what makes the credit consumed once.
+- `tax_return_input_claims`: the input side of a return, frozen, one row per bill line claimed (or a negative row that reverses
+  an earlier claim of a bill that was voided later). Append-only except `released_at`, set when the return is voided. A bill line is
+  claimed once among the live claims (partial unique index); a reversal reverses one claim once; the claims add up to
+  `input_claimed` (deferred trigger).
+- `tax_opening_credits`: the credit a hotel starts with (POSTED or VOIDED, journal Dr INPUT_VAT / Cr opening balance equity 3900),
+  one live per tax, only while the tax has no live return.
+- `tax_filing_profiles.claims_input_vat`: the profile whose return claims the input VAT; at most one per property, a VAT tax.
+
+## Rules
+
+- **Claims.** A return claims the CREDITABLE lines of POSTED bills with a bill date up to the end of its month that no live return
+  claims yet (so a late bill goes to the first open month), and reverses the claims of bills voided on or before the end of its month.
+- **Filing** (profile lock): worksheet recomputed, the offset journal (type TAX, dated the filing date: Dr the tax payable account,
+  Cr INPUT_VAT, sides swapped when negative), the return, its lines and its claims.
+- **Void**: only the latest live return of the tax (`TAX_RETURN_NOT_LATEST`), without payments (as before); the offset journal is
+  reversed on the business date and the claims are released. A correction is a void and a new filing.
+- **Payments** are limited by `payable_amount`; a return with nothing payable is paid already. The journal of a payment is unchanged.
+- **Liability** report: owed = collected - offset of the filed returns - paid; the credit available is shown.
+
+## API and UI
+
+Worksheet and return: `input` (claims), `input_claimed`, `credit_brought_forward`, `offset`, `payable`, `credit_carried_forward`.
+Periods: `payable`, `credit_carried_forward`. Profile: `claims_input_vat`, `opening_credit`. `POST/void
+{P}/tax/profiles/{id}/opening-credit`. The worksheet card shows output, input (by bill), credit brought forward, offset, payable and
+credit carried; the profile form has the flag and the opening credit; the liability page shows the credit.

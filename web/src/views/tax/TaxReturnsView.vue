@@ -59,7 +59,14 @@ const periodColumns = computed<Column<TaxFilingPeriod>[]>(() => [
   { key: 'status', label: t('taxReturns.status') },
   { key: 'paid', label: t('taxReturns.paid'), align: 'right', format: 'money' as const },
   { key: 'outstanding', label: t('taxReturns.owed'), align: 'right', format: 'money' as const },
+  { key: 'credit', label: t('taxReturns.credit'), align: 'right' },
 ])
+/** The month on screen as the return filed for it, else as the worksheet: both carry the offset of the input VAT and the credit. */
+const vat = computed(() => filed.value ?? worksheet.value)
+const showOffset = computed(() => {
+  const v = vat.value
+  return !!v && (worksheet.value?.claims_input_vat === true || Number(v.input_claimed) !== 0 || Number(v.credit_brought_forward) !== 0 || Number(v.credit_carried_forward) !== 0)
+})
 const base = () => ({ path: { propertyId: pid.value as number } })
 const monthLabel = (start: string): string => new Date(`${start}T00:00:00Z`).toLocaleDateString(i18n.global.locale.value, { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
@@ -256,6 +263,7 @@ watch([() => pid.value, taxId], () => {
           <template #cell-status="{ row }"><Badge :variant="row.status === 'FILED' ? 'success' : row.status === 'READY' ? 'warning' : 'outline'">{{ statusText(row.status) }}</Badge></template>
           <template #cell-paid="{ row }">{{ row.status === 'FILED' ? row.paid : '' }}</template>
           <template #cell-outstanding="{ row }">{{ row.status === 'FILED' ? row.outstanding : '' }}</template>
+          <template #cell-credit="{ row }">{{ row.status === 'FILED' && Number(row.credit_carried_forward) ? $money(row.credit_carried_forward) : '' }}</template>
           <template #detail>
             <template v-if="worksheet">
               <table class="w-full border-collapse text-sm" data-testid="lines">
@@ -274,6 +282,28 @@ watch([() => pid.value, taxId], () => {
                 </tbody>
                 <tfoot><tr data-testid="totals" class="font-semibold"><th colspan="3" class="pt-2 text-left">{{ t('taxReturns.total') }}</th><th class="px-3 pt-2 text-right tabular-nums">{{ $money(worksheet.base_amount) }}</th><th class="pl-3 pt-2 text-right tabular-nums">{{ $money(worksheet.tax_amount) }}</th></tr></tfoot>
               </table>
+              <div v-if="showOffset && vat" class="mt-3" data-testid="offset" @click.stop>
+                <h3 class="mb-1 text-sm font-semibold">{{ t('taxReturns.offsetTitle') }}</h3>
+                <table class="w-full max-w-xl border-collapse text-sm">
+                  <tbody class="[&_td]:py-1 [&_td:last-child]:text-right [&_td:last-child]:tabular-nums">
+                    <tr class="border-b border-border"><td>{{ t('taxReturns.outputVat') }}</td><td data-testid="offset-output">{{ $money(vat.tax_amount) }}</td></tr>
+                    <tr class="border-b border-border"><td>{{ t('taxReturns.inputClaimed') }}</td><td data-testid="offset-input">{{ $money(vat.input_claimed) }}</td></tr>
+                    <tr class="border-b border-border"><td>{{ t('taxReturns.creditBroughtForward') }}</td><td data-testid="offset-bf">{{ $money(vat.credit_brought_forward) }}</td></tr>
+                    <tr class="border-b border-border"><td>{{ t('taxReturns.offsetAmount') }}</td><td data-testid="offset-offset">{{ $money(vat.offset) }}</td></tr>
+                    <tr class="border-b border-border font-semibold"><td>{{ t('taxReturns.payable') }}</td><td data-testid="offset-payable">{{ $money(vat.payable) }}</td></tr>
+                    <tr><td>{{ t('taxReturns.creditCarriedForward') }}</td><td data-testid="offset-cf">{{ $money(vat.credit_carried_forward) }}</td></tr>
+                  </tbody>
+                </table>
+                <table v-if="(filed?.input ?? worksheet.input).length" class="mt-2 w-full max-w-xl border-collapse text-sm" data-testid="input-claims">
+                  <caption class="pb-1 text-left text-xs text-muted-foreground">{{ t('taxReturns.inputClaims') }}</caption>
+                  <tbody>
+                    <tr v-for="c in (filed?.input ?? worksheet.input)" :key="`${c.bill_id}-${c.line_no}-${c.reversal}`" class="border-b border-border">
+                      <td class="py-1 pr-3">{{ c.bill_number }} · {{ c.supplier_name }}<small class="text-muted-foreground"> · {{ c.supplier_invoice_number }} · {{ $date(c.bill_date) }}</small><small v-if="c.reversal" class="text-destructive"> · {{ t('taxReturns.takenBack') }}</small></td>
+                      <td class="pl-3 text-right tabular-nums">{{ $money(c.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <p class="mb-2 mt-3 text-sm text-muted-foreground" data-testid="books-check" @click.stop>
                 {{ t('taxReturns.booksCredited', { amount: $money(worksheet.gl_collected) }) }}<template v-if="Number(worksheet.difference) !== 0"> · <b class="text-destructive">{{ t('taxReturns.difference', { amount: money(worksheet.difference) }) }}</b></template><template v-else> · {{ t('taxReturns.agree') }}</template>
                 · {{ t('taxReturns.daysClosed', { posted: worksheet.posted_days, days: worksheet.days }) }}

@@ -5,7 +5,8 @@
 -- Profiles
 
 -- name: ListProfiles :many
-SELECT p.id, p.tax_id, t.code AS tax_code, t.name AS tax_name, t.rate AS tax_rate, t.gl_account_code, p.authority, p.registration_number, p.due_day, p.is_active, p.created_at
+SELECT p.id, p.tax_id, t.code AS tax_code, t.name AS tax_name, t.rate AS tax_rate, t.tax_kind, t.gl_account_code, p.authority, p.registration_number, p.due_day, p.is_active, p.claims_input_vat, p.created_at,
+       COALESCE((SELECT sum(c.amount) FROM tax_opening_credits c WHERE c.property_id = p.property_id AND c.tax_id = p.tax_id AND c.status = 'POSTED'), 0)::numeric AS opening_credit
 FROM tax_filing_profiles p
 JOIN taxes t ON t.property_id = p.property_id AND t.id = p.tax_id
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id
@@ -14,16 +15,16 @@ WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id
 ORDER BY t.code, p.id;
 
 -- name: InsertProfile :one
-INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority, registration_number, due_day, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @tax_id, @authority, sqlc.narg(registration_number), @due_day, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO tax_filing_profiles (tenant_id, property_id, tax_id, authority, registration_number, due_day, is_active, claims_input_vat, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @tax_id, @authority, sqlc.narg(registration_number), @due_day, @is_active, @claims_input_vat, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateProfile :exec
-UPDATE tax_filing_profiles SET authority = @authority, registration_number = sqlc.narg(registration_number), due_day = @due_day, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+UPDATE tax_filing_profiles SET authority = @authority, registration_number = sqlc.narg(registration_number), due_day = @due_day, is_active = @is_active, claims_input_vat = @claims_input_vat, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: TaxOfProperty :one
-SELECT id, code, is_active FROM taxes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+SELECT id, code, is_active, tax_kind FROM taxes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: ProfileOfReturn :one
 SELECT p.id FROM tax_filing_profiles p JOIN tax_returns r ON r.property_id = p.property_id AND r.tax_id = p.tax_id
@@ -76,9 +77,9 @@ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.component_
 
 -- name: InsertReturn :one
 INSERT INTO tax_returns (tenant_id, property_id, return_number, tax_id, period_start, period_end, due_date, base_amount, tax_amount, filed_on, filing_reference, notes,
-                         filed_at, filed_by, idempotency_key)
+                         filed_at, filed_by, idempotency_key, input_claimed, credit_brought_forward, offset_journal_id)
 VALUES (@tenant_id, @property_id, @return_number, @tax_id, @period_start, @period_end, @due_date, @base_amount, @tax_amount, @filed_on, sqlc.narg(filing_reference),
-        sqlc.narg(notes), @now, sqlc.narg(actor_id), sqlc.narg(idempotency_key))
+        sqlc.narg(notes), @now, sqlc.narg(actor_id), sqlc.narg(idempotency_key), @input_claimed, @credit_brought_forward, sqlc.narg(offset_journal_id))
 RETURNING id;
 
 -- name: InsertReturnLine :exec
@@ -87,7 +88,8 @@ VALUES (@tenant_id, @property_id, @return_id, @line_no, @charge_code, sqlc.narg(
 
 -- name: ListReturns :many
 SELECT r.id, r.return_number, r.tax_id, t.code AS tax_code, t.name AS tax_name, r.period_start, r.period_end, r.due_date, r.base_amount, r.tax_amount, r.status, r.filed_on,
-       r.filing_reference, r.notes, r.filed_at, r.voided_at, r.void_reason,
+       r.filing_reference, r.notes, r.filed_at, r.voided_at, r.void_reason, r.input_claimed, r.credit_brought_forward, COALESCE(r.offset_amount, 0)::numeric AS offset_amount, COALESCE(r.payable_amount, 0)::numeric AS payable_amount, COALESCE(r.credit_carried_forward, 0)::numeric AS credit_carried_forward,
+       r.offset_journal_id,
        COALESCE((SELECT sum(x.amount) FROM tax_payments x WHERE x.property_id = r.property_id AND x.return_id = r.id AND x.status = 'POSTED'), 0)::numeric AS paid
 FROM tax_returns r
 JOIN taxes t ON t.property_id = r.property_id AND t.id = r.tax_id
@@ -109,7 +111,8 @@ SELECT id FROM tax_returns WHERE tenant_id = @tenant_id AND property_id = @prope
 SELECT id FROM tax_returns WHERE tenant_id = @tenant_id AND property_id = @property_id AND tax_id = @tax_id AND period_start = @period_start AND status = 'FILED';
 
 -- name: VoidReturn :exec
-UPDATE tax_returns SET status = 'VOIDED', voided_at = @now, voided_by = sqlc.narg(actor_id), void_reason = @reason, approved_by = sqlc.narg(approved_by)
+UPDATE tax_returns SET status = 'VOIDED', voided_at = @now, voided_by = sqlc.narg(actor_id), void_reason = @reason, approved_by = sqlc.narg(approved_by),
+       offset_void_journal_id = sqlc.narg(offset_void_journal_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: CountLivePayments :one
@@ -164,7 +167,7 @@ GROUP BY k.tax_id;
 
 -- Returns filed (not voided, or voided after the date) with a period ended by a date, and what was paid on them by it.
 -- name: FiledAndPaidToDate :many
-SELECT r.tax_id, COALESCE(sum(r.tax_amount), 0)::numeric AS filed, count(*)::int AS returns,
+SELECT r.tax_id, COALESCE(sum(r.tax_amount), 0)::numeric AS filed, COALESCE(sum(r.offset_amount), 0)::numeric AS offsets, count(*)::int AS returns,
        COALESCE(sum((SELECT COALESCE(sum(x.amount), 0) FROM tax_payments x LEFT JOIN gl_journals xv ON xv.property_id = x.property_id AND xv.id = x.void_journal_id
                       WHERE x.property_id = r.property_id AND x.return_id = r.id AND x.payment_date <= @as_of::date AND (x.status = 'POSTED' OR xv.journal_date > @as_of::date))), 0)::numeric AS paid
 FROM tax_returns r
@@ -208,3 +211,77 @@ INSERT INTO property_tax_settings (tenant_id, property_id, effective_from, is_pk
 VALUES (@tenant_id, @property_id, @effective_from, @is_pkp, sqlc.narg(npwp), sqlc.narg(pkp_number), sqlc.narg(pkp_confirmed_on), @input_vat_treatment,
         sqlc.narg(signer_name), sqlc.narg(signer_title), sqlc.narg(approved_by), sqlc.narg(actor_id))
 RETURNING id;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- The credit chain, the input VAT claims and the opening credit
+
+-- The live return of the month before (the latest one that starts earlier): its credit carried is the credit brought forward.
+-- name: PreviousLiveReturn :one
+SELECT id, period_start, COALESCE(credit_carried_forward, 0)::numeric AS credit_carried_forward FROM tax_returns
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND tax_id = @tax_id AND status = 'FILED' AND period_start < @period_start::date
+ORDER BY period_start DESC LIMIT 1;
+
+-- name: CountLaterLiveReturns :one
+SELECT count(*)::int FROM tax_returns
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND tax_id = @tax_id AND status = 'FILED' AND period_start > @period_start::date;
+
+-- name: CountLiveReturnsOfTax :one
+SELECT count(*)::int FROM tax_returns WHERE tenant_id = @tenant_id AND property_id = @property_id AND tax_id = @tax_id AND status = 'FILED';
+
+-- name: CountLiveClaimsOfTax :one
+SELECT count(*)::int FROM tax_return_input_claims c JOIN tax_returns r ON r.property_id = c.property_id AND r.id = c.return_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND r.tax_id = @tax_id AND c.released_at IS NULL;
+
+-- name: OpeningCreditOfTax :one
+SELECT id, amount, as_of, journal_id, created_at FROM tax_opening_credits
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND tax_id = @tax_id AND status = 'POSTED';
+
+-- name: InsertOpeningCredit :one
+INSERT INTO tax_opening_credits (tenant_id, property_id, tax_id, as_of, amount, journal_id, approved_by, created_by)
+VALUES (@tenant_id, @property_id, @tax_id, @as_of, @amount, @journal_id, sqlc.narg(approved_by), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: VoidOpeningCredit :exec
+UPDATE tax_opening_credits SET status = 'VOIDED', voided_at = @now, voided_by = sqlc.narg(actor_id), void_reason = @reason, void_journal_id = @void_journal_id, approved_by = sqlc.narg(approved_by)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- Lines of bills with VAT to claim: creditable, not voided, dated up to the end of the month, and not claimed by a live return yet.
+-- name: ClaimableBillLines :many
+SELECT l.bill_id, l.line_no, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date, l.vat_amount
+FROM supplier_bill_lines l
+JOIN supplier_bills b ON b.property_id = l.property_id AND b.id = l.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.vat_treatment = 'CREDITABLE' AND l.vat_amount > 0
+  AND b.status = 'POSTED' AND b.bill_date <= @to_date::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims c WHERE c.property_id = l.property_id AND c.bill_id = l.bill_id AND c.line_no = l.line_no
+                   AND c.released_at IS NULL AND c.reverses_claim_id IS NULL)
+ORDER BY b.bill_date, b.id, l.line_no;
+
+-- Live claims of this tax whose bill was voided on or before the end of the month and that no live return reverses yet.
+-- name: ReversibleClaims :many
+SELECT c.id, c.bill_id, c.line_no, c.amount, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+FROM tax_return_input_claims c
+JOIN tax_returns r ON r.property_id = c.property_id AND r.id = c.return_id
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND r.tax_id = @tax_id AND c.released_at IS NULL AND c.reverses_claim_id IS NULL
+  AND b.status = 'VOIDED' AND vj.journal_date <= @to_date::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = c.property_id AND x.reverses_claim_id = c.id AND x.released_at IS NULL)
+ORDER BY b.bill_date, b.id, c.line_no;
+
+-- name: InsertClaim :exec
+INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, amount, reverses_claim_id)
+VALUES (@tenant_id, @property_id, @return_id, @bill_id, @line_no, @amount, sqlc.narg(reverses_claim_id));
+
+-- name: ListReturnClaims :many
+SELECT c.id, c.bill_id, c.line_no, c.amount, c.reverses_claim_id, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+FROM tax_return_input_claims c
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.return_id = @return_id
+ORDER BY b.bill_date, b.id, c.line_no, c.id;
+
+-- name: ReleaseClaims :exec
+UPDATE tax_return_input_claims SET released_at = @now
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND return_id = @return_id AND released_at IS NULL;

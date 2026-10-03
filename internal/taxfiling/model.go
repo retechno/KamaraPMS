@@ -20,12 +20,17 @@ type Profile struct {
 	TaxCode            string          `json:"tax_code"`
 	TaxName            string          `json:"tax_name"`
 	TaxRate            decimal.Decimal `json:"tax_rate"`
+	TaxKind            string          `json:"tax_kind"`
 	GLAccountCode      string          `json:"gl_account_code,omitempty"`
 	Authority          string          `json:"authority"`
 	RegistrationNumber string          `json:"registration_number,omitempty"`
 	DueDay             int             `json:"due_day"`
 	IsActive           bool            `json:"is_active"`
-	CreatedAt          time.Time       `json:"created_at"`
+	// ClaimsInputVAT is set on the profile of the VAT tax whose returns claim the input VAT of the supplier bills; OpeningCredit is the VAT credit
+	// the hotel started with.
+	ClaimsInputVAT bool            `json:"claims_input_vat"`
+	OpeningCredit  decimal.Decimal `json:"opening_credit"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 // ProfileInput sets up the filing of a tax.
@@ -35,6 +40,7 @@ type ProfileInput struct {
 	RegistrationNumber string `json:"registration_number"`
 	DueDay             *int   `json:"due_day"`
 	IsActive           *bool  `json:"is_active"`
+	ClaimsInputVAT     *bool  `json:"claims_input_vat"`
 }
 
 // ProfilePatch changes the filing of a tax; the tax never changes.
@@ -43,6 +49,7 @@ type ProfilePatch struct {
 	RegistrationNumber *string `json:"registration_number"`
 	DueDay             *int    `json:"due_day"`
 	IsActive           *bool   `json:"is_active"`
+	ClaimsInputVAT     *bool   `json:"claims_input_vat"`
 }
 
 // WorksheetLine is the tax collected on a charge code at a rate in the month.
@@ -92,6 +99,11 @@ type Return struct {
 	Outstanding     decimal.Decimal `json:"outstanding"`
 	PaymentStatus   string          `json:"payment_status"`
 	Overdue         bool            `json:"overdue"`
+	// VATOffset is frozen with the return: what was claimed, what was brought forward, what was offset, what is payable (the return is
+	// paid up to it) and what the next month starts with. Without input VAT the payable is the tax.
+	VATOffset
+	OffsetJournalID *int64          `json:"offset_journal_id"`
+	Input           []InputClaim    `json:"input,omitempty"`
 	Lines           []WorksheetLine `json:"lines,omitempty"`
 	Payments        []Payment       `json:"payments,omitempty"`
 }
@@ -105,6 +117,10 @@ type Worksheet struct {
 	Lines       []WorksheetLine `json:"lines"`
 	Base        decimal.Decimal `json:"base_amount"`
 	Tax         decimal.Decimal `json:"tax_amount"`
+	// The input side (only the profile that claims the input VAT has any) and what it comes to against the tax collected.
+	ClaimsInputVAT bool         `json:"claims_input_vat"`
+	Input          []InputClaim `json:"input"`
+	VATOffset
 	GLCollected decimal.Decimal `json:"gl_collected"`
 	Difference  decimal.Decimal `json:"difference"`
 	Days        int             `json:"days"`
@@ -116,15 +132,17 @@ type Worksheet struct {
 
 // Period is a month of a tax in the list of its returns.
 type Period struct {
-	PeriodStart civil.Date      `json:"period_start"`
-	PeriodEnd   civil.Date      `json:"period_end"`
-	DueDate     civil.Date      `json:"due_date"`
-	Tax         decimal.Decimal `json:"tax_amount"`
-	Status      string          `json:"status"` // OPEN (the month is not over or not all journaled), READY, FILED
-	ReturnID    *int64          `json:"return_id"`
-	Paid        decimal.Decimal `json:"paid"`
-	Outstanding decimal.Decimal `json:"outstanding"`
-	Overdue     bool            `json:"overdue"`
+	PeriodStart          civil.Date      `json:"period_start"`
+	PeriodEnd            civil.Date      `json:"period_end"`
+	DueDate              civil.Date      `json:"due_date"`
+	Tax                  decimal.Decimal `json:"tax_amount"`
+	Payable              decimal.Decimal `json:"payable"`
+	CreditCarriedForward decimal.Decimal `json:"credit_carried_forward"`
+	Status               string          `json:"status"` // OPEN (the month is not over or not all journaled), READY, FILED
+	ReturnID             *int64          `json:"return_id"`
+	Paid                 decimal.Decimal `json:"paid"`
+	Outstanding          decimal.Decimal `json:"outstanding"`
+	Overdue              bool            `json:"overdue"`
 }
 
 // FileInput files the return of a month.
@@ -187,6 +205,8 @@ type LiabilityLine struct {
 	AccountCode     string          `json:"account_code"`
 	Collected       decimal.Decimal `json:"collected"`
 	Filed           decimal.Decimal `json:"filed"`
+	Offset          decimal.Decimal `json:"offset"`
+	CreditAvailable decimal.Decimal `json:"credit_available"`
 	Unfiled         decimal.Decimal `json:"unfiled"`
 	Paid            decimal.Decimal `json:"paid"`
 	Owed            decimal.Decimal `json:"owed"`
