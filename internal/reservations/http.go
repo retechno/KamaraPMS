@@ -440,11 +440,11 @@ func (h *Handler) calendar(w http.ResponseWriter, r *http.Request) error {
 	}
 	var errs []apperr.FieldError
 	from, to := queryDate(r, "from", &errs, true), queryDate(r, "to", &errs, true)
-	bedTypeID := queryID(r, "bed_type_id", &errs)
+	byBed := r.URL.Query().Get("by_bed") == "true"
 	if len(errs) > 0 {
 		return apperr.Invalid("the window is invalid", errs...)
 	}
-	res, err := h.svc.AvailabilityCalendar(r.Context(), pid, *from, *to, bedTypeID)
+	res, err := h.svc.AvailabilityCalendar(r.Context(), pid, *from, *to, byBed)
 	if err != nil {
 		return err
 	}

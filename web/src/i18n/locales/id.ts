@@ -2347,9 +2347,8 @@ export const id: Messages = {
     empty: 'Properti ini belum punya tipe kamar aktif.',
     rooms: '{n} kamar',
     total: 'Total',
-    bedType: 'Tipe bed',
-    allBeds: 'Semua bed',
-    bedNote: 'Hanya kamar dengan bed ini yang dihitung, dan hanya pemesanan yang sudah ditetapkan ke kamar. Pemesanan tanpa kamar tidak dihitung karena bisa mendapat bed apa pun.',
+    showBeds: 'Tampilkan bed type',
+    bedNote: 'Baris di bawah tipe kamar hanya menghitung kamar dengan bed itu, dan hanya pemesanan yang sudah ditetapkan ke kamar. Pemesanan tanpa kamar tidak dihitung di sini karena bisa mendapat bed apa pun, jadi baris ini bisa menunjukkan kamar kosong lebih banyak daripada tipe kamarnya.',
     cellTitle: '{date}: {held} terpakai dari {sellable} dapat dijual, {blocked} diblokir, okupansi {percent}%',
   },
   status: {

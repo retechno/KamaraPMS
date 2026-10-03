@@ -9,7 +9,6 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
-	"kamarapms/internal/reservations/reservationsdb"
 )
 
 // CalendarNight is one room type on one night: the rooms it has to sell, the rooms held, and what is left.
@@ -28,6 +27,17 @@ type CalendarNight struct {
 // CalendarType is the nights of one active room type.
 type CalendarType struct {
 	RoomTypeID int64           `json:"room_type_id"`
+	Code       string          `json:"code"`
+	Name       string          `json:"name"`
+	RoomsTotal int             `json:"rooms_total"`
+	Nights     []CalendarNight `json:"nights"`
+	// Beds is the same per bed type of the rooms of the type; only present when asked for.
+	Beds []CalendarBed `json:"beds,omitempty"`
+}
+
+// CalendarBed is one bed type of a room type, counted over the rooms with that bed.
+type CalendarBed struct {
+	BedTypeID  int64           `json:"bed_type_id"`
 	Code       string          `json:"code"`
 	Name       string          `json:"name"`
 	RoomsTotal int             `json:"rooms_total"`
@@ -54,9 +64,10 @@ type Calendar struct {
 
 // AvailabilityCalendar lists, per active room type and night of [from, to), the rooms to sell, blocked, held and still
 // available, with the occupancy of each type and of the whole property (reservation.read). The window is after from and
-// at most 62 days. With a bed type the numbers cover only the rooms with that bed and only the bookings already assigned
-// to a room (see availability.BedInventory); room types without such a room are left out. It reads committed data and takes no locks; like a search it is advisory, only booking decides.
-func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, from, to civil.Date, bedTypeID *int64) (Calendar, error) {
+// at most 62 days. With byBed each type also lists its bed types, counted over the rooms with that bed and only the
+// bookings already assigned to a room (see availability.BedInventory); the totals stay per room type. It reads committed
+// data and takes no locks; like a search it is advisory, only booking decides.
+func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, from, to civil.Date, byBed bool) (Calendar, error) {
 	p, err := s.writer(ctx, propertyID, auth.PermReservationRead)
 	if err != nil {
 		return Calendar{}, err
@@ -80,15 +91,6 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	for i, t := range types {
 		typeIDs[i] = t.ID
 	}
-	if bedTypeID != nil {
-		rows, err := s.q(ctx).ListBedTypeBriefs(ctx, reservationsdb.ListBedTypeBriefsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: []int64{*bedTypeID}})
-		if err != nil {
-			return Calendar{}, err
-		}
-		if len(rows) == 0 {
-			return Calendar{}, apperr.Invalid("the bed type is invalid", fieldErr("bed_type_id", "BED_TYPE_NOT_FOUND", "the bed type does not exist in this property"))
-		}
-	}
 	inv, err := s.avail.Inventory(ctx, p.TenantID, propertyID, typeIDs, nights, day.BusinessDate, nil)
 	if err != nil {
 		return Calendar{}, err
@@ -97,9 +99,13 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	if err != nil {
 		return Calendar{}, err
 	}
-	var bedInv map[int64]map[civil.Date]availability.BedNight
-	if bedTypeID != nil {
-		if bedInv, err = s.avail.BedInventory(ctx, p.TenantID, propertyID, *bedTypeID, typeIDs, nights, day.BusinessDate); err != nil {
+	var beds []availability.RoomBed
+	var bedInv map[availability.BedKey]map[civil.Date]availability.BedNight
+	if byBed {
+		if beds, err = s.avail.RoomBeds(ctx, p.TenantID, propertyID); err != nil {
+			return Calendar{}, err
+		}
+		if bedInv, err = s.avail.BedInventory(ctx, p.TenantID, propertyID, nights, day.BusinessDate); err != nil {
 			return Calendar{}, err
 		}
 	}
@@ -107,34 +113,31 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	for i, d := range nights {
 		out.Totals[i].Date = d
 	}
+	night := func(d civil.Date, rooms, sellable, held int) CalendarNight {
+		occ := availability.Occupancy{Sellable: sellable, Booked: held}
+		return CalendarNight{Date: d, Sellable: sellable, Blocked: rooms - sellable, Held: held, Available: sellable - held, OccupancyPercent: occ.Percent()}
+	}
 	for _, t := range types {
-		if bedTypeID != nil {
-			total := 0
-			for _, n := range bedInv[t.ID] {
-				total = n.Rooms
-				break
-			}
-			if total == 0 {
-				continue
-			}
-			totals[t.ID] = total
-		}
 		ct := CalendarType{RoomTypeID: t.ID, Code: t.Code, Name: t.Name, RoomsTotal: totals[t.ID], Nights: make([]CalendarNight, len(nights))}
 		for i, d := range nights {
 			n := inv[t.ID][d]
-			if bedTypeID != nil {
-				b := bedInv[t.ID][d]
-				n = availability.Night{Date: d, Sellable: b.Sellable, Demand: b.Held}
-			}
-			occ := availability.Occupancy{Sellable: n.Sellable, Booked: n.Demand}
-			ct.Nights[i] = CalendarNight{
-				Date: d, Sellable: n.Sellable, Blocked: ct.RoomsTotal - n.Sellable, Held: n.Demand, Available: n.Sellable - n.Demand, OccupancyPercent: occ.Percent(),
-			}
+			ct.Nights[i] = night(d, ct.RoomsTotal, n.Sellable, n.Demand)
 			tot := &out.Totals[i]
 			tot.Sellable += n.Sellable
 			tot.Blocked += ct.RoomsTotal - n.Sellable
 			tot.Held += n.Demand
 			tot.Available += n.Sellable - n.Demand
+		}
+		for _, b := range beds {
+			if b.RoomTypeID != t.ID {
+				continue
+			}
+			cb := CalendarBed{BedTypeID: b.BedTypeID, Code: b.Code, Name: b.Name, RoomsTotal: b.Rooms, Nights: make([]CalendarNight, len(nights))}
+			for i, d := range nights {
+				n := bedInv[availability.BedKey{RoomTypeID: t.ID, BedTypeID: b.BedTypeID}][d]
+				cb.Nights[i] = night(d, b.Rooms, n.Sellable, n.Held)
+			}
+			ct.Beds = append(ct.Beds, cb)
 		}
 		out.RoomTypes = append(out.RoomTypes, ct)
 	}

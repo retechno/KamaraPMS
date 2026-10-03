@@ -323,7 +323,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **GET `{P}/availability/calendar?from&to`** (`reservation.read`)
 - **Purpose:** the availability of every active room type for each night of `[from, to)`, as a grid: `sellable`, `blocked`, `held`, `available` (`sellable - held`, negative when oversold) and `occupancy_percent` per type and night, and `totals` per night. At most 62 days.
-- **Optional `bed_type_id`:** narrows the grid to the rooms with that bed. `sellable`/`blocked`/`held` then count those rooms only, and `held` only the bookings already assigned to a room (a booking without a room may still end up in any bed, so it is not counted); room types without such a room are left out; 422 `BED_TYPE_NOT_FOUND` for an unknown bed type. Bed type stays a description, not inventory: this is a view of the free rooms, not a rule for booking.
+- **Optional `by_bed=true`:** each room type also lists `beds`: per bed type of its active rooms the same numbers, counted over the rooms with that bed. Only bookings already assigned to a room (and open stays) count there; a booking without a room may still end up in any bed, so it is not counted, and the bed rows can show more free rooms than the type row. The type rows and `totals` are unchanged. Bed type stays a description, not inventory: this is a view of the free rooms, not a rule for booking.
 - **Rules:** read-only and advisory (only booking decides); the numbers are the availability engine's own (`NightInventory`), so the calendar can never disagree with a booking attempt. Inactive rooms count nowhere; blocked rooms are `blocked`, not `sellable`.
 - **TX:** R
 

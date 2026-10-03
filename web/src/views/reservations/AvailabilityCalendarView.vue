@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AvailabilityCalendar, BedType } from '@/api/types'
+import type { AvailabilityCalendar } from '@/api/types'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -32,8 +32,7 @@ const days = ref(14)
 const start = ref('')
 const calendar = ref<AvailabilityCalendar | null>(null)
 const error = ref<ApiError | null>(null)
-const beds = ref<BedType[]>([])
-const bedTypeId = ref('') // '' = every bed
+const byBed = ref(false) // one row per bed type under each room type
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const businessDate = computed(() => property.clock?.business_date ?? '')
@@ -51,24 +50,11 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/calendar', {
-      params: { path: { propertyId }, query: { from: start.value, to: addDays(start.value, days.value), bed_type_id: bedTypeId.value ? Number(bedTypeId.value) : undefined } },
+      params: { path: { propertyId }, query: { from: start.value, to: addDays(start.value, days.value), by_bed: byBed.value || undefined } },
     })
     calendar.value = data ?? null
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
-  }
-}
-
-// The beds to filter by. Optional: without them the calendar still works for every bed.
-async function loadBeds(): Promise<void> {
-  const propertyId = property.currentId
-  beds.value = []
-  if (propertyId === null || !canRead.value) return
-  try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId } } })
-    beds.value = data?.data ?? []
-  } catch {
-    beds.value = []
   }
 }
 
@@ -91,9 +77,7 @@ function tone(n: Night): string {
 watch(() => property.currentId, () => {
   start.value = ''
   calendar.value = null
-  bedTypeId.value = ''
   void load()
-  void loadBeds()
 }, { immediate: true })
 watch(businessDate, () => {
   if (!calendar.value) void load()
@@ -106,10 +90,7 @@ watch(businessDate, () => {
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('availabilityCalendar.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('availabilityCalendar.businessDate') }}</Button>
       <Button variant="outline" size="sm" @click="shift(7)">{{ t('availabilityCalendar.week') }} &rarr;</Button>
-      <NativeSelect v-if="beds.length" v-model="bedTypeId" name="bed_type_id" class="w-36" :aria-label="t('availabilityCalendar.bedType')" @change="load">
-        <option value="">{{ t('availabilityCalendar.allBeds') }}</option>
-        <option v-for="b in beds" :key="b.id" :value="String(b.id)">{{ b.name }}</option>
-      </NativeSelect>
+      <label class="flex items-center gap-2 text-sm"><input v-model="byBed" name="by_bed" type="checkbox" class="size-4 accent-primary" @change="load" /><span>{{ t('availabilityCalendar.showBeds') }}</span></label>
       <NativeSelect v-model.number="days" class="w-28" :aria-label="t('availabilityCalendar.daysShown')" @change="load">
         <option :value="14">{{ t('availabilityCalendar.days', { n: 14 }) }}</option>
         <option :value="28">{{ t('availabilityCalendar.days', { n: 28 }) }}</option>
@@ -124,7 +105,7 @@ watch(businessDate, () => {
 
   <template v-else-if="calendar">
     <p class="mb-3 text-xs text-muted-foreground" data-testid="legend">{{ t('availabilityCalendar.legend') }}</p>
-    <p v-if="bedTypeId" class="notice" data-testid="bed-note">{{ t('availabilityCalendar.bedNote') }}</p>
+    <p v-if="byBed" class="notice" data-testid="bed-note">{{ t('availabilityCalendar.bedNote') }}</p>
     <p v-if="calendar.room_types.length === 0" class="muted" data-testid="empty">{{ t('availabilityCalendar.empty') }}</p>
 
     <Card v-else class="overflow-x-auto">
@@ -142,7 +123,8 @@ watch(businessDate, () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="ty in calendar.room_types" :key="ty.room_type_id">
+          <template v-for="ty in calendar.room_types" :key="ty.room_type_id">
+          <tr>
             <th class="sticky left-0 z-10 border-b border-border bg-card px-2 py-1.5 text-left font-medium">
               {{ ty.code }}
               <span class="block text-[10px] font-normal text-muted-foreground">{{ ty.name }} &middot; {{ t('availabilityCalendar.rooms', { n: ty.rooms_total }) }}</span>
@@ -157,6 +139,22 @@ watch(businessDate, () => {
               {{ n.available }}
             </td>
           </tr>
+          <tr v-for="bed in ty.beds ?? []" :key="bed.bed_type_id" :data-testid="`bed-row-${ty.code}-${bed.code}`">
+            <th class="sticky left-0 z-10 border-b border-border bg-card py-1 pl-5 pr-2 text-left text-[11px] font-normal">
+              {{ bed.name }}
+              <span class="block text-[10px] text-muted-foreground">{{ t('availabilityCalendar.rooms', { n: bed.rooms_total }) }}</span>
+            </th>
+            <td
+              v-for="n in bed.nights"
+              :key="n.date"
+              :title="tooltip(n)"
+              :data-testid="`cell-${ty.code}-${bed.code}-${n.date}`"
+              :class="cn('border-b border-l border-border bg-muted/20 px-1 py-1 text-center tabular-nums text-muted-foreground', tone(n))"
+            >
+              {{ n.available }}
+            </td>
+          </tr>
+          </template>
         </tbody>
         <tfoot>
           <tr>

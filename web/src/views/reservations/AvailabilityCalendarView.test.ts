@@ -27,7 +27,7 @@ function mountView(permissions = ['reservation.read'], data: unknown = calendar)
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-10-01' } as never
-  GET = vi.fn((url: string) => Promise.resolve({ data: url.endsWith('/bed-types') ? { data: [{ id: 3, code: 'KING', name: 'King' }] } : data }))
+  GET = vi.fn().mockResolvedValue({ data })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(AvailabilityCalendarView, { global: { plugins: [pinia, router] } })
 }
@@ -51,14 +51,24 @@ describe('AvailabilityCalendarView', () => {
     expect(w.get('[data-testid=occupancy-2026-10-01]').text()).toBe('50%')
   })
 
-  it('filters by bed type and tells what is counted', async () => {
-    const w = mountView()
+  it('shows a row per bed type under each room type when asked', async () => {
+    const withBeds = { ...calendar, room_types: [{ ...calendar.room_types[0], beds: [
+      { bed_type_id: 3, code: 'KING', name: 'King', rooms_total: 1, nights: [night('2026-10-01', 1, 1), night('2026-10-02', 1, 0), night('2026-10-03', 1, 0)] },
+      { bed_type_id: 4, code: 'TWIN', name: 'Twin', rooms_total: 1, nights: [night('2026-10-01', 1, 0), night('2026-10-02', 1, 0), night('2026-10-03', 0, 0, 1)] },
+    ] }] }
+    const w = mountView(['reservation.read'], withBeds)
     await flushPromises()
+    expect(GET.mock.calls[0]?.[1].params.query.by_bed).toBeUndefined()
     expect(w.find('[data-testid=bed-note]').exists()).toBe(false)
-    await w.get('select[name=bed_type_id]').setValue('3')
+    await w.get('input[name=by_bed]').setValue(true)
     await flushPromises()
-    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-01', bed_type_id: 3 } } })
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-01', by_bed: true } } })
     expect(w.find('[data-testid=bed-note]').exists()).toBe(true)
+    expect(w.get('[data-testid=bed-row-DLX-KING]').text()).toContain('King')
+    expect(w.get('[data-testid=cell-DLX-KING-2026-10-01]').text()).toBe('0')
+    expect(w.get('[data-testid=cell-DLX-TWIN-2026-10-01]').text()).toBe('1')
+    // the room type row and the totals are unchanged
+    expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('1')
   })
 
   it('moves the window by a week', async () => {

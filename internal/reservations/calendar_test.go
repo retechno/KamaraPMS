@@ -34,7 +34,7 @@ func TestAvailabilityCalendar(t *testing.T) {
 	_, err := f.Rooms.CreateBlock(f.admin, f.propID, rooms.CreateBlockInput{RoomID: f.r102.ID, BlockType: "OOO", StartDate: d("2026-10-04"), EndDate: d("2026-10-06"), Reason: "AC"})
 	must(t, err)
 
-	cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-06"), nil)
+	cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-06"), false)
 	must(t, err)
 	if len(cal.RoomTypes) != 2 || len(cal.Totals) != 4 || cal.RoomTypes[0].RoomsTotal+cal.RoomTypes[1].RoomsTotal != 3 {
 		t.Fatalf("shape: %+v", cal)
@@ -65,7 +65,7 @@ func TestAvailabilityCalendar(t *testing.T) {
 	if _, err := f.Rooms.UpdateRoom(f.admin, f.propID, extra.ID, rooms.RoomPatch{IsActive: ptrBool(false)}); err != nil {
 		t.Fatal(err)
 	}
-	cal, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-03"), nil)
+	cal, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-03"), false)
 	must(t, err)
 	if n := nightOf(t, cal, "DLX", "2026-10-02"); n.Sellable != 2 || n.Blocked != 0 {
 		t.Fatalf("an inactive room is left out: %+v", n)
@@ -74,25 +74,25 @@ func TestAvailabilityCalendar(t *testing.T) {
 
 func TestAvailabilityCalendarWindowAndPermission(t *testing.T) {
 	f := setup(t)
-	_, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-05"), d("2026-10-05"), nil)
+	_, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-05"), d("2026-10-05"), false)
 	if c := code(t, err, "VALIDATION_FAILED"); c.Fields[0].Field != "to" {
 		t.Fatalf("fields: %+v", c.Fields)
 	}
-	_, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-01"), d("2026-12-31"), nil) // more than 62 days
+	_, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-01"), d("2026-12-31"), false) // more than 62 days
 	wantCode(t, err, "VALIDATION_FAILED")
-	if cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-01"), d("2026-12-02"), nil); err != nil || len(cal.Totals) != 62 {
+	if cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-01"), d("2026-12-02"), false); err != nil || len(cal.Totals) != 62 {
 		t.Fatalf("62 nights are allowed: %v", err)
 	}
 	nobody := f.User(t, f.tenantID, f.propID, auth.PermGuestRead)
-	_, err = f.Res.AvailabilityCalendar(nobody, f.propID, d("2026-10-01"), d("2026-10-05"), nil)
+	_, err = f.Res.AvailabilityCalendar(nobody, f.propID, d("2026-10-01"), d("2026-10-05"), false)
 	wantCode(t, err, "PERMISSION_DENIED")
 	foreign := f.Tenant(t, "XYZ")
-	_, err = f.Res.AvailabilityCalendar(roomstest.Admin(foreign.ID), f.propID, d("2026-10-01"), d("2026-10-05"), nil)
+	_, err = f.Res.AvailabilityCalendar(roomstest.Admin(foreign.ID), f.propID, d("2026-10-01"), d("2026-10-05"), false)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 }
 
-// With a bed type the calendar counts only the rooms with that bed and the bookings already assigned to them.
-func TestAvailabilityCalendarBedType(t *testing.T) {
+// With byBed each room type lists its bed types, counted over the rooms with that bed and the bookings assigned to them.
+func TestAvailabilityCalendarBeds(t *testing.T) {
 	f := setup(t) // DLX: 101, 102; STD: 201
 	king, twin := f.bed(t, "KING"), f.bed(t, "TWIN")
 	for _, r := range []struct {
@@ -107,23 +107,30 @@ func TestAvailabilityCalendarBedType(t *testing.T) {
 	must(t, err)
 	f.book(t, f.dlx, "2026-10-02", "2026-10-04") // no room yet: not counted per bed
 
-	cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), &king.ID)
+	plain, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), false)
 	must(t, err)
-	if len(cal.RoomTypes) != 2 {
-		t.Fatalf("both types have a King room: %+v", cal.RoomTypes)
+	if len(plain.RoomTypes[0].Beds) != 0 {
+		t.Fatalf("beds only when asked for: %+v", plain.RoomTypes[0].Beds)
 	}
-	if n := nightOf(t, cal, "DLX", "2026-10-02"); n.Sellable != 1 || n.Held != 1 || n.Available != 0 {
-		t.Fatalf("DLX King: %+v", n)
-	}
-	if cal.RoomTypes[0].RoomsTotal != 1 || cal.Totals[0].Sellable != 2 || cal.Totals[0].Held != 1 {
-		t.Fatalf("totals count King rooms only: %+v", cal.Totals[0])
-	}
-	cal, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), &twin.ID)
+
+	cal, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), true)
 	must(t, err)
-	if len(cal.RoomTypes) != 1 || cal.RoomTypes[0].Code != "DLX" || nightOf(t, cal, "DLX", "2026-10-02").Available != 1 {
-		t.Fatalf("only DLX has a Twin room: %+v", cal.RoomTypes)
+	dlx, std := cal.RoomTypes[0], cal.RoomTypes[1]
+	if dlx.Code != "DLX" || len(dlx.Beds) != 2 || len(std.Beds) != 1 {
+		t.Fatalf("beds per type: %+v", cal.RoomTypes)
 	}
-	unknown := int64(999999)
-	_, err = f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), &unknown)
-	wantCode(t, err, "VALIDATION_FAILED")
+	k, tw := dlx.Beds[0], dlx.Beds[1] // catalogue order: King before Twin
+	if k.Code != "KING" || k.RoomsTotal != 1 || k.Nights[0].Sellable != 1 || k.Nights[0].Held != 1 || k.Nights[0].Available != 0 {
+		t.Fatalf("DLX King: %+v", k)
+	}
+	if tw.Code != "TWIN" || tw.Nights[0].Held != 0 || tw.Nights[0].Available != 1 {
+		t.Fatalf("DLX Twin: %+v", tw)
+	}
+	if std.Beds[0].Code != "KING" || std.Beds[0].Nights[0].Available != 1 {
+		t.Fatalf("STD King: %+v", std.Beds[0])
+	}
+	// the type row still counts the unassigned booking, and the totals stay per room type
+	if dlx.Nights[0].Held != 2 || cal.Totals[0].Held != 2 {
+		t.Fatalf("type and totals are unchanged: %+v %+v", dlx.Nights[0], cal.Totals[0])
+	}
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.40.0
+  version: 0.41.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -1754,12 +1754,14 @@ paths:
         Per active room type and night: `sellable` (active rooms without an OOO/OOS block), `blocked` (active rooms that
         are blocked), `held` (rooms held by CONFIRMED lines and open stays, counted per room type as the availability
         engine does), `available` (`sellable - held`, negative when the type is oversold) and the occupancy in percent.
-        `totals` adds the types up per night.
+        `totals` adds the types up per night. With `by_bed=true` each room type also lists `beds`: per bed type of its active
+        rooms the same numbers, counted over the rooms with that bed and only the bookings already assigned to a room (a
+        booking without a room may end up in any bed, so it is not counted). The totals stay per room type.
       tags: [reservations]
       parameters:
         - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
         - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: Exclusive. }
-        - { name: bed_type_id, in: query, required: false, schema: { type: integer, format: int64 }, description: "Only the rooms with this bed type, and only the bookings already assigned to a room; room types without such a room are left out. 422 BED_TYPE_NOT_FOUND for an unknown bed type." }
+        - { name: by_bed, in: query, required: false, schema: { type: boolean }, description: "true adds `beds` to every room type: the same numbers per bed type of its rooms (see description)." }
       responses:
         "200":
           description: The calendar.
@@ -6941,6 +6943,20 @@ components:
               nights:
                 type: array
                 items: { $ref: "#/components/schemas/CalendarNight" }
+              beds:
+                type: array
+                description: Only with by_bed=true; in the catalogue order. Bed types the type has no room with are not listed.
+                items:
+                  type: object
+                  required: [bed_type_id, code, name, rooms_total, nights]
+                  properties:
+                    bed_type_id: { type: integer, format: int64 }
+                    code: { type: string }
+                    name: { type: string }
+                    rooms_total: { type: integer, description: The active rooms of the type with this bed. }
+                    nights:
+                      type: array
+                      items: { $ref: "#/components/schemas/CalendarNight" }
         totals:
           type: array
           description: The whole property, one entry per night.

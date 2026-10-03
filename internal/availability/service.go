@@ -58,30 +58,54 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 	return out, nil
 }
 
-// BedNight is one room type on one night counted only over the rooms with one bed type.
-type BedNight struct {
-	Rooms, Sellable, Held int
+// RoomBed is a bed type of a room type: the active rooms of the type that have it.
+type RoomBed struct {
+	RoomTypeID, BedTypeID int64
+	Code, Name            string
+	Rooms                 int
 }
 
-// BedInventory counts, per room type and night, the active rooms with the bed type, those without a block and those
-// already held by a room-assigned CONFIRMED line or an open stay. Bookings that have no room yet are not counted.
-func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID, bedTypeID int64, typeIDs []int64, dates []civil.Date, bd civil.Date) (map[int64]map[civil.Date]BedNight, error) {
-	out := map[int64]map[civil.Date]BedNight{}
-	if len(typeIDs) == 0 || len(dates) == 0 {
+// RoomBeds lists the bed types of each room type's active rooms, in the catalogue's order.
+func (s *Service) RoomBeds(ctx context.Context, tenantID, propertyID int64) ([]RoomBed, error) {
+	rows, err := s.q(ctx).ListRoomBeds(ctx, availabilitydb.ListRoomBedsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RoomBed, len(rows))
+	for i, r := range rows {
+		out[i] = RoomBed{RoomTypeID: r.RoomTypeID, BedTypeID: r.BedTypeID, Code: r.Code, Name: r.Name, Rooms: int(r.Rooms)}
+	}
+	return out, nil
+}
+
+// BedNight is one (room type, bed type) pair on one night, counted over the rooms with that bed only.
+type BedNight struct {
+	Sellable, Held int
+}
+
+// BedKey names a bed type of a room type.
+type BedKey struct{ RoomTypeID, BedTypeID int64 }
+
+// BedInventory counts, per (room type, bed type) pair and night, the rooms without a block and those already held by a
+// room-assigned CONFIRMED line or an open stay. Bookings that have no room yet are not counted.
+func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID int64, dates []civil.Date, bd civil.Date) (map[BedKey]map[civil.Date]BedNight, error) {
+	out := map[BedKey]map[civil.Date]BedNight{}
+	if len(dates) == 0 {
 		return out, nil
 	}
 	rows, err := s.q(ctx).BedNightInventory(ctx, availabilitydb.BedNightInventoryParams{
-		TenantID: tenantID, PropertyID: propertyID, BedTypeID: &bedTypeID, BusinessDate: bd, NextDate: bd.AddDays(1),
-		RoomTypeIds: typeIDs, Dates: isoDates(dates),
+		TenantID: tenantID, PropertyID: propertyID, BusinessDate: bd, NextDate: bd.AddDays(1),
+		Dates: isoDates(dates),
 	})
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range rows {
-		if out[r.RoomTypeID] == nil {
-			out[r.RoomTypeID] = map[civil.Date]BedNight{}
+		k := BedKey{r.RoomTypeID, r.BedTypeID}
+		if out[k] == nil {
+			out[k] = map[civil.Date]BedNight{}
 		}
-		out[r.RoomTypeID][r.Night] = BedNight{Rooms: int(r.Rooms), Sellable: int(r.Sellable), Held: int(r.Held)}
+		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held)}
 	}
 	return out, nil
 }

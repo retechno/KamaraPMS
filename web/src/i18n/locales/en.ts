@@ -2348,9 +2348,8 @@ export const en = {
     empty: 'This property has no active room types.',
     rooms: '{n} rooms',
     total: 'Total',
-    bedType: 'Bed type',
-    allBeds: 'All beds',
-    bedNote: 'Only rooms with this bed are counted, and only bookings already assigned to a room. A booking without a room is not counted, as it may end up in any bed.',
+    showBeds: 'Show bed types',
+    bedNote: 'Rows under a room type count only the rooms with that bed, and only bookings already assigned to a room. A booking without a room is not counted there, as it may end up in any bed, so these rows can show more free rooms than the room type.',
     cellTitle: '{date}: {held} held of {sellable} sellable, {blocked} blocked, {percent}% occupied',
   },
   status: {

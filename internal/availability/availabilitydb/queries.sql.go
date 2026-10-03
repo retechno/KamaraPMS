@@ -12,60 +12,54 @@ import (
 )
 
 const bedNightInventory = `-- name: BedNightInventory :many
-SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
+SELECT t.room_type_id::bigint AS room_type_id, t.bed_type_id::bigint AS bed_type_id, d.night::date AS night,
     (SELECT count(*) FROM rooms r
       WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
-        AND r.is_active AND r.bed_type_id = $3)::int AS rooms,
-    (SELECT count(*) FROM rooms r
-      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
-        AND r.is_active AND r.bed_type_id = $3
+        AND r.is_active AND r.bed_type_id = t.bed_type_id
         AND NOT EXISTS (SELECT 1 FROM room_blocks b
                          WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
                            AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
     (SELECT count(*) FROM rooms r
       WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = t.room_type_id
-        AND r.is_active AND r.bed_type_id = $3
+        AND r.is_active AND r.bed_type_id = t.bed_type_id
         AND (EXISTS (SELECT 1 FROM reservation_rooms l
                       WHERE l.property_id = r.property_id AND l.room_id = r.id AND l.status = 'CONFIRMED'
                         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
           OR EXISTS (SELECT 1 FROM stay_rooms sr
                       JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
                       WHERE sr.property_id = r.property_id AND sr.room_id = r.id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-                        AND $4::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $5::date))))::int AS held
-FROM unnest($6::bigint[]) AS t (room_type_id)
-CROSS JOIN unnest($7::text[]) AS d (night)
-ORDER BY t.room_type_id, d.night
+                        AND $3::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $4::date))))::int AS held
+FROM (SELECT DISTINCT room_type_id, bed_type_id FROM rooms
+       WHERE tenant_id = $1 AND property_id = $2 AND is_active AND bed_type_id IS NOT NULL) AS t
+CROSS JOIN unnest($5::text[]) AS d (night)
+ORDER BY t.room_type_id, t.bed_type_id, d.night
 `
 
 type BedNightInventoryParams struct {
 	TenantID     int64
 	PropertyID   int64
-	BedTypeID    *int64
 	BusinessDate civil.Date
 	NextDate     civil.Date
-	RoomTypeIds  []int64
 	Dates        []string
 }
 
 type BedNightInventoryRow struct {
 	RoomTypeID int64
+	BedTypeID  int64
 	Night      civil.Date
-	Rooms      int32
 	Sellable   int32
 	Held       int32
 }
 
-// The same per room type and night, but only for the rooms with one bed type, and only the rooms already assigned:
-// rooms = active rooms with the bed, sellable = those without an active block, held = those held by a CONFIRMED line
-// assigned to them or by an open stay. Bookings without a room are not counted (they may end up in any bed).
+// The same per (room type, bed type) pair of the active rooms with a bed, per night, counting only the rooms with that bed: sellable = active rooms
+// with the bed and without an active block, held = those held by a CONFIRMED line assigned to them or by an open
+// stay. Bookings without a room are not counted (they may end up in any bed).
 func (q *Queries) BedNightInventory(ctx context.Context, arg BedNightInventoryParams) ([]BedNightInventoryRow, error) {
 	rows, err := q.db.Query(ctx, bedNightInventory,
 		arg.TenantID,
 		arg.PropertyID,
-		arg.BedTypeID,
 		arg.BusinessDate,
 		arg.NextDate,
-		arg.RoomTypeIds,
 		arg.Dates,
 	)
 	if err != nil {
@@ -77,8 +71,8 @@ func (q *Queries) BedNightInventory(ctx context.Context, arg BedNightInventoryPa
 		var i BedNightInventoryRow
 		if err := rows.Scan(
 			&i.RoomTypeID,
+			&i.BedTypeID,
 			&i.Night,
-			&i.Rooms,
 			&i.Sellable,
 			&i.Held,
 		); err != nil {
@@ -267,6 +261,55 @@ func (q *Queries) ListFreeRooms(ctx context.Context, arg ListFreeRoomsParams) ([
 			&i.BedTypeID,
 			&i.BedTypeCode,
 			&i.BedTypeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoomBeds = `-- name: ListRoomBeds :many
+SELECT r.room_type_id, r.bed_type_id::bigint AS bed_type_id, bt.code, bt.name, count(*)::int AS rooms
+FROM rooms r
+JOIN bed_types bt ON bt.property_id = r.property_id AND bt.id = r.bed_type_id
+WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.is_active AND r.bed_type_id IS NOT NULL
+GROUP BY r.room_type_id, r.bed_type_id, bt.code, bt.name, bt.sort_order
+ORDER BY r.room_type_id, bt.sort_order, bt.code
+`
+
+type ListRoomBedsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListRoomBedsRow struct {
+	RoomTypeID int64
+	BedTypeID  int64
+	Code       string
+	Name       string
+	Rooms      int32
+}
+
+// The (room type, bed type) pairs of the active rooms with a bed, and how many rooms each has.
+func (q *Queries) ListRoomBeds(ctx context.Context, arg ListRoomBedsParams) ([]ListRoomBedsRow, error) {
+	rows, err := q.db.Query(ctx, listRoomBeds, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoomBedsRow{}
+	for rows.Next() {
+		var i ListRoomBedsRow
+		if err := rows.Scan(
+			&i.RoomTypeID,
+			&i.BedTypeID,
+			&i.Code,
+			&i.Name,
+			&i.Rooms,
 		); err != nil {
 			return nil, err
 		}

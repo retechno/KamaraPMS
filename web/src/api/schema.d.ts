@@ -1357,7 +1357,9 @@ export interface paths {
          *     Per active room type and night: `sellable` (active rooms without an OOO/OOS block), `blocked` (active rooms that
          *     are blocked), `held` (rooms held by CONFIRMED lines and open stays, counted per room type as the availability
          *     engine does), `available` (`sellable - held`, negative when the type is oversold) and the occupancy in percent.
-         *     `totals` adds the types up per night.
+         *     `totals` adds the types up per night. With `by_bed=true` each room type also lists `beds`: per bed type of its active
+         *     rooms the same numbers, counted over the rooms with that bed and only the bookings already assigned to a room (a
+         *     booking without a room may end up in any bed, so it is not counted). The totals stay per room type.
          */
         get: operations["getAvailabilityCalendar"];
         put?: never;
@@ -6061,6 +6063,16 @@ export interface components {
                 /** @description The active rooms of the type. */
                 rooms_total: number;
                 nights: components["schemas"]["CalendarNight"][];
+                /** @description Only with by_bed=true; in the catalogue order. Bed types the type has no room with are not listed. */
+                beds?: {
+                    /** Format: int64 */
+                    bed_type_id: number;
+                    code: string;
+                    name: string;
+                    /** @description The active rooms of the type with this bed. */
+                    rooms_total: number;
+                    nights: components["schemas"]["CalendarNight"][];
+                }[];
             }[];
             /** @description The whole property, one entry per night. */
             totals: {
@@ -11048,8 +11060,8 @@ export interface operations {
                 from: components["schemas"]["Date"];
                 /** @description Exclusive. */
                 to: components["schemas"]["Date"];
-                /** @description Only the rooms with this bed type, and only the bookings already assigned to a room; room types without such a room are left out. 422 BED_TYPE_NOT_FOUND for an unknown bed type. */
-                bed_type_id?: number;
+                /** @description true adds `beds` to every room type: the same numbers per bed type of its rooms (see description). */
+                by_bed?: boolean;
             };
             header?: never;
             path: {
