@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -340,9 +341,32 @@ type rateRow struct {
 
 type pricedLine struct {
 	ratePlanID   int64
+	kind         string // the rate plan's occupancy kind
 	chargeCodeID int64
 	priceMode    string
 	rows         []rateRow
+}
+
+// occupancyReason applies the rule of complimentary and house use rooms to a priced line. A PAID line keeps no
+// reason. Any other kind needs a reason, and booking it (a new line, or a changed plan) needs
+// reservation.complimentary. It returns the reason to store.
+func (s *Service) occupancyReason(ctx context.Context, propertyID int64, prefix, kind, reason string, booking bool) (*string, error) {
+	if kind == rates.KindPaid {
+		return nil, nil
+	}
+	if booking {
+		if err := s.authz.Require(ctx, propertyID, auth.PermReservationComplimentary); err != nil {
+			return nil, err
+		}
+	}
+	reason = strings.TrimSpace(reason)
+	switch {
+	case reason == "":
+		return nil, apperr.Invalid("the room is invalid", fieldErr(prefix+"occupancy_reason", "REQUIRED", "say why the room is complimentary or for house use"))
+	case len([]rune(reason)) > 500:
+		return nil, apperr.Invalid("the room is invalid", fieldErr(prefix+"occupancy_reason", "TOO_LONG", "at most 500 characters"))
+	}
+	return &reason, nil
 }
 
 // priceLine prices every night of [arrival, departure) from the grid; overrides replace single nights and
@@ -390,7 +414,10 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		gridBy[n.Date] = n
 	}
 	var unpriced []string
-	out := pricedLine{ratePlanID: grid.RatePlanID, chargeCodeID: grid.RoomChargeCodeID, priceMode: grid.PriceMode}
+	if grid.OccupancyKind != rates.KindPaid && len(overrides) > 0 {
+		return pricedLine{}, apperr.Invalid("the override is invalid", fieldErr(prefix+"nightly_overrides", "OVERRIDE_NOT_ALLOWED", "a complimentary or house use room is not priced"))
+	}
+	out := pricedLine{ratePlanID: grid.RatePlanID, kind: grid.OccupancyKind, chargeCodeID: grid.RoomChargeCodeID, priceMode: grid.PriceMode}
 	for _, m := range missing {
 		if _, ok := byDate[m]; !ok && !keep[m] {
 			unpriced = append(unpriced, m.String())

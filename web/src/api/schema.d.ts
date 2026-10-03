@@ -5506,6 +5506,13 @@ export interface components {
          * @enum {string}
          */
         MealPlan: "RO" | "BB" | "HB" | "FB" | "AI";
+        /**
+         * @description Of a rate plan. COMPLIMENTARY (a guest who does not pay) and HOUSE_USE (a room used by the hotel) are priced at
+         *     zero: every night costs 0 without a grid rate, price overrides are refused (422 `OVERRIDE_NOT_ALLOWED`), and the
+         *     room charge posts as 0 (no service, no tax). Booking one needs `reservation.complimentary` and a reason.
+         * @enum {string}
+         */
+        OccupancyKind: "PAID" | "COMPLIMENTARY" | "HOUSE_USE";
         RatePlan: {
             /** Format: int64 */
             id: number;
@@ -5520,6 +5527,7 @@ export interface components {
             /** @description Code of the room charge code. */
             room_charge_code: string;
             price_mode: components["schemas"]["PriceMode"];
+            occupancy_kind: components["schemas"]["OccupancyKind"];
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -5540,6 +5548,11 @@ export interface components {
             is_refundable: boolean;
             /** Format: int64 */
             room_charge_code_id: number;
+            /**
+             * @description Fixed when the plan is created; it cannot be changed.
+             * @default PAID
+             */
+            occupancy_kind: components["schemas"]["OccupancyKind"];
             /** @default true */
             is_active: boolean;
         };
@@ -5617,6 +5630,7 @@ export interface components {
             code: string;
             name: string;
             price_mode: components["schemas"]["PriceMode"];
+            occupancy_kind: components["schemas"]["OccupancyKind"];
             nightly: components["schemas"]["NightAmount"][];
             /** @description Nights without a rate; the plan cannot be booked without overrides when above 0. */
             missing_nights: number;
@@ -5680,6 +5694,8 @@ export interface components {
              * @description The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`.
              */
             bed_type_id?: number;
+            /** @description Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan. */
+            occupancy_reason?: string;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         CreateReservationRequest: {
@@ -5758,6 +5774,8 @@ export interface components {
              * @description The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed
              */
             bed_type_id?: number;
+            /** @description The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason. */
+            occupancy_reason?: string;
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AssignRoomRequest: {
@@ -5903,6 +5921,10 @@ export interface components {
             bed_type_id?: number | null;
             bed_type_code?: string;
             bed_type_name?: string;
+            /** @description Of the rate plan of the line. */
+            occupancy_kind: components["schemas"]["OccupancyKind"];
+            /** @description Why the room is free (complimentary and house use only). */
+            occupancy_reason?: string;
             /** Format: int64 */
             room_id: number | null;
             room_number?: string;
@@ -6049,6 +6071,10 @@ export interface components {
             held: number;
             /** @description Sellable minus held; negative when oversold. */
             available: number;
+            /** @description Held rooms that belong to a COMPLIMENTARY rate plan (a part of held). */
+            complimentary: number;
+            /** @description Held rooms that belong to a HOUSE_USE rate plan (a part of held). */
+            house_use: number;
             /** @description Held in percent of sellable */
             occupancy_percent: string;
             /** @description Rooms of open stays held that night (a part of held). */
@@ -6091,6 +6117,8 @@ export interface components {
                 in_house: number;
                 arrivals: number;
                 reservations: number;
+                complimentary: number;
+                house_use: number;
             }[];
         };
         TapeChart: {
@@ -6357,6 +6385,8 @@ export interface components {
             /** @default false */
             override_room_not_ready: boolean;
             override_reason?: string;
+            /** @description Why the room is free. Required when the rate plan is COMPLIMENTARY or HOUSE_USE (which also need `reservation.complimentary`). */
+            occupancy_reason?: string;
         };
         ReverseCheckInRequest: {
             /**

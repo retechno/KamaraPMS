@@ -319,15 +319,17 @@ func (h *Handler) addRoom(w http.ResponseWriter, r *http.Request) error {
 }
 
 type patchRoomRequest struct {
-	Version    int32           `json:"version"`
-	Arrival    *civil.Date     `json:"arrival_date"`
-	Departure  *civil.Date     `json:"departure_date"`
-	RoomTypeID *int64          `json:"room_type_id"`
-	RatePlanID *int64          `json:"rate_plan_id"`
-	Adults     *int            `json:"adult_count"`
-	Children   *int            `json:"child_count"`
-	BedTypeID  *int64          `json:"bed_type_id"`
-	Overrides  []NightOverride `json:"nightly_overrides"`
+	Version    int32       `json:"version"`
+	Arrival    *civil.Date `json:"arrival_date"`
+	Departure  *civil.Date `json:"departure_date"`
+	RoomTypeID *int64      `json:"room_type_id"`
+	RatePlanID *int64      `json:"rate_plan_id"`
+	Adults     *int        `json:"adult_count"`
+	Children   *int        `json:"child_count"`
+	BedTypeID  *int64      `json:"bed_type_id"`
+	// OccupancyReason is the reason of a complimentary or house use room.
+	OccupancyReason *string         `json:"occupancy_reason"`
+	Overrides       []NightOverride `json:"nightly_overrides"`
 }
 
 func (h *Handler) patchRoom(w http.ResponseWriter, r *http.Request) error {

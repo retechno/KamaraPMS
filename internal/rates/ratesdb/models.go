@@ -28,6 +28,7 @@ type RatePlan struct {
 	CreatedBy          *int64
 	UpdatedAt          time.Time
 	UpdatedBy          *int64
+	OccupancyKind      string
 }
 
 type YieldRule struct {

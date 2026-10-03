@@ -35,7 +35,7 @@ const guestQuery = ref('')
 const guestResults = ref<Guest[]>([])
 const guest = ref<Guest | null>(null)
 const beds = ref<BedType[]>([])
-const form = reactive({ source: 'PHONE' as ReservationSource, bedTypeId: 0, confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
+const form = reactive({ source: 'PHONE' as ReservationSource, bedTypeId: 0, occupancyReason: '', confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
 const companies = ref<Company[]>([])
 const groups = ref<Group[]>([])
 const chosenGroup = computed(() => groups.value.find((g) => g.id === form.groupId))
@@ -152,6 +152,7 @@ async function loadBeds(): Promise<void> {
 
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
+  form.occupancyReason = ''
   idempotencyKey = newIdempotencyKey()
   error.value = null
   void loadLinks()
@@ -192,6 +193,7 @@ async function book(): Promise<void> {
           adult_count: search.adults,
           child_count: search.children,
           bed_type_id: form.bedTypeId || undefined,
+          occupancy_reason: picked.value.plan.occupancy_kind !== 'PAID' ? form.occupancyReason : undefined,
         }],
       },
     })
@@ -246,7 +248,7 @@ async function book(): Promise<void> {
           <template #cell-left="{ row: o }"><span :class="o.type.available_min < 1 && 'font-semibold text-destructive'">{{ o.type.available_min }}</span></template>
           <template #cell-plan="{ row: o }">
             <small v-if="!o.plan" class="text-muted-foreground">{{ t('newReservation.noPlan') }}</small>
-            <template v-else>{{ o.plan.code }} <small class="text-muted-foreground">{{ o.plan.price_mode === 'INCLUSIVE' ? t('newReservation.inclusive') : t('newReservation.exclusive') }}</small></template>
+            <template v-else>{{ o.plan.code }} <Badge v-if="o.plan.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${o.plan.code}`">{{ t(`occupancy.kind_${o.plan.occupancy_kind}`) }}</Badge> <small class="text-muted-foreground">{{ o.plan.price_mode === 'INCLUSIVE' ? t('newReservation.inclusive') : t('newReservation.exclusive') }}</small></template>
           </template>
           <template #cell-estimate="{ row: o }">
             <template v-if="o.plan">
@@ -302,6 +304,11 @@ async function book(): Promise<void> {
                   <option :value="0">{{ t('bedTypes.noPreference') }}</option>
                   <option v-for="b in beds" :key="b.id" :value="b.id">{{ b.name }}</option>
                 </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="picked.plan.occupancy_kind !== 'PAID'" :label="t('occupancy.reason')" :error="fieldError('rooms[0].occupancy_reason')">
+              <template #default="{ id, invalid }">
+                <Input :id="id" v-model="form.occupancyReason" name="occupancy_reason" :placeholder="t('occupancy.reasonHint')" :aria-invalid="invalid" />
               </template>
             </FormField>
             <FormField :label="t('newReservation.remarks')">

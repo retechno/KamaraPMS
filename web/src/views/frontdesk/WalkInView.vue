@@ -29,7 +29,7 @@ const guestQuery = ref('')
 const guestResults = ref<Guest[]>([])
 const guest = ref<Guest | null>(null)
 const newGuest = reactive({ first_name: '', last_name: '' })
-const form = reactive({ typeId: 0, roomId: null as number | null, planId: 0, departure: '', adults: 1, children: 0, override: false, reason: '' })
+const form = reactive({ typeId: 0, roomId: null as number | null, planId: 0, departure: '', adults: 1, children: 0, override: false, reason: '', occupancyReason: '' })
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 let key = newIdempotencyKey()
@@ -39,7 +39,10 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 const allowed = computed(() => auth.can('frontdesk.checkin', pid.value) && auth.can('reservation.create', pid.value))
 const requiresInspection = computed(() => property.current?.require_room_inspection_for_checkin ?? false)
 const activeTypes = computed(() => types.value.filter((t) => t.is_active))
-const activePlans = computed(() => plans.value.filter((p) => p.is_active))
+// Complimentary and house use plans are offered only to who may book them.
+const canGiveFree = computed(() => auth.can('reservation.complimentary', pid.value))
+const activePlans = computed(() => plans.value.filter((p) => p.is_active && (p.occupancy_kind === 'PAID' || canGiveFree.value)))
+const chosenPlan = computed(() => plans.value.find((p) => p.id === form.planId))
 const selected = computed(() => rooms.value.find((r) => r.room_id === form.roomId))
 const isReady = (s: string) => (requiresInspection.value ? s === 'INSPECTED' : s === 'CLEAN' || s === 'INSPECTED')
 const notReady = computed(() => !!selected.value && !isReady(selected.value.housekeeping_status))
@@ -100,6 +103,7 @@ async function submit(): Promise<void> {
         guest_id: guest.value?.id, new_guest: guest.value ? undefined : { first_name: newGuest.first_name || undefined, last_name: newGuest.last_name },
         room_id: form.roomId, rate_plan_id: form.planId, departure_date: form.departure, adult_count: form.adults, child_count: form.children,
         override_room_not_ready: form.override, override_reason: form.override ? form.reason : undefined,
+        occupancy_reason: chosenPlan.value && chosenPlan.value.occupancy_kind !== 'PAID' ? form.occupancyReason : undefined,
       },
     })
     if (data) await router.push(`/stays/${data.stay.id}`)
@@ -153,9 +157,12 @@ watch(businessDate, (bd) => {
           <FormField :label="t('walkIn.ratePlan')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model.number="form.planId" name="rate_plan">
-                <option v-for="p in activePlans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
+                <option v-for="p in activePlans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}{{ p.occupancy_kind !== 'PAID' ? ` (${t(`occupancy.kind_${p.occupancy_kind}`)})` : '' }}</option>
               </NativeSelect>
             </template>
+          </FormField>
+          <FormField v-if="chosenPlan && chosenPlan.occupancy_kind !== 'PAID'" :label="t('occupancy.reason')" :error="fieldError('rooms[0].occupancy_reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.occupancyReason" name="occupancy_reason" :placeholder="t('occupancy.reasonHint')" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('walkIn.adults')" :error="fieldError('adult_count')">
             <template #default="{ id, invalid }"><Input :id="id" v-model.number="form.adults" name="adults" type="number" min="1" :aria-invalid="invalid" /></template>

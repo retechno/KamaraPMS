@@ -43,6 +43,7 @@ type WalkInInput struct {
 	AdultCount           int                          `json:"adult_count"`
 	ChildCount           int                          `json:"child_count"`
 	NightlyOverrides     []reservations.NightOverride `json:"nightly_overrides"`
+	OccupancyReason      string                       `json:"occupancy_reason"` // why the room is free, on a complimentary or house use plan
 	AccompanyingGuestIDs []int64                      `json:"accompanying_guest_ids"`
 	OverrideRoomNotReady bool                         `json:"override_room_not_ready"`
 	OverrideReason       string                       `json:"override_reason"`

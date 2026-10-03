@@ -62,6 +62,8 @@ func (s *Service) Inventory(ctx context.Context, tenantID, propertyID int64, typ
 // night (lines arriving plus stays, walk-ins included, whose arrival date it is). Demand = InHouse + Reservations.
 type Parts struct {
 	InHouse, Arrivals, Reservations int
+	// Complimentary and HouseUse are the held rooms (either way) that belong to a rate plan of that occupancy kind.
+	Complimentary, HouseUse int
 }
 
 // Breakdown returns the parts of the demand per room type and night.
@@ -80,7 +82,7 @@ func (s *Service) Breakdown(ctx context.Context, tenantID, propertyID int64, typ
 		if out[r.RoomTypeID] == nil {
 			out[r.RoomTypeID] = map[civil.Date]Parts{}
 		}
-		out[r.RoomTypeID][r.Night] = Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}
+		out[r.RoomTypeID][r.Night] = Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations), Complimentary: int(r.Complimentary), HouseUse: int(r.HouseUse)}
 	}
 	return out, nil
 }
@@ -133,7 +135,7 @@ func (s *Service) BedInventory(ctx context.Context, tenantID, propertyID int64, 
 		if out[k] == nil {
 			out[k] = map[civil.Date]BedNight{}
 		}
-		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held), Parts: Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations)}}
+		out[k][r.Night] = BedNight{Sellable: int(r.Sellable), Held: int(r.Held), Parts: Parts{InHouse: int(r.InHouse), Arrivals: int(r.Arrivals), Reservations: int(r.Reservations), Complimentary: int(r.Complimentary), HouseUse: int(r.HouseUse)}}
 	}
 	return out, nil
 }
@@ -408,6 +410,8 @@ type SellablePlan struct {
 	Code      string
 	Name      string
 	PriceMode string
+	// Kind is the plan's occupancy kind: PAID, COMPLIMENTARY or HOUSE_USE.
+	Kind string
 }
 
 // SellablePlans lists the active rate plans of the property.
@@ -418,7 +422,7 @@ func (s *Service) SellablePlans(ctx context.Context, tenantID, propertyID int64)
 	}
 	out := make([]SellablePlan, len(rows))
 	for i, r := range rows {
-		out[i] = SellablePlan{ID: r.ID, Code: r.Code, Name: r.Name, PriceMode: r.PriceMode}
+		out[i] = SellablePlan{ID: r.ID, Code: r.Code, Name: r.Name, PriceMode: r.PriceMode, Kind: r.OccupancyKind}
 	}
 	return out, nil
 }

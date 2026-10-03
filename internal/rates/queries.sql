@@ -3,10 +3,10 @@
 -- name: CreateRatePlan :one
 INSERT INTO rate_plans (
     tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable,
-    room_charge_code_id, is_active, created_by, updated_by
+    room_charge_code_id, occupancy_kind, is_active, created_by, updated_by
 ) VALUES (
     @tenant_id, @property_id, @code, @name, sqlc.narg(rate_plan_description), @meal_plan, sqlc.narg(cancellation_policy), @is_refundable,
-    @room_charge_code_id, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id)
+    @room_charge_code_id, @occupancy_kind, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id)
 )
 RETURNING *;
 

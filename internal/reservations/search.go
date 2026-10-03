@@ -2,6 +2,7 @@ package reservations
 
 import (
 	"context"
+	"slices"
 
 	"github.com/shopspring/decimal"
 
@@ -11,6 +12,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/rates"
 )
 
 // NightAmount is a priced night.
@@ -22,10 +24,12 @@ type NightAmount struct {
 // PlanOffer is a rate plan's price for the searched nights. A plan with nights that have no rate is shown
 // with missing_nights and no estimate: it cannot be booked without overrides.
 type PlanOffer struct {
-	ID            int64         `json:"id"`
-	Code          string        `json:"code"`
-	Name          string        `json:"name"`
-	PriceMode     string        `json:"price_mode"`
+	ID        int64  `json:"id"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	PriceMode string `json:"price_mode"`
+	// OccupancyKind is PAID, COMPLIMENTARY or HOUSE_USE; the last two are only offered to who may book them.
+	OccupancyKind string        `json:"occupancy_kind"`
 	Nightly       []NightAmount `json:"nightly"`
 	MissingNights int           `json:"missing_nights"`
 	Estimate      *Estimate     `json:"estimate"`
@@ -79,6 +83,9 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 	if err != nil {
 		return SearchResult{}, err
 	}
+	if s.authz.Require(ctx, propertyID, auth.PermReservationComplimentary) != nil {
+		plans = slices.DeleteFunc(plans, func(pl availability.SellablePlan) bool { return pl.Kind != rates.KindPaid })
+	}
 	typeIDs := make([]int64, len(types))
 	for i, t := range types {
 		typeIDs[i] = t.ID
@@ -121,7 +128,7 @@ func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID in
 	if err != nil {
 		return PlanOffer{}, err
 	}
-	po := PlanOffer{ID: pl.ID, Code: pl.Code, Name: pl.Name, PriceMode: prices.PriceMode, Nightly: make([]NightAmount, len(prices.Nights)), MissingNights: len(missing)}
+	po := PlanOffer{ID: pl.ID, Code: pl.Code, Name: pl.Name, PriceMode: prices.PriceMode, OccupancyKind: pl.Kind, Nightly: make([]NightAmount, len(prices.Nights)), MissingNights: len(missing)}
 	charges := make([]billingconfig.NightCharge, len(prices.Nights))
 	for i, n := range prices.Nights {
 		po.Nightly[i] = NightAmount{Date: n.Date, Amount: n.Amount}

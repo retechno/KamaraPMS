@@ -26,6 +26,9 @@ type CalendarNight struct {
 	InHouse      int `json:"in_house"`
 	Arrivals     int `json:"arrivals"`
 	Reservations int `json:"reservations"`
+	// Complimentary and HouseUse are the held rooms given free or used by the hotel (parts of Held, sold at zero).
+	Complimentary int `json:"complimentary"`
+	HouseUse      int `json:"house_use"`
 }
 
 // CalendarType is the nights of one active room type.
@@ -59,6 +62,8 @@ type CalendarTotal struct {
 	InHouse          int             `json:"in_house"`
 	Arrivals         int             `json:"arrivals"`
 	Reservations     int             `json:"reservations"`
+	Complimentary    int             `json:"complimentary"`
+	HouseUse         int             `json:"house_use"`
 }
 
 // Calendar is the availability of every active room type over a window of nights [From, To).
@@ -126,7 +131,7 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	}
 	night := func(d civil.Date, rooms, sellable, held int, pt availability.Parts) CalendarNight {
 		occ := availability.Occupancy{Sellable: sellable, Booked: held}
-		return CalendarNight{Date: d, Sellable: sellable, Blocked: rooms - sellable, Held: held, Available: sellable - held, OccupancyPercent: occ.Percent(), InHouse: pt.InHouse, Arrivals: pt.Arrivals, Reservations: pt.Reservations}
+		return CalendarNight{Date: d, Sellable: sellable, Blocked: rooms - sellable, Held: held, Available: sellable - held, OccupancyPercent: occ.Percent(), InHouse: pt.InHouse, Arrivals: pt.Arrivals, Reservations: pt.Reservations, Complimentary: pt.Complimentary, HouseUse: pt.HouseUse}
 	}
 	for _, t := range types {
 		ct := CalendarType{RoomTypeID: t.ID, Code: t.Code, Name: t.Name, RoomsTotal: totals[t.ID], Nights: make([]CalendarNight, len(nights))}
@@ -142,6 +147,8 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 			tot.InHouse += pt.InHouse
 			tot.Arrivals += pt.Arrivals
 			tot.Reservations += pt.Reservations
+			tot.Complimentary += pt.Complimentary
+			tot.HouseUse += pt.HouseUse
 		}
 		for _, b := range beds {
 			if b.RoomTypeID != t.ID {

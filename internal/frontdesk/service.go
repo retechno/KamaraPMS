@@ -496,7 +496,7 @@ func (s *Service) WalkIn(ctx context.Context, propertyID int64, key string, in W
 				res, err := s.res.CreateHeld(ctx, propertyID, bd, reservations.CreateInput{
 					GuestID: &guestID, Source: "WALK_IN", Confirm: true, Rooms: []reservations.LineInput{{
 						RoomTypeID: room.RoomTypeID, RatePlanID: in.RatePlanID, Arrival: bd, Departure: in.DepartureDate, Adults: in.AdultCount, Children: in.ChildCount,
-						RoomID: &in.RoomID, Overrides: in.NightlyOverrides,
+						RoomID: &in.RoomID, Overrides: in.NightlyOverrides, OccupancyReason: in.OccupancyReason,
 					}},
 				})
 				if err != nil {

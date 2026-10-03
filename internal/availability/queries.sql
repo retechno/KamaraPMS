@@ -30,7 +30,8 @@ CROSS JOIN unnest(@dates::text[]) AS d (night)
 ORDER BY t.room_type_id, d.night;
 
 -- The parts of demand per room type and night, for the detailed availability calendar: in_house = rooms of open stays,
--- reservations = CONFIRMED lines (not checked in yet), so demand = in_house + reservations; arrivals = rooms that
+-- reservations = CONFIRMED lines (not checked in yet), so demand = in_house + reservations; complimentary and
+-- house_use = the rooms of demand that belong to a rate plan of that occupancy kind (a part of it, whichever of the two); arrivals = rooms that
 -- arrive that night: CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is.
 -- name: NightBreakdown :many
 SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
@@ -53,7 +54,35 @@ SELECT t.room_type_id::bigint AS room_type_id, d.night::date AS night,
        LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
         AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id
-        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+        LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND rp.occupancy_kind = 'COMPLIMENTARY'
+         AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN reservation_rooms sl ON sl.property_id = s.property_id AND sl.id = s.reservation_room_id
+         JOIN rate_plans srp ON srp.property_id = sl.property_id AND srp.id = sl.rate_plan_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND srp.occupancy_kind = 'COMPLIMENTARY' AND sroom.room_type_id = t.room_type_id
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS complimentary,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+        LEFT JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND rp.occupancy_kind = 'HOUSE_USE'
+         AND COALESCE(lr.room_type_id, l.room_type_id) = t.room_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN reservation_rooms sl ON sl.property_id = s.property_id AND sl.id = s.reservation_room_id
+         JOIN rate_plans srp ON srp.property_id = sl.property_id AND srp.id = sl.rate_plan_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND srp.occupancy_kind = 'HOUSE_USE' AND sroom.room_type_id = t.room_type_id
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS house_use
 FROM unnest(@room_type_ids::bigint[]) AS t (room_type_id)
 CROSS JOIN unnest(@dates::text[]) AS d (night)
 ORDER BY t.room_type_id, d.night;
@@ -98,7 +127,35 @@ SELECT t.room_type_id::bigint AS room_type_id, t.bed_type_id::bigint AS bed_type
        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
         AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id
-        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)::int AS reservations,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND rp.occupancy_kind = 'COMPLIMENTARY'
+         AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN reservation_rooms sl ON sl.property_id = s.property_id AND sl.id = s.reservation_room_id
+         JOIN rate_plans srp ON srp.property_id = sl.property_id AND srp.id = sl.rate_plan_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND srp.occupancy_kind = 'COMPLIMENTARY' AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS complimentary,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND rp.occupancy_kind = 'HOUSE_USE'
+         AND lr.room_type_id = t.room_type_id AND lr.bed_type_id = t.bed_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date)
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN reservation_rooms sl ON sl.property_id = s.property_id AND sl.id = s.reservation_room_id
+         JOIN rate_plans srp ON srp.property_id = sl.property_id AND srp.id = sl.rate_plan_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND srp.occupancy_kind = 'HOUSE_USE' AND sroom.room_type_id = t.room_type_id AND sroom.bed_type_id = t.bed_type_id
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS house_use
 FROM (SELECT DISTINCT room_type_id, bed_type_id FROM rooms
        WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active AND bed_type_id IS NOT NULL) AS t
 CROSS JOIN unnest(@dates::text[]) AS d (night)
@@ -199,7 +256,7 @@ ORDER BY sort_order, code;
 
 -- Active rate plans with the room charge code they sell through.
 -- name: ListSellableRatePlans :many
-SELECT p.id, p.code, p.name, p.meal_plan, p.is_refundable, p.room_charge_code_id, c.price_mode
+SELECT p.id, p.code, p.name, p.meal_plan, p.is_refundable, p.room_charge_code_id, p.occupancy_kind, c.price_mode
 FROM rate_plans p JOIN charge_codes c ON c.property_id = p.property_id AND c.id = p.room_charge_code_id
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.is_active
 ORDER BY p.code;

@@ -63,9 +63,9 @@ async function loadBase(): Promise<void> {
       fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/rate-plans', { params: { ...path, query: { limit: 200, cursor } } })),
       fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { ...path, query: { limit: 200, cursor } } })),
     ])
-    plans.value = p
+    plans.value = p.filter((x) => x.occupancy_kind !== 'COMPLIMENTARY' && x.occupancy_kind !== 'HOUSE_USE') // free plans have no rates
     types.value = rt
-    planId.value = p.find((x) => x.is_active)?.id ?? p[0]?.id ?? 0
+    planId.value = plans.value.find((x) => x.is_active)?.id ?? plans.value[0]?.id ?? 0
     form.typeIds = activeTypes.value.map((x) => x.id)
     await loadGrid()
   } catch (e) {

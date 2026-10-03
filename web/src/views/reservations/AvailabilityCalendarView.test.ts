@@ -11,7 +11,7 @@ vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } })
 
 const night = (date: string, sellable: number, held: number, blocked = 0) => ({
   date, sellable, held, blocked, available: sellable - held, occupancy_percent: sellable ? String(Math.round((held / sellable) * 100)) : '0',
-  in_house: 0, arrivals: 0, reservations: held,
+  in_house: 0, arrivals: 0, reservations: held, complimentary: 0, house_use: 0,
 })
 const calendar = {
   from: '2026-10-01', to: '2026-10-15',
@@ -99,6 +99,19 @@ describe('AvailabilityCalendarView', () => {
     await flushPromises()
     // arrivals is the only one left: back to the compact view, with the arrivals in the type row
     expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('2')
+  })
+
+  it('can show the complimentary and house use rooms', async () => {
+    const night1 = { ...night('2026-10-01', 2, 2), complimentary: 1, house_use: 1 }
+    const w = mountView(['reservation.read'], { ...calendar, room_types: [{ ...calendar.room_types[0], nights: [night1, night('2026-10-02', 2, 1), night('2026-10-03', 2, 0)] }] })
+    await flushPromises()
+    await w.get('[data-testid=metrics-trigger]').trigger('click')
+    await flushPromises()
+    ;(document.body.querySelector('input[name=metric_complimentary]') as HTMLInputElement).click()
+    ;(document.body.querySelector('input[name=metric_house_use]') as HTMLInputElement).click()
+    await flushPromises()
+    expect(w.get('[data-testid=cell-DLX-complimentary-2026-10-01]').text()).toBe('1')
+    expect(w.get('[data-testid=cell-DLX-house_use-2026-10-01]').text()).toBe('1')
   })
 
   it('moves the window by a week', async () => {

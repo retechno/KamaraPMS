@@ -49,10 +49,10 @@ RETURNING *;
 -- name: InsertLine :one
 INSERT INTO reservation_rooms (
     tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date,
-    adult_count, child_count, requested_bed_type_id, status, created_by, updated_by
+    adult_count, child_count, requested_bed_type_id, occupancy_reason, status, created_by, updated_by
 ) VALUES (
     @tenant_id, @property_id, @reservation_id, sqlc.narg(guest_id), @room_type_id, sqlc.narg(room_id), @rate_plan_id, @arrival_date,
-    @departure_date, @adult_count, @child_count, sqlc.narg(requested_bed_type_id), @status, sqlc.narg(actor_id), sqlc.narg(actor_id)
+    @departure_date, @adult_count, @child_count, sqlc.narg(requested_bed_type_id), sqlc.narg(occupancy_reason), @status, sqlc.narg(actor_id), sqlc.narg(actor_id)
 )
 RETURNING *;
 
@@ -79,7 +79,7 @@ ORDER BY reservation_id, id;
 UPDATE reservation_rooms SET
     guest_id = sqlc.narg(guest_id), room_type_id = @room_type_id, room_id = sqlc.narg(room_id), rate_plan_id = @rate_plan_id,
     arrival_date = @arrival_date, departure_date = @departure_date, adult_count = @adult_count, child_count = @child_count,
-    requested_bed_type_id = sqlc.narg(requested_bed_type_id), status = @status, cancelled_at = sqlc.narg(cancelled_at), cancelled_by = sqlc.narg(cancelled_by),
+    requested_bed_type_id = sqlc.narg(requested_bed_type_id), occupancy_reason = sqlc.narg(occupancy_reason), status = @status, cancelled_at = sqlc.narg(cancelled_at), cancelled_by = sqlc.narg(cancelled_by),
     cancellation_reason = sqlc.narg(cancellation_reason), no_show_at = sqlc.narg(no_show_at), no_show_by = sqlc.narg(no_show_by),
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
@@ -173,7 +173,7 @@ SELECT id, code, name, is_active, max_adult, max_child, max_occupancy FROM room_
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
 
 -- name: ListRatePlanBriefs :many
-SELECT id, code, name FROM rate_plans WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
+SELECT id, code, name, occupancy_kind FROM rate_plans WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
 
 -- name: DeleteNightRate :exec
 DELETE FROM reservation_room_rates WHERE property_id = @property_id AND reservation_room_id = @line_id AND stay_date = @stay_date;

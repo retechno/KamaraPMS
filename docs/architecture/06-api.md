@@ -274,7 +274,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 ## 10. Rate plans and rates
 
 **GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`; read: any access to the property)
-- **Request:** `{ code, name, description?, meal_plan (RO|BB|HB|FB|AI), cancellation_policy?, is_refundable?, room_charge_code_id, is_active? }`. The code is upper-cased and immutable. Responses add `room_charge_code` (its code) and `price_mode` (the code's, i.e. how grid amounts are read).
+- **Request:** `{ code, name, description?, meal_plan (RO|BB|HB|FB|AI), cancellation_policy?, is_refundable?, room_charge_code_id, occupancy_kind? (PAID|COMPLIMENTARY|HOUSE_USE, default PAID), is_active? }`. The code is upper-cased and immutable, and so is `occupancy_kind` (the PATCH has no such field). A COMPLIMENTARY or HOUSE_USE plan is priced at zero: every night costs 0 without a grid rate, price overrides are refused (422 `OVERRIDE_NOT_ALLOWED`) and the room charge posts as a zero charge (no service, no tax). Booking one needs `reservation.complimentary` and an `occupancy_reason` on the line (422 `REQUIRED` on `occupancy_reason`); the availability search lists such plans only to who has the permission. The line shows `occupancy_kind` (its plan's) and `occupancy_reason`; the reason can be edited by PATCH of the line, and a paid plan keeps no reason. Responses add `room_charge_code` (its code) and `price_mode` (the code's, i.e. how grid amounts are read).
 - **Validation:** the room charge code is an active charge code of this property with `charge_type = ROOM` (404 `CHARGE_CODE_NOT_FOUND` for another property's, 422 `CHARGE_CODE_NOT_ROOM` on `room_charge_code_id` otherwise; a trigger backs it up).
 - **Rules:**
   - Changing `room_charge_code_id` affects **new** nightly snapshots only.
@@ -322,7 +322,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **TX:** `T[L1 share, L5]`. With `confirm: true`, it takes the confirm locks (L2, L3) before the sequence.
 
 **GET `{P}/availability/calendar?from&to`** (`reservation.read`)
-- **Purpose:** the availability of every active room type for each night of `[from, to)`, as a grid: `sellable`, `blocked`, `held`, `available` (`sellable - held`, negative when oversold) and `occupancy_percent` per type and night, the parts of `held` (`in_house` = rooms of open stays, `reservations` = rooms of CONFIRMED lines not yet checked in; `held = in_house + reservations`) and `arrivals` (rooms arriving that night: CONFIRMED lines arriving plus stays, walk-ins included, whose arrival date it is), and `totals` per night. At most 62 days.
+- **Purpose:** the availability of every active room type for each night of `[from, to)`, as a grid: `sellable`, `blocked`, `held`, `available` (`sellable - held`, negative when oversold) and `occupancy_percent` per type and night, the parts of `held` (`in_house` = rooms of open stays, `reservations` = rooms of CONFIRMED lines not yet checked in; `held = in_house + reservations`) and `arrivals` (rooms arriving that night: CONFIRMED lines arriving plus stays, walk-ins included, whose arrival date it is), and `totals` per night, and `complimentary` / `house_use` (the held rooms that belong to a plan of that occupancy kind; they stay part of `held`). At most 62 days.
 - **Optional `by_bed=true`:** each room type also lists `beds`: per bed type of its active rooms the same numbers, counted over the rooms with that bed. Only bookings already assigned to a room (and open stays) count there; a booking without a room may still end up in any bed, so it is not counted, and the bed rows can show more free rooms than the type row. The type rows and `totals` are unchanged. Bed type stays a description, not inventory: this is a view of the free rooms, not a rule for booking.
 - **Rules:** read-only and advisory (only booking decides); the numbers are the availability engine's own (`NightInventory`), so the calendar can never disagree with a booking attempt. Inactive rooms count nowhere; blocked rooms are `blocked`, not `sellable`.
 - **TX:** R
@@ -414,7 +414,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `{P}/walk-ins`** ⓘ (`frontdesk.checkin` + `reservation.create`)
 - **Purpose:** a walk-in.
-- **Request:** `{ guest_id | new_guest{...}, room_id, rate_plan_id, departure_date, adult_count, child_count, nightly_overrides?, accompanying_guest_ids? }`
+- **Request:** `{ guest_id | new_guest{...}, room_id, rate_plan_id, departure_date, adult_count, child_count, nightly_overrides?, occupancy_reason?, accompanying_guest_ids? }` (`occupancy_reason` as on a reservation line: required on a complimentary or house use plan)
 - **Response 201:** `{ reservation, stay, folio }`
 - **Rules:** arrival = BD, `source = WALK_IN`. Runs create, confirm, assign and check-in.
 - **TX:** a single `T[L1, L2, L3, L4, L5]`

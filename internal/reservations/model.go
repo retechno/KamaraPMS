@@ -73,8 +73,10 @@ type LineInput struct {
 	GuestID    *int64     `json:"guest_id,omitempty"`
 	RoomID     *int64     `json:"room_id,omitempty"`
 	// BedTypeID is the bed type the guest asks for: a request, not a reservation of inventory.
-	BedTypeID *int64          `json:"bed_type_id,omitempty"`
-	Overrides []NightOverride `json:"nightly_overrides,omitempty"`
+	BedTypeID *int64 `json:"bed_type_id,omitempty"`
+	// OccupancyReason is why the room is given free; required (and only kept) when the rate plan is COMPLIMENTARY or HOUSE_USE.
+	OccupancyReason string          `json:"occupancy_reason,omitempty"`
+	Overrides       []NightOverride `json:"nightly_overrides,omitempty"`
 }
 
 // CreateInput creates a draft, optionally confirming it in the same transaction.
@@ -121,7 +123,9 @@ type LinePatch struct {
 	Children   *int
 	// BedTypeID changes the requested bed type; 0 takes the request off.
 	BedTypeID *int64
-	Overrides []NightOverride
+	// OccupancyReason changes the reason of a complimentary or house use room.
+	OccupancyReason *string
+	Overrides       []NightOverride
 }
 
 // ListFilter narrows the reservation list.
@@ -231,6 +235,8 @@ type Line struct {
 	RoomNumber         string      `json:"room_number,omitempty"`
 	RatePlanID         int64       `json:"rate_plan_id"`
 	RatePlanCode       string      `json:"rate_plan_code"`
+	OccupancyKind      string      `json:"occupancy_kind"`
+	OccupancyReason    string      `json:"occupancy_reason,omitempty"`
 	GuestID            *int64      `json:"guest_id"`
 	Guest              *GuestName  `json:"guest,omitempty"`
 	ArrivalDate        civil.Date  `json:"arrival_date"`

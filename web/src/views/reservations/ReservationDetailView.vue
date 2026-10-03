@@ -120,6 +120,11 @@ const saveHeader = () => run(() => api.PATCH('/api/v1/properties/{propertyId}/re
 const saveBed = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
   params: lineParams(line.id), body: { version: version(), bed_type_id: bedPick[line.id] ?? line.bed_type_id ?? 0 },
 }))
+const reasonPick = reactive<Record<number, string>>({})
+const saveReason = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+  params: lineParams(line.id), body: { version: version(), occupancy_reason: reasonPick[line.id] ?? line.occupancy_reason ?? '' },
+}))
+const reasonChanged = (line: ReservationRoom) => (reasonPick[line.id] ?? line.occupancy_reason ?? '') !== (line.occupancy_reason ?? '')
 const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type_id ?? 0) !== (line.bed_type_id ?? 0)
 const unassign = (lineId: number) => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room', { params: lineParams(lineId), body: { version: version() } }))
 
@@ -253,6 +258,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <StatusBadge domain="reservation" :status="line.status" :data-testid="`line-status-${line.id}`" />
           <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
           <Badge v-if="line.bed_type_code" variant="outline" :data-testid="`bed-${line.id}`">{{ t('bedTypes.bed') }}: {{ line.bed_type_name || line.bed_type_code }}</Badge>
+          <Badge v-if="line.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${line.id}`">{{ t(`occupancy.kind_${line.occupancy_kind}`) }}</Badge>
           <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
           <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
         </CardHeader>
@@ -292,6 +298,16 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <Button v-if="canNoShow(line)" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-${line.id}`" @click="ask('no-show', line.id)">{{ t('reservation.noShow') }}</Button>
             <Button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" variant="outline" size="sm" class="text-destructive" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">{{ t('reservation.cancelRoom') }}</Button>
           </div>
+
+          <form v-if="line.occupancy_kind !== 'PAID' && (line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.update')" class="mt-3 flex flex-wrap items-end gap-3" novalidate :data-testid="`reason-form-${line.id}`" @submit.prevent="saveReason(line)">
+            <FormField class="w-80" :label="t('occupancy.reason')">
+              <template #default="{ id }">
+                <Input :id="id" :model-value="reasonPick[line.id] ?? line.occupancy_reason ?? ''" :name="`occupancy_reason_${line.id}`" @update:model-value="(v) => (reasonPick[line.id] = String(v))" />
+              </template>
+            </FormField>
+            <Button type="submit" variant="outline" size="sm" :disabled="busy || !reasonChanged(line)" :data-testid="`save-reason-${line.id}`">{{ t('common.save') }}</Button>
+          </form>
+          <p v-else-if="line.occupancy_reason" class="mb-0 mt-2 text-sm text-muted-foreground" :data-testid="`reason-${line.id}`">{{ t('occupancy.reason') }}: {{ line.occupancy_reason }}</p>
 
           <form v-if="beds.length && (line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.update')" class="mt-3 flex flex-wrap items-end gap-3" novalidate :data-testid="`bed-form-${line.id}`" @submit.prevent="saveBed(line)">
             <FormField class="w-56" :label="t('bedTypes.requested')">

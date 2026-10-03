@@ -140,6 +140,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		}
 		var fields []apperr.FieldError
 		priced := make([]pricedLine, len(in.Rooms))
+		reasons := make([]*string, len(in.Rooms))
 		holds := make([]hold, len(in.Rooms))
 		for i, l := range in.Rooms {
 			prefix := fmt.Sprintf("rooms[%d].", i)
@@ -164,7 +165,11 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			return apperr.Invalid("the reservation is invalid", fields...)
 		}
 		for i, l := range in.Rooms {
-			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, fmt.Sprintf("rooms[%d].", i), l.RatePlanID, l.RoomTypeID, l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
+			prefix := fmt.Sprintf("rooms[%d].", i)
+			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, prefix, l.RatePlanID, l.RoomTypeID, l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
+				return err
+			}
+			if reasons[i], err = s.occupancyReason(ctx, propertyID, prefix, priced[i].kind, l.OccupancyReason, true); err != nil {
 				return err
 			}
 		}
@@ -198,7 +203,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			line, err := q.InsertLine(ctx, reservationsdb.InsertLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, ReservationID: res.ID, GuestID: l.GuestID, RoomTypeID: l.RoomTypeID, RoomID: l.RoomID,
 				RatePlanID: l.RatePlanID, ArrivalDate: l.Arrival, DepartureDate: l.Departure, AdultCount: int16(l.Adults), ChildCount: int16(l.Children), //nolint:gosec // G115: bounded by validateOccupancy
-				RequestedBedTypeID: l.BedTypeID, Status: lineStatus, ActorID: p.ActorID(),
+				RequestedBedTypeID: l.BedTypeID, OccupancyReason: reasons[i], Status: lineStatus, ActorID: p.ActorID(),
 			})
 			if err != nil {
 				return err

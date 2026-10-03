@@ -47,13 +47,14 @@ const (
 	PermBillingConfigManage Permission = "billing_config.manage"
 	PermRateManage          Permission = "rate.manage"
 
-	PermReservationRead         Permission = "reservation.read"
-	PermReservationCreate       Permission = "reservation.create"
-	PermReservationUpdate       Permission = "reservation.update"
-	PermReservationCancel       Permission = "reservation.cancel"
-	PermReservationReinstate    Permission = "reservation.reinstate"
-	PermReservationOverrideRate Permission = "reservation.override_rate"
-	PermReservationUpgrade      Permission = "reservation.upgrade"
+	PermReservationRead          Permission = "reservation.read"
+	PermReservationCreate        Permission = "reservation.create"
+	PermReservationUpdate        Permission = "reservation.update"
+	PermReservationCancel        Permission = "reservation.cancel"
+	PermReservationReinstate     Permission = "reservation.reinstate"
+	PermReservationOverrideRate  Permission = "reservation.override_rate"
+	PermReservationUpgrade       Permission = "reservation.upgrade"
+	PermReservationComplimentary Permission = "reservation.complimentary"
 
 	PermFrontdeskCheckin            Permission = "frontdesk.checkin"
 	PermFrontdeskCheckinUnreadyRoom Permission = "frontdesk.checkin_unready_room"
@@ -132,6 +133,7 @@ var Catalogue = []PermissionInfo{
 	{PermReservationReinstate, "Reservations", "Reinstate cancelled reservations", "M8"},
 	{PermReservationOverrideRate, "Reservations", "Override nightly rates", "M8"},
 	{PermReservationUpgrade, "Reservations", "Assign upgraded rooms", "M8"},
+	{PermReservationComplimentary, "Reservations", "Book complimentary and house use rooms", "M8"},
 
 	{PermFrontdeskCheckin, "Front desk", "Check guests in (including walk-ins)", "M10"},
 	{PermFrontdeskCheckinUnreadyRoom, "Front desk", "Check in to a room that is not clean/inspected", "M10"},

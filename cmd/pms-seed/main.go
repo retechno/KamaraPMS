@@ -333,6 +333,10 @@ func seedRates(e *env, propertyCode, planCode string, days int, dryRun bool) err
 		fmt.Printf("rate plan %s exists\n", planCode)
 	}
 
+	if err := seedFreePlans(e, plans, dryRun); err != nil {
+		return err
+	}
+
 	day, err := e.ten.CurrentBusinessDay(ctx, propertyID)
 	if err != nil {
 		return err
@@ -394,4 +398,47 @@ func typeCodeAt(position int) string {
 		}
 	}
 	return types[0].code
+}
+
+// seedFreePlans adds the complimentary and house use plans (COMP, HOUSE) when the property has none with those codes.
+// They need no rates: a night on them costs nothing.
+func seedFreePlans(e *env, plans []rates.RatePlan, dryRun bool) error {
+	have := map[string]bool{}
+	for _, p := range plans {
+		have[p.Code] = true
+	}
+	free := []struct{ code, name, kind string }{
+		{"COMP", "Complimentary", rates.KindComplimentary},
+		{"HOUSE", "House Use", rates.KindHouseUse},
+	}
+	typeRoom := "ROOM"
+	for _, f := range free {
+		if have[f.code] {
+			fmt.Printf("rate plan %s exists\n", f.code)
+			continue
+		}
+		fmt.Printf("rate plan %s: to create (%s, no rates needed)\n", f.code, f.kind)
+		if dryRun {
+			continue
+		}
+		codes, err := e.bc.ListChargeCodes(e.ctx, e.propertyID, 0, billingconfig.ChargeCodeFilter{ChargeType: &typeRoom}, 50)
+		if err != nil {
+			return err
+		}
+		var charge int64
+		for _, c := range codes {
+			if c.Code == "ROOM" && c.IsActive {
+				charge = c.ID
+			}
+		}
+		if charge == 0 {
+			return fmt.Errorf("the property has no active ROOM charge code to sell rooms through")
+		}
+		if _, err := e.rt.CreateRatePlan(e.ctx, e.propertyID, rates.RatePlanInput{
+			Code: f.code, Name: f.name, Description: "Demo plan: " + f.name, MealPlan: "RO", IsRefundable: true, RoomChargeCodeID: charge, OccupancyKind: f.kind, IsActive: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

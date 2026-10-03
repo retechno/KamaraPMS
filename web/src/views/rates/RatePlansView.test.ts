@@ -18,7 +18,7 @@ const codes = [
 ]
 const bar = {
   id: 5, code: 'BAR', name: 'Best available', meal_plan: 'BB', is_refundable: true, room_charge_code_id: 3, room_charge_code: 'ROOM_OLD',
-  price_mode: 'EXCLUSIVE', is_active: true,
+  price_mode: 'EXCLUSIVE', occupancy_kind: 'PAID', is_active: true,
 }
 
 function mountView(permissions: string[] = ['rate.manage']) {
@@ -69,9 +69,25 @@ describe('RatePlansView', () => {
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/rate-plans', {
       params: { path: { propertyId: 7 } },
       body: {
-        code: 'NETT', name: 'Nett rate', description: '', meal_plan: 'HB', cancellation_policy: '', is_refundable: true, room_charge_code_id: 1, is_active: true,
+        code: 'NETT', name: 'Nett rate', description: '', meal_plan: 'HB', cancellation_policy: '', is_refundable: true, room_charge_code_id: 1, occupancy_kind: 'PAID', is_active: true,
       },
     })
+  })
+
+  it('creates a complimentary plan, and the kind cannot be changed afterwards', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=new-plan]').trigger('click')
+    expect(w.find('[data-testid=kind-hint]').exists()).toBe(false)
+    await w.get('input[name=code]').setValue('COMP')
+    await w.get('input[name=name]').setValue('Complimentary')
+    await w.get('select[name=occupancy_kind]').setValue('COMPLIMENTARY')
+    expect(w.find('[data-testid=kind-hint]').exists()).toBe(true)
+    await w.get('[data-testid=plan-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { code: 'COMP', occupancy_kind: 'COMPLIMENTARY' } })
+    await w.get('[data-testid=plan-BAR] button').trigger('click')
+    expect((w.get('select[name=occupancy_kind]').element as HTMLSelectElement).disabled).toBe(true)
   })
 
   it('keeps an unusable current code selectable while editing, and shows a price mode conflict', async () => {

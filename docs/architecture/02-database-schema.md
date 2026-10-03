@@ -583,6 +583,7 @@ There is no `is_inclusive` column (rejected).
 | cancellation_policy | text | YES | Text in the MVP |
 | is_refundable | boolean | NO | DEFAULT true |
 | room_charge_code_id | bigint | NO | FK → charge_codes. Its `charge_type` must be `ROOM` (service check). |
+| occupancy_kind | varchar(14) | NO | CHECK IN (`PAID`,`COMPLIMENTARY`,`HOUSE_USE`). DEFAULT `PAID`. Fixed at creation (the service has no way to change it), so the history of a plan never changes meaning. A non-PAID plan is priced at zero: no grid rate, no override, the room charge posts as 0. |
 | is_active | boolean | NO | |
 | [std] | | | |
 
@@ -629,6 +630,7 @@ There is no `is_inclusive` column (rejected).
 | departure_date | date | NO | CHECK `departure_date > arrival_date` |
 | adult_count | smallint | NO | CHECK ≥ 1 |
 | child_count | smallint | NO | CHECK ≥ 0 |
+| occupancy_reason | varchar(500) | YES | Why the room is free. Set exactly when the rate plan is `COMPLIMENTARY` or `HOUSE_USE` (a service rule, since the kind lives on the plan). |
 | requested_bed_type_id | bigint | YES | FK `(property_id, requested_bed_type_id) → bed_types`. The bed the guest asked for: a request, not a hold; any room of the booked type can still be assigned. |
 | status | varchar(12) | NO | CHECK IN (`DRAFT`,`CONFIRMED`,`CHECKED_IN`,`COMPLETED`,`CANCELLED`,`NO_SHOW`) |
 | cancelled_at, cancelled_by, cancellation_reason | | YES | CHECK `(status = 'CANCELLED') = (cancelled_at IS NOT NULL)` |

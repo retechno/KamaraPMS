@@ -50,9 +50,9 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	if err != nil {
 		return Reservation{}, err
 	}
-	planCode := map[int64]string{}
+	planCode, planKind := map[int64]string{}, map[int64]string{}
 	for _, pl := range plans {
-		planCode[pl.ID] = pl.Code
+		planCode[pl.ID], planKind[pl.ID] = pl.Code, pl.OccupancyKind
 	}
 	bedIDs := make([]int64, 0, len(lines))
 	for _, l := range lines {
@@ -141,7 +141,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	for i, l := range lines {
 		line := Line{
 			ID: l.ID, Status: l.Status, RoomTypeID: l.RoomTypeID, RoomTypeCode: typeCode[l.RoomTypeID], RoomID: l.RoomID,
-			RatePlanID: l.RatePlanID, RatePlanCode: planCode[l.RatePlanID], GuestID: l.GuestID, ArrivalDate: l.ArrivalDate,
+			RatePlanID: l.RatePlanID, RatePlanCode: planCode[l.RatePlanID], OccupancyKind: planKind[l.RatePlanID], OccupancyReason: deref(l.OccupancyReason), GuestID: l.GuestID, ArrivalDate: l.ArrivalDate,
 			DepartureDate: l.DepartureDate, Nights: l.ArrivalDate.DaysUntil(l.DepartureDate), AdultCount: int(l.AdultCount),
 			ChildCount: int(l.ChildCount), CancelledAt: l.CancelledAt, CancellationReason: deref(l.CancellationReason), NoShowAt: l.NoShowAt,
 			NightlyRates: ratesBy[l.ID],

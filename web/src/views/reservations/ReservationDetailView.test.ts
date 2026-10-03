@@ -17,7 +17,7 @@ const night = (date: string, amount: string, over = false, yieldRules: string[] 
   date, rate_plan_id: 1, charge_code_id: 1, price_mode: 'EXCLUSIVE', base_rate: yieldRules ? amount : '1000000', grid_rate: '1000000', yield_rules: yieldRules, discount_amount: '0', amount, is_override: over,
 })
 const line = (over: object = {}) => ({
-  id: 4, status: 'CONFIRMED', room_type_id: 10, room_type_code: 'DLX', room_id: null, rate_plan_id: 1, rate_plan_code: 'BAR', guest_id: null,
+  id: 4, status: 'CONFIRMED', room_type_id: 10, room_type_code: 'DLX', room_id: null, rate_plan_id: 1, rate_plan_code: 'BAR', occupancy_kind: 'PAID', guest_id: null,
   arrival_date: '2026-10-02', departure_date: '2026-10-04', nights: 2, adult_count: 2, child_count: 0, stay_id: null,
   nightly_rates: [night('2026-10-02', '1000000'), night('2026-10-03', '900000', true)],
   estimate: { net: '1900000', service: '95000', tax: '199500', total: '2194500' }, ...over,
@@ -250,6 +250,29 @@ describe('ReservationDetailView', () => {
     await w.get('[data-testid=bed-form-4]').trigger('submit')
     await flushPromises()
     expect(PATCH.mock.calls[1]?.[1].body).toMatchObject({ bed_type_id: 0 })
+  })
+
+  it('shows a complimentary room with its reason, and changes the reason', async () => {
+    const free = line({ rate_plan_code: 'COMP', occupancy_kind: 'COMPLIMENTARY', occupancy_reason: 'Owner guest' })
+    const w = mountView(reservation({ rooms: [free] }))
+    await flushPromises()
+    expect(w.get('[data-testid=kind-4]').text()).toBe('Complimentary')
+    expect((w.get('input[name=occupancy_reason_4]').element as HTMLInputElement).value).toBe('Owner guest')
+    expect((w.get('[data-testid=save-reason-4]').element as HTMLButtonElement).disabled).toBe(true)
+    PATCH.mockResolvedValue({ data: reservation({ rooms: [{ ...free, occupancy_reason: 'Press trip' }] }) })
+    await w.get('input[name=occupancy_reason_4]').setValue('Press trip')
+    await w.get('[data-testid=reason-form-4]').trigger('submit')
+    await flushPromises()
+    expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
+      params: { path: { propertyId: 7, id: 1, lineId: 4 } }, body: { version: 2, occupancy_reason: 'Press trip' },
+    })
+  })
+
+  it('shows no kind or reason form on a paid room', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=kind-4]').exists()).toBe(false)
+    expect(w.find('[data-testid=reason-form-4]').exists()).toBe(false)
   })
 
   it('lists the rooms with the bed that was asked for first, and marks them', async () => {

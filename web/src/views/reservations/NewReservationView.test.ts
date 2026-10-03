@@ -18,16 +18,17 @@ const search = {
     {
       room_type_id: 10, code: 'DLX', name: 'Deluxe', fits_occupancy: true, available_min: 2, per_night: [],
       rate_plans: [
-        { id: 1, code: 'BAR', name: 'Best', price_mode: 'EXCLUSIVE', nightly: [], missing_nights: 0, estimate: { net: '2000000', service: '0', tax: '0', total: '2200000' } },
-        { id: 2, code: 'HALF', name: 'Half', price_mode: 'EXCLUSIVE', nightly: [], missing_nights: 1, estimate: null },
+        { id: 1, code: 'BAR', name: 'Best', price_mode: 'EXCLUSIVE', occupancy_kind: 'PAID', nightly: [], missing_nights: 0, estimate: { net: '2000000', service: '0', tax: '0', total: '2200000' } },
+        { id: 2, code: 'HALF', name: 'Half', price_mode: 'EXCLUSIVE', occupancy_kind: 'PAID', nightly: [], missing_nights: 1, estimate: null },
       ],
     },
     {
       room_type_id: 11, code: 'STD', name: 'Standard', fits_occupancy: true, available_min: 0, per_night: [],
-      rate_plans: [{ id: 1, code: 'BAR', name: 'Best', price_mode: 'EXCLUSIVE', nightly: [], missing_nights: 0, estimate: { net: '1', service: '0', tax: '0', total: '1' } }],
+      rate_plans: [{ id: 1, code: 'BAR', name: 'Best', price_mode: 'EXCLUSIVE', occupancy_kind: 'PAID', nightly: [], missing_nights: 0, estimate: { net: '1', service: '0', tax: '0', total: '1' } }],
     },
   ],
 }
+const freePlan = { id: 9, code: 'COMP', name: 'Complimentary', price_mode: 'EXCLUSIVE', occupancy_kind: 'COMPLIMENTARY', nightly: [], missing_nights: 0, estimate: { net: '0', service: '0', tax: '0', total: '0' } }
 const siti = { id: 3, code: 'GST000001', first_name: 'Siti', last_name: 'Nurhaliza' }
 
 const beds = [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }]
@@ -93,6 +94,26 @@ describe('NewReservationView', () => {
     await w.get('form[data-testid=book-form]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body.rooms[0]).toMatchObject({ room_type_id: 10, bed_type_id: 6 })
+  })
+
+  it('asks for the reason when the plan is complimentary, and sends it', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0], rate_plans: [...search.room_types[0]!.rate_plans, freePlan] }] } }))
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=kind-COMP]').text()).toBe('Complimentary')
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    expect(w.find('input[name=occupancy_reason]').exists()).toBe(false) // a paid plan needs none
+    await w.get('[data-testid=pick-DLX-COMP]').trigger('click')
+    await w.get('input[name=occupancy_reason]').setValue('Owner guest')
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body.rooms[0]).toMatchObject({ rate_plan_id: 9, occupancy_reason: 'Owner guest' })
   })
 
   it('books with a booker and an Idempotency-Key, then opens the reservation', async () => {

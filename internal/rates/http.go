@@ -79,6 +79,7 @@ type createPlanRequest struct {
 	CancellationPolicy string `json:"cancellation_policy"`
 	IsRefundable       *bool  `json:"is_refundable"`
 	RoomChargeCodeID   int64  `json:"room_charge_code_id"`
+	OccupancyKind      string `json:"occupancy_kind"`
 	IsActive           *bool  `json:"is_active"`
 }
 
@@ -93,7 +94,7 @@ func (h *Handler) createPlan(w http.ResponseWriter, r *http.Request) error {
 	}
 	in := RatePlanInput{
 		Code: req.Code, Name: req.Name, Description: req.Description, MealPlan: req.MealPlan, CancellationPolicy: req.CancellationPolicy,
-		IsRefundable: req.IsRefundable == nil || *req.IsRefundable, RoomChargeCodeID: req.RoomChargeCodeID, IsActive: req.IsActive == nil || *req.IsActive,
+		IsRefundable: req.IsRefundable == nil || *req.IsRefundable, RoomChargeCodeID: req.RoomChargeCodeID, OccupancyKind: req.OccupancyKind, IsActive: req.IsActive == nil || *req.IsActive,
 	}
 	plan, err := h.svc.CreateRatePlan(r.Context(), pid, in)
 	if err != nil {

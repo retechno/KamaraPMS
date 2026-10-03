@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { ChargeCode, MealPlan, RatePlan } from '@/api/types'
+import type { ChargeCode, MealPlan, OccupancyKind, RatePlan } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -29,18 +29,20 @@ const editing = ref<RatePlan | 'new' | null>(null)
 
 const canManage = computed(() => auth.can('rate.manage', property.currentId))
 const mealKeys: MealPlan[] = ['RO', 'BB', 'HB', 'FB', 'AI']
+const kindKeys: OccupancyKind[] = ['PAID', 'COMPLIMENTARY', 'HOUSE_USE']
 const columns = computed<Column<RatePlan>[]>(() => [
   { key: 'code', label: t('ratePlans.code') },
   { key: 'name', label: t('ratePlans.name') },
   { key: 'meal_plan', label: t('ratePlans.mealPlan') },
   { key: 'room_charge_code', label: t('ratePlans.roomChargeCode') },
   { key: 'price_mode', label: t('ratePlans.prices') },
+  { key: 'occupancy_kind', label: t('occupancy.kind') },
   { key: 'is_refundable', label: t('ratePlans.refundable') },
   { key: 'status', label: t('setup.status') },
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 const blank = () => ({
-  code: '', name: '', description: '', meal_plan: 'RO' as MealPlan, cancellation_policy: '', is_refundable: true, room_charge_code_id: 0, is_active: true,
+  code: '', name: '', description: '', meal_plan: 'RO' as MealPlan, cancellation_policy: '', is_refundable: true, room_charge_code_id: 0, occupancy_kind: 'PAID' as OccupancyKind, is_active: true,
 })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -80,7 +82,7 @@ function startNew(): void {
 function startEdit(p: RatePlan): void {
   Object.assign(form, blank(), {
     code: p.code, name: p.name, description: p.description ?? '', meal_plan: p.meal_plan, cancellation_policy: p.cancellation_policy ?? '',
-    is_refundable: p.is_refundable, room_charge_code_id: p.room_charge_code_id, is_active: p.is_active,
+    is_refundable: p.is_refundable, room_charge_code_id: p.room_charge_code_id, occupancy_kind: p.occupancy_kind, is_active: p.is_active,
   })
   error.value = null
   editing.value = p
@@ -97,7 +99,7 @@ async function save(): Promise<void> {
   }
   try {
     if (editing.value === 'new') {
-      await api.POST('/api/v1/properties/{propertyId}/rate-plans', { params: { path: { propertyId } }, body: { code: form.code, ...common } })
+      await api.POST('/api/v1/properties/{propertyId}/rate-plans', { params: { path: { propertyId } }, body: { code: form.code, occupancy_kind: form.occupancy_kind, ...common } })
     } else {
       await api.PATCH('/api/v1/properties/{propertyId}/rate-plans/{id}', { params: { path: { propertyId, id: editing.value.id } }, body: common })
     }
@@ -146,6 +148,14 @@ watch(() => property.currentId, load, { immediate: true })
               </NativeSelect>
             </template>
           </FormField>
+          <FormField :label="t('occupancy.kind')" :error="fieldError('occupancy_kind')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.occupancy_kind" name="occupancy_kind" :disabled="editing !== 'new'">
+                <option v-for="k in kindKeys" :key="k" :value="k">{{ t(`occupancy.kind_${k}`) }}</option>
+              </NativeSelect>
+              <small v-if="form.occupancy_kind !== 'PAID'" class="text-xs text-muted-foreground" data-testid="kind-hint">{{ t('occupancy.kindHint') }}</small>
+            </template>
+          </FormField>
           <FormField :label="t('ratePlans.roomChargeCode')" :error="fieldError('room_charge_code_id')">
             <template #default="{ id, invalid }">
               <NativeSelect :id="id" v-model="form.room_charge_code_id" name="room_charge_code_id" :aria-invalid="invalid">
@@ -184,6 +194,7 @@ watch(() => property.currentId, load, { immediate: true })
     <DataTable v-else-if="plans.length" :columns="columns" :rows="plans" row-key="id" :row-test-id="(p) => `plan-${p.code}`" :caption="t('ratePlans.title')">
       <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
       <template #cell-price_mode="{ row }">{{ row.price_mode === 'INCLUSIVE' ? t('ratePlans.inclusive') : t('ratePlans.exclusive') }}</template>
+      <template #cell-occupancy_kind="{ row }"><Badge v-if="row.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${row.code}`">{{ t(`occupancy.kind_${row.occupancy_kind}`) }}</Badge><template v-else>{{ t('occupancy.kind_PAID') }}</template></template>
       <template #cell-is_refundable="{ row }">{{ row.is_refundable ? t('common.yes') : t('common.no') }}</template>
       <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
       <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>

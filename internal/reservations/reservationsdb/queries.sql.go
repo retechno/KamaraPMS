@@ -258,7 +258,7 @@ func (q *Queries) DeleteNightRatesOutside(ctx context.Context, arg DeleteNightRa
 }
 
 const getLine = `-- name: GetLine :one
-SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id FROM reservation_rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason FROM reservation_rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetLineParams struct {
@@ -294,6 +294,7 @@ func (q *Queries) GetLine(ctx context.Context, arg GetLineParams) (ReservationRo
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.RequestedBedTypeID,
+		&i.OccupancyReason,
 	)
 	return i, err
 }
@@ -535,12 +536,12 @@ func (q *Queries) GuestBrief(ctx context.Context, arg GuestBriefParams) (GuestBr
 const insertLine = `-- name: InsertLine :one
 INSERT INTO reservation_rooms (
     tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date,
-    adult_count, child_count, requested_bed_type_id, status, created_by, updated_by
+    adult_count, child_count, requested_bed_type_id, occupancy_reason, status, created_by, updated_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14, $14
+    $9, $10, $11, $12, $13, $14, $15, $15
 )
-RETURNING id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id
+RETURNING id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason
 `
 
 type InsertLineParams struct {
@@ -556,6 +557,7 @@ type InsertLineParams struct {
 	AdultCount         int16
 	ChildCount         int16
 	RequestedBedTypeID *int64
+	OccupancyReason    *string
 	Status             string
 	ActorID            *int64
 }
@@ -574,6 +576,7 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) (Reserva
 		arg.AdultCount,
 		arg.ChildCount,
 		arg.RequestedBedTypeID,
+		arg.OccupancyReason,
 		arg.Status,
 		arg.ActorID,
 	)
@@ -602,6 +605,7 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) (Reserva
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.RequestedBedTypeID,
+		&i.OccupancyReason,
 	)
 	return i, err
 }
@@ -818,7 +822,7 @@ func (q *Queries) ListGuestBriefs(ctx context.Context, arg ListGuestBriefsParams
 }
 
 const listLines = `-- name: ListLines :many
-SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id FROM reservation_rooms
+SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason FROM reservation_rooms
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3
 ORDER BY id
 `
@@ -862,6 +866,7 @@ func (q *Queries) ListLines(ctx context.Context, arg ListLinesParams) ([]Reserva
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 			&i.RequestedBedTypeID,
+			&i.OccupancyReason,
 		); err != nil {
 			return nil, err
 		}
@@ -874,7 +879,7 @@ func (q *Queries) ListLines(ctx context.Context, arg ListLinesParams) ([]Reserva
 }
 
 const listLinesByIDs = `-- name: ListLinesByIDs :many
-SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id FROM reservation_rooms
+SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason FROM reservation_rooms
 WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
 ORDER BY id
 `
@@ -919,6 +924,7 @@ func (q *Queries) ListLinesByIDs(ctx context.Context, arg ListLinesByIDsParams) 
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 			&i.RequestedBedTypeID,
+			&i.OccupancyReason,
 		); err != nil {
 			return nil, err
 		}
@@ -931,7 +937,7 @@ func (q *Queries) ListLinesByIDs(ctx context.Context, arg ListLinesByIDsParams) 
 }
 
 const listLinesOfReservations = `-- name: ListLinesOfReservations :many
-SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id FROM reservation_rooms
+SELECT id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason FROM reservation_rooms
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = ANY($3::bigint[])
 ORDER BY reservation_id, id
 `
@@ -975,6 +981,7 @@ func (q *Queries) ListLinesOfReservations(ctx context.Context, arg ListLinesOfRe
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 			&i.RequestedBedTypeID,
+			&i.OccupancyReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1037,7 +1044,7 @@ func (q *Queries) ListNightRates(ctx context.Context, arg ListNightRatesParams) 
 }
 
 const listRatePlanBriefs = `-- name: ListRatePlanBriefs :many
-SELECT id, code, name FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+SELECT id, code, name, occupancy_kind FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
 `
 
 type ListRatePlanBriefsParams struct {
@@ -1047,9 +1054,10 @@ type ListRatePlanBriefsParams struct {
 }
 
 type ListRatePlanBriefsRow struct {
-	ID   int64
-	Code string
-	Name string
+	ID            int64
+	Code          string
+	Name          string
+	OccupancyKind string
 }
 
 func (q *Queries) ListRatePlanBriefs(ctx context.Context, arg ListRatePlanBriefsParams) ([]ListRatePlanBriefsRow, error) {
@@ -1061,7 +1069,12 @@ func (q *Queries) ListRatePlanBriefs(ctx context.Context, arg ListRatePlanBriefs
 	items := []ListRatePlanBriefsRow{}
 	for rows.Next() {
 		var i ListRatePlanBriefsRow
-		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.OccupancyKind,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1617,11 +1630,11 @@ const updateLine = `-- name: UpdateLine :one
 UPDATE reservation_rooms SET
     guest_id = $1, room_type_id = $2, room_id = $3, rate_plan_id = $4,
     arrival_date = $5, departure_date = $6, adult_count = $7, child_count = $8,
-    requested_bed_type_id = $9, status = $10, cancelled_at = $11, cancelled_by = $12,
-    cancellation_reason = $13, no_show_at = $14, no_show_by = $15,
-    updated_by = $16
-WHERE tenant_id = $17 AND property_id = $18 AND id = $19
-RETURNING id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id
+    requested_bed_type_id = $9, occupancy_reason = $10, status = $11, cancelled_at = $12, cancelled_by = $13,
+    cancellation_reason = $14, no_show_at = $15, no_show_by = $16,
+    updated_by = $17
+WHERE tenant_id = $18 AND property_id = $19 AND id = $20
+RETURNING id, tenant_id, property_id, reservation_id, guest_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, status, cancelled_at, cancelled_by, cancellation_reason, no_show_at, no_show_by, created_at, created_by, updated_at, updated_by, requested_bed_type_id, occupancy_reason
 `
 
 type UpdateLineParams struct {
@@ -1634,6 +1647,7 @@ type UpdateLineParams struct {
 	AdultCount         int16
 	ChildCount         int16
 	RequestedBedTypeID *int64
+	OccupancyReason    *string
 	Status             string
 	CancelledAt        *time.Time
 	CancelledBy        *int64
@@ -1658,6 +1672,7 @@ func (q *Queries) UpdateLine(ctx context.Context, arg UpdateLineParams) (Reserva
 		arg.AdultCount,
 		arg.ChildCount,
 		arg.RequestedBedTypeID,
+		arg.OccupancyReason,
 		arg.Status,
 		arg.CancelledAt,
 		arg.CancelledBy,
@@ -1694,6 +1709,7 @@ func (q *Queries) UpdateLine(ctx context.Context, arg UpdateLineParams) (Reserva
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.RequestedBedTypeID,
+		&i.OccupancyReason,
 	)
 	return i, err
 }

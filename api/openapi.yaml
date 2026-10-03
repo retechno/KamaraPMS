@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.42.0
+  version: 0.43.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -6373,9 +6373,16 @@ components:
       type: string
       enum: [RO, BB, HB, FB, AI]
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+    OccupancyKind:
+      type: string
+      enum: [PAID, COMPLIMENTARY, HOUSE_USE]
+      description: |
+        Of a rate plan. COMPLIMENTARY (a guest who does not pay) and HOUSE_USE (a room used by the hotel) are priced at
+        zero: every night costs 0 without a grid rate, price overrides are refused (422 `OVERRIDE_NOT_ALLOWED`), and the
+        room charge posts as 0 (no service, no tax). Booking one needs `reservation.complimentary` and a reason.
     RatePlan:
       type: object
-      required: [id, code, name, meal_plan, is_refundable, room_charge_code_id, room_charge_code, price_mode, is_active, created_at, updated_at]
+      required: [id, code, name, meal_plan, is_refundable, room_charge_code_id, room_charge_code, price_mode, occupancy_kind, is_active, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -6387,6 +6394,7 @@ components:
         room_charge_code_id: { type: integer, format: int64 }
         room_charge_code: { type: string, description: Code of the room charge code. }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
+        occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -6410,6 +6418,7 @@ components:
         cancellation_policy: { type: string, maxLength: 2000 }
         is_refundable: { type: boolean, default: true }
         room_charge_code_id: { type: integer, format: int64 }
+        occupancy_kind: { allOf: [{ $ref: "#/components/schemas/OccupancyKind" }], default: PAID, description: Fixed when the plan is created; it cannot be changed. }
         is_active: { type: boolean, default: true }
     PatchRatePlanRequest:
       type: object
@@ -6493,12 +6502,13 @@ components:
         total: { type: string }
     PlanOffer:
       type: object
-      required: [id, code, name, price_mode, nightly, missing_nights, estimate]
+      required: [id, code, name, price_mode, occupancy_kind, nightly, missing_nights, estimate]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
+        occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
         nightly:
           type: array
           items: { $ref: "#/components/schemas/NightAmount" }
@@ -6565,6 +6575,7 @@ components:
         guest_id: { type: integer, format: int64, description: The occupant, when different from the booker. }
         room_id: { type: integer, format: int64, description: Only with confirm; must be a room of the booked type. }
         bed_type_id: { type: integer, format: int64, description: "The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`." }
+        occupancy_reason: { type: string, maxLength: 500, description: "Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6635,6 +6646,7 @@ components:
         adult_count: { type: integer, minimum: 1 }
         child_count: { type: integer, minimum: 0 }
         bed_type_id: { type: integer, format: int64, minimum: 0, description: The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed, even if the bed type has been switched off since. }
+        occupancy_reason: { type: string, maxLength: 500, description: "The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason." }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -6769,7 +6781,7 @@ components:
         is_override: { type: boolean }
     ReservationRoom:
       type: object
-      required: [id, status, room_type_id, room_type_code, room_id, rate_plan_id, rate_plan_code, guest_id, arrival_date, departure_date, nights, adult_count, child_count, stay_id, nightly_rates, estimate]
+      required: [id, status, room_type_id, room_type_code, room_id, rate_plan_id, rate_plan_code, occupancy_kind, guest_id, arrival_date, departure_date, nights, adult_count, child_count, stay_id, nightly_rates, estimate]
       properties:
         id: { type: integer, format: int64 }
         status: { type: string, enum: [DRAFT, CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW] }
@@ -6778,6 +6790,8 @@ components:
         bed_type_id: { type: [integer, "null"], format: int64, description: The bed type the guest asked for. }
         bed_type_code: { type: string }
         bed_type_name: { type: string }
+        occupancy_kind: { $ref: "#/components/schemas/OccupancyKind", description: "Of the rate plan of the line." }
+        occupancy_reason: { type: string, description: Why the room is free (complimentary and house use only). }
         room_id: { type: [integer, "null"], format: int64 }
         room_number: { type: string }
         rate_plan_id: { type: integer, format: int64 }
@@ -6916,13 +6930,15 @@ components:
           items: { $ref: "#/components/schemas/TapeBooking" }
     CalendarNight:
       type: object
-      required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
+      required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations, complimentary, house_use]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         sellable: { type: integer }
         blocked: { type: integer }
         held: { type: integer }
         available: { type: integer, description: Sellable minus held; negative when oversold. }
+        complimentary: { type: integer, description: Held rooms that belong to a COMPLIMENTARY rate plan (a part of held). }
+        house_use: { type: integer, description: Held rooms that belong to a HOUSE_USE rate plan (a part of held). }
         occupancy_percent: { type: string, description: Held in percent of sellable, two decimals at most (0 when nothing is sellable). }
         in_house: { type: integer, description: Rooms of open stays held that night (a part of held). }
         arrivals: { type: integer, description: Rooms arriving that night - CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is. }
@@ -6965,7 +6981,7 @@ components:
           description: The whole property, one entry per night.
           items:
             type: object
-            required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations]
+            required: [date, sellable, blocked, held, available, occupancy_percent, in_house, arrivals, reservations, complimentary, house_use]
             properties:
               date: { $ref: "#/components/schemas/Date" }
               sellable: { type: integer }
@@ -6976,6 +6992,8 @@ components:
               in_house: { type: integer }
               arrivals: { type: integer }
               reservations: { type: integer }
+              complimentary: { type: integer }
+              house_use: { type: integer }
     TapeChart:
       type: object
       required: [from, to, rooms, unassigned]
@@ -7246,6 +7264,7 @@ components:
           items: { type: integer, format: int64 }
         override_room_not_ready: { type: boolean, default: false }
         override_reason: { type: string, maxLength: 500 }
+        occupancy_reason: { type: string, maxLength: 500, description: "Why the room is free. Required when the rate plan is COMPLIMENTARY or HOUSE_USE (which also need `reservation.complimentary`)." }
     ReverseCheckInRequest:
       type: object
       required: [version, reason]

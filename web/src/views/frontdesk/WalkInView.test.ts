@@ -10,6 +10,8 @@ let GET = vi.fn()
 let POST = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
+const comp = { id: 4, code: 'COMP', name: 'Complimentary', occupancy_kind: 'COMPLIMENTARY', is_active: true }
+
 function mountView(permissions = ['frontdesk.checkin', 'reservation.create', 'reservation.read']) {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -20,7 +22,7 @@ function mountView(permissions = ['frontdesk.checkin', 'reservation.create', 're
   property.current = { require_room_inspection_for_checkin: false } as never
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/room-types')) return { data: { data: [{ id: 10, code: 'DLX', name: 'Deluxe', is_active: true }] } }
-    if (path.endsWith('/rate-plans')) return { data: { data: [{ id: 3, code: 'BAR', name: 'Best', is_active: true }] } }
+    if (path.endsWith('/rate-plans')) return { data: { data: [{ id: 3, code: 'BAR', name: 'Best', occupancy_kind: 'PAID', is_active: true }, comp] } }
     if (path.endsWith('/availability/rooms')) return { data: { data: [{ room_id: 21, room_number: '101', housekeeping_status: 'CLEAN' }] } }
     if (path.endsWith('/guests')) return { data: { data: [{ id: 3, code: 'G1', first_name: 'Siti', last_name: 'Nurhaliza' }] } }
     return { data: {} }
@@ -42,6 +44,22 @@ describe('WalkInView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(w.find('form').exists()).toBe(false)
+  })
+
+  it('offers complimentary plans only to who may book them, with a reason', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    expect(w.findAll('select[name=rate_plan] option').map((o) => o.text())).toEqual(['BAR · Best'])
+    const { w: w2 } = mountView(['frontdesk.checkin', 'reservation.create', 'reservation.read', 'reservation.complimentary'])
+    await flushPromises()
+    expect(w2.findAll('select[name=rate_plan] option').map((o) => o.text())).toEqual(['BAR · Best', 'COMP · Complimentary (Complimentary)'])
+    expect(w2.find('input[name=occupancy_reason]').exists()).toBe(false)
+    await w2.get('select[name=rate_plan]').setValue(4)
+    await w2.get('input[name=occupancy_reason]').setValue('Engineer')
+    await w2.get('input[name=last_name]').setValue('Walker')
+    await w2.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ rate_plan_id: 4, occupancy_reason: 'Engineer' })
   })
 
   it('searches free rooms from the business date and walks in a new guest', async () => {

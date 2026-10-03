@@ -131,7 +131,7 @@ func (s *Service) CreateRatePlan(ctx context.Context, propertyID int64, in RateP
 		row, err := s.q(ctx).CreateRatePlan(ctx, ratesdb.CreateRatePlanParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, RatePlanDescription: nullable(in.Description),
 			MealPlan: in.MealPlan, CancellationPolicy: nullable(in.CancellationPolicy), IsRefundable: in.IsRefundable,
-			RoomChargeCodeID: in.RoomChargeCodeID, IsActive: in.IsActive, ActorID: p.ActorID(),
+			RoomChargeCodeID: in.RoomChargeCodeID, OccupancyKind: in.OccupancyKind, IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -428,7 +428,14 @@ func (s *Service) PriceNights(ctx context.Context, tenantID, propertyID, ratePla
 	for _, r := range rows {
 		have[r.StayDate] = r.Amount
 	}
-	out := NightlyPrices{RatePlanID: plan.ID, RoomChargeCodeID: code.ID, RoomChargeCode: code.Code, PriceMode: code.PriceMode}
+	out := NightlyPrices{RatePlanID: plan.ID, OccupancyKind: plan.OccupancyKind, RoomChargeCodeID: code.ID, RoomChargeCode: code.Code, PriceMode: code.PriceMode}
+	if plan.OccupancyKind != KindPaid {
+		// complimentary and house use cost nothing: every night is priced at zero, with no grid and no yield rules
+		for d := arrival; d.Before(departure); d = d.AddDays(1) {
+			out.Nights = append(out.Nights, NightPrice{Date: d, Amount: decimal.Zero, Grid: decimal.Zero})
+		}
+		return out, nil, nil
+	}
 	var missing []civil.Date
 	for d := arrival; d.Before(departure); d = d.AddDays(1) {
 		amount, ok := have[d]

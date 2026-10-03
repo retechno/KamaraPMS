@@ -44,20 +44,33 @@ func fieldErr(field, code, msg string) apperr.FieldError {
 
 // RatePlan is a pricing strategy.
 type RatePlan struct {
-	ID                 int64     `json:"id"`
-	Code               string    `json:"code"`
-	Name               string    `json:"name"`
-	Description        string    `json:"description,omitempty"`
-	MealPlan           string    `json:"meal_plan"`
-	CancellationPolicy string    `json:"cancellation_policy,omitempty"`
-	IsRefundable       bool      `json:"is_refundable"`
-	RoomChargeCodeID   int64     `json:"room_charge_code_id"`
-	RoomChargeCode     string    `json:"room_charge_code"`
-	PriceMode          string    `json:"price_mode"` // of the room charge code: how grid amounts are read
-	IsActive           bool      `json:"is_active"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                 int64  `json:"id"`
+	Code               string `json:"code"`
+	Name               string `json:"name"`
+	Description        string `json:"description,omitempty"`
+	MealPlan           string `json:"meal_plan"`
+	CancellationPolicy string `json:"cancellation_policy,omitempty"`
+	IsRefundable       bool   `json:"is_refundable"`
+	RoomChargeCodeID   int64  `json:"room_charge_code_id"`
+	RoomChargeCode     string `json:"room_charge_code"`
+	// OccupancyKind is PAID, COMPLIMENTARY or HOUSE_USE: the last two are priced at zero (see KindPaid).
+	OccupancyKind string    `json:"occupancy_kind"`
+	PriceMode     string    `json:"price_mode"` // of the room charge code: how grid amounts are read
+	IsActive      bool      `json:"is_active"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+// The occupancy kinds of a rate plan. A line on a COMPLIMENTARY or HOUSE_USE plan is priced at zero: no grid rate is
+// needed, no override is allowed, and the room charge posts as 0 (no tax, no service). Booking one needs the
+// reservation.complimentary permission and a reason.
+const (
+	KindPaid          = "PAID"
+	KindComplimentary = "COMPLIMENTARY"
+	KindHouseUse      = "HOUSE_USE"
+)
+
+var occupancyKinds = map[string]bool{KindPaid: true, KindComplimentary: true, KindHouseUse: true}
 
 // RatePlanInput is the editable part of a rate plan (the code is fixed at creation).
 type RatePlanInput struct {
@@ -68,6 +81,7 @@ type RatePlanInput struct {
 	CancellationPolicy string
 	IsRefundable       bool
 	RoomChargeCodeID   int64
+	OccupancyKind      string // fixed at creation; empty means PAID
 	IsActive           bool
 }
 
@@ -77,6 +91,10 @@ func (in *RatePlanInput) Normalize() {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
 	in.MealPlan = strings.ToUpper(strings.TrimSpace(in.MealPlan))
+	in.OccupancyKind = strings.ToUpper(strings.TrimSpace(in.OccupancyKind))
+	if in.OccupancyKind == "" {
+		in.OccupancyKind = KindPaid
+	}
 	in.CancellationPolicy = strings.TrimSpace(in.CancellationPolicy)
 }
 
@@ -102,6 +120,9 @@ func (in RatePlanInput) Validate(checkCode bool) []apperr.FieldError {
 	}
 	if in.RoomChargeCodeID < 1 {
 		errs = append(errs, fieldErr("room_charge_code_id", "REQUIRED", ""))
+	}
+	if !occupancyKinds[in.OccupancyKind] {
+		errs = append(errs, fieldErr("occupancy_kind", "INVALID_VALUE", "PAID, COMPLIMENTARY or HOUSE_USE"))
 	}
 	return errs
 }
@@ -239,6 +260,7 @@ func (n NightPrice) RuleCodes() []string {
 // NightlyPrices is the price lookup result: the plan's nights with the code they are charged through.
 type NightlyPrices struct {
 	RatePlanID       int64
+	OccupancyKind    string
 	RoomChargeCodeID int64
 	RoomChargeCode   string
 	PriceMode        string

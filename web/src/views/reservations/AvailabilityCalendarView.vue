@@ -27,10 +27,12 @@ interface Night {
   in_house: number
   arrivals: number
   reservations: number
+  complimentary: number
+  house_use: number
 }
 
 /** What a cell can show. `available` alone is the compact view; more than one makes it the detailed view. */
-const METRICS = ['available', 'held', 'in_house', 'arrivals', 'reservations', 'blocked', 'occupancy_percent'] as const
+const METRICS = ['available', 'held', 'in_house', 'arrivals', 'reservations', 'complimentary', 'house_use', 'blocked', 'occupancy_percent'] as const
 type Metric = (typeof METRICS)[number]
 
 /** One row group: a room type, one of its bed types, or the property total. */

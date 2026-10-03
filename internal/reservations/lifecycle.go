@@ -15,7 +15,7 @@ func (s *Service) saveLine(ctx context.Context, p auth.Principal, propertyID int
 	return s.q(ctx).UpdateLine(ctx, reservationsdb.UpdateLineParams{
 		TenantID: p.TenantID, PropertyID: propertyID, ID: l.ID, GuestID: l.GuestID, RoomTypeID: l.RoomTypeID, RoomID: l.RoomID,
 		RatePlanID: l.RatePlanID, ArrivalDate: l.ArrivalDate, DepartureDate: l.DepartureDate, AdultCount: l.AdultCount, ChildCount: l.ChildCount,
-		RequestedBedTypeID: l.RequestedBedTypeID, Status: l.Status, CancelledAt: l.CancelledAt, CancelledBy: l.CancelledBy, CancellationReason: l.CancellationReason,
+		RequestedBedTypeID: l.RequestedBedTypeID, OccupancyReason: l.OccupancyReason, Status: l.Status, CancelledAt: l.CancelledAt, CancelledBy: l.CancelledBy, CancellationReason: l.CancellationReason,
 		NoShowAt: l.NoShowAt, NoShowBy: l.NoShowBy, ActorID: p.ActorID(),
 	})
 }
