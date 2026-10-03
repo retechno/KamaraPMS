@@ -58,14 +58,22 @@ FROM city_ledger_invoices i
 JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
 WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.id = @id;
 
--- The folios behind a city ledger invoice and what of each was transferred onto it.
+-- The folios behind a city ledger invoice, what of each was transferred onto it and what the credit notes of those transfers that the invoice took off
+-- when it was made came to.
 -- name: CityLedgerTransfers :many
-SELECT p.folio_id, sum(l.amount)::numeric AS amount
+SELECT p.folio_id, sum(l.amount)::numeric AS amount,
+       COALESCE(sum((SELECT sum(a.amount) FROM city_ledger_adjustments a JOIN city_ledger_adjustment_invoices x ON x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL AND x.invoice_id = l.invoice_id
+                      WHERE a.property_id = l.property_id AND a.payment_id = l.payment_id AND a.status = 'POSTED')), 0)::numeric AS credited
 FROM city_ledger_invoice_lines l
 JOIN payments p ON p.property_id = l.property_id AND p.id = l.payment_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.invoice_id = @invoice_id AND l.released_at IS NULL
 GROUP BY p.folio_id
 ORDER BY p.folio_id;
+
+-- What the credit notes made against the invoice itself took off (a write-off does not change what was supplied).
+-- name: CityLedgerDirectCredited :one
+SELECT COALESCE(sum(amount), 0)::numeric AS credited FROM city_ledger_adjustments
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND invoice_id = @invoice_id AND kind = 'CREDIT_NOTE' AND status = 'POSTED';
 
 -- name: FolioSource :one
 SELECT id, folio_number, status FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

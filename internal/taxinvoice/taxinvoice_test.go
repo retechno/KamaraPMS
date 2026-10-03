@@ -521,3 +521,67 @@ func TestTheTaxInvoiceIsADocument(t *testing.T) {
 	_, err = f.Docs.TaxInvoicePDF(f.admin, f.propID, 999999)
 	wantCode(t, err, "TAX_INVOICE_NOT_FOUND")
 }
+
+// creditNote makes a credit note with VAT (net 55,000, VAT 5,500: half of an invoice of 110,000 and 11,000) against an invoice or a transfer.
+func (f *fx) creditNote(t *testing.T, invoiceID, paymentID *int64, key string) (cityledger.Adjustment, error) {
+	t.Helper()
+	var ppn, allowance int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM taxes WHERE property_id = $1 AND code = 'PPN'`, f.propID).Scan(&ppn))
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM gl_accounts WHERE property_id = $1 AND code = '4160'`, f.propID).Scan(&allowance))
+	return f.CityLedger.CreateCreditNote(f.admin, f.propID, key, cityledger.CreditNoteInput{InvoiceID: invoiceID, PaymentID: paymentID, Reason: "dispute", Approval: f.approval(),
+		Lines: []cityledger.CreditNoteLineInput{{Description: "Restaurant corrected", AccountID: allowance, NetAmount: "55000", TaxID: &ppn}}})
+}
+
+// VAT on a credit note changes the faktur the buyer has: it waits for the tax invoice to be void, and the replacement is on the reduced invoice.
+func TestACreditNoteWithVATAsksTheTaxInvoiceToBeVoidedFirst(t *testing.T) {
+	f := setup(t, true)
+	cli, _ := f.cityLedgerInvoice(t, "110000", "121000")
+	inv, err := f.issueCL(t, cli.ID, "k1")
+	must(t, err)
+	eq(t, "the faktur as first issued", inv.VATAmount, "11000")
+	_, err = f.creditNote(t, &cli.ID, nil, "cn1")
+	wantCode(t, err, "CREDIT_NOTE_TAX_INVOICE_LIVE")
+	if f.Count(t, `SELECT count(*) FROM city_ledger_adjustments`) != 0 {
+		t.Fatal("nothing was made")
+	}
+	_, err = f.TaxInvoice.VoidInvoice(f.admin, f.propID, inv.ID, taxinvoice.VoidInput{Reason: "credit note coming", Approval: f.approval()})
+	must(t, err)
+	note, err := f.creditNote(t, &cli.ID, nil, "cn2")
+	must(t, err)
+	eq(t, "credit note", dec(note.Amount), "60500")
+	rep, err := f.TaxInvoice.Issue(f.admin, f.propID, taxinvoice.IssueInput{SourceType: taxinvoice.SourceCityLedgerInvoice, CityLedgerInvoiceID: cli.ID, ReplacesInvoiceID: &inv.ID}, "k2")
+	must(t, err)
+	eq(t, "replacement base", rep.TaxableBase, "55000")
+	eq(t, "replacement VAT", rep.VATAmount, "5500")
+}
+
+// A credit note of the transfer before it is invoiced: the invoice asks the net and so does its faktur.
+func TestTheTaxInvoiceOfAnInvoiceMadeFromACreditedTransferCoversTheNet(t *testing.T) {
+	f := setup(t, true)
+	folio, stay := f.stayFolio(t, f.restaurant, "110000")
+	res, err := f.Folios.Transfer(f.admin, f.propID, folio, "tr", folios.TransferInput{CompanyID: f.acme.ID, Amount: "121000"})
+	must(t, err)
+	f.checkOut(t, stay)
+	_, err = f.creditNote(t, nil, &res.Payment.ID, "cn1")
+	must(t, err)
+	cli, err := f.CityLedger.CreateInvoice(f.admin, f.propID, f.acme.ID, "ci", cityledger.InvoiceInput{PaymentIDs: []int64{res.Payment.ID}})
+	must(t, err)
+	eq(t, "the invoice asks the net", dec(cli.Total), "60500")
+	inv, err := f.issueCL(t, cli.ID, "k1")
+	must(t, err)
+	eq(t, "base", inv.TaxableBase, "55000")
+	eq(t, "VAT", inv.VATAmount, "5500")
+}
+
+// A credit note without tax, or with a tax that is not VAT, does not touch the tax invoice.
+func TestACreditNoteWithoutVATLeavesTheTaxInvoiceBe(t *testing.T) {
+	f := setup(t, true)
+	cli, _ := f.cityLedgerInvoice(t, "110000", "121000")
+	_, err := f.issueCL(t, cli.ID, "k1")
+	must(t, err)
+	var allowance int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM gl_accounts WHERE property_id = $1 AND code = '4160'`, f.propID).Scan(&allowance))
+	_, err = f.CityLedger.CreateCreditNote(f.admin, f.propID, "cn", cityledger.CreditNoteInput{InvoiceID: &cli.ID, Reason: "goodwill", Approval: f.approval(),
+		Lines: []cityledger.CreditNoteLineInput{{Description: "Goodwill", AccountID: allowance, NetAmount: "1000"}}})
+	must(t, err)
+}

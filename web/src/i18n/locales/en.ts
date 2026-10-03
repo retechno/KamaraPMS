@@ -1863,6 +1863,7 @@ export const en = {
     isReopened: 'The statement is open again.',
   },
   taxReturns: {
+    creditNotes: 'Credit notes',
     credit: 'Credit',
     offsetTitle: 'Input VAT offset',
     outputVat: 'VAT collected (output)',
@@ -2826,6 +2827,7 @@ export const en = {
     TAX_OPENING_CREDIT_NOT_FOUND: 'This tax has no opening credit.',
     TAX_RETURN_NOT_LATEST: 'A return of a later month is filed: void the latest return first.',
     CITY_LEDGER_INVOICE_NOT_FOUND: 'The city ledger invoice does not exist in this property.',
+    CREDIT_NOTE_TAX_INVOICE_LIVE: 'The invoice has a tax invoice (faktur pajak): void it first; the replacement is made on the reduced invoice.',
     CITY_LEDGER_INVOICE_HAS_TAX_INVOICE: 'The invoice has a tax invoice: void the tax invoice first.',
     INVALID_BUYER_NPWP: 'The buyer needs a tax number of 15 or 16 digits.',
     TAX_INVOICE_ALREADY_REPLACED: 'This tax invoice is replaced already.',

@@ -62,6 +62,9 @@ type WorksheetLine struct {
 	Tax        decimal.Decimal `json:"tax_amount"`
 }
 
+// CreditNotesCode is the charge code of the lines of a worksheet that are the credit notes to companies of the month.
+const CreditNotesCode = "CREDIT_NOTE"
+
 // Return statuses.
 const (
 	ReturnFiled  = "FILED"

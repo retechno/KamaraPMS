@@ -303,6 +303,15 @@ func (s *Service) worksheet(ctx context.Context, tenantID, propertyID int64, pro
 		w.Lines = append(w.Lines, WorksheetLine{ChargeCode: r.ChargeCode, ChargeName: r.ChargeName, Rate: r.Rate, Items: int(r.Items), Base: r.Base, Tax: r.Tax})
 		w.Base, w.Tax = w.Base.Add(r.Base), w.Tax.Add(r.Tax)
 	}
+	// the credit notes to companies take off what was collected: a negative line per rate (and a positive one for a credit note voided in the month)
+	notes, err := q.CreditNoteTaxLines(ctx, taxfilingdb.CreditNoteTaxLinesParams{TenantID: tenantID, PropertyID: propertyID, TaxID: &prof.TaxID, FromDate: start, ToDate: end})
+	if err != nil {
+		return Worksheet{}, err
+	}
+	for _, r := range notes {
+		w.Lines = append(w.Lines, WorksheetLine{ChargeCode: CreditNotesCode, ChargeName: "Credit notes", Rate: r.Rate, Items: int(r.Items), Base: r.Base, Tax: r.Tax})
+		w.Base, w.Tax = w.Base.Add(r.Base), w.Tax.Add(r.Tax)
+	}
 	if w.Input, err = s.inputClaims(ctx, tenantID, propertyID, prof, end); err != nil {
 		return Worksheet{}, err
 	}
@@ -435,7 +444,11 @@ func (s *Service) Periods(ctx context.Context, propertyID, taxID int64) ([]Perio
 			if err != nil {
 				return nil, err
 			}
-			per.Tax = tax
+			credits, err := q.CreditNoteTaxBetween(ctx, taxfilingdb.CreditNoteTaxBetweenParams{TenantID: p.TenantID, PropertyID: propertyID, TaxID: &taxID, FromDate: start, ToDate: end})
+			if err != nil {
+				return nil, err
+			}
+			per.Tax = tax.Add(credits)
 			if end.Before(today) {
 				first := start
 				if st.After(first) {

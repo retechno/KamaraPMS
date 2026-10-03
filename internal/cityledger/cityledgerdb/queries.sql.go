@@ -77,6 +77,24 @@ func (q *Queries) CountLiveAdjustmentsOfInvoice(ctx context.Context, arg CountLi
 	return column_1, err
 }
 
+const countLiveTaxInvoices = `-- name: CountLiveTaxInvoices :one
+SELECT count(*)::int FROM tax_invoices WHERE tenant_id = $1 AND property_id = $2 AND city_ledger_invoice_id = $3 AND status = 'ISSUED'
+`
+
+type CountLiveTaxInvoicesParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  *int64
+}
+
+// The tax invoices (faktur pajak) of an invoice that are not void.
+func (q *Queries) CountLiveTaxInvoices(ctx context.Context, arg CountLiveTaxInvoicesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveTaxInvoices, arg.TenantID, arg.PropertyID, arg.InvoiceID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active, c.email, c.phone, c.address, c.contact_name,
        COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
@@ -1409,7 +1427,7 @@ func (q *Queries) ReleaseInvoiceLines(ctx context.Context, arg ReleaseInvoiceLin
 }
 
 const taxForCreditNote = `-- name: TaxForCreditNote :one
-SELECT id, code, rate, is_active, gl_account_code FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, code, rate, is_active, gl_account_code, tax_kind FROM taxes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type TaxForCreditNoteParams struct {
@@ -1424,6 +1442,7 @@ type TaxForCreditNoteRow struct {
 	Rate          decimal.Decimal
 	IsActive      bool
 	GlAccountCode *string
+	TaxKind       string
 }
 
 func (q *Queries) TaxForCreditNote(ctx context.Context, arg TaxForCreditNoteParams) (TaxForCreditNoteRow, error) {
@@ -1435,6 +1454,7 @@ func (q *Queries) TaxForCreditNote(ctx context.Context, arg TaxForCreditNotePara
 		&i.Rate,
 		&i.IsActive,
 		&i.GlAccountCode,
+		&i.TaxKind,
 	)
 	return i, err
 }

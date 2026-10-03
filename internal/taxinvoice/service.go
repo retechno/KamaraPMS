@@ -175,8 +175,33 @@ func (s *Service) prepare(ctx context.Context, tenantID, propertyID int64, in Is
 		if err != nil {
 			return Preview{}, err
 		}
-		for _, t := range ts {
-			transfers = append(transfers, part{t.FolioID, t.Amount, false})
+		// the invoice covers what it asks: the transfers less the credit notes it took off when it was made, and less the credit notes made against it since
+		// (taken off the folios in proportion); the VAT of the folios is taken in that share
+		direct, err := q.CityLedgerDirectCredited(ctx, taxinvoicedb.CityLedgerDirectCreditedParams{TenantID: tenantID, PropertyID: propertyID, InvoiceID: &in.CityLedgerInvoiceID})
+		if err != nil {
+			return Preview{}, err
+		}
+		nets := make([]decimal.Decimal, len(ts))
+		netTotal := decimal.Zero
+		for i, t := range ts {
+			nets[i] = t.Amount.Sub(t.Credited)
+			netTotal = netTotal.Add(nets[i])
+		}
+		left := direct
+		for i, t := range ts {
+			n := nets[i]
+			if direct.IsPositive() && netTotal.IsPositive() {
+				cut := direct.Mul(nets[i]).Div(netTotal).Round(decimals)
+				if i == len(ts)-1 {
+					cut = left
+				}
+				left = left.Sub(cut)
+				n = n.Sub(cut)
+			}
+			if n.IsNegative() {
+				n = decimal.Zero
+			}
+			transfers = append(transfers, part{t.FolioID, n, false})
 		}
 	case SourceFolio:
 		row, err := q.FolioSource(ctx, taxinvoicedb.FolioSourceParams{TenantID: tenantID, PropertyID: propertyID, ID: in.FolioID})

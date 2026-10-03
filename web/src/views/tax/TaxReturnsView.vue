@@ -275,7 +275,7 @@ watch([() => pid.value, taxId], () => {
                 </thead>
                 <tbody>
                   <tr v-for="l in worksheet.lines" :key="`${l.charge_code}-${l.rate}`" class="border-b border-border">
-                    <td class="py-1 pr-3">{{ l.charge_code }}<small v-if="l.charge_name" class="text-muted-foreground"> · {{ l.charge_name }}</small></td>
+                    <td class="py-1 pr-3"><template v-if="l.charge_code === 'CREDIT_NOTE'">{{ t('taxReturns.creditNotes') }}</template><template v-else>{{ l.charge_code }}<small v-if="l.charge_name" class="text-muted-foreground"> · {{ l.charge_name }}</small></template></td>
                     <td class="px-3 text-right tabular-nums">{{ Number(l.rate) }}%</td><td class="px-3 text-right tabular-nums">{{ l.items }}</td><td class="px-3 text-right tabular-nums">{{ $money(l.base_amount) }}</td><td class="pl-3 text-right tabular-nums">{{ $money(l.tax_amount) }}</td>
                   </tr>
                   <tr v-if="!worksheet.lines.length"><td colspan="5" class="py-1 text-muted-foreground">{{ t('taxReturns.nothing') }}</td></tr>

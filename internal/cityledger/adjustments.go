@@ -325,6 +325,7 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 					rate     *decimal.Decimal
 					taxCode  string
 					taxGL    string
+					vat      bool
 				}
 				bs := make([]booked, len(in.Lines))
 				total := decimal.Zero
@@ -362,7 +363,7 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 							lineErrs = append(lineErrs, field(at("tax_id"), "INACTIVE", "the tax is inactive"))
 						default:
 							rate := t.Rate
-							b.rate, b.taxCode, b.taxGL = &rate, t.Code, deref(t.GlAccountCode)
+							b.rate, b.taxCode, b.taxGL, b.vat = &rate, t.Code, deref(t.GlAccountCode), t.TaxKind == "VAT"
 							b.tax = nets[i].Mul(t.Rate).Div(decimal.NewFromInt(100)).Round(decimals)
 						}
 					}
@@ -376,6 +377,18 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				if in.InvoiceID != nil {
 					if invoice.Status != InvoiceIssued {
 						return apperr.Conflict("INVOICE_NOT_PAYABLE", "a voided invoice has no credit note")
+					}
+					// VAT on a credit note changes the tax invoice the buyer has: void that first, so the replacement is made on the reduced invoice
+					for _, b := range bs {
+						if !b.vat {
+							continue
+						}
+						if n, terr := q.CountLiveTaxInvoices(ctx, cityledgerdb.CountLiveTaxInvoicesParams{TenantID: p.TenantID, PropertyID: propertyID, InvoiceID: &invoice.ID}); terr != nil {
+							return terr
+						} else if n > 0 {
+							return apperr.Conflict("CREDIT_NOTE_TAX_INVOICE_LIVE", "the invoice has a tax invoice (faktur pajak): void it first, the replacement is made on the reduced invoice")
+						}
+						break
 					}
 					owes, oerr := s.invoiceOwes(ctx, propertyID, invoice)
 					if oerr != nil {

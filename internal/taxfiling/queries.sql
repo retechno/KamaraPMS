@@ -48,13 +48,14 @@ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.component_
 GROUP BY COALESCE(cc.code, occ.code, ''), COALESCE(cc.name, occ.name, ''), k.rate
 ORDER BY 1, k.rate;
 
--- What the day close journals credited for a tax in a range (the lines carry the tax code as their source).
+-- What the books collected for a tax in a range (the lines carry the tax code as their source): what the day close credited, less what the credit notes
+-- to companies debited (their lines carry TAX_CREDIT_NOTE; the reversal of a voided credit note gives it back on the day it is voided).
 -- name: GLCollected :one
 SELECT COALESCE(sum(l.credit - l.debit), 0)::numeric AS collected
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
-WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.source_type = 'TAX' AND l.source_ref = @tax_code
-  AND j.journal_type = 'DAY_CLOSE' AND j.journal_date BETWEEN @from_date::date AND @to_date::date;
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.source_ref = @tax_code AND j.journal_date BETWEEN @from_date::date AND @to_date::date
+  AND ((l.source_type = 'TAX' AND j.journal_type = 'DAY_CLOSE') OR l.source_type = 'TAX_CREDIT_NOTE');
 
 -- name: AccountingStart :one
 SELECT start_date FROM accounting_settings WHERE tenant_id = @tenant_id AND property_id = @property_id;
@@ -285,3 +286,45 @@ ORDER BY b.bill_date, b.id, c.line_no, c.id;
 -- name: ReleaseClaims :exec
 UPDATE tax_return_input_claims SET released_at = @now
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND return_id = @return_id AND released_at IS NULL;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Credit notes to companies: the tax they take off what was collected
+
+-- The credit notes of a tax as lines of the worksheet of a range, by rate and signed: what a credit note made in the range took off (negative) and what the
+-- voiding of one in the range gave back (positive). A credit note made and voided in the range leaves nothing.
+-- name: CreditNoteTaxLines :many
+SELECT x.rate::numeric AS rate, sum(x.items)::int AS items, sum(x.base)::numeric AS base, sum(x.tax)::numeric AS tax FROM (
+    SELECT COALESCE(l.tax_rate, 0)::numeric AS rate, count(*)::int AS items, -sum(l.net_amount)::numeric AS base, -sum(l.tax_amount)::numeric AS tax
+    FROM city_ledger_credit_note_lines l
+    JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+    WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.tax_id = @tax_id AND a.business_date BETWEEN @from_date::date AND @to_date::date
+    GROUP BY l.tax_rate
+    UNION ALL
+    SELECT COALESCE(l.tax_rate, 0)::numeric, -count(*)::int, sum(l.net_amount)::numeric, sum(l.tax_amount)::numeric
+    FROM city_ledger_credit_note_lines l
+    JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id AND a.status = 'VOIDED'
+    JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+    WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.tax_id = @tax_id AND vj.journal_date BETWEEN @from_date::date AND @to_date::date
+    GROUP BY l.tax_rate
+) x
+GROUP BY x.rate
+HAVING sum(x.tax) <> 0 OR sum(x.base) <> 0
+ORDER BY x.rate;
+
+-- The same, as one signed amount of tax for a range (a month that is not filed yet).
+-- name: CreditNoteTaxBetween :one
+SELECT (COALESCE((SELECT -sum(l.tax_amount) FROM city_ledger_credit_note_lines l JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+                   WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.tax_id = @tax_id AND a.business_date BETWEEN @from_date::date AND @to_date::date), 0)
+      + COALESCE((SELECT sum(l.tax_amount) FROM city_ledger_credit_note_lines l JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id AND a.status = 'VOIDED'
+                   JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+                   WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.tax_id = @tax_id AND vj.journal_date BETWEEN @from_date::date AND @to_date::date), 0))::numeric AS tax;
+
+-- The tax credit notes took off what was collected, by tax, up to a date (a credit note voided after the date still counts).
+-- name: CreditNoteTaxToDate :many
+SELECT l.tax_id, sum(l.tax_amount)::numeric AS tax
+FROM city_ledger_credit_note_lines l
+JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+LEFT JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.tax_id IS NOT NULL AND a.business_date <= @as_of::date
+  AND (a.status = 'POSTED' OR vj.journal_date > @as_of::date)
+GROUP BY l.tax_id;

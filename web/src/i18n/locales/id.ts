@@ -1862,6 +1862,7 @@ export const id: Messages = {
     isReopened: 'Rekening koran terbuka kembali.',
   },
   taxReturns: {
+    creditNotes: 'Credit note',
     credit: 'Kredit',
     offsetTitle: 'Kompensasi PPN masukan',
     outputVat: 'PPN dipungut (keluaran)',
@@ -2825,6 +2826,7 @@ export const id: Messages = {
     TAX_OPENING_CREDIT_NOT_FOUND: 'Pajak ini tidak punya kredit awal.',
     TAX_RETURN_NOT_LATEST: 'Ada return bulan yang lebih baru: void return terbaru dulu.',
     CITY_LEDGER_INVOICE_NOT_FOUND: 'Invoice city ledger tidak ada di properti ini.',
+    CREDIT_NOTE_TAX_INVOICE_LIVE: 'Invoice ini punya faktur pajak: void dulu; faktur pengganti dibuat atas invoice yang sudah dikurangi.',
     CITY_LEDGER_INVOICE_HAS_TAX_INVOICE: 'Invoice ini punya faktur pajak: void faktur pajaknya dulu.',
     INVALID_BUYER_NPWP: 'Pembeli perlu NPWP atau NIK 15 atau 16 digit.',
     TAX_INVOICE_ALREADY_REPLACED: 'Faktur pajak ini sudah diganti.',

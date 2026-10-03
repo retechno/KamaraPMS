@@ -2883,7 +2883,7 @@ export interface paths {
          * @description Against an issued invoice (at most what it still owes: 409 `ADJUSTMENT_EXCEEDS_INVOICE`) or against a transfer that is not on an invoice
          *     (at most what the transfer says: 409 `ADJUSTMENT_EXCEEDS_TRANSFER`; 409 `TRANSFER_ON_INVOICE` when it is on one). The invoice later made from such
          *     a transfer asks the net amount. Each line is booked on a revenue account (the allowance) with an optional tax of the property, taken at its rate on the net
-         *     amount. The journal is made when the note is: Dr the allowance and the tax payable, Cr the city ledger, on the business date. The company row is locked.
+         *     amount. The journal is made when the note is: Dr the allowance and the tax payable, Cr the city ledger, on the business date. The company row is locked. The tax on the lines takes off the tax collected: the worksheet of the tax return of the month of the credit note has a negative line `CREDIT_NOTE` (and a positive one in the month a credit note is voided); VAT on a credit note against an invoice that has a live tax invoice is refused: 409 `CREDIT_NOTE_TAX_INVOICE_LIVE` (void the tax invoice first; the replacement is made on the reduced invoice).
          */
         post: operations["createCityLedgerCreditNote"];
         delete?: never;
@@ -9504,6 +9504,7 @@ export interface components {
             uncovered: components["schemas"]["TaxInvoiceUncoveredFolio"][];
         };
         TaxFilingWorksheetLine: {
+            /** @description The charge code of the folio items, or `CREDIT_NOTE` for the credit notes to companies of the month (negative base and tax; positive for one voided in the month). */
             charge_code: string;
             charge_name?: string;
             rate: string;

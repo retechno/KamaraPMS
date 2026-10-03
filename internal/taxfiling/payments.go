@@ -334,6 +334,15 @@ func (s *Service) Liability(ctx context.Context, propertyID int64, asOf *civil.D
 			collected[*r.TaxID] = r.Tax
 		}
 	}
+	creditRows, err := q.CreditNoteTaxToDate(ctx, taxfilingdb.CreditNoteTaxToDateParams{TenantID: p.TenantID, PropertyID: propertyID, AsOf: at})
+	if err != nil {
+		return Liability{}, err
+	}
+	for _, r := range creditRows {
+		if r.TaxID != nil {
+			collected[*r.TaxID] = collected[*r.TaxID].Sub(r.Tax) // the credit notes took it off
+		}
+	}
 	filedRows, err := q.FiledAndPaidToDate(ctx, taxfilingdb.FiledAndPaidToDateParams{TenantID: p.TenantID, PropertyID: propertyID, AsOf: at})
 	if err != nil {
 		return Liability{}, err

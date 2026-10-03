@@ -317,6 +317,149 @@ func (q *Queries) CountPostedDays(ctx context.Context, arg CountPostedDaysParams
 	return column_1, err
 }
 
+const creditNoteTaxBetween = `-- name: CreditNoteTaxBetween :one
+SELECT (COALESCE((SELECT -sum(l.tax_amount) FROM city_ledger_credit_note_lines l JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+                   WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.tax_id = $3 AND a.business_date BETWEEN $4::date AND $5::date), 0)
+      + COALESCE((SELECT sum(l.tax_amount) FROM city_ledger_credit_note_lines l JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id AND a.status = 'VOIDED'
+                   JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+                   WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.tax_id = $3 AND vj.journal_date BETWEEN $4::date AND $5::date), 0))::numeric AS tax
+`
+
+type CreditNoteTaxBetweenParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      *int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+// The same, as one signed amount of tax for a range (a month that is not filed yet).
+func (q *Queries) CreditNoteTaxBetween(ctx context.Context, arg CreditNoteTaxBetweenParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, creditNoteTaxBetween,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	var tax decimal.Decimal
+	err := row.Scan(&tax)
+	return tax, err
+}
+
+const creditNoteTaxLines = `-- name: CreditNoteTaxLines :many
+
+SELECT x.rate::numeric AS rate, sum(x.items)::int AS items, sum(x.base)::numeric AS base, sum(x.tax)::numeric AS tax FROM (
+    SELECT COALESCE(l.tax_rate, 0)::numeric AS rate, count(*)::int AS items, -sum(l.net_amount)::numeric AS base, -sum(l.tax_amount)::numeric AS tax
+    FROM city_ledger_credit_note_lines l
+    JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+    WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.tax_id = $3 AND a.business_date BETWEEN $4::date AND $5::date
+    GROUP BY l.tax_rate
+    UNION ALL
+    SELECT COALESCE(l.tax_rate, 0)::numeric, -count(*)::int, sum(l.net_amount)::numeric, sum(l.tax_amount)::numeric
+    FROM city_ledger_credit_note_lines l
+    JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id AND a.status = 'VOIDED'
+    JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+    WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.tax_id = $3 AND vj.journal_date BETWEEN $4::date AND $5::date
+    GROUP BY l.tax_rate
+) x
+GROUP BY x.rate
+HAVING sum(x.tax) <> 0 OR sum(x.base) <> 0
+ORDER BY x.rate
+`
+
+type CreditNoteTaxLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      *int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type CreditNoteTaxLinesRow struct {
+	Rate  decimal.Decimal
+	Items int32
+	Base  decimal.Decimal
+	Tax   decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Credit notes to companies: the tax they take off what was collected
+// The credit notes of a tax as lines of the worksheet of a range, by rate and signed: what a credit note made in the range took off (negative) and what the
+// voiding of one in the range gave back (positive). A credit note made and voided in the range leaves nothing.
+func (q *Queries) CreditNoteTaxLines(ctx context.Context, arg CreditNoteTaxLinesParams) ([]CreditNoteTaxLinesRow, error) {
+	rows, err := q.db.Query(ctx, creditNoteTaxLines,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CreditNoteTaxLinesRow{}
+	for rows.Next() {
+		var i CreditNoteTaxLinesRow
+		if err := rows.Scan(
+			&i.Rate,
+			&i.Items,
+			&i.Base,
+			&i.Tax,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const creditNoteTaxToDate = `-- name: CreditNoteTaxToDate :many
+SELECT l.tax_id, sum(l.tax_amount)::numeric AS tax
+FROM city_ledger_credit_note_lines l
+JOIN city_ledger_adjustments a ON a.property_id = l.property_id AND a.id = l.adjustment_id
+LEFT JOIN gl_journals vj ON vj.property_id = a.property_id AND vj.id = a.void_journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.tax_id IS NOT NULL AND a.business_date <= $3::date
+  AND (a.status = 'POSTED' OR vj.journal_date > $3::date)
+GROUP BY l.tax_id
+`
+
+type CreditNoteTaxToDateParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+type CreditNoteTaxToDateRow struct {
+	TaxID *int64
+	Tax   decimal.Decimal
+}
+
+// The tax credit notes took off what was collected, by tax, up to a date (a credit note voided after the date still counts).
+func (q *Queries) CreditNoteTaxToDate(ctx context.Context, arg CreditNoteTaxToDateParams) ([]CreditNoteTaxToDateRow, error) {
+	rows, err := q.db.Query(ctx, creditNoteTaxToDate, arg.TenantID, arg.PropertyID, arg.AsOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CreditNoteTaxToDateRow{}
+	for rows.Next() {
+		var i CreditNoteTaxToDateRow
+		if err := rows.Scan(&i.TaxID, &i.Tax); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const filedAndPaidToDate = `-- name: FiledAndPaidToDate :many
 SELECT r.tax_id, COALESCE(sum(r.tax_amount), 0)::numeric AS filed, COALESCE(sum(r.offset_amount), 0)::numeric AS offsets, count(*)::int AS returns,
        COALESCE(sum((SELECT COALESCE(sum(x.amount), 0) FROM tax_payments x LEFT JOIN gl_journals xv ON xv.property_id = x.property_id AND xv.id = x.void_journal_id
@@ -422,8 +565,8 @@ const gLCollected = `-- name: GLCollected :one
 SELECT COALESCE(sum(l.credit - l.debit), 0)::numeric AS collected
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
-WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.source_type = 'TAX' AND l.source_ref = $3
-  AND j.journal_type = 'DAY_CLOSE' AND j.journal_date BETWEEN $4::date AND $5::date
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.source_ref = $3 AND j.journal_date BETWEEN $4::date AND $5::date
+  AND ((l.source_type = 'TAX' AND j.journal_type = 'DAY_CLOSE') OR l.source_type = 'TAX_CREDIT_NOTE')
 `
 
 type GLCollectedParams struct {
@@ -434,7 +577,8 @@ type GLCollectedParams struct {
 	ToDate     civil.Date
 }
 
-// What the day close journals credited for a tax in a range (the lines carry the tax code as their source).
+// What the books collected for a tax in a range (the lines carry the tax code as their source): what the day close credited, less what the credit notes
+// to companies debited (their lines carry TAX_CREDIT_NOTE; the reversal of a voided credit note gives it back on the day it is voided).
 func (q *Queries) GLCollected(ctx context.Context, arg GLCollectedParams) (decimal.Decimal, error) {
 	row := q.db.QueryRow(ctx, gLCollected,
 		arg.TenantID,

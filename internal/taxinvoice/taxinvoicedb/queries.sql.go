@@ -13,6 +13,25 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const cityLedgerDirectCredited = `-- name: CityLedgerDirectCredited :one
+SELECT COALESCE(sum(amount), 0)::numeric AS credited FROM city_ledger_adjustments
+WHERE tenant_id = $1 AND property_id = $2 AND invoice_id = $3 AND kind = 'CREDIT_NOTE' AND status = 'POSTED'
+`
+
+type CityLedgerDirectCreditedParams struct {
+	TenantID   int64
+	PropertyID int64
+	InvoiceID  *int64
+}
+
+// What the credit notes made against the invoice itself took off (a write-off does not change what was supplied).
+func (q *Queries) CityLedgerDirectCredited(ctx context.Context, arg CityLedgerDirectCreditedParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, cityLedgerDirectCredited, arg.TenantID, arg.PropertyID, arg.InvoiceID)
+	var credited decimal.Decimal
+	err := row.Scan(&credited)
+	return credited, err
+}
+
 const cityLedgerInvoiceSource = `-- name: CityLedgerInvoiceSource :one
 
 SELECT i.id, i.invoice_number, i.status, c.id AS company_id, c.name AS company_name, c.tax_id AS company_tax_id, c.address AS company_address, c.city AS company_city
@@ -57,7 +76,9 @@ func (q *Queries) CityLedgerInvoiceSource(ctx context.Context, arg CityLedgerInv
 }
 
 const cityLedgerTransfers = `-- name: CityLedgerTransfers :many
-SELECT p.folio_id, sum(l.amount)::numeric AS amount
+SELECT p.folio_id, sum(l.amount)::numeric AS amount,
+       COALESCE(sum((SELECT sum(a.amount) FROM city_ledger_adjustments a JOIN city_ledger_adjustment_invoices x ON x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL AND x.invoice_id = l.invoice_id
+                      WHERE a.property_id = l.property_id AND a.payment_id = l.payment_id AND a.status = 'POSTED')), 0)::numeric AS credited
 FROM city_ledger_invoice_lines l
 JOIN payments p ON p.property_id = l.property_id AND p.id = l.payment_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.invoice_id = $3 AND l.released_at IS NULL
@@ -72,11 +93,13 @@ type CityLedgerTransfersParams struct {
 }
 
 type CityLedgerTransfersRow struct {
-	FolioID int64
-	Amount  decimal.Decimal
+	FolioID  int64
+	Amount   decimal.Decimal
+	Credited decimal.Decimal
 }
 
-// The folios behind a city ledger invoice and what of each was transferred onto it.
+// The folios behind a city ledger invoice, what of each was transferred onto it and what the credit notes of those transfers that the invoice took off
+// when it was made came to.
 func (q *Queries) CityLedgerTransfers(ctx context.Context, arg CityLedgerTransfersParams) ([]CityLedgerTransfersRow, error) {
 	rows, err := q.db.Query(ctx, cityLedgerTransfers, arg.TenantID, arg.PropertyID, arg.InvoiceID)
 	if err != nil {
@@ -86,7 +109,7 @@ func (q *Queries) CityLedgerTransfers(ctx context.Context, arg CityLedgerTransfe
 	items := []CityLedgerTransfersRow{}
 	for rows.Next() {
 		var i CityLedgerTransfersRow
-		if err := rows.Scan(&i.FolioID, &i.Amount); err != nil {
+		if err := rows.Scan(&i.FolioID, &i.Amount, &i.Credited); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

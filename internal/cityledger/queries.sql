@@ -246,4 +246,8 @@ SELECT id, payment_number, company_id, amount, status, payment_type, payment_met
 SELECT count(*)::int FROM city_ledger_invoice_lines WHERE property_id = @property_id AND payment_id = @payment_id AND released_at IS NULL;
 
 -- name: TaxForCreditNote :one
-SELECT id, code, rate, is_active, gl_account_code FROM taxes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+SELECT id, code, rate, is_active, gl_account_code, tax_kind FROM taxes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The tax invoices (faktur pajak) of an invoice that are not void.
+-- name: CountLiveTaxInvoices :one
+SELECT count(*)::int FROM tax_invoices WHERE tenant_id = @tenant_id AND property_id = @property_id AND city_ledger_invoice_id = @invoice_id AND status = 'ISSUED';
