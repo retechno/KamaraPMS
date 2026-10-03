@@ -40,4 +40,23 @@ describe('reportDefs', () => {
     } as never)
     expect(inHouse.rows.map((x) => x[7])).toEqual(['', 'Complimentary'])
   })
+
+  it('puts the free rooms in three tables and says what the value rests on', () => {
+    const data = {
+      reference_plan: 'BAR',
+      lines: [{ confirmation_number: 'RES1', guest: 'Siti', room_type: 'DLX', room: '102', rate_plan: 'COMP', occupancy_kind: 'COMPLIMENTARY', reason: 'Owner guest', nights: 2, value: '2000000', missing_nights: 0 }],
+      by_reason: [{ key: 'Owner guest', rooms: 1, nights: 2, value: '2000000', missing_nights: 0 }],
+      by_kind: [{ key: 'COMPLIMENTARY', rooms: 1, nights: 2, value: '2000000', missing_nights: 0 }],
+      totals: { rooms: 1, nights: 2, value: '2000000', missing_nights: 1 },
+    }
+    const list = reports.find((x) => x.key === 'free-rooms')!.table(data as never)
+    expect(list.rows[0]).toEqual(['RES1', 'Siti', 'DLX', '102', 'COMP', 'Complimentary', 'Owner guest', '2', '2000000'])
+    expect(list.footer?.slice(-2)).toEqual(['2', '2000000'])
+    expect(list.note).toContain('BAR')
+    expect(list.note).toContain('1 night(s)')
+    expect(reports.find((x) => x.key === 'free-rooms-by-reason')!.table(data as never).rows[0]).toEqual(['Owner guest', '1', '2', '2000000'])
+    expect(reports.find((x) => x.key === 'free-rooms-by-kind')!.table(data as never).rows[0]?.[0]).toBe('Complimentary')
+    const without = reports.find((x) => x.key === 'free-rooms')!.table({ ...data, reference_plan: '', totals: { ...data.totals, missing_nights: 0 } } as never)
+    expect(without.note).toContain('no reference rate plan')
+  })
 })

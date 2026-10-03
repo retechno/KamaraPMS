@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.44.0
+  version: 0.45.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -2414,6 +2414,75 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CashierReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/free-rooms:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getFreeRoomsReport
+      summary: Complimentary and house use rooms, one row per room (report.view)
+      description: "The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind)."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers this table as a text/csv file." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeRoomsReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/free-rooms-by-reason:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getFreeRoomsByReasonReport
+      summary: Complimentary and house use rooms, totals per reason (report.view)
+      description: "The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind)."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers this table as a text/csv file." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeRoomsReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/free-rooms-by-kind:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getFreeRoomsByKindReport
+      summary: Complimentary and house use rooms, totals per kind (report.view)
+      description: "The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind)."
+      tags: [reports]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Date" }, description: On or after from; at most 366 days. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers this table as a text/csv file." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeRoomsReport" }
             text/csv:
               schema: { type: string }
         "403": { $ref: "#/components/responses/Problem" }
@@ -6382,7 +6451,7 @@ components:
         room charge posts as 0 (no service, no tax). Booking one needs `reservation.complimentary` and a reason.
     RatePlan:
       type: object
-      required: [id, code, name, meal_plan, is_refundable, room_charge_code_id, room_charge_code, price_mode, occupancy_kind, is_active, created_at, updated_at]
+      required: [id, code, name, meal_plan, is_refundable, room_charge_code_id, room_charge_code, price_mode, occupancy_kind, is_reference, is_active, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -6395,6 +6464,7 @@ components:
         room_charge_code: { type: string, description: Code of the room charge code. }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
+        is_reference: { type: boolean, description: "The reference plan of the property (at most one, and a paid one): the reports value complimentary and house use nights at its grid price." }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -6430,6 +6500,7 @@ components:
         cancellation_policy: { type: string, maxLength: 2000 }
         is_refundable: { type: boolean }
         room_charge_code_id: { type: integer, format: int64 }
+        is_reference: { type: boolean, description: "true makes this the reference plan and clears the flag from the plan that had it (422 `NOT_PAID` on a complimentary or house use plan)." }
         is_active: { type: boolean }
     RateCell:
       type: object
@@ -7906,6 +7977,55 @@ components:
         occupancy_percent: { type: string }
         adr: { $ref: "#/components/schemas/Amount" }
         revpar: { $ref: "#/components/schemas/Amount" }
+    FreeRoomGroup:
+      type: object
+      required: [key, rooms, nights, value, missing_nights]
+      properties:
+        key: { type: string, description: The reason (as first written) or the kind. }
+        rooms: { type: integer }
+        nights: { type: integer }
+        value: { $ref: "#/components/schemas/Amount" }
+        missing_nights: { type: integer }
+    FreeRoomsReport:
+      type: object
+      required: [from, to, reference_plan, lines, by_reason, by_kind, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        reference_plan: { type: string, description: Code of the reference rate plan the nights are valued at; empty when the property has none. }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [reservation_room_id, confirmation_number, status, guest, room_type, rate_plan, occupancy_kind, reason, nights, value, missing_nights]
+            properties:
+              reservation_room_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+              status: { type: string }
+              guest: { type: string }
+              room_type: { type: string }
+              room: { type: string }
+              rate_plan: { type: string }
+              occupancy_kind: { $ref: "#/components/schemas/OccupancyKind" }
+              reason: { type: string }
+              nights: { type: integer, description: Nights of the line inside the range. }
+              value: { $ref: "#/components/schemas/Amount" }
+              missing_nights: { type: integer, description: Nights the reference plan has no rate for (valued at 0). }
+        by_reason:
+          type: array
+          description: Reasons that differ only in case or spacing are one; the biggest value first.
+          items: { $ref: "#/components/schemas/FreeRoomGroup" }
+        by_kind:
+          type: array
+          items: { $ref: "#/components/schemas/FreeRoomGroup" }
+        totals:
+          type: object
+          required: [rooms, nights, value, missing_nights]
+          properties:
+            rooms: { type: integer }
+            nights: { type: integer }
+            value: { $ref: "#/components/schemas/Amount" }
+            missing_nights: { type: integer }
     StatisticsReport:
       type: object
       required: [from, to, days, totals]

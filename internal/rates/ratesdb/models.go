@@ -29,6 +29,7 @@ type RatePlan struct {
 	UpdatedAt          time.Time
 	UpdatedBy          *int64
 	OccupancyKind      string
+	IsReference        bool
 }
 
 type YieldRule struct {

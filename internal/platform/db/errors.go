@@ -34,6 +34,8 @@ var constraintErrors = map[string]mapped{
 	"service_charges_property_code_uk": {apperr.KindConflict, "CODE_TAKEN", "the service charge code is already in use"},
 	"charge_codes_property_code_uk":    {apperr.KindConflict, "CODE_TAKEN", "the charge code is already in use"},
 	"rate_plans_property_code_uk":      {apperr.KindConflict, "CODE_TAKEN", "the rate plan code is already in use"},
+	"rate_plans_reference_uk":          {apperr.KindConflict, "REFERENCE_PLAN_EXISTS", "the property already has a reference rate plan"},
+	"rate_plans_reference_paid_ck":     {apperr.KindInvalid, "VALIDATION_FAILED", "only a paid rate plan can be the reference plan"},
 	"reservations_confirmation_uk":     {apperr.KindConflict, "NUMBER_TAKEN", "the confirmation number is already in use"},
 
 	// Access grants (composite FKs keep grants inside the tenant)

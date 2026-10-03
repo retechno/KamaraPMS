@@ -54,11 +54,13 @@ type RatePlan struct {
 	RoomChargeCodeID   int64  `json:"room_charge_code_id"`
 	RoomChargeCode     string `json:"room_charge_code"`
 	// OccupancyKind is PAID, COMPLIMENTARY or HOUSE_USE: the last two are priced at zero (see KindPaid).
-	OccupancyKind string    `json:"occupancy_kind"`
-	PriceMode     string    `json:"price_mode"` // of the room charge code: how grid amounts are read
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	OccupancyKind string `json:"occupancy_kind"`
+	// IsReference marks the one paid plan whose grid price values complimentary and house use nights in the reports.
+	IsReference bool      `json:"is_reference"`
+	PriceMode   string    `json:"price_mode"` // of the room charge code: how grid amounts are read
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // The occupancy kinds of a rate plan. A line on a COMPLIMENTARY or HOUSE_USE plan is priced at zero: no grid rate is
@@ -82,6 +84,7 @@ type RatePlanInput struct {
 	IsRefundable       bool
 	RoomChargeCodeID   int64
 	OccupancyKind      string // fixed at creation; empty means PAID
+	IsReference        bool   // set by an update, not at creation
 	IsActive           bool
 }
 

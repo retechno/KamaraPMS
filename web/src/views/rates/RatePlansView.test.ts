@@ -90,6 +90,21 @@ describe('RatePlansView', () => {
     expect((w.get('select[name=occupancy_kind]').element as HTMLSelectElement).disabled).toBe(true)
   })
 
+  it('marks the reference plan, only on a paid plan and only when editing', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=new-plan]').trigger('click')
+    expect(w.find('input[name=is_reference]').exists()).toBe(false) // not at creation
+    await w.get('button[type=button]:not([data-testid])').trigger('click')
+    PATCH.mockResolvedValue({ data: {} })
+    await w.get('[data-testid=plan-BAR] button').trigger('click')
+    expect(w.find('input[name=is_reference]').exists()).toBe(true)
+    await w.get('input[name=is_reference]').setValue(true)
+    await w.get('[data-testid=plan-form]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[0]?.[1].body).toMatchObject({ is_reference: true })
+  })
+
   it('keeps an unusable current code selectable while editing, and shows a price mode conflict', async () => {
     const w = mountView()
     await flushPromises()

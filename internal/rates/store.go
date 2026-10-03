@@ -32,7 +32,7 @@ func toRatePlan(p ratesdb.RatePlan, codeName, priceMode string) RatePlan {
 	return RatePlan{
 		ID: p.ID, Code: p.Code, Name: p.Name, Description: deref(p.Description), MealPlan: p.MealPlan,
 		CancellationPolicy: deref(p.CancellationPolicy), IsRefundable: p.IsRefundable, RoomChargeCodeID: p.RoomChargeCodeID,
-		RoomChargeCode: codeName, PriceMode: priceMode, OccupancyKind: p.OccupancyKind, IsActive: p.IsActive, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		RoomChargeCode: codeName, PriceMode: priceMode, OccupancyKind: p.OccupancyKind, IsReference: p.IsReference, IsActive: p.IsActive, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 

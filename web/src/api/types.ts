@@ -71,6 +71,7 @@ export type CancelResult = Schemas['CancelResult']
 export type NightRate = Schemas['NightRate']
 export type TapeChart = Schemas['TapeChart']
 export type OccupancyKind = Schemas['OccupancyKind']
+export type FreeRoomsReport = Schemas['FreeRoomsReport']
 export type AvailabilityCalendar = Schemas['AvailabilityCalendar']
 export type TapeBooking = Schemas['TapeBooking']
 

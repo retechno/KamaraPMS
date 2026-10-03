@@ -1,11 +1,11 @@
 import type {
-  ArrivalsReport, CashierReport, DailySummaryReport, HousekeepingDirtyRoomsReport, HousekeepingProductivityReport, MaintenanceReport, RevenueReport,
+  ArrivalsReport, CashierReport, DailySummaryReport, FreeRoomsReport, HousekeepingDirtyRoomsReport, HousekeepingProductivityReport, MaintenanceReport, RevenueReport,
   StatisticsReport, StayListReport, TaxReport,
 } from '@/api/types'
 import { t } from '@/i18n'
 
 /** A report as the screen shows it: a title, the inputs it needs, and how its answer becomes a table. */
-export type ReportKey = 'revenue' | 'tax' | 'cashier' | 'statistics' | 'daily-summary' | 'arrivals' | 'departures' | 'in-house' | 'housekeeping-productivity' | 'housekeeping-dirty-rooms' | 'maintenance'
+export type ReportKey = 'revenue' | 'tax' | 'cashier' | 'statistics' | 'daily-summary' | 'arrivals' | 'departures' | 'in-house' | 'housekeeping-productivity' | 'housekeeping-dirty-rooms' | 'maintenance' | 'free-rooms' | 'free-rooms-by-reason' | 'free-rooms-by-kind'
 
 export interface Table {
   columns: string[]
@@ -32,6 +32,13 @@ const r = (key: string, params?: Record<string, unknown>): string => t(`reportDe
 
 /** The kind of a room in a list: nothing for a paid room, the name for a complimentary or house use one. */
 const kind = (k: string): string => (k === 'PAID' ? '' : t(`occupancy.kind_${k}` as 'occupancy.kind_PAID'))
+
+/** What the value of the free rooms rests on, and what is missing from it. */
+function freeNote(d: FreeRoomsReport): string {
+  const parts = [d.reference_plan ? r('freeReferenceNote', { plan: d.reference_plan }) : r('freeNoReference')]
+  if (d.totals.missing_nights > 0) parts.push(r('freeMissing', { n: d.totals.missing_nights }))
+  return parts.join(' ')
+}
 
 export const reports: ReportDef[] = [
   {
@@ -105,6 +112,30 @@ export const reports: ReportDef[] = [
     table: (d: StayListReport) => ({
       columns: [r('stay'), r('guest'), r('room'), r('arrival'), r('departure'), r('party'), r('balance'), r('kind')], numeric: [6],
       rows: d.rows.map((x) => [x.stay_number, x.guest, s(x.room), x.arrival_date, x.departure_date, `${x.adult_count}+${x.child_count}`, x.balance, kind(x.occupancy_kind)]),
+    }),
+  },
+  {
+    key: 'free-rooms', title: () => r('freeRooms'), input: 'range', hint: () => r('freeRoomsHint'),
+    table: (d: FreeRoomsReport) => ({
+      columns: [r('reservation'), r('guest'), r('roomType'), r('room'), r('freeRatePlan'), r('kind'), r('freeReason'), r('freeNights'), r('freeValue')], numeric: [7, 8], note: freeNote(d),
+      rows: d.lines.map((l) => [l.confirmation_number, l.guest, l.room_type, s(l.room), l.rate_plan, kind(l.occupancy_kind) || l.occupancy_kind, l.reason, s(l.nights), l.value]),
+      footer: [r('total'), '', '', '', '', '', '', s(d.totals.nights), d.totals.value],
+    }),
+  },
+  {
+    key: 'free-rooms-by-reason', title: () => r('freeByReason'), input: 'range', hint: () => r('freeByReasonHint'),
+    table: (d: FreeRoomsReport) => ({
+      columns: [r('freeReason'), r('freeRoomsCount'), r('freeNights'), r('freeValue')], numeric: [1, 2, 3], note: freeNote(d),
+      rows: d.by_reason.map((g) => [g.key, s(g.rooms), s(g.nights), g.value]),
+      footer: [r('total'), s(d.totals.rooms), s(d.totals.nights), d.totals.value],
+    }),
+  },
+  {
+    key: 'free-rooms-by-kind', title: () => r('freeByKind'), input: 'range', hint: () => r('freeByKindHint'),
+    table: (d: FreeRoomsReport) => ({
+      columns: [r('kind'), r('freeRoomsCount'), r('freeNights'), r('freeValue')], numeric: [1, 2, 3], note: freeNote(d),
+      rows: d.by_kind.map((g) => [t(`occupancy.kind_${g.key}` as 'occupancy.kind_PAID'), s(g.rooms), s(g.nights), g.value]),
+      footer: [r('total'), s(d.totals.rooms), s(d.totals.nights), d.totals.value],
     }),
   },
   {

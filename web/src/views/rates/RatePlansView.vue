@@ -42,7 +42,7 @@ const columns = computed<Column<RatePlan>[]>(() => [
   ...(canManage.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 const blank = () => ({
-  code: '', name: '', description: '', meal_plan: 'RO' as MealPlan, cancellation_policy: '', is_refundable: true, room_charge_code_id: 0, occupancy_kind: 'PAID' as OccupancyKind, is_active: true,
+  code: '', name: '', description: '', meal_plan: 'RO' as MealPlan, cancellation_policy: '', is_refundable: true, room_charge_code_id: 0, occupancy_kind: 'PAID' as OccupancyKind, is_reference: false, is_active: true,
 })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -82,7 +82,7 @@ function startNew(): void {
 function startEdit(p: RatePlan): void {
   Object.assign(form, blank(), {
     code: p.code, name: p.name, description: p.description ?? '', meal_plan: p.meal_plan, cancellation_policy: p.cancellation_policy ?? '',
-    is_refundable: p.is_refundable, room_charge_code_id: p.room_charge_code_id, occupancy_kind: p.occupancy_kind, is_active: p.is_active,
+    is_refundable: p.is_refundable, room_charge_code_id: p.room_charge_code_id, occupancy_kind: p.occupancy_kind, is_reference: p.is_reference, is_active: p.is_active,
   })
   error.value = null
   editing.value = p
@@ -101,7 +101,8 @@ async function save(): Promise<void> {
     if (editing.value === 'new') {
       await api.POST('/api/v1/properties/{propertyId}/rate-plans', { params: { path: { propertyId } }, body: { code: form.code, occupancy_kind: form.occupancy_kind, ...common } })
     } else {
-      await api.PATCH('/api/v1/properties/{propertyId}/rate-plans/{id}', { params: { path: { propertyId, id: editing.value.id } }, body: common })
+      const body = form.occupancy_kind === 'PAID' ? { ...common, is_reference: form.is_reference } : common
+      await api.PATCH('/api/v1/properties/{propertyId}/rate-plans/{id}', { params: { path: { propertyId, id: editing.value.id } }, body })
     }
     editing.value = null
     await load()
@@ -176,6 +177,10 @@ watch(() => property.currentId, load, { immediate: true })
             <input v-model="form.is_refundable" name="is_refundable" type="checkbox" class="size-4 accent-primary" />
             <span>{{ t('ratePlans.refundable') }}</span>
           </label>
+          <label v-if="editing !== 'new' && form.occupancy_kind === 'PAID'" class="flex items-center gap-2 text-sm" :title="t('ratePlans.refPlanHint')">
+            <input v-model="form.is_reference" name="is_reference" type="checkbox" class="size-4 accent-primary" />
+            <span>{{ t('ratePlans.refPlan') }}</span>
+          </label>
           <label class="flex items-center gap-2 text-sm">
             <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
             <span>{{ t('ratePlans.activeCheck') }}</span>
@@ -192,7 +197,7 @@ watch(() => property.currentId, load, { immediate: true })
   <Card>
     <EmptyState v-if="loaded && !plans.length" :title="t('ratePlans.empty')" data-testid="empty" />
     <DataTable v-else-if="plans.length" :columns="columns" :rows="plans" row-key="id" :row-test-id="(p) => `plan-${p.code}`" :caption="t('ratePlans.title')">
-      <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
+      <template #cell-code="{ row }"><b>{{ row.code }}</b> <Badge v-if="row.is_reference" variant="outline" :data-testid="`ref-${row.code}`">{{ t('ratePlans.refBadge') }}</Badge></template>
       <template #cell-price_mode="{ row }">{{ row.price_mode === 'INCLUSIVE' ? t('ratePlans.inclusive') : t('ratePlans.exclusive') }}</template>
       <template #cell-occupancy_kind="{ row }"><Badge v-if="row.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${row.code}`">{{ t(`occupancy.kind_${row.occupancy_kind}`) }}</Badge><template v-else>{{ t('occupancy.kind_PAID') }}</template></template>
       <template #cell-is_refundable="{ row }">{{ row.is_refundable ? t('common.yes') : t('common.no') }}</template>

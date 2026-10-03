@@ -58,6 +58,18 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		}
 		return h.svc.HousekeepingDirty(r.Context(), pid, hours)
 	})))
+	mux.Handle("GET "+p+"/free-rooms", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
+		res, err := h.svc.FreeRooms(r.Context(), pid, f, t)
+		return FreeRoomsList(res), err
+	})))
+	mux.Handle("GET "+p+"/free-rooms-by-reason", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
+		res, err := h.svc.FreeRooms(r.Context(), pid, f, t)
+		return FreeRoomsByReason(res), err
+	})))
+	mux.Handle("GET "+p+"/free-rooms-by-kind", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
+		res, err := h.svc.FreeRooms(r.Context(), pid, f, t)
+		return FreeRoomsByKind(res), err
+	})))
 	mux.Handle("GET "+p+"/maintenance", httpx.HandlerFunc(h.ranged(func(r *http.Request, pid int64, f, t civil.Date) (any, error) {
 		return h.svc.Maintenance(r.Context(), pid, f, t)
 	})))

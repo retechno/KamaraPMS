@@ -30,9 +30,14 @@ LIMIT @row_limit;
 UPDATE rate_plans SET
     name = @name, description = sqlc.narg(rate_plan_description), meal_plan = @meal_plan,
     cancellation_policy = sqlc.narg(cancellation_policy), is_refundable = @is_refundable,
-    room_charge_code_id = @room_charge_code_id, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+    room_charge_code_id = @room_charge_code_id, is_reference = @is_reference, is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
+
+-- Only one plan per property is the reference plan: taking the flag over clears it from the others first.
+-- name: ClearReferencePlans :exec
+UPDATE rate_plans SET is_reference = false, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_reference AND id <> @id;
 
 -- The room charge code of a plan: what the plan sells through, and how its grid amounts are read.
 -- name: GetChargeCodeForPlan :one

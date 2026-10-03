@@ -150,6 +150,7 @@ type RatePlanPatch struct {
 	CancellationPolicy *string
 	IsRefundable       *bool
 	RoomChargeCodeID   *int64
+	IsReference        *bool
 	IsActive           *bool
 }
 
@@ -181,7 +182,7 @@ func (s *Service) UpdateRatePlan(ctx context.Context, propertyID, id int64, patc
 		before := toRatePlan(row, oldCode.Code, oldCode.PriceMode)
 		in := RatePlanInput{
 			Code: before.Code, Name: before.Name, Description: before.Description, MealPlan: before.MealPlan,
-			CancellationPolicy: before.CancellationPolicy, IsRefundable: before.IsRefundable, RoomChargeCodeID: before.RoomChargeCodeID, IsActive: before.IsActive,
+			CancellationPolicy: before.CancellationPolicy, IsRefundable: before.IsRefundable, RoomChargeCodeID: before.RoomChargeCodeID, OccupancyKind: before.OccupancyKind, IsReference: before.IsReference, IsActive: before.IsActive,
 		}
 		apply(&in.Name, patch.Name)
 		apply(&in.Description, patch.Description)
@@ -189,10 +190,20 @@ func (s *Service) UpdateRatePlan(ctx context.Context, propertyID, id int64, patc
 		apply(&in.CancellationPolicy, patch.CancellationPolicy)
 		apply(&in.IsRefundable, patch.IsRefundable)
 		apply(&in.RoomChargeCodeID, patch.RoomChargeCodeID)
+		apply(&in.IsReference, patch.IsReference)
 		apply(&in.IsActive, patch.IsActive)
 		in.Normalize()
 		if fields := in.Validate(false); len(fields) > 0 {
 			return apperr.Invalid("the rate plan is invalid", fields...)
+		}
+
+		if in.IsReference && in.OccupancyKind != KindPaid {
+			return apperr.Invalid("the rate plan is invalid", fieldErr("is_reference", "NOT_PAID", "only a paid rate plan can be the reference plan"))
+		}
+		if in.IsReference && !row.IsReference {
+			if err := q.ClearReferencePlans(ctx, ratesdb.ClearReferencePlansParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, ActorID: p.ActorID()}); err != nil {
+				return err
+			}
 		}
 
 		codeName, mode := oldCode.Code, oldCode.PriceMode
@@ -217,7 +228,7 @@ func (s *Service) UpdateRatePlan(ctx context.Context, propertyID, id int64, patc
 		updated, err := q.UpdateRatePlan(ctx, ratesdb.UpdateRatePlanParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, RatePlanDescription: nullable(in.Description), MealPlan: in.MealPlan,
 			CancellationPolicy: nullable(in.CancellationPolicy), IsRefundable: in.IsRefundable, RoomChargeCodeID: in.RoomChargeCodeID,
-			IsActive: in.IsActive, ActorID: p.ActorID(),
+			IsReference: in.IsReference, IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err

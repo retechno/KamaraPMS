@@ -13,6 +13,29 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const clearReferencePlans = `-- name: ClearReferencePlans :exec
+UPDATE rate_plans SET is_reference = false, updated_by = $1
+WHERE tenant_id = $2 AND property_id = $3 AND is_reference AND id <> $4
+`
+
+type ClearReferencePlansParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// Only one plan per property is the reference plan: taking the flag over clears it from the others first.
+func (q *Queries) ClearReferencePlans(ctx context.Context, arg ClearReferencePlansParams) error {
+	_, err := q.db.Exec(ctx, clearReferencePlans,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const countRatesOfPlan = `-- name: CountRatesOfPlan :one
 SELECT count(*) FROM rates WHERE tenant_id = $1 AND property_id = $2 AND rate_plan_id = $3
 `
@@ -39,7 +62,7 @@ INSERT INTO rate_plans (
     $1, $2, $3, $4, $5, $6, $7, $8,
     $9, $10, $11, $12, $12
 )
-RETURNING id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind
+RETURNING id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference
 `
 
 type CreateRatePlanParams struct {
@@ -91,6 +114,7 @@ func (q *Queries) CreateRatePlan(ctx context.Context, arg CreateRatePlanParams) 
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.OccupancyKind,
+		&i.IsReference,
 	)
 	return i, err
 }
@@ -279,7 +303,7 @@ func (q *Queries) GetChargeCodeForPlanShare(ctx context.Context, arg GetChargeCo
 }
 
 const getRatePlan = `-- name: GetRatePlan :one
-SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetRatePlanParams struct {
@@ -308,12 +332,13 @@ func (q *Queries) GetRatePlan(ctx context.Context, arg GetRatePlanParams) (RateP
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.OccupancyKind,
+		&i.IsReference,
 	)
 	return i, err
 }
 
 const getRatePlanForShare = `-- name: GetRatePlanForShare :one
-SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR SHARE
+SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR SHARE
 `
 
 type GetRatePlanForShareParams struct {
@@ -342,12 +367,13 @@ func (q *Queries) GetRatePlanForShare(ctx context.Context, arg GetRatePlanForSha
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.OccupancyKind,
+		&i.IsReference,
 	)
 	return i, err
 }
 
 const getRatePlanForUpdate = `-- name: GetRatePlanForUpdate :one
-SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetRatePlanForUpdateParams struct {
@@ -376,6 +402,7 @@ func (q *Queries) GetRatePlanForUpdate(ctx context.Context, arg GetRatePlanForUp
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.OccupancyKind,
+		&i.IsReference,
 	)
 	return i, err
 }
@@ -622,7 +649,7 @@ func (q *Queries) ListNightRates(ctx context.Context, arg ListNightRatesParams) 
 }
 
 const listRatePlans = `-- name: ListRatePlans :many
-SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind FROM rate_plans
+SELECT id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference FROM rate_plans
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
 ORDER BY id
@@ -669,6 +696,7 @@ func (q *Queries) ListRatePlans(ctx context.Context, arg ListRatePlansParams) ([
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 			&i.OccupancyKind,
+			&i.IsReference,
 		); err != nil {
 			return nil, err
 		}
@@ -811,9 +839,9 @@ const updateRatePlan = `-- name: UpdateRatePlan :one
 UPDATE rate_plans SET
     name = $1, description = $2, meal_plan = $3,
     cancellation_policy = $4, is_refundable = $5,
-    room_charge_code_id = $6, is_active = $7, updated_by = $8
-WHERE tenant_id = $9 AND property_id = $10 AND id = $11
-RETURNING id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind
+    room_charge_code_id = $6, is_reference = $7, is_active = $8, updated_by = $9
+WHERE tenant_id = $10 AND property_id = $11 AND id = $12
+RETURNING id, tenant_id, property_id, code, name, description, meal_plan, cancellation_policy, is_refundable, room_charge_code_id, is_active, created_at, created_by, updated_at, updated_by, occupancy_kind, is_reference
 `
 
 type UpdateRatePlanParams struct {
@@ -823,6 +851,7 @@ type UpdateRatePlanParams struct {
 	CancellationPolicy  *string
 	IsRefundable        bool
 	RoomChargeCodeID    int64
+	IsReference         bool
 	IsActive            bool
 	ActorID             *int64
 	TenantID            int64
@@ -838,6 +867,7 @@ func (q *Queries) UpdateRatePlan(ctx context.Context, arg UpdateRatePlanParams) 
 		arg.CancellationPolicy,
 		arg.IsRefundable,
 		arg.RoomChargeCodeID,
+		arg.IsReference,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,
@@ -862,6 +892,7 @@ func (q *Queries) UpdateRatePlan(ctx context.Context, arg UpdateRatePlanParams) 
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.OccupancyKind,
+		&i.IsReference,
 	)
 	return i, err
 }

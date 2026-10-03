@@ -1973,6 +1973,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reports/free-rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Complimentary and house use rooms, one row per room (report.view)
+         * @description The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind).
+         */
+        get: operations["getFreeRoomsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/free-rooms-by-reason": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Complimentary and house use rooms, totals per reason (report.view)
+         * @description The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind).
+         */
+        get: operations["getFreeRoomsByReasonReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/free-rooms-by-kind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Complimentary and house use rooms, totals per kind (report.view)
+         * @description The complimentary and house use rooms with nights in the range (CONFIRMED, CHECKED_IN and COMPLETED lines), valued at the grid price of the property's reference rate plan (`is_reference`) for the room type and night. Without a reference plan the nights are counted and the value is 0; nights the reference plan has no rate for count in `missing_nights` and are valued at 0. The JSON is the same for the three paths; the CSV is the table of the path (one row per room, per reason or per kind).
+         */
+        get: operations["getFreeRoomsByKindReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/statistics": {
         parameters: {
             query?: never;
@@ -5528,6 +5594,8 @@ export interface components {
             room_charge_code: string;
             price_mode: components["schemas"]["PriceMode"];
             occupancy_kind: components["schemas"]["OccupancyKind"];
+            /** @description The reference plan of the property (at most one, and a paid one): the reports value complimentary and house use nights at its grid price. */
+            is_reference: boolean;
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -5564,6 +5632,8 @@ export interface components {
             is_refundable?: boolean;
             /** Format: int64 */
             room_charge_code_id?: number;
+            /** @description true makes this the reference plan and clears the flag from the plan that had it (422 `NOT_PAID` on a complimentary or house use plan). */
+            is_reference?: boolean;
             is_active?: boolean;
         };
         RateCell: {
@@ -6914,6 +6984,46 @@ export interface components {
             occupancy_percent: string;
             adr: components["schemas"]["Amount"];
             revpar: components["schemas"]["Amount"];
+        };
+        FreeRoomGroup: {
+            /** @description The reason (as first written) or the kind. */
+            key: string;
+            rooms: number;
+            nights: number;
+            value: components["schemas"]["Amount"];
+            missing_nights: number;
+        };
+        FreeRoomsReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            /** @description Code of the reference rate plan the nights are valued at; empty when the property has none. */
+            reference_plan: string;
+            lines: {
+                /** Format: int64 */
+                reservation_room_id: number;
+                confirmation_number: string;
+                status: string;
+                guest: string;
+                room_type: string;
+                room?: string;
+                rate_plan: string;
+                occupancy_kind: components["schemas"]["OccupancyKind"];
+                reason: string;
+                /** @description Nights of the line inside the range. */
+                nights: number;
+                value: components["schemas"]["Amount"];
+                /** @description Nights the reference plan has no rate for (valued at 0). */
+                missing_nights: number;
+            }[];
+            /** @description Reasons that differ only in case or spacing are one; the biggest value first. */
+            by_reason: components["schemas"]["FreeRoomGroup"][];
+            by_kind: components["schemas"]["FreeRoomGroup"][];
+            totals: {
+                rooms: number;
+                nights: number;
+                value: components["schemas"]["Amount"];
+                missing_nights: number;
+            };
         };
         StatisticsReport: {
             from: components["schemas"]["Date"];
@@ -11984,6 +12094,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashierReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getFreeRoomsReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers this table as a text/csv file. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreeRoomsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getFreeRoomsByReasonReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers this table as a text/csv file. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreeRoomsReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getFreeRoomsByKindReport: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description On or after from; at most 366 days. */
+                to: components["schemas"]["Date"];
+                /** @description csv answers this table as a text/csv file. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreeRoomsReport"];
                     "text/csv": string;
                 };
             };

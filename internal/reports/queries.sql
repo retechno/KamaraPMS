@@ -188,3 +188,26 @@ SELECT d.night::date AS night,
           AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS booked
 FROM unnest(@dates::text[]) AS d (night)
 ORDER BY d.night;
+
+-- The reference rate plan of the property (the plan whose grid price values complimentary and house use nights).
+-- name: GetReferenceRatePlan :one
+SELECT id, code FROM rate_plans WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_reference;
+
+-- One row per night of a complimentary or house use line (the nightly snapshot), with the grid price of the reference
+-- plan for the room type the line really holds (NULL when there is no such rate).
+-- name: ReportFreeRoomNights :many
+SELECT l.id AS reservation_room_id, res.confirmation_number, l.status, rp.code AS plan_code, rp.occupancy_kind, l.occupancy_reason,
+       t.code AS room_type_code, r.room_number, g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       n.stay_date, ref.amount AS reference_amount
+FROM reservation_room_rates n
+JOIN reservation_rooms l ON l.property_id = n.property_id AND l.id = n.reservation_room_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
+JOIN room_types t ON t.property_id = l.property_id AND t.id = COALESCE(r.room_type_id, l.room_type_id)
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+LEFT JOIN rates ref ON ref.property_id = n.property_id AND ref.rate_plan_id = sqlc.narg(reference_plan_id)::bigint
+                   AND ref.room_type_id = t.id AND ref.stay_date = n.stay_date
+WHERE n.tenant_id = @tenant_id AND n.property_id = @property_id AND rp.occupancy_kind <> 'PAID'
+  AND l.status IN ('CONFIRMED', 'CHECKED_IN', 'COMPLETED') AND n.stay_date BETWEEN @from_date::date AND @to_date::date
+ORDER BY l.id, n.stay_date;

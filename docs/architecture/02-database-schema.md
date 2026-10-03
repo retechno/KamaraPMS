@@ -583,6 +583,7 @@ There is no `is_inclusive` column (rejected).
 | cancellation_policy | text | YES | Text in the MVP |
 | is_refundable | boolean | NO | DEFAULT true |
 | room_charge_code_id | bigint | NO | FK → charge_codes. Its `charge_type` must be `ROOM` (service check). |
+| is_reference | boolean | NO | DEFAULT false. UK `(property_id) WHERE is_reference` (one reference plan per property), CHECK `NOT is_reference OR occupancy_kind = 'PAID'`. The grid price of the reference plan values complimentary and house use nights in the report of free rooms. |
 | occupancy_kind | varchar(14) | NO | CHECK IN (`PAID`,`COMPLIMENTARY`,`HOUSE_USE`). DEFAULT `PAID`. Fixed at creation (the service has no way to change it), so the history of a plan never changes meaning. A non-PAID plan is priced at zero: no grid rate, no override, the room charge posts as 0. |
 | is_active | boolean | NO | |
 | [std] | | | |

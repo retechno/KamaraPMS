@@ -336,6 +336,18 @@ func seedRates(e *env, propertyCode, planCode string, days int, dryRun bool) err
 	if err := seedFreePlans(e, plans, dryRun); err != nil {
 		return err
 	}
+	// the plan the reports value the free rooms at, when the property has no reference plan yet
+	hasReference := false
+	for _, p := range plans {
+		hasReference = hasReference || p.IsReference
+	}
+	if !hasReference && planID != 0 && !dryRun {
+		yes := true
+		if _, err := e.rt.UpdateRatePlan(ctx, propertyID, planID, rates.RatePlanPatch{IsReference: &yes}); err != nil {
+			return err
+		}
+		fmt.Printf("rate plan %s is now the reference plan\n", planCode)
+	}
 
 	day, err := e.ten.CurrentBusinessDay(ctx, propertyID)
 	if err != nil {

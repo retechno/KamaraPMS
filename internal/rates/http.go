@@ -110,6 +110,7 @@ type patchPlanRequest struct {
 	CancellationPolicy *string `json:"cancellation_policy"`
 	IsRefundable       *bool   `json:"is_refundable"`
 	RoomChargeCodeID   *int64  `json:"room_charge_code_id"`
+	IsReference        *bool   `json:"is_reference"`
 	IsActive           *bool   `json:"is_active"`
 }
 
