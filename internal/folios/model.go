@@ -43,6 +43,9 @@ const (
 // MethodCityLedger is the payment method of a transfer to a company account; it is not offered as a way to pay.
 const MethodCityLedger = "CITY_LEDGER"
 
+// methodCash is the payment method that goes through a cashier shift.
+const methodCash = "CASH"
+
 var paymentMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
 
 func fieldErr(field, code, msg string) apperr.FieldError {

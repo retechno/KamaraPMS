@@ -1465,7 +1465,7 @@ const seedRetainedEarningsMap = `-- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, $1
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = $2 AND a.property_id = $3
 ON CONFLICT (property_id, map_key) DO NOTHING
 `

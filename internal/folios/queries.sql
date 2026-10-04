@@ -130,10 +130,10 @@ WHERE property_id = @property_id AND folio_item_id = @item_id AND status = 'POST
 -- name: InsertPayment :one
 INSERT INTO payments (
     tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date,
-    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id
+    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id
 ) VALUES (
     @tenant_id, @property_id, @payment_number, @folio_id, @payment_type, @payment_method, @amount, @paid_at, @business_date,
-    sqlc.narg(reference_number), sqlc.narg(refund_of_payment_id), sqlc.narg(idempotency_key), sqlc.narg(remarks), sqlc.narg(actor_id), sqlc.narg(approved_by), sqlc.narg(company_id)
+    sqlc.narg(reference_number), sqlc.narg(refund_of_payment_id), sqlc.narg(idempotency_key), sqlc.narg(remarks), sqlc.narg(actor_id), sqlc.narg(approved_by), sqlc.narg(company_id), sqlc.narg(shift_id)
 )
 RETURNING *;
 

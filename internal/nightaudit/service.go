@@ -18,6 +18,7 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
+	"kamarapms/internal/shifts"
 	"kamarapms/internal/tenancy"
 )
 
@@ -32,6 +33,7 @@ type Service struct {
 	res     *reservations.Service
 	hk      *housekeeping.Service
 	journal Journaler
+	shifts  ShiftChecker
 }
 
 // Journaler makes the general ledger journal of a business date (accounting.Service). It runs inside the night audit's
@@ -39,6 +41,14 @@ type Service struct {
 type Journaler interface {
 	PostDay(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error
 }
+
+// ShiftChecker lists the cashier shifts that are open and says whether they block the night audit (shifts.Service).
+type ShiftChecker interface {
+	OpenShifts(ctx context.Context, tenantID, propertyID int64) ([]shifts.OpenShift, bool, error)
+}
+
+// SetShiftChecker wires the cashier shifts; without it nothing is checked.
+func (s *Service) SetShiftChecker(c ShiftChecker) { s.shifts = c }
 
 // SetJournaler wires the general ledger.
 func (s *Service) SetJournaler(j Journaler) { s.journal = j }
@@ -75,7 +85,7 @@ type analysis struct {
 func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, decimals int32, withWarnings bool) (analysis, error) {
 	q := s.q(ctx)
 	a := analysis{
-		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}},
+		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
 		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, BlocksEnding: []EndingBlock{}},
 	}
@@ -97,6 +107,15 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 		a.blockers.UnresolvedDepartures = append(a.blockers.UnresolvedDepartures, Departure{
 			StayID: r.StayID, StayNumber: r.StayNumber, Room: deref(r.RoomNumber), Guest: name(r.GuestFirstName, r.GuestLastName), DepartureDate: r.DepartureDate,
 		})
+	}
+	if s.shifts != nil {
+		open, blocks, err := s.shifts.OpenShifts(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return a, err
+		}
+		if blocks && len(open) > 0 {
+			a.blockers.OpenShifts = open
+		}
 	}
 	cmd := roomcharge.PostCmd{BusinessDate: bd, Trigger: roomcharge.TriggerNightAudit}
 	dry := cmd

@@ -387,7 +387,7 @@ func (q *Queries) GetItemOfPayment(ctx context.Context, arg GetItemOfPaymentPara
 }
 
 const getPayment = `-- name: GetPayment :one
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id FROM payments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id FROM payments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetPaymentParams struct {
@@ -422,12 +422,13 @@ func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (Payment
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.CompanyID,
+		&i.ShiftID,
 	)
 	return i, err
 }
 
 const getPaymentByKey = `-- name: GetPaymentByKey :one
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id FROM payments WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id FROM payments WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
 
 type GetPaymentByKeyParams struct {
@@ -462,6 +463,7 @@ func (q *Queries) GetPaymentByKey(ctx context.Context, arg GetPaymentByKeyParams
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.CompanyID,
+		&i.ShiftID,
 	)
 	return i, err
 }
@@ -754,12 +756,12 @@ const insertPayment = `-- name: InsertPayment :one
 
 INSERT INTO payments (
     tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date,
-    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id
+    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11, $12, $13, $14, $15, $16
+    $10, $11, $12, $13, $14, $15, $16, $17
 )
-RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id
+RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id
 `
 
 type InsertPaymentParams struct {
@@ -779,6 +781,7 @@ type InsertPaymentParams struct {
 	ActorID           *int64
 	ApprovedBy        *int64
 	CompanyID         *int64
+	ShiftID           *int64
 }
 
 // ---------------------------------------------------------------------------
@@ -801,6 +804,7 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		arg.ActorID,
 		arg.ApprovedBy,
 		arg.CompanyID,
+		arg.ShiftID,
 	)
 	var i Payment
 	err := row.Scan(
@@ -826,6 +830,7 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.CompanyID,
+		&i.ShiftID,
 	)
 	return i, err
 }
@@ -1138,7 +1143,7 @@ func (q *Queries) ListItemComponents(ctx context.Context, arg ListItemComponents
 }
 
 const listPayments = `-- name: ListPayments :many
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id FROM payments
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id FROM payments
 WHERE tenant_id = $1 AND property_id = $2 AND id < $3::bigint
   AND ($4::date IS NULL OR business_date = $4::date)
   AND ($5::text IS NULL OR payment_method = $5::text)
@@ -1194,6 +1199,7 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 			&i.CreatedBy,
 			&i.ApprovedBy,
 			&i.CompanyID,
+			&i.ShiftID,
 		); err != nil {
 			return nil, err
 		}
@@ -1392,7 +1398,7 @@ func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromSt
 const voidPayment = `-- name: VoidPayment :one
 UPDATE payments SET status = 'VOIDED', voided_at = $1::timestamptz, voided_by = $2, void_reason = $3, approved_by = $4
 WHERE tenant_id = $5 AND property_id = $6 AND id = $7
-RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id
+RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id
 `
 
 type VoidPaymentParams struct {
@@ -1439,6 +1445,7 @@ func (q *Queries) VoidPayment(ctx context.Context, arg VoidPaymentParams) (Payme
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.CompanyID,
+		&i.ShiftID,
 	)
 	return i, err
 }

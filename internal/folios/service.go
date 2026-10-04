@@ -31,6 +31,7 @@ type Service struct {
 	billing *billingconfig.Service
 	iam     *iam.Service
 	gate    CompanyGate
+	shifts  ShiftGate
 }
 
 // CompanyGate guards a company's city ledger account. Implementations lock the company row (lock level 44) and
@@ -41,6 +42,15 @@ type CompanyGate interface {
 	// LockForVoid refuses taking amount back when receipts would then exceed what the company is owed.
 	LockForVoid(ctx context.Context, propertyID, companyID int64, amount decimal.Decimal) error
 }
+
+// ShiftGate answers the cashier shift a cash payment or refund goes through (lock level 43, taken in the caller's transaction before the document number).
+type ShiftGate interface {
+	// CashShift is the open shift of the caller, or nil when the property does not need one; 409 NO_OPEN_SHIFT when it does and there is none.
+	CashShift(ctx context.Context, propertyID int64) (*int64, error)
+}
+
+// SetShiftGate wires the cashier shifts; without it cash is taken on no shift.
+func (s *Service) SetShiftGate(g ShiftGate) { s.shifts = g }
 
 // SetCompanyGate wires the city ledger; without it transfers are refused.
 func (s *Service) SetCompanyGate(g CompanyGate) { s.gate = g }

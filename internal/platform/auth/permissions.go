@@ -94,6 +94,11 @@ const (
 	PermCityLedgerWriteOff   Permission = "cityledger.write_off"
 	PermCityLedgerReminder   Permission = "cityledger.reminder"
 
+	PermCashierShift        Permission = "cashier.shift"
+	PermCashierShiftManage  Permission = "cashier.shift_manage"
+	PermCashierShiftApprove Permission = "cashier.shift_approve"
+	PermCashierSettings     Permission = "cashier.settings"
+
 	PermAuditRead Permission = "audit.read"
 )
 
@@ -177,6 +182,11 @@ var Catalogue = []PermissionInfo{
 	{PermCityLedgerCreditNote, "Accounts", "Make and void credit notes to a company, against an invoice or a transfer (an approval is needed)", "S1"},
 	{PermCityLedgerReminder, "Accounts", "Record payment reminders sent to companies for overdue invoices, and set the late fee shown on them", "S1"},
 	{PermCityLedgerWriteOff, "Accounts", "Write off what an invoice of a company still owes, and void a write-off (an approval is needed)", "S1"},
+
+	{PermCashierShift, "Billing", "Open and close one's own cashier shift, and move cash (drop, pay-in, pay-out) on it", "S2"},
+	{PermCashierShiftManage, "Billing", "See every cashier shift of the property and close the shift of another cashier", "S2"},
+	{PermCashierShiftApprove, "Billing", "Approve the cash over or short of a shift that is beyond the limit", "S2"},
+	{PermCashierSettings, "Billing", "Change the cashier settings: shifts for cash, the variance limit, the night audit rule", "S2"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

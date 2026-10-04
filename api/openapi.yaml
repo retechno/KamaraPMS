@@ -2445,6 +2445,195 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/settings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getCashierSettings
+      summary: The cashier settings of the property (any cashier permission)
+      tags: [cashier]
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setCashierSettings
+      summary: Change the cashier settings (cashier.settings)
+      description: Whether cash needs an open shift, the over or short a cashier may close with without an approval (0 = every difference needs one), and whether an open shift blocks the night audit.
+      tags: [cashier]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CashierSettings" }
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listCashierShifts
+      summary: Cashier shifts, newest first (cashier.shift_manage for all of them, cashier.shift for one's own)
+      tags: [cashier]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
+        - { name: user_id, in: query, schema: { type: integer, format: int64 }, description: Only with cashier.shift_manage; the others always see their own. }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Business date the shift was opened, on or after. }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of shifts (without cash, movements or counts).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShiftPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: openCashierShift
+      summary: Open a shift for the caller (cashier.shift)
+      description: One shift is open per cashier (409 `SHIFT_ALREADY_OPEN`) and per drawer (409 `DRAWER_IN_USE`). Without a float the shift starts with what the last shift of the drawer left.
+      tags: [cashier]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OpenCashierShiftRequest" }
+      responses:
+        "201":
+          description: The shift.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShift" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/current:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getCurrentCashierShift
+      summary: The open shift of the caller, or null (cashier.shift)
+      tags: [cashier]
+      responses:
+        "200":
+          description: The shift with its cash so far.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shift]
+                properties:
+                  shift: { oneOf: [{ $ref: "#/components/schemas/CashierShift" }, { type: "null" }] }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/suggested-float:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getSuggestedCashierFloat
+      summary: What the last shift of a drawer left in it (cashier.shift)
+      tags: [cashier]
+      parameters:
+        - { name: drawer, in: query, schema: { type: string, maxLength: 20 }, description: MAIN when empty. }
+      responses:
+        "200":
+          description: The float.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [opening_float]
+                properties:
+                  opening_float: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCashierShift
+      summary: One shift with its cash, movements and count (the owner, or cashier.shift_manage)
+      tags: [cashier]
+      responses:
+        "200":
+          description: The shift.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShift" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/{id}/movements:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveCashierCash
+      summary: A drop to the safe, a pay-in or a pay-out on an open shift (the owner, or cashier.shift_manage)
+      description: |
+        A drop is not journaled (the cash stays in the books). A pay-in (Dr cash, Cr the account) and a pay-out (Dr the account, Cr cash) are journaled on the business date.
+        409 `SHIFT_NOT_OPEN`.
+      tags: [cashier]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CashierMovementRequest" }
+      responses:
+        "201":
+          description: The shift with the movement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShift" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/{id}/close:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: closeCashierShift
+      summary: Close a shift with the cash counted (the owner, or cashier.shift_manage)
+      description: |
+        The difference to the expected cash is the over or short. A difference beyond the limit of the property (0: every difference) needs a `reason` and the `approval`
+        of a user with `cashier.shift_approve` (422 `APPROVAL_REQUIRED`, `VALIDATION_FAILED` on `reason`), and is journaled on the business date against the cash over and short
+        account. `counts` (optional) must add up to `counted_cash`. A closed shift never changes. 409 `SHIFT_NOT_OPEN`.
+      tags: [cashier]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloseCashierShiftRequest" }
+      responses:
+        "200":
+          description: The closed shift.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShift" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reports/cashier:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8320,8 +8509,12 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
     NightAuditBlockers:
       type: object
-      required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges]
+      required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges, open_shifts]
       properties:
+        open_shifts:
+          type: array
+          description: Cashier shifts still open, when the property wants the cash counted before the day closes.
+          items: { $ref: "#/components/schemas/OpenCashierShiftSummary" }
         unresolved_arrivals:
           type: array
           items: { $ref: "#/components/schemas/UnresolvedArrival" }
@@ -8334,6 +8527,115 @@ components:
         invalid_charges:
           type: array
           items: { $ref: "#/components/schemas/InvalidPosting" }
+    CashierSettings:
+      type: object
+      required: [require_shift_for_cash, max_variance, block_night_audit]
+      additionalProperties: false
+      properties:
+        require_shift_for_cash: { type: boolean, description: "A cash payment, refund or city ledger receipt needs the open shift of the caller (409 `NO_OPEN_SHIFT`)." }
+        max_variance: { type: string, description: "The over or short a shift may close with without an approval; 0 means every difference needs one." }
+        block_night_audit: { type: boolean, description: "An open shift blocks the night audit." }
+    CashierCash:
+      type: object
+      required: [opening_float, payments, refunds, receipts, voided_after_close, pay_ins, pay_outs, drops, expected]
+      properties:
+        opening_float: { type: string }
+        payments: { type: string, description: Cash payments of the shift that stand. }
+        refunds: { type: string }
+        receipts: { type: string, description: Cash receipts of the city ledger. }
+        voided_after_close: { type: string, description: "Cash payments and receipts of earlier shifts, already closed, that this cashier voided while this shift was open." }
+        pay_ins: { type: string }
+        pay_outs: { type: string }
+        drops: { type: string }
+        expected: { type: string, description: The cash that should be in the drawer. }
+    CashierMovement:
+      type: object
+      required: [id, kind, amount, account_id, reason, business_date, journal_id, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [DROP, PAY_IN, PAY_OUT] }
+        amount: { type: string }
+        account_id: { type: [integer, "null"], format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        reason: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        journal_id: { type: [integer, "null"], format: int64 }
+        journal_number: { type: string }
+        created_at: { type: string, format: date-time }
+    CashierCount:
+      type: object
+      required: [denomination, quantity]
+      additionalProperties: false
+      properties:
+        denomination: { type: string }
+        quantity: { type: integer, minimum: 0 }
+    CashierShift:
+      type: object
+      required: [id, number, user_id, user_name, drawer, status, opened_at, business_date_opened, opening_float, closed_at, business_date_closed, expected_cash, counted_cash, over_short, journal_id, approved_by, handed_over_to]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string, description: "SHF000001." }
+        user_id: { type: integer, format: int64 }
+        user_name: { type: string }
+        drawer: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        opened_at: { type: string, format: date-time }
+        business_date_opened: { $ref: "#/components/schemas/Date" }
+        opening_float: { type: string }
+        closed_at: { type: [string, "null"], format: date-time }
+        business_date_closed: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        expected_cash: { type: [string, "null"] }
+        counted_cash: { type: [string, "null"] }
+        over_short: { type: [string, "null"], description: "Counted less expected: negative is short." }
+        variance_reason: { type: string }
+        journal_id: { type: [integer, "null"], format: int64 }
+        approved_by: { type: [integer, "null"], format: int64 }
+        handed_over_to: { type: [integer, "null"], format: int64 }
+        cash: { $ref: "#/components/schemas/CashierCash" }
+        movements: { type: array, items: { $ref: "#/components/schemas/CashierMovement" } }
+        counts: { type: array, items: { $ref: "#/components/schemas/CashierCount" } }
+    CashierShiftPage:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/CashierShift" } }
+        next_cursor: { type: string }
+    OpenCashierShiftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        drawer: { type: string, maxLength: 20, description: MAIN when empty. }
+        opening_float: { type: [string, "null"], description: What the last shift of the drawer left when empty. }
+    CashierMovementRequest:
+      type: object
+      required: [kind, amount, reason]
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [DROP, PAY_IN, PAY_OUT] }
+        amount: { type: string }
+        account_id: { type: integer, format: int64, description: "Required for a pay-in and a pay-out (the account on the other side), not allowed for a drop." }
+        reason: { type: string, maxLength: 500 }
+    CloseCashierShiftRequest:
+      type: object
+      required: [counted_cash]
+      additionalProperties: false
+      properties:
+        counted_cash: { type: string }
+        counts: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/CashierCount" } }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+        hand_over_to: { type: [integer, "null"], format: int64, description: The user who gets the drawer next. }
+    OpenCashierShiftSummary:
+      type: object
+      required: [id, number, drawer, user_id, user_name, opened_at]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        drawer: { type: string }
+        user_id: { type: integer, format: int64 }
+        user_name: { type: string }
+        opened_at: { type: string, format: date-time }
     NightAuditWarnings:
       type: object
       required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending]

@@ -729,6 +729,16 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `POST {P}/city-ledger/accounts/{id}/reminders` | `cityledger.reminder` | `Idempotency-Key` required; `{level 1-3, note?, invoice_ids?}` (every overdue invoice by default); freezes what each owes today; 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE`; no journal |
 | `GET {P}/city-ledger/reminders/{id}` | `cityledger.read` | One reminder; 404 `REMINDER_NOT_FOUND` |
 | `GET {P}/city-ledger/reminders/{id}/reminder.pdf` | `cityledger.read` | The letter (First, Second or Final reminder), the interest column only when there is interest |
+| `GET {P}/cashier/settings` | any cashier permission | `{require_shift_for_cash, max_variance, block_night_audit}` |
+| `PUT {P}/cashier/settings` | `cashier.settings` | The same body; `max_variance` 0 means every difference needs an approval |
+| `GET {P}/cashier/shifts` | `cashier.shift_manage` (all) or `cashier.shift` (own) | `status`, `user_id`, `from`, `to`, `limit`, `cursor`; newest first |
+| `POST {P}/cashier/shifts` | `cashier.shift` | `{drawer?, opening_float?}`; 409 `SHIFT_ALREADY_OPEN`, `DRAWER_IN_USE`; the float defaults to what the last shift of the drawer left |
+| `GET {P}/cashier/shifts/current` | `cashier.shift` | `{shift}`: the caller's open shift with its cash so far, or null |
+| `GET {P}/cashier/shifts/suggested-float` | `cashier.shift` | `?drawer`; what the last shift of the drawer left |
+| `GET {P}/cashier/shifts/{id}` | the owner, or `cashier.shift_manage` | The shift with `cash` (float, payments, refunds, receipts, voided_after_close, pay-ins, pay-outs, drops, expected), movements and counts |
+| `POST {P}/cashier/shifts/{id}/movements` | the owner, or `cashier.shift_manage` | `Idempotency-Key` required; `{kind DROP|PAY_IN|PAY_OUT, amount, account_id (pay-in and pay-out), reason}`; pay-in and pay-out are journaled (type CASHIER), a drop is not; 409 `SHIFT_NOT_OPEN` |
+| `POST {P}/cashier/shifts/{id}/close` | the owner, or `cashier.shift_manage` | `{counted_cash, counts?, reason?, approval?, hand_over_to?}`; a difference beyond `max_variance` needs `reason` and an `approval` of `cashier.shift_approve` (422 `APPROVAL_REQUIRED`) and is journaled against the cash over and short account; 409 `SHIFT_NOT_OPEN` |
+Cash payments, cash refunds and cash city ledger receipts need the caller's open shift when `require_shift_for_cash` is on (409 `NO_OPEN_SHIFT`); the night audit preview and run list open shifts in `blockers.open_shifts` when `block_night_audit` is on.
 | `GET {P}/city-ledger/adjustments/{id}` | `cityledger.read` | One credit note or write-off |
 | `POST {P}/city-ledger/adjustments/{id}/void` | the permission of its kind + approval | `{reason, approval}`: reverses its journal on the business date; 409 `ADJUSTMENT_ALREADY_VOIDED`, `ADJUSTMENT_ON_INVOICE` |
 | `GET {P}/city-ledger/adjustments/{id}/credit-note.pdf` | `cityledger.read` | The credit note as a document (a write-off has none: 409 `NOT_A_CREDIT_NOTE`) |

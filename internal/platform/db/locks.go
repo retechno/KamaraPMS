@@ -67,6 +67,7 @@ var (
 	Stays            = LockTable{"stays", LevelStays}
 	Folios           = LockTable{"folios", LevelFolios}
 	Payments         = LockTable{"payments", LevelPayments}
+	CashierShifts    = LockTable{"cashier_shifts", LevelPayments} // taken after the payments of the same level: a payment is posted on a shift
 	Companies        = LockTable{"companies", LevelCompanies}
 	Groups           = LockTable{"booking_groups", LevelGroups}
 	Accounting       = LockTable{"accounting_settings", LevelAccounting}

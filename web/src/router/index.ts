@@ -130,6 +130,7 @@ export const router = createRouter({
     { path: '/audit', name: 'audit', component: () => import('@/views/audit/AuditTrailView.vue'), meta: { title: 'Audit trail' } },
     { path: '/reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reports' } },
     { path: '/room-charges', name: 'room-charges', component: () => import('@/views/billing/RoomChargesView.vue'), meta: { title: 'Room charges' } },
+    { path: '/cashier/shifts', name: 'cashier-shifts', component: () => import('@/views/billing/CashierShiftView.vue'), meta: { title: 'Cashier shifts' } },
     { path: '/cashier', name: 'cashier', component: () => import('@/views/billing/CashierView.vue'), meta: { title: 'Cashier' } },
     { path: '/arrivals', name: 'arrivals', component: () => import('@/views/frontdesk/FrontDeskView.vue'), props: { tab: 'arrivals' }, meta: { title: 'Arrivals' } },
     { path: '/walk-in', name: 'walk-in', component: () => import('@/views/frontdesk/WalkInView.vue'), meta: { title: 'Walk-in' } },

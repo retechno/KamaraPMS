@@ -166,7 +166,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	if typ == "" {
 		typ = JournalPayables
 	}
-	if typ != JournalPayables && typ != JournalBank && typ != JournalTax && typ != JournalReceivables {
+	if typ != JournalPayables && typ != JournalBank && typ != JournalTax && typ != JournalReceivables && typ != JournalCashier {
 		return 0, "", apperr.Internal(fmt.Errorf("a module cannot post a journal of type %s", typ))
 	}
 	if len(in.Lines) < 2 {

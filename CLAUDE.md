@@ -51,7 +51,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
   `numeric(18,3)` in SQL, rounded half away from zero at `properties.currency_decimals` (0 to 3).
 - **Transactions:** a use case opens `TxManager.WithinTx`; services join the ambient transaction and never
   commit. Row locks only via `db.LockRows` / `db.EnterLockLevel` (global lock order is enforced at runtime:
-  business day → room types → rooms → reservations → stays → folios → payments → companies → groups → accounting → suppliers → bank accounts → tax profiles → sequences).
+  business day → room types → rooms → reservations → stays → folios → payments/cashier shifts → companies → groups → accounting → suppliers → bank accounts → tax profiles → sequences).
 - **Every business-dated write** first calls `RequireOpenBusinessDay(ctx, propertyID, db.ForShare, …)`.
 - **Errors:** return `*apperr.Error` with a stable code. DB constraint names map to codes in
   `internal/platform/db/errors.go` (a test verifies every name exists). New constraint → add a mapping.

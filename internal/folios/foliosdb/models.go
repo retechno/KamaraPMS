@@ -110,4 +110,5 @@ type Payment struct {
 	CreatedBy         *int64
 	ApprovedBy        *int64
 	CompanyID         *int64
+	ShiftID           *int64
 }

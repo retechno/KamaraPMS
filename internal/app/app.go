@@ -39,6 +39,7 @@ import (
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
+	"kamarapms/internal/shifts"
 	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/taxinvoice"
 	"kamarapms/internal/tenancy"
@@ -110,6 +111,10 @@ func New(d Deps) *App {
 	bankrecSvc := bankrec.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
 	lostFoundSvc := lostfound.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
+	shiftsSvc := shifts.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, accountingSvc)
+	foliosSvc.SetShiftGate(shiftsSvc) // cash goes through the shift of the cashier
+	cityLedgerSvc.SetShiftGate(shiftsSvc)
+	nightAuditSvc.SetShiftChecker(shiftsSvc) // and an open shift stops the night audit
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
@@ -125,6 +130,7 @@ func New(d Deps) *App {
 	frontdesk.NewHandler(frontdeskSvc).Register(api)
 	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
+	shifts.NewHandler(shiftsSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)

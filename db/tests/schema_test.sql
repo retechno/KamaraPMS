@@ -1414,6 +1414,31 @@ SELECT expect_error('the days of grace are at most 365', '23514',
     $q$INSERT INTO city_ledger_late_fee_settings (tenant_id, property_id, monthly_rate, grace_days) VALUES (tn('ABC'), pr('BALI'), 3, 400)$q$);
 
 ------------------------------------------------------------------------------------------
+-- Cashier shifts
+------------------------------------------------------------------------------------------
+INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, drawer, opened_at, business_date_opened, opening_float)
+VALUES (tn('ABC'), pr('BALI'), 'SHF9001', (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')), 'FRONT', now(), '2026-10-01', 100000);
+SELECT expect_error('a shift number is unique per property', '23505',
+    $q$INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, drawer, opened_at, business_date_opened) VALUES (tn('ABC'), pr('BALI'), 'SHF9001', (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')), 'BACK', now(), '2026-10-01')$q$);
+SELECT expect_error('one shift is open per cashier', '23505',
+    $q$INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, drawer, opened_at, business_date_opened) VALUES (tn('ABC'), pr('BALI'), 'SHF9002', (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')), 'BACK', now(), '2026-10-01')$q$);
+SELECT expect_error('one shift is open per drawer', '23505',
+    $q$INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, drawer, opened_at, business_date_opened) VALUES (tn('ABC'), pr('BALI'), 'SHF9003', (SELECT max(id) FROM users WHERE tenant_id = tn('ABC')) + 0, 'FRONT', now(), '2026-10-01')$q$);
+SELECT expect_error('a float is not negative', '23514',
+    $q$INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, drawer, opened_at, business_date_opened, opening_float) VALUES (tn('ABC'), pr('BALI'), 'SHF9004', (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')), 'X', now(), '2026-10-01', -1)$q$);
+SELECT expect_error('a closed shift has its count', '23514',
+    $q$UPDATE cashier_shifts SET status = 'CLOSED' WHERE shift_number = 'SHF9001'$q$);
+SELECT expect_error('a shift is never deleted', '23001', $q$DELETE FROM cashier_shifts WHERE shift_number = 'SHF9001'$q$);
+SELECT expect_error('a movement is above zero', '23514',
+    $q$INSERT INTO cashier_shift_movements (tenant_id, property_id, shift_id, kind, amount, reason, business_date) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM cashier_shifts WHERE shift_number = 'SHF9001'), 'DROP', 0, 'x', '2026-10-01')$q$);
+SELECT expect_error('a pay-in has an account and a journal', '23514',
+    $q$INSERT INTO cashier_shift_movements (tenant_id, property_id, shift_id, kind, amount, reason, business_date) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM cashier_shifts WHERE shift_number = 'SHF9001'), 'PAY_IN', 5, 'x', '2026-10-01')$q$);
+INSERT INTO cashier_shift_movements (tenant_id, property_id, shift_id, kind, amount, reason, business_date)
+VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM cashier_shifts WHERE shift_number = 'SHF9001'), 'DROP', 5000, 'to the safe', '2026-10-01');
+SELECT expect_error('movements are append-only', '23001', $q$UPDATE cashier_shift_movements SET amount = 1$q$);
+SELECT expect_error('the variance limit is not negative', '23514', $q$UPDATE property_cashier_settings SET max_variance = -1$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

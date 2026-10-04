@@ -10,6 +10,7 @@ import (
 	"kamarapms/internal/expected"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/roomcharge"
+	"kamarapms/internal/shifts"
 )
 
 // Arrival is an unresolved arrival: a CONFIRMED room whose arrival date has come.
@@ -32,17 +33,18 @@ type Departure struct {
 	DepartureDate civil.Date `json:"departure_date"`
 }
 
-// Blockers are the findings that stop the run (checks 2, 3, 4 and 6).
+// Blockers are the findings that stop the run (checks 2, 3, 4 and 6, and a cashier shift still open when the property asks for the cash to be counted first).
 type Blockers struct {
 	UnresolvedArrivals   []Arrival           `json:"unresolved_arrivals"`
 	UnresolvedDepartures []Departure         `json:"unresolved_departures"`
 	ChargeErrors         []roomcharge.Result `json:"charge_errors"`
 	InvalidCharges       []expected.Invalid  `json:"invalid_charges"`
+	OpenShifts           []shifts.OpenShift  `json:"open_shifts"`
 }
 
 // Any reports whether something blocks the run.
 func (b Blockers) Any() bool {
-	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges) > 0
+	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges)+len(b.OpenShifts) > 0
 }
 
 // MissingCharges are READY nights before the business date (the run posts them).

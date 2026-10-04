@@ -41,6 +41,10 @@ func newAPI(t *testing.T) *apiEnv {
 	t.Helper()
 	pool := dbtest.Pool(t)
 	dbtest.Reset(t, pool)
+	// These tests take cash without a shift; the shift rules have their own tests.
+	if _, err := pool.Exec(context.Background(), `ALTER TABLE property_cashier_settings ALTER COLUMN require_shift_for_cash SET DEFAULT false, ALTER COLUMN block_night_audit SET DEFAULT false`); err != nil {
+		t.Fatal(err)
+	}
 	txm := db.NewTxManager(pool, 5*time.Second)
 	c := clock.NewFake(time.Date(2026, 9, 30, 13, 0, 0, 0, time.UTC)) // 20:00 in Jakarta
 	aw := audit.NewWriter(c)

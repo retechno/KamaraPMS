@@ -52,6 +52,7 @@ const (
 	KeyRetainedEarnings = "RETAINED_EARNINGS"
 	KeyAccountsPayable  = "ACCOUNTS_PAYABLE"
 	KeyInputVAT         = "INPUT_VAT"
+	KeyCashOverShort    = "CASH_OVER_SHORT"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -69,6 +70,7 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyRetainedEarnings, TypeEquity, "Where the result of a fiscal year is closed to"},
 	{KeyAccountsPayable, TypeLiability, "What the hotel owes its suppliers (payables)"},
 	{KeyInputVAT, TypeAsset, "VAT paid on purchases that is claimed or kept apart (input VAT)"},
+	{KeyCashOverShort, TypeExpense, "Where the cash over and short of a cashier shift is booked"},
 }
 
 // Account is an account of the chart.

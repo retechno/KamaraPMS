@@ -76,6 +76,7 @@ type CityLedgerReceipt struct {
 	CreatedAt       time.Time
 	CreatedBy       *int64
 	ApprovedBy      *int64
+	ShiftID         *int64
 }
 
 type CityLedgerReminder struct {

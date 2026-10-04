@@ -76,6 +76,13 @@ func (s *Service) paymentReplay(ctx context.Context, tenantID, propertyID int64,
 
 // createPayment writes a payments row (number from the sequence, last in the lock order) and its ledger entry.
 func (ps posting) createPayment(ctx context.Context, payType, method string, amount decimal.Decimal, in PaymentInput, refundOf *int64, key string, approvedBy *int64, reason string) (foliosdb.Payment, error) {
+	var shiftID *int64
+	if method == methodCash && ps.s.shifts != nil {
+		var err error
+		if shiftID, err = ps.s.shifts.CashShift(ctx, ps.propertyID); err != nil {
+			return foliosdb.Payment{}, err
+		}
+	}
 	number, err := ps.s.days.NextDocumentNumber(ctx, ps.propertyID, tenancy.SeqPayment)
 	if err != nil {
 		return foliosdb.Payment{}, err
@@ -87,7 +94,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 	pay, err := ps.s.q(ctx).InsertPayment(ctx, foliosdb.InsertPaymentParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentNumber: number, FolioID: ps.folio.ID, PaymentType: payType, PaymentMethod: method,
 		Amount: amount, PaidAt: ps.at, BusinessDate: ps.bd, ReferenceNumber: nullable(in.ReferenceNumber), RefundOfPaymentID: refundOf,
-		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID,
+		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID, ShiftID: shiftID,
 	})
 	if err != nil {
 		return foliosdb.Payment{}, err

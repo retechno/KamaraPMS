@@ -59,6 +59,7 @@ export const navigation: NavSection[] = [
     items: [
       { id: 'folios', to: '/folios' },
       { id: 'cashier', to: '/cashier' },
+      { id: 'cashierShifts', to: '/cashier/shifts' },
       { id: 'roomCharges', to: '/room-charges' },
       { id: 'cityLedger', to: '/city-ledger' },
       { id: 'cityLedgerOverdue', to: '/city-ledger/overdue' },

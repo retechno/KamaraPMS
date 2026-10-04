@@ -31,6 +31,8 @@ const (
 	JournalTax      = "TAX"
 	// JournalReceivables is a credit note or a write-off of the city ledger.
 	JournalReceivables = "RECEIVABLES"
+	// JournalCashier is the over or short of a cashier shift, a pay-in or a pay-out of the drawer.
+	JournalCashier = "CASHIER"
 )
 
 const (

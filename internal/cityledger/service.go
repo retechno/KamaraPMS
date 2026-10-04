@@ -33,7 +33,16 @@ type Service struct {
 	iam       *iam.Service
 	companies *companies.Service
 	acct      *accounting.Service
+	shifts    ShiftGate
 }
+
+// ShiftGate answers the cashier shift a cash receipt goes through (see folios.ShiftGate).
+type ShiftGate interface {
+	CashShift(ctx context.Context, propertyID int64) (*int64, error)
+}
+
+// SetShiftGate wires the cashier shifts; without it cash is taken on no shift.
+func (s *Service) SetShiftGate(g ShiftGate) { s.shifts = g }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, i *iam.Service, co *companies.Service, acct *accounting.Service) *Service {
@@ -454,6 +463,12 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				if err != nil {
 					return err
 				}
+				var shiftID *int64
+				if method == "CASH" && s.shifts != nil {
+					if shiftID, err = s.shifts.CashShift(ctx, propertyID); err != nil {
+						return err
+					}
+				}
 				owes, err := s.companies.LockForReceipt(ctx, propertyID, companyID)
 				if err != nil {
 					return err
@@ -468,7 +483,7 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				r, err := s.q(ctx).InsertReceipt(ctx, cityledgerdb.InsertReceiptParams{
 					TenantID: p.TenantID, PropertyID: propertyID, ReceiptNumber: number, CompanyID: companyID, Amount: amount, PaymentMethod: method,
 					ReferenceNumber: nullable(strings.TrimSpace(in.ReferenceNumber)), Remarks: nullable(strings.TrimSpace(in.Remarks)),
-					BusinessDate: day.BusinessDate, PaidAt: s.clock.Now(), IdempotencyKey: &key, ActorID: p.ActorID(),
+					BusinessDate: day.BusinessDate, PaidAt: s.clock.Now(), IdempotencyKey: &key, ActorID: p.ActorID(), ShiftID: shiftID,
 				})
 				if err != nil {
 					return err

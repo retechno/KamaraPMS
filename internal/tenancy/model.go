@@ -268,6 +268,8 @@ const (
 	SeqWriteOff SequenceType = "WRITE_OFF"
 	// SeqReminder numbers the payment reminders sent to companies.
 	SeqReminder SequenceType = "REMINDER"
+	// SeqShift numbers the cashier shifts.
+	SeqShift SequenceType = "SHIFT"
 	// SeqMaintenance numbers maintenance requests.
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
@@ -294,6 +296,7 @@ var defaultSequences = []struct {
 	{SeqCreditNote, "CN"},
 	{SeqWriteOff, "WO"},
 	{SeqReminder, "REM"},
+	{SeqShift, "SHF"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 }

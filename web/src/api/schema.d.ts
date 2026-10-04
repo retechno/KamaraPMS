@@ -2005,6 +2005,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/cashier/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The cashier settings of the property (any cashier permission) */
+        get: operations["getCashierSettings"];
+        /**
+         * Change the cashier settings (cashier.settings)
+         * @description Whether cash needs an open shift, the over or short a cashier may close with without an approval (0 = every difference needs one), and whether an open shift blocks the night audit.
+         */
+        put: operations["setCashierSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Cashier shifts, newest first (cashier.shift_manage for all of them, cashier.shift for one's own) */
+        get: operations["listCashierShifts"];
+        put?: never;
+        /**
+         * Open a shift for the caller (cashier.shift)
+         * @description One shift is open per cashier (409 `SHIFT_ALREADY_OPEN`) and per drawer (409 `DRAWER_IN_USE`). Without a float the shift starts with what the last shift of the drawer left.
+         */
+        post: operations["openCashierShift"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The open shift of the caller, or null (cashier.shift) */
+        get: operations["getCurrentCashierShift"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/suggested-float": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** What the last shift of a drawer left in it (cashier.shift) */
+        get: operations["getSuggestedCashierFloat"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One shift with its cash, movements and count (the owner, or cashier.shift_manage) */
+        get: operations["getCashierShift"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/{id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A drop to the safe, a pay-in or a pay-out on an open shift (the owner, or cashier.shift_manage)
+         * @description A drop is not journaled (the cash stays in the books). A pay-in (Dr cash, Cr the account) and a pay-out (Dr the account, Cr cash) are journaled on the business date.
+         *     409 `SHIFT_NOT_OPEN`.
+         */
+        post: operations["moveCashierCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a shift with the cash counted (the owner, or cashier.shift_manage)
+         * @description The difference to the expected cash is the over or short. A difference beyond the limit of the property (0: every difference) needs a `reason` and the `approval`
+         *     of a user with `cashier.shift_approve` (422 `APPROVAL_REQUIRED`, `VALIDATION_FAILED` on `reason`), and is journaled on the business date against the cash over and short
+         *     account. `counts` (optional) must add up to `counted_cash`. A closed shift never changes. 409 `SHIFT_NOT_OPEN`.
+         */
+        post: operations["closeCashierShift"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/cashier": {
         parameters: {
             query?: {
@@ -7444,10 +7597,133 @@ export interface components {
             departure_date: components["schemas"]["Date"];
         };
         NightAuditBlockers: {
+            /** @description Cashier shifts still open, when the property wants the cash counted before the day closes. */
+            open_shifts: components["schemas"]["OpenCashierShiftSummary"][];
             unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
             unresolved_departures: components["schemas"]["UnresolvedDeparture"][];
             charge_errors: components["schemas"]["RoomChargeItem"][];
             invalid_charges: components["schemas"]["InvalidPosting"][];
+        };
+        CashierSettings: {
+            /** @description A cash payment, refund or city ledger receipt needs the open shift of the caller (409 `NO_OPEN_SHIFT`). */
+            require_shift_for_cash: boolean;
+            /** @description The over or short a shift may close with without an approval; 0 means every difference needs one. */
+            max_variance: string;
+            /** @description An open shift blocks the night audit. */
+            block_night_audit: boolean;
+        };
+        CashierCash: {
+            opening_float: string;
+            /** @description Cash payments of the shift that stand. */
+            payments: string;
+            refunds: string;
+            /** @description Cash receipts of the city ledger. */
+            receipts: string;
+            /** @description Cash payments and receipts of earlier shifts, already closed, that this cashier voided while this shift was open. */
+            voided_after_close: string;
+            pay_ins: string;
+            pay_outs: string;
+            drops: string;
+            /** @description The cash that should be in the drawer. */
+            expected: string;
+        };
+        CashierMovement: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "DROP" | "PAY_IN" | "PAY_OUT";
+            amount: string;
+            /** Format: int64 */
+            account_id: number | null;
+            account_code?: string;
+            account_name?: string;
+            reason: string;
+            business_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            journal_id: number | null;
+            journal_number?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CashierCount: {
+            denomination: string;
+            quantity: number;
+        };
+        CashierShift: {
+            /** Format: int64 */
+            id: number;
+            /** @description SHF000001. */
+            number: string;
+            /** Format: int64 */
+            user_id: number;
+            user_name: string;
+            drawer: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: date-time */
+            opened_at: string;
+            business_date_opened: components["schemas"]["Date"];
+            opening_float: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            business_date_closed: components["schemas"]["Date"] | null;
+            expected_cash: string | null;
+            counted_cash: string | null;
+            /** @description Counted less expected: negative is short. */
+            over_short: string | null;
+            variance_reason?: string;
+            /** Format: int64 */
+            journal_id: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** Format: int64 */
+            handed_over_to: number | null;
+            cash?: components["schemas"]["CashierCash"];
+            movements?: components["schemas"]["CashierMovement"][];
+            counts?: components["schemas"]["CashierCount"][];
+        };
+        CashierShiftPage: {
+            data: components["schemas"]["CashierShift"][];
+            next_cursor?: string;
+        };
+        OpenCashierShiftRequest: {
+            /** @description MAIN when empty. */
+            drawer?: string;
+            /** @description What the last shift of the drawer left when empty. */
+            opening_float?: string | null;
+        };
+        CashierMovementRequest: {
+            /** @enum {string} */
+            kind: "DROP" | "PAY_IN" | "PAY_OUT";
+            amount: string;
+            /**
+             * Format: int64
+             * @description Required for a pay-in and a pay-out (the account on the other side), not allowed for a drop.
+             */
+            account_id?: number;
+            reason: string;
+        };
+        CloseCashierShiftRequest: {
+            counted_cash: string;
+            counts?: components["schemas"]["CashierCount"][];
+            reason?: string;
+            approval?: components["schemas"]["Approval"];
+            /**
+             * Format: int64
+             * @description The user who gets the drawer next.
+             */
+            hand_over_to?: number | null;
+        };
+        OpenCashierShiftSummary: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            drawer: string;
+            /** Format: int64 */
+            user_id: number;
+            user_name: string;
+            /** Format: date-time */
+            opened_at: string;
         };
         NightAuditWarnings: {
             stale_drafts: {
@@ -13285,6 +13561,268 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCashierSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setCashierSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashierSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCashierShifts: {
+        parameters: {
+            query?: {
+                status?: "OPEN" | "CLOSED";
+                /** @description Only with cashier.shift_manage; the others always see their own. */
+                user_id?: number;
+                /** @description Business date the shift was opened */
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of shifts (without cash, movements or counts). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShiftPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    openCashierShift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenCashierShiftRequest"];
+            };
+        };
+        responses: {
+            /** @description The shift. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShift"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCurrentCashierShift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The shift with its cash so far. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        shift: components["schemas"]["CashierShift"] | null;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSuggestedCashierFloat: {
+        parameters: {
+            query?: {
+                /** @description MAIN when empty. */
+                drawer?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The float. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        opening_float: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCashierShift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The shift. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShift"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    moveCashierCash: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashierMovementRequest"];
+            };
+        };
+        responses: {
+            /** @description The shift with the movement. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShift"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    closeCashierShift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseCashierShiftRequest"];
+            };
+        };
+        responses: {
+            /** @description The closed shift. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShift"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

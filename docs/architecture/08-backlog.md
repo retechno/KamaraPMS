@@ -23,7 +23,7 @@ accounts payable, bank reconciliation and monthly tax filing. What is missing, m
 2. **Credit notes and write-offs.** An issued city ledger invoice can only be voided: add customer and supplier credit
    notes (journalled), write-off of bad debt with approval, and a list of overdue invoices for reminders (dunning,
    interest). **Customer side done** (credit notes, write-offs, overdue list, reminders, interest shown); the supplier credit notes remain.
-3. **Cashier shifts and the cash drawer.** Open and close a shift, opening float, drops and pay-ins, the counted cash,
+3. **Cashier shifts and the cash drawer.** (**Built**, see README; the Z-report PDF and a shift handover screen remain.) Open and close a shift, opening float, drops and pay-ins, the counted cash,
    the over and short journalled, and the hand-over between shifts.
 4. **Budget and cash flow.** A budget per account and month, actual against budget by USALI department, and a cash
    flow statement.

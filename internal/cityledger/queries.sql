@@ -48,10 +48,10 @@ SELECT * FROM city_ledger_receipts WHERE tenant_id = @tenant_id AND property_id 
 -- name: InsertReceipt :one
 INSERT INTO city_ledger_receipts (
     tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks,
-    business_date, paid_at, idempotency_key, created_by
+    business_date, paid_at, idempotency_key, created_by, shift_id
 ) VALUES (
     @tenant_id, @property_id, @receipt_number, @company_id, @amount, @payment_method, sqlc.narg(reference_number), sqlc.narg(remarks),
-    @business_date, @paid_at, sqlc.narg(idempotency_key), sqlc.narg(actor_id)
+    @business_date, @paid_at, sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(shift_id)
 )
 RETURNING *;
 

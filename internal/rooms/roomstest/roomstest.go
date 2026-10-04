@@ -41,6 +41,7 @@ import (
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/rooms"
+	"kamarapms/internal/shifts"
 	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/taxinvoice"
 	"kamarapms/internal/tenancy"
@@ -82,6 +83,7 @@ type Env struct {
 	BankRec     *bankrec.Service
 	Tax         *taxfiling.Service
 	TaxInvoice  *taxinvoice.Service
+	Shifts      *shifts.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -120,7 +122,11 @@ func Setup(t *testing.T) *Env {
 	ten.OnPropertyCreated(rm.SeedProperty) // and the standard bed types
 	taxSvc := taxfiling.NewService(txm, c, aw, authz, ten, acct, ia)
 	taxInv := taxinvoice.NewService(txm, c, aw, authz, ten, ia, taxSvc)
-	return &Env{TaxInvoice: taxInv, Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	sh := shifts.NewService(txm, c, aw, authz, ten, ia, acct)
+	fo.SetShiftGate(sh)
+	cl.SetShiftGate(sh)
+	na.SetShiftChecker(sh)
+	return &Env{Shifts: sh, TaxInvoice: taxInv, Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
 }
@@ -158,6 +164,11 @@ func (e *Env) PropertyIn(t *testing.T, tenantID int64, code, currency string, de
 		},
 		OpeningBusinessDate: BD,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The tests take cash without a shift unless a test turns the rule on (the shift tests do).
+	_, err = e.Pool.Exec(context.Background(), `UPDATE property_cashier_settings SET require_shift_for_cash = false, block_night_audit = false WHERE property_id = $1`, p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
