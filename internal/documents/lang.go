@@ -211,7 +211,7 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"INCOME STATEMENT": "LAPORAN LABA RUGI", "USALI layout": "Format USALI", "BALANCE SHEET": "NERACA", "GENERAL LEDGER": "BUKU BESAR", "Journal": "Jurnal",
 	"Detail": "Rincian", "Closing balance": "Saldo akhir", "Only the first entries are listed: narrow the range.": "Hanya entri pertama yang ditampilkan: persempit rentangnya.",
 	"Equity includes the earnings of all periods to date: there is no year-end closing entry.": "Ekuitas mencakup laba semua periode sampai saat ini: tidak ada jurnal penutup akhir tahun.",
-	"CASH FLOW STATEMENT": "LAPORAN ARUS KAS", "Indirect method": "Metode tidak langsung",
+	"CASH FLOW STATEMENT": "LAPORAN ARUS KAS", "Indirect method": "Metode tidak langsung", "Direct method": "Metode langsung",
 	"WARNING: the statement differs from the change of the cash accounts by ": "PERINGATAN: laporan berbeda dari perubahan akun kas sebesar ",
 	// budget
 	"BUDGET AGAINST ACTUAL": "ANGGARAN TERHADAP REALISASI", "Fiscal year": "Tahun fiskal", "Budget": "Anggaran", "Actual": "Realisasi", "Variance": "Selisih",

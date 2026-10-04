@@ -3,6 +3,7 @@ package documents
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/shopspring/decimal"
 
@@ -114,7 +115,22 @@ func (s *Service) IncomeStatementPDF(ctx context.Context, propertyID int64, from
 
 // CashFlowPDF is the cash flow statement of a range (accounting.view).
 func (s *Service) CashFlowPDF(ctx context.Context, propertyID int64, from, to *civil.Date) (Document, error) {
-	cf, err := s.acct.CashFlow(ctx, propertyID, from, to)
+	return s.cashFlowPDF(ctx, propertyID, from, to, accounting.CashFlowIndirect)
+}
+
+// CashFlowDirectPDF is the same statement by the direct method (accounting.view).
+func (s *Service) CashFlowDirectPDF(ctx context.Context, propertyID int64, from, to *civil.Date) (Document, error) {
+	return s.cashFlowPDF(ctx, propertyID, from, to, accounting.CashFlowDirect)
+}
+
+func (s *Service) cashFlowPDF(ctx context.Context, propertyID int64, from, to *civil.Date, method string) (Document, error) {
+	var cf accounting.CashFlow
+	var err error
+	if method == accounting.CashFlowDirect {
+		cf, err = s.acct.CashFlowDirect(ctx, propertyID, from, to)
+	} else {
+		cf, err = s.acct.CashFlow(ctx, propertyID, from, to)
+	}
 	if err != nil {
 		return Document{}, err
 	}
@@ -127,7 +143,7 @@ func (s *Service) CashFlowPDF(ctx context.Context, propertyID int64, from, to *c
 	if !cf.Difference.IsZero() {
 		notes = append(notes, "WARNING: the statement differs from the change of the cash accounts by "+dc.lang.Money(cf.Difference, dc.decimals)+".")
 	}
-	d, _, err := s.financial(ctx, propertyID, "CASH FLOW STATEMENT", dc.lang.T("Indirect method"), dc.lang.Date(cf.From)+" - "+dc.lang.Date(cf.To), statementCols, rows, bold, notes...)
+	d, _, err := s.financial(ctx, propertyID, "CASH FLOW STATEMENT", dc.lang.T(map[bool]string{true: "Direct method", false: "Indirect method"}[method == accounting.CashFlowDirect]), dc.lang.Date(cf.From)+" - "+dc.lang.Date(cf.To), statementCols, rows, bold, notes...)
 	if err != nil {
 		return Document{}, err
 	}
@@ -234,7 +250,17 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 	}
 	mux.Handle("GET "+p+"/trial-balance.pdf", rangeDoc(h.svc.TrialBalancePDF))
 	mux.Handle("GET "+p+"/income-statement.pdf", rangeDoc(h.svc.IncomeStatementPDF))
-	mux.Handle("GET "+p+"/cash-flow.pdf", rangeDoc(h.svc.CashFlowPDF))
+	indirectPDF, directPDF := rangeDoc(h.svc.CashFlowPDF), rangeDoc(h.svc.CashFlowDirectPDF)
+	mux.Handle("GET "+p+"/cash-flow.pdf", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		switch m := strings.ToUpper(r.URL.Query().Get("method")); m {
+		case "", accounting.CashFlowIndirect:
+			return indirectPDF(w, r)
+		case accounting.CashFlowDirect:
+			return directPDF(w, r)
+		default:
+			return apperr.Invalid("the document parameters are invalid", apperr.FieldError{Field: "method", Code: "INVALID_VALUE", Message: "INDIRECT or DIRECT"})
+		}
+	}))
 	mux.Handle("GET "+p+"/balance-sheet.pdf", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		pid, err := tenancy.PropertyID(r)
 		if err != nil {

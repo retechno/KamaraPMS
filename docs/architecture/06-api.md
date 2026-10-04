@@ -734,7 +734,7 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `POST {P}/city-ledger/accounts/{id}/reminders` | `cityledger.reminder` | `Idempotency-Key` required; `{level 1-3, note?, invoice_ids?}` (every overdue invoice by default); freezes what each owes today; 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE`; no journal |
 | `GET {P}/city-ledger/reminders/{id}` | `cityledger.read` | One reminder; 404 `REMINDER_NOT_FOUND` |
 | `GET {P}/city-ledger/reminders/{id}/reminder.pdf` | `cityledger.read` | The letter (First, Second or Final reminder), the interest column only when there is interest |
-| `GET {P}/accounting/cash-flow` | `accounting.view` | `from`, `to`, `format=csv`, `lang`; `lines` (statement lines), `net_income`, `operating`, `investing`, `financing`, `net_change`, `opening_cash`, `closing_cash`, `difference`, `reconciled`; `cash-flow.pdf` is the same as a PDF |
+| `GET {P}/accounting/cash-flow` | `accounting.view` | `from`, `to`, `method=INDIRECT|DIRECT`, `format=csv`, `lang`; `method`, `lines` (statement lines), `net_income`, `operating`, `investing`, `financing`, `net_change`, `opening_cash`, `closing_cash`, `difference`, `reconciled`; `cash-flow.pdf` is the same as a PDF |
 | `GET {P}/budgets` | `budget.view` | `year_start`, `status`; the summaries (no grid), latest year and version first |
 | `POST {P}/budgets` | `budget.manage` | `{year_start?, name, description?, copy_from_id?}`: a draft, empty or a copy (which keeps its year); the version is the next of the year; 201 with the grid; 409 `BUDGET_VERSION_TAKEN` (try again) |
 | `GET {P}/budgets/{id}` | `budget.view` | With `months`, `rows` (twelve amounts and a total per account) and `available_accounts`; 404 `BUDGET_NOT_FOUND` |

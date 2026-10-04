@@ -118,6 +118,71 @@ func (q *Queries) AncestorIDs(ctx context.Context, arg AncestorIDsParams) ([]int
 	return items, nil
 }
 
+const cashEffectByCounterpart = `-- name: CashEffectByCounterpart :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(a.statement_group, '')::text AS statement_group, sum(l.credit - l.debit)::numeric AS effect
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND j.journal_date >= $3::date AND j.journal_date <= $4::date AND NOT j.is_closing
+  AND COALESCE(a.statement_group, '') <> 'CASH'
+  AND EXISTS (SELECT 1 FROM gl_journal_lines c JOIN gl_accounts ca ON ca.property_id = c.property_id AND ca.id = c.account_id
+               WHERE c.property_id = l.property_id AND c.journal_id = l.journal_id AND ca.statement_group = 'CASH')
+GROUP BY a.id
+HAVING sum(l.credit - l.debit) <> 0
+ORDER BY a.code
+`
+
+type CashEffectByCounterpartParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type CashEffectByCounterpartRow struct {
+	ID             int64
+	Code           string
+	Name           string
+	AccountType    string
+	StatementGroup string
+	Effect         decimal.Decimal
+}
+
+// The direct method of the cash flow statement: the journals that touch a cash account (group CASH) in a range, closing journals left out, and for every other account
+// on those journals what it explains of the cash (credit less debit: a revenue credited on a journal with cash debited brought that cash). Journals balance, so
+// these add up to the change of the cash accounts.
+func (q *Queries) CashEffectByCounterpart(ctx context.Context, arg CashEffectByCounterpartParams) ([]CashEffectByCounterpartRow, error) {
+	rows, err := q.db.Query(ctx, cashEffectByCounterpart,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CashEffectByCounterpartRow{}
+	for rows.Next() {
+		var i CashEffectByCounterpartRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.StatementGroup,
+			&i.Effect,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const closePeriod = `-- name: ClosePeriod :exec
 INSERT INTO gl_periods (tenant_id, property_id, period_start, status, closed_at, closed_by)
 VALUES ($1, $2, $3, 'CLOSED', $4, $5)

@@ -358,3 +358,19 @@ SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
   JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;
+
+-- The direct method of the cash flow statement: the journals that touch a cash account (group CASH) in a range, closing journals left out, and for every other account
+-- on those journals what it explains of the cash (credit less debit: a revenue credited on a journal with cash debited brought that cash). Journals balance, so
+-- these add up to the change of the cash accounts.
+-- name: CashEffectByCounterpart :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(a.statement_group, '')::text AS statement_group, sum(l.credit - l.debit)::numeric AS effect
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND j.journal_date >= @from_date::date AND j.journal_date <= @to_date::date AND NOT j.is_closing
+  AND COALESCE(a.statement_group, '') <> 'CASH'
+  AND EXISTS (SELECT 1 FROM gl_journal_lines c JOIN gl_accounts ca ON ca.property_id = c.property_id AND ca.id = c.account_id
+               WHERE c.property_id = l.property_id AND c.journal_id = l.journal_id AND ca.statement_group = 'CASH')
+GROUP BY a.id
+HAVING sum(l.credit - l.debit) <> 0
+ORDER BY a.code;

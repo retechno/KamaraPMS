@@ -144,7 +144,7 @@ Part B's budget is built (README, "Budget"). What differs from the text above:
   - Financing: LONG_TERM_DEBT and EQUITY other than current-year earnings (capital, drawings).
   - The result must equal the **change of the CASH group** between the opening and closing balance; the report states the check and shows the difference if it does not (for
     example an account without a group, shown as unclassified).
-- The **direct method** is not built: it needs every journal classified; the bank and cashier data can give it later.
+- The **direct method** was built afterwards (README, "Cash flow statement"): the journals are classified by the statement group of the accounts that stand against the cash, so no new data was needed.
 - API: `GET {P}/accounting/cash-flow?from&to` (+ `.pdf`, `.csv`), permission `accounting.view`. Tests: a small set of journals whose cash flow is worked out by hand (sale on credit, payment of a
   bill, purchase of equipment, loan received), the reconciliation to the cash change, a contra account, period with no activity.
 

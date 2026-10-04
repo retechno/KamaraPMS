@@ -5253,6 +5253,7 @@ paths:
       parameters:
         - { name: from, in: query, description: Start of the range; the first day of the current business month by default., schema: { type: string, format: date } }
         - { name: to, in: query, description: End of the range (included); the current business date by default., schema: { type: string, format: date } }
+        - { name: method, in: query, description: "`INDIRECT` (default): from the net income. `DIRECT`: the cash received and paid by category, from the journals that touch a cash account.", schema: { type: string, enum: [INDIRECT, DIRECT], default: INDIRECT } }
         - { name: format, in: query, description: "`csv` answers the report as a CSV file.", schema: { type: string, enum: [csv, json] } }
       responses:
         "200":
@@ -5276,6 +5277,7 @@ paths:
       parameters:
         - { name: from, in: query, schema: { type: string, format: date } }
         - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: method, in: query, schema: { type: string, enum: [INDIRECT, DIRECT], default: INDIRECT } }
       responses:
         "200":
           description: The report as a PDF (inline, never cached).
@@ -9361,12 +9363,13 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/BudgetVarianceLine" } }
     CashFlow:
       type: object
-      required: [from, to, lines, net_income, operating, investing, financing, unclassified, net_change, opening_cash, closing_cash, difference, reconciled]
+      required: [from, to, method, lines, net_income, operating, investing, financing, unclassified, net_change, opening_cash, closing_cash, difference, reconciled]
       properties:
         from: { $ref: "#/components/schemas/Date" }
         to: { $ref: "#/components/schemas/Date" }
+        method: { type: string, enum: [INDIRECT, DIRECT] }
         lines: { type: array, items: { $ref: "#/components/schemas/StatementLine" } }
-        net_income: { type: string }
+        net_income: { type: string, description: Of the range; only the indirect statement starts from it (zero in the direct one). }
         operating: { type: string, description: Net cash from operating activities. }
         investing: { type: string }
         financing: { type: string }

@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"net/http"
+	"strings"
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
@@ -173,7 +174,15 @@ func (h *Handler) cashFlow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	cf, err := h.svc.CashFlow(r.Context(), pid, from, to)
+	var cf CashFlow
+	switch m := strings.ToUpper(r.URL.Query().Get("method")); m {
+	case "", CashFlowIndirect:
+		cf, err = h.svc.CashFlow(r.Context(), pid, from, to)
+	case CashFlowDirect:
+		cf, err = h.svc.CashFlowDirect(r.Context(), pid, from, to)
+	default:
+		return apperr.Invalid("the report parameters are invalid", fieldErr("method", "INVALID_VALUE", "INDIRECT or DIRECT"))
+	}
 	if err != nil {
 		return err
 	}

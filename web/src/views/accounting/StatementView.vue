@@ -10,6 +10,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -32,7 +33,7 @@ const imbalance = ref('')
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
-const form = reactive({ from: '', to: '', as_of: '' })
+const form = reactive({ from: '', to: '', as_of: '', method: 'INDIRECT' })
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -45,7 +46,7 @@ async function load(): Promise<void> {
   try {
     if (cashFlow.value) {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/cash-flow', {
-        params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } },
+        params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined, method: form.method === 'DIRECT' ? 'DIRECT' : undefined } },
       })
       const cf = data as CashFlow | undefined
       lines.value = cf?.lines ?? []
@@ -77,7 +78,7 @@ async function exportCsv(): Promise<void> {
   if (propertyId === null) return
   try {
     if (cashFlow.value) {
-      await downloadCsv('/api/v1/properties/{propertyId}/accounting/cash-flow', { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } }, 'cash-flow.csv')
+      await downloadCsv('/api/v1/properties/{propertyId}/accounting/cash-flow', { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined, method: form.method === 'DIRECT' ? 'DIRECT' : undefined } }, 'cash-flow.csv')
     } else if (income.value) {
       await downloadCsv('/api/v1/properties/{propertyId}/accounting/income-statement', { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } }, 'income-statement.csv')
     } else {
@@ -92,7 +93,7 @@ async function showPdf(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   try {
-    if (cashFlow.value) await openPdf(documentPath.accounting(propertyId, 'cash-flow', { from: form.from, to: form.to }))
+    if (cashFlow.value) await openPdf(documentPath.accounting(propertyId, 'cash-flow', { from: form.from, to: form.to, method: form.method === 'DIRECT' ? 'DIRECT' : undefined }))
     else if (income.value) await openPdf(documentPath.accounting(propertyId, 'income-statement', { from: form.from, to: form.to }))
     else await openPdf(documentPath.accounting(propertyId, 'balance-sheet', { as_of: form.as_of }))
   } catch (e) {
@@ -128,6 +129,14 @@ watch([() => pid.value, income, cashFlow], () => {
         <template v-if="ranged">
           <FormField :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
           <FormField :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+          <FormField v-if="cashFlow" :label="t('statements.method')">
+            <template #default="{ id }">
+              <NativeSelect :id="id" v-model="form.method" name="method">
+                <option value="INDIRECT">{{ t('statements.methodIndirect') }}</option>
+                <option value="DIRECT">{{ t('statements.methodDirect') }}</option>
+              </NativeSelect>
+            </template>
+          </FormField>
         </template>
         <FormField v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
@@ -135,7 +144,7 @@ watch([() => pid.value, income, cashFlow], () => {
     </Card>
     <Card v-if="loaded">
       <CardContent class="pt-4">
-        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template><template v-if="cashFlow"> · {{ t('statements.indirect') }}</template></p>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template><template v-if="cashFlow"> · {{ form.method === 'DIRECT' ? t('statements.direct') : t('statements.indirect') }}</template></p>
         <p v-if="imbalance" class="alert" data-testid="imbalance">{{ cashFlow ? t('statements.cashDifference', { amount: imbalance }) : t('statements.imbalance', { amount: imbalance }) }}</p>
         <EmptyState v-if="!lines.length" :title="t('statements.empty')" data-testid="empty" />
         <StatementTable v-else :lines="lines" />

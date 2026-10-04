@@ -8395,7 +8395,10 @@ export interface components {
         CashFlow: {
             from: components["schemas"]["Date"];
             to: components["schemas"]["Date"];
+            /** @enum {string} */
+            method: "INDIRECT" | "DIRECT";
             lines: components["schemas"]["StatementLine"][];
+            /** @description Of the range; only the indirect statement starts from it (zero in the direct one). */
             net_income: string;
             /** @description Net cash from operating activities. */
             operating: string;
@@ -18252,6 +18255,8 @@ export interface operations {
                 from?: string;
                 /** @description End of the range (included); the current business date by default. */
                 to?: string;
+                /** @description `INDIRECT` (default): from the net income. `DIRECT`: the cash received and paid by category, from the journals that touch a cash account. */
+                method?: "INDIRECT" | "DIRECT";
                 /** @description `csv` answers the report as a CSV file. */
                 format?: "csv" | "json";
             };
@@ -18285,6 +18290,7 @@ export interface operations {
                 lang?: components["parameters"]["Lang"];
                 from?: string;
                 to?: string;
+                method?: "INDIRECT" | "DIRECT";
             };
             header?: never;
             path: {

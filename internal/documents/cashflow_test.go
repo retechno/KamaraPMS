@@ -45,3 +45,31 @@ func TestCashFlowAsPDF(t *testing.T) {
 		t.Error("the Indonesian PDF")
 	}
 }
+
+func TestDirectCashFlowAsPDF(t *testing.T) {
+	f := setup(t)
+	byCode := map[string]int64{}
+	list, err := f.Accounting.Accounts(f.admin, f.propID, accounting.AccountFilter{})
+	must(t, err)
+	for _, a := range list {
+		byCode[a.Code] = a.ID
+	}
+	_, err = f.Accounting.PostManual(f.admin, f.propID, accounting.ManualInput{Date: civil.MustParseDate("2026-09-30"), Description: "loan", Lines: []accounting.LineInput{
+		{AccountID: byCode["1130"], Debit: decimal.RequireFromString("8000000")}, {AccountID: byCode["2610"], Credit: decimal.RequireFromString("8000000")},
+	}}, "a")
+	must(t, err)
+	from, to := civil.MustParseDate("2026-09-01"), civil.MustParseDate("2026-09-30")
+	doc, err := f.Docs.CashFlowDirectPDF(f.admin, f.propID, &from, &to)
+	must(t, err)
+	s := pdfText(t, doc)
+	for _, want := range []string{"CASH FLOW STATEMENT", "Direct method", "Loans received and repaid", "8,000,000"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the PDF lacks %q", want)
+		}
+	}
+	id, err := f.Docs.CashFlowDirectPDF(documents.WithLang(f.admin, documents.LangID), f.propID, &from, &to)
+	must(t, err)
+	if !strings.Contains(pdfText(t, id), "Metode langsung") {
+		t.Error("the Indonesian PDF")
+	}
+}

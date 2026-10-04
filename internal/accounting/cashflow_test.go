@@ -113,3 +113,74 @@ func TestCashFlowDoesNotCountTheClosingOfAYearTwice(t *testing.T) {
 		t.Fatal("still proved against the cash")
 	}
 }
+
+func TestDirectCashFlowGivesWhatWasReceivedAndPaidAndAgreesWithTheIndirectOne(t *testing.T) {
+	h := cashFlowBooks(t)
+	from, to := d("2026-09-01"), d("2026-09-30")
+	cf, err := h.Accounting.CashFlowDirect(h.admin, h.propID, &from, &to)
+	must(t, err)
+	if cf.Method != "DIRECT" {
+		t.Fatalf("method %s", cf.Method)
+	}
+	eq(t, "received from guests and customers: the receivable collected", lineOf(t, cf.Lines, "RECEIPTS").Amount, "300000")
+	eq(t, "paid to suppliers and for expenses: the payroll", lineOf(t, cf.Lines, "PAYMENTS").Amount, "-200000")
+	eq(t, "operating", cf.Operating, "100000")
+	eq(t, "the equipment", lineOf(t, cf.Lines, "FIXED_ASSETS").Amount, "-5000000")
+	eq(t, "investing", cf.Investing, "-5000000")
+	eq(t, "the loan", lineOf(t, cf.Lines, "LONG_TERM_DEBT").Amount, "8000000")
+	eq(t, "the capital", lineOf(t, cf.Lines, "EQUITY").Amount, "2000000")
+	eq(t, "financing", cf.Financing, "10000000")
+	eq(t, "net change", cf.NetChange, "5100000")
+	eq(t, "closing cash", cf.ClosingCash, "5100000")
+	if !cf.Reconciled {
+		t.Fatal("proved against the cash")
+	}
+	if recv := lineOf(t, cf.Lines, "RECEIPTS"); len(recv.Accounts) != 1 || recv.Accounts[0].Code != "1230" {
+		t.Fatalf("the account behind the receipt: %+v", recv.Accounts)
+	}
+	for _, l := range cf.Lines { // what did not move cash is not there: the sale on credit, the depreciation
+		if l.Key == "DEPRECIATION" || l.Key == "NET_INCOME" {
+			t.Errorf("the indirect line %s in the direct statement", l.Key)
+		}
+	}
+	ind, err := h.Accounting.CashFlow(h.admin, h.propID, &from, &to)
+	must(t, err)
+	for what, pair := range map[string][2]string{
+		"operating": {cf.Operating.String(), ind.Operating.String()}, "investing": {cf.Investing.String(), ind.Investing.String()},
+		"financing": {cf.Financing.String(), ind.Financing.String()}, "net change": {cf.NetChange.String(), ind.NetChange.String()},
+	} {
+		if pair[0] != pair[1] {
+			t.Errorf("%s: direct %s, indirect %s", what, pair[0], pair[1])
+		}
+	}
+}
+
+func TestDirectCashFlowLeavesOutMovesBetweenCashAccountsAndSplitsTaxesAndInterest(t *testing.T) {
+	h := cashFlowBooks(t)
+	h.manual(t, "2026-09-30", "1130", "1110", "1000000", "bank deposit of cash") // between two cash accounts
+	h.manual(t, "2026-09-30", "2420", "1130", "40000", "vat paid")
+	h.manual(t, "2026-09-30", "7610", "1130", "25000", "interest paid")
+	from, to := d("2026-09-01"), d("2026-09-30")
+	cf, err := h.Accounting.CashFlowDirect(h.admin, h.propID, &from, &to)
+	must(t, err)
+	eq(t, "taxes paid", lineOf(t, cf.Lines, "TAXES_PAID").Amount, "-40000")
+	eq(t, "interest paid", lineOf(t, cf.Lines, "INTEREST_PAID").Amount, "-25000")
+	eq(t, "the move between cash accounts is no flow: payroll only", lineOf(t, cf.Lines, "PAYMENTS").Amount, "-200000")
+	eq(t, "operating", cf.Operating, "35000")
+	eq(t, "net change", cf.NetChange, "5035000")
+	eq(t, "difference", cf.Difference, "0")
+	if !cf.Reconciled {
+		t.Fatal("proved against the cash")
+	}
+	later, laterEnd := d("2026-10-01"), d("2026-10-15")
+	quiet, err := h.Accounting.CashFlowDirect(h.admin, h.propID, &later, &laterEnd)
+	must(t, err)
+	eq(t, "opening", quiet.OpeningCash, "5035000")
+	eq(t, "net change", quiet.NetChange, "0")
+	if !quiet.Reconciled {
+		t.Fatal("a quiet period reconciles")
+	}
+	nobody := h.User(t, h.tenantID, h.propID, auth.PermBankView)
+	_, err = h.Accounting.CashFlowDirect(nobody, h.propID, nil, nil)
+	wantCode(t, err, "PERMISSION_DENIED")
+}
