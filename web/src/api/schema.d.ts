@@ -4508,6 +4508,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/cash-flow": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cash flow statement, indirect method (accounting.view)
+         * @description From the net income of the range (the income statement), the depreciation added back, then what the balance sheet accounts moved: operating (receivables, inventories, prepaid, other assets,
+         *     payables, accruals, deposits, taxes payable, other current liabilities, suspense), investing (property and equipment, net of the depreciation added back) and financing (long-term liabilities, equity
+         *     other than the result). Closing journals are left out of the movements. Computed from the journals, nothing is stored. The result is proved against the change of the cash accounts (the CASH group):
+         *     `difference` is the change less the statement and `reconciled` says it is zero. Lines are those of a statement (HEADING, GROUP with the accounts that moved, SUBTOTAL, TOTAL).
+         */
+        get: operations["getCashFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/cash-flow.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Cash flow statement as PDF (accounting.view) */
+        get: operations["getCashFlowPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/accounting/balance-sheet": {
         parameters: {
             query?: {
@@ -8241,6 +8291,25 @@ export interface components {
             to: components["schemas"]["Date"];
             budget: components["schemas"]["BudgetRef"];
             lines: components["schemas"]["BudgetVarianceLine"][];
+        };
+        CashFlow: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            lines: components["schemas"]["StatementLine"][];
+            net_income: string;
+            /** @description Net cash from operating activities. */
+            operating: string;
+            investing: string;
+            financing: string;
+            /** @description The movement of accounts without a statement group (zero in a sound chart). */
+            unclassified: string;
+            net_change: string;
+            /** @description The cash accounts (group CASH) the day before the range. */
+            opening_cash: string;
+            closing_cash: string;
+            /** @description The change of the cash accounts less the net change of the statement. */
+            difference: string;
+            reconciled: boolean;
         };
         CardFeeRule: {
             /** Format: int64 */
@@ -18006,6 +18075,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IncomeStatement"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCashFlow: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashFlow"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCashFlowPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             403: components["responses"]["Problem"];

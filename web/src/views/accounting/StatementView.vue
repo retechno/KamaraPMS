@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { StatementLine } from '@/api/types'
+import type { CashFlow, StatementLine } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -23,7 +23,9 @@ const property = usePropertyStore()
 const route = useRoute()
 
 const income = computed(() => route.name === 'accounting-income-statement')
-const title = computed(() => (income.value ? t('statements.income') : t('statements.balance')))
+const cashFlow = computed(() => route.name === 'accounting-cash-flow')
+const ranged = computed(() => income.value || cashFlow.value)
+const title = computed(() => (income.value ? t('statements.income') : cashFlow.value ? t('statements.cashFlow') : t('statements.balance')))
 const lines = ref<StatementLine[]>([])
 const heading = ref('')
 const imbalance = ref('')
@@ -41,7 +43,15 @@ async function load(): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    if (income.value) {
+    if (cashFlow.value) {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/cash-flow', {
+        params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } },
+      })
+      const cf = data as CashFlow | undefined
+      lines.value = cf?.lines ?? []
+      heading.value = cf ? t('statements.rangeIncome', { from: cf.from, to: cf.to }) : ''
+      imbalance.value = cf && !cf.reconciled ? cf.difference : ''
+    } else if (income.value) {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/income-statement', {
         params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } },
       })
@@ -66,7 +76,9 @@ async function exportCsv(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   try {
-    if (income.value) {
+    if (cashFlow.value) {
+      await downloadCsv('/api/v1/properties/{propertyId}/accounting/cash-flow', { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } }, 'cash-flow.csv')
+    } else if (income.value) {
       await downloadCsv('/api/v1/properties/{propertyId}/accounting/income-statement', { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } }, 'income-statement.csv')
     } else {
       await downloadCsv('/api/v1/properties/{propertyId}/accounting/balance-sheet', { path: { propertyId }, query: { as_of: form.as_of || undefined } }, 'balance-sheet.csv')
@@ -80,14 +92,15 @@ async function showPdf(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   try {
-    if (income.value) await openPdf(documentPath.accounting(propertyId, 'income-statement', { from: form.from, to: form.to }))
+    if (cashFlow.value) await openPdf(documentPath.accounting(propertyId, 'cash-flow', { from: form.from, to: form.to }))
+    else if (income.value) await openPdf(documentPath.accounting(propertyId, 'income-statement', { from: form.from, to: form.to }))
     else await openPdf(documentPath.accounting(propertyId, 'balance-sheet', { as_of: form.as_of }))
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
 }
 
-watch([() => pid.value, income], () => {
+watch([() => pid.value, income, cashFlow], () => {
   lines.value = []
   loaded.value = false
   void load()
@@ -112,7 +125,7 @@ watch([() => pid.value, income], () => {
   <template v-else>
     <Card class="mb-4">
       <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
-        <template v-if="income">
+        <template v-if="ranged">
           <FormField :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
           <FormField :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
         </template>
@@ -122,11 +135,11 @@ watch([() => pid.value, income], () => {
     </Card>
     <Card v-if="loaded">
       <CardContent class="pt-4">
-        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template></p>
-        <p v-if="imbalance" class="alert" data-testid="imbalance">{{ t('statements.imbalance', { amount: imbalance }) }}</p>
+        <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template><template v-if="cashFlow"> · {{ t('statements.indirect') }}</template></p>
+        <p v-if="imbalance" class="alert" data-testid="imbalance">{{ cashFlow ? t('statements.cashDifference', { amount: imbalance }) : t('statements.imbalance', { amount: imbalance }) }}</p>
         <EmptyState v-if="!lines.length" :title="t('statements.empty')" data-testid="empty" />
         <StatementTable v-else :lines="lines" />
-        <p v-if="!income" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('statements.equityNote') }}</p>
+        <p v-if="!ranged" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('statements.equityNote') }}</p>
       </CardContent>
     </Card>
   </template>

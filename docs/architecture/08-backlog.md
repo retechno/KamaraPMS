@@ -25,7 +25,7 @@ accounts payable, bank reconciliation and monthly tax filing. What is missing, m
    interest). **Customer side done** (credit notes, write-offs, overdue list, reminders, interest shown); the supplier credit notes remain.
 3. **Cashier shifts and the cash drawer.** (**Built**, see README; the Z-report PDF and a shift handover screen remain.) Open and close a shift, opening float, drops and pay-ins, the counted cash,
    the over and short journalled, and the hand-over between shifts.
-4. **Budget and cash flow.** (**Budget built**, see README; the cash flow statement remains.) A budget per account and month, actual against budget by USALI department, and a cash
+4. **Budget and cash flow.** (**Built**, see README; the direct method remains.) A budget per account and month, actual against budget by USALI department, and a cash
    flow statement.
 5. **Card settlement.** (**Built** except the VAT on the commission, see README.) Match the bank deposit of the card machine or gateway with the card payments, with the merchant
    fee (MDR) as its own line; bank reconciliation matches line by line today.

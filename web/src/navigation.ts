@@ -87,6 +87,7 @@ export const navigation: NavSection[] = [
       { id: 'generalLedger', to: '/accounting/ledger', group: 'accounting' },
       { id: 'incomeStatement', to: '/accounting/income-statement', group: 'accounting' },
       { id: 'balanceSheet', to: '/accounting/balance-sheet', group: 'accounting' },
+      { id: 'cashFlow', to: '/accounting/cash-flow', group: 'accounting' },
       { id: 'controlAccounts', to: '/accounting/reconciliation', group: 'accounting' },
       { id: 'suppliers', to: '/payables/suppliers', group: 'payables' },
       { id: 'supplierBills', to: '/payables/bills', group: 'payables' },

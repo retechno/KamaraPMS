@@ -42,6 +42,16 @@ const answers: Record<string, unknown> = {
       { key: 'NET_INCOME', title: 'Net income', kind: 'TOTAL', amount: '1000', accounts: [] },
     ],
   },
+  '/cash-flow': {
+    from: '2026-09-01', to: '2026-09-30', net_income: '700', operating: '100', investing: '-500', financing: '1000', unclassified: '0', net_change: '600', opening_cash: '0', closing_cash: '600', difference: '0', reconciled: true,
+    lines: [
+      { key: 'H_OPERATING', title: 'Operating activities', kind: 'HEADING', amount: '0', accounts: [] },
+      { key: 'NET_INCOME', title: 'Net income', kind: 'GROUP', amount: '700', accounts: [] },
+      { key: 'RECEIVABLES', title: 'Receivables', kind: 'GROUP', amount: '-700', accounts: [{ account_id: 9, code: '1230', name: 'Other receivables', amount: '-700' }] },
+      { key: 'OPERATING', title: 'Net cash from operating activities', kind: 'SUBTOTAL', amount: '100', accounts: [] },
+      { key: 'CLOSING_CASH', title: 'Cash at the end of the period', kind: 'TOTAL', amount: '600', accounts: [] },
+    ],
+  },
   '/balance-sheet': { as_of: '2026-09-30', lines: [{ key: 'TOTAL_ASSETS', title: 'Total assets', kind: 'TOTAL', amount: '5', accounts: [] }], total_assets: '5', total_liabilities: '3', total_equity: '1', difference: '1' },
   '/reconciliation': {
     as_of: '2026-09-30', start_date: '2026-09-30', pending_days: 0, includes_open_day: false, reconciled: true,
@@ -144,6 +154,24 @@ describe('report views', () => {
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ from: undefined, to: '2026-09-15' })
     await w.get('[data-testid=pdf]').trigger('click')
     expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/income-statement.pdf?to=2026-09-15')
+  })
+
+  it('lays the cash flow statement out and warns when it differs from the cash', async () => {
+    const w = await mountView(StatementView, ['accounting.view'], 'accounting-cash-flow')
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/cash-flow'))).toBe(true)
+    expect(w.get('h1').text()).toBe('Cash flow statement')
+    expect(w.get('[data-testid=line-OPERATING]').text()).toContain('100')
+    expect(w.get('[data-testid=line-CLOSING_CASH]').text()).toContain('600')
+    expect(w.find('[data-testid=imbalance]').exists()).toBe(false)
+    expect(w.find('input[name=from]').exists()).toBe(true)
+    await w.get('[data-testid=pdf]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/accounting/cash-flow.pdf')
+    await w.get('[data-testid=export]').trigger('click')
+    expect(download.mock.calls.at(-1)?.[2]).toBe('cash-flow.csv')
+    const bad = await mountView(StatementView, ['accounting.view'], 'accounting-cash-flow', { '/cash-flow': { ...(answers['/cash-flow'] as object), reconciled: false, difference: '25' } })
+    await flushPromises()
+    expect(bad.get('[data-testid=imbalance]').text()).toContain('differs from the change of the cash accounts by 25')
   })
 
   it('warns when the balance sheet does not balance', async () => {

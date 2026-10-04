@@ -61,6 +61,7 @@ export const router = createRouter({
     { path: '/accounting/ledger', name: 'accounting-ledger', component: () => import('@/views/accounting/GeneralLedgerView.vue'), meta: { title: 'General ledger' } },
     { path: '/accounting/income-statement', name: 'accounting-income-statement', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Income statement' } },
     { path: '/accounting/balance-sheet', name: 'accounting-balance-sheet', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Balance sheet' } },
+    { path: '/accounting/cash-flow', name: 'accounting-cash-flow', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Cash flow statement' } },
     { path: '/accounting/reconciliation', name: 'accounting-reconciliation', component: () => import('@/views/accounting/ReconciliationView.vue'), meta: { title: 'Control accounts' } },
     { path: '/budget', name: 'budget', component: () => import('@/views/budget/BudgetsView.vue'), meta: { title: 'Budgets' } },
     { path: '/budget/vs-actual', name: 'budget-vs-actual', component: () => import('@/views/budget/BudgetVsActualView.vue'), meta: { title: 'Budget against actual' } },

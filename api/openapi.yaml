@@ -5187,6 +5187,54 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/cash-flow:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getCashFlow
+      summary: Cash flow statement, indirect method (accounting.view)
+      description: |
+        From the net income of the range (the income statement), the depreciation added back, then what the balance sheet accounts moved: operating (receivables, inventories, prepaid, other assets,
+        payables, accruals, deposits, taxes payable, other current liabilities, suspense), investing (property and equipment, net of the depreciation added back) and financing (long-term liabilities, equity
+        other than the result). Closing journals are left out of the movements. Computed from the journals, nothing is stored. The result is proved against the change of the cash accounts (the CASH group):
+        `difference` is the change less the statement and `reconciled` says it is zero. Lines are those of a statement (HEADING, GROUP with the accounts that moved, SUBTOTAL, TOTAL).
+      tags: [accounting]
+      parameters:
+        - { name: from, in: query, description: Start of the range; the first day of the current business month by default., schema: { type: string, format: date } }
+        - { name: to, in: query, description: End of the range (included); the current business date by default., schema: { type: string, format: date } }
+        - { name: format, in: query, description: "`csv` answers the report as a CSV file.", schema: { type: string, enum: [csv, json] } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashFlow" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/cash-flow.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getCashFlowPdf
+      summary: Cash flow statement as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/accounting/balance-sheet:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9202,6 +9250,23 @@ components:
         to: { $ref: "#/components/schemas/Date", description: The last day of the last month of the period. }
         budget: { $ref: "#/components/schemas/BudgetRef" }
         lines: { type: array, items: { $ref: "#/components/schemas/BudgetVarianceLine" } }
+    CashFlow:
+      type: object
+      required: [from, to, lines, net_income, operating, investing, financing, unclassified, net_change, opening_cash, closing_cash, difference, reconciled]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        lines: { type: array, items: { $ref: "#/components/schemas/StatementLine" } }
+        net_income: { type: string }
+        operating: { type: string, description: Net cash from operating activities. }
+        investing: { type: string }
+        financing: { type: string }
+        unclassified: { type: string, description: The movement of accounts without a statement group (zero in a sound chart). }
+        net_change: { type: string }
+        opening_cash: { type: string, description: The cash accounts (group CASH) the day before the range. }
+        closing_cash: { type: string }
+        difference: { type: string, description: The change of the cash accounts less the net change of the statement. }
+        reconciled: { type: boolean }
     CardFeeRule:
       type: object
       required: [id, payment_method, mdr_rate, settlement_days, effective_from, created_at]

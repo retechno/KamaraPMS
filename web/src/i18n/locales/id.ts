@@ -73,6 +73,7 @@ export const id: Messages = {
       generalLedger: 'Buku besar',
       incomeStatement: 'Laba rugi',
       balanceSheet: 'Neraca',
+      cashFlow: 'Laporan arus kas',
       controlAccounts: 'Akun kontrol',
       suppliers: 'Pemasok',
       supplierBills: 'Tagihan pemasok',
@@ -2419,6 +2420,9 @@ export const id: Messages = {
   statements: {
     income: 'Laporan laba rugi',
     balance: 'Neraca',
+    cashFlow: 'Laporan arus kas',
+    indirect: 'Metode tidak langsung: dari laba bersih sampai perubahan kas',
+    cashDifference: 'Laporan berbeda dari perubahan akun kas sebesar {amount}.',
     trial: 'Neraca saldo',
     pdf: 'PDF',
     export: 'Ekspor CSV',

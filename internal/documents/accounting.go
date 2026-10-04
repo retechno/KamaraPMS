@@ -112,6 +112,29 @@ func (s *Service) IncomeStatementPDF(ctx context.Context, propertyID int64, from
 	return Document{Filename: "income-statement-" + is.To.String() + ".pdf", PDF: pdf}, err
 }
 
+// CashFlowPDF is the cash flow statement of a range (accounting.view).
+func (s *Service) CashFlowPDF(ctx context.Context, propertyID int64, from, to *civil.Date) (Document, error) {
+	cf, err := s.acct.CashFlow(ctx, propertyID, from, to)
+	if err != nil {
+		return Document{}, err
+	}
+	dc, err := s.context(ctx, propertyID)
+	if err != nil {
+		return Document{}, err
+	}
+	rows, bold := statementRows(dc.lang, cf.Lines, dc.decimals)
+	var notes []string
+	if !cf.Difference.IsZero() {
+		notes = append(notes, "WARNING: the statement differs from the change of the cash accounts by "+dc.lang.Money(cf.Difference, dc.decimals)+".")
+	}
+	d, _, err := s.financial(ctx, propertyID, "CASH FLOW STATEMENT", dc.lang.T("Indirect method"), dc.lang.Date(cf.From)+" - "+dc.lang.Date(cf.To), statementCols, rows, bold, notes...)
+	if err != nil {
+		return Document{}, err
+	}
+	pdf, err := RenderFinancial(d)
+	return Document{Filename: "cash-flow-" + cf.To.String() + ".pdf", PDF: pdf}, err
+}
+
 // BalanceSheetPDF is the balance sheet as of a date (accounting.view).
 func (s *Service) BalanceSheetPDF(ctx context.Context, propertyID int64, asOf *civil.Date) (Document, error) {
 	bs, err := s.acct.BalanceSheet(ctx, propertyID, asOf)
@@ -211,6 +234,7 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 	}
 	mux.Handle("GET "+p+"/trial-balance.pdf", rangeDoc(h.svc.TrialBalancePDF))
 	mux.Handle("GET "+p+"/income-statement.pdf", rangeDoc(h.svc.IncomeStatementPDF))
+	mux.Handle("GET "+p+"/cash-flow.pdf", rangeDoc(h.svc.CashFlowPDF))
 	mux.Handle("GET "+p+"/balance-sheet.pdf", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		pid, err := tenancy.PropertyID(r)
 		if err != nil {

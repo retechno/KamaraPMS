@@ -17,6 +17,7 @@ func (h *Handler) RegisterReports(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/accounts/{id}/ledger", httpx.HandlerFunc(h.ledger))
 	mux.Handle("GET "+p+"/income-statement", httpx.HandlerFunc(h.incomeStatement))
 	mux.Handle("GET "+p+"/balance-sheet", httpx.HandlerFunc(h.balanceSheet))
+	mux.Handle("GET "+p+"/cash-flow", httpx.HandlerFunc(h.cashFlow))
 	mux.Handle("GET "+p+"/reconciliation", httpx.HandlerFunc(h.reconciliation))
 }
 
@@ -161,4 +162,25 @@ func (h *Handler) reconciliation(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, rec)
+}
+
+func (h *Handler) cashFlow(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	from, to, _, err := reportQuery(r)
+	if err != nil {
+		return err
+	}
+	cf, err := h.svc.CashFlow(r.Context(), pid, from, to)
+	if err != nil {
+		return err
+	}
+	if wantsCSV(r) {
+		rows := statementCSV(cf.Lines)
+		rows[0] = csvlang.Header(r, rows[0])
+		return writeCSV(w, "cash-flow-"+cf.To.String()+".csv", rows)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, cf)
 }

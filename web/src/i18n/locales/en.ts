@@ -74,6 +74,7 @@ export const en = {
       generalLedger: 'General ledger',
       incomeStatement: 'Income statement',
       balanceSheet: 'Balance sheet',
+      cashFlow: 'Cash flow statement',
       controlAccounts: 'Control accounts',
       suppliers: 'Suppliers',
       supplierBills: 'Supplier bills',
@@ -2420,6 +2421,9 @@ export const en = {
   statements: {
     income: 'Income statement',
     balance: 'Balance sheet',
+    cashFlow: 'Cash flow statement',
+    indirect: 'Indirect method: from the net income to the change of the cash',
+    cashDifference: 'The statement differs from the change of the cash accounts by {amount}.',
     trial: 'Trial balance',
     pdf: 'PDF',
     export: 'Export CSV',
