@@ -170,3 +170,49 @@ func TestBudgetAPI(t *testing.T) {
 		t.Fatalf("a bad id: %d %v", r.status, r.body)
 	}
 }
+
+func TestBudgetStatisticsAPI(t *testing.T) {
+	e := newAPI(t)
+	abc, xyz := e.login("ABC"), e.login("XYZ")
+	bali := idOf(abc.do(http.MethodPost, "/api/v1/properties", validProperty()))
+	budgets := "/api/v1/properties/" + bali + "/budgets"
+	r := abc.do(http.MethodPost, budgets, map[string]any{"year_start": "2026-01-01", "name": "Plan"})
+	id := itoaID(int64(r.body["id"].(float64)))
+	one := budgets + "/" + id
+
+	rows := []map[string]any{{"month": 9, "rooms_available": 300, "rooms_sold": 210, "adr": "1000000"}}
+	r = abc.do(http.MethodPut, one+"/statistics", map[string]any{"rows": rows})
+	stats, _ := r.body["statistics"].([]any)
+	if r.status != 200 || len(stats) != 1 || stats[0].(map[string]any)["occupancy_percent"] != "70.00" || stats[0].(map[string]any)["room_revenue"] != "210000000" || stats[0].(map[string]any)["revpar"] != "700000" {
+		t.Fatalf("save: %d %v", r.status, r.body)
+	}
+	if r := abc.do(http.MethodPut, one+"/statistics", map[string]any{"rows": []map[string]any{{"month": 1, "rooms_available": 10, "rooms_sold": 11, "adr": "1"}}}); r.status != 422 || fieldsOf(r)["rows[0].rooms_sold"] != "INVALID_VALUE" {
+		t.Fatalf("sold above available: %d %v", r.status, r.body)
+	}
+	if r := abc.do(http.MethodGet, budgets+"/statistics-vs-actual", nil); r.status != 404 || r.body["code"] != "NO_ACTIVE_BUDGET" {
+		t.Fatalf("no active budget: %d %v", r.status, r.body)
+	}
+	if r := abc.do(http.MethodPost, one+"/activate", map[string]any{"approval": map[string]any{"email": "admin@hotel.com", "password": testPassword}}); r.status != 200 {
+		t.Fatalf("statistics alone make an active budget: %d %v", r.status, r.body)
+	}
+	if r := abc.do(http.MethodPut, one+"/statistics", map[string]any{"rows": rows}); r.status != 409 || r.body["code"] != "BUDGET_NOT_DRAFT" {
+		t.Fatalf("an active budget is fixed: %d %v", r.status, r.body)
+	}
+	rep := abc.do(http.MethodGet, budgets+"/statistics-vs-actual?from=2026-09-01&to=2026-09-30", nil)
+	metrics, _ := rep.body["metrics"].([]any)
+	if rep.status != 200 || rep.body["has_statistics"] != true || len(metrics) != 6 || rep.body["closed_days"] != float64(0) {
+		t.Fatalf("report: %d %v", rep.status, rep.body)
+	}
+	if first := metrics[0].(map[string]any); first["key"] != "rooms_available" || first["unit"] != "NIGHTS" || first["period"].(map[string]any)["budget"] != "300" {
+		t.Fatalf("the first metric: %v", first)
+	}
+	if r := abc.do(http.MethodGet, budgets+"/statistics-vs-actual?to=2027-03-01", nil); r.status != 422 {
+		t.Fatalf("a range outside the year: %d %v", r.status, r.body)
+	}
+	if r := xyz.do(http.MethodGet, budgets+"/statistics-vs-actual", nil); r.status != 404 || r.body["code"] != "PROPERTY_NOT_FOUND" {
+		t.Fatalf("foreign tenant: %d %v", r.status, r.body)
+	}
+	if r := xyz.do(http.MethodPut, one+"/statistics", map[string]any{"rows": rows}); r.status != 404 {
+		t.Fatalf("foreign tenant save: %d %v", r.status, r.body)
+	}
+}

@@ -35,7 +35,8 @@ const (
 	maxTextLen    = 500
 	maxGridRows   = 1000
 	maxImportRows = 1000
-	yearsAhead    = 2 // a budget may be made for the fiscal years up to this many after the current one
+	maxRooms      = 1000000 // room nights available in a month
+	yearsAhead    = 2       // a budget may be made for the fiscal years up to this many after the current one
 )
 
 // maxAmount is the largest figure of a month (the column holds 15 digits before the decimals; a year of twelve of them still fits).
@@ -66,6 +67,9 @@ type Budget struct {
 	Months    []Month      `json:"months,omitempty"`
 	Rows      []Row        `json:"rows,omitempty"`
 	Available []AccountRef `json:"available_accounts,omitempty"`
+	// Statistics are the rooms available and sold and the ADR of each month, with occupancy, RevPAR and room revenue; RoomCount is the rooms the property sells today (to suggest the rooms available).
+	Statistics []StatRow `json:"statistics,omitempty"`
+	RoomCount  int       `json:"room_count,omitempty"`
 }
 
 // Month is a month of the fiscal year, from 1 to 12.

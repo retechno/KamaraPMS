@@ -746,6 +746,8 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `POST {P}/budgets/{id}/activate` | `budget.manage` + approval of `budget.approve` | `{approval}`; the version that was active is archived; 409 `BUDGET_EMPTY`, `BUDGET_NOT_DRAFT` |
 | `GET {P}/budgets/{id}/export` | `budget.view` | CSV: `code,name,m1..m12` |
 | `POST {P}/budgets/{id}/import` | `budget.manage` | `{csv, dry_run?}`; all or nothing, 422 with a field error per row (`rows[N].field`) |
+| `PUT {P}/budgets/{id}/statistics` | `budget.manage` | `{rows: [{month, rooms_available, rooms_sold, adr}]}` replaces the statistics of a draft; 422 `rows[N].rooms_sold`; 409 `BUDGET_NOT_DRAFT` |
+| `GET {P}/budgets/statistics-vs-actual` | `budget.view` | `year_start`, `from`, `to`, `budget_id`; `metrics` (rooms_available, rooms_sold, occupancy, adr, revpar, room_revenue with `period` and `ytd` cells), `closed_days`, `room_revenue_check` |
 | `GET {P}/budgets/vs-actual` | `budget.view` | `year_start`, `from`, `to` (snapped to whole months of the year), `budget_id` (the active version by default), `format=csv`, `lang`; the income statement layout with `period` and `ytd` cells (`actual`, `budget`, `variance`, `variance_percent`, `favourable`); 404 `NO_ACTIVE_BUDGET` |
 | `GET {P}/budgets/vs-actual.pdf` | `budget.view` | The same as a PDF |
 | `GET {P}/cashier/settings` | any cashier permission | `{require_shift_for_cash, max_variance, block_night_audit}` |

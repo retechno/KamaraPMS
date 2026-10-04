@@ -295,3 +295,81 @@ describe('BudgetEditorView', () => {
     expect(w.get('[data-testid=budget-error]').text()).toContain('BUDGET_NOT_FOUND')
   })
 })
+
+describe('BudgetEditorView statistics', () => {
+  const sep = { month: 9, rooms_available: 300, rooms_sold: 210, adr: '1000000', occupancy_percent: '70.00', revpar: '700000', room_revenue: '210000000' }
+
+  it('shows the statistics of the draft with what follows from them', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ statistics: [sep], room_count: 10 }))
+    expect((w.get('input[name=s-available-9]').element as HTMLInputElement).value).toBe('300')
+    expect((w.get('input[name=s-sold-9]').element as HTMLInputElement).value).toBe('210')
+    expect((w.get('input[name=s-adr-9]').element as HTMLInputElement).value).toBe('1000000')
+    expect((w.get('input[name=s-sold-1]').element as HTMLInputElement).value).toBe('') // a month with none is empty
+    expect(w.get('[data-testid=stats-occupancy]').text()).toContain('70.00%')
+    expect(w.get('[data-testid=stats-revenue]').text()).toContain('210,000,000')
+  })
+
+  it('derives occupancy and room revenue while typing, and saves only the months that have figures', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ room_count: 10 }))
+    expect((w.get('[data-testid=stats-save]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=s-available-3]').setValue('310')
+    await w.get('input[name=s-sold-3]').setValue('155')
+    await w.get('input[name=s-adr-3]').setValue('900000')
+    expect(w.get('[data-testid=stats-occupancy]').text()).toContain('50.00%')
+    expect(w.get('[data-testid=stats-revenue]').text()).toContain('139,500,000')
+    expect(w.find('[data-testid=stats-unsaved]').exists()).toBe(true)
+    PUT.mockResolvedValueOnce({ data: budget({ statistics: [{ ...sep, month: 3, rooms_available: 310, rooms_sold: 155, adr: '900000' }] }) })
+    await w.get('[data-testid=stats-save]').trigger('click')
+    await flushPromises()
+    const [path, init] = PUT.mock.calls[0] as [string, { body: { rows: unknown[] } }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/budgets/{id}/statistics')
+    expect(init.body.rows).toEqual([{ month: 3, rooms_available: 310, rooms_sold: 155, adr: '900000' }])
+    expect(w.get('[data-testid=notice]').text()).toContain('statistics were saved')
+    expect(w.find('[data-testid=stats-unsaved]').exists()).toBe(false)
+  })
+
+  it('refuses statistics that are not valid', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ room_count: 10 }))
+    await w.get('input[name=s-available-1]').setValue('10')
+    await w.get('input[name=s-sold-1]').setValue('11')
+    expect(w.get('[data-testid=stats-invalid]').text()).toContain('1 statistics figures')
+    expect((w.get('[data-testid=stats-save]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=s-sold-1]').setValue('5')
+    await w.get('input[name=s-adr-1]').setValue('-1')
+    expect(w.find('[data-testid=stats-invalid]').exists()).toBe(true)
+    await w.get('input[name=s-adr-1]').setValue('100')
+    expect(w.find('[data-testid=stats-invalid]').exists()).toBe(false)
+    await w.get('input[name=s-sold-2]').setValue('1.5')
+    expect(w.find('[data-testid=stats-invalid]').exists()).toBe(true)
+  })
+
+  it('suggests the rooms available from the rooms of the property', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ room_count: 10, statistics: [sep] }))
+    await w.get('[data-testid=stats-suggest]').trigger('click')
+    expect((w.get('input[name=s-available-1]').element as HTMLInputElement).value).toBe('310') // 10 rooms x 31 days
+    expect((w.get('input[name=s-available-2]').element as HTMLInputElement).value).toBe('280') // 2026 is not a leap year
+    expect((w.get('input[name=s-available-9]').element as HTMLInputElement).value).toBe('300') // what is typed stays
+  })
+
+  it('saves the statistics before it activates, and keeps the grid that was typed', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ room_count: 10 }))
+    await w.get('input[name=s-available-1]').setValue('31')
+    await cell(w, '4110', 4).setValue('5')
+    await w.get('[data-testid=activate]').trigger('click')
+    await flushPromises()
+    expect(PUT.mock.calls.map((c) => c[0])).toEqual([
+      '/api/v1/properties/{propertyId}/budgets/{id}/grid',
+      '/api/v1/properties/{propertyId}/budgets/{id}/statistics',
+    ])
+    expect(w.findComponent({ name: 'ApprovalDialog' }).exists()).toBe(true)
+  })
+
+  it('shows the statistics of a version that is fixed, and nothing when there are none', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ status: 'ACTIVE', approved_by: 3, statistics: [sep] }))
+    expect(w.find('input[name=s-available-9]').exists()).toBe(false)
+    expect(w.get('[data-testid=stats-available]').text()).toContain('300')
+    expect(w.find('[data-testid=stats-save]').exists()).toBe(false)
+    const { w: none } = await mountView(['budget.view'], budget({ status: 'ACTIVE', approved_by: 3 }))
+    expect(none.find('[data-testid=statistics]').exists()).toBe(false)
+  })
+})

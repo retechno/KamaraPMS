@@ -133,7 +133,7 @@ Part B's budget is built (README, "Budget"). What differs from the text above:
 - Beyond the plan: **spread** of a yearly figure (equally, or after last year's months), a **PDF** of the report, English and Indonesian texts, and a `budget.approve` permission used as the approver's.
 - The report takes a **period** (whole months) and shows the **year to date** beside it, instead of a month column and a year column picked separately.
 - A budget may be made for the fiscal years from the year the books start in to two years after the current one.
-- Not built, as decided: a budget of statistics (rooms, occupancy, ADR) and of the balance sheet. The cash flow statement is built too (README, "Cash flow statement"): the range may be any range up to five years, not only one inside a fiscal year, and SUSPENSE is treated as operating.
+- The budget of the **statistics** was built afterwards (README, "Budget statistics"): rooms available, rooms sold and ADR per month, kept beside the money. Not built, as decided: a budget of the balance sheet. The cash flow statement is built too (README, "Cash flow statement"): the range may be any range up to five years, not only one inside a fiscal year, and SUSPENSE is treated as operating.
 
 ### Cash flow statement (indirect method)
 

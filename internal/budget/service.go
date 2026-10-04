@@ -210,6 +210,14 @@ func (s *Service) detail(ctx context.Context, tenantID, propertyID, id int64, de
 		return Budget{}, err
 	}
 	b.Available = accounts
+	if b.Statistics, err = s.statistics(ctx, tenantID, propertyID, id, decimals); err != nil {
+		return Budget{}, err
+	}
+	rc, err := s.q(ctx).CountActiveRooms(ctx, budgetdb.CountActiveRoomsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return Budget{}, err
+	}
+	b.RoomCount = int(rc)
 	b.Rows = []Row{}
 	for _, a := range accounts {
 		g, ok := grid[a.ID]
@@ -321,6 +329,9 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 		}
 		if in.CopyFromID != nil {
 			if err := q.CopyBudgetLines(ctx, budgetdb.CopyBudgetLinesParams{TenantID: p.TenantID, PropertyID: propertyID, FromBudgetID: *in.CopyFromID, ToBudgetID: id}); err != nil {
+				return err
+			}
+			if err := q.CopyBudgetStatistics(ctx, budgetdb.CopyBudgetStatisticsParams{TenantID: p.TenantID, PropertyID: propertyID, FromBudgetID: *in.CopyFromID, ToBudgetID: id}); err != nil {
 				return err
 			}
 		}
@@ -758,8 +769,12 @@ func (s *Service) Activate(ctx context.Context, propertyID, id int64, in Activat
 		if b.Status != StatusDraft {
 			return errNotDraft(b.Status)
 		}
-		if b.AccountCount == 0 {
-			return apperr.Conflict("BUDGET_EMPTY", "a budget with no figures is not made active")
+		stats, err := q.ListBudgetStatistics(ctx, budgetdb.ListBudgetStatisticsParams{TenantID: p.TenantID, PropertyID: propertyID, BudgetID: id})
+		if err != nil {
+			return err
+		}
+		if b.AccountCount == 0 && len(stats) == 0 {
+			return apperr.Conflict("BUDGET_EMPTY", "a budget with no figures and no statistics is not made active")
 		}
 		now := s.clock.Now()
 		var archived *int64

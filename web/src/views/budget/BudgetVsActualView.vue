@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Budget, BudgetCell, BudgetVsActual } from '@/api/types'
+import type { Budget, BudgetCell, BudgetStatisticsVsActual, BudgetVsActual } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -27,6 +27,7 @@ const auth = useAuthStore()
 const property = usePropertyStore()
 
 const report = ref<BudgetVsActual | null>(null)
+const statistics = ref<BudgetStatisticsVsActual | null>(null)
 const budgets = ref<Budget[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
@@ -66,8 +67,15 @@ async function show(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/budgets/vs-actual', { params: { path: { propertyId }, query: query() } })
     report.value = (data as BudgetVsActual | undefined) ?? null
+    // the statistics of the same version and range; the money report alone is not lost when they cannot be read
+    statistics.value = null
+    if (report.value) {
+      const st = await api.GET('/api/v1/properties/{propertyId}/budgets/statistics-vs-actual', { params: { path: { propertyId }, query: query() } })
+      statistics.value = st.data ?? null
+    }
   } catch (e) {
     report.value = null
+    statistics.value = null
     error.value = e instanceof ApiError ? e : null
   } finally {
     busy.value = false
@@ -102,6 +110,11 @@ const verdict = (c: BudgetCell): string => (c.favourable === null ? '' : c.favou
 const tone = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? 'text-success' : 'text-destructive')
 const amount = (v: string): string => (Number(v) === 0 ? '–' : formatMoney(v))
 const percent = (c: BudgetCell): string => (c.variance_percent === null ? '' : `${formatMoney(c.variance_percent)}%`)
+/** A statistic in its unit: room nights as they are, a percent with its sign, money with separators. */
+function stat(unit: string, v: string): string {
+  if (unit === 'PERCENT') return `${formatMoney(v)}%`
+  return unit === 'MONEY' ? amount(v) : formatMoney(v)
+}
 const bothZero = (c: BudgetCell): boolean => Number(c.actual) === 0 && Number(c.budget) === 0
 
 watch(() => pid.value, () => {
@@ -234,6 +247,41 @@ watch(() => form.year_start, () => { form.budget_id = '' })
             </table>
           </div>
           <p class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('budget.varianceNote') }}</p>
+        </template>
+      </CardContent>
+    </Card>
+    <Card v-if="loaded && report && statistics" class="mt-4" data-testid="statistics">
+      <CardContent class="pt-4">
+        <h2 class="m-0 text-lg font-semibold">{{ t('budget.statsReportTitle') }}</h2>
+        <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('budget.statsReportHint') }} {{ t('budget.statsClosedDays', { n: statistics.closed_days }) }}</p>
+        <p v-if="!statistics.has_statistics" class="muted" data-testid="stats-none">{{ t('budget.statsNone') }}</p>
+        <template v-else>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm" data-testid="stats-report">
+              <thead>
+                <tr class="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                  <th class="py-2 pr-2 text-left" />
+                  <template v-for="g in ['p', 'y']" :key="g">
+                    <th class="border-l border-border px-2 py-1 text-right">{{ g === 'p' ? t('budget.period') : t('budget.ytd') }} · {{ t('budget.actual') }}</th>
+                    <th class="px-2 py-1 text-right">{{ t('budget.budgetCol') }}</th>
+                    <th class="px-2 py-1 text-right">{{ t('budget.variance') }}</th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in statistics.metrics" :key="m.key" class="border-b border-border" :data-testid="`metric-${m.key}`">
+                  <th scope="row" class="py-1.5 pr-2 text-left font-medium">{{ t(`budget.metric.${m.key}`) }}</th>
+                  <template v-for="c in [m.period, m.ytd]" :key="c === m.period ? 'p' : 'y'">
+                    <td class="border-l border-border px-2 text-right tabular-nums">{{ stat(m.unit, c.actual) }}</td>
+                    <td class="px-2 text-right tabular-nums">{{ stat(m.unit, c.budget) }}</td>
+                    <td class="px-2 text-right tabular-nums" :class="tone(c)">{{ stat(m.unit, c.variance) }} <small v-if="verdict(c)">{{ verdict(c) }}</small></td>
+                  </template>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="statistics.room_revenue_check.agrees" class="mb-0 mt-3 text-sm text-muted-foreground" data-testid="check-agrees">{{ t('budget.statsCheckAgrees') }}</p>
+          <p v-else class="alert mb-0 mt-3" data-testid="check-differs">{{ t('budget.statsCheckDiffers', { money: formatMoney(statistics.room_revenue_check.ytd_money), stats: formatMoney(statistics.room_revenue_check.ytd_statistics) }) }}</p>
         </template>
       </CardContent>
     </Card>

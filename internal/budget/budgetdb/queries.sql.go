@@ -281,6 +281,69 @@ func (q *Queries) BudgetIDsOfYear(ctx context.Context, arg BudgetIDsOfYearParams
 	return items, nil
 }
 
+const budgetedRoomRevenue = `-- name: BudgetedRoomRevenue :one
+SELECT COALESCE(sum(l.amount), 0)::numeric AS amount
+FROM budget_lines l JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.budget_id = $3 AND a.statement_group = 'REV_ROOMS'
+  AND l.month >= $4::smallint AND l.month <= $5::smallint
+`
+
+type BudgetedRoomRevenueParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+	FromMonth  int16
+	ToMonth    int16
+}
+
+// The budget of the room revenue (the accounts of the REV_ROOMS group) for a range of months.
+func (q *Queries) BudgetedRoomRevenue(ctx context.Context, arg BudgetedRoomRevenueParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, budgetedRoomRevenue,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BudgetID,
+		arg.FromMonth,
+		arg.ToMonth,
+	)
+	var amount decimal.Decimal
+	err := row.Scan(&amount)
+	return amount, err
+}
+
+const budgetedStatistics = `-- name: BudgetedStatistics :one
+SELECT COALESCE(sum(rooms_available), 0)::int AS rooms_available, COALESCE(sum(rooms_sold), 0)::int AS rooms_sold, COALESCE(sum(rooms_sold * adr), 0)::numeric AS room_revenue
+FROM budget_statistics
+WHERE tenant_id = $1 AND property_id = $2 AND budget_id = $3 AND month >= $4::smallint AND month <= $5::smallint
+`
+
+type BudgetedStatisticsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+	FromMonth  int16
+	ToMonth    int16
+}
+
+type BudgetedStatisticsRow struct {
+	RoomsAvailable int32
+	RoomsSold      int32
+	RoomRevenue    decimal.Decimal
+}
+
+// The budget of the statistics for a range of months.
+func (q *Queries) BudgetedStatistics(ctx context.Context, arg BudgetedStatisticsParams) (BudgetedStatisticsRow, error) {
+	row := q.db.QueryRow(ctx, budgetedStatistics,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BudgetID,
+		arg.FromMonth,
+		arg.ToMonth,
+	)
+	var i BudgetedStatisticsRow
+	err := row.Scan(&i.RoomsAvailable, &i.RoomsSold, &i.RoomRevenue)
+	return i, err
+}
+
 const copyBudgetLines = `-- name: CopyBudgetLines :exec
 INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
 SELECT l.tenant_id, l.property_id, $1::bigint, l.account_id, l.month, l.amount
@@ -302,6 +365,46 @@ func (q *Queries) CopyBudgetLines(ctx context.Context, arg CopyBudgetLinesParams
 		arg.FromBudgetID,
 	)
 	return err
+}
+
+const copyBudgetStatistics = `-- name: CopyBudgetStatistics :exec
+INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr)
+SELECT s.tenant_id, s.property_id, $1::bigint, s.month, s.rooms_available, s.rooms_sold, s.adr
+FROM budget_statistics s WHERE s.tenant_id = $2 AND s.property_id = $3 AND s.budget_id = $4
+`
+
+type CopyBudgetStatisticsParams struct {
+	ToBudgetID   int64
+	TenantID     int64
+	PropertyID   int64
+	FromBudgetID int64
+}
+
+func (q *Queries) CopyBudgetStatistics(ctx context.Context, arg CopyBudgetStatisticsParams) error {
+	_, err := q.db.Exec(ctx, copyBudgetStatistics,
+		arg.ToBudgetID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromBudgetID,
+	)
+	return err
+}
+
+const countActiveRooms = `-- name: CountActiveRooms :one
+SELECT count(*)::int FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND is_active
+`
+
+type CountActiveRoomsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The rooms the hotel sells today (a suggestion for the rooms available).
+func (q *Queries) CountActiveRooms(ctx context.Context, arg CountActiveRoomsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveRooms, arg.TenantID, arg.PropertyID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const deleteBudget = `-- name: DeleteBudget :exec
@@ -352,6 +455,21 @@ func (q *Queries) DeleteBudgetLinesOfAccount(ctx context.Context, arg DeleteBudg
 		arg.BudgetID,
 		arg.AccountID,
 	)
+	return err
+}
+
+const deleteBudgetStatistics = `-- name: DeleteBudgetStatistics :exec
+DELETE FROM budget_statistics WHERE tenant_id = $1 AND property_id = $2 AND budget_id = $3
+`
+
+type DeleteBudgetStatisticsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+}
+
+func (q *Queries) DeleteBudgetStatistics(ctx context.Context, arg DeleteBudgetStatisticsParams) error {
+	_, err := q.db.Exec(ctx, deleteBudgetStatistics, arg.TenantID, arg.PropertyID, arg.BudgetID)
 	return err
 }
 
@@ -503,6 +621,29 @@ func (q *Queries) InsertBudgetLines(ctx context.Context, arg InsertBudgetLinesPa
 	return err
 }
 
+const insertBudgetStatistics = `-- name: InsertBudgetStatistics :exec
+INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr)
+SELECT $1::bigint, $2::bigint, $3::bigint, (c ->> 'month')::smallint, (c ->> 'rooms_available')::int, (c ->> 'rooms_sold')::int, (c ->> 'adr')::numeric
+FROM jsonb_array_elements($4::jsonb) AS c
+`
+
+type InsertBudgetStatisticsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+	Cells      []byte
+}
+
+func (q *Queries) InsertBudgetStatistics(ctx context.Context, arg InsertBudgetStatisticsParams) error {
+	_, err := q.db.Exec(ctx, insertBudgetStatistics,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BudgetID,
+		arg.Cells,
+	)
+	return err
+}
+
 const listBudgetAccounts = `-- name: ListBudgetAccounts :many
 SELECT a.id, a.code, a.name, a.account_type, COALESCE(a.statement_group, '')::text AS statement_group, a.is_active
 FROM gl_accounts a
@@ -582,6 +723,51 @@ func (q *Queries) ListBudgetLines(ctx context.Context, arg ListBudgetLinesParams
 	for rows.Next() {
 		var i ListBudgetLinesRow
 		if err := rows.Scan(&i.AccountID, &i.Month, &i.Amount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBudgetStatistics = `-- name: ListBudgetStatistics :many
+SELECT month, rooms_available, rooms_sold, adr FROM budget_statistics
+WHERE tenant_id = $1 AND property_id = $2 AND budget_id = $3
+ORDER BY month
+`
+
+type ListBudgetStatisticsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+}
+
+type ListBudgetStatisticsRow struct {
+	Month          int16
+	RoomsAvailable int32
+	RoomsSold      int32
+	Adr            decimal.Decimal
+}
+
+// The statistics of a budget, by month.
+func (q *Queries) ListBudgetStatistics(ctx context.Context, arg ListBudgetStatisticsParams) ([]ListBudgetStatisticsRow, error) {
+	rows, err := q.db.Query(ctx, listBudgetStatistics, arg.TenantID, arg.PropertyID, arg.BudgetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBudgetStatisticsRow{}
+	for rows.Next() {
+		var i ListBudgetStatisticsRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.RoomsAvailable,
+			&i.RoomsSold,
+			&i.Adr,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -672,6 +858,44 @@ func (q *Queries) ListBudgets(ctx context.Context, arg ListBudgetsParams) ([]Lis
 			&i.TotalRevenue,
 			&i.TotalExpense,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClosedDaySummaries = `-- name: ListClosedDaySummaries :many
+SELECT business_date, summary FROM business_days
+WHERE property_id = $1 AND status = 'CLOSED' AND business_date BETWEEN $2::date AND $3::date
+ORDER BY business_date
+`
+
+type ListClosedDaySummariesParams struct {
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ListClosedDaySummariesRow struct {
+	BusinessDate civil.Date
+	Summary      []byte
+}
+
+// Closed days with a stored summary, for the actual statistics.
+func (q *Queries) ListClosedDaySummaries(ctx context.Context, arg ListClosedDaySummariesParams) ([]ListClosedDaySummariesRow, error) {
+	rows, err := q.db.Query(ctx, listClosedDaySummaries, arg.PropertyID, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClosedDaySummariesRow{}
+	for rows.Next() {
+		var i ListClosedDaySummariesRow
+		if err := rows.Scan(&i.BusinessDate, &i.Summary); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

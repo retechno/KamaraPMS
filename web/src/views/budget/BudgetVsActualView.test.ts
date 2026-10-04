@@ -47,12 +47,23 @@ const budgets = [
   { id: 9, year_start: '2027-01-01', year_label: 'FY2027', version: 1, name: 'Next', status: 'DRAFT' },
 ]
 
-function mountView(permissions = ['budget.view']) {
+const metric = (key: string, unit: string, period: ReturnType<typeof cell>, ytd = period) => ({ key, unit, period, ytd })
+const statistics = {
+  year_start: '2026-01-01', year_end: '2026-12-31', year_label: 'FY2026', from: '2026-09-01', to: '2026-09-30', budget: report.budget, has_statistics: true, closed_days: 30,
+  metrics: [
+    metric('rooms_sold', 'NIGHTS', cell('210', '240', '-30', '-12.5', false)),
+    metric('occupancy', 'PERCENT', cell('70', '80', '-10', '-12.5', false)),
+    metric('adr', 'MONEY', cell('1000000', '900000', '100000', '11.1', true)),
+  ],
+  room_revenue_check: { period_money: '200', period_statistics: '210', ytd_money: '200', ytd_statistics: '210', agrees: false },
+}
+
+function mountView(permissions = ['budget.view'], stats: Record<string, unknown> = statistics) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  GET = vi.fn().mockImplementation((path: string) => Promise.resolve({ data: path.endsWith('/vs-actual') ? report : { data: budgets } }))
+  GET = vi.fn().mockImplementation((path: string) => Promise.resolve({ data: path.endsWith('/vs-actual') ? report : path.endsWith('/statistics-vs-actual') ? stats : { data: budgets } }))
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(BudgetVsActualView, { global: { plugins: [pinia, router] } })
 }
@@ -150,5 +161,29 @@ describe('BudgetVsActualView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('sets the statistics against the closed days, with the check of the room revenue', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(GET.mock.calls.some(([p]) => String(p).endsWith('/statistics-vs-actual'))).toBe(true)
+    expect(w.get('[data-testid=statistics]').text()).toContain('30 closed days')
+    expect(w.get('[data-testid=metric-rooms_sold]').text()).toContain('210')
+    expect(w.get('[data-testid=metric-rooms_sold]').text()).toContain('unfav.')
+    expect(w.get('[data-testid=metric-occupancy]').text()).toContain('70%')
+    expect(w.get('[data-testid=metric-adr]').text()).toContain('1,000,000')
+    expect(w.get('[data-testid=metric-adr]').text()).toContain('fav.')
+    expect(w.get('[data-testid=check-differs]').text()).toContain('(200)')
+    expect(w.get('[data-testid=check-differs]').text()).toContain('(210)')
+    const agreeing = mountView(['budget.view'], { ...statistics, room_revenue_check: { ...statistics.room_revenue_check, agrees: true } })
+    await flushPromises()
+    expect(agreeing.find('[data-testid=check-agrees]').exists()).toBe(true)
+  })
+
+  it('says when the budget has no statistics', async () => {
+    const w = mountView(['budget.view'], { ...statistics, has_statistics: false, metrics: [] })
+    await flushPromises()
+    expect(w.find('[data-testid=stats-none]').exists()).toBe(true)
+    expect(w.find('[data-testid=stats-report]').exists()).toBe(false)
   })
 })

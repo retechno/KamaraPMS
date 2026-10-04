@@ -117,3 +117,45 @@ JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.budget_id = @budget_id AND l.month >= @from_month::smallint AND l.month <= @to_month::smallint
 GROUP BY a.id
 ORDER BY a.code;
+
+-- The statistics of a budget, by month.
+-- name: ListBudgetStatistics :many
+SELECT month, rooms_available, rooms_sold, adr FROM budget_statistics
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id
+ORDER BY month;
+
+-- name: DeleteBudgetStatistics :exec
+DELETE FROM budget_statistics WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id;
+
+-- name: InsertBudgetStatistics :exec
+INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr)
+SELECT @tenant_id::bigint, @property_id::bigint, @budget_id::bigint, (c ->> 'month')::smallint, (c ->> 'rooms_available')::int, (c ->> 'rooms_sold')::int, (c ->> 'adr')::numeric
+FROM jsonb_array_elements(@cells::jsonb) AS c;
+
+-- name: CopyBudgetStatistics :exec
+INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr)
+SELECT s.tenant_id, s.property_id, @to_budget_id::bigint, s.month, s.rooms_available, s.rooms_sold, s.adr
+FROM budget_statistics s WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.budget_id = @from_budget_id;
+
+-- The rooms the hotel sells today (a suggestion for the rooms available).
+-- name: CountActiveRooms :one
+SELECT count(*)::int FROM rooms WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active;
+
+-- The budget of the room revenue (the accounts of the REV_ROOMS group) for a range of months.
+-- name: BudgetedRoomRevenue :one
+SELECT COALESCE(sum(l.amount), 0)::numeric AS amount
+FROM budget_lines l JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.budget_id = @budget_id AND a.statement_group = 'REV_ROOMS'
+  AND l.month >= @from_month::smallint AND l.month <= @to_month::smallint;
+
+-- The budget of the statistics for a range of months.
+-- name: BudgetedStatistics :one
+SELECT COALESCE(sum(rooms_available), 0)::int AS rooms_available, COALESCE(sum(rooms_sold), 0)::int AS rooms_sold, COALESCE(sum(rooms_sold * adr), 0)::numeric AS room_revenue
+FROM budget_statistics
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id AND month >= @from_month::smallint AND month <= @to_month::smallint;
+
+-- Closed days with a stored summary, for the actual statistics.
+-- name: ListClosedDaySummaries :many
+SELECT business_date, summary FROM business_days
+WHERE property_id = @property_id AND status = 'CLOSED' AND business_date BETWEEN @from_date::date AND @to_date::date
+ORDER BY business_date;

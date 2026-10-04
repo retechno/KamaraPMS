@@ -2730,6 +2730,56 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/statistics-vs-actual:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBudgetStatisticsVsActual
+      summary: The statistics of the budget against the closed days (budget.view)
+      description: |
+        The room nights available and sold, the occupancy (sold over available, on both sides), the ADR, RevPAR and the room revenue, for the period and the year to date: the budget of the
+        statistics against the summaries of the closed business days (the rooms the hotel uses itself are not available; the room revenue is the net). The range, the year and the version are
+        those of the budget against actual report. `room_revenue_check` says whether the room revenue of the money budget (the REV_ROOMS accounts) agrees with sold x ADR of the statistics.
+        404 `NO_ACTIVE_BUDGET`.
+      tags: [budget]
+      parameters:
+        - { name: year_start, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: budget_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetStatisticsVsActual" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/statistics:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: saveBudgetStatistics
+      summary: Replace the statistics of a draft (budget.manage)
+      description: "A row per month given (1 to 12 of the fiscal year): room nights available, sold (not above the available) and the ADR. The months given replace what the draft held; an empty list clears them. 409 `BUDGET_NOT_DRAFT`."
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BudgetStatisticsRequest" }
+      responses:
+        "200":
+          description: The budget with its grid and statistics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/budgets/{id}:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9135,6 +9185,65 @@ components:
         months: { type: array, items: { $ref: "#/components/schemas/BudgetMonth" }, description: Only on one budget. }
         rows: { type: array, items: { $ref: "#/components/schemas/BudgetRow" }, description: "Only on one budget (absent when the grid is empty)." }
         available_accounts: { type: array, items: { $ref: "#/components/schemas/BudgetAccountRef" }, description: "Only on one budget: the accounts a budget may cover." }
+        statistics: { type: array, items: { $ref: "#/components/schemas/BudgetStatisticsRow" }, description: "Only on one budget (absent when there are none): the rooms available and sold and the ADR of each month, with what follows from them." }
+        room_count: { type: integer, description: "Only on one budget: the rooms the property sells today, to suggest the rooms available." }
+    BudgetStatisticsRow:
+      type: object
+      required: [month, rooms_available, rooms_sold, adr, occupancy_percent, revpar, room_revenue]
+      properties:
+        month: { type: integer, minimum: 1, maximum: 12 }
+        rooms_available: { type: integer }
+        rooms_sold: { type: integer }
+        adr: { type: string }
+        occupancy_percent: { type: string, description: Sold over available. }
+        revpar: { type: string }
+        room_revenue: { type: string, description: Sold x ADR. }
+    BudgetStatisticsRowRequest:
+      type: object
+      required: [month, rooms_available, rooms_sold, adr]
+      additionalProperties: false
+      properties:
+        month: { type: integer, minimum: 1, maximum: 12 }
+        rooms_available: { type: integer, minimum: 0 }
+        rooms_sold: { type: integer, minimum: 0 }
+        adr: { type: string }
+    BudgetStatisticsRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows: { type: array, maxItems: 12, items: { $ref: "#/components/schemas/BudgetStatisticsRowRequest" } }
+    BudgetStatMetric:
+      type: object
+      required: [key, unit, period, ytd]
+      properties:
+        key: { type: string, enum: [rooms_available, rooms_sold, occupancy, adr, revpar, room_revenue] }
+        unit: { type: string, enum: [NIGHTS, PERCENT, MONEY] }
+        period: { $ref: "#/components/schemas/BudgetCell" }
+        ytd: { $ref: "#/components/schemas/BudgetCell" }
+    BudgetRoomRevenueCheck:
+      type: object
+      required: [period_money, period_statistics, ytd_money, ytd_statistics, agrees]
+      properties:
+        period_money: { type: string }
+        period_statistics: { type: string }
+        ytd_money: { type: string }
+        ytd_statistics: { type: string }
+        agrees: { type: boolean }
+    BudgetStatisticsVsActual:
+      type: object
+      required: [year_start, year_end, year_label, from, to, budget, has_statistics, closed_days, metrics, room_revenue_check]
+      properties:
+        year_start: { $ref: "#/components/schemas/Date" }
+        year_end: { $ref: "#/components/schemas/Date" }
+        year_label: { type: string }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        budget: { $ref: "#/components/schemas/BudgetRef" }
+        has_statistics: { type: boolean }
+        closed_days: { type: integer, description: The closed business days of the year to date that were read. }
+        metrics: { type: array, items: { $ref: "#/components/schemas/BudgetStatMetric" } }
+        room_revenue_check: { $ref: "#/components/schemas/BudgetRoomRevenueCheck" }
     BudgetPage:
       type: object
       required: [data]

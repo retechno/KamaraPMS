@@ -1505,6 +1505,23 @@ SELECT expect_ok('a draft is deleted with its lines',
     $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '6110' AND property_id = pr('BALI')), 2, 250000)$q$,
     $q$DELETE FROM budgets WHERE name = 'Budget 2026 v2' AND status = 'DRAFT'$q$);
 
+INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr)
+VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 9, 300, 210, 1000000);
+SELECT expect_error('a month has one set of statistics', '23505',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 9, 10, 5, 1)$q$);
+SELECT expect_error('the statistics month is from 1 to 12', '23514',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 13, 10, 5, 1)$q$);
+SELECT expect_error('the rooms sold are not above the rooms available', '23514',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 10, 10, 11, 1)$q$);
+SELECT expect_error('the ADR is not negative', '23514',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 10, 10, 5, -1)$q$);
+SELECT expect_error('statistics of a budget of another property are impossible', '23503',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('XYZ'), pr('SG'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), 10, 10, 5, 1)$q$);
+SELECT expect_error('the statistics of an active budget are not added', '23001',
+    $q$INSERT INTO budget_statistics (tenant_id, property_id, budget_id, month, rooms_available, rooms_sold, adr) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), 10, 10, 5, 1)$q$);
+SELECT expect_ok('a draft is deleted with its statistics',
+    $q$DELETE FROM budgets WHERE name = 'Budget 2026 v2' AND status = 'DRAFT'$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

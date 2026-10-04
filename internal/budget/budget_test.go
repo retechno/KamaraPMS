@@ -834,3 +834,174 @@ func TestConcurrentEditAndActivation(t *testing.T) {
 	}
 	eqs(t, "what was activated is what the edit left", rowOf(t, got, "4110").Total, want)
 }
+
+func stats(month int, available, sold int, adr string) budget.StatInput {
+	return budget.StatInput{Month: month, RoomsAvailable: available, RoomsSold: sold, ADR: adr}
+}
+
+func (f *fx) saveStats(t *testing.T, id int64, rows ...budget.StatInput) budget.Budget {
+	t.Helper()
+	b, err := f.Budget.SaveStatistics(f.manager, f.propID, id, budget.StatisticsInput{Rows: rows})
+	must(t, err)
+	return b
+}
+
+func TestStatisticsAreKeptWithWhatFollowsFromThem(t *testing.T) {
+	f := setup(t)
+	b := f.create(t, "2026-01-01", "A")
+	if len(b.Statistics) != 0 {
+		t.Fatalf("a new draft has none: %+v", b.Statistics)
+	}
+	b = f.saveStats(t, b.ID, stats(9, 300, 210, "1000000"), stats(10, 310, 155, "1200000"))
+	if len(b.Statistics) != 2 {
+		t.Fatalf("two months: %+v", b.Statistics)
+	}
+	sep := b.Statistics[0]
+	if sep.Month != 9 || sep.Occupancy != "70.00" || sep.RoomRevenue != "210000000" || sep.RevPAR != "700000" {
+		t.Fatalf("what follows from September: %+v", sep)
+	}
+	if b.RoomCount != 0 {
+		t.Fatalf("the property has no rooms yet: %d", b.RoomCount)
+	}
+	// saving again replaces; an empty list clears
+	b = f.saveStats(t, b.ID, stats(1, 31, 0, "0"))
+	if len(b.Statistics) != 1 || b.Statistics[0].Month != 1 {
+		t.Fatalf("replaced: %+v", b.Statistics)
+	}
+	b = f.saveStats(t, b.ID)
+	if len(b.Statistics) != 0 {
+		t.Fatalf("cleared: %+v", b.Statistics)
+	}
+}
+
+func TestStatisticsAreValidated(t *testing.T) {
+	f := setup(t)
+	b := f.create(t, "2026-01-01", "A")
+	for name, rows := range map[string][]budget.StatInput{
+		"month 0":            {stats(0, 10, 5, "1")},
+		"month 13":           {stats(13, 10, 5, "1")},
+		"a month twice":      {stats(1, 10, 5, "1"), stats(1, 10, 5, "1")},
+		"sold above":         {stats(1, 10, 11, "1")},
+		"negative available": {stats(1, -1, 0, "1")},
+		"negative sold":      {stats(1, 10, -1, "1")},
+		"negative ADR":       {stats(1, 10, 5, "-1")},
+		"ADR decimals":       {stats(1, 10, 5, "1.5")},
+		"ADR a word":         {stats(1, 10, 5, "abc")},
+		"too many rooms":     {stats(1, 2000000, 5, "1")},
+	} {
+		_, err := f.Budget.SaveStatistics(f.manager, f.propID, b.ID, budget.StatisticsInput{Rows: rows})
+		if e, ok := apperr.As(err); !ok || len(e.Fields) == 0 {
+			t.Errorf("%s: got %v, want a validation error", name, err)
+		}
+	}
+	if got := mustGet(t, f, b.ID); len(got.Statistics) != 0 {
+		t.Fatal("a refused set changes nothing")
+	}
+	_, err := f.Budget.SaveStatistics(f.viewer, f.propID, b.ID, budget.StatisticsInput{})
+	wantCode(t, err, "PERMISSION_DENIED")
+}
+
+func TestStatisticsFollowTheStatusOfTheBudget(t *testing.T) {
+	f := setup(t)
+	b := f.create(t, "2026-01-01", "A")
+	f.saveStats(t, b.ID, stats(9, 300, 210, "1000000"))
+	// statistics alone are enough to make a budget active
+	f.activate(t, b.ID)
+	_, err := f.Budget.SaveStatistics(f.manager, f.propID, b.ID, budget.StatisticsInput{})
+	wantCode(t, err, "BUDGET_NOT_DRAFT")
+	// a revision copies them
+	rev, err := f.Budget.Create(f.manager, f.propID, budget.CreateInput{Name: "Revision", CopyFromID: &b.ID})
+	must(t, err)
+	if len(rev.Statistics) != 1 || rev.Statistics[0].RoomsSold != 210 {
+		t.Fatalf("the copy has the statistics: %+v", rev.Statistics)
+	}
+	rev = f.saveStats(t, rev.ID, stats(9, 300, 240, "1000000"))
+	if got := mustGet(t, f, b.ID).Statistics[0].RoomsSold; got != 210 {
+		t.Fatalf("the active version did not change: %d", got)
+	}
+	_ = rev
+	// an empty budget still cannot be made active
+	empty := f.create(t, "2027-01-01", "Empty")
+	_, err = f.Budget.Activate(f.manager, f.propID, empty.ID, budget.ActivateInput{Approval: f.approval()})
+	wantCode(t, err, "BUDGET_EMPTY")
+}
+
+func TestStatisticsAgainstTheClosedDays(t *testing.T) {
+	f := setup(t)
+	// 30 Sep 2026 closed: 10 rooms, 8 sold, room revenue 1,600,000 (ADR 200,000, occupancy 80%, RevPAR 160,000)
+	_, err := f.Pool.Exec(context.Background(), `UPDATE business_days SET status = 'CLOSED', closed_at = now(), summary = $2::jsonb WHERE property_id = $1 AND business_date = '2026-09-30'`,
+		f.propID, `{"rooms": {"total": 11, "out_of_order": 1, "house_use": 0, "sold": 8}, "room_revenue": {"net": "1600000"}}`)
+	must(t, err)
+	_, err = f.Pool.Exec(context.Background(), `INSERT INTO business_days (tenant_id, property_id, business_date) VALUES ($1, $2, '2026-10-01')`, f.tenantID, f.propID)
+	must(t, err)
+
+	b := f.create(t, "2026-01-01", "Plan")
+	// the plan for September: 300 nights available, 210 sold at 1,000,000 (70%, room revenue 210,000,000); August: 310 / 155 at 900,000
+	f.saveStats(t, b.ID, stats(8, 310, 155, "900000"), stats(9, 300, 210, "1000000"))
+	rooms := budget.RowInput{AccountID: f.rooms, Amounts: make([]string, 12)}
+	for i := range rooms.Amounts {
+		rooms.Amounts[i] = "0"
+	}
+	rooms.Amounts[7], rooms.Amounts[8] = "139500000", "200000000" // August agrees with 155 x 900,000; September does not agree with 210 x 1,000,000
+	f.save(t, b.ID, rooms)
+	f.activate(t, b.ID)
+
+	from, to := d("2026-09-01"), d("2026-09-30")
+	rep, err := f.Budget.StatisticsVsActual(f.viewer, f.propID, budget.VsActualQuery{From: &from, To: &to})
+	must(t, err)
+	if !rep.HasStatistics || rep.ClosedDays != 1 || rep.YearLabel != "FY2026" {
+		t.Fatalf("the report: %+v", rep)
+	}
+	m := map[string]budget.StatMetric{}
+	for _, x := range rep.Metrics {
+		m[x.Key] = x
+	}
+	check := func(key, actual, budgetV, variance string) {
+		t.Helper()
+		c := m[key].Period
+		eqd(t, key+" actual", c.Actual, actual)
+		eqd(t, key+" budget", c.Budget, budgetV)
+		eqd(t, key+" variance", c.Variance, variance)
+	}
+	check("rooms_available", "10", "300", "-290")
+	check("rooms_sold", "8", "210", "-202")
+	check("occupancy", "80", "70", "10")
+	check("adr", "200000", "1000000", "-800000")
+	check("revpar", "160000", "700000", "-540000")
+	check("room_revenue", "1600000", "210000000", "-208400000")
+	if f := m["occupancy"].Period.Favourable; f == nil || !*f {
+		t.Fatal("a higher occupancy is favourable")
+	}
+	if m["occupancy"].Unit != "PERCENT" || m["adr"].Unit != "MONEY" || m["rooms_sold"].Unit != "NIGHTS" {
+		t.Fatal("units")
+	}
+	// the year to date adds August (nothing actual) to September
+	eqd(t, "ytd sold budget", m["rooms_sold"].YTD.Budget, "365")
+	eqd(t, "ytd actual sold", m["rooms_sold"].YTD.Actual, "8")
+	// the money of the plan against sold x ADR
+	chk := rep.RoomRevenueCheck
+	eqd(t, "period money", chk.PeriodMoney, "200000000")
+	eqd(t, "period statistics", chk.PeriodStatistics, "210000000")
+	eqd(t, "ytd money", chk.YTDMoney, "339500000")
+	eqd(t, "ytd statistics", chk.YTDStatistics, "349500000")
+	if chk.Agrees {
+		t.Fatal("September does not agree")
+	}
+	aug, augEnd := d("2026-08-01"), d("2026-08-31")
+	rep, err = f.Budget.StatisticsVsActual(f.viewer, f.propID, budget.VsActualQuery{From: &aug, To: &augEnd})
+	must(t, err)
+	if !rep.RoomRevenueCheck.Agrees || rep.ClosedDays != 0 {
+		t.Fatalf("August agrees and has no closed day: %+v", rep.RoomRevenueCheck)
+	}
+
+	_, err = f.Budget.StatisticsVsActual(f.viewer, f.propID, budget.VsActualQuery{BudgetID: new(int64)})
+	wantCode(t, err, "BUDGET_NOT_FOUND")
+	other := f.create(t, "2027-01-01", "Next")
+	_, err = f.Budget.StatisticsVsActual(f.viewer, f.propID, budget.VsActualQuery{BudgetID: &other.ID})
+	if fieldCodes(t, err)["budget_id"] != "OTHER_YEAR" {
+		t.Fatal("another year")
+	}
+	nobody := f.User(t, f.tenantID, f.propID, auth.PermAccountingView)
+	_, err = f.Budget.StatisticsVsActual(nobody, f.propID, budget.VsActualQuery{})
+	wantCode(t, err, "PERMISSION_DENIED")
+}

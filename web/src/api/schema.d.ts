@@ -2237,6 +2237,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/budgets/statistics-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The statistics of the budget against the closed days (budget.view)
+         * @description The room nights available and sold, the occupancy (sold over available, on both sides), the ADR, RevPAR and the room revenue, for the period and the year to date: the budget of the
+         *     statistics against the summaries of the closed business days (the rooms the hotel uses itself are not available; the room revenue is the net). The range, the year and the version are
+         *     those of the budget against actual report. `room_revenue_check` says whether the room revenue of the money budget (the REV_ROOMS accounts) agrees with sold x ADR of the statistics.
+         *     404 `NO_ACTIVE_BUDGET`.
+         */
+        get: operations["getBudgetStatisticsVsActual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the statistics of a draft (budget.manage)
+         * @description A row per month given (1 to 12 of the fiscal year): room nights available, sold (not above the available) and the ADR. The months given replace what the draft held; an empty list clears them. 409 `BUDGET_NOT_DRAFT`.
+         */
+        put: operations["saveBudgetStatistics"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/budgets/{id}": {
         parameters: {
             query?: never;
@@ -8184,6 +8232,58 @@ export interface components {
             rows?: components["schemas"]["BudgetRow"][];
             /** @description Only on one budget: the accounts a budget may cover. */
             available_accounts?: components["schemas"]["BudgetAccountRef"][];
+            /** @description Only on one budget (absent when there are none): the rooms available and sold and the ADR of each month, with what follows from them. */
+            statistics?: components["schemas"]["BudgetStatisticsRow"][];
+            /** @description Only on one budget: the rooms the property sells today, to suggest the rooms available. */
+            room_count?: number;
+        };
+        BudgetStatisticsRow: {
+            month: number;
+            rooms_available: number;
+            rooms_sold: number;
+            adr: string;
+            /** @description Sold over available. */
+            occupancy_percent: string;
+            revpar: string;
+            /** @description Sold x ADR. */
+            room_revenue: string;
+        };
+        BudgetStatisticsRowRequest: {
+            month: number;
+            rooms_available: number;
+            rooms_sold: number;
+            adr: string;
+        };
+        BudgetStatisticsRequest: {
+            rows: components["schemas"]["BudgetStatisticsRowRequest"][];
+        };
+        BudgetStatMetric: {
+            /** @enum {string} */
+            key: "rooms_available" | "rooms_sold" | "occupancy" | "adr" | "revpar" | "room_revenue";
+            /** @enum {string} */
+            unit: "NIGHTS" | "PERCENT" | "MONEY";
+            period: components["schemas"]["BudgetCell"];
+            ytd: components["schemas"]["BudgetCell"];
+        };
+        BudgetRoomRevenueCheck: {
+            period_money: string;
+            period_statistics: string;
+            ytd_money: string;
+            ytd_statistics: string;
+            agrees: boolean;
+        };
+        BudgetStatisticsVsActual: {
+            year_start: components["schemas"]["Date"];
+            year_end: components["schemas"]["Date"];
+            year_label: string;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            budget: components["schemas"]["BudgetRef"];
+            has_statistics: boolean;
+            /** @description The closed business days of the year to date that were read. */
+            closed_days: number;
+            metrics: components["schemas"]["BudgetStatMetric"][];
+            room_revenue_check: components["schemas"]["BudgetRoomRevenueCheck"];
         };
         BudgetPage: {
             data: components["schemas"]["Budget"][];
@@ -14621,6 +14721,67 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBudgetStatisticsVsActual: {
+        parameters: {
+            query?: {
+                year_start?: components["schemas"]["Date"];
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+                budget_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetStatisticsVsActual"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    saveBudgetStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetStatisticsRequest"];
+            };
+        };
+        responses: {
+            /** @description The budget with its grid and statistics. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

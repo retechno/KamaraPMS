@@ -152,24 +152,7 @@ func (s *Service) VsActual(ctx context.Context, propertyID int64, in VsActualQue
 		return VsActual{}, err
 	}
 	q := s.q(ctx)
-	var ref budgetdb.GetBudgetRow
-	if in.BudgetID != nil {
-		ref, err = q.GetBudget(ctx, budgetdb.GetBudgetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *in.BudgetID})
-		if isNoRows(err) {
-			return VsActual{}, errBudgetNotFound()
-		}
-		if err == nil && !ref.YearStart.Equal(yearStart) {
-			return VsActual{}, apperr.Invalid("the report parameters are invalid", fieldErr("budget_id", "OTHER_YEAR", "the budget is of another fiscal year"))
-		}
-	} else {
-		var id int64
-		if id, err = q.ActiveBudgetOfYear(ctx, budgetdb.ActiveBudgetOfYearParams{TenantID: p.TenantID, PropertyID: propertyID, YearStart: yearStart}); isNoRows(err) {
-			return VsActual{}, apperr.NotFound("NO_ACTIVE_BUDGET", "the fiscal year has no active budget: make a version active, or pick one").WithContext("year_start", yearStart.String())
-		}
-		if err == nil {
-			ref, err = q.GetBudget(ctx, budgetdb.GetBudgetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
-		}
-	}
+	ref, err := s.resolveBudget(ctx, p.TenantID, propertyID, in, yearStart)
 	if err != nil {
 		return VsActual{}, err
 	}
@@ -249,4 +232,27 @@ func (s *Service) VsActual(ctx context.Context, propertyID int64, in VsActualQue
 		out.Lines = append(out.Lines, line)
 	}
 	return out, nil
+}
+
+// resolveBudget is the version a report is made with: the one named, or the active one of the year.
+func (s *Service) resolveBudget(ctx context.Context, tenantID, propertyID int64, in VsActualQuery, yearStart civil.Date) (budgetdb.GetBudgetRow, error) {
+	q := s.q(ctx)
+	if in.BudgetID != nil {
+		ref, err := q.GetBudget(ctx, budgetdb.GetBudgetParams{TenantID: tenantID, PropertyID: propertyID, ID: *in.BudgetID})
+		if isNoRows(err) {
+			return ref, errBudgetNotFound()
+		}
+		if err == nil && !ref.YearStart.Equal(yearStart) {
+			return ref, apperr.Invalid("the report parameters are invalid", fieldErr("budget_id", "OTHER_YEAR", "the budget is of another fiscal year"))
+		}
+		return ref, err
+	}
+	id, err := q.ActiveBudgetOfYear(ctx, budgetdb.ActiveBudgetOfYearParams{TenantID: tenantID, PropertyID: propertyID, YearStart: yearStart})
+	if isNoRows(err) {
+		return budgetdb.GetBudgetRow{}, apperr.NotFound("NO_ACTIVE_BUDGET", "the fiscal year has no active budget: make a version active, or pick one").WithContext("year_start", yearStart.String())
+	}
+	if err != nil {
+		return budgetdb.GetBudgetRow{}, err
+	}
+	return q.GetBudget(ctx, budgetdb.GetBudgetParams{TenantID: tenantID, PropertyID: propertyID, ID: id})
 }

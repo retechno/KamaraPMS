@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, Budget, BudgetRow } from '@/api/types'
+import type { Approval, Budget, BudgetRow, BudgetStatisticsRow } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -30,7 +30,11 @@ const router = useRouter()
 
 interface GridRow { account_id: number; code: string; name: string; account_type: string; amounts: string[] }
 
+interface StatCell { available: string; sold: string; adr: string }
+
 const budget = ref<Budget | null>(null)
+const stats = ref<StatCell[]>([])
+const statsSaved = ref('')
 const grid = ref<GridRow[]>([])
 const saved = ref('')
 const loaded = ref(false)
@@ -51,6 +55,30 @@ const can = (p: string) => auth.can(p, pid.value)
 const editable = computed(() => budget.value?.status === 'DRAFT' && can('budget.manage'))
 const months = computed(() => budget.value?.months ?? [])
 const dirty = computed(() => JSON.stringify(grid.value) !== saved.value)
+const statDirty = computed(() => JSON.stringify(stats.value) !== statsSaved.value)
+const showStats = computed(() => editable.value || (budget.value?.statistics?.length ?? 0) > 0)
+
+const isCount = (v: string): boolean => v.trim() === '' || /^\d{1,7}$/.test(v.trim())
+const isRate = (v: string): boolean => isAmount(v) && !v.trim().startsWith('-')
+function statInvalid(c: StatCell): number {
+  let n = [!isCount(c.available), !isCount(c.sold), !isRate(c.adr)].filter(Boolean).length
+  if (n === 0 && Number(c.sold || 0) > Number(c.available || 0)) n++
+  return n
+}
+const invalidStats = computed(() => stats.value.reduce((n, c) => n + statInvalid(c), 0))
+/** The occupancy a month shows while it is edited: sold over available, as the server will derive it. */
+function occupancy(c: StatCell): string {
+  const a = Number(c.available || 0)
+  return a > 0 && statInvalid(c) === 0 ? `${(Math.round((Number(c.sold || 0) * 10000) / a) / 100).toFixed(2)}%` : ''
+}
+function roomRevenue(c: StatCell): string {
+  const adr = toMilli(c.adr)
+  return adr === null || statInvalid(c) > 0 || c.sold.trim() === '' ? '' : fromMilli(adr * BigInt(c.sold.trim()))
+}
+const daysOf = (start: string): number => {
+  const m = /^(\d{4})-(\d{2})-/.exec(start)
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate() : 0
+}
 const invalidCells = computed(() => grid.value.reduce((n, r) => n + r.amounts.filter((a) => !isAmount(a)).length, 0))
 const free = computed(() => (budget.value?.available_accounts ?? []).filter((a) => !grid.value.some((r) => r.account_id === a.id)))
 
@@ -72,10 +100,24 @@ function monthResult(m: number): string {
   return rev === null || exp === null ? '' : fromMilli(rev - exp)
 }
 
-function apply(b: Budget): void {
-  budget.value = b
+function applyGrid(b: Budget): void {
   grid.value = (b.rows ?? []).map((r: BudgetRow) => ({ account_id: r.account_id, code: r.code, name: r.name, account_type: r.account_type, amounts: [...r.amounts] }))
   saved.value = JSON.stringify(grid.value)
+}
+
+function applyStats(b: Budget): void {
+  const by = new Map((b.statistics ?? []).map((r: BudgetStatisticsRow) => [r.month, r]))
+  stats.value = (b.months ?? []).map((m) => {
+    const r = by.get(m.number)
+    return r ? { available: String(r.rooms_available), sold: String(r.rooms_sold), adr: r.adr } : { available: '', sold: '', adr: '' }
+  })
+  statsSaved.value = JSON.stringify(stats.value)
+}
+
+function apply(b: Budget): void {
+  budget.value = b
+  applyGrid(b)
+  applyStats(b)
   details.name = b.name
   details.description = b.description ?? ''
 }
@@ -116,7 +158,36 @@ async function saveGrid(): Promise<void> {
   if (propertyId === null || budget.value === null) return
   const rows = grid.value.map((r) => ({ account_id: r.account_id, amounts: r.amounts.map((a) => a.trim()) }))
   const { data } = await api.PUT('/api/v1/properties/{propertyId}/budgets/{id}/grid', { params: { path: { propertyId, id: budget.value.id } }, body: { rows } })
-  if (data) apply(data)
+  if (data) {
+    budget.value = data
+    applyGrid(data) // what is typed in the statistics stays
+  }
+}
+
+async function saveStatistics(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || budget.value === null) return
+  const rows = stats.value
+    .map((c, i) => ({ month: i + 1, c }))
+    .filter(({ c }) => c.available.trim() !== '' || c.sold.trim() !== '' || c.adr.trim() !== '')
+    .map(({ month, c }) => ({ month, rooms_available: Number(c.available || 0), rooms_sold: Number(c.sold || 0), adr: c.adr.trim() || '0' }))
+  const { data } = await api.PUT('/api/v1/properties/{propertyId}/budgets/{id}/statistics', { params: { path: { propertyId, id: budget.value.id } }, body: { rows } })
+  if (data) {
+    budget.value = data
+    applyStats(data) // what is typed in the grid stays
+  }
+}
+
+const saveStats = () => run(async () => {
+  await saveStatistics()
+  notice.value = t('budget.statsSaved')
+})
+
+function suggestRooms(): void {
+  const count = budget.value?.room_count ?? 0
+  stats.value.forEach((c, i) => {
+    if (c.available.trim() === '') c.available = String(count * daysOf(months.value[i]?.start ?? ''))
+  })
 }
 
 const save = () => run(async () => {
@@ -127,6 +198,7 @@ const save = () => run(async () => {
 /** What an action works on is on the server: unsaved figures are saved first, and the action stops if they are refused. */
 async function saveIfDirty(): Promise<void> {
   if (dirty.value) await saveGrid()
+  if (statDirty.value) await saveStatistics()
 }
 
 async function saveDetails(): Promise<void> {
@@ -444,6 +516,51 @@ watch([() => pid.value, budgetId], () => {
             <Button type="button" variant="outline" :disabled="busy || !dirty || invalidCells > 0" data-testid="save" @click="save">{{ t('budget.saveGrid') }}</Button>
             <Button type="button" :disabled="busy || invalidCells > 0 || !grid.length" data-testid="activate" @click="askApproval">{{ t('budget.activate') }}</Button>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card v-if="showStats" class="mt-4" data-testid="statistics">
+      <CardHeader>
+        <CardTitle>{{ t('budget.statsTitle') }}</CardTitle>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('budget.statsHint') }}</p>
+      </CardHeader>
+      <CardContent>
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-sm" data-testid="stats-grid">
+            <thead>
+              <tr class="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th class="sticky left-0 z-10 min-w-48 bg-card py-2 pr-2" />
+                <th v-for="m in months" :key="m.number" class="px-1 py-2 text-right">{{ monthLabel(m.start) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="f in [{ key: 'available', label: t('budget.statsAvailable') }, { key: 'sold', label: t('budget.statsSold') }, { key: 'adr', label: t('budget.statsAdr') }] as const" :key="f.key" class="border-b border-border" :data-testid="`stats-${f.key}`">
+                <th scope="row" class="sticky left-0 z-10 bg-card py-1 pr-2 text-left font-normal">{{ f.label }}</th>
+                <td v-for="(c, i) in stats" :key="i" class="px-1 py-1 text-right tabular-nums">
+                  <Input
+                    v-if="editable" v-model="c[f.key]" :name="`s-${f.key}-${i + 1}`" inputmode="decimal" class="h-8 w-24 text-right tabular-nums"
+                    :aria-invalid="statInvalid(c) > 0" :aria-label="`${f.label} ${monthLabel(months[i]?.start ?? '')}`"
+                  />
+                  <template v-else>{{ c[f.key] === '' ? '' : f.key === 'adr' ? $money(c[f.key]) : c[f.key] }}</template>
+                </td>
+              </tr>
+              <tr class="border-b border-border text-muted-foreground" data-testid="stats-occupancy">
+                <th scope="row" class="sticky left-0 z-10 bg-card py-1.5 pr-2 text-left font-normal">{{ t('budget.statsOccupancy') }}</th>
+                <td v-for="(c, i) in stats" :key="i" class="px-1 py-1.5 text-right tabular-nums">{{ occupancy(c) }}</td>
+              </tr>
+              <tr class="text-muted-foreground" data-testid="stats-revenue">
+                <th scope="row" class="sticky left-0 z-10 bg-card py-1.5 pr-2 text-left font-normal">{{ t('budget.statsRevenue') }}</th>
+                <td v-for="(c, i) in stats" :key="i" class="px-1 py-1.5 text-right tabular-nums">{{ $money(roomRevenue(c)) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="invalidStats" class="alert mt-3" role="alert" data-testid="stats-invalid">{{ t('budget.statsInvalid', { n: invalidStats }) }}</p>
+        <div v-if="editable" class="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="outline" :title="t('budget.statsSuggestHint')" data-testid="stats-suggest" @click="suggestRooms">{{ t('budget.statsSuggest') }}</Button>
+          <span v-if="statDirty" class="text-sm text-muted-foreground" data-testid="stats-unsaved">{{ t('budget.unsaved') }}</span>
+          <Button type="button" :disabled="busy || !statDirty || invalidStats > 0" data-testid="stats-save" @click="saveStats">{{ t('budget.statsSave') }}</Button>
         </div>
       </CardContent>
     </Card>
