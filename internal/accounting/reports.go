@@ -299,6 +299,35 @@ func (s *Service) IncomeStatement(ctx context.Context, propertyID int64, from, t
 	if err != nil {
 		return IncomeStatement{}, err
 	}
+	lines, net := layoutIncome(rows)
+	return IncomeStatement{Range: r, Lines: lines, NetIncome: net}, nil
+}
+
+// AccountBalance is an account of revenue or expense with its balance (debit minus credit): the input of IncomeLayout.
+type AccountBalance struct {
+	ID          int64
+	Code        string
+	Name        string
+	AccountType string
+	Group       string
+	Balance     decimal.Decimal
+}
+
+// IncomeLayout lays accounts out as the USALI income statement does (the same groups, subtotals and net income as IncomeStatement), so
+// another report, such as the budget against actual, reads like it. Revenue shows positive and expenses positive.
+func IncomeLayout(accounts []AccountBalance) ([]StatementLine, decimal.Decimal) {
+	rows := make([]accountingdb.AccountBalancesRow, len(accounts))
+	for i, a := range accounts {
+		g := a.Group
+		rows[i] = accountingdb.AccountBalancesRow{ID: a.ID, Code: a.Code, Name: a.Name, AccountType: a.AccountType, StatementGroup: &g, Balance: a.Balance}
+	}
+	return layoutIncome(rows)
+}
+
+// layoutIncome is the USALI layout of the income statement: operated departments (revenue less departmental expenses),
+// undistributed operating expenses, gross operating profit, management fees, non-operating expenses (EBITDA),
+// depreciation, interest and income taxes down to net income.
+func layoutIncome(rows []accountingdb.AccountBalancesRow) ([]StatementLine, decimal.Decimal) {
 	b := newBuilder(rows)
 	b.heading("H_REVENUE", "Operating revenue")
 	revenue := b.group(revGroups)
@@ -319,7 +348,7 @@ func (s *Service) IncomeStatement(ctx context.Context, propertyID int64, from, t
 	ebt := b.sub("EBT", "Income before income taxes", "SUBTOTAL", ebit.Sub(interest))
 	tax := b.group([]groupSpec{{"INCOME_TAX", "Income taxes"}})
 	net := b.sub("NET_INCOME", "Net income", "TOTAL", ebt.Sub(tax))
-	return IncomeStatement{Range: r, Lines: b.lines, NetIncome: net}, nil
+	return b.lines, net
 }
 
 // BalanceSheet is the balance sheet as of a date. Equity includes the earnings of all periods to date, since there is no

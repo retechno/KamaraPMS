@@ -2634,6 +2634,296 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBudgets
+      summary: The budgets of the property, the latest year and version first (budget.view)
+      description: The summary of each version without its grid.
+      tags: [budget]
+      parameters:
+        - { name: year_start, in: query, description: Only the versions of this fiscal year (its first day)., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: status, in: query, schema: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] } }
+      responses:
+        "200":
+          description: The budgets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBudget
+      summary: Start a draft budget of a fiscal year, empty or copied from another version (budget.manage)
+      description: |
+        The version is the next number of the year. A copy (`copy_from_id`) keeps the year of the version it comes from and its figures: that is how an active budget is revised.
+        `year_start` is the first day of a fiscal year, from the year the books start in to two years after the current one (422 `VALIDATION_FAILED` on `year_start`).
+        409 `BUDGET_VERSION_TAKEN` when another draft of the year took the same number at the same moment: try again.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBudgetRequest" }
+      responses:
+        "201":
+          description: The draft with its grid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/vs-actual:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getBudgetVsActual
+      summary: Budget against actual (budget.view)
+      description: |
+        A range of months of one fiscal year, laid out like the income statement (departments after USALI down to net income): per account and per group, the actual (the journals,
+        the same source as the income statement), the budget and the variance, for the period and for the year to date (the first day of the fiscal year to the end of the period).
+        The variance is the actual less the budget; `favourable` is true when revenue (or a profit) is above the budget or an expense below it, and null when there is no variance.
+        `variance_percent` is null when the budget is zero. The range is snapped to whole months. The version is the active one of the year unless `budget_id` names another
+        (a draft can be previewed). 404 `NO_ACTIVE_BUDGET` when the year has none.
+      tags: [budget]
+      parameters:
+        - { name: year_start, in: query, description: The first day of the fiscal year; the current one by default., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: from, in: query, description: A date in the first month of the period; the first month of the year by default., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, description: A date in the last month of the period; the current month by default (the whole year for a past year)., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: budget_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: format, in: query, description: "`csv` answers the report as a CSV file.", schema: { type: string, enum: [csv, json] } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetVsActual" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/vs-actual.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getBudgetVsActualPdf
+      summary: Budget against actual as PDF (budget.view)
+      tags: [documents]
+      parameters:
+        - { name: year_start, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: budget_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBudget
+      summary: One budget with its grid, its months and the accounts it may cover (budget.view)
+      tags: [budget]
+      responses:
+        "200":
+          description: The budget.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateBudget
+      summary: Rename a draft (budget.manage)
+      description: 409 `BUDGET_NOT_DRAFT` for an active or archived budget.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBudgetRequest" }
+      responses:
+        "200":
+          description: The budget.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteBudget
+      summary: Delete a draft with its figures (budget.manage)
+      description: 409 `BUDGET_NOT_DRAFT` for an active or archived budget, 409 `BUDGET_IN_USE` while another version was copied from it.
+      tags: [budget]
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/grid:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: saveBudgetGrid
+      summary: Replace the figures of a draft (budget.manage)
+      description: |
+        A row per account, twelve amounts one per month of the fiscal year (an empty amount is zero, a negative one is allowed), on the normal side of the account: revenue and
+        expense both positive. Only revenue and expense accounts that take postings (422 `VALIDATION_FAILED`, `rows[N].account_id`). The whole grid is checked and replaced in one
+        transaction. 409 `BUDGET_NOT_DRAFT`.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BudgetGridRequest" }
+      responses:
+        "200":
+          description: The budget with its grid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/spread:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: spreadBudgetAccount
+      summary: Spread a yearly figure of an account over the months of a draft (budget.manage)
+      description: |
+        `EQUAL` splits it into twelve (the last month takes the rounding, so they add up exactly); `LAST_YEAR` follows the months of the actuals of the year before (422 `NO_PATTERN`
+        on `method` when the account had none). It replaces the row of the account. 409 `BUDGET_NOT_DRAFT`.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpreadBudgetRequest" }
+      responses:
+        "200":
+          description: The budget with its grid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/fill-from-actuals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: fillBudgetFromActuals
+      summary: Fill a draft from the actuals of a fiscal year, raised or lowered by a percent (budget.manage)
+      description: |
+        The source is the fiscal year before the budget's unless `source_year_start` names another. Revenue and expense accounts that take postings, month by month, on the
+        normal side. Without `replace` the accounts that have a row keep it. 409 `NO_ACTUALS` when the year has nothing in the books, 409 `BUDGET_NOT_DRAFT`.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FillBudgetRequest" }
+      responses:
+        "200":
+          description: The budget with its grid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/activate:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: activateBudget
+      summary: Make a draft the active version of its fiscal year (budget.manage, with an approval)
+      description: |
+        The approver holds `budget.approve` (422 `APPROVAL_REQUIRED`, 401 `APPROVAL_INVALID_CREDENTIALS`, 403 `APPROVAL_NOT_PERMITTED`). The version that was active becomes archived.
+        An active budget cannot be edited: a revision is a copy. 409 `BUDGET_EMPTY` for a budget with no figures, 409 `BUDGET_NOT_DRAFT`.
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivateBudgetRequest" }
+      responses:
+        "200":
+          description: The active budget.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/export:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: exportBudget
+      summary: The grid of a budget as CSV (budget.view)
+      description: "The columns are code, name and m1 to m12 (the months of the fiscal year); the import reads the same layout."
+      tags: [budget]
+      responses:
+        "200":
+          description: The CSV file.
+          content:
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/{id}/import:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: importBudget
+      summary: Replace the grid of a draft with a CSV file (budget.manage)
+      description: "Everything is checked and applied in one transaction: a file with a mistake changes nothing (422 with one field error per row, `rows[N].field`). `dry_run` checks and applies it without keeping it. 409 `BUDGET_NOT_DRAFT`."
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportBudgetRequest" }
+      responses:
+        "200":
+          description: What the import did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportBudgetResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reports/cashier:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8744,6 +9034,174 @@ components:
         user_id: { type: integer, format: int64 }
         user_name: { type: string }
         opened_at: { type: string, format: date-time }
+    BudgetMonth:
+      type: object
+      required: [number, start]
+      properties:
+        number: { type: integer, minimum: 1, maximum: 12, description: The month of the fiscal year. }
+        start: { $ref: "#/components/schemas/Date" }
+    BudgetAccountRef:
+      type: object
+      required: [id, code, name, account_type, statement_group, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        account_type: { type: string, enum: [REVENUE, EXPENSE] }
+        statement_group: { type: string }
+        is_active: { type: boolean }
+    BudgetRow:
+      type: object
+      required: [account_id, code, name, account_type, statement_group, amounts, total]
+      properties:
+        account_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        account_type: { type: string, enum: [REVENUE, EXPENSE] }
+        statement_group: { type: string }
+        amounts: { type: array, minItems: 12, maxItems: 12, items: { type: string }, description: "One per month of the fiscal year, on the normal side of the account." }
+        total: { type: string }
+    Budget:
+      type: object
+      required: [id, year_start, year_end, year_label, version, name, status, copied_from_id, activated_at, activated_by, approved_by, archived_at, created_at, updated_at, account_count, total_revenue, total_expense, total_result]
+      properties:
+        id: { type: integer, format: int64 }
+        year_start: { $ref: "#/components/schemas/Date" }
+        year_end: { $ref: "#/components/schemas/Date" }
+        year_label: { type: string, description: "FY2026: the fiscal year is named after the year it ends in." }
+        version: { type: integer, minimum: 1 }
+        name: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] }
+        copied_from_id: { type: [integer, "null"], format: int64 }
+        activated_at: { type: [string, "null"], format: date-time }
+        activated_by: { type: [integer, "null"], format: int64 }
+        approved_by: { type: [integer, "null"], format: int64 }
+        archived_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        account_count: { type: integer }
+        total_revenue: { type: string }
+        total_expense: { type: string }
+        total_result: { type: string, description: Revenue less expense. }
+        months: { type: array, items: { $ref: "#/components/schemas/BudgetMonth" }, description: Only on one budget. }
+        rows: { type: array, items: { $ref: "#/components/schemas/BudgetRow" }, description: "Only on one budget (absent when the grid is empty)." }
+        available_accounts: { type: array, items: { $ref: "#/components/schemas/BudgetAccountRef" }, description: "Only on one budget: the accounts a budget may cover." }
+    BudgetPage:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Budget" } }
+    CreateBudgetRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        year_start: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: "The first day of the fiscal year. Left out for a copy, which keeps the year of its source." }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        copy_from_id: { type: [integer, "null"], format: int64, description: The version to copy the figures from. }
+    UpdateBudgetRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+    BudgetRowRequest:
+      type: object
+      required: [account_id, amounts]
+      additionalProperties: false
+      properties:
+        account_id: { type: integer, format: int64 }
+        amounts: { type: array, minItems: 12, maxItems: 12, items: { type: string }, description: "Twelve amounts, one per month of the fiscal year; an empty one is zero." }
+    BudgetGridRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows: { type: array, maxItems: 1000, items: { $ref: "#/components/schemas/BudgetRowRequest" } }
+    SpreadBudgetRequest:
+      type: object
+      required: [account_id, total, method]
+      additionalProperties: false
+      properties:
+        account_id: { type: integer, format: int64 }
+        total: { type: string, description: The figure of the whole year. }
+        method: { type: string, enum: [EQUAL, LAST_YEAR] }
+    FillBudgetRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        source_year_start: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: The first day of the fiscal year whose actuals are copied; the year before the budget's by default. }
+        percent_change: { type: string, description: "A percent from -100 to 1000 with up to two decimals added to every figure (10 raises them by a tenth); none by default." }
+        replace: { type: boolean, default: false, description: Empty the grid first; otherwise the accounts that have a row keep it. }
+    ActivateBudgetRequest:
+      type: object
+      required: [approval]
+      additionalProperties: false
+      properties:
+        approval: { $ref: "#/components/schemas/Approval" }
+    ImportBudgetRequest:
+      type: object
+      required: [csv]
+      additionalProperties: false
+      properties:
+        csv: { type: string, description: "CSV text with a header row; needs the columns code and m1 to m12 (name is read as a label and ignored). An empty amount is zero." }
+        dry_run: { type: boolean, default: false }
+    ImportBudgetResult:
+      type: object
+      required: [dry_run, accounts]
+      properties:
+        dry_run: { type: boolean }
+        accounts: { type: integer, description: The accounts in the grid after the import. }
+    BudgetCell:
+      type: object
+      required: [actual, budget, variance, variance_percent, favourable]
+      properties:
+        actual: { type: string }
+        budget: { type: string }
+        variance: { type: string, description: The actual less the budget. }
+        variance_percent: { type: [string, "null"], description: "Of the budget, one decimal; null when the budget is zero." }
+        favourable: { type: [boolean, "null"], description: "Revenue (or a profit) above the budget, or an expense below it; null when there is no variance." }
+    BudgetVarianceAccount:
+      type: object
+      required: [account_id, code, name, period, ytd]
+      properties:
+        account_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        period: { $ref: "#/components/schemas/BudgetCell" }
+        ytd: { $ref: "#/components/schemas/BudgetCell" }
+    BudgetVarianceLine:
+      type: object
+      required: [key, title, kind, period, ytd, accounts]
+      properties:
+        key: { type: string, description: "The key of the line of the income statement (REV_ROOMS, TOTAL_REVENUE, GOP, NET_INCOME...)." }
+        title: { type: string }
+        kind: { type: string, enum: [HEADING, GROUP, SUBTOTAL, TOTAL] }
+        period: { $ref: "#/components/schemas/BudgetCell" }
+        ytd: { $ref: "#/components/schemas/BudgetCell" }
+        accounts: { type: array, items: { $ref: "#/components/schemas/BudgetVarianceAccount" } }
+    BudgetRef:
+      type: object
+      required: [id, name, version, status]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        version: { type: integer }
+        status: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] }
+    BudgetVsActual:
+      type: object
+      required: [year_start, year_end, year_label, from, to, budget, lines]
+      properties:
+        year_start: { $ref: "#/components/schemas/Date" }
+        year_end: { $ref: "#/components/schemas/Date" }
+        year_label: { type: string }
+        from: { $ref: "#/components/schemas/Date", description: The first day of the first month of the period. }
+        to: { $ref: "#/components/schemas/Date", description: The last day of the last month of the period. }
+        budget: { $ref: "#/components/schemas/BudgetRef" }
+        lines: { type: array, items: { $ref: "#/components/schemas/BudgetVarianceLine" } }
     CardFeeRule:
       type: object
       required: [id, payment_method, mdr_rate, settlement_days, effective_from, created_at]

@@ -100,6 +100,8 @@ export const navigation: NavSection[] = [
       { id: 'bankAccounts', to: '/bank/accounts', group: 'bank' },
       { id: 'bankStatements', to: '/bank/statements', group: 'bank' },
       { id: 'bankCards', to: '/bank/cards', group: 'bank' },
+      { id: 'budgets', to: '/budget', group: 'budget' },
+      { id: 'budgetVsActual', to: '/budget/vs-actual', group: 'budget' },
     ],
   },
   {

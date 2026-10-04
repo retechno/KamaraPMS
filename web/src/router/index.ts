@@ -62,6 +62,9 @@ export const router = createRouter({
     { path: '/accounting/income-statement', name: 'accounting-income-statement', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Income statement' } },
     { path: '/accounting/balance-sheet', name: 'accounting-balance-sheet', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Balance sheet' } },
     { path: '/accounting/reconciliation', name: 'accounting-reconciliation', component: () => import('@/views/accounting/ReconciliationView.vue'), meta: { title: 'Control accounts' } },
+    { path: '/budget', name: 'budget', component: () => import('@/views/budget/BudgetsView.vue'), meta: { title: 'Budgets' } },
+    { path: '/budget/vs-actual', name: 'budget-vs-actual', component: () => import('@/views/budget/BudgetVsActualView.vue'), meta: { title: 'Budget against actual' } },
+    { path: '/budget/:id', name: 'budget-editor', component: () => import('@/views/budget/BudgetEditorView.vue'), meta: { title: 'Budget' } },
     {
       path: '/room-blocks',
       name: 'room-blocks',

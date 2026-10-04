@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/availability"
 	"kamarapms/internal/bankrec"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
 	"kamarapms/internal/documents"
@@ -84,6 +85,7 @@ type Env struct {
 	Tax         *taxfiling.Service
 	TaxInvoice  *taxinvoice.Service
 	Shifts      *shifts.Service
+	Budget      *budget.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -126,7 +128,10 @@ func Setup(t *testing.T) *Env {
 	fo.SetShiftGate(sh)
 	cl.SetShiftGate(sh)
 	na.SetShiftChecker(sh)
-	return &Env{Shifts: sh, TaxInvoice: taxInv, Docs: documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv), Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	bud := budget.NewService(txm, c, aw, authz, ten, ia)
+	docs := documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv)
+	docs.SetBudget(bud)
+	return &Env{Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
 }

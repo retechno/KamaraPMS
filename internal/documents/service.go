@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
 	"kamarapms/internal/folios"
@@ -42,6 +43,7 @@ type Service struct {
 	acct   *accounting.Service
 	tax    *taxfiling.Service
 	taxInv *taxinvoice.Service
+	budget *budget.Service
 }
 
 // NewService wires the service.

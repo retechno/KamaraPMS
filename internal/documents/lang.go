@@ -211,6 +211,10 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"INCOME STATEMENT": "LAPORAN LABA RUGI", "USALI layout": "Format USALI", "BALANCE SHEET": "NERACA", "GENERAL LEDGER": "BUKU BESAR", "Journal": "Jurnal",
 	"Detail": "Rincian", "Closing balance": "Saldo akhir", "Only the first entries are listed: narrow the range.": "Hanya entri pertama yang ditampilkan: persempit rentangnya.",
 	"Equity includes the earnings of all periods to date: there is no year-end closing entry.": "Ekuitas mencakup laba semua periode sampai saat ini: tidak ada jurnal penutup akhir tahun.",
+	// budget
+	"BUDGET AGAINST ACTUAL": "ANGGARAN TERHADAP REALISASI", "Fiscal year": "Tahun fiskal", "Budget": "Anggaran", "Actual": "Realisasi", "Variance": "Selisih",
+	"YTD actual": "Realisasi s.d. kini", "YTD budget": "Anggaran s.d. kini", "YTD variance": "Selisih s.d. kini",
+	"The variance is the actual less the budget. The year to date runs from the first day of the fiscal year to the end of the period.": "Selisih adalah realisasi dikurangi anggaran. Sampai saat ini dihitung dari hari pertama tahun fiskal sampai akhir periode.",
 	// tax
 	"TAX RETURN": "LAPORAN PAJAK", "TAX WORKSHEET": "LEMBAR KERJA PAJAK", "Tax": "Pajak", "Authority": "Otoritas", "Registration number": "Nomor registrasi",
 	"Due": "Jatuh tempo", "Worksheet (not filed)": "Lembar kerja (belum dilaporkan)", "Filed on": "Dilaporkan pada", "Filing reference": "Referensi pelaporan",

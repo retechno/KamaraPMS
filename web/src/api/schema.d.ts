@@ -2158,6 +2158,256 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The budgets of the property, the latest year and version first (budget.view)
+         * @description The summary of each version without its grid.
+         */
+        get: operations["listBudgets"];
+        put?: never;
+        /**
+         * Start a draft budget of a fiscal year, empty or copied from another version (budget.manage)
+         * @description The version is the next number of the year. A copy (`copy_from_id`) keeps the year of the version it comes from and its figures: that is how an active budget is revised.
+         *     `year_start` is the first day of a fiscal year, from the year the books start in to two years after the current one (422 `VALIDATION_FAILED` on `year_start`).
+         *     409 `BUDGET_VERSION_TAKEN` when another draft of the year took the same number at the same moment: try again.
+         */
+        post: operations["createBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/vs-actual": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Budget against actual (budget.view)
+         * @description A range of months of one fiscal year, laid out like the income statement (departments after USALI down to net income): per account and per group, the actual (the journals,
+         *     the same source as the income statement), the budget and the variance, for the period and for the year to date (the first day of the fiscal year to the end of the period).
+         *     The variance is the actual less the budget; `favourable` is true when revenue (or a profit) is above the budget or an expense below it, and null when there is no variance.
+         *     `variance_percent` is null when the budget is zero. The range is snapped to whole months. The version is the active one of the year unless `budget_id` names another
+         *     (a draft can be previewed). 404 `NO_ACTIVE_BUDGET` when the year has none.
+         */
+        get: operations["getBudgetVsActual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/vs-actual.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Budget against actual as PDF (budget.view) */
+        get: operations["getBudgetVsActualPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One budget with its grid, its months and the accounts it may cover (budget.view) */
+        get: operations["getBudget"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a draft with its figures (budget.manage)
+         * @description 409 `BUDGET_NOT_DRAFT` for an active or archived budget, 409 `BUDGET_IN_USE` while another version was copied from it.
+         */
+        delete: operations["deleteBudget"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename a draft (budget.manage)
+         * @description 409 `BUDGET_NOT_DRAFT` for an active or archived budget.
+         */
+        patch: operations["updateBudget"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the figures of a draft (budget.manage)
+         * @description A row per account, twelve amounts one per month of the fiscal year (an empty amount is zero, a negative one is allowed), on the normal side of the account: revenue and
+         *     expense both positive. Only revenue and expense accounts that take postings (422 `VALIDATION_FAILED`, `rows[N].account_id`). The whole grid is checked and replaced in one
+         *     transaction. 409 `BUDGET_NOT_DRAFT`.
+         */
+        put: operations["saveBudgetGrid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/spread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spread a yearly figure of an account over the months of a draft (budget.manage)
+         * @description `EQUAL` splits it into twelve (the last month takes the rounding, so they add up exactly); `LAST_YEAR` follows the months of the actuals of the year before (422 `NO_PATTERN`
+         *     on `method` when the account had none). It replaces the row of the account. 409 `BUDGET_NOT_DRAFT`.
+         */
+        post: operations["spreadBudgetAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/fill-from-actuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill a draft from the actuals of a fiscal year, raised or lowered by a percent (budget.manage)
+         * @description The source is the fiscal year before the budget's unless `source_year_start` names another. Revenue and expense accounts that take postings, month by month, on the
+         *     normal side. Without `replace` the accounts that have a row keep it. 409 `NO_ACTUALS` when the year has nothing in the books, 409 `BUDGET_NOT_DRAFT`.
+         */
+        post: operations["fillBudgetFromActuals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a draft the active version of its fiscal year (budget.manage, with an approval)
+         * @description The approver holds `budget.approve` (422 `APPROVAL_REQUIRED`, 401 `APPROVAL_INVALID_CREDENTIALS`, 403 `APPROVAL_NOT_PERMITTED`). The version that was active becomes archived.
+         *     An active budget cannot be edited: a revision is a copy. 409 `BUDGET_EMPTY` for a budget with no figures, 409 `BUDGET_NOT_DRAFT`.
+         */
+        post: operations["activateBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The grid of a budget as CSV (budget.view)
+         * @description The columns are code, name and m1 to m12 (the months of the fiscal year); the import reads the same layout.
+         */
+        get: operations["exportBudget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/budgets/{id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the grid of a draft with a CSV file (budget.manage)
+         * @description Everything is checked and applied in one transaction: a file with a mistake changes nothing (422 with one field error per row, `rows[N].field`). `dry_run` checks and applies it without keeping it. 409 `BUDGET_NOT_DRAFT`.
+         */
+        post: operations["importBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/cashier": {
         parameters: {
             query?: {
@@ -7819,6 +8069,178 @@ export interface components {
             user_name: string;
             /** Format: date-time */
             opened_at: string;
+        };
+        BudgetMonth: {
+            /** @description The month of the fiscal year. */
+            number: number;
+            start: components["schemas"]["Date"];
+        };
+        BudgetAccountRef: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            account_type: "REVENUE" | "EXPENSE";
+            statement_group: string;
+            is_active: boolean;
+        };
+        BudgetRow: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            account_type: "REVENUE" | "EXPENSE";
+            statement_group: string;
+            /** @description One per month of the fiscal year, on the normal side of the account. */
+            amounts: string[];
+            total: string;
+        };
+        Budget: {
+            /** Format: int64 */
+            id: number;
+            year_start: components["schemas"]["Date"];
+            year_end: components["schemas"]["Date"];
+            /** @description FY2026: the fiscal year is named after the year it ends in. */
+            year_label: string;
+            version: number;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+            /** Format: int64 */
+            copied_from_id: number | null;
+            /** Format: date-time */
+            activated_at: string | null;
+            /** Format: int64 */
+            activated_by: number | null;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** Format: date-time */
+            archived_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            account_count: number;
+            total_revenue: string;
+            total_expense: string;
+            /** @description Revenue less expense. */
+            total_result: string;
+            /** @description Only on one budget. */
+            months?: components["schemas"]["BudgetMonth"][];
+            /** @description Only on one budget (absent when the grid is empty). */
+            rows?: components["schemas"]["BudgetRow"][];
+            /** @description Only on one budget: the accounts a budget may cover. */
+            available_accounts?: components["schemas"]["BudgetAccountRef"][];
+        };
+        BudgetPage: {
+            data: components["schemas"]["Budget"][];
+        };
+        CreateBudgetRequest: {
+            /** @description The first day of the fiscal year. Left out for a copy, which keeps the year of its source. */
+            year_start?: components["schemas"]["Date"] | null;
+            name: string;
+            description?: string;
+            /**
+             * Format: int64
+             * @description The version to copy the figures from.
+             */
+            copy_from_id?: number | null;
+        };
+        UpdateBudgetRequest: {
+            name: string;
+            description?: string;
+        };
+        BudgetRowRequest: {
+            /** Format: int64 */
+            account_id: number;
+            /** @description Twelve amounts, one per month of the fiscal year; an empty one is zero. */
+            amounts: string[];
+        };
+        BudgetGridRequest: {
+            rows: components["schemas"]["BudgetRowRequest"][];
+        };
+        SpreadBudgetRequest: {
+            /** Format: int64 */
+            account_id: number;
+            /** @description The figure of the whole year. */
+            total: string;
+            /** @enum {string} */
+            method: "EQUAL" | "LAST_YEAR";
+        };
+        FillBudgetRequest: {
+            /** @description The first day of the fiscal year whose actuals are copied; the year before the budget's by default. */
+            source_year_start?: components["schemas"]["Date"] | null;
+            /** @description A percent from -100 to 1000 with up to two decimals added to every figure (10 raises them by a tenth); none by default. */
+            percent_change?: string;
+            /**
+             * @description Empty the grid first; otherwise the accounts that have a row keep it.
+             * @default false
+             */
+            replace: boolean;
+        };
+        ActivateBudgetRequest: {
+            approval: components["schemas"]["Approval"];
+        };
+        ImportBudgetRequest: {
+            /** @description CSV text with a header row; needs the columns code and m1 to m12 (name is read as a label and ignored). An empty amount is zero. */
+            csv: string;
+            /** @default false */
+            dry_run: boolean;
+        };
+        ImportBudgetResult: {
+            dry_run: boolean;
+            /** @description The accounts in the grid after the import. */
+            accounts: number;
+        };
+        BudgetCell: {
+            actual: string;
+            budget: string;
+            /** @description The actual less the budget. */
+            variance: string;
+            /** @description Of the budget, one decimal; null when the budget is zero. */
+            variance_percent: string | null;
+            /** @description Revenue (or a profit) above the budget, or an expense below it; null when there is no variance. */
+            favourable: boolean | null;
+        };
+        BudgetVarianceAccount: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            period: components["schemas"]["BudgetCell"];
+            ytd: components["schemas"]["BudgetCell"];
+        };
+        BudgetVarianceLine: {
+            /** @description The key of the line of the income statement (REV_ROOMS, TOTAL_REVENUE, GOP, NET_INCOME...). */
+            key: string;
+            title: string;
+            /** @enum {string} */
+            kind: "HEADING" | "GROUP" | "SUBTOTAL" | "TOTAL";
+            period: components["schemas"]["BudgetCell"];
+            ytd: components["schemas"]["BudgetCell"];
+            accounts: components["schemas"]["BudgetVarianceAccount"][];
+        };
+        BudgetRef: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            version: number;
+            /** @enum {string} */
+            status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+        };
+        BudgetVsActual: {
+            year_start: components["schemas"]["Date"];
+            year_end: components["schemas"]["Date"];
+            year_label: string;
+            /** @description The first day of the first month of the period. */
+            from: components["schemas"]["Date"];
+            /** @description The last day of the last month of the period. */
+            to: components["schemas"]["Date"];
+            budget: components["schemas"]["BudgetRef"];
+            lines: components["schemas"]["BudgetVarianceLine"][];
         };
         CardFeeRule: {
             /** Format: int64 */
@@ -13998,6 +14420,396 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBudgets: {
+        parameters: {
+            query?: {
+                /** @description Only the versions of this fiscal year (its first day). */
+                year_start?: components["schemas"]["Date"];
+                status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The budgets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description The draft with its grid. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBudgetVsActual: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description The first day of the fiscal year; the current one by default. */
+                year_start?: components["schemas"]["Date"];
+                /** @description A date in the first month of the period; the first month of the year by default. */
+                from?: components["schemas"]["Date"];
+                /** @description A date in the last month of the period; the current month by default (the whole year for a past year). */
+                to?: components["schemas"]["Date"];
+                budget_id?: number;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetVsActual"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBudgetVsActualPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                year_start?: components["schemas"]["Date"];
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+                budget_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The budget. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description The budget. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    saveBudgetGrid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetGridRequest"];
+            };
+        };
+        responses: {
+            /** @description The budget with its grid. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    spreadBudgetAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpreadBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description The budget with its grid. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fillBudgetFromActuals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FillBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description The budget with its grid. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    activateBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description The active budget. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    exportBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The CSV file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    importBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description What the import did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportBudgetResult"];
+                };
+            };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

@@ -734,6 +734,19 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `POST {P}/city-ledger/accounts/{id}/reminders` | `cityledger.reminder` | `Idempotency-Key` required; `{level 1-3, note?, invoice_ids?}` (every overdue invoice by default); freezes what each owes today; 409 `NO_OVERDUE_INVOICES`, `INVOICE_NOT_OVERDUE`; no journal |
 | `GET {P}/city-ledger/reminders/{id}` | `cityledger.read` | One reminder; 404 `REMINDER_NOT_FOUND` |
 | `GET {P}/city-ledger/reminders/{id}/reminder.pdf` | `cityledger.read` | The letter (First, Second or Final reminder), the interest column only when there is interest |
+| `GET {P}/budgets` | `budget.view` | `year_start`, `status`; the summaries (no grid), latest year and version first |
+| `POST {P}/budgets` | `budget.manage` | `{year_start?, name, description?, copy_from_id?}`: a draft, empty or a copy (which keeps its year); the version is the next of the year; 201 with the grid; 409 `BUDGET_VERSION_TAKEN` (try again) |
+| `GET {P}/budgets/{id}` | `budget.view` | With `months`, `rows` (twelve amounts and a total per account) and `available_accounts`; 404 `BUDGET_NOT_FOUND` |
+| `PATCH {P}/budgets/{id}` | `budget.manage` | `{name, description?}` of a draft; 409 `BUDGET_NOT_DRAFT` |
+| `DELETE {P}/budgets/{id}` | `budget.manage` | A draft with its figures; 409 `BUDGET_NOT_DRAFT`, `BUDGET_IN_USE` (a version was copied from it) |
+| `PUT {P}/budgets/{id}/grid` | `budget.manage` | `{rows: [{account_id, amounts: [12]}]}` replaces the figures of a draft; an empty amount is zero; 422 `rows[N].account_id` `INVALID_ACCOUNT` |
+| `POST {P}/budgets/{id}/spread` | `budget.manage` | `{account_id, total, method EQUAL|LAST_YEAR}`; 422 `method` `NO_PATTERN` |
+| `POST {P}/budgets/{id}/fill-from-actuals` | `budget.manage` | `{source_year_start?, percent_change?, replace?}`; 409 `NO_ACTUALS` |
+| `POST {P}/budgets/{id}/activate` | `budget.manage` + approval of `budget.approve` | `{approval}`; the version that was active is archived; 409 `BUDGET_EMPTY`, `BUDGET_NOT_DRAFT` |
+| `GET {P}/budgets/{id}/export` | `budget.view` | CSV: `code,name,m1..m12` |
+| `POST {P}/budgets/{id}/import` | `budget.manage` | `{csv, dry_run?}`; all or nothing, 422 with a field error per row (`rows[N].field`) |
+| `GET {P}/budgets/vs-actual` | `budget.view` | `year_start`, `from`, `to` (snapped to whole months of the year), `budget_id` (the active version by default), `format=csv`, `lang`; the income statement layout with `period` and `ytd` cells (`actual`, `budget`, `variance`, `variance_percent`, `favourable`); 404 `NO_ACTIVE_BUDGET` |
+| `GET {P}/budgets/vs-actual.pdf` | `budget.view` | The same as a PDF |
 | `GET {P}/cashier/settings` | any cashier permission | `{require_shift_for_cash, max_variance, block_night_audit}` |
 | `PUT {P}/cashier/settings` | `cashier.settings` | The same body; `max_variance` 0 means every difference needs an approval |
 | `GET {P}/cashier/shifts` | `cashier.shift_manage` (all) or `cashier.shift` (own) | `status`, `user_id`, `from`, `to`, `limit`, `cursor`; newest first |

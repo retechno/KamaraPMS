@@ -125,6 +125,16 @@ What is missing is **expectation**: today the commission is only discovered when
   year-to-date columns. CSV and PDF like the other books.
 - Permissions: `budget.view`, `budget.manage`, `budget.approve` (making a version ACTIVE needs an approval).
 
+### Built (budget)
+
+Part B's budget is built (README, "Budget"). What differs from the text above:
+
+- `budgets.year_start` (the first day of the fiscal year) takes the place of `fiscal_year_id`: `gl_fiscal_years` holds a row only for a year that was closed, so an open year has no id.
+- Beyond the plan: **spread** of a yearly figure (equally, or after last year's months), a **PDF** of the report, English and Indonesian texts, and a `budget.approve` permission used as the approver's.
+- The report takes a **period** (whole months) and shows the **year to date** beside it, instead of a month column and a year column picked separately.
+- A budget may be made for the fiscal years from the year the books start in to two years after the current one.
+- Not built, as decided: a budget of statistics (rooms, occupancy, ADR) and of the balance sheet. The cash flow statement is next.
+
 ### Cash flow statement (indirect method)
 
 - Computed, nothing stored. Period = a range of dates inside a fiscal year. **Starts from net income** of the period (the income statement of the same range), adds back non-cash

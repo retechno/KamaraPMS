@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/availability"
 	"kamarapms/internal/bankrec"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
 	"kamarapms/internal/documents"
@@ -115,6 +116,8 @@ func New(d Deps) *App {
 	foliosSvc.SetShiftGate(shiftsSvc) // cash goes through the shift of the cashier
 	cityLedgerSvc.SetShiftGate(shiftsSvc)
 	nightAuditSvc.SetShiftChecker(shiftsSvc) // and an open shift stops the night audit
+	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
+	documentsSvc.SetBudget(budgetSvc)
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()
@@ -131,6 +134,7 @@ func New(d Deps) *App {
 	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
 	shifts.NewHandler(shiftsSvc).Register(api)
+	budget.NewHandler(budgetSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)

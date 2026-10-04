@@ -1454,6 +1454,58 @@ SELECT expect_error('a rule is never changed', '23001', $q$UPDATE card_fee_rules
 SELECT expect_error('a rule is never deleted', '23001', $q$DELETE FROM card_fee_rules$q$);
 
 ------------------------------------------------------------------------------------------
+-- Budgets
+------------------------------------------------------------------------------------------
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('ABC'), pr('BALI'), '6110', 'Salaries', 'EXPENSE', 'DEBIT', 'UND_AG');
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, is_postable) VALUES (tn('ABC'), pr('BALI'), '6000', 'Expenses', 'EXPENSE', 'DEBIT', false);
+INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('ABC'), pr('BALI'), '2026-01-01', 1, 'Budget 2026');
+SELECT expect_error('a budget version is unique per year', '23505',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('ABC'), pr('BALI'), '2026-01-01', 1, 'Again')$q$);
+SELECT expect_error('a fiscal year starts on the first of a month', '23514',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('ABC'), pr('BALI'), '2026-01-15', 2, 'Odd')$q$);
+SELECT expect_error('a budget has a name', '23514',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('ABC'), pr('BALI'), '2026-01-01', 2, '  ')$q$);
+SELECT expect_error('a budget status is known', '23514',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name, status) VALUES (tn('ABC'), pr('BALI'), '2026-01-01', 2, 'X', 'OPEN')$q$);
+SELECT expect_error('a budget of another tenant property is impossible', '23503',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('XYZ'), pr('BALI'), '2026-01-01', 3, 'Cross')$q$);
+SELECT expect_error('an active budget has its approval', '23514',
+    $q$UPDATE budgets SET status = 'ACTIVE', activated_at = now() WHERE name = 'Budget 2026'$q$);
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
+VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), 1, 1000000);
+SELECT expect_error('an account has one figure per month', '23505',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), 1, 5)$q$);
+SELECT expect_error('a month is from 1 to 12', '23514',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), 13, 5)$q$);
+SELECT expect_error('a budget does not cover a balance sheet account', '23514',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '1110' AND property_id = pr('BALI')), 1, 5)$q$);
+SELECT expect_error('a budget does not cover a header account', '23514',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '6000' AND property_id = pr('BALI')), 1, 5)$q$);
+SELECT expect_error('a budget line of an account of another property is impossible', '23503',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026'), (SELECT id FROM gl_accounts WHERE code = '1110' AND property_id = pr('SG')), 1, 5)$q$);
+UPDATE budgets SET status = 'ACTIVE', activated_at = now(), approved_by = (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')) WHERE name = 'Budget 2026';
+INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('ABC'), pr('BALI'), '2026-01-01', 2, 'Budget 2026 v2');
+SELECT expect_error('one version is active per year', '23505',
+    $q$UPDATE budgets SET status = 'ACTIVE', activated_at = now(), approved_by = (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')) WHERE name = 'Budget 2026 v2'$q$);
+SELECT expect_error('an active budget is not edited', '23001',
+    $q$UPDATE budgets SET name = 'Renamed' WHERE name = 'Budget 2026'$q$);
+SELECT expect_error('an active budget is not deleted', '23001', $q$DELETE FROM budgets WHERE name = 'Budget 2026'$q$);
+SELECT expect_error('the lines of an active budget do not change', '23001',
+    $q$UPDATE budget_lines SET amount = 1 WHERE budget_id = (SELECT id FROM budgets WHERE name = 'Budget 2026')$q$);
+SELECT expect_error('the lines of an active budget are not deleted', '23001',
+    $q$DELETE FROM budget_lines WHERE budget_id = (SELECT id FROM budgets WHERE name = 'Budget 2026')$q$);
+SELECT expect_error('the year of a budget never changes', '23001',
+    $q$UPDATE budgets SET year_start = '2027-01-01' WHERE name = 'Budget 2026 v2'$q$);
+SELECT expect_error('an active budget does not go back to draft', '23001',
+    $q$UPDATE budgets SET status = 'DRAFT', activated_at = NULL, approved_by = NULL WHERE name = 'Budget 2026'$q$);
+SELECT expect_ok('an active budget is archived when another takes its place',
+    $q$UPDATE budgets SET status = 'ARCHIVED', archived_at = now() WHERE name = 'Budget 2026'$q$,
+    $q$UPDATE budgets SET status = 'ACTIVE', activated_at = now(), approved_by = (SELECT min(id) FROM users WHERE tenant_id = tn('ABC')) WHERE name = 'Budget 2026 v2'$q$);
+SELECT expect_ok('a draft is deleted with its lines',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '6110' AND property_id = pr('BALI')), 2, 250000)$q$,
+    $q$DELETE FROM budgets WHERE name = 'Budget 2026 v2' AND status = 'DRAFT'$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)
