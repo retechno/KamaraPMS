@@ -315,6 +315,47 @@ func (q *Queries) InsertBankAccount(ctx context.Context, arg InsertBankAccountPa
 	return id, err
 }
 
+const insertCardFeeRule = `-- name: InsertCardFeeRule :one
+INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by
+`
+
+type InsertCardFeeRuleParams struct {
+	TenantID       int64
+	PropertyID     int64
+	PaymentMethod  string
+	MdrRate        decimal.Decimal
+	SettlementDays int16
+	EffectiveFrom  civil.Date
+	ActorID        *int64
+}
+
+func (q *Queries) InsertCardFeeRule(ctx context.Context, arg InsertCardFeeRuleParams) (CardFeeRule, error) {
+	row := q.db.QueryRow(ctx, insertCardFeeRule,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PaymentMethod,
+		arg.MdrRate,
+		arg.SettlementDays,
+		arg.EffectiveFrom,
+		arg.ActorID,
+	)
+	var i CardFeeRule
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.PaymentMethod,
+		&i.MdrRate,
+		&i.SettlementDays,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const insertClearing = `-- name: InsertClearing :exec
 INSERT INTO bank_clearings (tenant_id, property_id, bank_account_id, statement_id, statement_line_id, journal_line_id, amount, cleared_at, cleared_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -348,8 +389,8 @@ func (q *Queries) InsertClearing(ctx context.Context, arg InsertClearingParams) 
 }
 
 const insertSettlement = `-- name: InsertSettlement :one
-INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, reference, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_fee, reference, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id
 `
 
@@ -362,6 +403,7 @@ type InsertSettlementParams struct {
 	Gross         decimal.Decimal
 	Net           decimal.Decimal
 	Fee           decimal.Decimal
+	ExpectedFee   *decimal.Decimal
 	Reference     *string
 	ActorID       *int64
 }
@@ -376,6 +418,7 @@ func (q *Queries) InsertSettlement(ctx context.Context, arg InsertSettlementPara
 		arg.Gross,
 		arg.Net,
 		arg.Fee,
+		arg.ExpectedFee,
 		arg.Reference,
 		arg.ActorID,
 	)
@@ -512,6 +555,41 @@ func (q *Queries) JournalLineOfAccount(ctx context.Context, arg JournalLineOfAcc
 	return id, err
 }
 
+const journalLineRefs = `-- name: JournalLineRefs :many
+SELECT id, COALESCE(source_ref, '')::text AS source_ref FROM gl_journal_lines WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+`
+
+type JournalLineRefsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+type JournalLineRefsRow struct {
+	ID        int64
+	SourceRef string
+}
+
+func (q *Queries) JournalLineRefs(ctx context.Context, arg JournalLineRefsParams) ([]JournalLineRefsRow, error) {
+	rows, err := q.db.Query(ctx, journalLineRefs, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JournalLineRefsRow{}
+	for rows.Next() {
+		var i JournalLineRefsRow
+		if err := rows.Scan(&i.ID, &i.SourceRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const laterReconciledExists = `-- name: LaterReconciledExists :one
 SELECT EXISTS (SELECT 1 FROM bank_statements WHERE tenant_id = $1 AND property_id = $2 AND bank_account_id = $3 AND period_to > $4::date AND status = 'RECONCILED')::boolean
 `
@@ -623,6 +701,48 @@ func (q *Queries) ListBankAccounts(ctx context.Context, arg ListBankAccountsPara
 	return items, nil
 }
 
+const listCardFeeRules = `-- name: ListCardFeeRules :many
+
+SELECT id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by FROM card_fee_rules WHERE tenant_id = $1 AND property_id = $2 ORDER BY payment_method, effective_from DESC
+`
+
+type ListCardFeeRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// ---------------------------------------------------------------------------
+// Card fee rules (the fee the acquirer is expected to keep) and what the payments expected
+func (q *Queries) ListCardFeeRules(ctx context.Context, arg ListCardFeeRulesParams) ([]CardFeeRule, error) {
+	rows, err := q.db.Query(ctx, listCardFeeRules, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CardFeeRule{}
+	for rows.Next() {
+		var i CardFeeRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.PaymentMethod,
+			&i.MdrRate,
+			&i.SettlementDays,
+			&i.EffectiveFrom,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClearings = `-- name: ListClearings :many
 SELECT c.id, c.statement_line_id, c.journal_line_id, c.amount, j.journal_date, j.journal_number, j.journal_type, COALESCE(l.description, j.description) AS description
 FROM bank_clearings c
@@ -667,6 +787,76 @@ func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([
 			&i.JournalNumber,
 			&i.JournalType,
 			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSettlements = `-- name: ListSettlements :many
+SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_fee, s.reference, s.created_at, j.journal_date, j.journal_number,
+       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
+FROM card_settlements s
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id < $3
+ORDER BY s.id DESC
+LIMIT $4
+`
+
+type ListSettlementsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BeforeID   int64
+	RowLimit   int32
+}
+
+type ListSettlementsRow struct {
+	ID            int64
+	BankAccountID int64
+	AccountKey    string
+	Gross         decimal.Decimal
+	Net           decimal.Decimal
+	Fee           decimal.Decimal
+	ExpectedFee   *decimal.Decimal
+	Reference     *string
+	CreatedAt     time.Time
+	JournalDate   civil.Date
+	JournalNumber string
+	Payments      int32
+}
+
+func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams) ([]ListSettlementsRow, error) {
+	rows, err := q.db.Query(ctx, listSettlements,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSettlementsRow{}
+	for rows.Next() {
+		var i ListSettlementsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BankAccountID,
+			&i.AccountKey,
+			&i.Gross,
+			&i.Net,
+			&i.Fee,
+			&i.ExpectedFee,
+			&i.Reference,
+			&i.CreatedAt,
+			&i.JournalDate,
+			&i.JournalNumber,
+			&i.Payments,
 		); err != nil {
 			return nil, err
 		}
@@ -913,6 +1103,51 @@ func (q *Queries) NextStatementExists(ctx context.Context, arg NextStatementExis
 	return column_1, err
 }
 
+const paymentFeeSnapshots = `-- name: PaymentFeeSnapshots :many
+SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+FROM payments
+WHERE tenant_id = $1 AND property_id = $2 AND payment_number = ANY($3::text[]) AND mdr_rate IS NOT NULL
+`
+
+type PaymentFeeSnapshotsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Numbers    []string
+}
+
+type PaymentFeeSnapshotsRow struct {
+	DocNumber    string
+	MdrRate      decimal.Decimal
+	MdrFee       decimal.Decimal
+	ExpectedDate civil.Date
+}
+
+// The snapshots of the payments and the city ledger receipts of some numbers (the reference of a journal line is the number of its document).
+func (q *Queries) PaymentFeeSnapshots(ctx context.Context, arg PaymentFeeSnapshotsParams) ([]PaymentFeeSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, paymentFeeSnapshots, arg.TenantID, arg.PropertyID, arg.Numbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PaymentFeeSnapshotsRow{}
+	for rows.Next() {
+		var i PaymentFeeSnapshotsRow
+		if err := rows.Scan(
+			&i.DocNumber,
+			&i.MdrRate,
+			&i.MdrFee,
+			&i.ExpectedDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const previousStatement = `-- name: PreviousStatement :one
 SELECT id, period_to, closing_balance, status FROM bank_statements
 WHERE tenant_id = $1 AND property_id = $2 AND bank_account_id = $3 AND period_to < $4::date
@@ -949,6 +1184,50 @@ func (q *Queries) PreviousStatement(ctx context.Context, arg PreviousStatementPa
 		&i.Status,
 	)
 	return i, err
+}
+
+const receiptFeeSnapshots = `-- name: ReceiptFeeSnapshots :many
+SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+FROM city_ledger_receipts
+WHERE tenant_id = $1 AND property_id = $2 AND receipt_number = ANY($3::text[]) AND mdr_rate IS NOT NULL
+`
+
+type ReceiptFeeSnapshotsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Numbers    []string
+}
+
+type ReceiptFeeSnapshotsRow struct {
+	DocNumber    string
+	MdrRate      decimal.Decimal
+	MdrFee       decimal.Decimal
+	ExpectedDate civil.Date
+}
+
+func (q *Queries) ReceiptFeeSnapshots(ctx context.Context, arg ReceiptFeeSnapshotsParams) ([]ReceiptFeeSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, receiptFeeSnapshots, arg.TenantID, arg.PropertyID, arg.Numbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReceiptFeeSnapshotsRow{}
+	for rows.Next() {
+		var i ReceiptFeeSnapshotsRow
+		if err := rows.Scan(
+			&i.DocNumber,
+			&i.MdrRate,
+			&i.MdrFee,
+			&i.ExpectedDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const settlementCandidates = `-- name: SettlementCandidates :many

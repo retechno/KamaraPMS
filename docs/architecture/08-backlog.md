@@ -27,7 +27,7 @@ accounts payable, bank reconciliation and monthly tax filing. What is missing, m
    the over and short journalled, and the hand-over between shifts.
 4. **Budget and cash flow.** A budget per account and month, actual against budget by USALI department, and a cash
    flow statement.
-5. **Card settlement.** Match the bank deposit of the card machine or gateway with the card payments, with the merchant
+5. **Card settlement.** (**Built** except the VAT on the commission, see README.) Match the bank deposit of the card machine or gateway with the card payments, with the merchant
    fee (MDR) as its own line; bank reconciliation matches line by line today.
 6. **Later:** fixed assets and depreciation, purchase orders and goods receipt, withholding tax on payables, MT940/OFX
    bank statements, a master folio for a group, e-mailing invoices and receipts.

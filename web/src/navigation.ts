@@ -99,6 +99,7 @@ export const navigation: NavSection[] = [
       { id: 'taxOwed', to: '/tax/liability', group: 'tax' },
       { id: 'bankAccounts', to: '/bank/accounts', group: 'bank' },
       { id: 'bankStatements', to: '/bank/statements', group: 'bank' },
+      { id: 'bankCards', to: '/bank/cards', group: 'bank' },
     ],
   },
   {

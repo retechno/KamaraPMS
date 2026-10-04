@@ -1439,6 +1439,21 @@ SELECT expect_error('movements are append-only', '23001', $q$UPDATE cashier_shif
 SELECT expect_error('the variance limit is not negative', '23514', $q$UPDATE property_cashier_settings SET max_variance = -1$q$);
 
 ------------------------------------------------------------------------------------------
+-- Card fee rules
+------------------------------------------------------------------------------------------
+INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 2, 1, '2026-09-01');
+SELECT expect_error('a rule starts once per method and date', '23505',
+    $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 3, 1, '2026-09-01')$q$);
+SELECT expect_error('a rule is for card or e-wallet', '23514',
+    $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CASH', 3, 1, '2026-09-02')$q$);
+SELECT expect_error('a rate is a percent', '23514',
+    $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 101, 1, '2026-09-03')$q$);
+SELECT expect_error('the days to pay out are at most 60', '23514',
+    $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 2, 61, '2026-09-04')$q$);
+SELECT expect_error('a rule is never changed', '23001', $q$UPDATE card_fee_rules SET mdr_rate = 1$q$);
+SELECT expect_error('a rule is never deleted', '23001', $q$DELETE FROM card_fee_rules$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

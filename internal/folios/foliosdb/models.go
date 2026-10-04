@@ -88,27 +88,30 @@ type FolioItemComponent struct {
 }
 
 type Payment struct {
-	ID                int64
-	TenantID          int64
-	PropertyID        int64
-	PaymentNumber     string
-	FolioID           int64
-	PaymentType       string
-	PaymentMethod     string
-	Amount            decimal.Decimal
-	PaidAt            time.Time
-	BusinessDate      civil.Date
-	ReferenceNumber   *string
-	RefundOfPaymentID *int64
-	Status            string
-	VoidedAt          *time.Time
-	VoidedBy          *int64
-	VoidReason        *string
-	IdempotencyKey    *string
-	Remarks           *string
-	CreatedAt         time.Time
-	CreatedBy         *int64
-	ApprovedBy        *int64
-	CompanyID         *int64
-	ShiftID           *int64
+	ID                     int64
+	TenantID               int64
+	PropertyID             int64
+	PaymentNumber          string
+	FolioID                int64
+	PaymentType            string
+	PaymentMethod          string
+	Amount                 decimal.Decimal
+	PaidAt                 time.Time
+	BusinessDate           civil.Date
+	ReferenceNumber        *string
+	RefundOfPaymentID      *int64
+	Status                 string
+	VoidedAt               *time.Time
+	VoidedBy               *int64
+	VoidReason             *string
+	IdempotencyKey         *string
+	Remarks                *string
+	CreatedAt              time.Time
+	CreatedBy              *int64
+	ApprovedBy             *int64
+	CompanyID              *int64
+	ShiftID                *int64
+	MdrRate                *decimal.Decimal
+	MdrFee                 *decimal.Decimal
+	ExpectedSettlementDate *civil.Date
 }

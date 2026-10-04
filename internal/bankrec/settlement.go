@@ -200,8 +200,16 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		if err != nil {
 			return err
 		}
+		expectedFee, known, err := s.expectedFeeOf(ctx, p.TenantID, propertyID, in.JournalLineIDs)
+		if err != nil {
+			return err
+		}
+		var expected *decimal.Decimal // the fee the payments expected, when every one of them kept a snapshot
+		if known {
+			expected = &expectedFee
+		}
 		sid, err := q.InsertSettlement(ctx, bankrecdb.InsertSettlementParams{
-			TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: ba.ID, AccountKey: in.AccountKey, JournalID: jid, Gross: gross, Net: net, Fee: fee, Reference: nullable(ref), ActorID: p.ActorID(),
+			TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: ba.ID, AccountKey: in.AccountKey, JournalID: jid, Gross: gross, Net: net, Fee: fee, ExpectedFee: expected, Reference: nullable(ref), ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -218,7 +226,7 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.settled", "bank_statement", statementID, nil,
-			map[string]any{"line": line.LineNo, "key": in.AccountKey, "gross": gross.String(), "net": net.String(), "fee": fee.String(), "payments": len(items), "journal": jnum}))
+			map[string]any{"line": line.LineNo, "key": in.AccountKey, "gross": gross.String(), "net": net.String(), "fee": fee.String(), "expected_fee": expected, "payments": len(items), "journal": jnum}))
 	})
 	if err != nil {
 		return StatementDetail{}, err

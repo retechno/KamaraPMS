@@ -35,6 +35,7 @@ const busy = ref(false)
 const selectedLines = ref<number[]>([])
 const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, description: '', lines: [] as UnclearedLine[], picked: [] as number[] })
 const picked = ref<number[]>([])
+const suggestion = ref<{ matched: boolean; difference: string; expected_fee: string } | null>(null)
 const adjust = reactive({ open: false, account_id: 0, description: '' })
 const reopening = ref<{ reason: string; asking: boolean } | null>(null)
 
@@ -191,8 +192,21 @@ async function startSettle(): Promise<void> {
   await loadSettleLines()
 }
 
+async function suggest(): Promise<void> {
+  const l = line.value
+  if (!l) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-proposal', { params: { path: { ...base().path, lineId: l.id }, query: { account_key: settle.key as 'CARD' } } })
+    settle.picked = data?.journal_line_ids ?? []
+    suggestion.value = data ? { matched: data.matched, difference: data.difference, expected_fee: data.expected_fee } : null
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 async function loadSettleLines(): Promise<void> {
   settle.picked = []
+  suggestion.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/bank/statements/{id}/settlement-lines', { params: { ...base(), query: { account_key: settle.key as 'CARD' } } })
     settle.lines = data?.data ?? []
@@ -342,6 +356,10 @@ watch([() => pid.value, sid], () => {
                   </NativeSelect>
                 </template>
               </FormField>
+              <div v-if="settle.lines.length" class="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="outline" size="sm" data-testid="suggest" @click="suggest">{{ t('reconcile.suggest') }}</Button>
+                <small v-if="suggestion" data-testid="suggestion" :class="suggestion.matched ? 'text-muted-foreground' : 'text-destructive'">{{ suggestion.matched ? t('reconcile.suggestMatched', { fee: $money(suggestion.expected_fee) }) : t('reconcile.suggestOff', { difference: $money(suggestion.difference) }) }}</small>
+              </div>
               <p v-if="!settle.lines.length" class="m-0 text-sm text-muted-foreground" data-testid="no-settle-lines">{{ t('reconcile.noSettle') }}</p>
               <DataTable v-else :columns="settleColumns" :rows="settle.lines" row-key="journal_line_id" :row-test-id="(u) => `settle-${u.journal_line_id}`" :caption="t('reconcile.paymentsOf')" data-testid="settle-lines">
                 <template #cell-pick="{ row }"><input v-model="settle.picked" type="checkbox" class="size-4 accent-primary" :value="row.journal_line_id" /></template>

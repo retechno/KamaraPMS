@@ -49,6 +49,7 @@ export const router = createRouter({
     { path: '/tax/returns', name: 'tax-returns', component: () => import('@/views/tax/TaxReturnsView.vue'), meta: { title: 'Tax returns' } },
     { path: '/tax/liability', name: 'tax-liability', component: () => import('@/views/tax/TaxLiabilityView.vue'), meta: { title: 'Tax owed' } },
     { path: '/bank/accounts', name: 'bank-accounts', component: () => import('@/views/bank/BankAccountsView.vue'), meta: { title: 'Bank accounts' } },
+    { path: '/bank/cards', name: 'bank-cards', component: () => import('@/views/bank/BankCardsView.vue'), meta: { title: 'Card settlements' } },
     { path: '/bank/statements', name: 'bank-statements', component: () => import('@/views/bank/BankStatementsView.vue'), meta: { title: 'Bank statements' } },
     { path: '/bank/statements/:id', name: 'bank-reconcile', component: () => import('@/views/bank/BankReconcileView.vue'), props: true, meta: { title: 'Reconcile a statement' } },
     { path: '/payables/suppliers', name: 'payables-suppliers', component: () => import('@/views/payables/SuppliersView.vue'), meta: { title: 'Suppliers' } },

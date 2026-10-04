@@ -57,26 +57,29 @@ type CityLedgerInvoice struct {
 }
 
 type CityLedgerReceipt struct {
-	ID              int64
-	TenantID        int64
-	PropertyID      int64
-	ReceiptNumber   string
-	CompanyID       int64
-	Amount          decimal.Decimal
-	PaymentMethod   string
-	ReferenceNumber *string
-	Remarks         *string
-	BusinessDate    civil.Date
-	PaidAt          time.Time
-	Status          string
-	VoidedAt        *time.Time
-	VoidedBy        *int64
-	VoidReason      *string
-	IdempotencyKey  *string
-	CreatedAt       time.Time
-	CreatedBy       *int64
-	ApprovedBy      *int64
-	ShiftID         *int64
+	ID                     int64
+	TenantID               int64
+	PropertyID             int64
+	ReceiptNumber          string
+	CompanyID              int64
+	Amount                 decimal.Decimal
+	PaymentMethod          string
+	ReferenceNumber        *string
+	Remarks                *string
+	BusinessDate           civil.Date
+	PaidAt                 time.Time
+	Status                 string
+	VoidedAt               *time.Time
+	VoidedBy               *int64
+	VoidReason             *string
+	IdempotencyKey         *string
+	CreatedAt              time.Time
+	CreatedBy              *int64
+	ApprovedBy             *int64
+	ShiftID                *int64
+	MdrRate                *decimal.Decimal
+	MdrFee                 *decimal.Decimal
+	ExpectedSettlementDate *civil.Date
 }
 
 type CityLedgerReminder struct {

@@ -190,8 +190,8 @@ LIMIT @row_limit;
 SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = @line_id OR settling_line_id = @line_id)::boolean;
 
 -- name: InsertSettlement :one
-INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, reference, created_by)
-VALUES (@tenant_id, @property_id, @bank_account_id, @account_key, @journal_id, @gross, @net, @fee, sqlc.narg(reference), sqlc.narg(actor_id))
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_fee, reference, created_by)
+VALUES (@tenant_id, @property_id, @bank_account_id, @account_key, @journal_id, @gross, @net, @fee, sqlc.narg(expected_fee), sqlc.narg(reference), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: InsertSettlementItem :exec
@@ -201,3 +201,37 @@ VALUES (@tenant_id, @property_id, @settlement_id, @settled_line_id, @settling_li
 -- The account a system key of the books points at.
 -- name: MapAccount :one
 SELECT account_id FROM gl_account_map WHERE tenant_id = @tenant_id AND property_id = @property_id AND map_key = @map_key;
+
+-- ---------------------------------------------------------------------------
+-- Card fee rules (the fee the acquirer is expected to keep) and what the payments expected
+
+-- name: ListCardFeeRules :many
+SELECT * FROM card_fee_rules WHERE tenant_id = @tenant_id AND property_id = @property_id ORDER BY payment_method, effective_from DESC;
+
+-- name: InsertCardFeeRule :one
+INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_by)
+VALUES (@tenant_id, @property_id, @payment_method, @mdr_rate, @settlement_days, @effective_from, sqlc.narg(actor_id))
+RETURNING *;
+
+-- The snapshots of the payments and the city ledger receipts of some numbers (the reference of a journal line is the number of its document).
+-- name: PaymentFeeSnapshots :many
+SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+FROM payments
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND payment_number = ANY(@numbers::text[]) AND mdr_rate IS NOT NULL;
+
+-- name: ReceiptFeeSnapshots :many
+SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+FROM city_ledger_receipts
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND receipt_number = ANY(@numbers::text[]) AND mdr_rate IS NOT NULL;
+
+-- name: JournalLineRefs :many
+SELECT id, COALESCE(source_ref, '')::text AS source_ref FROM gl_journal_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
+
+-- name: ListSettlements :many
+SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_fee, s.reference, s.created_at, j.journal_date, j.journal_number,
+       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
+FROM card_settlements s
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id < @before_id
+ORDER BY s.id DESC
+LIMIT @row_limit;

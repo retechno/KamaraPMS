@@ -48,12 +48,19 @@ SELECT * FROM city_ledger_receipts WHERE tenant_id = @tenant_id AND property_id 
 -- name: InsertReceipt :one
 INSERT INTO city_ledger_receipts (
     tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks,
-    business_date, paid_at, idempotency_key, created_by, shift_id
+    business_date, paid_at, idempotency_key, created_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date
 ) VALUES (
     @tenant_id, @property_id, @receipt_number, @company_id, @amount, @payment_method, sqlc.narg(reference_number), sqlc.narg(remarks),
-    @business_date, @paid_at, sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(shift_id)
+    @business_date, @paid_at, sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(shift_id), sqlc.narg(mdr_rate), sqlc.narg(mdr_fee), sqlc.narg(expected_settlement_date)
 )
 RETURNING *;
+-- The rate that applies to a card or e-wallet payment of a business date: the latest rule that has started.
+-- name: CardFeeRule :one
+SELECT mdr_rate, settlement_days FROM card_fee_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND payment_method = @payment_method AND effective_from <= @on_date::date
+ORDER BY effective_from DESC
+LIMIT 1;
+
 
 -- name: VoidReceipt :one
 UPDATE city_ledger_receipts

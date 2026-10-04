@@ -504,3 +504,22 @@ func TestReceiptKeyRace(t *testing.T) {
 		t.Fatal("one receipt")
 	}
 }
+
+func TestAReceiptByCardKeepsTheFeeRuleOfItsDay(t *testing.T) {
+	f := setup(t)
+	_, err := f.transfer(f.folio(t, "400000"), f.acme.ID, "t1", "300000")
+	must(t, err)
+	must(t, f.Exec(t, `INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES ($1, $2, 'CARD', 1.5, 3, '2026-09-01')`, f.tenantID, f.propID))
+	card, err := f.CityLedger.Receive(f.admin, f.propID, f.acme.ID, "r-card", cityledger.ReceiptInput{Amount: "100000", PaymentMethod: "CARD"})
+	must(t, err)
+	cash, err := f.CityLedger.Receive(f.admin, f.propID, f.acme.ID, "r-cash", cityledger.ReceiptInput{Amount: "1000", PaymentMethod: "CASH"})
+	must(t, err)
+	var rate, fee, on string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT mdr_rate::text, mdr_fee::text, expected_settlement_date::text FROM city_ledger_receipts WHERE id = $1`, card.Receipt.ID).Scan(&rate, &fee, &on))
+	if rate != "1.5000" || fee != "1500.000" || on != "2026-10-03" {
+		t.Fatalf("snapshot: %s %s %s", rate, fee, on)
+	}
+	if f.Count(t, `SELECT count(*) FROM city_ledger_receipts WHERE id = $1 AND mdr_rate IS NULL`, cash.Receipt.ID) != 1 {
+		t.Fatal("cash has no fee")
+	}
+}

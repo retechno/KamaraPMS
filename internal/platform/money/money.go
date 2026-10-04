@@ -33,6 +33,11 @@ func Round(d decimal.Decimal, decimals int32) decimal.Decimal {
 	return d.Round(decimals)
 }
 
+// Percent is rate percent of amount, rounded to the currency (a fee of 2.5 percent on 100000 is 2500).
+func Percent(amount, rate decimal.Decimal, decimals int32) decimal.Decimal {
+	return Round(amount.Mul(rate).Div(decimal.NewFromInt(100)), decimals)
+}
+
 // ValidateDecimals checks a currency precision.
 func ValidateDecimals(decimals int32) error {
 	if decimals < 0 || decimals > MaxDecimals {

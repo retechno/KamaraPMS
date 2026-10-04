@@ -33,6 +33,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/statements/{id}/auto-match", httpx.HandlerFunc(h.autoMatch))
 	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/adjust", httpx.HandlerFunc(h.adjust))
 	mux.Handle("GET "+p+"/statements/{id}/settlement-lines", httpx.HandlerFunc(h.settlementLines))
+	mux.Handle("GET "+p+"/statements/{id}/lines/{lineId}/settlement-proposal", httpx.HandlerFunc(h.settlementProposal))
+	mux.Handle("GET "+p+"/card-fee-rules", httpx.HandlerFunc(h.feeRules))
+	mux.Handle("POST "+p+"/card-fee-rules", httpx.HandlerFunc(h.createFeeRule))
+	mux.Handle("GET "+p+"/card-settlements/expected", httpx.HandlerFunc(h.expectedSettlements))
+	mux.Handle("GET "+p+"/card-settlements", httpx.HandlerFunc(h.settlements))
 	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/settle", httpx.HandlerFunc(h.settle))
 	mux.Handle("POST "+p+"/statements/{id}/reconcile", httpx.HandlerFunc(h.reconcile))
 	mux.Handle("POST "+p+"/statements/{id}/reopen", httpx.HandlerFunc(h.reopen))
@@ -314,4 +319,97 @@ func (h *Handler) settle(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) settlementProposal(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := statementPath(r)
+	if err != nil {
+		return err
+	}
+	lid, err := pathID(r, "lineId", apperr.NotFound("STATEMENT_LINE_NOT_FOUND", "the line does not exist in this statement"))
+	if err != nil {
+		return err
+	}
+	pr, err := h.svc.SettlementProposal(r.Context(), pid, id, lid, strings.ToUpper(r.URL.Query().Get("account_key")))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, pr)
+}
+
+func (h *Handler) feeRules(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.CardFeeRules(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[FeeRule]{Data: list})
+}
+
+func (h *Handler) createFeeRule(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in FeeRuleInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	rule, err := h.svc.CreateCardFeeRule(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, rule)
+}
+
+func (h *Handler) expectedSettlements(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	key := strings.ToUpper(r.URL.Query().Get("account_key"))
+	if key == "" {
+		key = KeyCard
+	}
+	e, err := h.svc.ExpectedSettlements(r.Context(), pid, key)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, e)
+}
+
+type settlementCursor struct {
+	Before int64 `json:"b"`
+}
+
+func (h *Handler) settlements(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		return err
+	}
+	var cur settlementCursor
+	if page.Cursor != "" {
+		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
+			return err
+		}
+	}
+	items, err := h.svc.Settlements(r.Context(), pid, cur.Before, page.Limit+1)
+	if err != nil {
+		return err
+	}
+	out := httpx.Page[SettlementRow]{Data: items}
+	if len(items) > page.Limit {
+		out.Data = items[:page.Limit]
+		if out.NextCursor, err = httpx.EncodeCursor(settlementCursor{Before: out.Data[page.Limit-1].ID}); err != nil {
+			return err
+		}
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }

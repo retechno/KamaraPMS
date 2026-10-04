@@ -4971,6 +4971,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/bank/card-fee-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The fee (MDR) rules of card and e-wallet payments (bank.view) */
+        get: operations["listCardFeeRules"];
+        put?: never;
+        /**
+         * Add a fee rule (bank.manage)
+         * @description A rule says the percent the acquirer keeps from the payments of a method and how many days it takes to pay out, from a date. A rule is never changed: a new rate is a new rule
+         *     from a later date (409 `FEE_RULE_EXISTS` when the method has one from that date). A payment keeps a snapshot of the rule of its business date (`mdr_rate`, `mdr_fee`,
+         *     `expected_settlement_date`), so what was expected never moves.
+         */
+        post: operations["createCardFeeRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/card-settlements/expected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What the acquirer should still pay (bank.view)
+         * @description The payment lines of the card (`CARD`, the default) or e-wallet (`OTHER_PAYMENT`) clearing account that no settlement has settled, each with the fee and the payout day its payment expected. The ones past that day are late. Payments are on the list once the day they were taken on is closed (their journal is made with the day close).
+         */
+        get: operations["getExpectedCardSettlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/card-settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The settlements made, with the fee they were expected to cost (bank.view) */
+        get: operations["listCardSettlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The payment lines that probably make up a line of money in (bank.view)
+         * @description The unsettled payments made by the day of the line, in the order they come due, up to the number whose expected net is closest to the line. `matched` says the difference is within the tolerance (a currency unit or half a percent of the line). Only a choice of lines: settling them is the settle call.
+         */
+        get: operations["getSettlementProposal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tax/settings": {
         parameters: {
             query?: never;
@@ -7178,6 +7268,11 @@ export interface components {
             folio_balance: string;
         };
         Payment: {
+            /** @description The fee rate (percent) that applied on the day, for a card or e-wallet payment that had a rule. */
+            mdr_rate?: string;
+            /** @description The fee the acquirer is expected to keep. */
+            mdr_fee?: string;
+            expected_settlement_date?: components["schemas"]["Date"];
             /** Format: int64 */
             id: number;
             payment_number: string;
@@ -7724,6 +7819,89 @@ export interface components {
             user_name: string;
             /** Format: date-time */
             opened_at: string;
+        };
+        CardFeeRule: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            payment_method: "CARD" | "OTHER";
+            /** @description A percent. */
+            mdr_rate: string;
+            settlement_days: number;
+            effective_from: components["schemas"]["Date"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        CardFeeRuleRequest: {
+            /** @enum {string} */
+            payment_method: "CARD" | "OTHER";
+            /** @description 0 to 100, at most 4 decimals. */
+            mdr_rate: string;
+            settlement_days: number;
+            effective_from: components["schemas"]["Date"];
+        };
+        ExpectedCardLine: {
+            /** Format: int64 */
+            journal_line_id: number;
+            journal_date: components["schemas"]["Date"];
+            journal_number: string;
+            description?: string;
+            /** @description The number of the payment or receipt. */
+            reference?: string;
+            amount: string;
+            /** @description Null for a payment taken before there was a rule. */
+            mdr_rate: string | null;
+            expected_fee: string;
+            expected_net: string;
+            expected_date: components["schemas"]["Date"] | null;
+            late: boolean;
+        };
+        ExpectedCardSettlements: {
+            as_of: components["schemas"]["Date"];
+            account_key: string;
+            gross: string;
+            expected_fee: string;
+            expected_net: string;
+            late_count: number;
+            late_gross: string;
+            /** @description Payments without a snapshot. */
+            without_rate: number;
+            lines: components["schemas"]["ExpectedCardLine"][];
+        };
+        SettlementProposal: {
+            /** Format: int64 */
+            statement_line_id: number;
+            account_key: string;
+            amount: string;
+            tolerance: string;
+            matched: boolean;
+            /** @description The line less the expected net of the payments proposed. */
+            difference: string;
+            gross: string;
+            expected_fee: string;
+            expected_net: string;
+            journal_line_ids: number[];
+            lines: components["schemas"]["ExpectedCardLine"][];
+        };
+        CardSettlement: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            bank_account_id: number;
+            account_key: string;
+            journal_date: components["schemas"]["Date"];
+            journal_number: string;
+            gross: string;
+            net: string;
+            fee: string;
+            /** @description Null when a payment of the settlement had no snapshot. */
+            expected_fee: string | null;
+            /** @description The fee taken less the fee expected: positive is more than expected. */
+            fee_variance: string | null;
+            payments: number;
+            reference?: string;
+            /** Format: date-time */
+            created_at: string;
         };
         NightAuditWarnings: {
             stale_drafts: {
@@ -18177,6 +18355,148 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCardFeeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules by method, the newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CardFeeRule"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCardFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardFeeRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardFeeRule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getExpectedCardSettlements: {
+        parameters: {
+            query?: {
+                account_key?: "CARD" | "OTHER_PAYMENT";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The expected settlements. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedCardSettlements"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCardSettlements: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CardSettlement"][];
+                        next_cursor?: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSettlementProposal: {
+        parameters: {
+            query: {
+                account_key: "CARD" | "OTHER_PAYMENT";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The proposal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementProposal"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

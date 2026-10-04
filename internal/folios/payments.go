@@ -13,7 +13,9 @@ import (
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/money"
 	"kamarapms/internal/tenancy"
 )
 
@@ -25,6 +27,10 @@ func (s *Service) paymentView(ctx context.Context, propertyID int64, pay foliosd
 		Amount: fixed(pay.Amount, decimals), PaidAt: pay.PaidAt, BusinessDate: pay.BusinessDate, ReferenceNumber: deref(pay.ReferenceNumber),
 		RefundOfPaymentID: pay.RefundOfPaymentID, Status: pay.Status, VoidedAt: pay.VoidedAt, VoidReason: deref(pay.VoidReason),
 		Remarks: deref(pay.Remarks), CreatedBy: pay.CreatedBy, ApprovedBy: pay.ApprovedBy,
+	}
+	if pay.MdrRate != nil && pay.MdrFee != nil {
+		rate, fee := pay.MdrRate.String(), fixed(*pay.MdrFee, decimals)
+		v.MDRRate, v.MDRFee, v.ExpectedSettlementDate = &rate, &fee, pay.ExpectedSettlementDate
 	}
 	if pay.PaymentType == PaymentTypePayment && pay.Status == PaymentPosted {
 		sum, err := s.q(ctx).SumRefundsOf(ctx, foliosdb.SumRefundsOfParams{PropertyID: propertyID, PaymentID: &pay.ID})
@@ -83,6 +89,22 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 			return foliosdb.Payment{}, err
 		}
 	}
+	var mdrRate, mdrFee *decimal.Decimal
+	var settleOn *civil.Date
+	if payType == PaymentTypePayment && (method == "CARD" || method == "OTHER") {
+		rule, err := ps.s.q(ctx).CardFeeRule(ctx, foliosdb.CardFeeRuleParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentMethod: method, OnDate: ps.bd})
+		switch {
+		case err == nil:
+			decimals, derr := ps.s.decimals(ctx, ps.propertyID)
+			if derr != nil {
+				return foliosdb.Payment{}, derr
+			}
+			fee, on := money.Percent(amount, rule.MdrRate, decimals), ps.bd.AddDays(int(rule.SettlementDays))
+			mdrRate, mdrFee, settleOn = &rule.MdrRate, &fee, &on // the rate that applies today is kept with the payment
+		case !errors.Is(err, pgx.ErrNoRows):
+			return foliosdb.Payment{}, err
+		}
+	}
 	number, err := ps.s.days.NextDocumentNumber(ctx, ps.propertyID, tenancy.SeqPayment)
 	if err != nil {
 		return foliosdb.Payment{}, err
@@ -94,7 +116,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 	pay, err := ps.s.q(ctx).InsertPayment(ctx, foliosdb.InsertPaymentParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentNumber: number, FolioID: ps.folio.ID, PaymentType: payType, PaymentMethod: method,
 		Amount: amount, PaidAt: ps.at, BusinessDate: ps.bd, ReferenceNumber: nullable(in.ReferenceNumber), RefundOfPaymentID: refundOf,
-		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID, ShiftID: shiftID,
+		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID, ShiftID: shiftID, MdrRate: mdrRate, MdrFee: mdrFee, ExpectedSettlementDate: settleOn,
 	})
 	if err != nil {
 		return foliosdb.Payment{}, err

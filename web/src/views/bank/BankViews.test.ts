@@ -232,6 +232,30 @@ describe('bank views', () => {
     expect(call[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, description: 'Card settlement 1 Oct' })
   })
 
+  it('suggests the payments of a settlement and picks them', async () => {
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    await flushPromises()
+    const lines = detail().lines.map((l) => (l.id === 12 ? { ...l, amount: '980000', description: 'Card settlement' } : l))
+    GET.mockImplementation(async (p: string) => {
+      if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
+      if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
+      if (p.endsWith('/settlement-proposal')) return { data: { matched: true, difference: '0', expected_fee: '20000', journal_line_ids: [301, 302] } }
+      return { data: detail({ lines }) }
+    })
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    await w.get('[data-testid=pick-line-2]').setValue(true)
+    await w.get('[data-testid=settle-open]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=suggest]').trigger('click')
+    await flushPromises()
+    const call = GET.mock.calls.find((c) => String(c[0]).endsWith('/settlement-proposal')) as [string, { params: { path: unknown; query: unknown } }]
+    expect(call[1].params.path).toEqual({ propertyId: 7, id: 6, lineId: 12 })
+    expect(call[1].params.query).toEqual({ account_key: 'CARD' })
+    expect(w.get('[data-testid=suggestion]').text()).toContain('20,000')
+    expect(w.get('[data-testid=settle-summary]').text()).toContain('Payments 1,000,000')
+  })
+
   it('undoes a matching, matches automatically and clears lines without a statement line', async () => {
     const w = await mountView(BankReconcileView, undefined, { id: '5' })
     await flushPromises()

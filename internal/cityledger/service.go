@@ -469,6 +469,18 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 						return err
 					}
 				}
+				var mdrRate, mdrFee *decimal.Decimal
+				var settleOn *civil.Date
+				if method == "CARD" || method == "OTHER" {
+					rule, err := s.q(ctx).CardFeeRule(ctx, cityledgerdb.CardFeeRuleParams{TenantID: p.TenantID, PropertyID: propertyID, PaymentMethod: method, OnDate: day.BusinessDate})
+					switch {
+					case err == nil:
+						fee, on := money.Percent(amount, rule.MdrRate, decimals), day.BusinessDate.AddDays(int(rule.SettlementDays))
+						mdrRate, mdrFee, settleOn = &rule.MdrRate, &fee, &on
+					case !errors.Is(err, pgx.ErrNoRows):
+						return err
+					}
+				}
 				owes, err := s.companies.LockForReceipt(ctx, propertyID, companyID)
 				if err != nil {
 					return err
@@ -483,7 +495,7 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				r, err := s.q(ctx).InsertReceipt(ctx, cityledgerdb.InsertReceiptParams{
 					TenantID: p.TenantID, PropertyID: propertyID, ReceiptNumber: number, CompanyID: companyID, Amount: amount, PaymentMethod: method,
 					ReferenceNumber: nullable(strings.TrimSpace(in.ReferenceNumber)), Remarks: nullable(strings.TrimSpace(in.Remarks)),
-					BusinessDate: day.BusinessDate, PaidAt: s.clock.Now(), IdempotencyKey: &key, ActorID: p.ActorID(), ShiftID: shiftID,
+					BusinessDate: day.BusinessDate, PaidAt: s.clock.Now(), IdempotencyKey: &key, ActorID: p.ActorID(), ShiftID: shiftID, MdrRate: mdrRate, MdrFee: mdrFee, ExpectedSettlementDate: settleOn,
 				})
 				if err != nil {
 					return err

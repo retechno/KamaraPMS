@@ -60,6 +60,38 @@ func (q *Queries) AttachedNotes(ctx context.Context, arg AttachedNotesParams) ([
 	return items, nil
 }
 
+const cardFeeRule = `-- name: CardFeeRule :one
+SELECT mdr_rate, settlement_days FROM card_fee_rules
+WHERE tenant_id = $1 AND property_id = $2 AND payment_method = $3 AND effective_from <= $4::date
+ORDER BY effective_from DESC
+LIMIT 1
+`
+
+type CardFeeRuleParams struct {
+	TenantID      int64
+	PropertyID    int64
+	PaymentMethod string
+	OnDate        civil.Date
+}
+
+type CardFeeRuleRow struct {
+	MdrRate        decimal.Decimal
+	SettlementDays int16
+}
+
+// The rate that applies to a card or e-wallet payment of a business date: the latest rule that has started.
+func (q *Queries) CardFeeRule(ctx context.Context, arg CardFeeRuleParams) (CardFeeRuleRow, error) {
+	row := q.db.QueryRow(ctx, cardFeeRule,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PaymentMethod,
+		arg.OnDate,
+	)
+	var i CardFeeRuleRow
+	err := row.Scan(&i.MdrRate, &i.SettlementDays)
+	return i, err
+}
+
 const countLiveAdjustmentsOfInvoice = `-- name: CountLiveAdjustmentsOfInvoice :one
 SELECT count(*)::int FROM city_ledger_adjustments WHERE tenant_id = $1 AND property_id = $2 AND invoice_id = $3 AND status = 'POSTED'
 `
@@ -319,7 +351,7 @@ func (q *Queries) GetLateFee(ctx context.Context, arg GetLateFeeParams) (GetLate
 }
 
 const getReceipt = `-- name: GetReceipt :one
-SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetReceiptParams struct {
@@ -352,12 +384,15 @@ func (q *Queries) GetReceipt(ctx context.Context, arg GetReceiptParams) (CityLed
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.ShiftID,
+		&i.MdrRate,
+		&i.MdrFee,
+		&i.ExpectedSettlementDate,
 	)
 	return i, err
 }
 
 const getReceiptByKey = `-- name: GetReceiptByKey :one
-SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM city_ledger_receipts WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
 
 type GetReceiptByKeyParams struct {
@@ -390,6 +425,9 @@ func (q *Queries) GetReceiptByKey(ctx context.Context, arg GetReceiptByKeyParams
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.ShiftID,
+		&i.MdrRate,
+		&i.MdrFee,
+		&i.ExpectedSettlementDate,
 	)
 	return i, err
 }
@@ -702,28 +740,31 @@ func (q *Queries) InsertInvoiceLine(ctx context.Context, arg InsertInvoiceLinePa
 const insertReceipt = `-- name: InsertReceipt :one
 INSERT INTO city_ledger_receipts (
     tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks,
-    business_date, paid_at, idempotency_key, created_by, shift_id
+    business_date, paid_at, idempotency_key, created_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13
+    $9, $10, $11, $12, $13, $14, $15, $16
 )
-RETURNING id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id
+RETURNING id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date
 `
 
 type InsertReceiptParams struct {
-	TenantID        int64
-	PropertyID      int64
-	ReceiptNumber   string
-	CompanyID       int64
-	Amount          decimal.Decimal
-	PaymentMethod   string
-	ReferenceNumber *string
-	Remarks         *string
-	BusinessDate    civil.Date
-	PaidAt          time.Time
-	IdempotencyKey  *string
-	ActorID         *int64
-	ShiftID         *int64
+	TenantID               int64
+	PropertyID             int64
+	ReceiptNumber          string
+	CompanyID              int64
+	Amount                 decimal.Decimal
+	PaymentMethod          string
+	ReferenceNumber        *string
+	Remarks                *string
+	BusinessDate           civil.Date
+	PaidAt                 time.Time
+	IdempotencyKey         *string
+	ActorID                *int64
+	ShiftID                *int64
+	MdrRate                *decimal.Decimal
+	MdrFee                 *decimal.Decimal
+	ExpectedSettlementDate *civil.Date
 }
 
 func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (CityLedgerReceipt, error) {
@@ -741,6 +782,9 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 		arg.IdempotencyKey,
 		arg.ActorID,
 		arg.ShiftID,
+		arg.MdrRate,
+		arg.MdrFee,
+		arg.ExpectedSettlementDate,
 	)
 	var i CityLedgerReceipt
 	err := row.Scan(
@@ -764,6 +808,9 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.ShiftID,
+		&i.MdrRate,
+		&i.MdrFee,
+		&i.ExpectedSettlementDate,
 	)
 	return i, err
 }
@@ -1542,7 +1589,7 @@ func (q *Queries) ListOverdueInvoices(ctx context.Context, arg ListOverdueInvoic
 }
 
 const listReceipts = `-- name: ListReceipts :many
-SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id FROM city_ledger_receipts
+SELECT id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM city_ledger_receipts
 WHERE tenant_id = $1 AND property_id = $2 AND company_id = $3
 ORDER BY business_date, id
 `
@@ -1583,6 +1630,9 @@ func (q *Queries) ListReceipts(ctx context.Context, arg ListReceiptsParams) ([]C
 			&i.CreatedBy,
 			&i.ApprovedBy,
 			&i.ShiftID,
+			&i.MdrRate,
+			&i.MdrFee,
+			&i.ExpectedSettlementDate,
 		); err != nil {
 			return nil, err
 		}
@@ -2011,7 +2061,7 @@ const voidReceipt = `-- name: VoidReceipt :one
 UPDATE city_ledger_receipts
 SET status = 'VOIDED', voided_at = $1::timestamptz, voided_by = $2, void_reason = $3, approved_by = $4
 WHERE tenant_id = $5 AND property_id = $6 AND id = $7
-RETURNING id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id
+RETURNING id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date
 `
 
 type VoidReceiptParams struct {
@@ -2056,6 +2106,9 @@ func (q *Queries) VoidReceipt(ctx context.Context, arg VoidReceiptParams) (CityL
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.ShiftID,
+		&i.MdrRate,
+		&i.MdrFee,
+		&i.ExpectedSettlementDate,
 	)
 	return i, err
 }

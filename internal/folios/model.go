@@ -270,8 +270,12 @@ type Payment struct {
 	VoidReason        string     `json:"void_reason,omitempty"`
 	Remarks           string     `json:"remarks,omitempty"`
 	Refundable        *string    `json:"refundable,omitempty"`
-	CreatedBy         *int64     `json:"created_by"`
-	ApprovedBy        *int64     `json:"approved_by"`
+	// The fee the acquirer is expected to keep, from the rate that applied on the day (card and e-wallet payments only), and the day it should pay out.
+	MDRRate                *string     `json:"mdr_rate,omitempty"`
+	MDRFee                 *string     `json:"mdr_fee,omitempty"`
+	ExpectedSettlementDate *civil.Date `json:"expected_settlement_date,omitempty"`
+	CreatedBy              *int64      `json:"created_by"`
+	ApprovedBy             *int64      `json:"approved_by"`
 }
 
 // ItemResult is a posted item with the folio's balance after it.

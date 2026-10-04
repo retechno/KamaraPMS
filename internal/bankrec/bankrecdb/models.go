@@ -3,3 +3,22 @@
 //   sqlc v1.31.1
 
 package bankrecdb
+
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+	"kamarapms/internal/platform/civil"
+)
+
+type CardFeeRule struct {
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	PaymentMethod  string
+	MdrRate        decimal.Decimal
+	SettlementDays int16
+	EffectiveFrom  civil.Date
+	CreatedAt      time.Time
+	CreatedBy      *int64
+}
