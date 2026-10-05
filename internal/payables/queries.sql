@@ -3,14 +3,19 @@
 -- ---------------------------------------------------------------------------------------------------------------
 -- Suppliers
 
--- A supplier with what is owed to it now: bills not voided less the allocations of payments not voided.
+-- A supplier with what is owed to it now: bills not voided less the allocations of payments not voided and less the credit notes not voided (negative: the supplier owes the hotel a credit).
+-- unapplied_credit is the part of the credit notes that no bill has taken off yet.
 -- name: ListSuppliers :many
 SELECT s.id, s.code, s.name, s.contact_name, s.email, s.phone, s.address, s.city, s.tax_id, s.payment_terms_days, s.default_account_id,
        da.code AS default_account_code, da.name AS default_account_name, s.bank_details, s.notes, s.is_active, s.created_at,
        (COALESCE((SELECT sum(b.total) FROM supplier_bills b WHERE b.property_id = s.property_id AND b.supplier_id = s.id AND b.status = 'POSTED'), 0)
         - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
                      JOIN supplier_bills b ON b.property_id = a.property_id AND b.id = a.bill_id
-                    WHERE a.property_id = s.property_id AND a.supplier_id = s.id AND x.status = 'POSTED' AND b.status = 'POSTED'), 0))::numeric AS outstanding
+                    WHERE a.property_id = s.property_id AND a.supplier_id = s.id AND x.status = 'POSTED' AND b.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(c.total) FROM supplier_credit_notes c WHERE c.property_id = s.property_id AND c.supplier_id = s.id AND c.status = 'POSTED'), 0))::numeric AS outstanding,
+       (COALESCE((SELECT sum(c.total) FROM supplier_credit_notes c WHERE c.property_id = s.property_id AND c.supplier_id = s.id AND c.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes c ON c.property_id = ca.property_id AND c.id = ca.credit_id
+                     WHERE ca.property_id = s.property_id AND ca.supplier_id = s.id AND c.status = 'POSTED'), 0))::numeric AS unapplied_credit
 FROM suppliers s
 LEFT JOIN gl_accounts da ON da.property_id = s.property_id AND da.id = s.default_account_id
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id
@@ -50,12 +55,14 @@ RETURNING id;
 INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, description, amount, vat_amount, vat_treatment, department_id)
 VALUES (@tenant_id, @property_id, @bill_id, @line_no, @account_id, sqlc.narg(description), @amount, @vat_amount, sqlc.narg(vat_treatment), sqlc.narg(department_id));
 
--- A bill with its supplier, what has been paid and the journal numbers.
+-- A bill with its supplier, what has been paid, what credit notes took off it and the journal numbers.
 -- name: ListBills :many
 SELECT b.id, b.bill_number, b.supplier_id, s.code AS supplier_code, s.name AS supplier_name, b.supplier_invoice_number, b.bill_date, b.due_date, b.description,
        b.total, b.status, b.journal_id, jn.journal_number, b.void_journal_id, b.voided_at, b.void_reason, b.created_at,
        COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-                  WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)::numeric AS paid
+                  WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)::numeric AS paid,
+       COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0)::numeric AS credited
 FROM supplier_bills b
 JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
 JOIN gl_journals jn ON jn.property_id = b.property_id AND jn.id = b.journal_id
@@ -69,7 +76,9 @@ WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id
        OR s.name ILIKE '%' || sqlc.narg(q)::text || '%')
   AND (NOT @open_only::boolean OR (b.status = 'POSTED' AND b.total > COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a
         JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-        WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)))
+        WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)
+        + COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0)))
 ORDER BY b.bill_date DESC, b.id DESC
 LIMIT @row_limit;
 
@@ -97,7 +106,9 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 -- name: OpenBillsOfSupplier :many
 SELECT b.id, b.bill_number, b.supplier_invoice_number, b.bill_date, b.due_date, b.total,
        (b.total - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0))::numeric AS outstanding
+                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0))::numeric AS outstanding
 FROM supplier_bills b
 WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.supplier_id = @supplier_id AND b.status = 'POSTED'
 ORDER BY b.due_date, b.id;
@@ -162,7 +173,11 @@ SELECT b.id, b.bill_number, b.supplier_id, s.code AS supplier_code, s.name AS su
        (b.total - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
                              LEFT JOIN gl_journals pvj ON pvj.property_id = x.property_id AND pvj.id = x.void_journal_id
                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.payment_date <= @as_of::date
-                              AND (x.status = 'POSTED' OR pvj.journal_date > @as_of::date)), 0))::numeric AS outstanding
+                              AND (x.status = 'POSTED' OR pvj.journal_date > @as_of::date)), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                     LEFT JOIN gl_journals cvj ON cvj.property_id = cn.property_id AND cvj.id = cn.void_journal_id
+                    WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND ca.applied_on <= @as_of::date
+                      AND (cn.status = 'POSTED' OR cvj.journal_date > @as_of::date)), 0))::numeric AS outstanding
 FROM supplier_bills b
 JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
 LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
@@ -175,3 +190,92 @@ SELECT is_postable, is_active FROM gl_accounts WHERE tenant_id = @tenant_id AND 
 
 -- name: FindSupplierPaymentByKey :one
 SELECT id FROM supplier_payments WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Credit notes of suppliers
+
+-- name: InsertCreditNote :one
+INSERT INTO supplier_credit_notes (tenant_id, property_id, credit_number, supplier_id, bill_id, supplier_credit_number, credit_date, reason, total, journal_id, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @credit_number, @supplier_id, @bill_id, @supplier_credit_number, @credit_date, @reason, @total, @journal_id, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: InsertCreditLine :exec
+INSERT INTO supplier_credit_note_lines (tenant_id, property_id, credit_id, line_no, bill_id, bill_line_no, account_id, description, amount, vat_amount, vat_treatment, department_id)
+VALUES (@tenant_id, @property_id, @credit_id, @line_no, @bill_id, @bill_line_no, @account_id, sqlc.narg(description), @amount, @vat_amount, sqlc.narg(vat_treatment), sqlc.narg(department_id));
+
+-- name: InsertCreditAllocation :exec
+INSERT INTO supplier_credit_allocations (tenant_id, property_id, supplier_id, credit_id, bill_id, amount, applied_on, created_by)
+VALUES (@tenant_id, @property_id, @supplier_id, @credit_id, @bill_id, @amount, @applied_on, sqlc.narg(actor_id));
+
+-- A credit note with its supplier and bill, what has been applied to bills and the journal numbers.
+-- name: ListCreditNotes :many
+SELECT c.id, c.credit_number, c.supplier_id, s.code AS supplier_code, s.name AS supplier_name, c.bill_id, b.bill_number, b.supplier_invoice_number, c.supplier_credit_number,
+       c.credit_date, c.reason, c.total, c.status, c.journal_id, jn.journal_number, c.void_journal_id, c.voided_at, c.void_reason, c.created_at,
+       COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id), 0)::numeric AS applied
+FROM supplier_credit_notes c
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN gl_journals jn ON jn.property_id = c.property_id AND jn.id = c.journal_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id
+  AND (sqlc.narg(id)::bigint IS NULL OR c.id = sqlc.narg(id)::bigint)
+  AND (sqlc.narg(supplier_id)::bigint IS NULL OR c.supplier_id = sqlc.narg(supplier_id)::bigint)
+  AND (sqlc.narg(bill_id)::bigint IS NULL OR c.bill_id = sqlc.narg(bill_id)::bigint)
+  AND (sqlc.narg(status)::text IS NULL OR c.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(from_date)::date IS NULL OR c.credit_date >= sqlc.narg(from_date)::date)
+  AND (sqlc.narg(to_date)::date IS NULL OR c.credit_date <= sqlc.narg(to_date)::date)
+  AND (NOT @unapplied_only::boolean OR (c.status = 'POSTED' AND c.total > COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id), 0)))
+  AND (sqlc.narg(q)::text IS NULL OR c.credit_number ILIKE '%' || sqlc.narg(q)::text || '%' OR c.supplier_credit_number ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR s.name ILIKE '%' || sqlc.narg(q)::text || '%')
+ORDER BY c.credit_date DESC, c.id DESC
+LIMIT @row_limit;
+
+-- name: ListCreditLines :many
+SELECT l.line_no, l.bill_line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount, l.vat_amount, l.vat_treatment,
+       l.department_id, d.code AS department_code, d.name AS department_name
+FROM supplier_credit_note_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.credit_id = @credit_id
+ORDER BY l.line_no;
+
+-- name: ListCreditAllocations :many
+SELECT ca.bill_id, b.bill_number, b.supplier_invoice_number, ca.amount, ca.applied_on
+FROM supplier_credit_allocations ca
+JOIN supplier_bills b ON b.property_id = ca.property_id AND b.id = ca.bill_id
+WHERE ca.tenant_id = @tenant_id AND ca.property_id = @property_id AND ca.credit_id = @credit_id
+ORDER BY ca.id;
+
+-- name: FindCreditByKey :one
+SELECT id FROM supplier_credit_notes WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: CreditSupplier :one
+SELECT supplier_id FROM supplier_credit_notes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: VoidCreditNote :exec
+UPDATE supplier_credit_notes SET status = 'VOIDED', voided_at = @now, voided_by = sqlc.narg(actor_id), void_reason = @reason, void_journal_id = @void_journal_id,
+       approved_by = sqlc.narg(approved_by)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- What the credit notes that are not voided have already taken off each line of a bill, so that a new one cannot credit more than the line.
+-- name: CreditedOfBillLines :many
+SELECT l.bill_line_no, COALESCE(sum(l.amount), 0)::numeric AS amount, COALESCE(sum(l.vat_amount), 0)::numeric AS vat
+FROM supplier_credit_note_lines l
+JOIN supplier_credit_notes c ON c.property_id = l.property_id AND c.id = l.credit_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.bill_id = @bill_id AND c.status = 'POSTED'
+GROUP BY l.bill_line_no;
+
+-- Credit notes that stop a bill from being voided: those against it that are not voided, and those applied to it.
+-- name: CountLiveCreditsOfBill :one
+SELECT ((SELECT count(*) FROM supplier_credit_notes c WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.bill_id = @bill_id AND c.status = 'POSTED')
+      + (SELECT count(*) FROM supplier_credit_allocations ca JOIN supplier_credit_notes c ON c.property_id = ca.property_id AND c.id = ca.credit_id
+          WHERE ca.tenant_id = @tenant_id AND ca.property_id = @property_id AND ca.bill_id = @bill_id AND c.status = 'POSTED'))::int AS n;
+
+-- The credit of each supplier that no bill has taken off as of a date, for the aging (a credit note voided after the date still counts).
+-- name: UnappliedCreditRows :many
+SELECT c.id, c.credit_number, c.supplier_id, s.code AS supplier_code, s.name AS supplier_name, c.supplier_credit_number, c.credit_date,
+       (c.total - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id AND ca.applied_on <= @as_of::date), 0))::numeric AS unapplied
+FROM supplier_credit_notes c
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+LEFT JOIN gl_journals vj ON vj.property_id = c.property_id AND vj.id = c.void_journal_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.credit_date <= @as_of::date AND (c.status = 'POSTED' OR vj.journal_date > @as_of::date)
+ORDER BY s.name, c.credit_date, c.id;

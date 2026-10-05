@@ -690,7 +690,13 @@ func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID i
 			if c.Reversal {
 				reverses = ptr(c.reversesID)
 			}
-			if err := q.InsertClaim(ctx, taxfilingdb.InsertClaimParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id, BillID: c.BillID, LineNo: int32(c.LineNo), Amount: c.Amount, ReversesClaimID: reverses}); err != nil { //nolint:gosec // G115: a line number
+			claim := taxfilingdb.InsertClaimParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id, Amount: c.Amount, ReversesClaimID: reverses}
+			if c.Source == ClaimCreditNote {
+				claim.CreditID, claim.CreditLineNo = ptr(c.CreditID), ptr(int64(c.CreditLineNo))
+			} else {
+				claim.BillID, claim.LineNo = ptr(c.BillID), ptr(int64(c.LineNo))
+			}
+			if err := q.InsertClaim(ctx, claim); err != nil {
 				return err
 			}
 		}

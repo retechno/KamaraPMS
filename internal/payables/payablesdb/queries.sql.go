@@ -41,7 +41,11 @@ SELECT b.id, b.bill_number, b.supplier_id, s.code AS supplier_code, s.name AS su
        (b.total - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
                              LEFT JOIN gl_journals pvj ON pvj.property_id = x.property_id AND pvj.id = x.void_journal_id
                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.payment_date <= $1::date
-                              AND (x.status = 'POSTED' OR pvj.journal_date > $1::date)), 0))::numeric AS outstanding
+                              AND (x.status = 'POSTED' OR pvj.journal_date > $1::date)), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                     LEFT JOIN gl_journals cvj ON cvj.property_id = cn.property_id AND cvj.id = cn.void_journal_id
+                    WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND ca.applied_on <= $1::date
+                      AND (cn.status = 'POSTED' OR cvj.journal_date > $1::date)), 0))::numeric AS outstanding
 FROM supplier_bills b
 JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
 LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
@@ -139,6 +143,84 @@ func (q *Queries) CountLiveAllocations(ctx context.Context, arg CountLiveAllocat
 	return column_1, err
 }
 
+const countLiveCreditsOfBill = `-- name: CountLiveCreditsOfBill :one
+SELECT ((SELECT count(*) FROM supplier_credit_notes c WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.bill_id = $3 AND c.status = 'POSTED')
+      + (SELECT count(*) FROM supplier_credit_allocations ca JOIN supplier_credit_notes c ON c.property_id = ca.property_id AND c.id = ca.credit_id
+          WHERE ca.tenant_id = $1 AND ca.property_id = $2 AND ca.bill_id = $3 AND c.status = 'POSTED'))::int AS n
+`
+
+type CountLiveCreditsOfBillParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+}
+
+// Credit notes that stop a bill from being voided: those against it that are not voided, and those applied to it.
+func (q *Queries) CountLiveCreditsOfBill(ctx context.Context, arg CountLiveCreditsOfBillParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveCreditsOfBill, arg.TenantID, arg.PropertyID, arg.BillID)
+	var n int32
+	err := row.Scan(&n)
+	return n, err
+}
+
+const creditSupplier = `-- name: CreditSupplier :one
+SELECT supplier_id FROM supplier_credit_notes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type CreditSupplierParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) CreditSupplier(ctx context.Context, arg CreditSupplierParams) (int64, error) {
+	row := q.db.QueryRow(ctx, creditSupplier, arg.TenantID, arg.PropertyID, arg.ID)
+	var supplier_id int64
+	err := row.Scan(&supplier_id)
+	return supplier_id, err
+}
+
+const creditedOfBillLines = `-- name: CreditedOfBillLines :many
+SELECT l.bill_line_no, COALESCE(sum(l.amount), 0)::numeric AS amount, COALESCE(sum(l.vat_amount), 0)::numeric AS vat
+FROM supplier_credit_note_lines l
+JOIN supplier_credit_notes c ON c.property_id = l.property_id AND c.id = l.credit_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.bill_id = $3 AND c.status = 'POSTED'
+GROUP BY l.bill_line_no
+`
+
+type CreditedOfBillLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+}
+
+type CreditedOfBillLinesRow struct {
+	BillLineNo int32
+	Amount     decimal.Decimal
+	Vat        decimal.Decimal
+}
+
+// What the credit notes that are not voided have already taken off each line of a bill, so that a new one cannot credit more than the line.
+func (q *Queries) CreditedOfBillLines(ctx context.Context, arg CreditedOfBillLinesParams) ([]CreditedOfBillLinesRow, error) {
+	rows, err := q.db.Query(ctx, creditedOfBillLines, arg.TenantID, arg.PropertyID, arg.BillID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CreditedOfBillLinesRow{}
+	for rows.Next() {
+		var i CreditedOfBillLinesRow
+		if err := rows.Scan(&i.BillLineNo, &i.Amount, &i.Vat); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findBillByKey = `-- name: FindBillByKey :one
 SELECT id FROM supplier_bills WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
@@ -151,6 +233,23 @@ type FindBillByKeyParams struct {
 
 func (q *Queries) FindBillByKey(ctx context.Context, arg FindBillByKeyParams) (int64, error) {
 	row := q.db.QueryRow(ctx, findBillByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findCreditByKey = `-- name: FindCreditByKey :one
+SELECT id FROM supplier_credit_notes WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type FindCreditByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) FindCreditByKey(ctx context.Context, arg FindCreditByKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findCreditByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -277,6 +376,118 @@ func (q *Queries) InsertBillLine(ctx context.Context, arg InsertBillLineParams) 
 		arg.DepartmentID,
 	)
 	return err
+}
+
+const insertCreditAllocation = `-- name: InsertCreditAllocation :exec
+INSERT INTO supplier_credit_allocations (tenant_id, property_id, supplier_id, credit_id, bill_id, amount, applied_on, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertCreditAllocationParams struct {
+	TenantID   int64
+	PropertyID int64
+	SupplierID int64
+	CreditID   int64
+	BillID     int64
+	Amount     decimal.Decimal
+	AppliedOn  civil.Date
+	ActorID    *int64
+}
+
+func (q *Queries) InsertCreditAllocation(ctx context.Context, arg InsertCreditAllocationParams) error {
+	_, err := q.db.Exec(ctx, insertCreditAllocation,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.SupplierID,
+		arg.CreditID,
+		arg.BillID,
+		arg.Amount,
+		arg.AppliedOn,
+		arg.ActorID,
+	)
+	return err
+}
+
+const insertCreditLine = `-- name: InsertCreditLine :exec
+INSERT INTO supplier_credit_note_lines (tenant_id, property_id, credit_id, line_no, bill_id, bill_line_no, account_id, description, amount, vat_amount, vat_treatment, department_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+`
+
+type InsertCreditLineParams struct {
+	TenantID     int64
+	PropertyID   int64
+	CreditID     int64
+	LineNo       int32
+	BillID       int64
+	BillLineNo   int32
+	AccountID    int64
+	Description  *string
+	Amount       decimal.Decimal
+	VatAmount    decimal.Decimal
+	VatTreatment *string
+	DepartmentID *int64
+}
+
+func (q *Queries) InsertCreditLine(ctx context.Context, arg InsertCreditLineParams) error {
+	_, err := q.db.Exec(ctx, insertCreditLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.CreditID,
+		arg.LineNo,
+		arg.BillID,
+		arg.BillLineNo,
+		arg.AccountID,
+		arg.Description,
+		arg.Amount,
+		arg.VatAmount,
+		arg.VatTreatment,
+		arg.DepartmentID,
+	)
+	return err
+}
+
+const insertCreditNote = `-- name: InsertCreditNote :one
+
+INSERT INTO supplier_credit_notes (tenant_id, property_id, credit_number, supplier_id, bill_id, supplier_credit_number, credit_date, reason, total, journal_id, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id
+`
+
+type InsertCreditNoteParams struct {
+	TenantID             int64
+	PropertyID           int64
+	CreditNumber         string
+	SupplierID           int64
+	BillID               int64
+	SupplierCreditNumber string
+	CreditDate           civil.Date
+	Reason               string
+	Total                decimal.Decimal
+	JournalID            int64
+	IdempotencyKey       *string
+	ActorID              *int64
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Credit notes of suppliers
+func (q *Queries) InsertCreditNote(ctx context.Context, arg InsertCreditNoteParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertCreditNote,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.CreditNumber,
+		arg.SupplierID,
+		arg.BillID,
+		arg.SupplierCreditNumber,
+		arg.CreditDate,
+		arg.Reason,
+		arg.Total,
+		arg.JournalID,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertSupplier = `-- name: InsertSupplier :one
@@ -488,7 +699,9 @@ const listBills = `-- name: ListBills :many
 SELECT b.id, b.bill_number, b.supplier_id, s.code AS supplier_code, s.name AS supplier_name, b.supplier_invoice_number, b.bill_date, b.due_date, b.description,
        b.total, b.status, b.journal_id, jn.journal_number, b.void_journal_id, b.voided_at, b.void_reason, b.created_at,
        COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-                  WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)::numeric AS paid
+                  WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)::numeric AS paid,
+       COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0)::numeric AS credited
 FROM supplier_bills b
 JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
 JOIN gl_journals jn ON jn.property_id = b.property_id AND jn.id = b.journal_id
@@ -502,7 +715,9 @@ WHERE b.tenant_id = $1 AND b.property_id = $2
        OR s.name ILIKE '%' || $8::text || '%')
   AND (NOT $9::boolean OR (b.status = 'POSTED' AND b.total > COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a
         JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-        WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)))
+        WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)
+        + COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0)))
 ORDER BY b.bill_date DESC, b.id DESC
 LIMIT $10
 `
@@ -539,9 +754,10 @@ type ListBillsRow struct {
 	VoidReason            *string
 	CreatedAt             time.Time
 	Paid                  decimal.Decimal
+	Credited              decimal.Decimal
 }
 
-// A bill with its supplier, what has been paid and the journal numbers.
+// A bill with its supplier, what has been paid, what credit notes took off it and the journal numbers.
 func (q *Queries) ListBills(ctx context.Context, arg ListBillsParams) ([]ListBillsRow, error) {
 	rows, err := q.db.Query(ctx, listBills,
 		arg.TenantID,
@@ -581,6 +797,232 @@ func (q *Queries) ListBills(ctx context.Context, arg ListBillsParams) ([]ListBil
 			&i.VoidReason,
 			&i.CreatedAt,
 			&i.Paid,
+			&i.Credited,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditAllocations = `-- name: ListCreditAllocations :many
+SELECT ca.bill_id, b.bill_number, b.supplier_invoice_number, ca.amount, ca.applied_on
+FROM supplier_credit_allocations ca
+JOIN supplier_bills b ON b.property_id = ca.property_id AND b.id = ca.bill_id
+WHERE ca.tenant_id = $1 AND ca.property_id = $2 AND ca.credit_id = $3
+ORDER BY ca.id
+`
+
+type ListCreditAllocationsParams struct {
+	TenantID   int64
+	PropertyID int64
+	CreditID   int64
+}
+
+type ListCreditAllocationsRow struct {
+	BillID                int64
+	BillNumber            string
+	SupplierInvoiceNumber string
+	Amount                decimal.Decimal
+	AppliedOn             civil.Date
+}
+
+func (q *Queries) ListCreditAllocations(ctx context.Context, arg ListCreditAllocationsParams) ([]ListCreditAllocationsRow, error) {
+	rows, err := q.db.Query(ctx, listCreditAllocations, arg.TenantID, arg.PropertyID, arg.CreditID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditAllocationsRow{}
+	for rows.Next() {
+		var i ListCreditAllocationsRow
+		if err := rows.Scan(
+			&i.BillID,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.Amount,
+			&i.AppliedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditLines = `-- name: ListCreditLines :many
+SELECT l.line_no, l.bill_line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount, l.vat_amount, l.vat_treatment,
+       l.department_id, d.code AS department_code, d.name AS department_name
+FROM supplier_credit_note_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.credit_id = $3
+ORDER BY l.line_no
+`
+
+type ListCreditLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	CreditID   int64
+}
+
+type ListCreditLinesRow struct {
+	LineNo         int32
+	BillLineNo     int32
+	AccountID      int64
+	AccountCode    string
+	AccountName    string
+	Description    *string
+	Amount         decimal.Decimal
+	VatAmount      decimal.Decimal
+	VatTreatment   *string
+	DepartmentID   *int64
+	DepartmentCode *string
+	DepartmentName *string
+}
+
+func (q *Queries) ListCreditLines(ctx context.Context, arg ListCreditLinesParams) ([]ListCreditLinesRow, error) {
+	rows, err := q.db.Query(ctx, listCreditLines, arg.TenantID, arg.PropertyID, arg.CreditID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditLinesRow{}
+	for rows.Next() {
+		var i ListCreditLinesRow
+		if err := rows.Scan(
+			&i.LineNo,
+			&i.BillLineNo,
+			&i.AccountID,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.Description,
+			&i.Amount,
+			&i.VatAmount,
+			&i.VatTreatment,
+			&i.DepartmentID,
+			&i.DepartmentCode,
+			&i.DepartmentName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditNotes = `-- name: ListCreditNotes :many
+SELECT c.id, c.credit_number, c.supplier_id, s.code AS supplier_code, s.name AS supplier_name, c.bill_id, b.bill_number, b.supplier_invoice_number, c.supplier_credit_number,
+       c.credit_date, c.reason, c.total, c.status, c.journal_id, jn.journal_number, c.void_journal_id, c.voided_at, c.void_reason, c.created_at,
+       COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id), 0)::numeric AS applied
+FROM supplier_credit_notes c
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN gl_journals jn ON jn.property_id = c.property_id AND jn.id = c.journal_id
+WHERE c.tenant_id = $1 AND c.property_id = $2
+  AND ($3::bigint IS NULL OR c.id = $3::bigint)
+  AND ($4::bigint IS NULL OR c.supplier_id = $4::bigint)
+  AND ($5::bigint IS NULL OR c.bill_id = $5::bigint)
+  AND ($6::text IS NULL OR c.status = $6::text)
+  AND ($7::date IS NULL OR c.credit_date >= $7::date)
+  AND ($8::date IS NULL OR c.credit_date <= $8::date)
+  AND (NOT $9::boolean OR (c.status = 'POSTED' AND c.total > COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id), 0)))
+  AND ($10::text IS NULL OR c.credit_number ILIKE '%' || $10::text || '%' OR c.supplier_credit_number ILIKE '%' || $10::text || '%'
+       OR s.name ILIKE '%' || $10::text || '%')
+ORDER BY c.credit_date DESC, c.id DESC
+LIMIT $11
+`
+
+type ListCreditNotesParams struct {
+	TenantID      int64
+	PropertyID    int64
+	ID            *int64
+	SupplierID    *int64
+	BillID        *int64
+	Status        *string
+	FromDate      *civil.Date
+	ToDate        *civil.Date
+	UnappliedOnly bool
+	Q             *string
+	RowLimit      int32
+}
+
+type ListCreditNotesRow struct {
+	ID                    int64
+	CreditNumber          string
+	SupplierID            int64
+	SupplierCode          string
+	SupplierName          string
+	BillID                int64
+	BillNumber            string
+	SupplierInvoiceNumber string
+	SupplierCreditNumber  string
+	CreditDate            civil.Date
+	Reason                string
+	Total                 decimal.Decimal
+	Status                string
+	JournalID             int64
+	JournalNumber         string
+	VoidJournalID         *int64
+	VoidedAt              *time.Time
+	VoidReason            *string
+	CreatedAt             time.Time
+	Applied               decimal.Decimal
+}
+
+// A credit note with its supplier and bill, what has been applied to bills and the journal numbers.
+func (q *Queries) ListCreditNotes(ctx context.Context, arg ListCreditNotesParams) ([]ListCreditNotesRow, error) {
+	rows, err := q.db.Query(ctx, listCreditNotes,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.SupplierID,
+		arg.BillID,
+		arg.Status,
+		arg.FromDate,
+		arg.ToDate,
+		arg.UnappliedOnly,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditNotesRow{}
+	for rows.Next() {
+		var i ListCreditNotesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreditNumber,
+			&i.SupplierID,
+			&i.SupplierCode,
+			&i.SupplierName,
+			&i.BillID,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.SupplierCreditNumber,
+			&i.CreditDate,
+			&i.Reason,
+			&i.Total,
+			&i.Status,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.VoidJournalID,
+			&i.VoidedAt,
+			&i.VoidReason,
+			&i.CreatedAt,
+			&i.Applied,
 		); err != nil {
 			return nil, err
 		}
@@ -694,7 +1136,11 @@ SELECT s.id, s.code, s.name, s.contact_name, s.email, s.phone, s.address, s.city
        (COALESCE((SELECT sum(b.total) FROM supplier_bills b WHERE b.property_id = s.property_id AND b.supplier_id = s.id AND b.status = 'POSTED'), 0)
         - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
                      JOIN supplier_bills b ON b.property_id = a.property_id AND b.id = a.bill_id
-                    WHERE a.property_id = s.property_id AND a.supplier_id = s.id AND x.status = 'POSTED' AND b.status = 'POSTED'), 0))::numeric AS outstanding
+                    WHERE a.property_id = s.property_id AND a.supplier_id = s.id AND x.status = 'POSTED' AND b.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(c.total) FROM supplier_credit_notes c WHERE c.property_id = s.property_id AND c.supplier_id = s.id AND c.status = 'POSTED'), 0))::numeric AS outstanding,
+       (COALESCE((SELECT sum(c.total) FROM supplier_credit_notes c WHERE c.property_id = s.property_id AND c.supplier_id = s.id AND c.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes c ON c.property_id = ca.property_id AND c.id = ca.credit_id
+                     WHERE ca.property_id = s.property_id AND ca.supplier_id = s.id AND c.status = 'POSTED'), 0))::numeric AS unapplied_credit
 FROM suppliers s
 LEFT JOIN gl_accounts da ON da.property_id = s.property_id AND da.id = s.default_account_id
 WHERE s.tenant_id = $1 AND s.property_id = $2
@@ -733,12 +1179,14 @@ type ListSuppliersRow struct {
 	IsActive           bool
 	CreatedAt          time.Time
 	Outstanding        decimal.Decimal
+	UnappliedCredit    decimal.Decimal
 }
 
 // Payables (sqlc): suppliers, supplier bills, supplier payments and their allocations. Every query is scoped by tenant_id and property_id.
 // ---------------------------------------------------------------------------------------------------------------
 // Suppliers
-// A supplier with what is owed to it now: bills not voided less the allocations of payments not voided.
+// A supplier with what is owed to it now: bills not voided less the allocations of payments not voided and less the credit notes not voided (negative: the supplier owes the hotel a credit).
+// unapplied_credit is the part of the credit notes that no bill has taken off yet.
 func (q *Queries) ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([]ListSuppliersRow, error) {
 	rows, err := q.db.Query(ctx, listSuppliers,
 		arg.TenantID,
@@ -774,6 +1222,7 @@ func (q *Queries) ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.Outstanding,
+			&i.UnappliedCredit,
 		); err != nil {
 			return nil, err
 		}
@@ -788,7 +1237,9 @@ func (q *Queries) ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([
 const openBillsOfSupplier = `-- name: OpenBillsOfSupplier :many
 SELECT b.id, b.bill_number, b.supplier_invoice_number, b.bill_date, b.due_date, b.total,
        (b.total - COALESCE((SELECT sum(a.amount) FROM supplier_payment_allocations a JOIN supplier_payments x ON x.property_id = a.property_id AND x.id = a.payment_id
-                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0))::numeric AS outstanding
+                             WHERE a.property_id = b.property_id AND a.bill_id = b.id AND x.status = 'POSTED'), 0)
+        - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca JOIN supplier_credit_notes cn ON cn.property_id = ca.property_id AND cn.id = ca.credit_id
+                  WHERE ca.property_id = b.property_id AND ca.bill_id = b.id AND cn.status = 'POSTED'), 0))::numeric AS outstanding
 FROM supplier_bills b
 WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.supplier_id = $3 AND b.status = 'POSTED'
 ORDER BY b.due_date, b.id
@@ -878,6 +1329,63 @@ func (q *Queries) SupplierActive(ctx context.Context, arg SupplierActiveParams) 
 	return i, err
 }
 
+const unappliedCreditRows = `-- name: UnappliedCreditRows :many
+SELECT c.id, c.credit_number, c.supplier_id, s.code AS supplier_code, s.name AS supplier_name, c.supplier_credit_number, c.credit_date,
+       (c.total - COALESCE((SELECT sum(ca.amount) FROM supplier_credit_allocations ca WHERE ca.property_id = c.property_id AND ca.credit_id = c.id AND ca.applied_on <= $1::date), 0))::numeric AS unapplied
+FROM supplier_credit_notes c
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+LEFT JOIN gl_journals vj ON vj.property_id = c.property_id AND vj.id = c.void_journal_id
+WHERE c.tenant_id = $2 AND c.property_id = $3 AND c.credit_date <= $1::date AND (c.status = 'POSTED' OR vj.journal_date > $1::date)
+ORDER BY s.name, c.credit_date, c.id
+`
+
+type UnappliedCreditRowsParams struct {
+	AsOf       civil.Date
+	TenantID   int64
+	PropertyID int64
+}
+
+type UnappliedCreditRowsRow struct {
+	ID                   int64
+	CreditNumber         string
+	SupplierID           int64
+	SupplierCode         string
+	SupplierName         string
+	SupplierCreditNumber string
+	CreditDate           civil.Date
+	Unapplied            decimal.Decimal
+}
+
+// The credit of each supplier that no bill has taken off as of a date, for the aging (a credit note voided after the date still counts).
+func (q *Queries) UnappliedCreditRows(ctx context.Context, arg UnappliedCreditRowsParams) ([]UnappliedCreditRowsRow, error) {
+	rows, err := q.db.Query(ctx, unappliedCreditRows, arg.AsOf, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UnappliedCreditRowsRow{}
+	for rows.Next() {
+		var i UnappliedCreditRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreditNumber,
+			&i.SupplierID,
+			&i.SupplierCode,
+			&i.SupplierName,
+			&i.SupplierCreditNumber,
+			&i.CreditDate,
+			&i.Unapplied,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSupplier = `-- name: UpdateSupplier :exec
 UPDATE suppliers SET name = $1, contact_name = $2, email = $3, phone = $4, address = $5,
        city = $6, tax_id = $7, payment_terms_days = $8, default_account_id = $9,
@@ -945,6 +1453,37 @@ type VoidBillParams struct {
 
 func (q *Queries) VoidBill(ctx context.Context, arg VoidBillParams) error {
 	_, err := q.db.Exec(ctx, voidBill,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.VoidJournalID,
+		arg.ApprovedBy,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const voidCreditNote = `-- name: VoidCreditNote :exec
+UPDATE supplier_credit_notes SET status = 'VOIDED', voided_at = $1, voided_by = $2, void_reason = $3, void_journal_id = $4,
+       approved_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
+`
+
+type VoidCreditNoteParams struct {
+	Now           *time.Time
+	ActorID       *int64
+	Reason        *string
+	VoidJournalID *int64
+	ApprovedBy    *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) VoidCreditNote(ctx context.Context, arg VoidCreditNoteParams) error {
+	_, err := q.db.Exec(ctx, voidCreditNote,
 		arg.Now,
 		arg.ActorID,
 		arg.Reason,

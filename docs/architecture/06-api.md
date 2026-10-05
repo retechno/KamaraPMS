@@ -685,11 +685,16 @@ Permissions: `payables.view` (read), `payables.manage` (suppliers), `payables.po
 | `GET {P}/payables/bills` | `payables.view` | Filters `supplier_id`, `status`, `from`, `to`, `q`, `open_only`, `limit` |
 | `POST {P}/payables/bills` | `payables.post` | `Idempotency-Key` required; 409 `DUPLICATE_INVOICE`, `SUPPLIER_INACTIVE`, `PERIOD_CLOSED`; field errors per line (`lines[N].account_id`: NOT_FOUND, NOT_POSTABLE, INACTIVE, CONTROL_ACCOUNT; `lines[N].amount`; `lines[N].vat_amount`: NEGATIVE, TOO_PRECISE). A line may carry `vat_amount` (the VAT paid on it, on top of `amount`): the PKP status of the property on the `bill_date` decides how it is booked (`CREDITABLE`/`DEFERRED` on the INPUT_VAT account, `EXPENSE` added to the cost), frozen on the line as `vat_treatment`; the `total` is the amounts plus their VAT |
 | `GET {P}/payables/bills/{id}` | `payables.view` | With its lines |
-| `POST {P}/payables/bills/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `BILL_HAS_PAYMENTS`, `BILL_ALREADY_VOIDED` |
+| `POST {P}/payables/bills/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `BILL_HAS_PAYMENTS`, `BILL_HAS_CREDIT_NOTES`, `BILL_ALREADY_VOIDED` |
+| `GET {P}/payables/credit-notes` | `payables.view` | Filters `supplier_id`, `bill_id`, `status`, `from`, `to`, `q`, `unapplied_only`, `limit` |
+| `POST {P}/payables/credit-notes` | `payables.post` | `Idempotency-Key`; `{bill_id, supplier_credit_number, credit_date, reason, lines: [{bill_line_no, amount, vat_amount, description}]}`; 409 `DUPLICATE_CREDIT_NOTE`, `BILL_ALREADY_VOIDED`; 422 `EXCEEDS_BILL_LINE`, `DEPARTMENT_REQUIRED` |
+| `GET {P}/payables/credit-notes/{id}` | `payables.view` | With `lines` and `allocations` (the bills it was taken off); 404 `CREDIT_NOTE_NOT_FOUND` |
+| `POST {P}/payables/credit-notes/{id}/apply` | `payables.post` | `{allocations: [{bill_id, amount}]}`; no journal; 409 `ALLOCATION_EXCEEDS_OUTSTANDING`, `CREDIT_EXCEEDS_UNAPPLIED`, `CREDIT_NOTE_VOIDED` |
+| `POST {P}/payables/credit-notes/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `CREDIT_NOTE_ALREADY_VOIDED` |
 | `GET/POST {P}/payables/payments` | read: `payables.view`; post: `payables.post` | POST needs `Idempotency-Key`; body `{supplier_id, payment_date, payment_method (CASH, BANK_TRANSFER, OTHER), allocations: [{bill_id, amount}]}`; 409 `ALLOCATION_EXCEEDS_OUTSTANDING` with one field error per allocation |
 | `GET {P}/payables/payments/{id}` | `payables.view` | With the bills it settles |
 | `POST {P}/payables/payments/{id}/void` | `payables.post` + approval | `{reason, approval}`; 409 `PAYMENT_ALREADY_VOIDED` |
-| `GET {P}/payables/aging` | `payables.view` | `as_of` (not after the business date); buckets CURRENT, DAYS_1_30, DAYS_31_60, DAYS_61_90, DAYS_OVER_90 per supplier and in total |
+| `GET {P}/payables/aging` | `payables.view` | `as_of` (not after the business date); buckets CURRENT, DAYS_1_30, DAYS_31_60, DAYS_61_90, DAYS_OVER_90 per supplier and in total; `unapplied_credit`, `credits` and `net` for the credit notes no bill has taken off |
 
 The journal type `PAYABLES` appears in the journal list; the system account map has 12 keys (`ACCOUNTS_PAYABLE` is the new one) and the reconciliation a fourth control.
 

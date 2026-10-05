@@ -5889,6 +5889,119 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payables/credit-notes:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listSupplierCreditNotes
+      summary: Credit notes of suppliers, newest first (payables.view)
+      tags: [payables]
+      parameters:
+        - { name: supplier_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: bill_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string, enum: [POSTED, VOIDED] } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, description: "Text in the credit note number, the supplier's credit note number or the supplier's name.", schema: { type: string } }
+        - { name: unapplied_only, in: query, description: Only credit notes with something left that no bill has taken off., schema: { type: boolean } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierCreditNoteList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postSupplierCreditNote
+      summary: Enter a credit note a supplier gave on a bill (payables.post)
+      description: "The `Idempotency-Key` header is required. Each line credits a line of the bill (`bill_line_no`), for an amount and the VAT on it that the bill line has left to credit (422 `EXCEEDS_BILL_LINE`); the account, the department and the VAT treatment are those of the bill line, frozen at the bill date. The journal is the mirror of the bill on the credit date (not before the bill date, not after the business date, in an open month): it debits ACCOUNTS PAYABLE and credits the expense (with the VAT when the treatment was EXPENSE) and input VAT (CREDITABLE and DEFERRED). It takes off the bill as much as the bill still owes (`applied`); the rest is a credit of the supplier (`unapplied`) that `apply` takes off other bills. The same supplier credit note is entered once (409 `DUPLICATE_CREDIT_NOTE`). 409 `BILL_ALREADY_VOIDED`. The department rule of the accounts applies (`DEPARTMENT_REQUIRED`). The VAT of a CREDITABLE line comes off the input VAT claimed on the return of the month of the credit date."
+      tags: [payables]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostSupplierCreditNoteRequest" }
+      responses:
+        "201":
+          description: The credit note with its lines and applications.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierCreditNote" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payables/credit-notes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getSupplierCreditNote
+      summary: One credit note with its lines and the bills it was applied to (payables.view)
+      tags: [payables]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierCreditNote" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payables/credit-notes/{id}/apply:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: applySupplierCreditNote
+      summary: Take what is left of a credit note off open bills of the same supplier (payables.post)
+      description: "No journal: the credit note already reduced what is owed to the supplier. 409 `ALLOCATION_EXCEEDS_OUTSTANDING` (a bill owes less), `CREDIT_EXCEEDS_UNAPPLIED`, `CREDIT_NOTE_VOIDED`."
+      tags: [payables]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplySupplierCreditRequest" }
+      responses:
+        "200":
+          description: The credit note with its applications.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierCreditNote" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payables/credit-notes/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidSupplierCreditNote
+      summary: Void a credit note (payables.post, needs approval)
+      description: "The journal is reversed on the current business date and the bills it was applied to owe that much again; a credit note can always be voided, it only makes more owed. The VAT it took back is given back on the return of the month, when a return had claimed it. 409 `CREDIT_NOTE_ALREADY_VOIDED`."
+      tags: [payables]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierCreditNote" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/payables/payments:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -11708,7 +11821,7 @@ components:
           items: { $ref: "#/components/schemas/FiscalYear" }
     Supplier:
       type: object
-      required: [id, code, name, payment_terms_days, default_account_id, is_active, outstanding, created_at]
+      required: [id, code, name, payment_terms_days, default_account_id, is_active, outstanding, unapplied_credit, created_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -11726,7 +11839,8 @@ components:
         bank_details: { type: string }
         notes: { type: string }
         is_active: { type: boolean }
-        outstanding: { type: string, description: What is owed to the supplier now (bills not voided less payments not voided). }
+        outstanding: { type: string, description: "What is owed to the supplier now: the bills not voided less the payments and the credit notes not voided (negative when the supplier owes the hotel a credit)." }
+        unapplied_credit: { type: string, description: The part of the credit notes that no bill has taken off yet. }
         created_at: { type: string, format: date-time }
     SupplierList:
       type: object
@@ -11784,7 +11898,7 @@ components:
         department_name: { type: string }
     Bill:
       type: object
-      required: [id, bill_number, supplier_id, supplier_code, supplier_name, supplier_invoice_number, bill_date, due_date, total, paid, outstanding, status, payment_status, journal_id, journal_number, void_journal_id, voided_at, created_at]
+      required: [id, bill_number, supplier_id, supplier_code, supplier_name, supplier_invoice_number, bill_date, due_date, total, paid, credited, outstanding, status, payment_status, journal_id, journal_number, void_journal_id, voided_at, created_at]
       properties:
         id: { type: integer, format: int64 }
         bill_number: { type: string }
@@ -11797,7 +11911,8 @@ components:
         description: { type: string }
         total: { type: string }
         paid: { type: string }
-        outstanding: { type: string }
+        credited: { type: string, description: What credit notes of the supplier took off the bill. }
+        outstanding: { type: string, description: The total less what was paid and what was credited. }
         status: { type: string, enum: [POSTED, VOIDED] }
         payment_status: { type: string, enum: [UNPAID, PARTIAL, PAID, VOIDED] }
         journal_id: { type: integer, format: int64 }
@@ -11807,6 +11922,101 @@ components:
         void_reason: { type: string }
         created_at: { type: string, format: date-time }
         lines: { type: array, items: { $ref: "#/components/schemas/BillLine" }, description: Only when one bill is read or created. }
+    SupplierCreditLine:
+      type: object
+      required: [line_no, bill_line_no, account_id, account_code, account_name, amount, vat_amount, department_id]
+      properties:
+        line_no: { type: integer }
+        bill_line_no: { type: integer, description: The line of the bill it credits. }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        vat_amount: { type: string }
+        vat_treatment: { type: string, enum: [CREDITABLE, EXPENSE, DEFERRED], description: That of the bill line. }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: string }
+        department_name: { type: string }
+    SupplierCreditAllocation:
+      type: object
+      required: [bill_id, bill_number, supplier_invoice_number, amount, applied_on]
+      properties:
+        bill_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        supplier_invoice_number: { type: string }
+        amount: { type: string }
+        applied_on: { type: string, format: date }
+    SupplierCreditNote:
+      type: object
+      required: [id, credit_number, supplier_id, supplier_code, supplier_name, bill_id, bill_number, supplier_invoice_number, supplier_credit_number, credit_date, reason, total, applied, unapplied, status, journal_id, journal_number, void_journal_id, voided_at, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        credit_number: { type: string }
+        supplier_id: { type: integer, format: int64 }
+        supplier_code: { type: string }
+        supplier_name: { type: string }
+        bill_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        supplier_invoice_number: { type: string, description: The number on the supplier's invoice of the bill. }
+        supplier_credit_number: { type: string, description: The number on the supplier's credit note. }
+        credit_date: { type: string, format: date }
+        reason: { type: string }
+        total: { type: string }
+        applied: { type: string, description: What has been taken off bills. }
+        unapplied: { type: string, description: What is left that no bill has taken off (zero when voided). }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        void_journal_id: { type: integer, format: int64, nullable: true }
+        voided_at: { type: string, format: date-time, nullable: true }
+        void_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/SupplierCreditLine" }, description: Only when one credit note is read or created. }
+        allocations: { type: array, items: { $ref: "#/components/schemas/SupplierCreditAllocation" }, description: Only when one credit note is read or created. }
+    SupplierCreditNoteList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/SupplierCreditNote" } }
+    PostSupplierCreditNoteRequest:
+      type: object
+      required: [bill_id, supplier_credit_number, credit_date, reason, lines]
+      additionalProperties: false
+      properties:
+        bill_id: { type: integer, format: int64 }
+        supplier_credit_number: { type: string, maxLength: 60 }
+        credit_date: { type: string, format: date }
+        reason: { type: string, maxLength: 500 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [bill_line_no]
+            additionalProperties: false
+            properties:
+              bill_line_no: { type: integer, minimum: 1 }
+              amount: { type: string, description: "What is credited of the line, up to what it has left; zero when only VAT is credited." }
+              vat_amount: { type: string, description: "The VAT credited, up to what the bill line has left; zero when none." }
+              description: { type: string, maxLength: 300 }
+    ApplySupplierCreditRequest:
+      type: object
+      required: [allocations]
+      additionalProperties: false
+      properties:
+        allocations:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [bill_id, amount]
+            additionalProperties: false
+            properties:
+              bill_id: { type: integer, format: int64 }
+              amount: { type: string }
     BillList:
       type: object
       required: [data]
@@ -11930,22 +12140,36 @@ components:
         outstanding: { type: string }
     AgingSupplier:
       type: object
-      required: [supplier_id, supplier_code, supplier_name, buckets, total, bills]
+      required: [supplier_id, supplier_code, supplier_name, buckets, total, unapplied_credit, net, bills, credits]
       properties:
         supplier_id: { type: integer, format: int64 }
         supplier_code: { type: string }
         supplier_name: { type: string }
         buckets: { $ref: "#/components/schemas/AgingBucket" }
-        total: { type: string }
+        total: { type: string, description: The open bills. }
+        unapplied_credit: { type: string, description: What credit notes the supplier gave that no bill has taken off. }
+        net: { type: string, description: The total less the unapplied credit. }
         bills: { type: array, items: { $ref: "#/components/schemas/AgingBill" } }
+        credits: { type: array, items: { $ref: "#/components/schemas/AgingCredit" } }
+    AgingCredit:
+      type: object
+      required: [credit_id, credit_number, supplier_credit_number, credit_date, unapplied]
+      properties:
+        credit_id: { type: integer, format: int64 }
+        credit_number: { type: string }
+        supplier_credit_number: { type: string }
+        credit_date: { type: string, format: date }
+        unapplied: { type: string }
     PayablesAging:
       type: object
-      required: [as_of, suppliers, buckets, total]
+      required: [as_of, suppliers, buckets, total, unapplied_credit, net]
       properties:
         as_of: { type: string, format: date }
         suppliers: { type: array, items: { $ref: "#/components/schemas/AgingSupplier" } }
         buckets: { $ref: "#/components/schemas/AgingBucket" }
         total: { type: string }
+        unapplied_credit: { type: string }
+        net: { type: string, description: The total less the unapplied credit. }
     BankAccount:
       type: object
       required: [id, account_id, account_code, account_name, name, is_active, book_balance, reconciled_to, open_statements, created_at]
@@ -12214,16 +12438,19 @@ components:
         claims_input_vat: { type: boolean, description: "Taking it off is refused while returns have claimed input VAT: 409 `TAX_CLAIMS_IN_USE`." }
     TaxFilingInputClaim:
       type: object
-      required: [bill_id, line_no, bill_number, supplier_invoice_number, supplier_name, bill_date, amount, reversal]
+      required: [source, bill_id, line_no, credit_id, credit_line_no, bill_number, supplier_invoice_number, supplier_name, bill_date, amount, reversal]
       properties:
-        bill_id: { type: integer, format: int64 }
+        source: { type: string, enum: [BILL, CREDIT_NOTE], description: "BILL: the VAT of a bill line. CREDIT_NOTE: the VAT a credit note of a supplier takes back (negative), or the positive reversal of it when the credit note was voided after it was claimed." }
+        bill_id: { type: integer, format: int64, description: Zero for a credit note claim. }
         line_no: { type: integer }
-        bill_number: { type: string }
-        supplier_invoice_number: { type: string }
+        credit_id: { type: integer, format: int64, description: Zero for a bill claim. }
+        credit_line_no: { type: integer }
+        bill_number: { type: string, description: "The number of the bill, or of the credit note for a credit note claim." }
+        supplier_invoice_number: { type: string, description: "The number on the supplier's invoice, or on the supplier's credit note." }
         supplier_name: { type: string }
-        bill_date: { type: string, format: date }
-        amount: { type: string, description: "The VAT of the bill line; negative on a reversal." }
-        reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back." }
+        bill_date: { type: string, format: date, description: The date of the bill or of the credit note. }
+        amount: { type: string, description: "The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim." }
+        reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back." }
     TaxFilingOpeningCreditRequest:
       type: object
       required: [as_of, amount, approval]

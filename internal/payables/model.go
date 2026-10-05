@@ -20,24 +20,26 @@ var methodAccount = map[string]string{"CASH": "CASH", "BANK_TRANSFER": "BANK_TRA
 
 // Supplier is somebody the hotel buys from.
 type Supplier struct {
-	ID                 int64           `json:"id"`
-	Code               string          `json:"code"`
-	Name               string          `json:"name"`
-	ContactName        string          `json:"contact_name,omitempty"`
-	Email              string          `json:"email,omitempty"`
-	Phone              string          `json:"phone,omitempty"`
-	Address            string          `json:"address,omitempty"`
-	City               string          `json:"city,omitempty"`
-	TaxID              string          `json:"tax_id,omitempty"`
-	PaymentTermsDays   int             `json:"payment_terms_days"`
-	DefaultAccountID   *int64          `json:"default_account_id"`
-	DefaultAccountCode string          `json:"default_account_code,omitempty"`
-	DefaultAccountName string          `json:"default_account_name,omitempty"`
-	BankDetails        string          `json:"bank_details,omitempty"`
-	Notes              string          `json:"notes,omitempty"`
-	IsActive           bool            `json:"is_active"`
-	Outstanding        decimal.Decimal `json:"outstanding"`
-	CreatedAt          time.Time       `json:"created_at"`
+	ID                 int64  `json:"id"`
+	Code               string `json:"code"`
+	Name               string `json:"name"`
+	ContactName        string `json:"contact_name,omitempty"`
+	Email              string `json:"email,omitempty"`
+	Phone              string `json:"phone,omitempty"`
+	Address            string `json:"address,omitempty"`
+	City               string `json:"city,omitempty"`
+	TaxID              string `json:"tax_id,omitempty"`
+	PaymentTermsDays   int    `json:"payment_terms_days"`
+	DefaultAccountID   *int64 `json:"default_account_id"`
+	DefaultAccountCode string `json:"default_account_code,omitempty"`
+	DefaultAccountName string `json:"default_account_name,omitempty"`
+	BankDetails        string `json:"bank_details,omitempty"`
+	Notes              string `json:"notes,omitempty"`
+	IsActive           bool   `json:"is_active"`
+	// Outstanding is what is owed to the supplier: the bills less the payments and the credit notes (negative when the supplier owes a credit); UnappliedCredit is the part of the credit notes that no bill has taken off yet.
+	Outstanding     decimal.Decimal `json:"outstanding"`
+	UnappliedCredit decimal.Decimal `json:"unapplied_credit"`
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 // SupplierInput creates a supplier.
@@ -118,6 +120,7 @@ type Bill struct {
 	Description           string          `json:"description,omitempty"`
 	Total                 decimal.Decimal `json:"total"`
 	Paid                  decimal.Decimal `json:"paid"`
+	Credited              decimal.Decimal `json:"credited"` // what credit notes took off the bill
 	Outstanding           decimal.Decimal `json:"outstanding"`
 	Status                string          `json:"status"`
 	PaymentStatus         string          `json:"payment_status"`
@@ -245,14 +248,27 @@ type AgingBill struct {
 // Aging buckets, by days past the due date as of the report date.
 var agingBuckets = []string{"CURRENT", "DAYS_1_30", "DAYS_31_60", "DAYS_61_90", "DAYS_OVER_90"}
 
-// AgingSupplier is what is owed to a supplier, split by how late it is.
+// AgingCredit is a credit of a supplier that no bill has taken off as of the date of the aging.
+type AgingCredit struct {
+	CreditID             int64           `json:"credit_id"`
+	CreditNumber         string          `json:"credit_number"`
+	SupplierCreditNumber string          `json:"supplier_credit_number"`
+	CreditDate           civil.Date      `json:"credit_date"`
+	Unapplied            decimal.Decimal `json:"unapplied"`
+}
+
+// AgingSupplier is what is owed to a supplier, split by how late it is. Total is the open bills; UnappliedCredit is what credit notes the supplier gave no bill has taken off, and Net is the
+// Total less it (what is owed to the supplier in all).
 type AgingSupplier struct {
-	SupplierID   int64                      `json:"supplier_id"`
-	SupplierCode string                     `json:"supplier_code"`
-	SupplierName string                     `json:"supplier_name"`
-	Buckets      map[string]decimal.Decimal `json:"buckets"`
-	Total        decimal.Decimal            `json:"total"`
-	Bills        []AgingBill                `json:"bills"`
+	SupplierID      int64                      `json:"supplier_id"`
+	SupplierCode    string                     `json:"supplier_code"`
+	SupplierName    string                     `json:"supplier_name"`
+	Buckets         map[string]decimal.Decimal `json:"buckets"`
+	Total           decimal.Decimal            `json:"total"`
+	UnappliedCredit decimal.Decimal            `json:"unapplied_credit"`
+	Net             decimal.Decimal            `json:"net"`
+	Bills           []AgingBill                `json:"bills"`
+	Credits         []AgingCredit              `json:"credits"`
 }
 
 // Aging is the payables aging as of a date.
@@ -261,6 +277,9 @@ type Aging struct {
 	Suppliers []AgingSupplier            `json:"suppliers"`
 	Buckets   map[string]decimal.Decimal `json:"buckets"`
 	Total     decimal.Decimal            `json:"total"`
+	// UnappliedCredit is the credit of suppliers that no bill has taken off, and Net the Total less it: what is owed in all.
+	UnappliedCredit decimal.Decimal `json:"unapplied_credit"`
+	Net             decimal.Decimal `json:"net"`
 }
 
 func bucketOf(daysOverdue int) string {
@@ -275,4 +294,96 @@ func bucketOf(daysOverdue int) string {
 		return agingBuckets[3]
 	}
 	return agingBuckets[4]
+}
+
+// Statuses of a credit note of a supplier.
+const (
+	CreditPosted = "POSTED"
+	CreditVoided = "VOIDED"
+)
+
+// CreditLine is a line of a credit note: it credits (part of) a line of the bill. The account, the department and the way the VAT was treated are those of the bill line.
+type CreditLine struct {
+	LineNo         int32           `json:"line_no"`
+	BillLineNo     int32           `json:"bill_line_no"`
+	AccountID      int64           `json:"account_id"`
+	AccountCode    string          `json:"account_code"`
+	AccountName    string          `json:"account_name"`
+	Description    string          `json:"description,omitempty"`
+	Amount         decimal.Decimal `json:"amount"`
+	VATAmount      decimal.Decimal `json:"vat_amount"`
+	VATTreatment   string          `json:"vat_treatment,omitempty"`
+	DepartmentID   *int64          `json:"department_id"`
+	DepartmentCode string          `json:"department_code,omitempty"`
+	DepartmentName string          `json:"department_name,omitempty"`
+}
+
+// CreditAllocation is the part of a credit note taken off a bill.
+type CreditAllocation struct {
+	BillID                int64           `json:"bill_id"`
+	BillNumber            string          `json:"bill_number"`
+	SupplierInvoiceNumber string          `json:"supplier_invoice_number"`
+	Amount                decimal.Decimal `json:"amount"`
+	AppliedOn             civil.Date      `json:"applied_on"`
+}
+
+// CreditNote is a credit note a supplier gave on a bill.
+type CreditNote struct {
+	ID                   int64              `json:"id"`
+	Number               string             `json:"credit_number"`
+	SupplierID           int64              `json:"supplier_id"`
+	SupplierCode         string             `json:"supplier_code"`
+	SupplierName         string             `json:"supplier_name"`
+	BillID               int64              `json:"bill_id"`
+	BillNumber           string             `json:"bill_number"`
+	SupplierInvoice      string             `json:"supplier_invoice_number"`
+	SupplierCreditNumber string             `json:"supplier_credit_number"`
+	CreditDate           civil.Date         `json:"credit_date"`
+	Reason               string             `json:"reason"`
+	Total                decimal.Decimal    `json:"total"`
+	Applied              decimal.Decimal    `json:"applied"`
+	Unapplied            decimal.Decimal    `json:"unapplied"`
+	Status               string             `json:"status"`
+	JournalID            int64              `json:"journal_id"`
+	JournalNumber        string             `json:"journal_number"`
+	VoidJournalID        *int64             `json:"void_journal_id"`
+	VoidedAt             *time.Time         `json:"voided_at"`
+	VoidReason           string             `json:"void_reason,omitempty"`
+	CreatedAt            time.Time          `json:"created_at"`
+	Lines                []CreditLine       `json:"lines,omitempty"`
+	Allocations          []CreditAllocation `json:"allocations,omitempty"`
+}
+
+// CreditLineInput credits a line of the bill: the whole of it or a part, and the VAT of it. The VAT cannot be more than the line paid, and an amount and a VAT cannot be
+// more than what earlier credit notes left of the line.
+type CreditLineInput struct {
+	BillLineNo  int32           `json:"bill_line_no"`
+	Amount      decimal.Decimal `json:"amount"`
+	VATAmount   decimal.Decimal `json:"vat_amount"`
+	Description string          `json:"description"`
+}
+
+// CreditNoteInput enters the credit note a supplier gave on a bill. It takes what it credits off the bill, as far as the bill still owes; the rest is a credit of the supplier.
+type CreditNoteInput struct {
+	BillID               int64             `json:"bill_id"`
+	SupplierCreditNumber string            `json:"supplier_credit_number"`
+	CreditDate           civil.Date        `json:"credit_date"`
+	Reason               string            `json:"reason"`
+	Lines                []CreditLineInput `json:"lines"`
+}
+
+// CreditFilter narrows the list of credit notes.
+type CreditFilter struct {
+	SupplierID    *int64
+	BillID        *int64
+	Status        string
+	From, To      *civil.Date
+	Q             string
+	UnappliedOnly bool
+	Limit         int
+}
+
+// ApplyCreditInput applies what is left of a credit note to open bills of the same supplier.
+type ApplyCreditInput struct {
+	Allocations []AllocationInput `json:"allocations"`
 }

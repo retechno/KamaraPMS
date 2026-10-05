@@ -54,6 +54,7 @@ export const router = createRouter({
     { path: '/bank/statements/:id', name: 'bank-reconcile', component: () => import('@/views/bank/BankReconcileView.vue'), props: true, meta: { title: 'Reconcile a statement' } },
     { path: '/payables/suppliers', name: 'payables-suppliers', component: () => import('@/views/payables/SuppliersView.vue'), meta: { title: 'Suppliers' } },
     { path: '/payables/bills', name: 'payables-bills', component: () => import('@/views/payables/BillsView.vue'), meta: { title: 'Supplier bills' } },
+    { path: '/payables/credit-notes', name: 'payables-credit-notes', component: () => import('@/views/payables/CreditNotesView.vue'), meta: { title: 'Supplier credit notes' } },
     { path: '/payables/payments', name: 'payables-payments', component: () => import('@/views/payables/PaymentsView.vue'), meta: { title: 'Supplier payments' } },
     { path: '/payables/aging', name: 'payables-aging', component: () => import('@/views/payables/AgingView.vue'), meta: { title: 'Payables aging' } },
     { path: '/accounting/fiscal-years', name: 'accounting-fiscal-years', component: () => import('@/views/accounting/FiscalYearsView.vue'), meta: { title: 'Fiscal years' } },

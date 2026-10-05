@@ -11,7 +11,7 @@ A multi-tenant hotel property management system: Go modular monolith, PostgreSQL
 Go 1.26+, Node 22.12+, Docker (for the dev database and for database tests).
 
 ## Run locally
-
+sssssssssssdssssssss
 ```bash
 docker compose up -d db                      # PostgreSQL 16 on localhost:55432
 cp .env.example .env                         # read automatically by cmd/api and cmd/migrate (run from the repo root)

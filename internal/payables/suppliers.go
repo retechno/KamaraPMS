@@ -13,7 +13,7 @@ func toSupplier(r payablesdb.ListSuppliersRow) Supplier {
 	return Supplier{
 		ID: r.ID, Code: r.Code, Name: r.Name, ContactName: deref(r.ContactName), Email: deref(r.Email), Phone: deref(r.Phone), Address: deref(r.Address), City: deref(r.City),
 		TaxID: deref(r.TaxID), PaymentTermsDays: int(r.PaymentTermsDays), DefaultAccountID: r.DefaultAccountID, DefaultAccountCode: deref(r.DefaultAccountCode),
-		DefaultAccountName: deref(r.DefaultAccountName), BankDetails: deref(r.BankDetails), Notes: deref(r.Notes), IsActive: r.IsActive, Outstanding: r.Outstanding, CreatedAt: r.CreatedAt,
+		DefaultAccountName: deref(r.DefaultAccountName), BankDetails: deref(r.BankDetails), Notes: deref(r.Notes), IsActive: r.IsActive, Outstanding: r.Outstanding, UnappliedCredit: r.UnappliedCredit, CreatedAt: r.CreatedAt,
 	}
 }
 

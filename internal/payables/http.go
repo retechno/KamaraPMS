@@ -33,6 +33,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/payments", httpx.HandlerFunc(h.postPayment))
 	mux.Handle("GET "+p+"/payments/{id}", httpx.HandlerFunc(h.payment))
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.voidPayment))
+	mux.Handle("GET "+p+"/credit-notes", httpx.HandlerFunc(h.creditNotes))
+	mux.Handle("POST "+p+"/credit-notes", httpx.HandlerFunc(h.postCreditNote))
+	mux.Handle("GET "+p+"/credit-notes/{id}", httpx.HandlerFunc(h.creditNote))
+	mux.Handle("POST "+p+"/credit-notes/{id}/apply", httpx.HandlerFunc(h.applyCredit))
+	mux.Handle("POST "+p+"/credit-notes/{id}/void", httpx.HandlerFunc(h.voidCreditNote))
 	mux.Handle("GET "+p+"/aging", httpx.HandlerFunc(h.aging))
 }
 
@@ -323,4 +328,93 @@ func (h *Handler) aging(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, a)
+}
+
+func (h *Handler) creditNotes(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var errs []apperr.FieldError
+	q := r.URL.Query()
+	f := CreditFilter{SupplierID: idQuery(r, "supplier_id", &errs), BillID: idQuery(r, "bill_id", &errs), Status: strings.ToUpper(q.Get("status")), From: dateQuery(r, "from", &errs), To: dateQuery(r, "to", &errs), Q: q.Get("q"), Limit: limitQuery(r, &errs)}
+	if v := q.Get("unapplied_only"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fieldErr("unapplied_only", "INVALID_VALUE", "true or false"))
+		}
+		f.UnappliedOnly = b
+	}
+	if len(errs) > 0 {
+		return apperr.Invalid("the filter is invalid", errs...)
+	}
+	list, err := h.svc.CreditNotes(r.Context(), pid, f)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[CreditNote]{Data: list})
+}
+
+func (h *Handler) creditNote(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r, errCreditNotFound())
+	if err != nil {
+		return err
+	}
+	c, err := h.svc.GetCreditNote(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, c)
+}
+
+func (h *Handler) postCreditNote(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in CreditNoteInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	c, err := h.svc.PostCreditNote(r.Context(), pid, in, key)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, c)
+}
+
+func (h *Handler) applyCredit(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r, errCreditNotFound())
+	if err != nil {
+		return err
+	}
+	var in ApplyCreditInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	c, err := h.svc.ApplyCredit(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, c)
+}
+
+func (h *Handler) voidCreditNote(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r, errCreditNotFound())
+	if err != nil {
+		return err
+	}
+	var in VoidInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	c, err := h.svc.VoidCreditNote(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, c)
 }

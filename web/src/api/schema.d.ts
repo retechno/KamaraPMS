@@ -5183,6 +5183,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/payables/credit-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Credit notes of suppliers, newest first (payables.view) */
+        get: operations["listSupplierCreditNotes"];
+        put?: never;
+        /**
+         * Enter a credit note a supplier gave on a bill (payables.post)
+         * @description The `Idempotency-Key` header is required. Each line credits a line of the bill (`bill_line_no`), for an amount and the VAT on it that the bill line has left to credit (422 `EXCEEDS_BILL_LINE`); the account, the department and the VAT treatment are those of the bill line, frozen at the bill date. The journal is the mirror of the bill on the credit date (not before the bill date, not after the business date, in an open month): it debits ACCOUNTS PAYABLE and credits the expense (with the VAT when the treatment was EXPENSE) and input VAT (CREDITABLE and DEFERRED). It takes off the bill as much as the bill still owes (`applied`); the rest is a credit of the supplier (`unapplied`) that `apply` takes off other bills. The same supplier credit note is entered once (409 `DUPLICATE_CREDIT_NOTE`). 409 `BILL_ALREADY_VOIDED`. The department rule of the accounts applies (`DEPARTMENT_REQUIRED`). The VAT of a CREDITABLE line comes off the input VAT claimed on the return of the month of the credit date.
+         */
+        post: operations["postSupplierCreditNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/credit-notes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One credit note with its lines and the bills it was applied to (payables.view) */
+        get: operations["getSupplierCreditNote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/credit-notes/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take what is left of a credit note off open bills of the same supplier (payables.post)
+         * @description No journal: the credit note already reduced what is owed to the supplier. 409 `ALLOCATION_EXCEEDS_OUTSTANDING` (a bill owes less), `CREDIT_EXCEEDS_UNAPPLIED`, `CREDIT_NOTE_VOIDED`.
+         */
+        post: operations["applySupplierCreditNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payables/credit-notes/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a credit note (payables.post, needs approval)
+         * @description The journal is reversed on the current business date and the bills it was applied to owe that much again; a credit note can always be voided, it only makes more owed. The VAT it took back is given back on the return of the month, when a return had claimed it. 409 `CREDIT_NOTE_ALREADY_VOIDED`.
+         */
+        post: operations["voidSupplierCreditNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/payables/payments": {
         parameters: {
             query?: never;
@@ -10637,8 +10726,10 @@ export interface components {
             bank_details?: string;
             notes?: string;
             is_active: boolean;
-            /** @description What is owed to the supplier now (bills not voided less payments not voided). */
+            /** @description What is owed to the supplier now: the bills not voided less the payments and the credit notes not voided (negative when the supplier owes the hotel a credit). */
             outstanding: string;
+            /** @description The part of the credit notes that no bill has taken off yet. */
+            unapplied_credit: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -10716,6 +10807,9 @@ export interface components {
             description?: string;
             total: string;
             paid: string;
+            /** @description What credit notes of the supplier took off the bill. */
+            credited: string;
+            /** @description The total less what was paid and what was credited. */
             outstanding: string;
             /** @enum {string} */
             status: "POSTED" | "VOIDED";
@@ -10733,6 +10827,102 @@ export interface components {
             created_at: string;
             /** @description Only when one bill is read or created. */
             lines?: components["schemas"]["BillLine"][];
+        };
+        SupplierCreditLine: {
+            line_no: number;
+            /** @description The line of the bill it credits. */
+            bill_line_no: number;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            description?: string;
+            amount: string;
+            vat_amount: string;
+            /**
+             * @description That of the bill line.
+             * @enum {string}
+             */
+            vat_treatment?: "CREDITABLE" | "EXPENSE" | "DEFERRED";
+            /** Format: int64 */
+            department_id: number | null;
+            department_code?: string;
+            department_name?: string;
+        };
+        SupplierCreditAllocation: {
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            supplier_invoice_number: string;
+            amount: string;
+            /** Format: date */
+            applied_on: string;
+        };
+        SupplierCreditNote: {
+            /** Format: int64 */
+            id: number;
+            credit_number: string;
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_code: string;
+            supplier_name: string;
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            /** @description The number on the supplier's invoice of the bill. */
+            supplier_invoice_number: string;
+            /** @description The number on the supplier's credit note. */
+            supplier_credit_number: string;
+            /** Format: date */
+            credit_date: string;
+            reason: string;
+            total: string;
+            /** @description What has been taken off bills. */
+            applied: string;
+            /** @description What is left that no bill has taken off (zero when voided). */
+            unapplied: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            void_journal_id: number | null;
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only when one credit note is read or created. */
+            lines?: components["schemas"]["SupplierCreditLine"][];
+            /** @description Only when one credit note is read or created. */
+            allocations?: components["schemas"]["SupplierCreditAllocation"][];
+        };
+        SupplierCreditNoteList: {
+            data: components["schemas"]["SupplierCreditNote"][];
+        };
+        PostSupplierCreditNoteRequest: {
+            /** Format: int64 */
+            bill_id: number;
+            supplier_credit_number: string;
+            /** Format: date */
+            credit_date: string;
+            reason: string;
+            lines: {
+                bill_line_no: number;
+                /** @description What is credited of the line, up to what it has left; zero when only VAT is credited. */
+                amount?: string;
+                /** @description The VAT credited, up to what the bill line has left; zero when none. */
+                vat_amount?: string;
+                description?: string;
+            }[];
+        };
+        ApplySupplierCreditRequest: {
+            allocations: {
+                /** Format: int64 */
+                bill_id: number;
+                amount: string;
+            }[];
         };
         BillList: {
             data: components["schemas"]["Bill"][];
@@ -10856,8 +11046,23 @@ export interface components {
             supplier_code: string;
             supplier_name: string;
             buckets: components["schemas"]["AgingBucket"];
+            /** @description The open bills. */
             total: string;
+            /** @description What credit notes the supplier gave that no bill has taken off. */
+            unapplied_credit: string;
+            /** @description The total less the unapplied credit. */
+            net: string;
             bills: components["schemas"]["AgingBill"][];
+            credits: components["schemas"]["AgingCredit"][];
+        };
+        AgingCredit: {
+            /** Format: int64 */
+            credit_id: number;
+            credit_number: string;
+            supplier_credit_number: string;
+            /** Format: date */
+            credit_date: string;
+            unapplied: string;
         };
         PayablesAging: {
             /** Format: date */
@@ -10865,6 +11070,9 @@ export interface components {
             suppliers: components["schemas"]["AgingSupplier"][];
             buckets: components["schemas"]["AgingBucket"];
             total: string;
+            unapplied_credit: string;
+            /** @description The total less the unapplied credit. */
+            net: string;
         };
         BankAccount: {
             /** Format: int64 */
@@ -11151,17 +11359,36 @@ export interface components {
             claims_input_vat?: boolean;
         };
         TaxFilingInputClaim: {
-            /** Format: int64 */
+            /**
+             * @description BILL: the VAT of a bill line. CREDIT_NOTE: the VAT a credit note of a supplier takes back (negative), or the positive reversal of it when the credit note was voided after it was claimed.
+             * @enum {string}
+             */
+            source: "BILL" | "CREDIT_NOTE";
+            /**
+             * Format: int64
+             * @description Zero for a credit note claim.
+             */
             bill_id: number;
             line_no: number;
+            /**
+             * Format: int64
+             * @description Zero for a bill claim.
+             */
+            credit_id: number;
+            credit_line_no: number;
+            /** @description The number of the bill, or of the credit note for a credit note claim. */
             bill_number: string;
+            /** @description The number on the supplier's invoice, or on the supplier's credit note. */
             supplier_invoice_number: string;
             supplier_name: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description The date of the bill or of the credit note.
+             */
             bill_date: string;
-            /** @description The VAT of the bill line; negative on a reversal. */
+            /** @description The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim. */
             amount: string;
-            /** @description The claim of a bill voided after it was claimed, taken back. */
+            /** @description The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back. */
             reversal: boolean;
         };
         TaxFilingOpeningCreditRequest: {
@@ -19757,6 +19984,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Bill"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listSupplierCreditNotes: {
+        parameters: {
+            query?: {
+                supplier_id?: number;
+                bill_id?: number;
+                status?: "POSTED" | "VOIDED";
+                from?: string;
+                to?: string;
+                /** @description Text in the credit note number, the supplier's credit note number or the supplier's name. */
+                q?: string;
+                /** @description Only credit notes with something left that no bill has taken off. */
+                unapplied_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCreditNoteList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postSupplierCreditNote: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostSupplierCreditNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The credit note with its lines and applications. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCreditNote"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getSupplierCreditNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCreditNote"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    applySupplierCreditNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplySupplierCreditRequest"];
+            };
+        };
+        responses: {
+            /** @description The credit note with its applications. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCreditNote"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidSupplierCreditNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCreditNote"];
                 };
             };
             401: components["responses"]["Problem"];

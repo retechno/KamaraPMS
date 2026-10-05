@@ -35,12 +35,14 @@ const payment = (id: number, number: string, over: Record<string, unknown> = {})
   status: 'POSTED', journal_id: 12, journal_number: 'JV000012', void_journal_id: null, voided_at: null, created_at: '2026-09-30T00:00:00Z', ...over,
 })
 
-function mountView(component: object, permissions = ['payables.view', 'payables.manage', 'payables.post', 'accounting.view'], query = '/') {
+function mountView(component: object, permissions = ['payables.view', 'payables.manage', 'payables.post', 'accounting.view'], query = '/', override?: (path: string) => unknown) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
   GET = vi.fn(async (path: string) => {
+    const overridden = override?.(path)
+    if (overridden !== undefined) return overridden
     if (path.endsWith('/open-bills')) return { data: { data: [{ bill_id: 1, bill_number: 'BILL000001', supplier_invoice_number: 'INV-1', bill_date: '2026-09-30', due_date: '2026-10-30', total: '1000000', outstanding: '600000' }, { bill_id: 3, bill_number: 'BILL000003', supplier_invoice_number: 'INV-3', bill_date: '2026-09-30', due_date: '2026-11-30', total: '500000', outstanding: '500000' }] } }
     if (path.endsWith('/suppliers')) return { data: { data: suppliers } }
     if (path.endsWith('/bills/{id}')) return { data: bill(1, 'BILL000001', { paid: '400000', lines: [{ line_no: 1, account_id: 5, account_code: '6510', account_name: 'Electricity', amount: '1000000' }] }) }
@@ -49,7 +51,7 @@ function mountView(component: object, permissions = ['payables.view', 'payables.
     if (path.endsWith('/payments')) return { data: { data: [payment(1, 'SPAY000001')] } }
     if (path.endsWith('/aging')) {
       const z = { CURRENT: '0', DAYS_1_30: '0', DAYS_31_60: '0', DAYS_61_90: '0', DAYS_OVER_90: '0' }
-      return { data: { as_of: '2026-10-02', total: '1500000', buckets: { ...z, CURRENT: '500000', DAYS_1_30: '1000000' }, suppliers: [{ supplier_id: 1, supplier_code: 'PLN', supplier_name: 'Supplier PLN', total: '1500000', buckets: { ...z, CURRENT: '500000', DAYS_1_30: '1000000' }, bills: [{ bill_id: 1, bill_number: 'BILL000001', supplier_invoice_number: 'INV-1', bill_date: '2026-09-30', due_date: '2026-09-30', days_overdue: 2, outstanding: '1000000' }] }] } }
+      return { data: { as_of: '2026-10-02', total: '1500000', unapplied_credit: '0', net: '1500000', buckets: { ...z, CURRENT: '500000', DAYS_1_30: '1000000' }, suppliers: [{ supplier_id: 1, supplier_code: 'PLN', supplier_name: 'Supplier PLN', total: '1500000', unapplied_credit: '0', net: '1500000', credits: [], buckets: { ...z, CURRENT: '500000', DAYS_1_30: '1000000' }, bills: [{ bill_id: 1, bill_number: 'BILL000001', supplier_invoice_number: 'INV-1', bill_date: '2026-09-30', due_date: '2026-09-30', days_overdue: 2, outstanding: '1000000' }] }] } }
     }
     return { data: { data: accounts } } // the chart
   })
@@ -241,6 +243,33 @@ describe('payables views', () => {
     await w.get('[data-testid=apply]').trigger('submit')
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-10-01' })
+  })
+
+  it('shows the credit of a supplier that no bill has taken off, in the aging, in the supplier list and on the bill', async () => {
+    const z = { CURRENT: '0', DAYS_1_30: '0', DAYS_31_60: '0', DAYS_61_90: '0', DAYS_OVER_90: '0' }
+    const aging = {
+      as_of: '2026-10-02', total: '1500000', unapplied_credit: '300000', net: '1200000', buckets: { ...z, CURRENT: '1500000' },
+      suppliers: [{ supplier_id: 1, supplier_code: 'PLN', supplier_name: 'Supplier PLN', total: '1500000', unapplied_credit: '300000', net: '1200000', buckets: { ...z, CURRENT: '1500000' },
+        bills: [{ bill_id: 1, bill_number: 'BILL000001', supplier_invoice_number: 'INV-1', bill_date: '2026-09-30', due_date: '2026-10-30', days_overdue: 0, outstanding: '1500000' }],
+        credits: [{ credit_id: 8, credit_number: 'SCN000001', supplier_credit_number: 'CR-77', credit_date: '2026-10-01', unapplied: '300000' }] }],
+    }
+    const w = await mountView(AgingView, undefined, '/', (p) => (p.endsWith('/aging') ? { data: aging } : undefined))
+    await flushPromises()
+    expect(w.get('[data-testid=credit-PLN]').text()).toContain('-300,000')
+    expect(w.get('[data-testid=net]').text()).toContain('1,200,000')
+    await w.get('[data-testid=supplier-PLN]').trigger('click')
+    expect(w.get('[data-testid=credits-PLN]').text()).toContain('SCN000001')
+
+    const list = await mountView(SuppliersView, undefined, '/', (p) => (p.endsWith('/suppliers') ? { data: { data: [supplier(1, 'PLN', { outstanding: '1200000', unapplied_credit: '300000' })] } } : undefined))
+    await flushPromises()
+    expect(list.get('[data-testid=unapplied-PLN]').text()).toContain('300,000')
+
+    const bills = await mountView(BillsView, undefined, '/', (p) => (p.endsWith('/bills/{id}') ? { data: bill(1, 'BILL000001', { paid: '400000', credited: '100000', lines: [] }) } : undefined))
+    await flushPromises()
+    await bills.get('[data-testid=bill-BILL000001]').trigger('click')
+    await flushPromises()
+    expect(bills.get('[data-testid=credited]').text()).toContain('100,000')
+    expect(bills.get('[data-testid=credit-note]').attributes('href')).toBe('/payables/credit-notes?bill=1')
   })
 
   it('shows only what the role may do', async () => {

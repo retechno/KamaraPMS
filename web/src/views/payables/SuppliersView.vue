@@ -205,6 +205,7 @@ watch(() => pid.value, () => {
           <DataTable :columns="columns" :rows="visible" row-key="id" :row-test-id="(s) => `supplier-${s.code}`" :row-class="(s) => (s.is_active ? undefined : 'text-muted-foreground')" :caption="t('payables.sTitle')" data-testid="suppliers">
             <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
             <template #cell-name="{ row }">{{ row.name }}<small v-if="!row.is_active" class="text-muted-foreground"> · {{ t('payables.inactiveNote') }}</small></template>
+            <template #cell-outstanding="{ row }"><span class="tabular-nums">{{ $money(row.outstanding) }}</span><small v-if="Number(row.unapplied_credit) > 0" class="block text-muted-foreground" :data-testid="`unapplied-${row.code}`">{{ t('supplierCredits.unappliedCredit') }}: {{ $money(row.unapplied_credit) }}</small></template>
             <template #cell-terms="{ row }">{{ t('payables.days', { n: row.payment_terms_days }) }}</template>
             <template #cell-account="{ row }">{{ row.default_account_code ? `${row.default_account_code} - ${row.default_account_name}` : '—' }}</template>
             <template #cell-actions="{ row }">

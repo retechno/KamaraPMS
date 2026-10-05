@@ -50,7 +50,7 @@ func (s *Service) Aging(ctx context.Context, propertyID int64, asOf *civil.Date)
 		if !ok {
 			i = len(out.Suppliers)
 			idx[r.SupplierID] = i
-			out.Suppliers = append(out.Suppliers, AgingSupplier{SupplierID: r.SupplierID, SupplierCode: r.SupplierCode, SupplierName: r.SupplierName, Buckets: zero(), Bills: []AgingBill{}})
+			out.Suppliers = append(out.Suppliers, AgingSupplier{SupplierID: r.SupplierID, SupplierCode: r.SupplierCode, SupplierName: r.SupplierName, Buckets: zero(), Bills: []AgingBill{}, Credits: []AgingCredit{}})
 		}
 		over := r.DueDate.DaysUntil(at)
 		b := bucketOf(over)
@@ -63,6 +63,9 @@ func (s *Service) Aging(ctx context.Context, propertyID int64, asOf *civil.Date)
 			over = 0
 		}
 		sup.Bills = append(sup.Bills, AgingBill{BillID: r.ID, BillNumber: r.BillNumber, SupplierInvoiceNumber: r.SupplierInvoiceNumber, BillDate: r.BillDate, DueDate: r.DueDate, DaysOverdue: over, Outstanding: r.Outstanding})
+	}
+	if err := s.agingCredits(ctx, p.TenantID, propertyID, at, &out); err != nil {
+		return Aging{}, err
 	}
 	return out, nil
 }

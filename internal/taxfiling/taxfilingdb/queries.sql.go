@@ -143,6 +143,63 @@ func (q *Queries) ClaimableBillLines(ctx context.Context, arg ClaimableBillLines
 	return items, nil
 }
 
+const claimableCreditLines = `-- name: ClaimableCreditLines :many
+SELECT l.credit_id, l.line_no, c.credit_number, c.supplier_credit_number, s.name AS supplier_name, c.credit_date, l.vat_amount
+FROM supplier_credit_note_lines l
+JOIN supplier_credit_notes c ON c.property_id = l.property_id AND c.id = l.credit_id
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.vat_treatment = 'CREDITABLE' AND l.vat_amount > 0
+  AND c.status = 'POSTED' AND c.credit_date <= $3::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = l.property_id AND x.credit_id = l.credit_id AND x.credit_line_no = l.line_no
+                   AND x.released_at IS NULL AND x.reverses_claim_id IS NULL)
+ORDER BY c.credit_date, c.id, l.line_no
+`
+
+type ClaimableCreditLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	ToDate     civil.Date
+}
+
+type ClaimableCreditLinesRow struct {
+	CreditID             int64
+	LineNo               int32
+	CreditNumber         string
+	SupplierCreditNumber string
+	SupplierName         string
+	CreditDate           civil.Date
+	VatAmount            decimal.Decimal
+}
+
+// Lines of credit notes of suppliers whose VAT was creditable, not voided, dated up to the end of the month, and not claimed by a live return yet: they take input VAT back.
+func (q *Queries) ClaimableCreditLines(ctx context.Context, arg ClaimableCreditLinesParams) ([]ClaimableCreditLinesRow, error) {
+	rows, err := q.db.Query(ctx, claimableCreditLines, arg.TenantID, arg.PropertyID, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimableCreditLinesRow{}
+	for rows.Next() {
+		var i ClaimableCreditLinesRow
+		if err := rows.Scan(
+			&i.CreditID,
+			&i.LineNo,
+			&i.CreditNumber,
+			&i.SupplierCreditNumber,
+			&i.SupplierName,
+			&i.CreditDate,
+			&i.VatAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const collectedBetween = `-- name: CollectedBetween :one
 SELECT COALESCE(sum(k.amount), 0)::numeric AS tax
 FROM folio_item_components k
@@ -593,16 +650,18 @@ func (q *Queries) GLCollected(ctx context.Context, arg GLCollectedParams) (decim
 }
 
 const insertClaim = `-- name: InsertClaim :exec
-INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, amount, reverses_claim_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, credit_id, credit_line_no, amount, reverses_claim_id)
+VALUES ($1, $2, $3, $4, $5::bigint, $6, $7::bigint, $8, $9)
 `
 
 type InsertClaimParams struct {
 	TenantID        int64
 	PropertyID      int64
 	ReturnID        int64
-	BillID          int64
-	LineNo          int32
+	BillID          *int64
+	LineNo          *int64
+	CreditID        *int64
+	CreditLineNo    *int64
 	Amount          decimal.Decimal
 	ReversesClaimID *int64
 }
@@ -614,6 +673,8 @@ func (q *Queries) InsertClaim(ctx context.Context, arg InsertClaimParams) error 
 		arg.ReturnID,
 		arg.BillID,
 		arg.LineNo,
+		arg.CreditID,
+		arg.CreditLineNo,
 		arg.Amount,
 		arg.ReversesClaimID,
 	)
@@ -951,12 +1012,17 @@ func (q *Queries) ListProfiles(ctx context.Context, arg ListProfilesParams) ([]L
 }
 
 const listReturnClaims = `-- name: ListReturnClaims :many
-SELECT c.id, c.bill_id, c.line_no, c.amount, c.reverses_claim_id, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+SELECT c.id, COALESCE(c.bill_id, 0)::bigint AS bill_id, COALESCE(c.line_no, 0)::bigint AS line_no, COALESCE(c.credit_id, 0)::bigint AS credit_id, COALESCE(c.credit_line_no, 0)::bigint AS credit_line_no,
+       c.amount, c.reverses_claim_id,
+       COALESCE(b.bill_number, cn.credit_number)::text AS document_number, COALESCE(b.supplier_invoice_number, cn.supplier_credit_number)::text AS supplier_document_number,
+       COALESCE(bs.name, cs.name)::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date)::date AS document_date
 FROM tax_return_input_claims c
-JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
-JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+LEFT JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+LEFT JOIN suppliers bs ON bs.property_id = b.property_id AND bs.id = b.supplier_id
+LEFT JOIN supplier_credit_notes cn ON cn.property_id = c.property_id AND cn.id = c.credit_id
+LEFT JOIN suppliers cs ON cs.property_id = cn.property_id AND cs.id = cn.supplier_id
 WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.return_id = $3
-ORDER BY b.bill_date, b.id, c.line_no, c.id
+ORDER BY COALESCE(b.bill_date, cn.credit_date), (c.credit_id IS NOT NULL), COALESCE(b.id, cn.id), COALESCE(c.line_no, c.credit_line_no), c.id
 `
 
 type ListReturnClaimsParams struct {
@@ -966,17 +1032,20 @@ type ListReturnClaimsParams struct {
 }
 
 type ListReturnClaimsRow struct {
-	ID                    int64
-	BillID                int64
-	LineNo                int32
-	Amount                decimal.Decimal
-	ReversesClaimID       *int64
-	BillNumber            string
-	SupplierInvoiceNumber string
-	SupplierName          string
-	BillDate              civil.Date
+	ID                     int64
+	BillID                 int64
+	LineNo                 int64
+	CreditID               int64
+	CreditLineNo           int64
+	Amount                 decimal.Decimal
+	ReversesClaimID        *int64
+	DocumentNumber         string
+	SupplierDocumentNumber string
+	SupplierName           string
+	DocumentDate           civil.Date
 }
 
+// A claim is of a bill line or of a credit note line (a negative one, or the positive reversal of it).
 func (q *Queries) ListReturnClaims(ctx context.Context, arg ListReturnClaimsParams) ([]ListReturnClaimsRow, error) {
 	rows, err := q.db.Query(ctx, listReturnClaims, arg.TenantID, arg.PropertyID, arg.ReturnID)
 	if err != nil {
@@ -990,12 +1059,14 @@ func (q *Queries) ListReturnClaims(ctx context.Context, arg ListReturnClaimsPara
 			&i.ID,
 			&i.BillID,
 			&i.LineNo,
+			&i.CreditID,
+			&i.CreditLineNo,
 			&i.Amount,
 			&i.ReversesClaimID,
-			&i.BillNumber,
-			&i.SupplierInvoiceNumber,
+			&i.DocumentNumber,
+			&i.SupplierDocumentNumber,
 			&i.SupplierName,
-			&i.BillDate,
+			&i.DocumentDate,
 		); err != nil {
 			return nil, err
 		}
@@ -1520,13 +1591,13 @@ func (q *Queries) ReturnOfPayment(ctx context.Context, arg ReturnOfPaymentParams
 }
 
 const reversibleClaims = `-- name: ReversibleClaims :many
-SELECT c.id, c.bill_id, c.line_no, c.amount, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
+SELECT c.id, c.bill_id::bigint AS bill_id, c.line_no::bigint AS line_no, c.amount, b.bill_number, b.supplier_invoice_number, s.name AS supplier_name, b.bill_date
 FROM tax_return_input_claims c
 JOIN tax_returns r ON r.property_id = c.property_id AND r.id = c.return_id
 JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
 JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
 JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id
-WHERE c.tenant_id = $1 AND c.property_id = $2 AND r.tax_id = $3 AND c.released_at IS NULL AND c.reverses_claim_id IS NULL
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND r.tax_id = $3 AND c.released_at IS NULL AND c.reverses_claim_id IS NULL AND c.credit_id IS NULL
   AND b.status = 'VOIDED' AND vj.journal_date <= $4::date
   AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = c.property_id AND x.reverses_claim_id = c.id AND x.released_at IS NULL)
 ORDER BY b.bill_date, b.id, c.line_no
@@ -1542,7 +1613,7 @@ type ReversibleClaimsParams struct {
 type ReversibleClaimsRow struct {
 	ID                    int64
 	BillID                int64
-	LineNo                int32
+	LineNo                int64
 	Amount                decimal.Decimal
 	BillNumber            string
 	SupplierInvoiceNumber string
@@ -1574,6 +1645,72 @@ func (q *Queries) ReversibleClaims(ctx context.Context, arg ReversibleClaimsPara
 			&i.SupplierInvoiceNumber,
 			&i.SupplierName,
 			&i.BillDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reversibleCreditClaims = `-- name: ReversibleCreditClaims :many
+SELECT x.id, x.credit_id::bigint AS credit_id, x.credit_line_no::bigint AS credit_line_no, x.amount, c.credit_number, c.supplier_credit_number, s.name AS supplier_name, c.credit_date
+FROM tax_return_input_claims x
+JOIN tax_returns r ON r.property_id = x.property_id AND r.id = x.return_id
+JOIN supplier_credit_notes c ON c.property_id = x.property_id AND c.id = x.credit_id
+JOIN suppliers s ON s.property_id = c.property_id AND s.id = c.supplier_id
+JOIN gl_journals vj ON vj.property_id = c.property_id AND vj.id = c.void_journal_id
+WHERE x.tenant_id = $1 AND x.property_id = $2 AND r.tax_id = $3 AND x.released_at IS NULL AND x.reverses_claim_id IS NULL AND x.credit_id IS NOT NULL
+  AND c.status = 'VOIDED' AND vj.journal_date <= $4::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims y WHERE y.property_id = x.property_id AND y.reverses_claim_id = x.id AND y.released_at IS NULL)
+ORDER BY c.credit_date, c.id, x.credit_line_no
+`
+
+type ReversibleCreditClaimsParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+	ToDate     civil.Date
+}
+
+type ReversibleCreditClaimsRow struct {
+	ID                   int64
+	CreditID             int64
+	CreditLineNo         int64
+	Amount               decimal.Decimal
+	CreditNumber         string
+	SupplierCreditNumber string
+	SupplierName         string
+	CreditDate           civil.Date
+}
+
+// Live claims of credit note lines of this tax whose credit note was voided on or before the end of the month and that no live return reverses yet.
+func (q *Queries) ReversibleCreditClaims(ctx context.Context, arg ReversibleCreditClaimsParams) ([]ReversibleCreditClaimsRow, error) {
+	rows, err := q.db.Query(ctx, reversibleCreditClaims,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReversibleCreditClaimsRow{}
+	for rows.Next() {
+		var i ReversibleCreditClaimsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreditID,
+			&i.CreditLineNo,
+			&i.Amount,
+			&i.CreditNumber,
+			&i.SupplierCreditNumber,
+			&i.SupplierName,
+			&i.CreditDate,
 		); err != nil {
 			return nil, err
 		}

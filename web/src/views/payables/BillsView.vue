@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Approval, Bill, GlAccount, Supplier } from '@/api/types'
@@ -341,9 +341,10 @@ watch(() => pid.value, () => {
                 </tbody>
               </table>
               <p class="mb-0 mt-2 text-sm text-muted-foreground" @click.stop>
-                {{ t('payables.journal', { number: opened.journal_number }) }} · {{ t('payables.paidInfo', { amount: $money(opened.paid) }) }}<template v-if="opened.void_reason"> · {{ t('payables.voidedReason', { reason: opened.void_reason }) }}</template>
+                {{ t('payables.journal', { number: opened.journal_number }) }} · {{ t('payables.paidInfo', { amount: $money(opened.paid) }) }}<template v-if="Number(opened.credited) > 0"> · <span data-testid="credited">{{ t('supplierCredits.credited', { amount: $money(opened.credited) }) }}</span></template><template v-if="opened.void_reason"> · {{ t('payables.voidedReason', { reason: opened.void_reason }) }}</template>
               </p>
               <div v-if="can('payables.post') && opened.status === 'POSTED' && row.id === opened.id" class="mt-2" @click.stop>
+                <RouterLink v-if="!voiding" class="mr-2 text-sm" :to="{ path: '/payables/credit-notes', query: { bill: String(opened.id) } }" data-testid="credit-note">{{ t('supplierCredits.creditNote') }}</RouterLink>
                 <Button v-if="!voiding" type="button" variant="outline" size="sm" data-testid="void" @click="voiding = { reason: '', asking: false }">{{ t('payables.voidEllipsis') }}</Button>
                 <form v-else class="flex flex-wrap items-end gap-3" novalidate @submit.prevent="voiding.asking = true">
                   <FormField class="w-80" :label="t('payables.reason')">

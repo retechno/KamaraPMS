@@ -22,7 +22,7 @@ accounts payable, bank reconciliation and monthly tax filing. What is missing, m
    the owner: does the hotel issue tax invoices (PKP), or only record input VAT and reconcile it?
 2. **Credit notes and write-offs.** An issued city ledger invoice can only be voided: add customer and supplier credit
    notes (journalled), write-off of bad debt with approval, and a list of overdue invoices for reminders (dunning,
-   interest). **Customer side done** (credit notes, write-offs, overdue list, reminders, interest shown); the supplier credit notes remain.
+   interest). **Customer side done** (credit notes, write-offs, overdue list, reminders, interest shown); the supplier credit notes are built too (`14-supplier-credit-notes.md`).
 3. **Cashier shifts and the cash drawer.** (**Built**, see README, including the shift handover and the Z and X reports.) Open and close a shift, opening float, drops and pay-ins, the counted cash,
    the over and short journalled, and the hand-over between shifts.
 4. **Budget and cash flow.** (**Built**, see README, both methods.) A budget per account and month, actual against budget by USALI department, and a cash

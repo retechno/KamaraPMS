@@ -256,6 +256,8 @@ const (
 	SeqSupplierBill SequenceType = "SUPPLIER_BILL"
 	// SeqSupplierPayment numbers the payments to suppliers.
 	SeqSupplierPayment SequenceType = "SUPPLIER_PAYMENT"
+	// SeqSupplierCredit numbers the credit notes of suppliers.
+	SeqSupplierCredit SequenceType = "SUPPLIER_CREDIT"
 	// SeqTaxReturn numbers the tax returns filed.
 	SeqTaxReturn SequenceType = "TAX_RETURN"
 	// SeqTaxPayment numbers the payments to the tax authority.
@@ -290,6 +292,7 @@ var defaultSequences = []struct {
 	{SeqJournal, "JV"},
 	{SeqSupplierBill, "BILL"},
 	{SeqSupplierPayment, "SPAY"},
+	{SeqSupplierCredit, "SCN"},
 	{SeqTaxReturn, "TXR"},
 	{SeqTaxPayment, "TXP"},
 	{SeqTaxInvoice, "TXI"},

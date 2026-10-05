@@ -19,18 +19,18 @@ import (
 func toBill(r payablesdb.ListBillsRow) Bill {
 	b := Bill{
 		ID: r.ID, Number: r.BillNumber, SupplierID: r.SupplierID, SupplierCode: r.SupplierCode, SupplierName: r.SupplierName, SupplierInvoiceNumber: r.SupplierInvoiceNumber,
-		BillDate: r.BillDate, DueDate: r.DueDate, Description: deref(r.Description), Total: r.Total, Paid: r.Paid, Status: r.Status, JournalID: r.JournalID,
+		BillDate: r.BillDate, DueDate: r.DueDate, Description: deref(r.Description), Total: r.Total, Paid: r.Paid, Credited: r.Credited, Status: r.Status, JournalID: r.JournalID,
 		JournalNumber: r.JournalNumber, VoidJournalID: r.VoidJournalID, VoidedAt: r.VoidedAt, VoidReason: deref(r.VoidReason), CreatedAt: r.CreatedAt,
 	}
 	switch r.Status {
 	case "VOIDED":
-		b.PaymentStatus, b.Paid = BillVoided, decimal.Zero
+		b.PaymentStatus, b.Paid, b.Credited = BillVoided, decimal.Zero, decimal.Zero
 	default:
-		b.Outstanding = r.Total.Sub(r.Paid)
+		b.Outstanding = r.Total.Sub(r.Paid).Sub(r.Credited)
 		switch {
 		case b.Outstanding.IsZero():
 			b.PaymentStatus = BillPaid
-		case r.Paid.IsPositive():
+		case r.Paid.IsPositive() || r.Credited.IsPositive():
 			b.PaymentStatus = BillPartial
 		default:
 			b.PaymentStatus = BillUnpaid
@@ -355,6 +355,13 @@ func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInp
 		}
 		if n > 0 {
 			return apperr.Conflict("BILL_HAS_PAYMENTS", "a bill with payments cannot be voided: void its payments first").WithContext("payments", n)
+		}
+		credits, err := q.CountLiveCreditsOfBill(ctx, payablesdb.CountLiveCreditsOfBillParams{TenantID: p.TenantID, PropertyID: propertyID, BillID: id})
+		if err != nil {
+			return err
+		}
+		if credits > 0 {
+			return apperr.Conflict("BILL_HAS_CREDIT_NOTES", "a bill with credit notes cannot be voided: void its credit notes first").WithContext("credit_notes", credits)
 		}
 		by := approval.UserID()
 		rj, err := po.Reverse(ctx, b.JournalID, day.BusinessDate, reason, by)

@@ -39,11 +39,21 @@ func offsetOf(tax, input, broughtForward decimal.Decimal) VATOffset {
 	return VATOffset{InputClaimed: input, CreditBroughtForward: broughtForward, Offset: off, Payable: tax.Sub(off), CreditCarriedForward: available.Sub(off)}
 }
 
+// Sources of an input claim.
+const (
+	ClaimBill       = "BILL"
+	ClaimCreditNote = "CREDIT_NOTE"
+)
+
 // InputClaim is the VAT of a bill line claimed on a return, or (Reversal) the claim of a bill voided after it was claimed,
-// taken back with the sign changed.
+// taken back with the sign changed. A credit note of a supplier takes input VAT back the same way (Source CREDIT_NOTE, a negative amount; its reversal, when the credit note is voided, is positive):
+// then BillNumber, SupplierInvoiceNumber and BillDate are the number of the credit note, the number on the supplier's credit note and its date, and CreditID and CreditLineNo name the line.
 type InputClaim struct {
+	Source                string          `json:"source"`
 	BillID                int64           `json:"bill_id"`
 	LineNo                int             `json:"line_no"`
+	CreditID              int64           `json:"credit_id"`
+	CreditLineNo          int             `json:"credit_line_no"`
 	BillNumber            string          `json:"bill_number"`
 	SupplierInvoiceNumber string          `json:"supplier_invoice_number"`
 	SupplierName          string          `json:"supplier_name"`
@@ -84,14 +94,29 @@ func (s *Service) inputClaims(ctx context.Context, tenantID, propertyID int64, p
 		return nil, err
 	}
 	for _, l := range lines {
-		out = append(out, InputClaim{BillID: l.BillID, LineNo: int(l.LineNo), BillNumber: l.BillNumber, SupplierInvoiceNumber: l.SupplierInvoiceNumber, SupplierName: l.SupplierName, BillDate: l.BillDate, Amount: l.VatAmount})
+		out = append(out, InputClaim{Source: ClaimBill, BillID: l.BillID, LineNo: int(l.LineNo), BillNumber: l.BillNumber, SupplierInvoiceNumber: l.SupplierInvoiceNumber, SupplierName: l.SupplierName, BillDate: l.BillDate, Amount: l.VatAmount})
+	}
+	credits, err := q.ClaimableCreditLines(ctx, taxfilingdb.ClaimableCreditLinesParams{TenantID: tenantID, PropertyID: propertyID, ToDate: end})
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range credits {
+		out = append(out, InputClaim{Source: ClaimCreditNote, CreditID: l.CreditID, CreditLineNo: int(l.LineNo), BillNumber: l.CreditNumber, SupplierInvoiceNumber: l.SupplierCreditNumber, SupplierName: l.SupplierName, BillDate: l.CreditDate, Amount: l.VatAmount.Neg()})
 	}
 	revs, err := q.ReversibleClaims(ctx, taxfilingdb.ReversibleClaimsParams{TenantID: tenantID, PropertyID: propertyID, TaxID: prof.TaxID, ToDate: end})
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range revs {
-		out = append(out, InputClaim{BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.BillNumber, SupplierInvoiceNumber: r.SupplierInvoiceNumber, SupplierName: r.SupplierName, BillDate: r.BillDate,
+		out = append(out, InputClaim{Source: ClaimBill, BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.BillNumber, SupplierInvoiceNumber: r.SupplierInvoiceNumber, SupplierName: r.SupplierName, BillDate: r.BillDate,
+			Amount: r.Amount.Neg(), Reversal: true, reversesID: r.ID})
+	}
+	creditRevs, err := q.ReversibleCreditClaims(ctx, taxfilingdb.ReversibleCreditClaimsParams{TenantID: tenantID, PropertyID: propertyID, TaxID: prof.TaxID, ToDate: end})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range creditRevs {
+		out = append(out, InputClaim{Source: ClaimCreditNote, CreditID: r.CreditID, CreditLineNo: int(r.CreditLineNo), BillNumber: r.CreditNumber, SupplierInvoiceNumber: r.SupplierCreditNumber, SupplierName: r.SupplierName, BillDate: r.CreditDate,
 			Amount: r.Amount.Neg(), Reversal: true, reversesID: r.ID})
 	}
 	return out, nil
@@ -104,8 +129,12 @@ func (s *Service) loadClaims(ctx context.Context, tenantID, propertyID, returnID
 	}
 	out := make([]InputClaim, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, InputClaim{BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.BillNumber, SupplierInvoiceNumber: r.SupplierInvoiceNumber, SupplierName: r.SupplierName, BillDate: r.BillDate,
-			Amount: r.Amount, Reversal: r.ReversesClaimID != nil})
+		c := InputClaim{Source: ClaimBill, BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.DocumentNumber, SupplierInvoiceNumber: r.SupplierDocumentNumber, SupplierName: r.SupplierName, BillDate: r.DocumentDate,
+			Amount: r.Amount, Reversal: r.ReversesClaimID != nil}
+		if r.CreditID != 0 {
+			c.Source, c.BillID, c.LineNo, c.CreditID, c.CreditLineNo = ClaimCreditNote, 0, 0, r.CreditID, int(r.CreditLineNo)
+		}
+		out = append(out, c)
 	}
 	return out, nil
 }

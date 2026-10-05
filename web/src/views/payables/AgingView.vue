@@ -87,7 +87,7 @@ watch(() => pid.value, () => {
         >
           <template #cell-supplier="{ row }">{{ row.supplier_code }} · {{ row.supplier_name }}</template>
           <template v-for="k in BUCKETS" :key="k" #[`cell-${k}`]="{ row }">{{ money(row.buckets[k]) }}</template>
-          <template #cell-total="{ row }"><b>{{ $money(row.total) }}</b></template>
+          <template #cell-total="{ row }"><b>{{ $money(row.total) }}</b><small v-if="Number(row.unapplied_credit) > 0" class="block text-muted-foreground" :data-testid="`credit-${row.supplier_code}`">{{ t('supplierCredits.unappliedCredit') }}: -{{ $money(row.unapplied_credit) }}</small></template>
           <template #detail="{ row }">
             <table class="w-full border-collapse text-sm">
               <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">{{ t('payables.bill') }}</th><th class="px-3 font-medium">{{ t('payables.invoice') }}</th><th class="px-3 font-medium">{{ t('payables.billDateCol') }}</th><th class="px-3 font-medium">{{ t('payables.due') }}</th><th class="px-3 text-right font-medium">{{ t('payables.daysLate') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.owed') }}</th></tr></thead>
@@ -98,6 +98,9 @@ watch(() => pid.value, () => {
                 </tr>
               </tbody>
             </table>
+            <ul v-if="row.credits.length" class="mt-2 list-none p-0 text-sm" :data-testid="`credits-${row.supplier_code}`">
+              <li v-for="c in row.credits" :key="c.credit_id">{{ t('supplierCredits.credits') }} {{ c.credit_number }} · {{ c.supplier_credit_number }} · {{ $date(c.credit_date) }}: -{{ $money(c.unapplied) }}</li>
+            </ul>
           </template>
           <template #footer>
             <div class="mt-2 grid grid-cols-[1fr_repeat(6,minmax(5rem,auto))] gap-x-3 border-t border-border px-3 pt-3 text-sm font-semibold" data-testid="totals">
@@ -105,6 +108,7 @@ watch(() => pid.value, () => {
               <span v-for="k in BUCKETS" :key="k" class="text-right tabular-nums">{{ money(report.buckets[k]) }}</span>
               <span class="text-right tabular-nums">{{ $money(report.total) }}</span>
             </div>
+            <p v-if="Number(report.unapplied_credit) > 0" class="mb-0 mt-2 px-3 text-right text-sm text-muted-foreground" data-testid="net">{{ t('supplierCredits.unappliedCredit') }}: -{{ $money(report.unapplied_credit) }} · {{ t('supplierCredits.net') }}: {{ $money(report.net) }}</p>
           </template>
         </DataTable>
       </CardContent>

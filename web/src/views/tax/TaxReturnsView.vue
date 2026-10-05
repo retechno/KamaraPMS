@@ -299,8 +299,8 @@ watch([() => pid.value, taxId], () => {
                 <table v-if="(filed?.input ?? worksheet.input).length" class="mt-2 w-full max-w-xl border-collapse text-sm" data-testid="input-claims">
                   <caption class="pb-1 text-left text-xs text-muted-foreground">{{ t('taxReturns.inputClaims') }}</caption>
                   <tbody>
-                    <tr v-for="c in (filed?.input ?? worksheet.input)" :key="`${c.bill_id}-${c.line_no}-${c.reversal}`" class="border-b border-border">
-                      <td class="py-1 pr-3">{{ c.bill_number }} · {{ c.supplier_name }}<small class="text-muted-foreground"> · {{ c.supplier_invoice_number }} · {{ $date(c.bill_date) }}</small><small v-if="c.reversal" class="text-destructive"> · {{ t('taxReturns.takenBack') }}</small></td>
+                    <tr v-for="c in (filed?.input ?? worksheet.input)" :key="`${c.source}-${c.bill_id}-${c.line_no}-${c.credit_id}-${c.credit_line_no}-${c.reversal}`" class="border-b border-border">
+                      <td class="py-1 pr-3">{{ c.bill_number }} · {{ c.supplier_name }}<small class="text-muted-foreground"> · {{ c.supplier_invoice_number }} · {{ $date(c.bill_date) }}</small><small v-if="c.source === 'CREDIT_NOTE'" class="text-muted-foreground"> · {{ t(c.reversal ? 'taxReturns.creditNoteGivenBack' : 'taxReturns.creditNoteClaim') }}</small><small v-else-if="c.reversal" class="text-destructive"> · {{ t('taxReturns.takenBack') }}</small></td>
                       <td class="pl-3 text-right tabular-nums">{{ $money(c.amount) }}</td>
                     </tr>
                   </tbody>

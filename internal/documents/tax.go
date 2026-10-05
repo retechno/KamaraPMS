@@ -39,7 +39,12 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 	if len(input) > 0 || !off.CreditBroughtForward.IsZero() || !off.CreditCarriedForward.IsZero() {
 		for _, c := range input {
 			label := "Input VAT: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
-			if c.Reversal {
+			switch {
+			case c.Source == taxfiling.ClaimCreditNote && c.Reversal:
+				label = "Input VAT of a credit note given back: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
+			case c.Source == taxfiling.ClaimCreditNote:
+				label = "Input VAT taken back by a credit note: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
+			case c.Reversal:
 				label = "Input VAT taken back: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
 			}
 			notes = append(notes, label+" "+m(c.Amount))
