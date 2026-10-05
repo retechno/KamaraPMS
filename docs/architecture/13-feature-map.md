@@ -72,7 +72,7 @@ Each row: what it is, migration, backend, API, screens, design, commit (`git sho
 | 19 | Departments on system journals: bank adjustment, card fee, credit note line, write-off, pay-in and pay-out, tax penalty | none | `bankrec`, `cityledger`, `shifts`, `taxfiling` | those requests take `department_id` | their forms | README: Departments on system journals | `6917afc` |
 | 20 | Department on the cash over and short line of a shift close | none | `shifts` | cashier shifts close | `billing/` CashierShift | same | `b644829` |
 | 21 | Department rule of an account: NONE, OPTIONAL, REQUIRED, default department, one gate for every journal, setup check | 00054 | `accounting` (`deptrule.go`, `deptsetup.go`), `folios`, `billingconfig`, `departments`, and the posting modules | accounts, accounting/department-setup | `accounting/` ChartOfAccounts, Departments | 12 (step 5) | `098022b` |
-| 22 | Shift handover (cashiers, handovers) and the Z and X report of a shift (JSON and PDF), other tenders on the report | none | `shifts` (`handover.go`), `documents` (`shiftreport.go`) | cashier/cashiers, cashier/handovers, cashier/shifts/{id}/report(.pdf) | `billing/` CashierShift | README: Shift handover; 11 | `218c69a` |
+| 22 | Shift handover (cashiers, handovers) and the Z and X report of a shift (JSON and PDF), other tenders on the report | none | `shifts` (`handover.go`), `documents` (`shiftreport.go`) | cashier/cashiers, cashier/handovers, cashier/shifts/{id}/report(.pdf) | `billing/` CashierShift | README: Shift handover; 11 | `ac36014` |
 
 ## 4. Cross-cutting rules, and the place each one lives
 
