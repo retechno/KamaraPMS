@@ -109,8 +109,8 @@ func (q *Queries) CountOpenStaysAffectedByTax(ctx context.Context, arg CountOpen
 
 const createChargeCode = `-- name: CreateChargeCode :one
 
-INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, is_system, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $10)
+INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, department_id, is_system, is_active, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10, $11, $11)
 RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id
 `
 
@@ -123,6 +123,7 @@ type CreateChargeCodeParams struct {
 	PriceMode        string
 	DefaultUnitPrice *decimal.Decimal
 	GlAccountCode    *string
+	DepartmentID     *int64
 	IsActive         bool
 	ActorID          *int64
 }
@@ -138,6 +139,7 @@ func (q *Queries) CreateChargeCode(ctx context.Context, arg CreateChargeCodePara
 		arg.PriceMode,
 		arg.DefaultUnitPrice,
 		arg.GlAccountCode,
+		arg.DepartmentID,
 		arg.IsActive,
 		arg.ActorID,
 	)
@@ -875,8 +877,8 @@ func (q *Queries) SeedChargeCodes(ctx context.Context, arg SeedChargeCodesParams
 const updateChargeCode = `-- name: UpdateChargeCode :one
 UPDATE charge_codes SET
     name = $1, charge_type = $2, price_mode = $3,
-    default_unit_price = $4, gl_account_code = $5, is_active = $6, updated_by = $7
-WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+    default_unit_price = $4, gl_account_code = $5, department_id = $6, is_active = $7, updated_by = $8
+WHERE tenant_id = $9 AND property_id = $10 AND id = $11
 RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id
 `
 
@@ -886,6 +888,7 @@ type UpdateChargeCodeParams struct {
 	PriceMode        string
 	DefaultUnitPrice *decimal.Decimal
 	GlAccountCode    *string
+	DepartmentID     *int64
 	IsActive         bool
 	ActorID          *int64
 	TenantID         int64
@@ -900,6 +903,7 @@ func (q *Queries) UpdateChargeCode(ctx context.Context, arg UpdateChargeCodePara
 		arg.PriceMode,
 		arg.DefaultUnitPrice,
 		arg.GlAccountCode,
+		arg.DepartmentID,
 		arg.IsActive,
 		arg.ActorID,
 		arg.TenantID,

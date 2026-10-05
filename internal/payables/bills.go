@@ -87,7 +87,8 @@ func (s *Service) loadBill(ctx context.Context, tenantID, propertyID, id int64) 
 	}
 	b.Lines = make([]BillLine, 0, len(lines))
 	for _, l := range lines {
-		b.Lines = append(b.Lines, BillLine{LineNo: l.LineNo, AccountID: l.AccountID, AccountCode: l.AccountCode, AccountName: l.AccountName, Description: deref(l.Description), Amount: l.Amount, VATAmount: l.VatAmount, VATTreatment: deref(l.VatTreatment)})
+		b.Lines = append(b.Lines, BillLine{LineNo: l.LineNo, AccountID: l.AccountID, AccountCode: l.AccountCode, AccountName: l.AccountName, Description: deref(l.Description), Amount: l.Amount, VATAmount: l.VatAmount, VATTreatment: deref(l.VatTreatment),
+			DepartmentID: l.DepartmentID, DepartmentCode: deref(l.DepartmentCode), DepartmentName: deref(l.DepartmentName)})
 	}
 	return b, nil
 }
@@ -241,6 +242,16 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 				return err
 			}
 		}
+		for i, l := range in.Lines {
+			if err := po.CheckDepartment(ctx, l.DepartmentID, fmt.Sprintf("lines[%d].department_id", i)); err != nil {
+				var ae *apperr.Error
+				if asApp(err, &ae) && len(ae.Fields) > 0 {
+					lineErrs = append(lineErrs, ae.Fields...)
+					continue
+				}
+				return err
+			}
+		}
 		if len(lineErrs) > 0 {
 			return apperr.Invalid("the bill is invalid", lineErrs...)
 		}
@@ -259,7 +270,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			if treatment == taxfiling.InputVATExpense {
 				cost = cost.Add(l.VATAmount) // the VAT is part of what the purchase cost
 			}
-			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: cost, Description: d, SourceType: "AP_BILL", SourceRef: number})
+			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: cost, Description: d, SourceType: "AP_BILL", SourceRef: number, DepartmentID: l.DepartmentID})
 			if l.VATAmount.IsPositive() && treatment != taxfiling.InputVATExpense {
 				jl = append(jl, accounting.SystemLine{AccountID: inputVAT, Debit: l.VATAmount, Description: "VAT " + d, SourceType: "AP_BILL", SourceRef: number})
 			}
@@ -283,7 +294,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			}
 			if err := q.InsertBillLine(ctx, payablesdb.InsertBillLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, BillID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Description: nullable(l.Description), Amount: l.Amount,
-				VatAmount: l.VATAmount, VatTreatment: lineTreatment,
+				VatAmount: l.VATAmount, VatTreatment: lineTreatment, DepartmentID: l.DepartmentID,
 			}); err != nil {
 				return err
 			}

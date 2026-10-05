@@ -235,19 +235,21 @@ type ServiceRule struct {
 
 // ChargeCode is what is charged, with the rules that apply to it.
 type ChargeCode struct {
-	ID               int64         `json:"id"`
-	Code             string        `json:"code"`
-	Name             string        `json:"name"`
-	ChargeType       string        `json:"charge_type"`
-	PriceMode        string        `json:"price_mode"`
-	DefaultUnitPrice *string       `json:"default_unit_price,omitempty"`
-	GLAccountCode    *string       `json:"gl_account_code"` // revenue account of this charge (optional)
-	IsSystem         bool          `json:"is_system"`
-	IsActive         bool          `json:"is_active"`
-	Taxes            []TaxRule     `json:"taxes"`
-	ServiceCharges   []ServiceRule `json:"service_charges"`
-	CreatedAt        time.Time     `json:"created_at"`
-	UpdatedAt        time.Time     `json:"updated_at"`
+	ID               int64   `json:"id"`
+	Code             string  `json:"code"`
+	Name             string  `json:"name"`
+	ChargeType       string  `json:"charge_type"`
+	PriceMode        string  `json:"price_mode"`
+	DefaultUnitPrice *string `json:"default_unit_price,omitempty"`
+	GLAccountCode    *string `json:"gl_account_code"` // revenue account of this charge (optional)
+	// DepartmentID is the department or sub-department the revenue of this charge goes to by default: the department is copied onto each item posted (optional).
+	DepartmentID   *int64        `json:"department_id"`
+	IsSystem       bool          `json:"is_system"`
+	IsActive       bool          `json:"is_active"`
+	Taxes          []TaxRule     `json:"taxes"`
+	ServiceCharges []ServiceRule `json:"service_charges"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 // ChargeCodeInput is the editable part of a charge code.
@@ -258,6 +260,7 @@ type ChargeCodeInput struct {
 	PriceMode        string
 	DefaultUnitPrice string // "" = none
 	GLAccountCode    string // "" = none
+	DepartmentID     *int64 // nil = none
 	IsActive         bool
 }
 

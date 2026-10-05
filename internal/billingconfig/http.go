@@ -273,6 +273,7 @@ type createChargeCodeRequest struct {
 	PriceMode        string `json:"price_mode"`
 	DefaultUnitPrice string `json:"default_unit_price"`
 	GLAccount        string `json:"gl_account_code"`
+	DepartmentID     *int64 `json:"department_id"`
 	IsActive         *bool  `json:"is_active"`
 }
 
@@ -287,7 +288,7 @@ func (h *Handler) createChargeCode(w http.ResponseWriter, r *http.Request) error
 	}
 	c, err := h.svc.CreateChargeCode(r.Context(), pid, ChargeCodeInput{
 		Code: req.Code, Name: req.Name, ChargeType: req.ChargeType, PriceMode: req.PriceMode,
-		DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, IsActive: req.IsActive == nil || *req.IsActive,
+		DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, DepartmentID: req.DepartmentID, IsActive: req.IsActive == nil || *req.IsActive,
 	})
 	if err != nil {
 		return err
@@ -301,6 +302,7 @@ type patchChargeCodeRequest struct {
 	PriceMode        *string `json:"price_mode"`
 	DefaultUnitPrice *string `json:"default_unit_price"`
 	GLAccount        *string `json:"gl_account_code"`
+	DepartmentID     *int64  `json:"department_id"`
 	IsActive         *bool   `json:"is_active"`
 }
 
@@ -317,7 +319,7 @@ func (h *Handler) updateChargeCode(w http.ResponseWriter, r *http.Request) error
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	c, err := h.svc.UpdateChargeCode(r.Context(), pid, id, ChargeCodePatch{Name: req.Name, ChargeType: req.ChargeType, PriceMode: req.PriceMode, DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, IsActive: req.IsActive})
+	c, err := h.svc.UpdateChargeCode(r.Context(), pid, id, ChargeCodePatch{Name: req.Name, ChargeType: req.ChargeType, PriceMode: req.PriceMode, DefaultUnitPrice: req.DefaultUnitPrice, GLAccountCode: req.GLAccount, DepartmentID: req.DepartmentID, IsActive: req.IsActive})
 	if err != nil {
 		return err
 	}

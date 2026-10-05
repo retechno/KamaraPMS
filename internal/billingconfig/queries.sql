@@ -92,8 +92,8 @@ FOR SHARE;
 -- ---------------------------------------------------------------- charge codes
 
 -- name: CreateChargeCode :one
-INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, is_system, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, @charge_type, @price_mode, sqlc.narg(default_unit_price), sqlc.narg(gl_account_code), false, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, department_id, is_system, is_active, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, @charge_type, @price_mode, sqlc.narg(default_unit_price), sqlc.narg(gl_account_code), sqlc.narg(department_id), false, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetChargeCode :one
@@ -113,7 +113,7 @@ LIMIT @row_limit;
 -- name: UpdateChargeCode :one
 UPDATE charge_codes SET
     name = @name, charge_type = @charge_type, price_mode = @price_mode,
-    default_unit_price = sqlc.narg(default_unit_price), gl_account_code = sqlc.narg(gl_account_code), is_active = @is_active, updated_by = sqlc.narg(actor_id)
+    default_unit_price = sqlc.narg(default_unit_price), gl_account_code = sqlc.narg(gl_account_code), department_id = sqlc.narg(department_id), is_active = @is_active, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 

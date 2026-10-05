@@ -7731,6 +7731,7 @@ components:
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { $ref: "#/components/schemas/Amount" }
         gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: "Revenue account of this charge (optional). Copied onto the ledger when an item is posted." }
+        department_id: { type: [integer, "null"], format: int64, description: "The department or sub-department the revenue of this charge goes to by default. It is copied onto each item posted (a snapshot: changing it later does not move what was posted), and the day close posts the revenue to it." }
         is_system: { type: boolean }
         is_active: { type: boolean }
         taxes:
@@ -7762,6 +7763,7 @@ components:
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { $ref: "#/components/schemas/Amount" }
         gl_account_code: { type: string, description: "Revenue account code, optional." }
+        department_id: { type: [integer, "null"], format: int64, description: "The default department of the revenue, optional: a department of the property that is in use (422 `department_id` `DEPARTMENT_NOT_FOUND` or `INACTIVE`)." }
         is_active: { type: boolean, default: true }
     PatchChargeCodeRequest:
       type: object
@@ -7772,6 +7774,7 @@ components:
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         default_unit_price: { type: string, description: An amount, or an empty string to clear it. }
         gl_account_code: { type: string, description: "An account code, or an empty string to clear it." }
+        department_id: { type: [integer, "null"], format: int64, description: "A department, or 0 to clear it." }
         is_active: { type: boolean }
     ReplaceRulesRequest:
       type: object
@@ -11150,6 +11153,9 @@ components:
         description: { type: string }
         source_type: { type: string, enum: [CHARGE_CODE, TAX, SERVICE_CHARGE, PAYMENT, RECEIPT, DEPOSIT_RELEASE], description: What a day close line adds up. }
         source_ref: { type: string, description: The charge code, tax, payment method or folio number. }
+        department_id: { type: [integer, "null"], format: int64, description: "The department or sub-department the line was posted to (a snapshot). The revenue lines of the day close take it from the items; a manual journal line and a bill line name it themselves; the others have none." }
+        department_code: { type: string }
+        department_name: { type: string }
     Journal:
       type: object
       required: [id, journal_number, journal_type, journal_date, description, reverses_journal_id, reversed_by_journal_id, posted_at, posted_by, approved_by, total, line_count]
@@ -11199,6 +11205,7 @@ components:
               debit: { type: string }
               credit: { type: string }
               description: { type: string, maxLength: 300 }
+              department_id: { type: [integer, "null"], format: int64, description: "Optional: a department or sub-department of the property that is in use (422 `lines[N].department_id`)." }
     ReverseJournalRequest:
       type: object
       required: [reason, approval]
@@ -11432,6 +11439,9 @@ components:
         amount: { type: string, description: The cost of the line, without its VAT. }
         vat_amount: { type: string, description: "The VAT paid on the line, on top of the amount; zero when there is none." }
         vat_treatment: { $ref: "#/components/schemas/InputVatTreatment", description: How the VAT was booked, frozen on the bill date from the PKP status of the property. Absent when there is no VAT. }
+        department_id: { type: [integer, "null"], format: int64, description: The department or sub-department the cost belongs to; the journal line of the cost carries it. }
+        department_code: { type: string }
+        department_name: { type: string }
     Bill:
       type: object
       required: [id, bill_number, supplier_id, supplier_code, supplier_name, supplier_invoice_number, bill_date, due_date, total, paid, outstanding, status, payment_status, journal_id, journal_number, void_journal_id, voided_at, created_at]
@@ -11485,6 +11495,7 @@ components:
               description: { type: string, maxLength: 300 }
               amount: { type: string, description: "Above zero, at the property's decimals." }
               vat_amount: { type: string, description: "The VAT paid on the line, on top of the amount (zero or more, at the property's decimals). Booked on the input VAT account, or added to the cost of the line, as the PKP status of the property on the bill date says. The total of the bill is the amounts plus their VAT." }
+              department_id: { type: [integer, "null"], format: int64, description: "Optional: the department or sub-department the cost belongs to (422 `lines[N].department_id`)." }
     OpenBill:
       type: object
       required: [bill_id, bill_number, supplier_invoice_number, bill_date, due_date, total, outstanding]

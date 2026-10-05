@@ -22,6 +22,8 @@ type SystemLine struct {
 	Description string
 	SourceType  string
 	SourceRef   string
+	// DepartmentID is the department or sub-department of the line, when it has one (a bill line of an expense).
+	DepartmentID *int64
 }
 
 // SystemJournal is a journal of the payables, posted by that module in its own transaction.
@@ -159,6 +161,14 @@ func (po *Poster) CheckAccount(ctx context.Context, id int64, field string) erro
 	return nil
 }
 
+// CheckDepartment says whether a department takes a line of a bill: it exists in the property and is in use. A nil department is no department.
+func (po *Poster) CheckDepartment(ctx context.Context, id *int64, field string) error {
+	if id == nil || po.svc.depts == nil {
+		return nil
+	}
+	return po.svc.depts.Check(ctx, po.p.TenantID, po.propertyID, *id, field)
+}
+
 // Post writes a balanced journal of type PAYABLES and returns its id and number. The caller has checked the date and
 // the accounts of its own lines (CheckDate, CheckAccount), which Post checks again.
 func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, error) {
@@ -202,7 +212,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	for i, l := range in.Lines {
 		if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 			TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Debit: l.Debit, Credit: l.Credit,
-			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef),
+			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: l.DepartmentID,
 		}); err != nil {
 			return 0, "", err
 		}
@@ -244,7 +254,7 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 	for _, l := range orig.Lines {
 		if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 			TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalID: id, LineNo: l.LineNo, AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit,
-			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef),
+			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: l.DepartmentID,
 		}); err != nil {
 			return 0, err
 		}

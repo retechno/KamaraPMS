@@ -91,6 +91,10 @@ type BillLine struct {
 	// CREDITABLE, EXPENSE or DEFERRED (empty when there is no VAT).
 	VATAmount    decimal.Decimal `json:"vat_amount"`
 	VATTreatment string          `json:"vat_treatment,omitempty"`
+	// The department or sub-department the cost belongs to, when the line names one.
+	DepartmentID   *int64 `json:"department_id"`
+	DepartmentCode string `json:"department_code,omitempty"`
+	DepartmentName string `json:"department_name,omitempty"`
 }
 
 // Payment statuses of a bill, derived from what has been paid.
@@ -132,6 +136,8 @@ type BillLineInput struct {
 	Description string          `json:"description"`
 	Amount      decimal.Decimal `json:"amount"`
 	VATAmount   decimal.Decimal `json:"vat_amount"` // the VAT paid on the line, on top of Amount; zero when there is none
+	// DepartmentID is optional: the department or sub-department the cost belongs to.
+	DepartmentID *int64 `json:"department_id"`
 }
 
 // BillInput enters a supplier bill. The due date defaults to the bill date plus the supplier's payment terms.

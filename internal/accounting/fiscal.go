@@ -319,7 +319,7 @@ func (s *Service) ReopenFiscalYear(ctx context.Context, propertyID int64, start 
 			}
 			for _, l := range orig.Lines {
 				if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
-					TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: l.LineNo, AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit, Description: nullable(l.Description),
+					TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: l.LineNo, AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit, Description: nullable(l.Description), DepartmentID: l.DepartmentID,
 				}); err != nil {
 					return err
 				}

@@ -611,7 +611,7 @@ INSERT INTO folio_items (
     tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id,
     reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode,
     base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit,
-    source, reason, idempotency_key, created_by, approved_by, revenue_account_code
+    source, reason, idempotency_key, created_by, approved_by, revenue_account_code, department_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
     $10, $11, $12, $13, $14, $15, $16, $17, $18,
@@ -621,6 +621,11 @@ INSERT INTO folio_items (
     CASE WHEN $10::bigint IS NOT NULL
          THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
+    END,
+    -- The department in force now (the default of the charge code); a reversal copies the department of the item it reverses.
+    CASE WHEN $10::bigint IS NOT NULL
+         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
+         ELSE (SELECT c.department_id FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
     END
 )
 RETURNING id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id

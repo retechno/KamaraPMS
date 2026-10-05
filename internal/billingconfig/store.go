@@ -42,7 +42,7 @@ func toServiceCharge(s billingconfigdb.ServiceCharge) ServiceCharge {
 // toChargeCode maps a row; amounts are formatted with the property's currency decimals.
 func toChargeCode(c billingconfigdb.ChargeCode, decimals int32) ChargeCode {
 	out := ChargeCode{
-		ID: c.ID, Code: c.Code, Name: c.Name, ChargeType: c.ChargeType, PriceMode: c.PriceMode, GLAccountCode: c.GlAccountCode, IsSystem: c.IsSystem, IsActive: c.IsActive,
+		ID: c.ID, Code: c.Code, Name: c.Name, ChargeType: c.ChargeType, PriceMode: c.PriceMode, GLAccountCode: c.GlAccountCode, DepartmentID: c.DepartmentID, IsSystem: c.IsSystem, IsActive: c.IsActive,
 		Taxes: []TaxRule{}, ServiceCharges: []ServiceRule{}, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 	if c.DefaultUnitPrice != nil {

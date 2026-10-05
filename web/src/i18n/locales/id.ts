@@ -1054,6 +1054,8 @@ export const id: Messages = {
     chargeCodes: 'Kode biaya',
   },
   chargeCodes: {
+    department: 'Departemen bawaan',
+    departmentHint: 'Tempat pendapatan biaya ini dilaporkan. Disalin ke setiap item yang diposting: mengubahnya nanti tidak memindahkan yang sudah diposting.',
     title: 'Kode biaya',
     new: 'Kode biaya baru',
     edit: 'Ubah {code}',
@@ -1527,6 +1529,7 @@ export const id: Messages = {
     varianceNote: 'Selisih adalah realisasi dikurangi anggaran. "untung" berarti baik bagi hasil (pendapatan atau laba di atas anggaran, biaya di bawahnya), "rugi" sebaliknya.',
   },
   departments: {
+    none: 'Tanpa departemen',
     title: 'Departemen',
     intro: 'Departemen dan sub-departemen tempat pendapatan dan biaya dilaporkan. Baris jurnal, kode biaya, baris tagihan supplier, dan anggaran bisa menyebut satu departemen. Kode dan departemen induk sebuah sub-departemen tidak pernah berubah, jadi yang sudah diposting tetap di tempatnya.',
     noAccess: 'Peran Anda di properti ini tidak bisa melihat departemen: izin {permission} diperlukan.',
@@ -1775,6 +1778,7 @@ export const id: Messages = {
     method_OTHER: 'Lainnya',
   },
   payables: {
+    department: 'Departemen',
     code: 'Kode',
     name: 'Nama',
     supplier: 'Pemasok',
@@ -2419,6 +2423,7 @@ export const id: Messages = {
     closingBalance: 'Saldo akhir',
   },
   journals: {
+    department: 'Departemen',
     title: 'Jurnal',
     postPending: 'Jurnalkan hari yang hilang',
     new: 'Jurnal baru',

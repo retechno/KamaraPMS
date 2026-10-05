@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { Approval, GlAccount, Journal } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -34,7 +35,7 @@ const notice = ref('')
 const busy = ref(false)
 const filter = reactive({ from: '', to: '', type: '', q: '' })
 const creating = ref(false)
-const form = reactive({ date: '', description: '', reference: '', lines: [] as { account_id: number; debit: string; credit: string; description: string }[] })
+const form = reactive({ date: '', description: '', reference: '', lines: [] as { account_id: number; debit: string; credit: string; description: string; department_id: number | null }[] })
 const reversing = ref<{ reason: string; asking: boolean } | null>(null)
 let postKey = newIdempotencyKey()
 
@@ -99,7 +100,7 @@ async function open(j: Journal): Promise<void> {
 
 function startNew(): void {
   Object.assign(form, { date: '', description: '', reference: '' })
-  form.lines = [{ account_id: 0, debit: '', credit: '', description: '' }, { account_id: 0, debit: '', credit: '', description: '' }]
+  form.lines = [{ account_id: 0, debit: '', credit: '', description: '', department_id: null }, { account_id: 0, debit: '', credit: '', description: '', department_id: null }]
   error.value = null
   postKey = newIdempotencyKey()
   creating.value = true
@@ -116,7 +117,7 @@ async function post(): Promise<void> {
       params: { path: { propertyId }, header: { 'Idempotency-Key': postKey } },
       body: {
         journal_date: form.date, description: form.description, reference: form.reference || undefined,
-        lines: form.lines.map((l) => ({ account_id: l.account_id, debit: l.debit.trim() || undefined, credit: l.credit.trim() || undefined, description: l.description || undefined })),
+        lines: form.lines.map((l) => ({ account_id: l.account_id, debit: l.debit.trim() || undefined, credit: l.credit.trim() || undefined, description: l.description || undefined, department_id: l.department_id ?? undefined })),
       },
     })
     postKey = newIdempotencyKey()
@@ -217,6 +218,7 @@ watch(() => pid.value, () => {
                 <th class="py-1.5 pr-3 font-medium">{{ t('journals.account') }}</th>
                 <th class="px-3 text-right font-medium">{{ t('journals.debit') }}</th>
                 <th class="px-3 text-right font-medium">{{ t('journals.credit') }}</th>
+                <th class="px-3 font-medium">{{ t('journals.department') }}</th>
                 <th class="px-3 font-medium">{{ t('journals.note') }}</th>
                 <th />
               </tr>
@@ -229,16 +231,20 @@ watch(() => pid.value, () => {
                 </td>
                 <td><Input v-model="l.debit" class="text-right" :name="`debit_${i}`" inputmode="decimal" :disabled="l.credit.trim() !== ''" /></td>
                 <td><Input v-model="l.credit" class="text-right" :name="`credit_${i}`" inputmode="decimal" :disabled="l.debit.trim() !== ''" /></td>
+                <td>
+                  <DepartmentSelect v-model="l.department_id" :name="`department_${i}`" :aria-invalid="!!fieldError(`lines[${i}].department_id`)" />
+                  <small v-if="fieldError(`lines[${i}].department_id`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].department_id`) }}</small>
+                </td>
                 <td><Input v-model="l.description" :name="`note_${i}`" maxlength="300" /></td>
                 <td><Button v-if="form.lines.length > 2" type="button" variant="outline" size="sm" :data-testid="`remove-line-${i}`" @click="form.lines.splice(i, 1)">{{ t('journals.remove') }}</Button></td>
               </tr>
             </tbody>
             <tfoot>
               <tr data-testid="line-totals" class="border-t border-border">
-                <td class="pt-2"><Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, debit: '', credit: '', description: '' })">{{ t('journals.addLine') }}</Button></td>
+                <td class="pt-2"><Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, debit: '', credit: '', description: '', department_id: null })">{{ t('journals.addLine') }}</Button></td>
                 <td class="pt-2 pr-3 text-right tabular-nums">{{ $money(fromMilli(sums.debit)) }}</td>
                 <td class="pt-2 pr-3 text-right tabular-nums">{{ $money(fromMilli(sums.credit)) }}</td>
-                <td colspan="2" class="pt-2">
+                <td colspan="3" class="pt-2">
                   <span v-if="!sums.valid" class="text-destructive">{{ t('journals.notNumber') }}</span>
                   <span v-else-if="sums.debit !== sums.credit" class="text-destructive" data-testid="difference">{{ t('journals.outOfBalance', { amount: $money(fromMilli(sums.debit > sums.credit ? sums.debit - sums.credit : sums.credit - sums.debit)) }) }}</span>
                   <span v-else class="text-muted-foreground">{{ t('journals.balanced') }}</span>
@@ -294,7 +300,7 @@ watch(() => pid.value, () => {
               <table class="w-full border-collapse text-sm">
                 <thead>
                   <tr class="border-b border-border text-left text-xs text-muted-foreground">
-                    <th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('journals.account') }}</th><th class="px-3 font-medium">{{ t('journals.detail') }}</th>
+                    <th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('journals.account') }}</th><th class="px-3 font-medium">{{ t('journals.detail') }}</th><th class="px-3 font-medium">{{ t('journals.department') }}</th>
                     <th class="px-3 text-right font-medium">{{ t('journals.debit') }}</th><th class="pl-3 text-right font-medium">{{ t('journals.credit') }}</th>
                   </tr>
                 </thead>
@@ -303,6 +309,7 @@ watch(() => pid.value, () => {
                     <td class="py-1 pr-3">{{ l.line_no }}</td>
                     <td class="px-3"><RouterLink :to="ledgerLink(l.account_id, row.journal_date)" class="text-primary hover:underline" :data-testid="`ledger-link-${l.line_no}`">{{ l.account_code }} · {{ l.account_name }}</RouterLink></td>
                     <td class="px-3"><small class="text-muted-foreground">{{ l.description }}</small></td>
+                    <td class="px-3" :data-testid="`line-department-${l.line_no}`"><small v-if="l.department_code" :title="l.department_name">{{ l.department_code }}</small></td>
                     <td class="px-3 text-right tabular-nums">{{ Number(l.debit) ? l.debit : '' }}</td>
                     <td class="pl-3 text-right tabular-nums">{{ Number(l.credit) ? l.credit : '' }}</td>
                   </tr>

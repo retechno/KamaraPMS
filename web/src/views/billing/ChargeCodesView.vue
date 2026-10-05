@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { ChargeCode, ChargeType, PriceMode, ServiceCharge, Tax } from '@/api/types'
 import ChargeCalculator from '@/components/ChargeCalculator.vue'
 import { useAccountNames } from './accountNames'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import GlAccountInput from './GlAccountInput.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -48,7 +49,7 @@ const columns = computed<Column<ChargeCode>[]>(() => [
 const visible = computed(() => codes.value.filter((c) => !typeFilter.value || c.charge_type === typeFilter.value))
 
 const blank = () => ({
-  code: '', name: '', charge_type: 'OTHER' as ChargeType, price_mode: 'EXCLUSIVE' as PriceMode, default_unit_price: '', gl_account_code: '', is_active: true,
+  code: '', name: '', charge_type: 'OTHER' as ChargeType, price_mode: 'EXCLUSIVE' as PriceMode, default_unit_price: '', gl_account_code: '', department_id: null as number | null, is_active: true,
 })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -112,7 +113,7 @@ function startNew(): void {
 
 function startEdit(c: ChargeCode): void {
   Object.assign(form, blank(), {
-    code: c.code, name: c.name, charge_type: c.charge_type, price_mode: c.price_mode, default_unit_price: c.default_unit_price ?? '', gl_account_code: c.gl_account_code ?? '', is_active: c.is_active,
+    code: c.code, name: c.name, charge_type: c.charge_type, price_mode: c.price_mode, default_unit_price: c.default_unit_price ?? '', gl_account_code: c.gl_account_code ?? '', department_id: c.department_id ?? null, is_active: c.is_active,
   })
   loadRules(c)
   error.value = null
@@ -151,7 +152,7 @@ async function save(): Promise<void> {
         params: { path: { propertyId } },
         body: {
           code: form.code, name: form.name, charge_type: form.charge_type, price_mode: form.price_mode,
-          default_unit_price: form.default_unit_price || undefined, gl_account_code: form.gl_account_code || undefined, is_active: form.is_active,
+          default_unit_price: form.default_unit_price || undefined, gl_account_code: form.gl_account_code || undefined, department_id: form.department_id ?? undefined, is_active: form.is_active,
         },
       })
     } else {
@@ -159,7 +160,7 @@ async function save(): Promise<void> {
         params: { path: { propertyId, id: editing.value.id } },
         body: {
           name: form.name, charge_type: form.charge_type, price_mode: form.price_mode,
-          default_unit_price: form.default_unit_price, gl_account_code: form.gl_account_code, is_active: form.is_active,
+          default_unit_price: form.default_unit_price, gl_account_code: form.gl_account_code, department_id: form.department_id ?? 0, is_active: form.is_active,
         },
       })
     }
@@ -245,6 +246,9 @@ watch(() => property.currentId, load, { immediate: true })
             </FormField>
             <FormField :label="t('chargeCodes.revenueAccount')" :hint="t('chargeCodes.accountHint')" :error="fieldError('gl_account_code')">
               <template #default="{ id, invalid }"><GlAccountInput :id="id" v-model="form.gl_account_code" kind="CHARGE_CODE" :invalid="invalid" /></template>
+            </FormField>
+            <FormField :label="t('chargeCodes.department')" :hint="t('chargeCodes.departmentHint')" :error="fieldError('department_id')">
+              <template #default="{ id, invalid }"><DepartmentSelect :id="id" v-model="form.department_id" name="department_id" :aria-invalid="invalid" /></template>
             </FormField>
             <label class="flex items-center gap-2 self-end pb-2 text-sm">
               <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />

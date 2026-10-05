@@ -442,52 +442,52 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 
 const dayActivity = `-- name: DayActivity :many
 
-SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount, x.detail::text AS detail
+SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount, x.detail::text AS detail, COALESCE(x.department_id, 0)::bigint AS department_id -- 0: no department
 FROM (
-    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount, '' AS detail
+    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount, '' AS detail, NULL::bigint AS department_id
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
      GROUP BY COALESCE(g.charge_code, 'UNKNOWN')
     UNION ALL
-    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount), ''
+    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount), '', g.department_id
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
-     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN')
+     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN'), g.department_id
     UNION ALL
     SELECT CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE' END, COALESCE(c.gl_account_code, ''),
-           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount), ''
+           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount), '', NULL::bigint
       FROM folio_item_gl g
       JOIN folio_item_components c ON c.property_id = g.property_id AND c.folio_item_id = g.item_id
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'CHARGE'
      GROUP BY c.component_type, COALESCE(c.gl_account_code, ''), c.code
     UNION ALL
-    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount), ''
+    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount), '', NULL::bigint
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
      GROUP BY g.is_deposit, g.payment_method
     UNION ALL
-    SELECT 'METHOD', g.payment_method, 'PAYMENT', COALESCE(g.payment_number, g.payment_method), -sum(g.signed_amount), COALESCE(g.payment_reference, '')
+    SELECT 'METHOD', g.payment_method, 'PAYMENT', COALESCE(g.payment_number, g.payment_method), -sum(g.signed_amount), COALESCE(g.payment_reference, ''), NULL::bigint
       FROM folio_item_gl g
      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.business_date = $3 AND g.kind = 'PAYMENT'
      GROUP BY g.payment_method, COALESCE(g.payment_number, g.payment_method), COALESCE(g.payment_reference, '')
     UNION ALL
-    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.receipt_number, sum(r.amount), COALESCE(r.reference_number, '')
+    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.receipt_number, sum(r.amount), COALESCE(r.reference_number, ''), NULL::bigint
       FROM city_ledger_receipts r
      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
      GROUP BY r.payment_method, r.receipt_number, COALESCE(r.reference_number, '')
     UNION ALL
-    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount), ''
+    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount), '', NULL::bigint
       FROM city_ledger_receipts r
      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
      GROUP BY r.payment_method
     UNION ALL
-    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), ''
+    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
     UNION ALL
-    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), ''
+    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
@@ -503,12 +503,13 @@ type DayActivityParams struct {
 }
 
 type DayActivityRow struct {
-	Role       string
-	Key        string
-	SourceType string
-	SourceRef  string
-	Amount     decimal.Decimal
-	Detail     string
+	Role         string
+	Key          string
+	SourceType   string
+	SourceRef    string
+	Amount       decimal.Decimal
+	Detail       string
+	DepartmentID int64
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -532,6 +533,7 @@ func (q *Queries) DayActivity(ctx context.Context, arg DayActivityParams) ([]Day
 			&i.SourceRef,
 			&i.Amount,
 			&i.Detail,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -781,21 +783,22 @@ func (q *Queries) InsertJournal(ctx context.Context, arg InsertJournalParams) (i
 }
 
 const insertJournalLine = `-- name: InsertJournalLine :exec
-INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type InsertJournalLineParams struct {
-	TenantID    int64
-	PropertyID  int64
-	JournalID   int64
-	LineNo      int32
-	AccountID   int64
-	Debit       decimal.Decimal
-	Credit      decimal.Decimal
-	Description *string
-	SourceType  *string
-	SourceRef   *string
+	TenantID     int64
+	PropertyID   int64
+	JournalID    int64
+	LineNo       int32
+	AccountID    int64
+	Debit        decimal.Decimal
+	Credit       decimal.Decimal
+	Description  *string
+	SourceType   *string
+	SourceRef    *string
+	DepartmentID *int64
 }
 
 func (q *Queries) InsertJournalLine(ctx context.Context, arg InsertJournalLineParams) error {
@@ -810,6 +813,7 @@ func (q *Queries) InsertJournalLine(ctx context.Context, arg InsertJournalLinePa
 		arg.Description,
 		arg.SourceType,
 		arg.SourceRef,
+		arg.DepartmentID,
 	)
 	return err
 }
@@ -1200,9 +1204,11 @@ func (q *Queries) ListFiscalYears(ctx context.Context, arg ListFiscalYearsParams
 }
 
 const listJournalLines = `-- name: ListJournalLines :many
-SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref,
+       l.department_id, d.code AS department_code, d.name AS department_name
 FROM gl_journal_lines l
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.journal_id = $3
 ORDER BY l.line_no
 `
@@ -1214,15 +1220,18 @@ type ListJournalLinesParams struct {
 }
 
 type ListJournalLinesRow struct {
-	LineNo      int32
-	AccountID   int64
-	AccountCode string
-	AccountName string
-	Debit       decimal.Decimal
-	Credit      decimal.Decimal
-	Description *string
-	SourceType  *string
-	SourceRef   *string
+	LineNo         int32
+	AccountID      int64
+	AccountCode    string
+	AccountName    string
+	Debit          decimal.Decimal
+	Credit         decimal.Decimal
+	Description    *string
+	SourceType     *string
+	SourceRef      *string
+	DepartmentID   *int64
+	DepartmentCode *string
+	DepartmentName *string
 }
 
 func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesParams) ([]ListJournalLinesRow, error) {
@@ -1244,6 +1253,9 @@ func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesPara
 			&i.Description,
 			&i.SourceType,
 			&i.SourceRef,
+			&i.DepartmentID,
+			&i.DepartmentCode,
+			&i.DepartmentName,
 		); err != nil {
 			return nil, err
 		}

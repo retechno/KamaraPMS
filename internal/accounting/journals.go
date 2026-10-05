@@ -52,6 +52,10 @@ type JournalLine struct {
 	Description string          `json:"description,omitempty"`
 	SourceType  string          `json:"source_type,omitempty"`
 	SourceRef   string          `json:"source_ref,omitempty"`
+	// The department the line was posted to (a snapshot: a later change of the master does not change it).
+	DepartmentID   *int64 `json:"department_id"`
+	DepartmentCode string `json:"department_code,omitempty"`
+	DepartmentName string `json:"department_name,omitempty"`
 }
 
 // Journal is a posted journal. Lines are filled when one journal is read.
@@ -90,6 +94,8 @@ type LineInput struct {
 	Debit       decimal.Decimal `json:"debit"`
 	Credit      decimal.Decimal `json:"credit"`
 	Description string          `json:"description"`
+	// DepartmentID is optional: the department or sub-department the line belongs to.
+	DepartmentID *int64 `json:"department_id"`
 }
 
 // ManualInput is a manual journal.
@@ -171,6 +177,7 @@ func (s *Service) loadJournal(ctx context.Context, tenantID, propertyID, id int6
 		j.Lines = append(j.Lines, JournalLine{
 			LineNo: l.LineNo, AccountID: l.AccountID, AccountCode: l.AccountCode, AccountName: l.AccountName, Debit: l.Debit, Credit: l.Credit,
 			Description: deref(l.Description), SourceType: deref(l.SourceType), SourceRef: deref(l.SourceRef),
+			DepartmentID: l.DepartmentID, DepartmentCode: deref(l.DepartmentCode), DepartmentName: deref(l.DepartmentName),
 		})
 	}
 	return j, nil
@@ -264,6 +271,7 @@ func lineLabel(k lineKey, detail string) string {
 type lineKey struct {
 	account         int64
 	sourceType, ref string
+	department      int64 // 0: none
 }
 
 // PostDay writes the journal of a business date from the folio ledger; the night audit calls it inside its transaction
@@ -317,7 +325,7 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 			return false, err
 		}
 		names[t.id] = t
-		k := lineKey{t.id, r.SourceType, r.SourceRef}
+		k := lineKey{t.id, r.SourceType, r.SourceRef, r.DepartmentID}
 		sums[k] = sums[k].Add(r.Amount)
 		if r.Detail != "" {
 			details[k] = r.Detail
@@ -345,7 +353,10 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		if a.sourceType != b.sourceType {
 			return a.sourceType < b.sourceType
 		}
-		return a.ref < b.ref
+		if a.ref != b.ref {
+			return a.ref < b.ref
+		}
+		return a.department < b.department
 	})
 	number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqJournal)
 	if err != nil {
@@ -364,6 +375,10 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		line := accountingdb.InsertJournalLineParams{
 			TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: k.account,
 			Description: nullable(lineLabel(k, details[k])), SourceType: &k.sourceType, SourceRef: &k.ref,
+		}
+		if k.department != 0 {
+			dept := k.department
+			line.DepartmentID = &dept
 		}
 		if v.IsPositive() {
 			line.Debit, line.Credit = v, decimal.Zero
@@ -562,6 +577,18 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 				lineErrs = append(lineErrs, fieldErr(at, "CONTROL_ACCOUNT", "only the day close posts to the "+strings.ToLower(strings.ReplaceAll(control[a.ID], "_", " "))+" account"))
 			}
 		}
+		for i, l := range in.Lines {
+			if l.DepartmentID != nil && s.depts != nil {
+				if err := s.depts.Check(ctx, p.TenantID, propertyID, *l.DepartmentID, fmt.Sprintf("lines[%d].department_id", i)); err != nil {
+					var ae *apperr.Error
+					if errors.As(err, &ae) && len(ae.Fields) > 0 {
+						lineErrs = append(lineErrs, ae.Fields...)
+						continue
+					}
+					return err
+				}
+			}
+		}
 		if len(lineErrs) > 0 {
 			return apperr.Invalid("the journal is invalid", lineErrs...)
 		}
@@ -583,7 +610,7 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 		for i, l := range in.Lines {
 			if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Debit: l.Debit, Credit: l.Credit,
-				Description: nullable(strings.TrimSpace(l.Description)),
+				Description: nullable(strings.TrimSpace(l.Description)), DepartmentID: l.DepartmentID,
 			}); err != nil {
 				return err
 			}
@@ -662,7 +689,7 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 		for _, l := range orig.Lines {
 			if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: l.LineNo, AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit,
-				Description: nullable(l.Description),
+				Description: nullable(l.Description), DepartmentID: l.DepartmentID,
 			}); err != nil {
 				return err
 			}

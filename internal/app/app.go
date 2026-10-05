@@ -87,6 +87,8 @@ func New(d Deps) *App {
 	tenancySvc.OnPropertyCreated(accountingSvc.SeedProperty) // the standard chart of accounts, after the charge codes it maps
 	departmentsSvc := departments.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	tenancySvc.OnPropertyCreated(departmentsSvc.SeedProperty) // the standard departments, and the default department of the charge codes
+	accountingSvc.SetDepartments(departmentsSvc)              // a journal line or a bill line names its department
+	billingSvc.SetDepartments(departmentsSvc)                 // and a charge code its default department
 	availSvc := availability.NewService(d.TxManager)
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)

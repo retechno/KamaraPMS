@@ -7,6 +7,7 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/billingconfig/billingconfigdb"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -26,7 +27,11 @@ type Service struct {
 	audit *audit.Writer
 	authz auth.Authorizer
 	days  *tenancy.Service
+	depts *departments.Service
 }
+
+// SetDepartments gives the service the departments, to check the default department of a charge code.
+func (s *Service) SetDepartments(d *departments.Service) { s.depts = d }
 
 // NewService wires the billing configuration service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service) *Service {
@@ -443,9 +448,12 @@ func (s *Service) CreateChargeCode(ctx context.Context, propertyID int64, in Cha
 		if err != nil {
 			return err
 		}
+		if err := s.checkDepartment(ctx, p.TenantID, propertyID, in.DepartmentID); err != nil {
+			return err
+		}
 		row, err := s.q(ctx).CreateChargeCode(ctx, billingconfigdb.CreateChargeCodeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, ChargeType: in.ChargeType, PriceMode: in.PriceMode,
-			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
+			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), DepartmentID: in.DepartmentID, IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -463,6 +471,7 @@ type ChargeCodePatch struct {
 	PriceMode        *string
 	DefaultUnitPrice *string
 	GLAccountCode    *string // "" clears it
+	DepartmentID     *int64  // 0 clears it
 	IsActive         *bool
 }
 
@@ -495,7 +504,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		if err != nil {
 			return err
 		}
-		in := ChargeCodeInput{Code: before.Code, Name: before.Name, ChargeType: before.ChargeType, PriceMode: before.PriceMode, GLAccountCode: glString(before.GLAccountCode), IsActive: before.IsActive}
+		in := ChargeCodeInput{Code: before.Code, Name: before.Name, ChargeType: before.ChargeType, PriceMode: before.PriceMode, GLAccountCode: glString(before.GLAccountCode), DepartmentID: before.DepartmentID, IsActive: before.IsActive}
 		if before.DefaultUnitPrice != nil {
 			in.DefaultUnitPrice = *before.DefaultUnitPrice
 		}
@@ -505,9 +514,20 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		apply(&in.DefaultUnitPrice, patch.DefaultUnitPrice)
 		apply(&in.GLAccountCode, patch.GLAccountCode)
 		apply(&in.IsActive, patch.IsActive)
+		if patch.DepartmentID != nil {
+			in.DepartmentID = patch.DepartmentID
+			if *patch.DepartmentID == 0 {
+				in.DepartmentID = nil
+			}
+		}
 		in.Normalize()
 		if fields := in.Validate(false, decimals); len(fields) > 0 {
 			return apperr.Invalid("the charge code is invalid", fields...)
+		}
+		if in.DepartmentID != nil && (before.DepartmentID == nil || *before.DepartmentID != *in.DepartmentID) { // an unchanged one may be switched off meanwhile
+			if err := s.checkDepartment(ctx, p.TenantID, propertyID, in.DepartmentID); err != nil {
+				return err
+			}
 		}
 		if row.IsSystem && in.ChargeType != before.ChargeType {
 			return apperr.Conflict("SYSTEM_CHARGE_CODE_LOCKED", "the charge type of a system charge code cannot change")
@@ -524,7 +544,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		}
 		if _, err := q.UpdateChargeCode(ctx, billingconfigdb.UpdateChargeCodeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, ChargeType: in.ChargeType, PriceMode: in.PriceMode,
-			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
+			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), DepartmentID: in.DepartmentID, IsActive: in.IsActive, ActorID: p.ActorID(),
 		}); err != nil {
 			return err // a locked price mode or charge type is mapped by the database error table
 		}
@@ -709,4 +729,12 @@ func (s *Service) ResolveRules(ctx context.Context, tenantID, propertyID, charge
 		}
 	}
 	return out, nil
+}
+
+// checkDepartment says whether a department can be the default of a charge code: it is a department of the property, in use.
+func (s *Service) checkDepartment(ctx context.Context, tenantID, propertyID int64, id *int64) error {
+	if id == nil || s.depts == nil {
+		return nil
+	}
+	return s.depts.Check(ctx, tenantID, propertyID, *id, "department_id")
 }

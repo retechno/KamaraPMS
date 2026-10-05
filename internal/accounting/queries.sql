@@ -104,52 +104,52 @@ ORDER BY u.kind, u.code;
 -- CITY_LEDGER are system accounts, METHOD is the payment method received into (key), REVENUE the charge code's revenue
 -- account (key), TAX and SERVICE the component's account (key). The service resolves roles to accounts.
 -- name: DayActivity :many
-SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount, x.detail::text AS detail
+SELECT x.role::text AS role, x.key::text AS key, x.source_type::text AS source_type, x.source_ref::text AS source_ref, x.amount::numeric AS amount, x.detail::text AS detail, COALESCE(x.department_id, 0)::bigint AS department_id -- 0: no department
 FROM (
-    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount, '' AS detail
+    SELECT 'GUEST_LEDGER' AS role, '' AS key, 'CHARGE_CODE' AS source_type, COALESCE(g.charge_code, 'UNKNOWN') AS source_ref, sum(g.signed_amount) AS amount, '' AS detail, NULL::bigint AS department_id
       FROM folio_item_gl g
      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
      GROUP BY COALESCE(g.charge_code, 'UNKNOWN')
     UNION ALL
-    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount), ''
+    SELECT 'REVENUE', COALESCE(g.revenue_account_code, ''), 'CHARGE_CODE', COALESCE(g.charge_code, 'UNKNOWN'), -sum(g.net_amount), '', g.department_id
       FROM folio_item_gl g
      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
-     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN')
+     GROUP BY COALESCE(g.revenue_account_code, ''), COALESCE(g.charge_code, 'UNKNOWN'), g.department_id
     UNION ALL
     SELECT CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE' END, COALESCE(c.gl_account_code, ''),
-           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount), ''
+           CASE c.component_type WHEN 'TAX' THEN 'TAX' ELSE 'SERVICE_CHARGE' END, c.code, -sum(c.amount), '', NULL::bigint
       FROM folio_item_gl g
       JOIN folio_item_components c ON c.property_id = g.property_id AND c.folio_item_id = g.item_id
      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'CHARGE'
      GROUP BY c.component_type, COALESCE(c.gl_account_code, ''), c.code
     UNION ALL
-    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount), ''
+    SELECT CASE WHEN g.is_deposit THEN 'ADVANCE_DEPOSITS' ELSE 'GUEST_LEDGER' END, '', 'PAYMENT', g.payment_method, sum(g.signed_amount), '', NULL::bigint
       FROM folio_item_gl g
      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'PAYMENT'
      GROUP BY g.is_deposit, g.payment_method
     UNION ALL
-    SELECT 'METHOD', g.payment_method, 'PAYMENT', COALESCE(g.payment_number, g.payment_method), -sum(g.signed_amount), COALESCE(g.payment_reference, '')
+    SELECT 'METHOD', g.payment_method, 'PAYMENT', COALESCE(g.payment_number, g.payment_method), -sum(g.signed_amount), COALESCE(g.payment_reference, ''), NULL::bigint
       FROM folio_item_gl g
      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.business_date = @business_date AND g.kind = 'PAYMENT'
      GROUP BY g.payment_method, COALESCE(g.payment_number, g.payment_method), COALESCE(g.payment_reference, '')
     UNION ALL
-    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.receipt_number, sum(r.amount), COALESCE(r.reference_number, '')
+    SELECT 'METHOD', r.payment_method, 'RECEIPT', r.receipt_number, sum(r.amount), COALESCE(r.reference_number, ''), NULL::bigint
       FROM city_ledger_receipts r
      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @business_date AND r.status = 'POSTED'
      GROUP BY r.payment_method, r.receipt_number, COALESCE(r.reference_number, '')
     UNION ALL
-    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount), ''
+    SELECT 'CITY_LEDGER', '', 'RECEIPT', r.payment_method, -sum(r.amount), '', NULL::bigint
       FROM city_ledger_receipts r
      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @business_date AND r.status = 'POSTED'
      GROUP BY r.payment_method
     UNION ALL
-    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), ''
+    SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
      WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
     UNION ALL
-    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), ''
+    SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
      WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
@@ -165,8 +165,8 @@ VALUES (@tenant_id, @property_id, @journal_number, @journal_type, @journal_date,
 RETURNING id;
 
 -- name: InsertJournalLine :exec
-INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref)
-VALUES (@tenant_id, @property_id, @journal_id, @line_no, @account_id, @debit, @credit, sqlc.narg(description), sqlc.narg(source_type), sqlc.narg(source_ref));
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id)
+VALUES (@tenant_id, @property_id, @journal_id, @line_no, @account_id, @debit, @credit, sqlc.narg(description), sqlc.narg(source_type), sqlc.narg(source_ref), sqlc.narg(department_id));
 
 -- name: ListJournals :many
 SELECT j.id, j.journal_number, j.journal_type, j.journal_date, j.description, j.reference, j.reverses_journal_id, j.reason, j.posted_at, j.posted_by,
@@ -187,9 +187,11 @@ ORDER BY j.journal_date DESC, j.id DESC
 LIMIT @row_limit;
 
 -- name: ListJournalLines :many
-SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.debit, l.credit, l.description, l.source_type, l.source_ref,
+       l.department_id, d.code AS department_code, d.name AS department_name
 FROM gl_journal_lines l
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.journal_id = @journal_id
 ORDER BY l.line_no;
 

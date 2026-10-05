@@ -47,8 +47,8 @@ VALUES (@tenant_id, @property_id, @bill_number, @supplier_id, @supplier_invoice_
 RETURNING id;
 
 -- name: InsertBillLine :exec
-INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, description, amount, vat_amount, vat_treatment)
-VALUES (@tenant_id, @property_id, @bill_id, @line_no, @account_id, sqlc.narg(description), @amount, @vat_amount, sqlc.narg(vat_treatment));
+INSERT INTO supplier_bill_lines (tenant_id, property_id, bill_id, line_no, account_id, description, amount, vat_amount, vat_treatment, department_id)
+VALUES (@tenant_id, @property_id, @bill_id, @line_no, @account_id, sqlc.narg(description), @amount, @vat_amount, sqlc.narg(vat_treatment), sqlc.narg(department_id));
 
 -- A bill with its supplier, what has been paid and the journal numbers.
 -- name: ListBills :many
@@ -74,9 +74,11 @@ ORDER BY b.bill_date DESC, b.id DESC
 LIMIT @row_limit;
 
 -- name: ListBillLines :many
-SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount, l.vat_amount, l.vat_treatment
+SELECT l.line_no, l.account_id, a.code AS account_code, a.name AS account_name, l.description, l.amount, l.vat_amount, l.vat_treatment,
+       l.department_id, d.code AS department_code, d.name AS department_name
 FROM supplier_bill_lines l
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.bill_id = @bill_id
 ORDER BY l.line_no;
 

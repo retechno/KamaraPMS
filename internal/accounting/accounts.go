@@ -14,6 +14,7 @@ import (
 
 	"kamarapms/internal/accounting/accountingdb"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -39,12 +40,16 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	iam   *iam.Service
+	depts *departments.Service
 }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, iamSvc *iam.Service) *Service {
 	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: iamSvc}
 }
+
+// SetDepartments gives the service the departments, to check the department of a journal line.
+func (s *Service) SetDepartments(d *departments.Service) { s.depts = d }
 
 func (s *Service) q(ctx context.Context) *accountingdb.Queries {
 	return accountingdb.New(s.txm.DB(ctx))

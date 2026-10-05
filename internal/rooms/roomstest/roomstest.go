@@ -114,6 +114,8 @@ func Setup(t *testing.T) *Env {
 	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
 	dept := departments.NewService(txm, c, aw, authz, ten)
 	ten.OnPropertyCreated(dept.SeedProperty) // and the standard departments
+	acct.SetDepartments(dept)
+	billing.SetDepartments(dept)
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
 	co := companies.NewService(txm, c, aw, authz, ten)
 	fo.SetCompanyGate(co)

@@ -1055,6 +1055,8 @@ export const en = {
     chargeCodes: 'Charge codes',
   },
   chargeCodes: {
+    department: 'Default department',
+    departmentHint: 'Where the revenue of this charge is reported. Copied onto each item posted: changing it later does not move what was posted.',
     title: 'Charge codes',
     new: 'New charge code',
     edit: 'Edit {code}',
@@ -1528,6 +1530,7 @@ export const en = {
     varianceNote: 'The variance is the actual less the budget. "fav." means good for the result (revenue or profit above the budget, an expense below it), "unfav." the opposite.',
   },
   departments: {
+    none: 'No department',
     title: 'Departments',
     intro: 'The departments and sub-departments that revenue and expenses are reported by. A journal line, a charge code, a supplier bill line and the budget can name one. The code and the department a sub-department belongs to never change, so what was posted keeps its place.',
     noAccess: 'Your role at this property cannot see departments: the {permission} permission is needed.',
@@ -1776,6 +1779,7 @@ export const en = {
     method_OTHER: 'Other',
   },
   payables: {
+    department: 'Department',
     code: 'Code',
     name: 'Name',
     supplier: 'Supplier',
@@ -2420,6 +2424,7 @@ export const en = {
     closingBalance: 'Closing balance',
   },
   journals: {
+    department: 'Department',
     title: 'Journals',
     postPending: 'Journal missing days',
     new: 'New journal',

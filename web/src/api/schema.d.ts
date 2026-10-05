@@ -6764,6 +6764,11 @@ export interface components {
             default_unit_price?: components["schemas"]["Amount"];
             /** @description Revenue account of this charge (optional). Copied onto the ledger when an item is posted. */
             gl_account_code: components["schemas"]["GlAccountCode"];
+            /**
+             * Format: int64
+             * @description The department or sub-department the revenue of this charge goes to by default. It is copied onto each item posted (a snapshot: changing it later does not move what was posted), and the day close posts the revenue to it.
+             */
+            department_id?: number | null;
             is_system: boolean;
             is_active: boolean;
             /** @description Active tax rules in calculation order. */
@@ -6787,6 +6792,11 @@ export interface components {
             default_unit_price?: components["schemas"]["Amount"];
             /** @description Revenue account code, optional. */
             gl_account_code?: string;
+            /**
+             * Format: int64
+             * @description The default department of the revenue, optional: a department of the property that is in use (422 `department_id` `DEPARTMENT_NOT_FOUND` or `INACTIVE`).
+             */
+            department_id?: number | null;
             /** @default true */
             is_active: boolean;
         };
@@ -6798,6 +6808,11 @@ export interface components {
             default_unit_price?: string;
             /** @description An account code, or an empty string to clear it. */
             gl_account_code?: string;
+            /**
+             * Format: int64
+             * @description A department, or 0 to clear it.
+             */
+            department_id?: number | null;
             is_active?: boolean;
         };
         ReplaceRulesRequest: {
@@ -9970,6 +9985,13 @@ export interface components {
             source_type?: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE" | "PAYMENT" | "RECEIPT" | "DEPOSIT_RELEASE";
             /** @description The charge code */
             source_ref?: string;
+            /**
+             * Format: int64
+             * @description The department or sub-department the line was posted to (a snapshot). The revenue lines of the day close take it from the items; a manual journal line and a bill line name it themselves; the others have none.
+             */
+            department_id?: number | null;
+            department_code?: string;
+            department_name?: string;
         };
         Journal: {
             /** Format: int64 */
@@ -10013,6 +10035,11 @@ export interface components {
                 debit?: string;
                 credit?: string;
                 description?: string;
+                /**
+                 * Format: int64
+                 * @description Optional: a department or sub-department of the property that is in use (422 `lines[N].department_id`).
+                 */
+                department_id?: number | null;
             }[];
         };
         ReverseJournalRequest: {
@@ -10247,6 +10274,13 @@ export interface components {
             vat_amount?: string;
             /** @description How the VAT was booked */
             vat_treatment?: components["schemas"]["InputVatTreatment"];
+            /**
+             * Format: int64
+             * @description The department or sub-department the cost belongs to; the journal line of the cost carries it.
+             */
+            department_id?: number | null;
+            department_code?: string;
+            department_name?: string;
         };
         Bill: {
             /** Format: int64 */
@@ -10302,6 +10336,11 @@ export interface components {
                 amount: string;
                 /** @description The VAT paid on the line, on top of the amount (zero or more, at the property's decimals). Booked on the input VAT account, or added to the cost of the line, as the PKP status of the property on the bill date says. The total of the bill is the amounts plus their VAT. */
                 vat_amount?: string;
+                /**
+                 * Format: int64
+                 * @description Optional: the department or sub-department the cost belongs to (422 `lines[N].department_id`).
+                 */
+                department_id?: number | null;
             }[];
         };
         OpenBill: {

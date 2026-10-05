@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { Approval, Bill, GlAccount, Supplier } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -37,7 +38,7 @@ const notice = ref('')
 const busy = ref(false)
 const filter = reactive({ supplier: Number(route.query.supplier) || 0, status: '', open_only: false, q: '', from: '', to: '' })
 const creating = ref(false)
-const form = reactive({ supplier_id: 0, invoice: '', bill_date: '', due_date: '', description: '', lines: [] as { account_id: number; description: string; amount: string; vat_amount: string }[] })
+const form = reactive({ supplier_id: 0, invoice: '', bill_date: '', due_date: '', description: '', lines: [] as { account_id: number; description: string; amount: string; vat_amount: string; department_id: number | null }[] })
 const voiding = ref<{ reason: string; asking: boolean } | null>(null)
 let postKey = newIdempotencyKey()
 
@@ -116,7 +117,7 @@ async function open(b: Bill): Promise<void> {
 
 function startNew(): void {
   Object.assign(form, { supplier_id: filter.supplier || 0, invoice: '', bill_date: '', due_date: '', description: '' })
-  form.lines = [{ account_id: 0, description: '', amount: '', vat_amount: '' }]
+  form.lines = [{ account_id: 0, description: '', amount: '', vat_amount: '', department_id: null }]
   applyDefaultAccount()
   error.value = null
   postKey = newIdempotencyKey()
@@ -141,7 +142,7 @@ async function post(): Promise<void> {
       params: { path: { propertyId }, header: { 'Idempotency-Key': postKey } },
       body: {
         supplier_id: form.supplier_id, supplier_invoice_number: form.invoice, bill_date: form.bill_date, due_date: form.due_date || null, description: form.description || undefined,
-        lines: form.lines.map((l) => ({ account_id: l.account_id, description: l.description || undefined, amount: l.amount.trim(), vat_amount: l.vat_amount.trim() || undefined })),
+        lines: form.lines.map((l) => ({ account_id: l.account_id, description: l.description || undefined, amount: l.amount.trim(), vat_amount: l.vat_amount.trim() || undefined, department_id: l.department_id ?? undefined })),
       },
     })
     postKey = newIdempotencyKey()
@@ -225,6 +226,7 @@ watch(() => pid.value, () => {
             <thead>
               <tr class="border-b border-border text-left text-xs text-muted-foreground">
                 <th class="py-1.5 pr-3 font-medium">{{ t('payables.chargedTo') }}</th>
+                <th class="px-3 font-medium">{{ t('payables.department') }}</th>
                 <th class="px-3 font-medium">{{ t('payables.detail') }}</th>
                 <th class="px-3 text-right font-medium">{{ t('payables.amount') }}</th>
                 <th class="px-3 text-right font-medium">{{ t('payables.vat') }}</th>
@@ -236,6 +238,10 @@ watch(() => pid.value, () => {
                 <td>
                   <Combobox v-model="l.account_id" :name="`account_${i}`" :aria-invalid="!!fieldError(`lines[${i}].account_id`)" :options="[{ value: 0, label: `${t('payables.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                   <small v-if="fieldError(`lines[${i}].account_id`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].account_id`) }}</small>
+                </td>
+                <td>
+                  <DepartmentSelect v-model="l.department_id" :name="`department_${i}`" :aria-invalid="!!fieldError(`lines[${i}].department_id`)" />
+                  <small v-if="fieldError(`lines[${i}].department_id`)" role="alert" class="text-xs text-destructive">{{ fieldError(`lines[${i}].department_id`) }}</small>
                 </td>
                 <td><Input v-model="l.description" :name="`detail_${i}`" maxlength="300" /></td>
                 <td>
@@ -252,7 +258,7 @@ watch(() => pid.value, () => {
             <tfoot>
               <tr class="border-t border-border">
                 <td class="pt-2">
-                  <Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, description: '', amount: '', vat_amount: '' })">{{ t('payables.addLine') }}</Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="add-line" @click="form.lines.push({ account_id: 0, description: '', amount: '', vat_amount: '', department_id: null })">{{ t('payables.addLine') }}</Button>
                   <small class="ml-2 text-xs text-muted-foreground">{{ t('payables.taxLineHint') }}</small>
                 </td>
                 <td class="pt-2 text-right"><b>{{ t('payables.total') }}</b></td>
@@ -319,12 +325,13 @@ watch(() => pid.value, () => {
             <template v-if="opened">
               <p v-if="opened.description" class="mb-2 mt-0 text-sm text-muted-foreground">{{ opened.description }}</p>
               <table class="w-full border-collapse text-sm">
-                <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('payables.account') }}</th><th class="px-3 font-medium">{{ t('payables.detail') }}</th><th class="px-3 text-right font-medium">{{ t('payables.amount') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.vat') }}</th></tr></thead>
+                <thead><tr class="border-b border-border text-left text-xs text-muted-foreground"><th class="py-1 pr-3 font-medium">#</th><th class="px-3 font-medium">{{ t('payables.account') }}</th><th class="px-3 font-medium">{{ t('payables.detail') }}</th><th class="px-3 font-medium">{{ t('payables.department') }}</th><th class="px-3 text-right font-medium">{{ t('payables.amount') }}</th><th class="pl-3 text-right font-medium">{{ t('payables.vat') }}</th></tr></thead>
                 <tbody>
                   <tr v-for="l in opened.lines" :key="l.line_no" class="border-b border-border">
                     <td class="py-1 pr-3">{{ l.line_no }}</td>
                     <td class="px-3">{{ l.account_code }} · {{ l.account_name }}</td>
                     <td class="px-3"><small class="text-muted-foreground">{{ l.description }}</small></td>
+                    <td class="px-3" :data-testid="`line-department-${l.line_no}`"><small v-if="l.department_code" :title="l.department_name">{{ l.department_code }}</small></td>
                     <td class="px-3 text-right tabular-nums">{{ $money(l.amount) }}</td>
                     <td class="pl-3 text-right tabular-nums" :data-testid="`line-vat-${l.line_no}`">
                       <template v-if="l.vat_treatment">{{ $money(l.vat_amount) }} <small class="text-muted-foreground">{{ t(`payables.vat_${l.vat_treatment}`) }}</small></template>
