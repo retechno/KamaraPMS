@@ -214,6 +214,16 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"CASH FLOW STATEMENT": "LAPORAN ARUS KAS", "Indirect method": "Metode tidak langsung", "Direct method": "Metode langsung",
 	"WARNING: the statement differs from the change of the cash accounts by ": "PERINGATAN: laporan berbeda dari perubahan akun kas sebesar ",
 	"DEPARTMENT REPORT": "LAPORAN DEPARTEMEN", "Department": "Departemen", "Revenue": "Pendapatan", "Expense": "Biaya", "Profit": "Laba", "Unassigned": "Tanpa departemen",
+	// cashier shift report
+	"Z REPORT": "LAPORAN Z", "X REPORT": "LAPORAN X", "Cashier shift": "Shift kasir", "Cash reconciliation": "Rekonsiliasi kas", "Opening float": "Modal awal",
+	"Cash payments": "Pembayaran tunai", "Cash refunds": "Pengembalian tunai", "Receipts of the city ledger": "Penerimaan piutang perusahaan", "Voided from earlier shifts": "Dibatalkan dari shift sebelumnya",
+	"Pay-ins": "Kas masuk", "Pay-outs": "Kas keluar", "Drops to the safe": "Setoran ke brankas", "Expected cash": "Kas seharusnya", "Counted cash": "Kas dihitung", "Over": "Lebih", "Short": "Kurang",
+	"Over / short": "Lebih / kurang", "Reason": "Alasan", "Count by denomination": "Hitungan per pecahan", "Other tenders taken by the cashier (not drawer cash)": "Pembayaran non-tunai oleh kasir (bukan kas laci)",
+	"Cash payments and receipts of the shift": "Pembayaran dan penerimaan tunai shift ini", "Movements of the drawer": "Mutasi laci kas", "Shift": "Shift", "Drawer": "Laci kas",
+	"Opened": "Dibuka", "Closed": "Ditutup", "Closed by": "Ditutup oleh", "Variance approved by": "Selisih disetujui oleh", "Drawer handed over to": "Laci diserahkan kepada", "Drop": "Setoran", "Pay-in": "Kas masuk", "Pay-out": "Kas keluar",
+	"payment": "pembayaran", "refund": "pengembalian", "receipt": "penerimaan",
+	"A Z report is final: it is made from the shift as it was closed and does not change.":                            "Laporan Z bersifat final: dibuat dari shift saat ditutup dan tidak berubah.",
+	"An X report is a reading of an open shift: it closes nothing, and the figures change until the shift is closed.": "Laporan X adalah pembacaan shift yang masih terbuka: tidak menutup apa pun, dan angkanya berubah sampai shift ditutup.",
 	// budget
 	"BUDGET AGAINST ACTUAL": "ANGGARAN TERHADAP REALISASI", "Fiscal year": "Tahun fiskal", "Budget": "Anggaran", "Actual": "Realisasi", "Variance": "Selisih",
 	"YTD actual": "Realisasi s.d. kini", "YTD budget": "Anggaran s.d. kini", "YTD variance": "Selisih s.d. kini",

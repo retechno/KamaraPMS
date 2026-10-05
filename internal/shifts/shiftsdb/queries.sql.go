@@ -218,6 +218,60 @@ func (q *Queries) GetShift(ctx context.Context, arg GetShiftParams) (GetShiftRow
 	return i, err
 }
 
+const handoversTo = `-- name: HandoversTo :many
+SELECT s.id, s.shift_number::text AS shift_number, s.drawer::text AS drawer, s.user_id, COALESCE(u.full_name, '')::text AS from_name, s.closed_at::timestamptz AS closed_at,
+       s.counted_cash::numeric AS left_cash
+FROM cashier_shifts s JOIN users u ON u.id = s.user_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status = 'CLOSED' AND s.handed_over_to = $3
+  AND NOT EXISTS (SELECT 1 FROM cashier_shifts n WHERE n.property_id = s.property_id AND n.drawer = s.drawer AND n.id > s.id)
+ORDER BY s.closed_at DESC, s.id DESC
+`
+
+type HandoversToParams struct {
+	TenantID   int64
+	PropertyID int64
+	UserID     *int64
+}
+
+type HandoversToRow struct {
+	ID          int64
+	ShiftNumber string
+	Drawer      string
+	UserID      int64
+	FromName    string
+	ClosedAt    time.Time
+	LeftCash    decimal.Decimal
+}
+
+// The drawers handed to a user: the closed shift that named them, while no later shift has used the drawer.
+func (q *Queries) HandoversTo(ctx context.Context, arg HandoversToParams) ([]HandoversToRow, error) {
+	rows, err := q.db.Query(ctx, handoversTo, arg.TenantID, arg.PropertyID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HandoversToRow{}
+	for rows.Next() {
+		var i HandoversToRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShiftNumber,
+			&i.Drawer,
+			&i.UserID,
+			&i.FromName,
+			&i.ClosedAt,
+			&i.LeftCash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertCount = `-- name: InsertCount :exec
 INSERT INTO cashier_shift_counts (tenant_id, property_id, shift_id, denomination, quantity)
 VALUES ($1, $2, $3, $4, $5)
@@ -334,6 +388,49 @@ func (q *Queries) LastClosedOfDrawer(ctx context.Context, arg LastClosedOfDrawer
 	var left_cash decimal.Decimal
 	err := row.Scan(&left_cash)
 	return left_cash, err
+}
+
+const listCashiers = `-- name: ListCashiers :many
+SELECT u.id, COALESCE(u.full_name, '')::text AS full_name
+FROM users u
+WHERE u.tenant_id = $1 AND u.is_active AND u.id <> $2::bigint
+  AND (u.is_tenant_admin OR EXISTS (
+        SELECT 1 FROM user_properties up
+        JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code IN ('cashier.shift', 'cashier.shift_manage')
+        WHERE up.user_id = u.id AND up.property_id = $3))
+ORDER BY full_name, u.id
+`
+
+type ListCashiersParams struct {
+	TenantID     int64
+	ExceptUserID int64
+	PropertyID   int64
+}
+
+type ListCashiersRow struct {
+	ID       int64
+	FullName string
+}
+
+// The people a drawer can be handed to: active users who can run a shift at the property (the owner of the tenant counts).
+func (q *Queries) ListCashiers(ctx context.Context, arg ListCashiersParams) ([]ListCashiersRow, error) {
+	rows, err := q.db.Query(ctx, listCashiers, arg.TenantID, arg.ExceptUserID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCashiersRow{}
+	for rows.Next() {
+		var i ListCashiersRow
+		if err := rows.Scan(&i.ID, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCounts = `-- name: ListCounts :many
@@ -725,6 +822,62 @@ func (q *Queries) ShiftCash(ctx context.Context, arg ShiftCashParams) (ShiftCash
 	return i, err
 }
 
+const shiftOtherTenders = `-- name: ShiftOtherTenders :many
+SELECT p.payment_method::text AS method, p.payment_type::text AS payment_type, count(*)::int AS n, sum(p.amount)::numeric AS amount
+FROM payments p
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.created_by = $3 AND p.payment_method <> 'CASH' AND p.status = 'POSTED'
+  AND p.paid_at >= $4::timestamptz AND p.paid_at <= $5::timestamptz
+GROUP BY 1, 2
+ORDER BY 1, 2
+`
+
+type ShiftOtherTendersParams struct {
+	TenantID   int64
+	PropertyID int64
+	UserID     *int64
+	OpenedAt   time.Time
+	Until      time.Time
+}
+
+type ShiftOtherTendersRow struct {
+	Method      string
+	PaymentType string
+	N           int32
+	Amount      decimal.Decimal
+}
+
+// What the cashier took in other tenders while the shift was open (card, transfer, other): not drawer cash, shown on the report so that all tenders add up.
+func (q *Queries) ShiftOtherTenders(ctx context.Context, arg ShiftOtherTendersParams) ([]ShiftOtherTendersRow, error) {
+	rows, err := q.db.Query(ctx, shiftOtherTenders,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.UserID,
+		arg.OpenedAt,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShiftOtherTendersRow{}
+	for rows.Next() {
+		var i ShiftOtherTendersRow
+		if err := rows.Scan(
+			&i.Method,
+			&i.PaymentType,
+			&i.N,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSettings = `-- name: UpdateSettings :one
 UPDATE property_cashier_settings
    SET require_shift_for_cash = $1, max_variance = $2, block_night_audit = $3, updated_by = $4
@@ -779,4 +932,39 @@ func (q *Queries) UserInProperty(ctx context.Context, arg UserInPropertyParams) 
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const userNames = `-- name: UserNames :many
+SELECT u.id, COALESCE(u.full_name, '')::text AS full_name FROM users u WHERE u.tenant_id = $1 AND u.id = ANY($2::bigint[])
+`
+
+type UserNamesParams struct {
+	TenantID int64
+	Ids      []int64
+}
+
+type UserNamesRow struct {
+	ID       int64
+	FullName string
+}
+
+// The names of the users on a report (who closed, who approved, who gets the drawer).
+func (q *Queries) UserNames(ctx context.Context, arg UserNamesParams) ([]UserNamesRow, error) {
+	rows, err := q.db.Query(ctx, userNames, arg.TenantID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserNamesRow{}
+	for rows.Next() {
+		var i UserNamesRow
+		if err := rows.Scan(&i.ID, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

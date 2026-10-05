@@ -633,3 +633,103 @@ func TestTheDepartmentRuleOfTheAccountAppliesToAPayOutAndTheOverShortLine(t *tes
 	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "60000", Reason: "a coin lost", Approval: f.approval(), DepartmentID: &dep.ID})
 	must(t, err)
 }
+
+func TestADrawerHandedOverIsWaitingForTheColleagueUntilItIsOpened(t *testing.T) {
+	f := setup(t)
+	colleague := f.User(t, f.tenantID, f.propID, auth.PermCashierShift)
+	pr, err := auth.Require(colleague)
+	must(t, err)
+	// the people a drawer can be handed to: the others who can run a shift (and the owner of the tenant), never oneself
+	list, err := f.Shifts.Cashiers(f.cashier, f.propID)
+	must(t, err)
+	var seen bool
+	for _, c := range list {
+		if c.ID == f.cashierID {
+			t.Fatalf("the caller is not offered: %+v", list)
+		}
+		seen = seen || c.ID == pr.UserID
+	}
+	if !seen {
+		t.Fatalf("the colleague is offered: %+v", list)
+	}
+	if _, err := f.Shifts.Cashiers(f.User(t, f.tenantID, f.propID, auth.PermFolioRead), f.propID); err == nil {
+		t.Fatal("a person who cannot run a shift has no list of cashiers")
+	}
+
+	sh := f.open(t, f.cashier, "", "100000")
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "100000", HandOverTo: &f.cashierID})
+	wantCode(t, err, "VALIDATION_FAILED") // not oneself
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "100000", HandOverTo: &pr.UserID})
+	must(t, err)
+
+	got, err := f.Shifts.Handovers(colleague, f.propID)
+	must(t, err)
+	if len(got) != 1 || got[0].ShiftID != sh.ID || got[0].Drawer != "MAIN" || got[0].LeftCash != "100000" || got[0].FromUserID != f.cashierID || got[0].FromUserName == "" {
+		t.Fatalf("the drawer waits for the colleague: %+v", got)
+	}
+	if mine, err := f.Shifts.Handovers(f.cashier, f.propID); err != nil || len(mine) != 0 {
+		t.Fatalf("nothing waits for the one who handed it over: %v %v", mine, err)
+	}
+	// the colleague opens the drawer with the float it was left with: the handover is done
+	float, err := f.Shifts.SuggestedFloat(colleague, f.propID, "MAIN")
+	must(t, err)
+	if float != "100000" {
+		t.Fatalf("suggested float %s", float)
+	}
+	_, err = f.Shifts.Open(colleague, f.propID, shifts.OpenInput{Drawer: "MAIN"})
+	must(t, err)
+	if after, err := f.Shifts.Handovers(colleague, f.propID); err != nil || len(after) != 0 {
+		t.Fatalf("an opened drawer is no longer waiting: %v %v", after, err)
+	}
+}
+
+func TestTheReportOfAShiftIsZWhenClosedAndXWhileOpen(t *testing.T) {
+	f := setup(t)
+	colleague := f.User(t, f.tenantID, f.propID, auth.PermCashierShift)
+	pr, err := auth.Require(colleague)
+	must(t, err)
+	sh := f.open(t, f.cashier, "", "100000")
+	folio := f.folio(t)
+	_, err = f.pay(f.cashier, folio, "p1", "CASH", "400000")
+	must(t, err)
+	_, err = f.pay(f.cashier, folio, "p2", "CARD", "50000")
+	must(t, err)
+	_, err = f.Shifts.Move(f.cashier, f.propID, sh.ID, "d1", shifts.MovementInput{Kind: "DROP", Amount: "300000", Reason: "to the safe"})
+	must(t, err)
+
+	x, err := f.Shifts.Report(f.cashier, f.propID, sh.ID)
+	must(t, err)
+	if x.Kind != "X" || x.Shift.Status != "OPEN" || x.Shift.Cash == nil || len(x.CashPayments) != 1 || x.CashPayments[0].Amount != "400000" {
+		t.Fatalf("X report: %+v", x)
+	}
+	if len(x.OtherTenders) != 1 || x.OtherTenders[0].Method != "CARD" || x.OtherTenders[0].Kind != "PAYMENT" || x.OtherTenders[0].Count != 1 || x.OtherTenders[0].Amount != "50000" {
+		t.Fatalf("the card is another tender, not drawer cash: %+v", x.OtherTenders)
+	}
+	eqd(t, "expected so far", x.Shift.Cash.Expected, "200000")
+
+	// another cashier does not see it; a manager does
+	_, err = f.Shifts.Report(colleague, f.propID, sh.ID)
+	wantCode(t, err, "PERMISSION_DENIED")
+
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "200000", HandOverTo: &pr.UserID, Counts: []shifts.Count{{Denomination: "100000", Quantity: 2}}})
+	must(t, err)
+	z, err := f.Shifts.Report(f.admin, f.propID, sh.ID)
+	must(t, err)
+	if z.Kind != "Z" || z.Shift.Status != "CLOSED" || z.ClosedByName == "" || z.HandedOverToName == "" || len(z.Shift.Counts) != 1 || len(z.Shift.Movements) != 1 {
+		t.Fatalf("Z report: %+v", z)
+	}
+	eqd(t, "counted", *z.Shift.CountedCash, "200000")
+	// the Z report does not change: a payment made after the close is not on it
+	f.Clock.Set(f.Clock.Now().Add(time.Minute)) // time passes after the close
+	_, err = f.Shifts.Open(f.cashier, f.propID, shifts.OpenInput{Drawer: "BACK"})
+	must(t, err)
+	_, err = f.pay(f.cashier, folio, "p3", "CARD", "70000")
+	must(t, err)
+	again, err := f.Shifts.Report(f.admin, f.propID, sh.ID)
+	must(t, err)
+	if len(again.OtherTenders) != 1 || again.OtherTenders[0].Amount != "50000" {
+		t.Fatalf("the Z report of a closed shift does not move: %+v", again.OtherTenders)
+	}
+	_, err = f.Shifts.Report(f.admin, f.propID, 999999)
+	wantCode(t, err, "SHIFT_NOT_FOUND")
+}

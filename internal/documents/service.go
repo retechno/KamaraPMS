@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/reservations"
+	"kamarapms/internal/shifts"
 	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/taxinvoice"
 	"kamarapms/internal/tenancy"
@@ -44,6 +45,7 @@ type Service struct {
 	tax    *taxfiling.Service
 	taxInv *taxinvoice.Service
 	budget *budget.Service
+	shifts *shifts.Service
 }
 
 // NewService wires the service.

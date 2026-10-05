@@ -61,7 +61,9 @@ Each is built the usual way (DB, backend, API, frontend, tests together) and com
 5. **Voiding a cash payment of a closed shift**: the void keeps working as today (it needs approval), but the shift is already closed, so the
    void is counted in the **shift that is open when it happens** (as a negative line "voided from shift X"); the closed shift never changes.
 6. **Handover**: closing with `hand_over_to` (a user) opens nothing by itself; it records who gets the drawer and the next shift of that drawer
-   suggests the float. Two people never share one open shift.
+   suggests the float. Two people never share one open shift. (Built: `GET cashier/cashiers`, `GET cashier/handovers`, a card on the cashier screen that opens the drawer with the cash it was left with.)
+6a. **The Z and X report** (built): `GET cashier/shifts/{id}/report` and `report.pdf`. Z for a closed shift (final), X for an open one. It adds the other tenders the cashier took during the shift (card, transfer, other)
+   beside the drawer cash, so the whole takings of the shift are on one page; drawer cash is still only what went through the drawer (`payments.shift_id`).
 7. **Drops**: move cash to the safe and are not journaled (the cash stays in CASH). A drop to the bank is out of scope; the bank deposit of cash is a bank
    statement line matched with the CASH account as today.
 8. **Pay-in and pay-out** are journaled on the business date (Dr/Cr CASH against the chosen account; a pay-out to an expense account, a pay-in to

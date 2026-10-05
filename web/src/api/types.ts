@@ -139,6 +139,8 @@ export type CityLedgerAging = Schemas['CityLedgerAging']
 
 export type CityLedgerInvoice = Schemas['CityLedgerInvoice']
 export type CashierShift = Schemas['CashierShift']
+export type Cashier = Schemas['Cashier']
+export type CashierHandover = Schemas['CashierHandover']
 export type CardFeeRule = Schemas['CardFeeRule']
 export type Budget = Schemas['Budget']
 export type Department = Schemas['Department']

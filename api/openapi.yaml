@@ -2578,6 +2578,72 @@ paths:
               schema: { $ref: "#/components/schemas/CashierShift" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/{id}/report:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCashierShiftReport
+      summary: "The report of a shift, the Z report when it is closed and the X report while it is open (the owner, or cashier.shift_manage)"
+      description: "The cash reconciliation (opening float, cash payments and refunds, receipts of the city ledger, voids of earlier shifts, pay-ins, pay-outs, drops, expected, counted, over or short), the count by denomination, the movements, the cash payments and receipts of the shift, and the other tenders (card, transfer, other) the cashier took while it was open. A Z report is made from the shift as it was closed and never changes; an X report reads an open shift and closes nothing."
+      tags: [cashier]
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierShiftReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/shifts/{id}/report.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getCashierShiftReportPdf
+      summary: The Z report (closed shift) or X report (open shift) as PDF (the owner, or cashier.shift_manage)
+      tags: [documents]
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/cashiers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listCashiers
+      summary: The people a drawer can be handed to (cashier.shift)
+      description: "Active users who can run a shift at the property, and the owner of the tenant, except the caller."
+      tags: [cashier]
+      responses:
+        "200":
+          description: The cashiers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/cashier/handovers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listCashierHandovers
+      summary: The drawers handed over to the caller that nobody has opened since (cashier.shift)
+      description: "A shift closed with `hand_over_to` names who gets the drawer. It is listed here, with the cash it was left with (the float the next shift is suggested to open with), until a later shift uses the drawer. Opening it is the ordinary `POST cashier/shifts`."
+      tags: [cashier]
+      responses:
+        "200":
+          description: The handovers waiting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashierHandoverList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/cashier/shifts/{id}/movements:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9251,6 +9317,66 @@ components:
       properties:
         denomination: { type: string }
         quantity: { type: integer, minimum: 0 }
+    Cashier:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+    CashierList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Cashier" }
+    CashierHandover:
+      type: object
+      required: [shift_id, shift_number, drawer, from_user_id, from_user_name, closed_at, left_cash]
+      properties:
+        shift_id: { type: integer, format: int64 }
+        shift_number: { type: string }
+        drawer: { type: string }
+        from_user_id: { type: integer, format: int64 }
+        from_user_name: { type: string }
+        closed_at: { type: string, format: date-time }
+        left_cash: { type: string, description: "What the closing cashier counted in the drawer, which is the float the next shift is suggested to open with." }
+    CashierHandoverList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/CashierHandover" }
+    CashierReportPayment:
+      type: object
+      required: [number, kind, amount, status, paid_at]
+      properties:
+        number: { type: string }
+        kind: { type: string, enum: [PAYMENT, REFUND, RECEIPT] }
+        amount: { type: string }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        paid_at: { type: string, format: date-time }
+        reference: { type: string }
+    CashierTender:
+      type: object
+      required: [method, kind, count, amount]
+      properties:
+        method: { type: string, enum: [CARD, BANK_TRANSFER, OTHER] }
+        kind: { type: string, enum: [PAYMENT, REFUND] }
+        count: { type: integer }
+        amount: { type: string }
+    CashierShiftReport:
+      type: object
+      required: [kind, shift, cash_payments, other_tenders]
+      properties:
+        kind: { type: string, enum: [Z, X], description: "Z for a closed shift (final), X for an open one (the figures so far)." }
+        shift: { $ref: "#/components/schemas/CashierShift" }
+        closed_by_name: { type: string }
+        approved_by_name: { type: string }
+        handed_over_to_name: { type: string }
+        cash_payments: { type: array, items: { $ref: "#/components/schemas/CashierReportPayment" } }
+        other_tenders: { type: array, items: { $ref: "#/components/schemas/CashierTender" } }
     CashierShift:
       type: object
       required: [id, number, user_id, user_name, drawer, status, opened_at, business_date_opened, opening_float, closed_at, business_date_closed, expected_cash, counted_cash, over_short, journal_id, approved_by, handed_over_to]

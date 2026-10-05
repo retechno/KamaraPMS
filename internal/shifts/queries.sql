@@ -115,3 +115,36 @@ ORDER BY 6, 1;
 -- Whether an account of the property may be the other side of a pay-in or pay-out.
 -- name: GetAccountForMovement :one
 SELECT id, code, name, account_type, is_postable, is_active FROM gl_accounts WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The people a drawer can be handed to: active users who can run a shift at the property (the owner of the tenant counts).
+-- name: ListCashiers :many
+SELECT u.id, COALESCE(u.full_name, '')::text AS full_name
+FROM users u
+WHERE u.tenant_id = @tenant_id AND u.is_active AND u.id <> @except_user_id::bigint
+  AND (u.is_tenant_admin OR EXISTS (
+        SELECT 1 FROM user_properties up
+        JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code IN ('cashier.shift', 'cashier.shift_manage')
+        WHERE up.user_id = u.id AND up.property_id = @property_id))
+ORDER BY full_name, u.id;
+
+-- The drawers handed to a user: the closed shift that named them, while no later shift has used the drawer.
+-- name: HandoversTo :many
+SELECT s.id, s.shift_number::text AS shift_number, s.drawer::text AS drawer, s.user_id, COALESCE(u.full_name, '')::text AS from_name, s.closed_at::timestamptz AS closed_at,
+       s.counted_cash::numeric AS left_cash
+FROM cashier_shifts s JOIN users u ON u.id = s.user_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status = 'CLOSED' AND s.handed_over_to = @user_id
+  AND NOT EXISTS (SELECT 1 FROM cashier_shifts n WHERE n.property_id = s.property_id AND n.drawer = s.drawer AND n.id > s.id)
+ORDER BY s.closed_at DESC, s.id DESC;
+
+-- What the cashier took in other tenders while the shift was open (card, transfer, other): not drawer cash, shown on the report so that all tenders add up.
+-- name: ShiftOtherTenders :many
+SELECT p.payment_method::text AS method, p.payment_type::text AS payment_type, count(*)::int AS n, sum(p.amount)::numeric AS amount
+FROM payments p
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.created_by = @user_id AND p.payment_method <> 'CASH' AND p.status = 'POSTED'
+  AND p.paid_at >= @opened_at::timestamptz AND p.paid_at <= @until::timestamptz
+GROUP BY 1, 2
+ORDER BY 1, 2;
+
+-- The names of the users on a report (who closed, who approved, who gets the drawer).
+-- name: UserNames :many
+SELECT u.id, COALESCE(u.full_name, '')::text AS full_name FROM users u WHERE u.tenant_id = @tenant_id AND u.id = ANY(@ids::bigint[]);

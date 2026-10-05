@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, CashierSettings, CashierShift, GlAccount } from '@/api/types'
+import type { Approval, Cashier, CashierHandover, CashierSettings, CashierShift, GlAccount } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -18,6 +18,7 @@ import { t } from '@/i18n'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { listAccounts } from '@/views/accounting/accountApi'
 
@@ -27,6 +28,9 @@ const property = usePropertyStore()
 const current = ref<CashierShift | null>(null)
 const shifts = ref<CashierShift[]>([])
 const settings = ref<CashierSettings | null>(null)
+const handovers = ref<CashierHandover[]>([])
+const cashiers = ref<Cashier[]>([])
+const lastClosed = ref<CashierShift | null>(null)
 const chart = ref<GlAccount[]>([])
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
@@ -36,7 +40,7 @@ const loaded = ref(false)
 
 const openForm = reactive({ drawer: '', opening_float: '' })
 const move = reactive({ kind: 'DROP' as 'DROP' | 'PAY_IN' | 'PAY_OUT', amount: '', account_id: 0, department_id: null as number | null, reason: '' })
-const closing = reactive({ open: false, counted: '', reason: '', department_id: null as number | null, asking: false })
+const closing = reactive({ open: false, counted: '', reason: '', department_id: null as number | null, hand_over_to: 0, asking: false })
 const settingsForm = reactive({ require_shift_for_cash: true, max_variance: '0', block_night_audit: true })
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
 let moveKey = newIdempotencyKey()
@@ -58,6 +62,7 @@ const columns = computed<Column<CashierShift>[]>(() => [
   { key: 'counted_cash', label: t('shifts.counted'), align: 'right', format: 'money' as const },
   { key: 'over_short', label: t('shifts.overShort'), align: 'right' },
   { key: 'status', label: t('setup.status') },
+  { key: 'report', label: '', align: 'right' as const },
 ])
 
 async function load(): Promise<void> {
@@ -74,6 +79,11 @@ async function load(): Promise<void> {
     shifts.value = l.data?.data ?? []
     settings.value = s.data ?? null
     if (s.data) Object.assign(settingsForm, s.data)
+    handovers.value = []
+    if (canShift.value && !current.value) {
+      const h = await api.GET('/api/v1/properties/{propertyId}/cashier/handovers', { params: { path: { propertyId } } })
+      handovers.value = Array.isArray(h.data?.data) ? h.data.data : [] // what was handed to this cashier and waits
+    }
     if (canShift.value && !current.value && !openForm.opening_float) {
       const f = await api.GET('/api/v1/properties/{propertyId}/cashier/shifts/suggested-float', { params: { path: { propertyId }, query: { drawer: openForm.drawer || undefined } } })
       openForm.opening_float = f.data?.opening_float ?? ''
@@ -116,6 +126,36 @@ async function openShift(): Promise<void> {
   }
 }
 
+/** Opens the drawer that was handed over, with the cash it was left with. */
+async function openHandover(h: CashierHandover): Promise<void> {
+  openForm.drawer = h.drawer
+  openForm.opening_float = h.left_cash
+  await openShift()
+}
+
+/** The Z report of a closed shift, the X report of an open one, as a PDF. */
+async function showReport(sh: CashierShift): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  error.value = null
+  try {
+    await openPdf(`/api/v1/properties/${propertyId}/cashier/shifts/${sh.id}/report.pdf`)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
+async function loadCashiers(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || !canShift.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/cashier/cashiers', { params: { path: { propertyId } } })
+    cashiers.value = Array.isArray(data?.data) ? data.data : []
+  } catch {
+    cashiers.value = [] // the drawer is then simply not handed to anyone
+  }
+}
+
 async function moveCash(): Promise<void> {
   const propertyId = pid.value
   const sh = current.value
@@ -148,8 +188,11 @@ function startClose(): void {
   closing.counted = ''
   closing.reason = ''
   closing.department_id = null
+  closing.hand_over_to = 0
+  lastClosed.value = null
   error.value = null
   notice.value = ''
+  void loadCashiers()
 }
 
 /** The difference the count makes against the cash expected, as the server will take it (shown as a hint). */
@@ -167,10 +210,11 @@ async function close(approval?: Approval): Promise<void> {
   busy.value = true
   dialogError.value = null
   try {
-    await api.POST('/api/v1/properties/{propertyId}/cashier/shifts/{id}/close', {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/cashier/shifts/{id}/close', {
       params: { path: { propertyId, id: sh.id } },
-      body: { counted_cash: closing.counted.trim(), reason: closing.reason.trim() || undefined, department_id: closing.department_id, approval },
+      body: { counted_cash: closing.counted.trim(), reason: closing.reason.trim() || undefined, department_id: closing.department_id, hand_over_to: closing.hand_over_to || undefined, approval },
     })
+    lastClosed.value = data && typeof data === 'object' && 'id' in data ? (data as CashierShift) : null
     closing.open = false
     closing.asking = false
     notice.value = t('shifts.closedNotice')
@@ -213,6 +257,8 @@ async function saveSettings(): Promise<void> {
 watch(() => property.currentId, () => {
   current.value = null
   shifts.value = []
+  handovers.value = []
+  lastClosed.value = null
   loaded.value = false
   void load()
 }, { immediate: true })
@@ -230,6 +276,19 @@ watch(() => move.kind, (k) => {
   <p v-else-if="!canSee" class="muted" data-testid="no-access">{{ t('shifts.noAccess', { permission: 'cashier.shift' }) }}</p>
 
   <template v-else>
+    <Card v-if="lastClosed" class="mb-4" data-testid="closed-card">
+      <CardContent class="flex flex-wrap items-center gap-3 pt-4 text-sm">
+        <span>{{ t('shifts.closedSummary', { number: lastClosed.number }) }}</span>
+        <Button type="button" variant="outline" size="sm" data-testid="print-z" @click="showReport(lastClosed)">{{ t('shifts.printZ') }}</Button>
+      </CardContent>
+    </Card>
+    <Card v-for="h in handovers" :key="h.shift_id" class="mb-4 border-primary/40" :data-testid="`handover-${h.drawer}`">
+      <CardHeader>
+        <CardTitle>{{ t('shifts.handoverTitle', { drawer: h.drawer }) }}</CardTitle>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('shifts.handoverHint', { from: h.from_user_name, number: h.shift_number, when: $date(h.closed_at.slice(0, 10)), amount: $money(h.left_cash) }) }}</p>
+      </CardHeader>
+      <CardContent><Button type="button" :disabled="busy" data-testid="open-handover" @click="openHandover(h)">{{ t('shifts.openHandover', { amount: $money(h.left_cash) }) }}</Button></CardContent>
+    </Card>
     <Card v-if="canShift && loaded && !current" class="mb-4" data-testid="open-form">
       <form novalidate @submit.prevent="openShift">
         <CardHeader>
@@ -252,6 +311,7 @@ watch(() => move.kind, (k) => {
       <Card class="mb-4" data-testid="current-shift">
         <CardHeader>
           <CardTitle>{{ t('shifts.current', { number: current.number, drawer: current.drawer }) }}</CardTitle>
+          <Button type="button" variant="outline" size="sm" data-testid="print-x" @click="showReport(current)">{{ t('shifts.printX') }}</Button>
         </CardHeader>
         <CardContent>
           <dl v-if="current.cash" class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4" data-testid="cash">
@@ -328,6 +388,14 @@ watch(() => move.kind, (k) => {
               <FormField :label="t('departments.field')" :error="fieldError('department_id')">
                 <template #default="{ id }"><DepartmentSelect :id="id" v-model="closing.department_id" name="close_department" /></template>
               </FormField>
+              <FormField :label="t('shifts.handOverTo')" :hint="t('shifts.handOverHint')" :error="fieldError('hand_over_to')">
+                <template #default="{ id }">
+                  <NativeSelect :id="id" v-model="closing.hand_over_to" name="hand_over_to">
+                    <option :value="0">{{ t('shifts.handOverNone') }}</option>
+                    <option v-for="c in cashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </NativeSelect>
+                </template>
+              </FormField>
             </div>
             <p v-if="difference !== null" class="mt-3 text-sm" data-testid="difference">
               {{ difference === 0 ? t('shifts.exact') : difference < 0 ? t('shifts.short', { amount: $money(String(-difference)) }) : t('shifts.over', { amount: $money(String(difference)) }) }}
@@ -362,6 +430,7 @@ watch(() => move.kind, (k) => {
         <DataTable v-else :columns="columns" :rows="shifts" row-key="id" :row-test-id="(s) => `shift-${s.number}`" :caption="t('shifts.title')">
           <template #cell-over_short="{ row }">{{ row.over_short === null ? '-' : $money(row.over_short) }}</template>
           <template #cell-status="{ row }"><Badge :variant="row.status === 'OPEN' ? 'success' : 'outline'">{{ row.status === 'OPEN' ? t('shifts.statusOpen') : t('shifts.statusClosed') }}</Badge></template>
+          <template #cell-report="{ row }"><Button type="button" variant="ghost" size="sm" :data-testid="`report-${row.number}`" @click="showReport(row)">{{ row.status === 'OPEN' ? t('shifts.reportX') : t('shifts.reportZ') }}</Button></template>
         </DataTable>
       </CardContent>
     </Card>

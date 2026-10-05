@@ -137,6 +137,7 @@ func Setup(t *testing.T) *Env {
 	bud := budget.NewService(txm, c, aw, authz, ten, ia)
 	docs := documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv)
 	docs.SetBudget(bud)
+	docs.SetShifts(sh)
 	bud.SetDepartments(dept)
 	return &Env{Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,

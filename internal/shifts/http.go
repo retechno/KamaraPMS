@@ -25,6 +25,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/shifts/current", httpx.HandlerFunc(h.current))
 	mux.Handle("GET "+p+"/shifts/suggested-float", httpx.HandlerFunc(h.suggestedFloat))
 	mux.Handle("GET "+p+"/shifts/{id}", httpx.HandlerFunc(h.get))
+	mux.Handle("GET "+p+"/shifts/{id}/report", httpx.HandlerFunc(h.report))
+	mux.Handle("GET "+p+"/cashiers", httpx.HandlerFunc(h.cashiers))
+	mux.Handle("GET "+p+"/handovers", httpx.HandlerFunc(h.handovers))
 	mux.Handle("POST "+p+"/shifts/{id}/movements", httpx.HandlerFunc(h.move))
 	mux.Handle("POST "+p+"/shifts/{id}/close", httpx.HandlerFunc(h.close))
 	mux.Handle("GET "+p+"/settings", httpx.HandlerFunc(h.settings))
@@ -223,4 +226,40 @@ func (h *Handler) setSettings(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, s)
+}
+
+func (h *Handler) report(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	rep, err := h.svc.Report(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, rep)
+}
+
+func (h *Handler) cashiers(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Cashiers(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Cashier]{Data: list})
+}
+
+func (h *Handler) handovers(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.Handovers(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[Handover]{Data: list})
 }

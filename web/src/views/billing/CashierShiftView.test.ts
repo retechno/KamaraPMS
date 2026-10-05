@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import CashierShiftView from './CashierShiftView.vue'
 
+const openPdf = vi.fn()
+vi.mock('@/utils/documents', () => ({ openPdf: (...a: unknown[]) => openPdf(...a) }))
 let GET = vi.fn()
 let POST = vi.fn()
 let PUT = vi.fn()
@@ -20,6 +22,7 @@ const openShift = {
 const closedShift = { ...openShift, id: 4, number: 'SHF000004', status: 'CLOSED', expected_cash: '300000', counted_cash: '295000', over_short: '-5000', cash: undefined }
 
 let current: unknown = null
+let waiting: unknown[] = []
 
 function mountView(permissions = ['cashier.shift']) {
   const pinia = createPinia()
@@ -28,6 +31,8 @@ function mountView(permissions = ['cashier.shift']) {
   usePropertyStore().currentId = 7
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/current')) return { data: { shift: current } }
+    if (path.endsWith('/handovers')) return { data: { data: waiting } }
+    if (path.endsWith('/cashiers')) return { data: { data: [{ id: 12, name: 'Dewi' }] } }
     if (path.endsWith('/suggested-float')) return { data: { opening_float: '200000' } }
     if (path.endsWith('/settings')) return { data: { require_shift_for_cash: true, max_variance: '0', block_night_audit: true } }
     return { data: { data: [closedShift] } }
@@ -42,6 +47,8 @@ describe('CashierShiftView', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
     current = null
+    waiting = []
+    openPdf.mockReset()
     GET = vi.fn()
     POST = vi.fn()
     PUT = vi.fn()
@@ -101,6 +108,51 @@ describe('CashierShiftView', () => {
     expect(last[0]).toBe('/api/v1/properties/{propertyId}/cashier/shifts/{id}/close')
     expect(last[1].body).toMatchObject({ counted_cash: '495000', reason: 'a coin lost', approval: { email: 'sari@hotel.com', password: 'secret' } })
     expect(w.get('[data-testid=notice]').text()).toContain('The shift is closed')
+  })
+
+  it('shows a drawer that was handed over and opens it with the cash it was left with', async () => {
+    waiting = [{ shift_id: 3, shift_number: 'SHF000003', drawer: 'FRONT', from_user_id: 4, from_user_name: 'Budi', closed_at: '2026-10-03T14:00:00Z', left_cash: '450000' }]
+    const w = mountView()
+    await flushPromises()
+    const card = w.get('[data-testid=handover-FRONT]')
+    expect(card.text()).toContain('Drawer FRONT was handed over to you')
+    expect(card.text()).toContain('Budi closed shift SHF000003')
+    expect(card.text()).toContain('450,000')
+    await w.get('[data-testid=open-handover]').trigger('click')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/cashier/shifts', { params: { path: { propertyId: 7 } }, body: { drawer: 'FRONT', opening_float: '450000' } })
+  })
+
+  it('hands the drawer over to a colleague when closing, and prints the Z report afterwards', async () => {
+    current = openShift
+    POST = vi.fn().mockResolvedValue({ data: { ...closedShift, id: 5, number: 'SHF000005' } })
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=start-close]').trigger('click')
+    await flushPromises()
+    const options = w.findAll('select[name=hand_over_to] option').map((o) => o.text())
+    expect(options).toEqual(['Nobody', 'Dewi'])
+    await w.get('input[name=counted_cash]').setValue('500000')
+    await w.get('select[name=hand_over_to]').setValue('12')
+    POST.mockResolvedValue({ data: { ...closedShift, id: 5, number: 'SHF000005' } })
+    await w.get('[data-testid=close-form] form').trigger('submit')
+    await flushPromises()
+    const body = (POST.mock.calls.at(-1) as [string, { body: Record<string, unknown> }])[1].body
+    expect(body.hand_over_to).toBe(12)
+    expect(w.get('[data-testid=closed-card]').text()).toContain('SHF000005')
+    await w.get('[data-testid=print-z]').trigger('click')
+    expect(openPdf).toHaveBeenCalledWith('/api/v1/properties/7/cashier/shifts/5/report.pdf')
+  })
+
+  it('prints the X report of the open shift and the report of a listed shift', async () => {
+    current = openShift
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=print-x]').trigger('click')
+    expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/cashier/shifts/5/report.pdf')
+    expect(w.get('[data-testid=report-SHF000004]').text()).toBe('Z report')
+    await w.get('[data-testid=report-SHF000004]').trigger('click')
+    expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/cashier/shifts/4/report.pdf')
   })
 
   it('shows the settings only with cashier.settings and saves them', async () => {

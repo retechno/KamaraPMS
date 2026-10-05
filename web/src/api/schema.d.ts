@@ -2109,6 +2109,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/cashier/shifts/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The report of a shift, the Z report when it is closed and the X report while it is open (the owner, or cashier.shift_manage)
+         * @description The cash reconciliation (opening float, cash payments and refunds, receipts of the city ledger, voids of earlier shifts, pay-ins, pay-outs, drops, expected, counted, over or short), the count by denomination, the movements, the cash payments and receipts of the shift, and the other tenders (card, transfer, other) the cashier took while it was open. A Z report is made from the shift as it was closed and never changes; an X report reads an open shift and closes nothing.
+         */
+        get: operations["getCashierShiftReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/shifts/{id}/report.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The Z report (closed shift) or X report (open shift) as PDF (the owner, or cashier.shift_manage) */
+        get: operations["getCashierShiftReportPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/cashiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The people a drawer can be handed to (cashier.shift)
+         * @description Active users who can run a shift at the property, and the owner of the tenant, except the caller.
+         */
+        get: operations["listCashiers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/cashier/handovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The drawers handed over to the caller that nobody has opened since (cashier.shift)
+         * @description A shift closed with `hand_over_to` names who gets the drawer. It is listed here, with the cash it was left with (the float the next shift is suggested to open with), until a later shift uses the drawer. Opening it is the ordinary `POST cashier/shifts`.
+         */
+        get: operations["listCashierHandovers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/cashier/shifts/{id}/movements": {
         parameters: {
             query?: never;
@@ -8257,6 +8347,62 @@ export interface components {
         CashierCount: {
             denomination: string;
             quantity: number;
+        };
+        Cashier: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        CashierList: {
+            data: components["schemas"]["Cashier"][];
+        };
+        CashierHandover: {
+            /** Format: int64 */
+            shift_id: number;
+            shift_number: string;
+            drawer: string;
+            /** Format: int64 */
+            from_user_id: number;
+            from_user_name: string;
+            /** Format: date-time */
+            closed_at: string;
+            /** @description What the closing cashier counted in the drawer, which is the float the next shift is suggested to open with. */
+            left_cash: string;
+        };
+        CashierHandoverList: {
+            data: components["schemas"]["CashierHandover"][];
+        };
+        CashierReportPayment: {
+            number: string;
+            /** @enum {string} */
+            kind: "PAYMENT" | "REFUND" | "RECEIPT";
+            amount: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            paid_at: string;
+            reference?: string;
+        };
+        CashierTender: {
+            /** @enum {string} */
+            method: "CARD" | "BANK_TRANSFER" | "OTHER";
+            /** @enum {string} */
+            kind: "PAYMENT" | "REFUND";
+            count: number;
+            amount: string;
+        };
+        CashierShiftReport: {
+            /**
+             * @description Z for a closed shift (final), X for an open one (the figures so far).
+             * @enum {string}
+             */
+            kind: "Z" | "X";
+            shift: components["schemas"]["CashierShift"];
+            closed_by_name?: string;
+            approved_by_name?: string;
+            handed_over_to_name?: string;
+            cash_payments: components["schemas"]["CashierReportPayment"][];
+            other_tenders: components["schemas"]["CashierTender"][];
         };
         CashierShift: {
             /** Format: int64 */
@@ -14944,6 +15090,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashierShift"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCashierShiftReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierShiftReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCashierShiftReportPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCashiers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cashiers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCashierHandovers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The handovers waiting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashierHandoverList"];
                 };
             };
             403: components["responses"]["Problem"];
