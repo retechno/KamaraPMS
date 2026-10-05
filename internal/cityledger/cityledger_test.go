@@ -523,3 +523,22 @@ func TestAReceiptByCardKeepsTheFeeRuleOfItsDay(t *testing.T) {
 		t.Fatal("cash has no fee")
 	}
 }
+
+func TestAReceiptByCardKeepsTheVATItExpectsOnTheFee(t *testing.T) {
+	f := setup(t)
+	_, err := f.transfer(f.folio(t, "400000"), f.acme.ID, "t1", "300000")
+	must(t, err)
+	must(t, f.Exec(t, `INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from) VALUES ($1, $2, 'CARD', 1.5, 11, 3, '2026-09-01')`, f.tenantID, f.propID))
+	card, err := f.CityLedger.Receive(f.admin, f.propID, f.acme.ID, "r-card", cityledger.ReceiptInput{Amount: "100000", PaymentMethod: "CARD"})
+	must(t, err)
+	var vatRate, vat string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT mdr_vat_rate::text, mdr_vat::text FROM city_ledger_receipts WHERE id = $1`, card.Receipt.ID).Scan(&vatRate, &vat))
+	if vatRate != "11.0000" || vat != "165.000" { // 11% of the fee of 1,500
+		t.Fatalf("the VAT snapshot: %s %s", vatRate, vat)
+	}
+	cash, err := f.CityLedger.Receive(f.admin, f.propID, f.acme.ID, "r-cash", cityledger.ReceiptInput{Amount: "1000", PaymentMethod: "CASH"})
+	must(t, err)
+	if f.Count(t, `SELECT count(*) FROM city_ledger_receipts WHERE id = $1 AND mdr_vat_rate IS NULL AND mdr_vat IS NULL`, cash.Receipt.ID) != 1 {
+		t.Fatal("cash has no VAT snapshot")
+	}
+}

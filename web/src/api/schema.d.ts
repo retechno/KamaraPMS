@@ -7965,6 +7965,10 @@ export interface components {
             mdr_rate?: string;
             /** @description The fee the acquirer is expected to keep. */
             mdr_fee?: string;
+            /** @description The VAT rate (percent) of the rule on the day; absent for a payment taken before the VAT was kept (without rate). */
+            mdr_vat_rate?: string;
+            /** @description The VAT the acquirer is expected to charge on the fee. */
+            mdr_vat?: string;
             expected_settlement_date?: components["schemas"]["Date"];
             /** Format: int64 */
             id: number;
@@ -8972,6 +8976,8 @@ export interface components {
             payment_method: "CARD" | "OTHER";
             /** @description A percent. */
             mdr_rate: string;
+            /** @description The VAT (percent) the acquirer charges on the MDR; 0 when none. */
+            vat_rate: string;
             settlement_days: number;
             effective_from: components["schemas"]["Date"];
             /** Format: date-time */
@@ -8982,6 +8988,8 @@ export interface components {
             payment_method: "CARD" | "OTHER";
             /** @description 0 to 100, at most 4 decimals. */
             mdr_rate: string;
+            /** @description The VAT the acquirer charges on the MDR, 0 to 100, at most 4 decimals; absent is 0 (422 `INVALID_RATE`). */
+            vat_rate?: string;
             settlement_days: number;
             effective_from: components["schemas"]["Date"];
         };
@@ -8997,6 +9005,15 @@ export interface components {
             /** @description Null for a payment taken before there was a rule. */
             mdr_rate: string | null;
             expected_mdr: string;
+            /** @description Null for a payment with no VAT snapshot (taken before the VAT was kept). */
+            vat_rate: string | null;
+            /** @description The VAT expected on the MDR; 0 for a payment without a VAT rate. */
+            expected_vat: string;
+            /** @description The MDR and the VAT. */
+            expected_deduction: string;
+            /** @description The payment has an MDR snapshot but no VAT rate: it expects no VAT and nothing is guessed. */
+            without_vat_rate: boolean;
+            /** @description The amount less the expected deduction. */
             expected_net: string;
             expected_date: components["schemas"]["Date"] | null;
             late: boolean;
@@ -9006,11 +9023,15 @@ export interface components {
             account_key: string;
             gross: string;
             expected_mdr: string;
+            expected_vat: string;
+            expected_deduction: string;
             expected_net: string;
             late_count: number;
             late_gross: string;
             /** @description Payments without a snapshot. */
             without_rate: number;
+            /** @description Payments with an MDR snapshot and no VAT rate. */
+            without_vat_rate: number;
             lines: components["schemas"]["ExpectedCardLine"][];
         };
         SettlementProposal: {
@@ -9024,6 +9045,9 @@ export interface components {
             difference: string;
             gross: string;
             expected_mdr: string;
+            expected_vat: string;
+            expected_deduction: string;
+            without_vat_rate: number;
             expected_net: string;
             journal_line_ids: number[];
             lines: components["schemas"]["ExpectedCardLine"][];

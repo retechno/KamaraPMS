@@ -316,8 +316,8 @@ func (q *Queries) InsertBankAccount(ctx context.Context, arg InsertBankAccountPa
 }
 
 const insertCardFeeRule = `-- name: InsertCardFeeRule :one
-INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by, vat_rate
 `
 
@@ -326,6 +326,7 @@ type InsertCardFeeRuleParams struct {
 	PropertyID     int64
 	PaymentMethod  string
 	MdrRate        decimal.Decimal
+	VatRate        decimal.Decimal
 	SettlementDays int16
 	EffectiveFrom  civil.Date
 	ActorID        *int64
@@ -337,6 +338,7 @@ func (q *Queries) InsertCardFeeRule(ctx context.Context, arg InsertCardFeeRulePa
 		arg.PropertyID,
 		arg.PaymentMethod,
 		arg.MdrRate,
+		arg.VatRate,
 		arg.SettlementDays,
 		arg.EffectiveFrom,
 		arg.ActorID,
@@ -1106,7 +1108,7 @@ func (q *Queries) NextStatementExists(ctx context.Context, arg NextStatementExis
 }
 
 const paymentFeeSnapshots = `-- name: PaymentFeeSnapshots :many
-SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date, mdr_vat_rate AS vat_rate, mdr_vat AS vat
 FROM payments
 WHERE tenant_id = $1 AND property_id = $2 AND payment_number = ANY($3::text[]) AND mdr_rate IS NOT NULL
 `
@@ -1122,6 +1124,8 @@ type PaymentFeeSnapshotsRow struct {
 	MdrRate      decimal.Decimal
 	MdrFee       decimal.Decimal
 	ExpectedDate civil.Date
+	VatRate      *decimal.Decimal
+	Vat          *decimal.Decimal
 }
 
 // The snapshots of the payments and the city ledger receipts of some numbers (the reference of a journal line is the number of its document).
@@ -1139,6 +1143,8 @@ func (q *Queries) PaymentFeeSnapshots(ctx context.Context, arg PaymentFeeSnapsho
 			&i.MdrRate,
 			&i.MdrFee,
 			&i.ExpectedDate,
+			&i.VatRate,
+			&i.Vat,
 		); err != nil {
 			return nil, err
 		}
@@ -1189,7 +1195,7 @@ func (q *Queries) PreviousStatement(ctx context.Context, arg PreviousStatementPa
 }
 
 const receiptFeeSnapshots = `-- name: ReceiptFeeSnapshots :many
-SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date, mdr_vat_rate AS vat_rate, mdr_vat AS vat
 FROM city_ledger_receipts
 WHERE tenant_id = $1 AND property_id = $2 AND receipt_number = ANY($3::text[]) AND mdr_rate IS NOT NULL
 `
@@ -1205,6 +1211,8 @@ type ReceiptFeeSnapshotsRow struct {
 	MdrRate      decimal.Decimal
 	MdrFee       decimal.Decimal
 	ExpectedDate civil.Date
+	VatRate      *decimal.Decimal
+	Vat          *decimal.Decimal
 }
 
 func (q *Queries) ReceiptFeeSnapshots(ctx context.Context, arg ReceiptFeeSnapshotsParams) ([]ReceiptFeeSnapshotsRow, error) {
@@ -1221,6 +1229,8 @@ func (q *Queries) ReceiptFeeSnapshots(ctx context.Context, arg ReceiptFeeSnapsho
 			&i.MdrRate,
 			&i.MdrFee,
 			&i.ExpectedDate,
+			&i.VatRate,
+			&i.Vat,
 		); err != nil {
 			return nil, err
 		}

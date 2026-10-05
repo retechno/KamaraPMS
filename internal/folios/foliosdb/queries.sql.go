@@ -37,7 +37,7 @@ func (q *Queries) BumpFolio(ctx context.Context, arg BumpFolioParams) error {
 }
 
 const cardFeeRule = `-- name: CardFeeRule :one
-SELECT mdr_rate, settlement_days FROM card_fee_rules
+SELECT mdr_rate, vat_rate, settlement_days FROM card_fee_rules
 WHERE tenant_id = $1 AND property_id = $2 AND payment_method = $3 AND effective_from <= $4::date
 ORDER BY effective_from DESC
 LIMIT 1
@@ -52,6 +52,7 @@ type CardFeeRuleParams struct {
 
 type CardFeeRuleRow struct {
 	MdrRate        decimal.Decimal
+	VatRate        decimal.Decimal
 	SettlementDays int16
 }
 
@@ -64,7 +65,7 @@ func (q *Queries) CardFeeRule(ctx context.Context, arg CardFeeRuleParams) (CardF
 		arg.OnDate,
 	)
 	var i CardFeeRuleRow
-	err := row.Scan(&i.MdrRate, &i.SettlementDays)
+	err := row.Scan(&i.MdrRate, &i.VatRate, &i.SettlementDays)
 	return i, err
 }
 
@@ -847,10 +848,10 @@ const insertPayment = `-- name: InsertPayment :one
 
 INSERT INTO payments (
     tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date,
-    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date
+    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
 RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 `
@@ -876,6 +877,8 @@ type InsertPaymentParams struct {
 	MdrRate                *decimal.Decimal
 	MdrFee                 *decimal.Decimal
 	ExpectedSettlementDate *civil.Date
+	MdrVatRate             *decimal.Decimal
+	MdrVat                 *decimal.Decimal
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +905,8 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		arg.MdrRate,
 		arg.MdrFee,
 		arg.ExpectedSettlementDate,
+		arg.MdrVatRate,
+		arg.MdrVat,
 	)
 	var i Payment
 	err := row.Scan(

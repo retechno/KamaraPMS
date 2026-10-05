@@ -32,6 +32,10 @@ func (s *Service) paymentView(ctx context.Context, propertyID int64, pay foliosd
 		rate, fee := pay.MdrRate.String(), fixed(*pay.MdrFee, decimals)
 		v.MDRRate, v.MDRFee, v.ExpectedSettlementDate = &rate, &fee, pay.ExpectedSettlementDate
 	}
+	if pay.MdrVatRate != nil && pay.MdrVat != nil {
+		rate, vat := pay.MdrVatRate.String(), fixed(*pay.MdrVat, decimals)
+		v.MDRVATRate, v.MDRVAT = &rate, &vat
+	}
 	if pay.PaymentType == PaymentTypePayment && pay.Status == PaymentPosted {
 		sum, err := s.q(ctx).SumRefundsOf(ctx, foliosdb.SumRefundsOfParams{PropertyID: propertyID, PaymentID: &pay.ID})
 		if err != nil {
@@ -89,7 +93,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 			return foliosdb.Payment{}, err
 		}
 	}
-	var mdrRate, mdrFee *decimal.Decimal
+	var mdrRate, mdrFee, mdrVATRate, mdrVAT *decimal.Decimal
 	var settleOn *civil.Date
 	if payType == PaymentTypePayment && (method == "CARD" || method == "OTHER") {
 		rule, err := ps.s.q(ctx).CardFeeRule(ctx, foliosdb.CardFeeRuleParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentMethod: method, OnDate: ps.bd})
@@ -100,7 +104,9 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 				return foliosdb.Payment{}, derr
 			}
 			fee, on := money.Percent(amount, rule.MdrRate, decimals), ps.bd.AddDays(int(rule.SettlementDays))
+			vat := money.Percent(fee, rule.VatRate, decimals)    // the VAT the acquirer will charge on the (rounded) MDR
 			mdrRate, mdrFee, settleOn = &rule.MdrRate, &fee, &on // the rate that applies today is kept with the payment
+			mdrVATRate, mdrVAT = &rule.VatRate, &vat
 		case !errors.Is(err, pgx.ErrNoRows):
 			return foliosdb.Payment{}, err
 		}
@@ -116,7 +122,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 	pay, err := ps.s.q(ctx).InsertPayment(ctx, foliosdb.InsertPaymentParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentNumber: number, FolioID: ps.folio.ID, PaymentType: payType, PaymentMethod: method,
 		Amount: amount, PaidAt: ps.at, BusinessDate: ps.bd, ReferenceNumber: nullable(in.ReferenceNumber), RefundOfPaymentID: refundOf,
-		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID, ShiftID: shiftID, MdrRate: mdrRate, MdrFee: mdrFee, ExpectedSettlementDate: settleOn,
+		IdempotencyKey: nullable(key), Remarks: nullable(remarks), ActorID: ps.p.ActorID(), ApprovedBy: approvedBy, CompanyID: in.companyID, ShiftID: shiftID, MdrRate: mdrRate, MdrFee: mdrFee, ExpectedSettlementDate: settleOn, MdrVatRate: mdrVATRate, MdrVat: mdrVAT,
 	})
 	if err != nil {
 		return foliosdb.Payment{}, err

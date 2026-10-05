@@ -25,6 +25,7 @@ type FeeRule struct {
 	ID             int64      `json:"id"`
 	PaymentMethod  string     `json:"payment_method"`
 	MDRRate        string     `json:"mdr_rate"`
+	VATRate        string     `json:"vat_rate"` // the VAT the acquirer charges on the MDR
 	SettlementDays int        `json:"settlement_days"`
 	EffectiveFrom  civil.Date `json:"effective_from"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -34,6 +35,7 @@ type FeeRule struct {
 type FeeRuleInput struct {
 	PaymentMethod  string     `json:"payment_method"`
 	MDRRate        string     `json:"mdr_rate"`
+	VATRate        string     `json:"vat_rate"` // optional, a percentage; empty is 0
 	SettlementDays int        `json:"settlement_days"`
 	EffectiveFrom  civil.Date `json:"effective_from"`
 }
@@ -48,37 +50,48 @@ type ExpectedLine struct {
 	Amount        decimal.Decimal `json:"amount"`
 	MDRRate       *string         `json:"mdr_rate"`
 	ExpectedMDR   decimal.Decimal `json:"expected_mdr"`
-	ExpectedNet   decimal.Decimal `json:"expected_net"`
-	ExpectedDate  *civil.Date     `json:"expected_date"`
-	Late          bool            `json:"late"`
+	// The VAT rate and the VAT expected on the MDR; the rate is nil, and the VAT 0, for a payment taken before the VAT was kept (WithoutVATRate: it has an MDR but no VAT rate).
+	VATRate           *string         `json:"vat_rate"`
+	ExpectedVAT       decimal.Decimal `json:"expected_vat"`
+	ExpectedDeduction decimal.Decimal `json:"expected_deduction"`
+	WithoutVATRate    bool            `json:"without_vat_rate"`
+	ExpectedNet       decimal.Decimal `json:"expected_net"`
+	ExpectedDate      *civil.Date     `json:"expected_date"`
+	Late              bool            `json:"late"`
 }
 
 // Expected is what the acquirer should still pay for the payments of a clearing account.
 type Expected struct {
-	AsOf        civil.Date      `json:"as_of"`
-	AccountKey  string          `json:"account_key"`
-	Gross       decimal.Decimal `json:"gross"`
-	ExpectedMDR decimal.Decimal `json:"expected_mdr"`
-	ExpectedNet decimal.Decimal `json:"expected_net"`
-	LateCount   int             `json:"late_count"`
-	LateGross   decimal.Decimal `json:"late_gross"`
-	NoRate      int             `json:"without_rate"`
-	Lines       []ExpectedLine  `json:"lines"`
+	AsOf              civil.Date      `json:"as_of"`
+	AccountKey        string          `json:"account_key"`
+	Gross             decimal.Decimal `json:"gross"`
+	ExpectedMDR       decimal.Decimal `json:"expected_mdr"`
+	ExpectedVAT       decimal.Decimal `json:"expected_vat"`
+	ExpectedDeduction decimal.Decimal `json:"expected_deduction"`
+	ExpectedNet       decimal.Decimal `json:"expected_net"`
+	LateCount         int             `json:"late_count"`
+	LateGross         decimal.Decimal `json:"late_gross"`
+	NoRate            int             `json:"without_rate"`
+	WithoutVATRate    int             `json:"without_vat_rate"` // payments with an MDR but no VAT rate
+	Lines             []ExpectedLine  `json:"lines"`
 }
 
 // Proposal is the payment lines that most likely make up a line of the bank statement.
 type Proposal struct {
-	StatementLineID int64           `json:"statement_line_id"`
-	AccountKey      string          `json:"account_key"`
-	Amount          decimal.Decimal `json:"amount"`
-	Tolerance       decimal.Decimal `json:"tolerance"`
-	Matched         bool            `json:"matched"`
-	Difference      decimal.Decimal `json:"difference"`
-	Gross           decimal.Decimal `json:"gross"`
-	ExpectedMDR     decimal.Decimal `json:"expected_mdr"`
-	ExpectedNet     decimal.Decimal `json:"expected_net"`
-	JournalLineIDs  []int64         `json:"journal_line_ids"`
-	Lines           []ExpectedLine  `json:"lines"`
+	StatementLineID   int64           `json:"statement_line_id"`
+	AccountKey        string          `json:"account_key"`
+	Amount            decimal.Decimal `json:"amount"`
+	Tolerance         decimal.Decimal `json:"tolerance"`
+	Matched           bool            `json:"matched"`
+	Difference        decimal.Decimal `json:"difference"`
+	Gross             decimal.Decimal `json:"gross"`
+	ExpectedMDR       decimal.Decimal `json:"expected_mdr"`
+	ExpectedVAT       decimal.Decimal `json:"expected_vat"`
+	ExpectedDeduction decimal.Decimal `json:"expected_deduction"`
+	WithoutVATRate    int             `json:"without_vat_rate"`
+	ExpectedNet       decimal.Decimal `json:"expected_net"`
+	JournalLineIDs    []int64         `json:"journal_line_ids"`
+	Lines             []ExpectedLine  `json:"lines"`
 }
 
 // SettlementRow is a settlement made, with the fee it was expected to cost.
@@ -99,7 +112,7 @@ type SettlementRow struct {
 }
 
 func toFeeRule(r bankrecdb.CardFeeRule) FeeRule {
-	return FeeRule{ID: r.ID, PaymentMethod: r.PaymentMethod, MDRRate: r.MdrRate.String(), SettlementDays: int(r.SettlementDays), EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt}
+	return FeeRule{ID: r.ID, PaymentMethod: r.PaymentMethod, MDRRate: r.MdrRate.String(), VATRate: r.VatRate.String(), SettlementDays: int(r.SettlementDays), EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt}
 }
 
 // CardFeeRules lists the rules, by method and then the newest first (bank.view).
@@ -130,6 +143,16 @@ func (s *Service) CreateCardFeeRule(ctx context.Context, propertyID int64, in Fe
 	if in.PaymentMethod != "CARD" && in.PaymentMethod != "OTHER" {
 		fields = append(fields, fieldErr("payment_method", "INVALID_VALUE", "CARD or OTHER"))
 	}
+	vatRate := decimal.Zero
+	if v := strings.TrimSpace(in.VATRate); v != "" {
+		var verr error
+		switch vatRate, verr = money.Parse(v); {
+		case verr != nil || vatRate.IsNegative() || vatRate.GreaterThan(decimal.NewFromInt(100)):
+			fields = append(fields, fieldErr("vat_rate", "INVALID_RATE", "a percentage from 0 to 100"))
+		case !vatRate.Equal(vatRate.Round(4)):
+			fields = append(fields, fieldErr("vat_rate", "INVALID_RATE", "at most 4 decimals"))
+		}
+	}
 	rate, perr := money.Parse(strings.TrimSpace(in.MDRRate))
 	switch {
 	case perr != nil || rate.IsNegative() || rate.GreaterThan(decimal.NewFromInt(100)):
@@ -153,22 +176,24 @@ func (s *Service) CreateCardFeeRule(ctx context.Context, propertyID int64, in Fe
 			return err
 		}
 		row, err := s.q(ctx).InsertCardFeeRule(ctx, bankrecdb.InsertCardFeeRuleParams{
-			TenantID: p.TenantID, PropertyID: propertyID, PaymentMethod: in.PaymentMethod, MdrRate: rate, SettlementDays: int16(in.SettlementDays), EffectiveFrom: in.EffectiveFrom, ActorID: p.ActorID(), //nolint:gosec // G115: checked above
+			TenantID: p.TenantID, PropertyID: propertyID, PaymentMethod: in.PaymentMethod, MdrRate: rate, VatRate: vatRate, SettlementDays: int16(in.SettlementDays), EffectiveFrom: in.EffectiveFrom, ActorID: p.ActorID(), //nolint:gosec // G115: checked above
 		})
 		if err != nil {
 			return err
 		}
 		out = toFeeRule(row)
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.card_fee_rule_added", "card_fee_rule", row.ID, nil,
-			map[string]any{"payment_method": in.PaymentMethod, "mdr_rate": rate.String(), "settlement_days": in.SettlementDays, "effective_from": in.EffectiveFrom}))
+			map[string]any{"payment_method": in.PaymentMethod, "mdr_rate": rate.String(), "vat_rate": vatRate.String(), "settlement_days": in.SettlementDays, "effective_from": in.EffectiveFrom}))
 	})
 	return out, err
 }
 
 type snapshot struct {
-	rate decimal.Decimal
-	fee  decimal.Decimal
-	on   civil.Date
+	rate    decimal.Decimal
+	fee     decimal.Decimal
+	on      civil.Date
+	vatRate *decimal.Decimal // nil: the payment was taken before the VAT was kept ("without rate")
+	vat     *decimal.Decimal
 }
 
 // snapshots reads what the payments and the receipts of some numbers expected.
@@ -183,14 +208,14 @@ func (s *Service) snapshots(ctx context.Context, tenantID, propertyID int64, num
 		return nil, err
 	}
 	for _, r := range pays {
-		out[r.DocNumber] = snapshot{r.MdrRate, r.MdrFee, r.ExpectedDate}
+		out[r.DocNumber] = snapshot{r.MdrRate, r.MdrFee, r.ExpectedDate, r.VatRate, r.Vat}
 	}
 	recs, err := q.ReceiptFeeSnapshots(ctx, bankrecdb.ReceiptFeeSnapshotsParams{TenantID: tenantID, PropertyID: propertyID, Numbers: numbers})
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range recs {
-		out[r.DocNumber] = snapshot{r.MdrRate, r.MdrFee, r.ExpectedDate}
+		out[r.DocNumber] = snapshot{r.MdrRate, r.MdrFee, r.ExpectedDate, r.VatRate, r.Vat}
 	}
 	return out, nil
 }
@@ -221,12 +246,19 @@ func (s *Service) expectedLines(ctx context.Context, tenantID, propertyID, accou
 		if desc == "" {
 			desc = r.JournalDescription
 		}
-		l := ExpectedLine{JournalLineID: r.ID, Date: r.JournalDate, JournalNumber: r.JournalNumber, Description: desc, Reference: deref(r.SourceRef), Amount: r.Amount, ExpectedNet: r.Amount, ExpectedMDR: decimal.Zero}
+		l := ExpectedLine{JournalLineID: r.ID, Date: r.JournalDate, JournalNumber: r.JournalNumber, Description: desc, Reference: deref(r.SourceRef), Amount: r.Amount, ExpectedNet: r.Amount, ExpectedMDR: decimal.Zero, ExpectedVAT: decimal.Zero, ExpectedDeduction: decimal.Zero}
 		if sn, ok := snaps[l.Reference]; ok && r.Amount.IsPositive() {
 			rate := sn.rate.String()
 			on := sn.on
 			l.MDRRate, l.ExpectedMDR, l.ExpectedDate = &rate, sn.fee, &on
-			l.ExpectedNet = r.Amount.Sub(sn.fee)
+			if sn.vatRate != nil && sn.vat != nil {
+				vr := sn.vatRate.String()
+				l.VATRate, l.ExpectedVAT = &vr, *sn.vat
+			} else {
+				l.WithoutVATRate = true // nothing is guessed: its VAT expects 0
+			}
+			l.ExpectedDeduction = l.ExpectedMDR.Add(l.ExpectedVAT)
+			l.ExpectedNet = r.Amount.Sub(l.ExpectedDeduction)
 			l.Late = on.Before(today)
 		}
 		out = append(out, l)
@@ -264,14 +296,18 @@ func (s *Service) ExpectedSettlements(ctx context.Context, propertyID int64, key
 	if err != nil {
 		return Expected{}, err
 	}
-	out := Expected{AsOf: day.BusinessDate, AccountKey: key, Lines: lines, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedNet: decimal.Zero, LateGross: decimal.Zero}
+	out := Expected{AsOf: day.BusinessDate, AccountKey: key, Lines: lines, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedVAT: decimal.Zero, ExpectedDeduction: decimal.Zero, ExpectedNet: decimal.Zero, LateGross: decimal.Zero}
 	if out.Lines == nil {
 		out.Lines = []ExpectedLine{}
 	}
 	for _, l := range lines {
 		out.Gross, out.ExpectedMDR, out.ExpectedNet = out.Gross.Add(l.Amount), out.ExpectedMDR.Add(l.ExpectedMDR), out.ExpectedNet.Add(l.ExpectedNet)
+		out.ExpectedVAT, out.ExpectedDeduction = out.ExpectedVAT.Add(l.ExpectedVAT), out.ExpectedDeduction.Add(l.ExpectedDeduction)
 		if l.MDRRate == nil {
 			out.NoRate++
+		}
+		if l.WithoutVATRate {
+			out.WithoutVATRate++
 		}
 		if l.Late {
 			out.LateCount++
@@ -358,7 +394,7 @@ func (s *Service) SettlementProposal(ctx context.Context, propertyID, statementI
 	if half := money.Percent(line.Amount, decimal.RequireFromString("0.5"), prop.CurrencyDecimals); half.GreaterThan(tol) {
 		tol = half
 	}
-	out := Proposal{StatementLineID: lineID, AccountKey: key, Amount: line.Amount, Tolerance: tol, JournalLineIDs: []int64{}, Lines: []ExpectedLine{}, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedNet: decimal.Zero}
+	out := Proposal{StatementLineID: lineID, AccountKey: key, Amount: line.Amount, Tolerance: tol, JournalLineIDs: []int64{}, Lines: []ExpectedLine{}, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedVAT: decimal.Zero, ExpectedDeduction: decimal.Zero, ExpectedNet: decimal.Zero}
 	if len(lines) == 0 {
 		out.Difference = line.Amount
 		return out, nil
@@ -368,6 +404,10 @@ func (s *Service) SettlementProposal(ctx context.Context, propertyID, statementI
 	for _, l := range out.Lines {
 		out.JournalLineIDs = append(out.JournalLineIDs, l.JournalLineID)
 		out.Gross, out.ExpectedMDR = out.Gross.Add(l.Amount), out.ExpectedMDR.Add(l.ExpectedMDR)
+		out.ExpectedVAT, out.ExpectedDeduction = out.ExpectedVAT.Add(l.ExpectedVAT), out.ExpectedDeduction.Add(l.ExpectedDeduction)
+		if l.WithoutVATRate {
+			out.WithoutVATRate++
+		}
 	}
 	out.ExpectedNet = sum
 	out.Difference = line.Amount.Sub(sum)

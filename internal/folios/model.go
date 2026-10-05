@@ -271,8 +271,11 @@ type Payment struct {
 	Remarks           string     `json:"remarks,omitempty"`
 	Refundable        *string    `json:"refundable,omitempty"`
 	// The fee the acquirer is expected to keep, from the rate that applied on the day (card and e-wallet payments only), and the day it should pay out.
-	MDRRate                *string     `json:"mdr_rate,omitempty"`
-	MDRFee                 *string     `json:"mdr_fee,omitempty"`
+	MDRRate *string `json:"mdr_rate,omitempty"`
+	MDRFee  *string `json:"mdr_fee,omitempty"`
+	// The VAT rate of the rule and the VAT expected on the fee; absent for a payment taken before the VAT was kept ("without rate").
+	MDRVATRate             *string     `json:"mdr_vat_rate,omitempty"`
+	MDRVAT                 *string     `json:"mdr_vat,omitempty"`
 	ExpectedSettlementDate *civil.Date `json:"expected_settlement_date,omitempty"`
 	CreatedBy              *int64      `json:"created_by"`
 	ApprovedBy             *int64      `json:"approved_by"`

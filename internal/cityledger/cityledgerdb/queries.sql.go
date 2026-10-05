@@ -61,7 +61,7 @@ func (q *Queries) AttachedNotes(ctx context.Context, arg AttachedNotesParams) ([
 }
 
 const cardFeeRule = `-- name: CardFeeRule :one
-SELECT mdr_rate, settlement_days FROM card_fee_rules
+SELECT mdr_rate, vat_rate, settlement_days FROM card_fee_rules
 WHERE tenant_id = $1 AND property_id = $2 AND payment_method = $3 AND effective_from <= $4::date
 ORDER BY effective_from DESC
 LIMIT 1
@@ -76,6 +76,7 @@ type CardFeeRuleParams struct {
 
 type CardFeeRuleRow struct {
 	MdrRate        decimal.Decimal
+	VatRate        decimal.Decimal
 	SettlementDays int16
 }
 
@@ -88,7 +89,7 @@ func (q *Queries) CardFeeRule(ctx context.Context, arg CardFeeRuleParams) (CardF
 		arg.OnDate,
 	)
 	var i CardFeeRuleRow
-	err := row.Scan(&i.MdrRate, &i.SettlementDays)
+	err := row.Scan(&i.MdrRate, &i.VatRate, &i.SettlementDays)
 	return i, err
 }
 
@@ -744,10 +745,10 @@ func (q *Queries) InsertInvoiceLine(ctx context.Context, arg InsertInvoiceLinePa
 const insertReceipt = `-- name: InsertReceipt :one
 INSERT INTO city_ledger_receipts (
     tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks,
-    business_date, paid_at, idempotency_key, created_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date
+    business_date, paid_at, idempotency_key, created_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14, $15, $16
+    $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 RETURNING id, tenant_id, property_id, receipt_number, company_id, amount, payment_method, reference_number, remarks, business_date, paid_at, status, voided_at, voided_by, void_reason, idempotency_key, created_at, created_by, approved_by, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 `
@@ -769,6 +770,8 @@ type InsertReceiptParams struct {
 	MdrRate                *decimal.Decimal
 	MdrFee                 *decimal.Decimal
 	ExpectedSettlementDate *civil.Date
+	MdrVatRate             *decimal.Decimal
+	MdrVat                 *decimal.Decimal
 }
 
 func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (CityLedgerReceipt, error) {
@@ -789,6 +792,8 @@ func (q *Queries) InsertReceipt(ctx context.Context, arg InsertReceiptParams) (C
 		arg.MdrRate,
 		arg.MdrFee,
 		arg.ExpectedSettlementDate,
+		arg.MdrVatRate,
+		arg.MdrVat,
 	)
 	var i CityLedgerReceipt
 	err := row.Scan(

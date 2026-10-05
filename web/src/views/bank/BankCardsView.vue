@@ -29,7 +29,7 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const loaded = ref(false)
-const rule = reactive({ payment_method: 'CARD' as 'CARD' | 'OTHER', mdr_rate: '', settlement_days: '1', effective_from: '' })
+const rule = reactive({ payment_method: 'CARD' as 'CARD' | 'OTHER', mdr_rate: '', vat_rate: '', settlement_days: '1', effective_from: '' })
 
 const pid = computed(() => property.currentId)
 const canView = computed(() => auth.can('bank.view', pid.value))
@@ -42,6 +42,7 @@ const lineColumns = computed<Column<ExpectedLine>[]>(() => [
   { key: 'amount', label: t('cards.amount'), align: 'right', format: 'money' as const },
   { key: 'mdr_rate', label: t('cards.rate'), align: 'right' },
   { key: 'expected_mdr', label: t('cards.expectedFee'), align: 'right', format: 'money' as const },
+  { key: 'expected_vat', label: t('cards.expectedVat'), align: 'right' },
   { key: 'expected_net', label: t('cards.expectedNet'), align: 'right', format: 'money' as const },
   { key: 'expected_date', label: t('cards.due') },
 ])
@@ -86,10 +87,11 @@ async function addRule(): Promise<void> {
   try {
     await api.POST('/api/v1/properties/{propertyId}/bank/card-fee-rules', {
       params: { path: { propertyId } },
-      body: { payment_method: rule.payment_method, mdr_rate: rule.mdr_rate.trim(), settlement_days: Number(rule.settlement_days), effective_from: rule.effective_from },
+      body: { payment_method: rule.payment_method, mdr_rate: rule.mdr_rate.trim(), vat_rate: rule.vat_rate.trim() || undefined, settlement_days: Number(rule.settlement_days), effective_from: rule.effective_from },
     })
     notice.value = t('cards.ruleAdded')
     rule.mdr_rate = ''
+    rule.vat_rate = ''
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -132,13 +134,20 @@ watch(key, () => void load())
           <dl class="mb-3 flex flex-wrap gap-6 text-sm" data-testid="totals">
             <div><dt class="text-muted-foreground">{{ t('cards.gross') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.gross) }}</dd></div>
             <div><dt class="text-muted-foreground">{{ t('cards.fee') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.expected_mdr) }}</dd></div>
+            <div><dt class="text-muted-foreground">{{ t('cards.vat') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums" data-testid="expected-vat">{{ $money(expected.expected_vat) }}</dd></div>
             <div><dt class="text-muted-foreground">{{ t('cards.net') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.expected_net) }}</dd></div>
           </dl>
           <p v-if="expected.late_count" class="mb-2 text-sm text-destructive" data-testid="late">{{ t('cards.lateHint', { count: expected.late_count, amount: $money(expected.late_gross) }) }}</p>
           <p v-if="expected.without_rate" class="mb-2 text-sm text-muted-foreground" data-testid="without-rate">{{ t('cards.withoutRate', { count: expected.without_rate }) }}</p>
+          <p v-if="expected.without_vat_rate" class="mb-2 text-sm text-muted-foreground" data-testid="without-vat-rate">{{ t('cards.withoutVatRate', { count: expected.without_vat_rate }) }}</p>
           <EmptyState v-if="!expected.lines.length" :title="t('cards.nothing')" data-testid="empty" />
           <DataTable v-else :columns="lineColumns" :rows="expected.lines" row-key="journal_line_id" :row-test-id="(l) => `line-${l.reference}`" :caption="t('cards.expectedTitle')">
             <template #cell-mdr_rate="{ row }">{{ row.mdr_rate === null ? '-' : `${row.mdr_rate}%` }}</template>
+            <template #cell-expected_vat="{ row }">
+              <template v-if="row.mdr_rate === null">-</template>
+              <Badge v-else-if="row.without_vat_rate" variant="outline" :data-testid="`no-vat-rate-${row.reference}`">{{ t('cards.withoutVatRateBadge') }}</Badge>
+              <template v-else>{{ $money(row.expected_vat) }}<small v-if="row.vat_rate" class="text-muted-foreground"> ({{ row.vat_rate }}%)</small></template>
+            </template>
             <template #cell-expected_date="{ row }">
               <template v-if="row.expected_date">{{ $date(row.expected_date) }} <Badge v-if="row.late" variant="destructive">{{ t('cards.late') }}</Badge></template>
               <template v-else>-</template>
@@ -156,7 +165,7 @@ watch(key, () => void load())
       <CardContent>
         <p v-if="loaded && !rules.length" class="mt-0 text-sm text-muted-foreground" data-testid="no-rules">{{ t('cards.noRules') }}</p>
         <ul v-else class="mt-0 list-none p-0 text-sm" data-testid="rule-list">
-          <li v-for="r in rules" :key="r.id">{{ r.payment_method === 'CARD' ? t('cards.card') : t('cards.ewallet') }} · {{ r.mdr_rate }}% · {{ r.settlement_days }} · {{ $date(r.effective_from) }}</li>
+          <li v-for="r in rules" :key="r.id">{{ r.payment_method === 'CARD' ? t('cards.card') : t('cards.ewallet') }} · {{ r.mdr_rate }}%<template v-if="Number(r.vat_rate) > 0"> + {{ t('cards.vat') }} {{ r.vat_rate }}%</template> · {{ r.settlement_days }} · {{ $date(r.effective_from) }}</li>
         </ul>
         <form v-if="canManage" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="rule-form" @submit.prevent="addRule">
           <FormField class="w-40" :label="t('cards.ruleMethod')" :error="fieldError('payment_method')">
@@ -169,6 +178,9 @@ watch(key, () => void load())
           </FormField>
           <FormField class="w-32" :label="t('cards.ruleRate')" :error="fieldError('mdr_rate')">
             <template #default="{ id }"><Input :id="id" v-model="rule.mdr_rate" name="mdr_rate" inputmode="decimal" /></template>
+          </FormField>
+          <FormField class="w-36" :label="t('cards.ruleVat')" :hint="t('cards.ruleVatHint')" :error="fieldError('vat_rate')">
+            <template #default="{ id }"><Input :id="id" v-model="rule.vat_rate" name="vat_rate" inputmode="decimal" placeholder="0" /></template>
           </FormField>
           <FormField class="w-32" :label="t('cards.ruleDays')" :error="fieldError('settlement_days')">
             <template #default="{ id }"><Input :id="id" v-model="rule.settlement_days" name="settlement_days" inputmode="numeric" /></template>

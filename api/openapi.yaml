@@ -8939,6 +8939,8 @@ components:
       properties:
         mdr_rate: { type: string, description: "The fee rate (percent) that applied on the day, for a card or e-wallet payment that had a rule." }
         mdr_fee: { type: string, description: The fee the acquirer is expected to keep. }
+        mdr_vat_rate: { type: string, description: "The VAT rate (percent) of the rule on the day; absent for a payment taken before the VAT was kept (without rate)." }
+        mdr_vat: { type: string, description: The VAT the acquirer is expected to charge on the fee. }
         expected_settlement_date: { $ref: "#/components/schemas/Date" }
         id: { type: integer, format: int64 }
         payment_number: { type: string }
@@ -9929,11 +9931,12 @@ components:
         reconciled: { type: boolean }
     CardFeeRule:
       type: object
-      required: [id, payment_method, mdr_rate, settlement_days, effective_from, created_at]
+      required: [id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from, created_at]
       properties:
         id: { type: integer, format: int64 }
         payment_method: { type: string, enum: [CARD, OTHER] }
         mdr_rate: { type: string, description: A percent. }
+        vat_rate: { type: string, description: "The VAT (percent) the acquirer charges on the MDR; 0 when none." }
         settlement_days: { type: integer }
         effective_from: { $ref: "#/components/schemas/Date" }
         created_at: { type: string, format: date-time }
@@ -9944,11 +9947,12 @@ components:
       properties:
         payment_method: { type: string, enum: [CARD, OTHER] }
         mdr_rate: { type: string, description: "0 to 100, at most 4 decimals." }
+        vat_rate: { type: string, description: "The VAT the acquirer charges on the MDR, 0 to 100, at most 4 decimals; absent is 0 (422 `INVALID_RATE`)." }
         settlement_days: { type: integer, minimum: 0, maximum: 60 }
         effective_from: { $ref: "#/components/schemas/Date" }
     ExpectedCardLine:
       type: object
-      required: [journal_line_id, journal_date, journal_number, amount, mdr_rate, expected_mdr, expected_net, expected_date, late]
+      required: [journal_line_id, journal_date, journal_number, amount, mdr_rate, expected_mdr, vat_rate, expected_vat, expected_deduction, without_vat_rate, expected_net, expected_date, late]
       properties:
         journal_line_id: { type: integer, format: int64 }
         journal_date: { $ref: "#/components/schemas/Date" }
@@ -9958,25 +9962,32 @@ components:
         amount: { type: string }
         mdr_rate: { type: [string, "null"], description: Null for a payment taken before there was a rule. }
         expected_mdr: { type: string }
-        expected_net: { type: string }
+        vat_rate: { type: [string, "null"], description: Null for a payment with no VAT snapshot (taken before the VAT was kept). }
+        expected_vat: { type: string, description: The VAT expected on the MDR; 0 for a payment without a VAT rate. }
+        expected_deduction: { type: string, description: The MDR and the VAT. }
+        without_vat_rate: { type: boolean, description: "The payment has an MDR snapshot but no VAT rate: it expects no VAT and nothing is guessed." }
+        expected_net: { type: string, description: The amount less the expected deduction. }
         expected_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
         late: { type: boolean }
     ExpectedCardSettlements:
       type: object
-      required: [as_of, account_key, gross, expected_mdr, expected_net, late_count, late_gross, without_rate, lines]
+      required: [as_of, account_key, gross, expected_mdr, expected_vat, expected_deduction, expected_net, late_count, late_gross, without_rate, without_vat_rate, lines]
       properties:
         as_of: { $ref: "#/components/schemas/Date" }
         account_key: { type: string }
         gross: { type: string }
         expected_mdr: { type: string }
+        expected_vat: { type: string }
+        expected_deduction: { type: string }
         expected_net: { type: string }
         late_count: { type: integer }
         late_gross: { type: string }
         without_rate: { type: integer, description: Payments without a snapshot. }
+        without_vat_rate: { type: integer, description: Payments with an MDR snapshot and no VAT rate. }
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }
     SettlementProposal:
       type: object
-      required: [statement_line_id, account_key, amount, tolerance, matched, difference, gross, expected_mdr, expected_net, journal_line_ids, lines]
+      required: [statement_line_id, account_key, amount, tolerance, matched, difference, gross, expected_mdr, expected_vat, expected_deduction, without_vat_rate, expected_net, journal_line_ids, lines]
       properties:
         statement_line_id: { type: integer, format: int64 }
         account_key: { type: string }
@@ -9986,6 +9997,9 @@ components:
         difference: { type: string, description: The line less the expected net of the payments proposed. }
         gross: { type: string }
         expected_mdr: { type: string }
+        expected_vat: { type: string }
+        expected_deduction: { type: string }
+        without_vat_rate: { type: integer }
         expected_net: { type: string }
         journal_line_ids: { type: array, items: { type: integer, format: int64 } }
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }

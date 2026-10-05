@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **design approved by the owner on 2026-10-05. Step 1 (schema and the rename) is built (migration 00056); steps 2 to 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename) and 2 (rules, snapshots, expected report and proposal) are built; steps 3 to 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -127,7 +127,7 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 ## Order of building (after approval)
 
 1. Migration 00056, constraint mappings, the DB tests, the rename `expected_fee` to `expected_mdr`. **Built.**
-2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal.
+2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal. **Built.**
 3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list.
 4. The claims on the VAT return.
 5. OpenAPI, the front end, the documents (README, `06-api.md`, the feature map), the full checks, one commit per step.

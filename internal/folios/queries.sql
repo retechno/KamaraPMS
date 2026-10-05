@@ -147,15 +147,15 @@ WHERE property_id = @property_id AND folio_item_id = @item_id AND status = 'POST
 -- name: InsertPayment :one
 INSERT INTO payments (
     tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date,
-    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date
+    reference_number, refund_of_payment_id, idempotency_key, remarks, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 ) VALUES (
     @tenant_id, @property_id, @payment_number, @folio_id, @payment_type, @payment_method, @amount, @paid_at, @business_date,
-    sqlc.narg(reference_number), sqlc.narg(refund_of_payment_id), sqlc.narg(idempotency_key), sqlc.narg(remarks), sqlc.narg(actor_id), sqlc.narg(approved_by), sqlc.narg(company_id), sqlc.narg(shift_id), sqlc.narg(mdr_rate), sqlc.narg(mdr_fee), sqlc.narg(expected_settlement_date)
+    sqlc.narg(reference_number), sqlc.narg(refund_of_payment_id), sqlc.narg(idempotency_key), sqlc.narg(remarks), sqlc.narg(actor_id), sqlc.narg(approved_by), sqlc.narg(company_id), sqlc.narg(shift_id), sqlc.narg(mdr_rate), sqlc.narg(mdr_fee), sqlc.narg(expected_settlement_date), sqlc.narg(mdr_vat_rate), sqlc.narg(mdr_vat)
 )
 RETURNING *;
 -- The rate that applies to a card or e-wallet payment of a business date: the latest rule that has started.
 -- name: CardFeeRule :one
-SELECT mdr_rate, settlement_days FROM card_fee_rules
+SELECT mdr_rate, vat_rate, settlement_days FROM card_fee_rules
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND payment_method = @payment_method AND effective_from <= @on_date::date
 ORDER BY effective_from DESC
 LIMIT 1;

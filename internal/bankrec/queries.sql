@@ -209,18 +209,18 @@ SELECT account_id FROM gl_account_map WHERE tenant_id = @tenant_id AND property_
 SELECT * FROM card_fee_rules WHERE tenant_id = @tenant_id AND property_id = @property_id ORDER BY payment_method, effective_from DESC;
 
 -- name: InsertCardFeeRule :one
-INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_by)
-VALUES (@tenant_id, @property_id, @payment_method, @mdr_rate, @settlement_days, @effective_from, sqlc.narg(actor_id))
+INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from, created_by)
+VALUES (@tenant_id, @property_id, @payment_method, @mdr_rate, @vat_rate, @settlement_days, @effective_from, sqlc.narg(actor_id))
 RETURNING *;
 
 -- The snapshots of the payments and the city ledger receipts of some numbers (the reference of a journal line is the number of its document).
 -- name: PaymentFeeSnapshots :many
-SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+SELECT payment_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date, mdr_vat_rate AS vat_rate, mdr_vat AS vat
 FROM payments
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND payment_number = ANY(@numbers::text[]) AND mdr_rate IS NOT NULL;
 
 -- name: ReceiptFeeSnapshots :many
-SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date
+SELECT receipt_number AS doc_number, mdr_rate::numeric AS mdr_rate, mdr_fee::numeric AS mdr_fee, expected_settlement_date::date AS expected_date, mdr_vat_rate AS vat_rate, mdr_vat AS vat
 FROM city_ledger_receipts
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND receipt_number = ANY(@numbers::text[]) AND mdr_rate IS NOT NULL;
 
