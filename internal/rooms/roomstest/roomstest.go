@@ -19,6 +19,7 @@ import (
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
@@ -86,6 +87,7 @@ type Env struct {
 	TaxInvoice  *taxinvoice.Service
 	Shifts      *shifts.Service
 	Budget      *budget.Service
+	Departments *departments.Service
 	LostFound   *lostfound.Service
 
 	seq int
@@ -110,6 +112,8 @@ func Setup(t *testing.T) *Env {
 	ia := iam.NewService(txm, c, aw, iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour})
 	acct := accounting.NewService(txm, c, aw, authz, ten, ia)
 	ten.OnPropertyCreated(acct.SeedProperty) // and the standard chart of accounts
+	dept := departments.NewService(txm, c, aw, authz, ten)
+	ten.OnPropertyCreated(dept.SeedProperty) // and the standard departments
 	fo := folios.NewService(txm, c, aw, authz, ten, billing, ia)
 	co := companies.NewService(txm, c, aw, authz, ten)
 	fo.SetCompanyGate(co)
@@ -131,7 +135,7 @@ func Setup(t *testing.T) *Env {
 	bud := budget.NewService(txm, c, aw, authz, ten, ia)
 	docs := documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv)
 	docs.SetBudget(bud)
-	return &Env{Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	return &Env{Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
 }

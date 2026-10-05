@@ -228,7 +228,7 @@ func (q *Queries) GetFolio(ctx context.Context, arg GetFolioParams) (Folio, erro
 }
 
 const getFolioItem = `-- name: GetFolioItem :one
-SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetFolioItemParams struct {
@@ -275,12 +275,13 @@ func (q *Queries) GetFolioItem(ctx context.Context, arg GetFolioItemParams) (Fol
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.RevenueAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const getFolioItemByKey = `-- name: GetFolioItemByKey :one
-SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
 
 type GetFolioItemByKeyParams struct {
@@ -327,6 +328,7 @@ func (q *Queries) GetFolioItemByKey(ctx context.Context, arg GetFolioItemByKeyPa
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.RevenueAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -367,7 +369,7 @@ func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) 
 }
 
 const getItemOfPayment = `-- name: GetItemOfPayment :one
-SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND payment_id = $3
+SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND payment_id = $3
 `
 
 type GetItemOfPaymentParams struct {
@@ -414,6 +416,7 @@ func (q *Queries) GetItemOfPayment(ctx context.Context, arg GetItemOfPaymentPara
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.RevenueAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -620,7 +623,7 @@ INSERT INTO folio_items (
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
     END
 )
-RETURNING id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code
+RETURNING id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id
 `
 
 type InsertFolioItemParams struct {
@@ -729,6 +732,7 @@ func (q *Queries) InsertFolioItem(ctx context.Context, arg InsertFolioItemParams
 		&i.CreatedBy,
 		&i.ApprovedBy,
 		&i.RevenueAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -931,7 +935,7 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 }
 
 const listFolioItems = `-- name: ListFolioItems :many
-SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number
+SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number
 FROM folio_items i
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
@@ -982,6 +986,7 @@ type ListFolioItemsRow struct {
 	CreatedBy          *int64
 	ApprovedBy         *int64
 	RevenueAccountCode *string
+	DepartmentID       *int64
 	ChargeCode         *string
 	ReversedByItemID   *int64
 	RoomNumber         *string
@@ -1033,6 +1038,7 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 			&i.CreatedBy,
 			&i.ApprovedBy,
 			&i.RevenueAccountCode,
+			&i.DepartmentID,
 			&i.ChargeCode,
 			&i.ReversedByItemID,
 			&i.RoomNumber,

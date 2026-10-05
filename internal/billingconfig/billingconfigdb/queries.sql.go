@@ -111,7 +111,7 @@ const createChargeCode = `-- name: CreateChargeCode :one
 
 INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, gl_account_code, is_system, is_active, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $10)
-RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
+RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id
 `
 
 type CreateChargeCodeParams struct {
@@ -158,6 +158,7 @@ func (q *Queries) CreateChargeCode(ctx context.Context, arg CreateChargeCodePara
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.GlAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -299,7 +300,7 @@ func (q *Queries) DeactivateChargeCodeTaxes(ctx context.Context, arg DeactivateC
 }
 
 const getChargeCode = `-- name: GetChargeCode :one
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetChargeCodeParams struct {
@@ -327,12 +328,13 @@ func (q *Queries) GetChargeCode(ctx context.Context, arg GetChargeCodeParams) (C
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.GlAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const getChargeCodeForUpdate = `-- name: GetChargeCodeForUpdate :one
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetChargeCodeForUpdateParams struct {
@@ -360,6 +362,7 @@ func (q *Queries) GetChargeCodeForUpdate(ctx context.Context, arg GetChargeCodeF
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.GlAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -598,7 +601,7 @@ func (q *Queries) ListActiveTaxRules(ctx context.Context, arg ListActiveTaxRules
 }
 
 const listChargeCodes = `-- name: ListChargeCodes :many
-SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM charge_codes
+SELECT id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id FROM charge_codes
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
   AND ($5::text IS NULL OR charge_type = $5::text)
@@ -647,6 +650,7 @@ func (q *Queries) ListChargeCodes(ctx context.Context, arg ListChargeCodesParams
 			&i.UpdatedAt,
 			&i.UpdatedBy,
 			&i.GlAccountCode,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -873,7 +877,7 @@ UPDATE charge_codes SET
     name = $1, charge_type = $2, price_mode = $3,
     default_unit_price = $4, gl_account_code = $5, is_active = $6, updated_by = $7
 WHERE tenant_id = $8 AND property_id = $9 AND id = $10
-RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code
+RETURNING id, tenant_id, property_id, code, name, charge_type, price_mode, default_unit_price, is_system, is_active, created_at, created_by, updated_at, updated_by, gl_account_code, department_id
 `
 
 type UpdateChargeCodeParams struct {
@@ -919,6 +923,7 @@ func (q *Queries) UpdateChargeCode(ctx context.Context, arg UpdateChargeCodePara
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.GlAccountCode,
+		&i.DepartmentID,
 	)
 	return i, err
 }

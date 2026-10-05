@@ -2634,6 +2634,94 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/departments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listDepartments
+      summary: The departments and sub-departments of the property (accounting.view)
+      description: Each department is followed by its sub-departments, in their order.
+      tags: [departments]
+      parameters:
+        - { name: active, in: query, description: Only the ones in use (true) or switched off (false)., schema: { type: boolean } }
+      responses:
+        "200":
+          description: The departments.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartmentPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createDepartment
+      summary: Add a department or a sub-department (accounting.manage)
+      description: |
+        With `parent_id` it is a sub-department of that department. At most two levels (422 `VALIDATION_FAILED`, `parent_id` `TOO_DEEP`), and the parent is a department of this
+        property that is in use. The code is unique in the property (409 `CODE_TAKEN`) and never changes, nor does the parent.
+      tags: [departments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDepartmentRequest" }
+      responses:
+        "201":
+          description: The department.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/departments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getDepartment
+      summary: One department (accounting.view)
+      tags: [departments]
+      responses:
+        "200":
+          description: The department.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateDepartment
+      summary: Rename, reorder, switch off or on (accounting.manage)
+      description: "A switched off department takes no new posting; what was posted stays. 409 `DEPARTMENT_HAS_ACTIVE_CHILDREN` while a sub-department is in use, 409 `DEPARTMENT_PARENT_INACTIVE` when switching on a sub-department of a switched off department."
+      tags: [departments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchDepartmentRequest" }
+      responses:
+        "200":
+          description: The department.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteDepartment
+      summary: Delete a department nothing refers to (accounting.manage)
+      description: "409 `DEPARTMENT_IN_USE` when it has sub-departments, or a journal line, a folio item, a charge code or a supplier bill line refers to it: switch it off instead."
+      tags: [departments]
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/budgets:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9134,6 +9222,41 @@ components:
         user_id: { type: integer, format: int64 }
         user_name: { type: string }
         opened_at: { type: string, format: date-time }
+    Department:
+      type: object
+      required: [id, parent_id, code, name, sort_order, is_active, level, child_count, in_use]
+      properties:
+        id: { type: integer, format: int64 }
+        parent_id: { type: [integer, "null"], format: int64, description: Null for a department; the department it belongs to for a sub-department. }
+        parent_code: { type: string }
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        level: { type: integer, enum: [1, 2] }
+        child_count: { type: integer }
+        in_use: { type: boolean, description: Something was posted to it or points to it, so it is switched off and not deleted. }
+    DepartmentPage:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Department" } }
+    CreateDepartmentRequest:
+      type: object
+      required: [code, name]
+      additionalProperties: false
+      properties:
+        code: { type: string, maxLength: 20, description: "A-Z, 0-9, . _ -; upper-cased." }
+        name: { type: string, maxLength: 100 }
+        parent_id: { type: [integer, "null"], format: int64 }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+    PatchDepartmentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+        is_active: { type: boolean }
     BudgetMonth:
       type: object
       required: [number, start]

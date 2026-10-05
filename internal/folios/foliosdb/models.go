@@ -66,6 +66,7 @@ type FolioItem struct {
 	CreatedBy          *int64
 	ApprovedBy         *int64
 	RevenueAccountCode *string
+	DepartmentID       *int64
 }
 
 type FolioItemComponent struct {

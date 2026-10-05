@@ -26,6 +26,7 @@ type ChargeCode struct {
 	UpdatedAt        time.Time
 	UpdatedBy        *int64
 	GlAccountCode    *string
+	DepartmentID     *int64
 }
 
 type ServiceCharge struct {

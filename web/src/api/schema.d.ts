@@ -2158,6 +2158,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The departments and sub-departments of the property (accounting.view)
+         * @description Each department is followed by its sub-departments, in their order.
+         */
+        get: operations["listDepartments"];
+        put?: never;
+        /**
+         * Add a department or a sub-department (accounting.manage)
+         * @description With `parent_id` it is a sub-department of that department. At most two levels (422 `VALIDATION_FAILED`, `parent_id` `TOO_DEEP`), and the parent is a department of this
+         *     property that is in use. The code is unique in the property (409 `CODE_TAKEN`) and never changes, nor does the parent.
+         */
+        post: operations["createDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/departments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One department (accounting.view) */
+        get: operations["getDepartment"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a department nothing refers to (accounting.manage)
+         * @description 409 `DEPARTMENT_IN_USE` when it has sub-departments, or a journal line, a folio item, a charge code or a supplier bill line refers to it: switch it off instead.
+         */
+        delete: operations["deleteDepartment"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, reorder, switch off or on (accounting.manage)
+         * @description A switched off department takes no new posting; what was posted stays. 409 `DEPARTMENT_HAS_ACTIVE_CHILDREN` while a sub-department is in use, 409 `DEPARTMENT_PARENT_INACTIVE` when switching on a sub-department of a switched off department.
+         */
+        patch: operations["updateDepartment"];
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/budgets": {
         parameters: {
             query?: never;
@@ -8167,6 +8222,42 @@ export interface components {
             user_name: string;
             /** Format: date-time */
             opened_at: string;
+        };
+        Department: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description Null for a department; the department it belongs to for a sub-department.
+             */
+            parent_id: number | null;
+            parent_code?: string;
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            sort_order: number;
+            is_active: boolean;
+            /** @enum {integer} */
+            level: 1 | 2;
+            child_count: number;
+            /** @description Something was posted to it or points to it */
+            in_use: boolean;
+        };
+        DepartmentPage: {
+            data: components["schemas"]["Department"][];
+        };
+        CreateDepartmentRequest: {
+            /** @description A-Z, 0-9, . _ -; upper-cased. */
+            code: string;
+            name: string;
+            /** Format: int64 */
+            parent_id?: number | null;
+            sort_order?: number;
+        };
+        PatchDepartmentRequest: {
+            name?: string;
+            sort_order?: number;
+            is_active?: boolean;
         };
         BudgetMonth: {
             /** @description The month of the fiscal year. */
@@ -14592,6 +14683,144 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listDepartments: {
+        parameters: {
+            query?: {
+                /** @description Only the ones in use (true) or switched off (false). */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The departments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDepartmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The department. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The department. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchDepartmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The department. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

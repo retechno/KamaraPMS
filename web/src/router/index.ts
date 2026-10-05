@@ -57,6 +57,7 @@ export const router = createRouter({
     { path: '/payables/payments', name: 'payables-payments', component: () => import('@/views/payables/PaymentsView.vue'), meta: { title: 'Supplier payments' } },
     { path: '/payables/aging', name: 'payables-aging', component: () => import('@/views/payables/AgingView.vue'), meta: { title: 'Payables aging' } },
     { path: '/accounting/fiscal-years', name: 'accounting-fiscal-years', component: () => import('@/views/accounting/FiscalYearsView.vue'), meta: { title: 'Fiscal years' } },
+    { path: '/accounting/departments', name: 'accounting-departments', component: () => import('@/views/accounting/DepartmentsView.vue'), meta: { title: 'Departments' } },
     { path: '/accounting/trial-balance', name: 'accounting-trial-balance', component: () => import('@/views/accounting/TrialBalanceView.vue'), meta: { title: 'Trial balance' } },
     { path: '/accounting/ledger', name: 'accounting-ledger', component: () => import('@/views/accounting/GeneralLedgerView.vue'), meta: { title: 'General ledger' } },
     { path: '/accounting/income-statement', name: 'accounting-income-statement', component: () => import('@/views/accounting/StatementView.vue'), meta: { title: 'Income statement' } },

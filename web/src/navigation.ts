@@ -83,6 +83,7 @@ export const navigation: NavSection[] = [
       { id: 'journals', to: '/accounting/journals', group: 'accounting' },
       { id: 'periods', to: '/accounting/periods', group: 'accounting' },
       { id: 'fiscalYears', to: '/accounting/fiscal-years', group: 'accounting' },
+      { id: 'departments', to: '/accounting/departments', group: 'accounting' },
       { id: 'trialBalance', to: '/accounting/trial-balance', group: 'accounting' },
       { id: 'generalLedger', to: '/accounting/ledger', group: 'accounting' },
       { id: 'incomeStatement', to: '/accounting/income-statement', group: 'accounting' },

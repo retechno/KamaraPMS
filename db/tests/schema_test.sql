@@ -1523,6 +1523,36 @@ SELECT expect_ok('a draft is deleted with its statistics',
     $q$DELETE FROM budgets WHERE name = 'Budget 2026 v2' AND status = 'DRAFT'$q$);
 
 ------------------------------------------------------------------------------------------
+-- Departments
+------------------------------------------------------------------------------------------
+INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'FB', 'Food and beverage');
+INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'ROOMS', 'Rooms');
+INSERT INTO departments (tenant_id, property_id, parent_id, code, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')), 'REST', 'Restaurant');
+INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('XYZ'), pr('SG'), 'FB', 'Food and beverage');
+SELECT expect_error('a department code is unique per property', '23505',
+    $q$INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'FB', 'Again')$q$);
+SELECT expect_error('a department code has a shape', '23514',
+    $q$INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'no way', 'x')$q$);
+SELECT expect_error('a department has a name', '23514',
+    $q$INSERT INTO departments (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'X1', '  ')$q$);
+SELECT expect_error('a sub-department has no sub-departments', '23514',
+    $q$INSERT INTO departments (tenant_id, property_id, parent_id, code, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM departments WHERE code = 'REST' AND property_id = pr('BALI')), 'PIZZA', 'Pizza')$q$);
+SELECT expect_error('a parent of another property is impossible', '23503',
+    $q$INSERT INTO departments (tenant_id, property_id, parent_id, code, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('SG')), 'BAR', 'Bar')$q$);
+SELECT expect_error('the code of a department never changes', '23001', $q$UPDATE departments SET code = 'FNB' WHERE code = 'FB' AND property_id = pr('BALI')$q$);
+SELECT expect_error('the parent of a department never changes', '23001',
+    $q$UPDATE departments SET parent_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE code = 'REST' AND property_id = pr('BALI')$q$);
+SELECT expect_error('a department does not become a sub-department', '23001',
+    $q$UPDATE departments SET parent_id = (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')) WHERE code = 'ROOMS' AND property_id = pr('BALI')$q$);
+SELECT expect_ok('a department is renamed and switched off', $q$UPDATE departments SET name = 'F and B', is_active = false WHERE code = 'REST' AND property_id = pr('BALI')$q$);
+SELECT expect_error('a department of another property cannot be put on a charge code', '23503',
+    $q$UPDATE charge_codes SET department_id = (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('SG')) WHERE property_id = pr('BALI') AND code = 'ROOM'$q$);
+UPDATE charge_codes SET department_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE property_id = pr('BALI') AND code = 'ROOM';
+SELECT expect_error('a department a charge code points to is not deleted', '23503', $q$DELETE FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')$q$);
+SELECT expect_error('a department with sub-departments is not deleted', '23503', $q$DELETE FROM departments WHERE code = 'FB' AND property_id = pr('BALI')$q$);
+SELECT expect_ok('a department nothing points to is deleted', $q$DELETE FROM departments WHERE code = 'REST' AND property_id = pr('BALI')$q$);
+
+------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------
 INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, new_data)

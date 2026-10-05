@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
@@ -84,6 +85,8 @@ func New(d Deps) *App {
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
 	accountingSvc := accounting.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	tenancySvc.OnPropertyCreated(accountingSvc.SeedProperty) // the standard chart of accounts, after the charge codes it maps
+	departmentsSvc := departments.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	tenancySvc.OnPropertyCreated(departmentsSvc.SeedProperty) // the standard departments, and the default department of the charge codes
 	availSvc := availability.NewService(d.TxManager)
 	ratesSvc := rates.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc)
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
@@ -135,6 +138,7 @@ func New(d Deps) *App {
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
 	shifts.NewHandler(shiftsSvc).Register(api)
 	budget.NewHandler(budgetSvc).Register(api)
+	departments.NewHandler(departmentsSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)
