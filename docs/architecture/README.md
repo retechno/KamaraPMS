@@ -10,6 +10,7 @@
 | 15 | [05-transactions-locking.md](05-transactions-locking.md) | Transaction and locking strategy, race analysis |
 | 16 | [06-api.md](06-api.md) | REST contracts, including transaction requirements |
 | 17 | [07-milestones.md](07-milestones.md) | MVP milestones M0–M15 |
+| – | [13-feature-map.md](13-feature-map.md) | Trace table: every module and feature, with its migration, package, API area, screens, design and commit |
 
 Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11 files, 34 tables). `scripts/db-test.sh` checks it with 80 schema tests (`db/tests/schema_test.sql`) plus an up/down/up cycle, and passes on PostgreSQL 16 and 18.
 **Implementation:**
