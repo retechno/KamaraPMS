@@ -41,7 +41,7 @@ const lineColumns = computed<Column<ExpectedLine>[]>(() => [
   { key: 'reference', label: t('cards.reference') },
   { key: 'amount', label: t('cards.amount'), align: 'right', format: 'money' as const },
   { key: 'mdr_rate', label: t('cards.rate'), align: 'right' },
-  { key: 'expected_fee', label: t('cards.expectedFee'), align: 'right', format: 'money' as const },
+  { key: 'expected_mdr', label: t('cards.expectedFee'), align: 'right', format: 'money' as const },
   { key: 'expected_net', label: t('cards.expectedNet'), align: 'right', format: 'money' as const },
   { key: 'expected_date', label: t('cards.due') },
 ])
@@ -51,8 +51,8 @@ const settlementColumns = computed<Column<CardSettlement>[]>(() => [
   { key: 'gross', label: t('cards.settlementGross'), align: 'right', format: 'money' as const },
   { key: 'net', label: t('cards.settlementNet'), align: 'right', format: 'money' as const },
   { key: 'fee', label: t('cards.settlementFee'), align: 'right', format: 'money' as const },
-  { key: 'expected_fee', label: t('cards.settlementExpected'), align: 'right' },
-  { key: 'fee_variance', label: t('cards.variance'), align: 'right' },
+  { key: 'expected_mdr', label: t('cards.settlementExpected'), align: 'right' },
+  { key: 'mdr_variance', label: t('cards.variance'), align: 'right' },
   { key: 'payments', label: t('cards.payments'), align: 'right' },
 ])
 
@@ -131,7 +131,7 @@ watch(key, () => void load())
         <template v-if="expected">
           <dl class="mb-3 flex flex-wrap gap-6 text-sm" data-testid="totals">
             <div><dt class="text-muted-foreground">{{ t('cards.gross') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.gross) }}</dd></div>
-            <div><dt class="text-muted-foreground">{{ t('cards.fee') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.expected_fee) }}</dd></div>
+            <div><dt class="text-muted-foreground">{{ t('cards.fee') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.expected_mdr) }}</dd></div>
             <div><dt class="text-muted-foreground">{{ t('cards.net') }}</dt><dd class="m-0 text-lg font-semibold tabular-nums">{{ $money(expected.expected_net) }}</dd></div>
           </dl>
           <p v-if="expected.late_count" class="mb-2 text-sm text-destructive" data-testid="late">{{ t('cards.lateHint', { count: expected.late_count, amount: $money(expected.late_gross) }) }}</p>
@@ -186,8 +186,8 @@ watch(key, () => void load())
       <CardContent>
         <EmptyState v-if="loaded && !settlements.length" :title="t('cards.noSettlements')" data-testid="no-settlements" />
         <DataTable v-else :columns="settlementColumns" :rows="settlements" row-key="id" :row-test-id="(s) => `settlement-${s.journal_number}`" :caption="t('cards.settlementsTitle')">
-          <template #cell-expected_fee="{ row }">{{ row.expected_fee === null ? '-' : $money(row.expected_fee) }}</template>
-          <template #cell-fee_variance="{ row }">{{ row.fee_variance === null ? '-' : $money(row.fee_variance) }}</template>
+          <template #cell-expected_mdr="{ row }">{{ row.expected_mdr === null ? '-' : $money(row.expected_mdr) }}</template>
+          <template #cell-mdr_variance="{ row }">{{ row.mdr_variance === null ? '-' : $money(row.mdr_variance) }}</template>
         </DataTable>
       </CardContent>
     </Card>

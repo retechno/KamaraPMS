@@ -318,7 +318,7 @@ func (q *Queries) InsertBankAccount(ctx context.Context, arg InsertBankAccountPa
 const insertCardFeeRule = `-- name: InsertCardFeeRule :one
 INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by
+RETURNING id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by, vat_rate
 `
 
 type InsertCardFeeRuleParams struct {
@@ -352,6 +352,7 @@ func (q *Queries) InsertCardFeeRule(ctx context.Context, arg InsertCardFeeRulePa
 		&i.EffectiveFrom,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.VatRate,
 	)
 	return i, err
 }
@@ -389,7 +390,7 @@ func (q *Queries) InsertClearing(ctx context.Context, arg InsertClearingParams) 
 }
 
 const insertSettlement = `-- name: InsertSettlement :one
-INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_fee, reference, created_by)
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_mdr, reference, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id
 `
@@ -403,7 +404,7 @@ type InsertSettlementParams struct {
 	Gross         decimal.Decimal
 	Net           decimal.Decimal
 	Fee           decimal.Decimal
-	ExpectedFee   *decimal.Decimal
+	ExpectedMdr   *decimal.Decimal
 	Reference     *string
 	ActorID       *int64
 }
@@ -418,7 +419,7 @@ func (q *Queries) InsertSettlement(ctx context.Context, arg InsertSettlementPara
 		arg.Gross,
 		arg.Net,
 		arg.Fee,
-		arg.ExpectedFee,
+		arg.ExpectedMdr,
 		arg.Reference,
 		arg.ActorID,
 	)
@@ -703,7 +704,7 @@ func (q *Queries) ListBankAccounts(ctx context.Context, arg ListBankAccountsPara
 
 const listCardFeeRules = `-- name: ListCardFeeRules :many
 
-SELECT id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by FROM card_fee_rules WHERE tenant_id = $1 AND property_id = $2 ORDER BY payment_method, effective_from DESC
+SELECT id, tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from, created_at, created_by, vat_rate FROM card_fee_rules WHERE tenant_id = $1 AND property_id = $2 ORDER BY payment_method, effective_from DESC
 `
 
 type ListCardFeeRulesParams struct {
@@ -732,6 +733,7 @@ func (q *Queries) ListCardFeeRules(ctx context.Context, arg ListCardFeeRulesPara
 			&i.EffectiveFrom,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.VatRate,
 		); err != nil {
 			return nil, err
 		}
@@ -799,7 +801,7 @@ func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([
 }
 
 const listSettlements = `-- name: ListSettlements :many
-SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_fee, s.reference, s.created_at, j.journal_date, j.journal_number,
+SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_mdr, s.reference, s.created_at, j.journal_date, j.journal_number,
        (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
@@ -822,7 +824,7 @@ type ListSettlementsRow struct {
 	Gross         decimal.Decimal
 	Net           decimal.Decimal
 	Fee           decimal.Decimal
-	ExpectedFee   *decimal.Decimal
+	ExpectedMdr   *decimal.Decimal
 	Reference     *string
 	CreatedAt     time.Time
 	JournalDate   civil.Date
@@ -851,7 +853,7 @@ func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams
 			&i.Gross,
 			&i.Net,
 			&i.Fee,
-			&i.ExpectedFee,
+			&i.ExpectedMdr,
 			&i.Reference,
 			&i.CreatedAt,
 			&i.JournalDate,

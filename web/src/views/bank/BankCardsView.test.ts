@@ -11,14 +11,14 @@ let POST = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
 const expected = {
-  as_of: '2026-10-04', account_key: 'CARD', gross: '1500000', expected_fee: '30000', expected_net: '1470000', late_count: 1, late_gross: '1000000', without_rate: 1,
+  as_of: '2026-10-04', account_key: 'CARD', gross: '1500000', expected_mdr: '30000', expected_net: '1470000', late_count: 1, late_gross: '1000000', without_rate: 1,
   lines: [
-    { journal_line_id: 1, journal_date: '2026-09-30', journal_number: 'JV1', reference: 'PAY000001', amount: '1000000', mdr_rate: '2', expected_fee: '20000', expected_net: '980000', expected_date: '2026-10-01', late: true },
-    { journal_line_id: 2, journal_date: '2026-10-03', journal_number: 'JV2', reference: 'PAY000002', amount: '500000', mdr_rate: null, expected_fee: '0', expected_net: '500000', expected_date: null, late: false },
+    { journal_line_id: 1, journal_date: '2026-09-30', journal_number: 'JV1', reference: 'PAY000001', amount: '1000000', mdr_rate: '2', expected_mdr: '20000', expected_net: '980000', expected_date: '2026-10-01', late: true },
+    { journal_line_id: 2, journal_date: '2026-10-03', journal_number: 'JV2', reference: 'PAY000002', amount: '500000', mdr_rate: null, expected_mdr: '0', expected_net: '500000', expected_date: null, late: false },
   ],
 }
 const rule = { id: 1, payment_method: 'CARD', mdr_rate: '2', settlement_days: 1, effective_from: '2026-09-01', created_at: '2026-09-01T00:00:00Z' }
-const settlement = { id: 3, bank_account_id: 1, account_key: 'CARD', journal_date: '2026-10-01', journal_number: 'JV9', gross: '1000000', net: '976000', fee: '24000', expected_fee: '20000', fee_variance: '4000', payments: 1, created_at: '2026-10-01T00:00:00Z' }
+const settlement = { id: 3, bank_account_id: 1, account_key: 'CARD', journal_date: '2026-10-01', journal_number: 'JV9', gross: '1000000', net: '976000', fee: '24000', expected_mdr: '20000', mdr_variance: '4000', payments: 1, created_at: '2026-10-01T00:00:00Z' }
 
 function mountView(permissions = ['bank.view', 'bank.manage']) {
   const pinia = createPinia()

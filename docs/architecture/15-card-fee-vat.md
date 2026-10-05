@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **design approved by the owner on 2026-10-05, not built.** Nothing in this file is implemented yet. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **design approved by the owner on 2026-10-05. Step 1 (schema and the rename) is built (migration 00056); steps 2 to 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -35,7 +35,7 @@ Decisions of the owner (2026-10-05):
 | column | meaning |
 |---|---|
 | `fee` (exists) | the whole deduction: `gross - net` |
-| `mdr_amount numeric(18,3) NOT NULL` | the MDR as finally booked (without VAT) |
+| `mdr_amount numeric(18,3)` **generated** (`fee - vat_amount`, stored) | the MDR as finally booked (without VAT) |
 | `vat_amount numeric(18,3) NOT NULL DEFAULT 0` | the VAT as finally booked |
 | `vat_treatment varchar(10)` | CREDITABLE, EXPENSE or DEFERRED; null exactly when `vat_amount = 0` |
 | `expected_mdr numeric(18,3)` | the MDR the payments expected (the existing `expected_fee`, **renamed**; null when a payment kept no snapshot) |
@@ -45,8 +45,8 @@ Decisions of the owner (2026-10-05):
 | `vat_rate numeric(7,4)` | the same for the VAT rate |
 | `payments_without_vat_rate int NOT NULL DEFAULT 0` | how many payments of the settlement were "without rate" |
 
-CHECKs: `fee = mdr_amount + vat_amount`; `mdr_amount >= 0`; `vat_amount >= 0`; `(vat_amount = 0) = (vat_treatment IS NULL)`; the treatment is one of the three; the rates between 0 and 100; `payments_without_vat_rate >= 0`. The settlement rows are append-only (the existing guard); nothing changes after posting. Data of the settlements made before this: `mdr_amount = fee`, `vat_amount = 0`, `proposed_vat = 0`, no treatment, `expected_mdr = expected_fee`, `expected_vat` null.
-The table is append-only (trigger `card_settlements_append_only`, which refuses UPDATE), so the migration fills `mdr_amount` of the existing rows with the trigger disabled for that one statement and enabled again at once; the Down does the same in the other direction. `card_settlements` already has `UNIQUE (property_id, id)` and `UNIQUE (journal_id)`.
+CHECKs: `vat_amount >= 0` and `vat_amount <= fee` (so `mdr_amount >= 0`); `fee = mdr_amount + vat_amount` holds **by construction** because `mdr_amount` is a stored generated column; `(vat_amount = 0) = (vat_treatment IS NULL)`; the treatment is one of the three; the rates between 0 and 100; `payments_without_vat_rate >= 0`. The settlement rows are append-only (the existing guard); nothing changes after posting. Data of the settlements made before this: `mdr_amount = fee`, `vat_amount = 0`, `proposed_vat = 0`, no treatment, `expected_mdr = expected_fee`, `expected_vat` null.
+As a generated column `mdr_amount` is filled for the settlements made before this too (VAT 0, so the MDR is the whole fee), and no UPDATE of the append-only table is needed. The rows are written with `fee` and `vat_amount`; the service never writes `mdr_amount`. `card_settlements` already has `UNIQUE (property_id, id)` and `UNIQUE (journal_id)`.
 
 `tax_return_input_claims` (the input side of the VAT return, see `14-supplier-credit-notes.md` for the pattern):
 
@@ -101,7 +101,7 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 - `GET {P}/bank/statements/{id}/lines/{line}/settlement-proposal`: lines and totals as above.
 - **New** `POST {P}/bank/statements/{id}/lines/{line}/settlement-preview` (`bank.view`): `{account_key, journal_line_ids}` answers `gross`, `net`, `deduction`, `expected_mdr`, `expected_vat`, `proposed_vat`, `proposed_mdr`, `vat_rate` (null when mixed), `without_vat_rate`, `vat_treatment` (what the settlement would freeze on the date of the line), `input_vat_account`. It writes nothing.
 - `POST {P}/bank/statements/{id}/lines/{line}/settle`: `vat_amount` is optional. Absent: the proposed VAT is used. Present (also "0"): it is the final VAT. 422 `VAT_EXCEEDS_DEDUCTION`.
-- `GET {P}/bank/card-settlements`: each settlement has `fee` (the deduction), `mdr_amount`, `vat_amount`, `vat_treatment`, `expected_mdr`, `expected_vat`, `proposed_vat`, `mdr_rate`, `vat_rate`, `payments_without_vat_rate`, `mdr_variance`, `vat_variance`. `expected_fee` is renamed `expected_mdr` and `fee_variance` becomes `mdr_variance` (both clients are ours).
+- `GET {P}/bank/card-settlements`: each settlement has `fee` (the deduction), `mdr_amount`, `vat_amount`, `vat_treatment`, `expected_mdr`, `expected_vat`, `proposed_vat`, `mdr_rate`, `vat_rate`, `payments_without_vat_rate`, `mdr_variance`, `vat_variance`. `expected_fee` is renamed `expected_mdr` and `fee_variance` becomes `mdr_variance` (both clients are ours); the same rename was made on the expected lines, the totals and the proposal (`expected_fee` to `expected_mdr`), where the fee of a payment is its MDR.
 - Tax return worksheet and return: a claim has `source` `SETTLEMENT` and `settlement_id`.
 - Permissions: `bank.view` reads, `bank.manage` writes the rules, `bank.reconcile` settles (as today); no new permission. The payment and receipt views that show the MDR snapshot add `mdr_vat_rate` and `mdr_vat`.
 
@@ -126,7 +126,7 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 
 ## Order of building (after approval)
 
-1. Migration 00056, constraint mappings, the DB tests, the rename `expected_fee` to `expected_mdr`.
+1. Migration 00056, constraint mappings, the DB tests, the rename `expected_fee` to `expected_mdr`. **Built.**
 2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal.
 3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list.
 4. The claims on the VAT return.

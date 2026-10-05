@@ -459,7 +459,7 @@ func (q *Queries) GetItemOfPayment(ctx context.Context, arg GetItemOfPaymentPara
 }
 
 const getPayment = `-- name: GetPayment :one
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM payments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetPaymentParams struct {
@@ -498,12 +498,14 @@ func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (Payment
 		&i.MdrRate,
 		&i.MdrFee,
 		&i.ExpectedSettlementDate,
+		&i.MdrVatRate,
+		&i.MdrVat,
 	)
 	return i, err
 }
 
 const getPaymentByKey = `-- name: GetPaymentByKey :one
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM payments WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
 
 type GetPaymentByKeyParams struct {
@@ -542,6 +544,8 @@ func (q *Queries) GetPaymentByKey(ctx context.Context, arg GetPaymentByKeyParams
 		&i.MdrRate,
 		&i.MdrFee,
 		&i.ExpectedSettlementDate,
+		&i.MdrVatRate,
+		&i.MdrVat,
 	)
 	return i, err
 }
@@ -848,7 +852,7 @@ INSERT INTO payments (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
     $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
-RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date
+RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 `
 
 type InsertPaymentParams struct {
@@ -927,6 +931,8 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		&i.MdrRate,
 		&i.MdrFee,
 		&i.ExpectedSettlementDate,
+		&i.MdrVatRate,
+		&i.MdrVat,
 	)
 	return i, err
 }
@@ -1241,7 +1247,7 @@ func (q *Queries) ListItemComponents(ctx context.Context, arg ListItemComponents
 }
 
 const listPayments = `-- name: ListPayments :many
-SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date FROM payments
+SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments
 WHERE tenant_id = $1 AND property_id = $2 AND id < $3::bigint
   AND ($4::date IS NULL OR business_date = $4::date)
   AND ($5::text IS NULL OR payment_method = $5::text)
@@ -1301,6 +1307,8 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 			&i.MdrRate,
 			&i.MdrFee,
 			&i.ExpectedSettlementDate,
+			&i.MdrVatRate,
+			&i.MdrVat,
 		); err != nil {
 			return nil, err
 		}
@@ -1499,7 +1507,7 @@ func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromSt
 const voidPayment = `-- name: VoidPayment :one
 UPDATE payments SET status = 'VOIDED', voided_at = $1::timestamptz, voided_by = $2, void_reason = $3, approved_by = $4
 WHERE tenant_id = $5 AND property_id = $6 AND id = $7
-RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date
+RETURNING id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat
 `
 
 type VoidPaymentParams struct {
@@ -1550,6 +1558,8 @@ func (q *Queries) VoidPayment(ctx context.Context, arg VoidPaymentParams) (Payme
 		&i.MdrRate,
 		&i.MdrFee,
 		&i.ExpectedSettlementDate,
+		&i.MdrVatRate,
+		&i.MdrVat,
 	)
 	return i, err
 }

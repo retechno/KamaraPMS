@@ -47,7 +47,7 @@ type ExpectedLine struct {
 	Reference     string          `json:"reference,omitempty"`
 	Amount        decimal.Decimal `json:"amount"`
 	MDRRate       *string         `json:"mdr_rate"`
-	ExpectedFee   decimal.Decimal `json:"expected_fee"`
+	ExpectedMDR   decimal.Decimal `json:"expected_mdr"`
 	ExpectedNet   decimal.Decimal `json:"expected_net"`
 	ExpectedDate  *civil.Date     `json:"expected_date"`
 	Late          bool            `json:"late"`
@@ -58,7 +58,7 @@ type Expected struct {
 	AsOf        civil.Date      `json:"as_of"`
 	AccountKey  string          `json:"account_key"`
 	Gross       decimal.Decimal `json:"gross"`
-	ExpectedFee decimal.Decimal `json:"expected_fee"`
+	ExpectedMDR decimal.Decimal `json:"expected_mdr"`
 	ExpectedNet decimal.Decimal `json:"expected_net"`
 	LateCount   int             `json:"late_count"`
 	LateGross   decimal.Decimal `json:"late_gross"`
@@ -75,7 +75,7 @@ type Proposal struct {
 	Matched         bool            `json:"matched"`
 	Difference      decimal.Decimal `json:"difference"`
 	Gross           decimal.Decimal `json:"gross"`
-	ExpectedFee     decimal.Decimal `json:"expected_fee"`
+	ExpectedMDR     decimal.Decimal `json:"expected_mdr"`
 	ExpectedNet     decimal.Decimal `json:"expected_net"`
 	JournalLineIDs  []int64         `json:"journal_line_ids"`
 	Lines           []ExpectedLine  `json:"lines"`
@@ -91,8 +91,8 @@ type SettlementRow struct {
 	Gross         decimal.Decimal  `json:"gross"`
 	Net           decimal.Decimal  `json:"net"`
 	Fee           decimal.Decimal  `json:"fee"`
-	ExpectedFee   *decimal.Decimal `json:"expected_fee"`
-	FeeVariance   *decimal.Decimal `json:"fee_variance"`
+	ExpectedMDR   *decimal.Decimal `json:"expected_mdr"`
+	MDRVariance   *decimal.Decimal `json:"mdr_variance"`
 	Payments      int              `json:"payments"`
 	Reference     string           `json:"reference,omitempty"`
 	CreatedAt     time.Time        `json:"created_at"`
@@ -221,11 +221,11 @@ func (s *Service) expectedLines(ctx context.Context, tenantID, propertyID, accou
 		if desc == "" {
 			desc = r.JournalDescription
 		}
-		l := ExpectedLine{JournalLineID: r.ID, Date: r.JournalDate, JournalNumber: r.JournalNumber, Description: desc, Reference: deref(r.SourceRef), Amount: r.Amount, ExpectedNet: r.Amount, ExpectedFee: decimal.Zero}
+		l := ExpectedLine{JournalLineID: r.ID, Date: r.JournalDate, JournalNumber: r.JournalNumber, Description: desc, Reference: deref(r.SourceRef), Amount: r.Amount, ExpectedNet: r.Amount, ExpectedMDR: decimal.Zero}
 		if sn, ok := snaps[l.Reference]; ok && r.Amount.IsPositive() {
 			rate := sn.rate.String()
 			on := sn.on
-			l.MDRRate, l.ExpectedFee, l.ExpectedDate = &rate, sn.fee, &on
+			l.MDRRate, l.ExpectedMDR, l.ExpectedDate = &rate, sn.fee, &on
 			l.ExpectedNet = r.Amount.Sub(sn.fee)
 			l.Late = on.Before(today)
 		}
@@ -264,12 +264,12 @@ func (s *Service) ExpectedSettlements(ctx context.Context, propertyID int64, key
 	if err != nil {
 		return Expected{}, err
 	}
-	out := Expected{AsOf: day.BusinessDate, AccountKey: key, Lines: lines, Gross: decimal.Zero, ExpectedFee: decimal.Zero, ExpectedNet: decimal.Zero, LateGross: decimal.Zero}
+	out := Expected{AsOf: day.BusinessDate, AccountKey: key, Lines: lines, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedNet: decimal.Zero, LateGross: decimal.Zero}
 	if out.Lines == nil {
 		out.Lines = []ExpectedLine{}
 	}
 	for _, l := range lines {
-		out.Gross, out.ExpectedFee, out.ExpectedNet = out.Gross.Add(l.Amount), out.ExpectedFee.Add(l.ExpectedFee), out.ExpectedNet.Add(l.ExpectedNet)
+		out.Gross, out.ExpectedMDR, out.ExpectedNet = out.Gross.Add(l.Amount), out.ExpectedMDR.Add(l.ExpectedMDR), out.ExpectedNet.Add(l.ExpectedNet)
 		if l.MDRRate == nil {
 			out.NoRate++
 		}
@@ -358,7 +358,7 @@ func (s *Service) SettlementProposal(ctx context.Context, propertyID, statementI
 	if half := money.Percent(line.Amount, decimal.RequireFromString("0.5"), prop.CurrencyDecimals); half.GreaterThan(tol) {
 		tol = half
 	}
-	out := Proposal{StatementLineID: lineID, AccountKey: key, Amount: line.Amount, Tolerance: tol, JournalLineIDs: []int64{}, Lines: []ExpectedLine{}, Gross: decimal.Zero, ExpectedFee: decimal.Zero, ExpectedNet: decimal.Zero}
+	out := Proposal{StatementLineID: lineID, AccountKey: key, Amount: line.Amount, Tolerance: tol, JournalLineIDs: []int64{}, Lines: []ExpectedLine{}, Gross: decimal.Zero, ExpectedMDR: decimal.Zero, ExpectedNet: decimal.Zero}
 	if len(lines) == 0 {
 		out.Difference = line.Amount
 		return out, nil
@@ -367,7 +367,7 @@ func (s *Service) SettlementProposal(ctx context.Context, propertyID, statementI
 	out.Lines = lines[:n]
 	for _, l := range out.Lines {
 		out.JournalLineIDs = append(out.JournalLineIDs, l.JournalLineID)
-		out.Gross, out.ExpectedFee = out.Gross.Add(l.Amount), out.ExpectedFee.Add(l.ExpectedFee)
+		out.Gross, out.ExpectedMDR = out.Gross.Add(l.Amount), out.ExpectedMDR.Add(l.ExpectedMDR)
 	}
 	out.ExpectedNet = sum
 	out.Difference = line.Amount.Sub(sum)
@@ -392,11 +392,11 @@ func (s *Service) Settlements(ctx context.Context, propertyID, before int64, lim
 	for _, r := range rows {
 		row := SettlementRow{
 			ID: r.ID, BankAccountID: r.BankAccountID, AccountKey: r.AccountKey, Date: r.JournalDate, JournalNumber: r.JournalNumber, Gross: r.Gross, Net: r.Net, Fee: r.Fee,
-			ExpectedFee: r.ExpectedFee, Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
+			ExpectedMDR: r.ExpectedMdr, Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
 		}
-		if r.ExpectedFee != nil {
-			v := r.Fee.Sub(*r.ExpectedFee)
-			row.FeeVariance = &v
+		if r.ExpectedMdr != nil {
+			v := r.Fee.Sub(*r.ExpectedMdr)
+			row.MDRVariance = &v
 		}
 		out = append(out, row)
 	}

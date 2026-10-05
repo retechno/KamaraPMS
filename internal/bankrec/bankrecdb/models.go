@@ -21,4 +21,5 @@ type CardFeeRule struct {
 	EffectiveFrom  civil.Date
 	CreatedAt      time.Time
 	CreatedBy      *int64
+	VatRate        decimal.Decimal
 }

@@ -239,7 +239,7 @@ describe('bank views', () => {
     GET.mockImplementation(async (p: string) => {
       if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
       if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
-      if (p.endsWith('/settlement-proposal')) return { data: { matched: true, difference: '0', expected_fee: '20000', journal_line_ids: [301, 302] } }
+      if (p.endsWith('/settlement-proposal')) return { data: { matched: true, difference: '0', expected_mdr: '20000', journal_line_ids: [301, 302] } }
       return { data: detail({ lines }) }
     })
     await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })

@@ -111,7 +111,7 @@ func TestTheExpectedSettlementsListWhatTheBankShouldPayAndWhatIsLate(t *testing.
 	exp, err := g.BankRec.ExpectedSettlements(g.admin, g.propID, "CARD")
 	must(t, err)
 	eq(t, "gross", exp.Gross, "1500000")
-	eq(t, "expected fee", exp.ExpectedFee, "30000")
+	eq(t, "expected fee", exp.ExpectedMDR, "30000")
 	eq(t, "expected net", exp.ExpectedNet, "1470000")
 	if len(exp.Lines) != 3 || exp.LateCount != 2 || exp.NoRate != 0 {
 		t.Fatalf("expected: %+v", exp)
@@ -150,7 +150,7 @@ func TestAProposalPicksTheOldestPaymentsThatAddUpToTheBankLine(t *testing.T) {
 		t.Fatalf("proposal: %+v", pr)
 	}
 	eq(t, "gross", pr.Gross, "1000000")
-	eq(t, "expected fee", pr.ExpectedFee, "20000")
+	eq(t, "expected fee", pr.ExpectedMDR, "20000")
 	eq(t, "difference", pr.Difference, "0")
 	// the settlement itself is the usual call; the fee it cost is compared with the fee expected
 	done, err := g.BankRec.Settle(g.admin, g.propID, st.ID, line.ID, bankrec.SettleInput{AccountKey: "CARD", JournalLineIDs: pr.JournalLineIDs, FeeAccountID: g.acc["6130"]})
@@ -160,12 +160,12 @@ func TestAProposalPicksTheOldestPaymentsThatAddUpToTheBankLine(t *testing.T) {
 	}
 	list, err := g.BankRec.Settlements(g.admin, g.propID, 0, 50)
 	must(t, err)
-	if len(list) != 1 || list[0].ExpectedFee == nil || list[0].FeeVariance == nil || list[0].Payments != 2 {
+	if len(list) != 1 || list[0].ExpectedMDR == nil || list[0].MDRVariance == nil || list[0].Payments != 2 {
 		t.Fatalf("settlements: %+v", list)
 	}
 	eq(t, "fee", list[0].Fee, "20000")
-	eq(t, "expected fee", *list[0].ExpectedFee, "20000")
-	eq(t, "variance", *list[0].FeeVariance, "0")
+	eq(t, "expected fee", *list[0].ExpectedMDR, "20000")
+	eq(t, "variance", *list[0].MDRVariance, "0")
 	// what is left is offered to the next line; an amount that fits nothing is not a match, but still the best choice
 	other := lineOf(t, st, "Odd payout")
 	pr2, err := g.BankRec.SettlementProposal(g.admin, g.propID, st.ID, other.ID, "CARD")
@@ -198,7 +198,7 @@ func TestASettlementShowsTheFeeThatWasNotExpected(t *testing.T) {
 	list, err := g.BankRec.Settlements(g.admin, g.propID, 0, 50)
 	must(t, err)
 	eq(t, "fee taken", list[0].Fee, "24000")
-	eq(t, "variance", *list[0].FeeVariance, "4000")
+	eq(t, "variance", *list[0].MDRVariance, "4000")
 }
 
 func TestASettlementOfPaymentsWithoutASnapshotHasNoExpectedFee(t *testing.T) {
@@ -216,7 +216,7 @@ func TestASettlementOfPaymentsWithoutASnapshotHasNoExpectedFee(t *testing.T) {
 	must(t, err)
 	list, err := g.BankRec.Settlements(g.admin, g.propID, 0, 50)
 	must(t, err)
-	if list[0].ExpectedFee != nil || list[0].FeeVariance != nil {
+	if list[0].ExpectedMDR != nil || list[0].MDRVariance != nil {
 		t.Fatalf("no snapshot, no expectation: %+v", list[0])
 	}
 }

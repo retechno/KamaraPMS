@@ -115,4 +115,6 @@ type Payment struct {
 	MdrRate                *decimal.Decimal
 	MdrFee                 *decimal.Decimal
 	ExpectedSettlementDate *civil.Date
+	MdrVatRate             *decimal.Decimal
+	MdrVat                 *decimal.Decimal
 }

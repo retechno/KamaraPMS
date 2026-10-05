@@ -8996,7 +8996,7 @@ export interface components {
             amount: string;
             /** @description Null for a payment taken before there was a rule. */
             mdr_rate: string | null;
-            expected_fee: string;
+            expected_mdr: string;
             expected_net: string;
             expected_date: components["schemas"]["Date"] | null;
             late: boolean;
@@ -9005,7 +9005,7 @@ export interface components {
             as_of: components["schemas"]["Date"];
             account_key: string;
             gross: string;
-            expected_fee: string;
+            expected_mdr: string;
             expected_net: string;
             late_count: number;
             late_gross: string;
@@ -9023,7 +9023,7 @@ export interface components {
             /** @description The line less the expected net of the payments proposed. */
             difference: string;
             gross: string;
-            expected_fee: string;
+            expected_mdr: string;
             expected_net: string;
             journal_line_ids: number[];
             lines: components["schemas"]["ExpectedCardLine"][];
@@ -9040,9 +9040,9 @@ export interface components {
             net: string;
             fee: string;
             /** @description Null when a payment of the settlement had no snapshot. */
-            expected_fee: string | null;
-            /** @description The fee taken less the fee expected: positive is more than expected. */
-            fee_variance: string | null;
+            expected_mdr: string | null;
+            /** @description The MDR taken less the MDR expected: positive is more than expected. */
+            mdr_variance: string | null;
             payments: number;
             reference?: string;
             /** Format: date-time */

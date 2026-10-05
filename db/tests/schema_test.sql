@@ -1450,6 +1450,32 @@ SELECT expect_error('a rate is a percent', '23514',
     $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 101, 1, '2026-09-03')$q$);
 SELECT expect_error('the days to pay out are at most 60', '23514',
     $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'CARD', 2, 61, '2026-09-04')$q$);
+SELECT expect_ok('a rule takes the VAT rate of the commission', $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 0.7, 11, 1, '2026-09-05')$q$);
+SELECT expect_error('the VAT rate of a rule is a percentage', '23514',
+    $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 0.7, 101, 1, '2026-09-06')$q$);
+-- The VAT of the commission of a settlement (00056): the identity fee = MDR + VAT, the treatment frozen with the VAT, the claim of a settlement
+SELECT expect_ok('a settlement with the VAT of its commission', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 978, 22, 2, 'CREDITABLE', 20, 2, 2, 2, 11)$q$);
+SELECT expect_error('the VAT of a settlement is not more than the deduction', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 21, 'CREDITABLE')$q$);
+SELECT expect_error('VAT needs its treatment', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 2)$q$);
+SELECT expect_error('a treatment needs VAT', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_treatment)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 'EXPENSE')$q$);
+SELECT expect_error('the treatment is one of three', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 2, 'MAYBE')$q$);
+SELECT expect_error('an expected VAT needs an expected MDR', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_vat)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 2)$q$);
+SELECT expect_error('the rates of a settlement are percentages', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_rate)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 101)$q$);
+SELECT expect_error('the proposed VAT is not more than the deduction', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, proposed_vat)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 21)$q$);
+SELECT expect_error('the MDR of a settlement is generated', '428C9', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, mdr_amount)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20, 20)$q$);
+SELECT expect_error('a claim of a settlement has no reversal', '23514', $q$INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, settlement_id, amount, reverses_claim_id)
+    VALUES (tn('ABC'), pr('BALI'), 1, 999999, -5, 999999)$q$);
+SELECT expect_error('a claim names one source', '23514', $q$INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, settlement_id, amount)
+    VALUES (tn('ABC'), pr('BALI'), 1, 1, 1, 999999, 5)$q$);
 SELECT expect_error('a rule is never changed', '23001', $q$UPDATE card_fee_rules SET mdr_rate = 1$q$);
 SELECT expect_error('a rule is never deleted', '23001', $q$DELETE FROM card_fee_rules$q$);
 

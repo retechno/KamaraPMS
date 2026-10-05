@@ -9948,7 +9948,7 @@ components:
         effective_from: { $ref: "#/components/schemas/Date" }
     ExpectedCardLine:
       type: object
-      required: [journal_line_id, journal_date, journal_number, amount, mdr_rate, expected_fee, expected_net, expected_date, late]
+      required: [journal_line_id, journal_date, journal_number, amount, mdr_rate, expected_mdr, expected_net, expected_date, late]
       properties:
         journal_line_id: { type: integer, format: int64 }
         journal_date: { $ref: "#/components/schemas/Date" }
@@ -9957,18 +9957,18 @@ components:
         reference: { type: string, description: The number of the payment or receipt. }
         amount: { type: string }
         mdr_rate: { type: [string, "null"], description: Null for a payment taken before there was a rule. }
-        expected_fee: { type: string }
+        expected_mdr: { type: string }
         expected_net: { type: string }
         expected_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
         late: { type: boolean }
     ExpectedCardSettlements:
       type: object
-      required: [as_of, account_key, gross, expected_fee, expected_net, late_count, late_gross, without_rate, lines]
+      required: [as_of, account_key, gross, expected_mdr, expected_net, late_count, late_gross, without_rate, lines]
       properties:
         as_of: { $ref: "#/components/schemas/Date" }
         account_key: { type: string }
         gross: { type: string }
-        expected_fee: { type: string }
+        expected_mdr: { type: string }
         expected_net: { type: string }
         late_count: { type: integer }
         late_gross: { type: string }
@@ -9976,7 +9976,7 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }
     SettlementProposal:
       type: object
-      required: [statement_line_id, account_key, amount, tolerance, matched, difference, gross, expected_fee, expected_net, journal_line_ids, lines]
+      required: [statement_line_id, account_key, amount, tolerance, matched, difference, gross, expected_mdr, expected_net, journal_line_ids, lines]
       properties:
         statement_line_id: { type: integer, format: int64 }
         account_key: { type: string }
@@ -9985,13 +9985,13 @@ components:
         matched: { type: boolean }
         difference: { type: string, description: The line less the expected net of the payments proposed. }
         gross: { type: string }
-        expected_fee: { type: string }
+        expected_mdr: { type: string }
         expected_net: { type: string }
         journal_line_ids: { type: array, items: { type: integer, format: int64 } }
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }
     CardSettlement:
       type: object
-      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, expected_fee, fee_variance, payments, created_at]
+      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, expected_mdr, mdr_variance, payments, created_at]
       properties:
         id: { type: integer, format: int64 }
         bank_account_id: { type: integer, format: int64 }
@@ -10001,8 +10001,8 @@ components:
         gross: { type: string }
         net: { type: string }
         fee: { type: string }
-        expected_fee: { type: [string, "null"], description: Null when a payment of the settlement had no snapshot. }
-        fee_variance: { type: [string, "null"], description: "The fee taken less the fee expected: positive is more than expected." }
+        expected_mdr: { type: [string, "null"], description: Null when a payment of the settlement had no snapshot. }
+        mdr_variance: { type: [string, "null"], description: "The MDR taken less the MDR expected: positive is more than expected." }
         payments: { type: integer }
         reference: { type: string }
         created_at: { type: string, format: date-time }

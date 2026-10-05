@@ -80,6 +80,8 @@ type CityLedgerReceipt struct {
 	MdrRate                *decimal.Decimal
 	MdrFee                 *decimal.Decimal
 	ExpectedSettlementDate *civil.Date
+	MdrVatRate             *decimal.Decimal
+	MdrVat                 *decimal.Decimal
 }
 
 type CityLedgerReminder struct {
