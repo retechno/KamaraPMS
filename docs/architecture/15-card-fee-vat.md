@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) 3 (preview, settle, the settlements list) and 4 (the claims on the VAT return) are built; step 5 is not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **built (all five steps; the settlement stays final, with no void).** Design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) 3 (preview, settle, the settlements list), 4 (the claims on the VAT return) and 5 (screens) are built.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -130,7 +130,7 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal. **Built.**
 3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list. **Built** (see "Built in step 3" below).
 4. The claims on the VAT return. **Built** (see "Built in step 4" below).
-5. OpenAPI, the front end, the documents (README, `06-api.md`, the feature map), the full checks, one commit per step.
+5. OpenAPI, the front end, the documents (README, `06-api.md`, the feature map), the full checks, one commit per step. **Built** (the OpenAPI went in with the steps that added the routes; see "Built in step 5").
 
 ## Built in step 3
 
@@ -145,6 +145,12 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 - `taxfiling.Service` claims a CREDITABLE settlement (`ClaimableSettlements`): a positive claim of `vat_amount`, source `SETTLEMENT` (`ClaimSettlement`), in the return of the month of the date of the statement line (the date of the settlement journal) or the first return not filed after it; only a profile that claims input VAT claims it. EXPENSE and DEFERRED settlements are never claimed. A settlement has no reversal, so there is no reversing claim.
 - A claim of a settlement reads back on the worksheet and the return with `source` SETTLEMENT and `settlement_id`; `bill_number` is the number of the settlement journal, `supplier_invoice_number` its reference, `supplier_name` the bank account and `bill_date` the date of the line. The PDF names it "Input VAT on card commission". Voiding the return releases the claim and the next worksheet offers it again, through the existing mechanism.
 - The database keeps one live claim per settlement, exactly one source per claim and no reversal of a settlement claim (migration 00056).
+
+## Built in step 5
+
+- **The settle dialog** (Bank, Reconcile a statement): when payments are picked the screen asks `settlement-preview` and shows what the payments expected (commission and VAT, when every payment kept a snapshot), a note for the payments without a VAT rate, the field "VAT in the deduction" filled with the proposal (the user may change it; between 0 and the deduction, else the button is off), the commission (MDR) that will be booked (the deduction less the VAT), and the treatment that will be frozen with the input VAT account (CREDITABLE: claimed on the VAT return, DEFERRED: kept apart, EXPENSE: part of the cost, booked with the commission). The VAT shown is sent as `vat_amount`, so what the user saw is what is booked. The commission account and its department are asked only when something is booked to the commission (not for a deduction that is all VAT booked to input VAT).
+- **The settlements list** (Bank, Card settlements): the MDR booked, the VAT booked with its treatment, the expected MDR, and the MDR and VAT variances.
+- The rule form and the expected table were done in step 2, and the claims on a tax return in step 4.
 
 ## Not in this scope
 

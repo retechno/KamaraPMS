@@ -20,7 +20,10 @@ const expected = {
   ],
 }
 const rule = { id: 1, payment_method: 'CARD', mdr_rate: '2', vat_rate: '11', settlement_days: 1, effective_from: '2026-09-01', created_at: '2026-09-01T00:00:00Z' }
-const settlement = { id: 3, bank_account_id: 1, account_key: 'CARD', journal_date: '2026-10-01', journal_number: 'JV9', gross: '1000000', net: '976000', fee: '24000', expected_mdr: '20000', mdr_variance: '4000', payments: 1, created_at: '2026-10-01T00:00:00Z' }
+const settlement = {
+  id: 3, bank_account_id: 1, account_key: 'CARD', journal_date: '2026-10-01', journal_number: 'JV9', gross: '1000000', net: '976000', fee: '24000', mdr_amount: '21800', vat_amount: '2200', vat_treatment: 'CREDITABLE',
+  expected_mdr: '20000', expected_vat: '2200', proposed_vat: '2200', mdr_rate: '2', vat_rate: '11', payments_without_vat_rate: 0, mdr_variance: '1800', vat_variance: '0', payments: 1, created_at: '2026-10-01T00:00:00Z',
+}
 
 function mountView(permissions = ['bank.view', 'bank.manage']) {
   const pinia = createPinia()
@@ -75,7 +78,10 @@ describe('BankCardsView', () => {
     const row = w.get('[data-testid=settlement-JV9]').text()
     expect(row).toContain('24,000')
     expect(row).toContain('20,000')
-    expect(row).toContain('4,000')
+    expect(row).toContain('21,800')
+    expect(row).toContain('2,200')
+    expect(row).toContain('1,800')
+    expect(w.get('[data-testid=treatment-JV9]').text()).toBe('claimed')
   })
 
   it('adds a fee rule', async () => {

@@ -52,8 +52,11 @@ const settlementColumns = computed<Column<CardSettlement>[]>(() => [
   { key: 'gross', label: t('cards.settlementGross'), align: 'right', format: 'money' as const },
   { key: 'net', label: t('cards.settlementNet'), align: 'right', format: 'money' as const },
   { key: 'fee', label: t('cards.settlementFee'), align: 'right', format: 'money' as const },
+  { key: 'mdr_amount', label: t('cards.settlementMdr'), align: 'right', format: 'money' as const },
+  { key: 'vat_amount', label: t('cards.settlementVat'), align: 'right' },
   { key: 'expected_mdr', label: t('cards.settlementExpected'), align: 'right' },
   { key: 'mdr_variance', label: t('cards.variance'), align: 'right' },
+  { key: 'vat_variance', label: t('cards.vatVariance'), align: 'right' },
   { key: 'payments', label: t('cards.payments'), align: 'right' },
 ])
 
@@ -200,6 +203,11 @@ watch(key, () => void load())
         <DataTable v-else :columns="settlementColumns" :rows="settlements" row-key="id" :row-test-id="(s) => `settlement-${s.journal_number}`" :caption="t('cards.settlementsTitle')">
           <template #cell-expected_mdr="{ row }">{{ row.expected_mdr === null ? '-' : $money(row.expected_mdr) }}</template>
           <template #cell-mdr_variance="{ row }">{{ row.mdr_variance === null ? '-' : $money(row.mdr_variance) }}</template>
+          <template #cell-vat_amount="{ row }">
+            <template v-if="row.vat_treatment">{{ $money(row.vat_amount) }} <Badge variant="outline" :data-testid="`treatment-${row.journal_number}`">{{ t(`cards.treatment_${row.vat_treatment}` as 'cards.treatment_EXPENSE') }}</Badge></template>
+            <template v-else>-</template>
+          </template>
+          <template #cell-vat_variance="{ row }">{{ row.vat_variance === null ? '-' : $money(row.vat_variance) }}</template>
         </DataTable>
       </CardContent>
     </Card>

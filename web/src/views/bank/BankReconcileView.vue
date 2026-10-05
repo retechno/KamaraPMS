@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, BankStatementDetail, GlAccount, UnclearedLine } from '@/api/types'
+import type { Approval, BankStatementDetail, GlAccount, SettlementPreview, UnclearedLine } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -34,7 +34,9 @@ const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const selectedLines = ref<number[]>([])
-const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, department_id: null as number | null, description: '', lines: [] as UnclearedLine[], picked: [] as number[] })
+const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, department_id: null as number | null, description: '', vat: '', lines: [] as UnclearedLine[], picked: [] as number[] })
+/** The split of the deduction the system proposes for the payments picked: the VAT is the user's to change, the MDR is what is left. */
+const preview = ref<SettlementPreview | null>(null)
 const picked = ref<number[]>([])
 const suggestion = ref<{ matched: boolean; difference: string; expected_mdr: string } | null>(null)
 const adjust = reactive({ open: false, account_id: 0, department_id: null as number | null, description: '' })
@@ -78,6 +80,18 @@ const neededTotal = computed(() => chosenLines.value.reduce((sum, l) => sum + (t
 const line = computed(() => (chosenLines.value.length === 1 ? (chosenLines.value[0] ?? null) : null))
 const settleGross = computed(() => settle.lines.filter((l) => settle.picked.includes(l.journal_line_id)).reduce((sum, l) => sum + (toMilli(l.amount) ?? 0n), 0n))
 const settleNet = computed(() => toMilli(line.value?.amount ?? '0') ?? 0n)
+const deduction = computed(() => settleGross.value - settleNet.value)
+/** The final VAT as typed (empty is none); null when it is not an amount, or is negative or more than the deduction. */
+const finalVat = computed<bigint | null>(() => {
+  const v = settle.vat.trim() === '' ? 0n : toMilli(settle.vat)
+  return v === null || v < 0n || v > deduction.value ? null : v
+})
+/** What is booked to the commission account: the deduction less the VAT, and all of it when the VAT is part of the cost (EXPENSE). */
+const commission = computed(() => {
+  if (finalVat.value === null) return deduction.value
+  return preview.value?.vat_treatment === 'EXPENSE' ? deduction.value : deduction.value - finalVat.value
+})
+const commissionDue = computed(() => commission.value > 0n)
 const chargeable = computed(() => accounts.value.filter((a) => a.is_postable && a.is_active))
 const base = () => ({ path: { propertyId: pid.value as number, id: sid.value } })
 
@@ -189,7 +203,8 @@ async function postAdjust(): Promise<void> {
 }
 
 async function startSettle(): Promise<void> {
-  Object.assign(settle, { open: true, fee_account_id: 0, department_id: null, description: '', picked: [] })
+  Object.assign(settle, { open: true, fee_account_id: 0, department_id: null, description: '', vat: '', picked: [] })
+  preview.value = null
   await loadSettleLines()
 }
 
@@ -208,6 +223,7 @@ async function suggest(): Promise<void> {
 async function loadSettleLines(): Promise<void> {
   settle.picked = []
   suggestion.value = null
+  preview.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/bank/statements/{id}/settlement-lines', { params: { ...base(), query: { account_key: settle.key as 'CARD' } } })
     settle.lines = data?.data ?? []
@@ -216,13 +232,33 @@ async function loadSettleLines(): Promise<void> {
   }
 }
 
+/** Asks the server for the split of the deduction each time the payments picked change; the proposed VAT fills the field. */
+async function loadPreview(): Promise<void> {
+  const l = line.value
+  preview.value = null
+  if (!l || !settle.open || !settle.picked.length || deduction.value < 0n) return
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-preview', {
+      params: { path: { ...base().path, lineId: l.id } }, body: { account_key: settle.key as 'CARD', journal_line_ids: settle.picked },
+    })
+    preview.value = data && typeof data.proposed_vat === 'string' ? data : null
+    settle.vat = preview.value ? preview.value.proposed_vat : ''
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+watch(() => [...settle.picked], () => { void loadPreview() })
+
 async function postSettle(): Promise<void> {
   const l = line.value
   if (!l) return
   const ok = await act(
     () => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle', {
       params: { path: { ...base().path, lineId: l.id } },
-      body: { account_key: settle.key as 'CARD', journal_line_ids: settle.picked, fee_account_id: settle.fee_account_id || undefined, department_id: settle.fee_account_id ? settle.department_id : undefined, description: settle.description || undefined },
+      body: {
+        account_key: settle.key as 'CARD', journal_line_ids: settle.picked, fee_account_id: settle.fee_account_id || undefined, department_id: settle.fee_account_id ? settle.department_id : undefined,
+        vat_amount: preview.value && settle.vat.trim() !== '' ? settle.vat.trim() : undefined, description: settle.description || undefined,
+      },
     }),
     t('reconcile.settled', { n: l.line_no }),
   )
@@ -372,12 +408,23 @@ watch([() => pid.value, sid], () => {
                 {{ t('reconcile.settleSummary', { gross: $money(fromMilli(settleGross)), net: $money(fromMilli(settleNet)) }) }}
                 <b :class="settleGross < settleNet && 'text-destructive'">{{ t('reconcile.commission', { amount: $money(fromMilli(settleGross - settleNet)) }) }}</b>
               </p>
-              <FormField v-if="settleGross > settleNet" :label="t('reconcile.commissionAccount')">
+              <div v-if="preview && deduction > 0n" class="grid gap-2 rounded-md border border-border p-3 text-sm" data-testid="settle-split">
+                <p v-if="preview.expected_mdr !== null && preview.expected_vat !== null" class="m-0 text-muted-foreground" data-testid="split-expected">{{ t('reconcile.expectedSplit', { mdr: $money(preview.expected_mdr), vat: $money(preview.expected_vat) }) }}</p>
+                <p v-if="preview.without_vat_rate" class="m-0 text-muted-foreground" data-testid="split-no-rate">{{ t('reconcile.withoutVatRate', { count: preview.without_vat_rate }) }}</p>
+                <FormField class="w-56" :label="t('reconcile.finalVat')" :hint="t('reconcile.finalVatHint', { proposed: $money(preview.proposed_vat) })" :error="finalVat === null ? t('reconcile.vatTooHigh', { amount: $money(fromMilli(deduction)) }) : undefined">
+                  <template #default="{ id, invalid }"><Input :id="id" v-model="settle.vat" name="settle_vat" inputmode="decimal" :aria-invalid="invalid" /></template>
+                </FormField>
+                <p class="m-0" data-testid="split-mdr"><b>{{ t('reconcile.finalMdr', { amount: $money(fromMilli(finalVat === null ? deduction : deduction - finalVat)) }) }}</b></p>
+                <p v-if="finalVat !== null && finalVat > 0n" class="m-0 text-muted-foreground" data-testid="split-treatment">
+                  {{ t(`reconcile.vatTreatment_${preview.vat_treatment}` as 'reconcile.vatTreatment_EXPENSE', { account: preview.input_vat_account ? `${preview.input_vat_account.code} · ${preview.input_vat_account.name}` : '' }) }}
+                </p>
+              </div>
+              <FormField v-if="commissionDue" :label="t('reconcile.commissionAccount')">
                 <template #default="{ id }">
                   <Combobox :id="id" v-model="settle.fee_account_id" name="settle_fee" :options="[{ value: 0, label: `${t('reconcile.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 </template>
               </FormField>
-              <FormField v-if="settleGross > settleNet" :label="t('departments.field')">
+              <FormField v-if="commissionDue" :label="t('departments.field')">
                 <template #default="{ id }"><DepartmentSelect :id="id" v-model="settle.department_id" name="settle_department" /></template>
               </FormField>
               <FormField :label="t('reconcile.description')">
@@ -385,7 +432,7 @@ watch([() => pid.value, sid], () => {
               </FormField>
               <div class="flex justify-end gap-2">
                 <Button type="button" variant="outline" @click="settle.open = false">{{ t('common.cancel') }}</Button>
-                <Button type="submit" :disabled="busy || !settle.picked.length || settleGross < settleNet || (settleGross > settleNet && !settle.fee_account_id)" data-testid="settle-post">{{ t('reconcile.settleAndMatch') }}</Button>
+                <Button type="submit" :disabled="busy || !settle.picked.length || settleGross < settleNet || finalVat === null || (commissionDue && !settle.fee_account_id)" data-testid="settle-post">{{ t('reconcile.settleAndMatch') }}</Button>
               </div>
             </form>
           </div>

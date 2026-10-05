@@ -232,6 +232,91 @@ describe('bank views', () => {
     expect(call[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, department_id: null, description: 'Card settlement 1 Oct' })
   })
 
+  it('shows the split of what the bank kept, lets the user change the VAT, and books the MDR that is left', async () => {
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    await flushPromises()
+    const lines = detail().lines.map((l) => (l.id === 12 ? { ...l, amount: '977800', description: 'Card settlement' } : l))
+    GET.mockImplementation(async (p: string) => {
+      if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
+      if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
+      return { data: detail({ lines }) }
+    })
+    const preview = {
+      statement_line_id: 12, account_key: 'CARD', gross: '1000000', net: '977800', deduction: '22200', expected_mdr: '20000', expected_vat: '2200', proposed_vat: '2200', proposed_mdr: '20000', mdr_rate: '2', vat_rate: '11',
+      without_vat_rate: 0, without_rate: 0, vat_treatment: 'CREDITABLE', input_vat_account: { id: 40, code: '1425', name: 'Input VAT' },
+    }
+    POST.mockImplementation(async (p: string) => (p.endsWith('/settlement-preview') ? { data: preview } : { data: detail() }))
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    await w.get('[data-testid=pick-line-2]').setValue(true)
+    await w.get('[data-testid=settle-open]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=settle-split]').exists()).toBe(false) // nothing picked yet
+    await w.get('[data-testid=settle-301] input').setValue(true)
+    await w.get('[data-testid=settle-302] input').setValue(true)
+    await flushPromises()
+    const asked = POST.mock.calls.filter((c) => String(c[0]).endsWith('/settlement-preview')).at(-1) as [string, { params: { path: unknown }; body: unknown }]
+    expect(asked[1].params.path).toEqual({ propertyId: 7, id: 6, lineId: 12 })
+    expect(asked[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302] })
+    expect(w.get('[data-testid=split-expected]').text()).toContain('commission of 20,000 and VAT of 2,200')
+    expect((w.get('input[name=settle_vat]').element as HTMLInputElement).value).toBe('2200')
+    expect(w.get('[data-testid=split-mdr]').text()).toContain('20,000')
+    expect(w.get('[data-testid=split-treatment]').text()).toContain('1425 · Input VAT')
+    expect(w.get('[data-testid=split-treatment]').text()).toContain('claimed on the VAT return')
+    // the VAT is the user's to change: the MDR is what is left, and it cannot be more than the deduction
+    await w.get('input[name=settle_vat]').setValue('2000')
+    expect(w.get('[data-testid=split-mdr]').text()).toContain('20,200')
+    await w.get('select[name=settle_fee]').setValue(9)
+    await w.get('input[name=settle_vat]').setValue('22201')
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true)
+    expect(w.get('[data-testid=settle-form]').text()).toContain('between 0 and the 22,200 the bank kept')
+    await w.get('input[name=settle_vat]').setValue('2000')
+    await w.get('[data-testid=settle-form]').trigger('submit')
+    await flushPromises()
+    const call = POST.mock.calls.at(-1) as [string, { body: Record<string, unknown> }]
+    expect(call[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle')
+    expect(call[1].body).toMatchObject({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, vat_amount: '2000' })
+  })
+
+  it('needs no commission account when the whole deduction is VAT booked to input VAT, but does when the VAT is part of the cost', async () => {
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    await flushPromises()
+    const lines = detail().lines.map((l) => (l.id === 12 ? { ...l, amount: '997800', description: 'Card settlement' } : l))
+    GET.mockImplementation(async (p: string) => {
+      if (p.endsWith('/uncleared')) return { data: { data: unclearedList } }
+      if (p.endsWith('/settlement-lines')) return { data: { data: settleList } }
+      return { data: detail({ lines }) }
+    })
+    let treatment = 'CREDITABLE'
+    POST.mockImplementation(async (p: string) => (p.endsWith('/settlement-preview')
+      ? { data: { statement_line_id: 12, account_key: 'CARD', gross: '1000000', net: '997800', deduction: '2200', expected_mdr: null, expected_vat: null, proposed_vat: '0', proposed_mdr: '2200', mdr_rate: null, vat_rate: null, without_vat_rate: 2, without_rate: 0, vat_treatment: treatment, input_vat_account: treatment === 'EXPENSE' ? null : { id: 40, code: '1425', name: 'Input VAT' } } }
+      : { data: detail() }))
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    await w.get('[data-testid=pick-line-2]').setValue(true)
+    await w.get('[data-testid=settle-open]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=settle-301] input').setValue(true)
+    await w.get('[data-testid=settle-302] input').setValue(true)
+    await flushPromises()
+    expect(w.find('[data-testid=split-expected]').exists()).toBe(false) // nothing to compare with
+    expect(w.get('[data-testid=split-no-rate]').text()).toContain('2 of the payments have no VAT rate')
+    expect(w.find('select[name=settle_fee]').exists()).toBe(true) // the proposal is no VAT: all of it is commission
+    await w.get('input[name=settle_vat]').setValue('2200')
+    expect(w.get('[data-testid=split-treatment]').text()).toContain('input VAT 1425')
+    expect(w.find('select[name=settle_fee]').exists()).toBe(false) // all of it is VAT booked to input VAT: no commission, no account
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(false)
+    // an expense: the VAT is part of the commission, which needs its account
+    treatment = 'EXPENSE'
+    await w.get('[data-testid=settle-301] input').setValue(false)
+    await w.get('[data-testid=settle-301] input').setValue(true)
+    await flushPromises()
+    await w.get('input[name=settle_vat]').setValue('2200')
+    expect(w.get('[data-testid=split-treatment]').text()).toContain('part of the cost')
+    expect(w.find('select[name=settle_fee]').exists()).toBe(true)
+    expect((w.get('[data-testid=settle-post]').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('suggests the payments of a settlement and picks them', async () => {
     const w = await mountView(BankReconcileView, undefined, { id: '5' })
     await flushPromises()

@@ -33,7 +33,7 @@ Wiring is in `internal/app/app.go` (and `internal/rooms/roomstest/roomstest.go` 
 | `cityledger` | Receivables of companies: invoices, receipts and allocations, credit notes, write-offs, overdue, reminders, late fee | (00023, 00024, 00045, 00046) | `accounts/` CityLedger, CityLedgerAccount, CityLedgerOverdue | 10 |
 | `accounting` | Chart of accounts (USALI), system account map, manual journals, day close journal, periods, fiscal years, reports (trial balance, income statement, balance sheet, cash flow, department report), department rule | gl_accounts, gl_journals, gl_journal_lines (00019, 00028 to 00030, 00051 to 00054) | `accounting/` | 03, 12 |
 | `payables` | Suppliers, bills (with input VAT), payments, credit notes of suppliers, aging | (00031, 00042, 00055) | `payables/` | 03, 14 |
-| `bankrec` | Bank accounts, statement import, matching, adjustments, card settlements, reconciliation | (00032, 00033, 00048) | `bank/` | 11 |
+| `bankrec` | Bank accounts, statement import, matching, adjustments, card settlements (MDR and the VAT on it), reconciliation | (00032, 00033, 00048, 00056) | `bank/` | 11, 15 |
 | `taxfiling` | Monthly returns of the taxes collected, payments, input VAT and credit carried forward, liability report | (00034, 00041 to 00043) | `tax/` TaxReturns, TaxLiability, TaxProfiles, TaxStatus | 09 |
 | `taxinvoice` | Tax invoices (faktur pajak) of a PKP property and their export | (00044) | `tax/` TaxInvoices | 09 |
 | `shifts` | Cashier shifts, the cash drawer, drops, pay-in and pay-out, cash over and short | (00047) | `billing/` CashierShift | 11 |
@@ -74,6 +74,7 @@ Each row: what it is, migration, backend, API, screens, design, commit (`git sho
 | 21 | Department rule of an account: NONE, OPTIONAL, REQUIRED, default department, one gate for every journal, setup check | 00054 | `accounting` (`deptrule.go`, `deptsetup.go`), `folios`, `billingconfig`, `departments`, and the posting modules | accounts, accounting/department-setup | `accounting/` ChartOfAccounts, Departments | 12 (step 5) | `098022b` |
 | 22 | Shift handover (cashiers, handovers) and the Z and X report of a shift (JSON and PDF), other tenders on the report | none | `shifts` (`handover.go`), `documents` (`shiftreport.go`) | cashier/cashiers, cashier/handovers, cashier/shifts/{id}/report(.pdf) | `billing/` CashierShift | README: Shift handover; 11 | `ac36014` |
 | 23 | Supplier credit notes: against a bill, journal mirror, apply the rest to other bills, input VAT on the return (claims of credit notes), credit in aging and supplier list | 00055 | `payables` (`credits.go`), `taxfiling` (claims) | payables/credit-notes, bills (`credited`), aging, tax returns (`source`) | `payables/` CreditNotes, Bills, Aging, `tax/` TaxReturns | README: Supplier credit notes; 14 | `dde98f8` |
+| 24 | VAT on the card commission (MDR): VAT rate on the rule, VAT snapshot on payments, expected VAT and net, settle with the final VAT and the frozen treatment, claims on the VAT return, screens | 00056 | `bankrec` (`cardfee.go`, `settlementvat.go`), `folios`, `cityledger`, `taxfiling` (claims) | bank/card-fee-rules, card-settlements (+expected), settlement-preview, settle, tax returns (`source` SETTLEMENT) | `bank/` BankCards, BankReconcile, `tax/` TaxReturns | README: VAT on the card commission; 15 | see git log |
 
 ## 4. Cross-cutting rules, and the place each one lives
 
@@ -105,7 +106,7 @@ Each row: what it is, migration, backend, API, screens, design, commit (`git sho
 - Departments: closing entries by department (a year closes each account in one line); allocation of a shared expense over departments; a department budget as its own CSV or PDF.
 - Budget: a button that fills room revenue from sold rooms x ADR; statistics in CSV and PDF.
 - Cashier: a Z report of a whole business day over all drawers; a drawer lock that refuses other users.
-- Card: VAT on the card commission.
+- Card: a void or correction of a settlement (a posted settlement is final); the VAT of the other bank fees (the `Adjust` of a statement line).
 - Supplier credit notes: a refund received from the supplier; a credit note without a bill; a PDF.
 - Language: numbers in Indonesian field errors; confirmation e-mail language; bed counts per room type.
 - No screen was looked at in a browser by the assistant; the owner checks them.
