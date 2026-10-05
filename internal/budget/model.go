@@ -97,6 +97,10 @@ type Row struct {
 	Group       string   `json:"statement_group"`
 	Amounts     []string `json:"amounts"`
 	Total       string   `json:"total"`
+	// The department or sub-department of the row, when it has one: the figures of an account may be given for several departments.
+	DepartmentID   *int64 `json:"department_id"`
+	DepartmentCode string `json:"department_code,omitempty"`
+	DepartmentName string `json:"department_name,omitempty"`
 }
 
 // ListFilter narrows the list of budgets.
@@ -128,13 +132,16 @@ type GridInput struct {
 type RowInput struct {
 	AccountID int64    `json:"account_id"`
 	Amounts   []string `json:"amounts"`
+	// DepartmentID is optional: the department or sub-department the figures are for. An account may have a row for each department.
+	DepartmentID *int64 `json:"department_id"`
 }
 
 // SpreadInput spreads a yearly figure of an account over the months, equally or after the pattern of the actuals of the year before.
 type SpreadInput struct {
-	AccountID int64  `json:"account_id"`
-	Total     string `json:"total"`
-	Method    string `json:"method"`
+	AccountID    int64  `json:"account_id"`
+	DepartmentID *int64 `json:"department_id"` // the row of the account for this department; none: the row without one
+	Total        string `json:"total"`
+	Method       string `json:"method"`
 }
 
 // FillInput fills a draft from the actuals of a fiscal year (the year before the budget's by default), raised or lowered by a percent.
@@ -233,9 +240,10 @@ func validText(name, description string) []apperr.FieldError {
 
 // cell is a figure of the grid on its way to the database.
 type cell struct {
-	AccountID int64  `json:"account_id"`
-	Month     int    `json:"month"`
-	Amount    string `json:"amount"`
+	AccountID    int64  `json:"account_id"`
+	DepartmentID int64  `json:"department_id"` // 0: none
+	Month        int    `json:"month"`
+	Amount       string `json:"amount"`
 }
 
 // spreadEqual splits a total into twelve amounts at the decimals of the currency; the months before the last get the rounded twelfth and the last one

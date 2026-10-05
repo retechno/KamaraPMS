@@ -2868,6 +2868,32 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/budgets/department-vs-actual:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBudgetDepartmentVsActual
+      summary: Budget against actual by department (budget.view)
+      description: |
+        Revenue, expenses and the departmental profit, the actual against the budget, for the period and the year to date, by department: a department adds up its sub-departments, what has no department is
+        `unassigned`, and `totals` are of everything (the actual totals are those of the income statement). Revenue and profit above the budget, and an expense below it, are favourable. The year, the range and the
+        version are those of the budget against actual report; `department_id` narrows it to one department or sub-department (404 `DEPARTMENT_NOT_FOUND`). 404 `NO_ACTIVE_BUDGET`.
+      tags: [budget]
+      parameters:
+        - { name: year_start, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: budget_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: department_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetDepartmentVsActual" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/budgets/statistics-vs-actual:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -3078,7 +3104,7 @@ paths:
     get:
       operationId: exportBudget
       summary: The grid of a budget as CSV (budget.view)
-      description: "The columns are code, name and m1 to m12 (the months of the fiscal year); the import reads the same layout."
+      description: "The columns are code, name, department (the code of the department, empty for none) and m1 to m12 (the months of the fiscal year); the import reads the same layout, and the department column may be left out."
       tags: [budget]
       responses:
         "200":
@@ -9378,6 +9404,9 @@ components:
         statement_group: { type: string }
         amounts: { type: array, minItems: 12, maxItems: 12, items: { type: string }, description: "One per month of the fiscal year, on the normal side of the account." }
         total: { type: string }
+        department_id: { type: [integer, "null"], format: int64, description: "The department or sub-department the row is for: the figures of an account may be given for several departments. Null: none." }
+        department_code: { type: string }
+        department_name: { type: string }
     Budget:
       type: object
       required: [id, year_start, year_end, year_label, version, name, status, copied_from_id, activated_at, activated_by, approved_by, archived_at, created_at, updated_at, account_count, total_revenue, total_expense, total_result]
@@ -9463,6 +9492,39 @@ components:
         closed_days: { type: integer, description: The closed business days of the year to date that were read. }
         metrics: { type: array, items: { $ref: "#/components/schemas/BudgetStatMetric" } }
         room_revenue_check: { $ref: "#/components/schemas/BudgetRoomRevenueCheck" }
+    BudgetPair:
+      type: object
+      required: [period, ytd]
+      properties:
+        period: { $ref: "#/components/schemas/BudgetCell" }
+        ytd: { $ref: "#/components/schemas/BudgetCell" }
+    BudgetDepartmentVariance:
+      type: object
+      required: [id, parent_id, code, name, level, is_active, revenue, expense, profit, children]
+      properties:
+        id: { type: integer, format: int64, description: 0 for the unassigned line and the totals. }
+        parent_id: { type: [integer, "null"], format: int64 }
+        code: { type: string }
+        name: { type: string }
+        level: { type: integer, enum: [1, 2] }
+        is_active: { type: boolean }
+        revenue: { $ref: "#/components/schemas/BudgetPair" }
+        expense: { $ref: "#/components/schemas/BudgetPair" }
+        profit: { $ref: "#/components/schemas/BudgetPair" }
+        children: { type: array, items: { $ref: "#/components/schemas/BudgetDepartmentVariance" } }
+    BudgetDepartmentVsActual:
+      type: object
+      required: [year_start, year_end, year_label, from, to, budget, departments, unassigned, totals]
+      properties:
+        year_start: { $ref: "#/components/schemas/Date" }
+        year_end: { $ref: "#/components/schemas/Date" }
+        year_label: { type: string }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        budget: { $ref: "#/components/schemas/BudgetRef" }
+        departments: { type: array, items: { $ref: "#/components/schemas/BudgetDepartmentVariance" } }
+        unassigned: { $ref: "#/components/schemas/BudgetDepartmentVariance" }
+        totals: { $ref: "#/components/schemas/BudgetDepartmentVariance" }
     BudgetPage:
       type: object
       required: [data]
@@ -9490,6 +9552,7 @@ components:
       additionalProperties: false
       properties:
         account_id: { type: integer, format: int64 }
+        department_id: { type: [integer, "null"], format: int64, description: "Optional: a department or sub-department of the property that is in use (422 `rows[N].department_id`). An account may have a row for each department, and one without; the same account and department twice is 422 `DUPLICATE`." }
         amounts: { type: array, minItems: 12, maxItems: 12, items: { type: string }, description: "Twelve amounts, one per month of the fiscal year; an empty one is zero." }
     BudgetGridRequest:
       type: object
@@ -9503,6 +9566,7 @@ components:
       additionalProperties: false
       properties:
         account_id: { type: integer, format: int64 }
+        department_id: { type: [integer, "null"], format: int64, description: "The row of the account for this department; none: the row without a department." }
         total: { type: string, description: The figure of the whole year. }
         method: { type: string, enum: [EQUAL, LAST_YEAR] }
     FillBudgetRequest:
@@ -9542,11 +9606,21 @@ components:
         favourable: { type: [boolean, "null"], description: "Revenue (or a profit) above the budget, or an expense below it; null when there is no variance." }
     BudgetVarianceAccount:
       type: object
-      required: [account_id, code, name, period, ytd]
+      required: [account_id, code, name, period, ytd, departments]
       properties:
         account_id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
+        period: { $ref: "#/components/schemas/BudgetCell" }
+        ytd: { $ref: "#/components/schemas/BudgetCell" }
+        departments: { type: array, items: { $ref: "#/components/schemas/BudgetAccountDepartment" }, description: "The cells of the account for each department and sub-department that has a figure (the figures without a department first), when it has any: they add up to the cells of the account." }
+    BudgetAccountDepartment:
+      type: object
+      required: [department_id, department_code, department_name, period, ytd]
+      properties:
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: string }
+        department_name: { type: string }
         period: { $ref: "#/components/schemas/BudgetCell" }
         ytd: { $ref: "#/components/schemas/BudgetCell" }
     BudgetVarianceLine:

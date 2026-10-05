@@ -1415,6 +1415,11 @@ export const en = {
     print: 'Print',
   },
   budget: {
+    department: 'Department',
+    noDepartment: 'No department',
+    byDepartmentTitle: 'By department',
+    byDepartmentHint: 'Revenue, expenses and the departmental profit, the actual against the budget. A department adds up its sub-departments; what has no department is shown apart.',
+    basis: 'Show',
     title: 'Budgets',
     intro: 'The plan of the revenue and the expenses of a fiscal year, an amount per account and month. Only one version of a year is active; a draft is worked on, an active budget is fixed.',
     noAccess: 'Your role at this property cannot see budgets: the {permission} permission is needed.',

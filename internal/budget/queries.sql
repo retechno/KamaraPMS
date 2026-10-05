@@ -63,28 +63,28 @@ FROM gl_accounts a
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.account_type IN ('REVENUE', 'EXPENSE') AND a.is_postable
 ORDER BY a.code;
 
--- The figures of a budget, an account per month.
+-- The figures of a budget, an account and a department (0: none) per month.
 -- name: ListBudgetLines :many
-SELECT l.account_id, l.month, l.amount
+SELECT l.account_id, COALESCE(l.department_id, 0)::bigint AS department_id, l.month, l.amount
 FROM budget_lines l
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.budget_id = @budget_id
-ORDER BY l.account_id, l.month;
+ORDER BY l.account_id, COALESCE(l.department_id, 0), l.month;
 
 -- name: DeleteBudgetLines :exec
 DELETE FROM budget_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id;
 
--- name: DeleteBudgetLinesOfAccount :exec
-DELETE FROM budget_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id AND account_id = @account_id;
+-- name: DeleteBudgetLinesOfRow :exec
+DELETE FROM budget_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @budget_id AND account_id = @account_id AND COALESCE(department_id, 0) = @department_id::bigint;
 
--- The cells arrive as a JSON array of {account_id, month, amount} (the amount as text), so a whole grid is one statement.
+-- The cells arrive as a JSON array of {account_id, department_id (0: none), month, amount} (the amount as text), so a whole grid is one statement.
 -- name: InsertBudgetLines :exec
-INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
-SELECT @tenant_id::bigint, @property_id::bigint, @budget_id::bigint, (c ->> 'account_id')::bigint, (c ->> 'month')::smallint, (c ->> 'amount')::numeric
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount)
+SELECT @tenant_id::bigint, @property_id::bigint, @budget_id::bigint, (c ->> 'account_id')::bigint, NULLIF((c ->> 'department_id')::bigint, 0), (c ->> 'month')::smallint, (c ->> 'amount')::numeric
 FROM jsonb_array_elements(@cells::jsonb) AS c;
 
 -- name: CopyBudgetLines :exec
-INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
-SELECT l.tenant_id, l.property_id, @to_budget_id::bigint, l.account_id, l.month, l.amount
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount)
+SELECT l.tenant_id, l.property_id, @to_budget_id::bigint, l.account_id, l.department_id, l.month, l.amount
 FROM budget_lines l WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.budget_id = @from_budget_id;
 
 -- Debit minus credit per account over a range of days, closing journals left out (what the income statement adds up).
@@ -98,16 +98,16 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND a.account_ty
 GROUP BY a.id
 ORDER BY a.code;
 
--- The same per account and calendar month.
+-- The same per account, department (0: none) and calendar month.
 -- name: ActualByAccountMonth :many
-SELECT a.id AS account_id, date_trunc('month', j.journal_date)::date AS month_start, sum(l.debit - l.credit)::numeric AS balance
+SELECT a.id AS account_id, COALESCE(l.department_id, 0)::bigint AS department_id, date_trunc('month', j.journal_date)::date AS month_start, sum(l.debit - l.credit)::numeric AS balance
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND a.account_type IN ('REVENUE', 'EXPENSE') AND a.is_postable
   AND j.journal_date >= @from_date::date AND j.journal_date <= @to_date::date AND NOT j.is_closing
-GROUP BY a.id, date_trunc('month', j.journal_date)
-ORDER BY a.id, month_start;
+GROUP BY a.id, COALESCE(l.department_id, 0), date_trunc('month', j.journal_date)
+ORDER BY a.id, COALESCE(l.department_id, 0), month_start;
 
 -- The budget of a range of months of the fiscal year (the months are 1 to 12 from the first month of the year).
 -- name: BudgetByAccount :many
@@ -159,3 +159,30 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND budget_id = @bud
 SELECT business_date, summary FROM business_days
 WHERE property_id = @property_id AND status = 'CLOSED' AND business_date BETWEEN @from_date::date AND @to_date::date
 ORDER BY business_date;
+
+-- Debit minus credit per account and department (0: none) over a range of days, closing journals left out.
+-- name: ActualByAccountDepartment :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(l.department_id, 0)::bigint AS department_id, sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND a.account_type IN ('REVENUE', 'EXPENSE')
+  AND j.journal_date >= @from_date::date AND j.journal_date <= @to_date::date AND NOT j.is_closing
+GROUP BY a.id, COALESCE(l.department_id, 0)
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY a.code, 5;
+
+-- The budget of a range of months per account and department (0: none).
+-- name: BudgetByAccountDepartment :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(l.department_id, 0)::bigint AS department_id, sum(l.amount)::numeric AS amount
+FROM budget_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.budget_id = @budget_id AND l.month >= @from_month::smallint AND l.month <= @to_month::smallint
+GROUP BY a.id, COALESCE(l.department_id, 0)
+ORDER BY a.code, 5;
+
+-- The departments of the property (the tree of the department report).
+-- name: ListDepartments :many
+SELECT id, parent_id, code, name, sort_order, is_active FROM departments
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+ORDER BY COALESCE(parent_id, id), (parent_id IS NOT NULL), sort_order, code;

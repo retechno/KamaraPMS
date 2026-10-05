@@ -3,8 +3,9 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, Budget, BudgetRow, BudgetStatisticsRow } from '@/api/types'
+import type { Approval, Budget, BudgetRow, BudgetStatisticsRow, Department } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { confirm } from '@/composables/useConfirm'
+import { loadDepartments } from '@/composables/useDepartments'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -28,7 +30,10 @@ const property = usePropertyStore()
 const route = useRoute()
 const router = useRouter()
 
-interface GridRow { account_id: number; code: string; name: string; account_type: string; amounts: string[] }
+interface GridRow { account_id: number; code: string; name: string; account_type: string; department_id: number | null; department_code: string; department_name: string; amounts: string[] }
+
+/** What tells the rows of an account apart: its code, and the code of the department when the row is for one ("4110", "4110-REST"). */
+const rowId = (r: Pick<GridRow, 'code' | 'department_code'>): string => (r.department_code ? `${r.code}-${r.department_code}` : r.code)
 
 interface StatCell { available: string; sold: string; adr: string }
 
@@ -44,8 +49,10 @@ const notice = ref('')
 const busy = ref(false)
 const asking = ref(false)
 const addId = ref('')
+const addDept = ref<number | null>(null)
+const deptList = ref<Department[]>([])
 const details = reactive({ name: '', description: '' })
-const spread = ref<{ account_id: number; label: string; total: string; method: 'EQUAL' | 'LAST_YEAR' } | null>(null)
+const spread = ref<{ account_id: number; department_id: number | null; label: string; total: string; method: 'EQUAL' | 'LAST_YEAR' } | null>(null)
 const fill = reactive({ open: false, percent: '', replace: false })
 const imp = reactive({ open: false, csv: '', checked: null as number | null })
 
@@ -80,7 +87,9 @@ const daysOf = (start: string): number => {
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate() : 0
 }
 const invalidCells = computed(() => grid.value.reduce((n, r) => n + r.amounts.filter((a) => !isAmount(a)).length, 0))
-const free = computed(() => (budget.value?.available_accounts ?? []).filter((a) => !grid.value.some((r) => r.account_id === a.id)))
+const accountList = computed(() => budget.value?.available_accounts ?? [])
+/** A row is an account and a department: an account may be added again for another department, not twice for the same one. */
+const canAdd = computed(() => addId.value !== '' && !grid.value.some((r) => String(r.account_id) === addId.value && (r.department_id ?? 0) === (addDept.value ?? 0)))
 
 const rowTotal = (r: GridRow): string => sumAmounts(r.amounts) ?? ''
 function monthTotal(type: 'REVENUE' | 'EXPENSE', m: number): string {
@@ -101,7 +110,10 @@ function monthResult(m: number): string {
 }
 
 function applyGrid(b: Budget): void {
-  grid.value = (b.rows ?? []).map((r: BudgetRow) => ({ account_id: r.account_id, code: r.code, name: r.name, account_type: r.account_type, amounts: [...r.amounts] }))
+  grid.value = (b.rows ?? []).map((r: BudgetRow) => ({
+    account_id: r.account_id, code: r.code, name: r.name, account_type: r.account_type, department_id: r.department_id ?? null, department_code: r.department_code ?? '', department_name: r.department_name ?? '',
+    amounts: [...r.amounts],
+  }))
   saved.value = JSON.stringify(grid.value)
 }
 
@@ -128,6 +140,7 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/budgets/{id}', { params: { path: { propertyId, id: budgetId.value } } })
     if (data) apply(data)
+    deptList.value = await loadDepartments(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -156,7 +169,7 @@ async function run(action: () => Promise<void>, onDialog = false): Promise<boole
 async function saveGrid(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null || budget.value === null) return
-  const rows = grid.value.map((r) => ({ account_id: r.account_id, amounts: r.amounts.map((a) => a.trim()) }))
+  const rows = grid.value.map((r) => ({ account_id: r.account_id, department_id: r.department_id ?? undefined, amounts: r.amounts.map((a) => a.trim()) }))
   const { data } = await api.PUT('/api/v1/properties/{propertyId}/budgets/{id}/grid', { params: { path: { propertyId, id: budget.value.id } }, body: { rows } })
   if (data) {
     budget.value = data
@@ -216,20 +229,23 @@ async function saveDetails(): Promise<void> {
 }
 
 function addRow(): void {
-  const a = free.value.find((x) => String(x.id) === addId.value)
-  if (!a) return
-  grid.value.push({ account_id: a.id, code: a.code, name: a.name, account_type: a.account_type, amounts: months.value.map(() => '') })
-  grid.value.sort((x, y) => x.code.localeCompare(y.code))
+  const a = accountList.value.find((x) => String(x.id) === addId.value)
+  if (!a || !canAdd.value) return
+  const d = deptList.value.find((x) => x.id === addDept.value)
+  grid.value.push({
+    account_id: a.id, code: a.code, name: a.name, account_type: a.account_type, department_id: addDept.value, department_code: d?.code ?? '', department_name: d?.name ?? '', amounts: months.value.map(() => ''),
+  })
+  grid.value.sort((x, y) => x.code.localeCompare(y.code) || x.department_code.localeCompare(y.department_code))
   addId.value = ''
 }
 
 function removeRow(r: GridRow): void {
-  grid.value = grid.value.filter((x) => x.account_id !== r.account_id)
-  if (spread.value?.account_id === r.account_id) spread.value = null
+  grid.value = grid.value.filter((x) => x !== r)
+  if (spread.value?.account_id === r.account_id && spread.value.department_id === r.department_id) spread.value = null
 }
 
 function openSpread(r: GridRow): void {
-  spread.value = { account_id: r.account_id, label: `${r.code} ${r.name}`, total: rowTotal(r) === '0' ? '' : rowTotal(r), method: 'EQUAL' }
+  spread.value = { account_id: r.account_id, department_id: r.department_id, label: `${r.code} ${r.name}${r.department_code ? ` · ${r.department_code}` : ''}`, total: rowTotal(r) === '0' ? '' : rowTotal(r), method: 'EQUAL' }
 }
 
 async function applySpread(): Promise<void> {
@@ -239,7 +255,7 @@ async function applySpread(): Promise<void> {
   const ok = await run(async () => {
     await saveIfDirty()
     const { data } = await api.POST('/api/v1/properties/{propertyId}/budgets/{id}/spread', {
-      params: { path: { propertyId, id: budget.value!.id } }, body: { account_id: s.account_id, total: s.total.trim(), method: s.method },
+      params: { path: { propertyId, id: budget.value!.id } }, body: { account_id: s.account_id, department_id: s.department_id ?? undefined, total: s.total.trim(), method: s.method },
     })
     if (data) apply(data)
     notice.value = t('budget.spreadDone', { account: s.label })
@@ -454,9 +470,10 @@ watch([() => pid.value, budgetId], () => {
         <div v-if="editable" class="flex flex-wrap items-center gap-2">
           <NativeSelect v-model="addId" name="add_account" class="w-64" :aria-label="t('budget.chooseAccount')" data-testid="add-account">
             <option value="">{{ t('budget.chooseAccount') }}</option>
-            <option v-for="a in free" :key="a.id" :value="String(a.id)">{{ a.code }} {{ a.name }}</option>
+            <option v-for="a in accountList" :key="a.id" :value="String(a.id)">{{ a.code }} {{ a.name }}</option>
           </NativeSelect>
-          <Button type="button" variant="outline" size="sm" :disabled="!addId" data-testid="add-row" @click="addRow">{{ t('budget.addAccount') }}</Button>
+          <DepartmentSelect v-model="addDept" name="add_department" class="w-56" :aria-label="t('budget.department')" />
+          <Button type="button" variant="outline" size="sm" :disabled="!canAdd" data-testid="add-row" @click="addRow">{{ t('budget.addAccount') }}</Button>
           <Button type="button" variant="outline" size="sm" data-testid="fill-open" @click="fill.open = !fill.open">{{ t('budget.fillTitle') }}</Button>
           <Button type="button" variant="outline" size="sm" data-testid="import-open" @click="imp.open = !imp.open">{{ t('budget.importTitle') }}</Button>
         </div>
@@ -474,21 +491,21 @@ watch([() => pid.value, budgetId], () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in grid" :key="r.account_id" class="border-b border-border" :data-testid="`row-${r.code}`">
+              <tr v-for="r in grid" :key="`${r.account_id}-${r.department_id ?? 0}`" class="border-b border-border" :data-testid="`row-${rowId(r)}`">
                 <th scope="row" class="sticky left-0 z-10 bg-card py-1 pr-2 text-left font-normal">
-                  <span class="tabular-nums text-muted-foreground">{{ r.code }}</span> {{ r.name }}
+                  <span class="tabular-nums text-muted-foreground">{{ r.code }}</span> {{ r.name }}<small v-if="r.department_code" class="ml-1 rounded bg-muted px-1 text-muted-foreground" :title="r.department_name" :data-testid="`department-${rowId(r)}`">{{ r.department_code }}</small>
                 </th>
                 <td v-for="(a, m) in r.amounts" :key="m" class="px-1 py-1 text-right tabular-nums">
                   <Input
-                    v-if="editable" v-model="r.amounts[m]" :name="`a-${r.code}-${m + 1}`" inputmode="decimal" class="h-8 w-28 text-right tabular-nums"
-                    :aria-invalid="!isAmount(a)" :aria-label="`${r.code} ${monthLabel(months[m]?.start ?? '')}`"
+                    v-if="editable" v-model="r.amounts[m]" :name="`a-${rowId(r)}-${m + 1}`" inputmode="decimal" class="h-8 w-28 text-right tabular-nums"
+                    :aria-invalid="!isAmount(a)" :aria-label="`${rowId(r)} ${monthLabel(months[m]?.start ?? '')}`"
                   />
                   <template v-else>{{ $money(a) }}</template>
                 </td>
-                <td class="px-2 py-1 text-right font-medium tabular-nums" :data-testid="`total-${r.code}`">{{ $money(rowTotal(r)) }}</td>
+                <td class="px-2 py-1 text-right font-medium tabular-nums" :data-testid="`total-${rowId(r)}`">{{ $money(rowTotal(r)) }}</td>
                 <td v-if="editable" class="whitespace-nowrap py-1 pl-2 text-right">
-                  <Button type="button" variant="ghost" size="sm" :data-testid="`spread-${r.code}`" @click="openSpread(r)">{{ t('budget.spread') }}</Button>
-                  <Button type="button" variant="ghost" size="sm" :data-testid="`remove-${r.code}`" :aria-label="t('budget.remove', { account: r.code })" @click="removeRow(r)">×</Button>
+                  <Button type="button" variant="ghost" size="sm" :data-testid="`spread-${rowId(r)}`" @click="openSpread(r)">{{ t('budget.spread') }}</Button>
+                  <Button type="button" variant="ghost" size="sm" :data-testid="`remove-${rowId(r)}`" :aria-label="t('budget.remove', { account: rowId(r) })" @click="removeRow(r)">×</Button>
                 </td>
               </tr>
             </tbody>

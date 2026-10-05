@@ -3,7 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Budget, BudgetCell, BudgetStatisticsVsActual, BudgetVsActual } from '@/api/types'
+import type { Budget, BudgetCell, BudgetDepartmentVariance, BudgetDepartmentVsActual, BudgetStatisticsVsActual, BudgetVsActual } from '@/api/types'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -28,11 +29,13 @@ const property = usePropertyStore()
 
 const report = ref<BudgetVsActual | null>(null)
 const statistics = ref<BudgetStatisticsVsActual | null>(null)
+const byDepartment = ref<BudgetDepartmentVsActual | null>(null)
+const basis = ref<'period' | 'ytd'>('period')
 const budgets = ref<Budget[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
-const form = reactive({ year_start: '', from: '', to: '', budget_id: '' })
+const form = reactive({ year_start: '', from: '', to: '', budget_id: '', department_id: null as number | null })
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -47,6 +50,9 @@ function query(): Record<string, string | number | undefined> {
     budget_id: form.budget_id ? Number(form.budget_id) : undefined,
   }
 }
+
+/** The same year, range and version, and the department the report by department is narrowed to. */
+const departmentQuery = () => ({ ...query(), department_id: form.department_id ?? undefined })
 
 async function loadBudgets(): Promise<void> {
   const propertyId = pid.value
@@ -72,10 +78,14 @@ async function show(): Promise<void> {
     if (report.value) {
       const st = await api.GET('/api/v1/properties/{propertyId}/budgets/statistics-vs-actual', { params: { path: { propertyId }, query: query() } })
       statistics.value = st.data ?? null
+      byDepartment.value = null
+      const dv = await api.GET('/api/v1/properties/{propertyId}/budgets/department-vs-actual', { params: { path: { propertyId }, query: departmentQuery() } })
+      byDepartment.value = dv.data ?? null
     }
   } catch (e) {
     report.value = null
     statistics.value = null
+    byDepartment.value = null
     error.value = e instanceof ApiError ? e : null
   } finally {
     busy.value = false
@@ -115,6 +125,16 @@ function stat(unit: string, v: string): string {
   if (unit === 'PERCENT') return `${formatMoney(v)}%`
   return unit === 'MONEY' ? amount(v) : formatMoney(v)
 }
+/** The departments of the report by department as rows: each department followed by its sub-departments. */
+const departmentRows = computed<BudgetDepartmentVariance[]>(() => {
+  const list = byDepartment.value?.departments
+  return Array.isArray(list) ? list.flatMap((d) => [d, ...(d.children ?? [])]) : []
+})
+const hasUnassigned = computed(() => {
+  const u = byDepartment.value?.unassigned
+  return !!u && [u.revenue, u.expense].some((p) => p && !(Number(p.period.actual) === 0 && Number(p.period.budget) === 0 && Number(p.ytd.actual) === 0 && Number(p.ytd.budget) === 0))
+})
+const deptCell = (p: { period: BudgetCell; ytd: BudgetCell }): BudgetCell => (basis.value === 'ytd' ? p.ytd : p.period)
 const bothZero = (c: BudgetCell): boolean => Number(c.actual) === 0 && Number(c.budget) === 0
 
 watch(() => pid.value, () => {
@@ -166,6 +186,9 @@ watch(() => form.year_start, () => { form.budget_id = '' })
               <option v-for="b in versions" :key="b.id" :value="String(b.id)">{{ t('budget.versionLabel', { year: b.year_label, version: b.version, name: b.name }) }} · {{ t(`budget.status.${b.status}`) }}</option>
             </NativeSelect>
           </template>
+        </FormField>
+        <FormField :label="t('budget.department')">
+          <template #default="{ id }"><DepartmentSelect :id="id" v-model="form.department_id" name="department_id" :none-label="t('departments.all')" /></template>
         </FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
@@ -230,7 +253,8 @@ watch(() => form.year_start, () => { form.budget_id = '' })
                         <td class="px-2 text-right tabular-nums text-muted-foreground">{{ percent(l.ytd) }}</td>
                       </tr>
                     </template>
-                    <tr v-for="a in l.kind === 'GROUP' ? l.accounts : []" :key="a.account_id" class="text-muted-foreground" :data-testid="`account-${a.code}`">
+                    <template v-for="a in l.kind === 'GROUP' ? l.accounts : []" :key="a.account_id">
+                    <tr class="text-muted-foreground" :data-testid="`account-${a.code}`">
                       <td class="py-1 pl-4 pr-2"><span class="tabular-nums">{{ a.code }}</span> {{ a.name }}</td>
                       <td class="border-l border-border px-2 text-right tabular-nums">{{ bothZero(a.period) ? '' : amount(a.period.actual) }}</td>
                       <td class="px-2 text-right tabular-nums">{{ bothZero(a.period) ? '' : amount(a.period.budget) }}</td>
@@ -241,6 +265,18 @@ watch(() => form.year_start, () => { form.budget_id = '' })
                       <td class="px-2 text-right tabular-nums" :class="tone(a.ytd)">{{ bothZero(a.ytd) ? '' : amount(a.ytd.variance) }} <small v-if="verdict(a.ytd)">{{ verdict(a.ytd) }}</small></td>
                       <td class="px-2 text-right tabular-nums">{{ percent(a.ytd) }}</td>
                     </tr>
+                    <tr v-for="d in a.departments ?? []" :key="d.department_id ?? 0" class="text-xs italic text-muted-foreground" :data-testid="`account-${a.code}-dept-${d.department_code || 'none'}`">
+                      <td class="py-0.5 pl-8 pr-2">{{ d.department_id === null ? t('budget.noDepartment') : `${d.department_code} · ${d.department_name}` }}</td>
+                      <td class="border-l border-border px-2 text-right tabular-nums">{{ bothZero(d.period) ? '' : amount(d.period.actual) }}</td>
+                      <td class="px-2 text-right tabular-nums">{{ bothZero(d.period) ? '' : amount(d.period.budget) }}</td>
+                      <td class="px-2 text-right tabular-nums" :class="tone(d.period)">{{ bothZero(d.period) ? '' : amount(d.period.variance) }} <small v-if="verdict(d.period)">{{ verdict(d.period) }}</small></td>
+                      <td class="px-2 text-right tabular-nums">{{ percent(d.period) }}</td>
+                      <td class="border-l border-border px-2 text-right tabular-nums">{{ bothZero(d.ytd) ? '' : amount(d.ytd.actual) }}</td>
+                      <td class="px-2 text-right tabular-nums">{{ bothZero(d.ytd) ? '' : amount(d.ytd.budget) }}</td>
+                      <td class="px-2 text-right tabular-nums" :class="tone(d.ytd)">{{ bothZero(d.ytd) ? '' : amount(d.ytd.variance) }} <small v-if="verdict(d.ytd)">{{ verdict(d.ytd) }}</small></td>
+                      <td class="px-2 text-right tabular-nums">{{ percent(d.ytd) }}</td>
+                    </tr>
+                    </template>
                   </template>
                 </template>
               </tbody>
@@ -248,6 +284,63 @@ watch(() => form.year_start, () => { form.budget_id = '' })
           </div>
           <p class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('budget.varianceNote') }}</p>
         </template>
+      </CardContent>
+    </Card>
+    <Card v-if="loaded && report && byDepartment && Array.isArray(byDepartment.departments)" class="mt-4" data-testid="by-department">
+      <CardContent class="pt-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="m-0 text-lg font-semibold">{{ t('budget.byDepartmentTitle') }}</h2>
+          <NativeSelect v-model="basis" name="basis" class="w-48" :aria-label="t('budget.basis')" data-testid="basis">
+            <option value="period">{{ t('budget.period') }}</option>
+            <option value="ytd">{{ t('budget.ytd') }}</option>
+          </NativeSelect>
+        </div>
+        <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('budget.byDepartmentHint') }}</p>
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-sm" data-testid="department-report">
+            <thead>
+              <tr class="text-xs uppercase tracking-wide text-muted-foreground">
+                <th rowspan="2" class="py-2 pr-2 text-left align-bottom">{{ t('budget.department') }}</th>
+                <th v-for="g in ['revenue', 'expense', 'profit']" :key="g" colspan="3" class="border-l border-border px-2 py-1 text-center">{{ t(`departments.${g}`) }}</th>
+              </tr>
+              <tr class="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                <template v-for="g in ['revenue', 'expense', 'profit']" :key="g">
+                  <th class="border-l border-border px-2 py-1 text-right">{{ t('budget.actual') }}</th>
+                  <th class="px-2 py-1 text-right">{{ t('budget.budgetCol') }}</th>
+                  <th class="px-2 py-1 text-right">{{ t('budget.variance') }}</th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in departmentRows" :key="d.id" class="border-b border-border" :class="d.level === 1 ? 'font-semibold' : ''" :data-testid="`dept-${d.code}`">
+                <td class="py-1.5 pr-2" :class="d.level === 2 ? 'pl-6' : ''">{{ d.code }} · {{ d.name }}</td>
+                <template v-for="g in (['revenue', 'expense', 'profit'] as const)" :key="g">
+                  <td class="border-l border-border px-2 text-right tabular-nums">{{ amount(deptCell(d[g]).actual) }}</td>
+                  <td class="px-2 text-right tabular-nums">{{ amount(deptCell(d[g]).budget) }}</td>
+                  <td class="px-2 text-right tabular-nums" :class="tone(deptCell(d[g]))">{{ amount(deptCell(d[g]).variance) }} <small v-if="verdict(deptCell(d[g]))">{{ verdict(deptCell(d[g])) }}</small></td>
+                </template>
+              </tr>
+              <tr v-if="hasUnassigned" class="border-b border-border italic" data-testid="dept-unassigned">
+                <td class="py-1.5 pr-2">{{ t('budget.noDepartment') }}</td>
+                <template v-for="g in (['revenue', 'expense', 'profit'] as const)" :key="g">
+                  <td class="border-l border-border px-2 text-right tabular-nums">{{ amount(deptCell(byDepartment.unassigned[g]).actual) }}</td>
+                  <td class="px-2 text-right tabular-nums">{{ amount(deptCell(byDepartment.unassigned[g]).budget) }}</td>
+                  <td class="px-2 text-right tabular-nums" :class="tone(deptCell(byDepartment.unassigned[g]))">{{ amount(deptCell(byDepartment.unassigned[g]).variance) }}</td>
+                </template>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2 border-foreground font-semibold" data-testid="dept-totals">
+                <td class="py-1.5 pr-2">{{ t('departments.total') }}</td>
+                <template v-for="g in (['revenue', 'expense', 'profit'] as const)" :key="g">
+                  <td class="border-l border-border px-2 text-right tabular-nums">{{ amount(deptCell(byDepartment.totals[g]).actual) }}</td>
+                  <td class="px-2 text-right tabular-nums">{{ amount(deptCell(byDepartment.totals[g]).budget) }}</td>
+                  <td class="px-2 text-right tabular-nums" :class="tone(deptCell(byDepartment.totals[g]))">{{ amount(deptCell(byDepartment.totals[g]).variance) }} <small v-if="verdict(deptCell(byDepartment.totals[g]))">{{ verdict(deptCell(byDepartment.totals[g])) }}</small></td>
+                </template>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </CardContent>
     </Card>
     <Card v-if="loaded && report && statistics" class="mt-4" data-testid="statistics">

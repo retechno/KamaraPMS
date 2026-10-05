@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { resetDepartments } from '@/composables/useDepartments'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import BudgetEditorView from './BudgetEditorView.vue'
@@ -36,12 +37,12 @@ const budget = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-async function mountView(permissions = ['budget.view', 'budget.manage'], b: Record<string, unknown> = budget()) {
+async function mountView(permissions = ['budget.view', 'budget.manage'], b: Record<string, unknown> = budget(), departments: unknown[] = []) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  GET = vi.fn().mockResolvedValue({ data: b })
+  GET = vi.fn(async (path: string) => (path.endsWith('/departments') ? { data: { data: departments } } : { data: b }))
   POST = vi.fn().mockResolvedValue({ data: b })
   PUT = vi.fn().mockResolvedValue({ data: b })
   PATCH = vi.fn().mockResolvedValue({ data: { ...b, name: 'Renamed' } })
@@ -60,7 +61,10 @@ async function mountView(permissions = ['budget.view', 'budget.manage'], b: Reco
 const cell = (w: Awaited<ReturnType<typeof mountView>>['w'], code: string, month: number) => w.get(`input[name=a-${code}-${month}]`)
 
 describe('BudgetEditorView', () => {
-  beforeEach(() => vi.restoreAllMocks())
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    resetDepartments()
+  })
 
   it('shows the grid of a draft with the totals of the rows, the months and the year', async () => {
     const { w } = await mountView()
@@ -109,7 +113,10 @@ describe('BudgetEditorView', () => {
     const { w } = await mountView()
     const options = w.findAll('select[name=add_account] option').map((o) => o.text())
     expect(options).toContain('6110 Admin salaries')
-    expect(options.some((o) => o.includes('4110'))).toBe(false)
+    expect(options.some((o) => o.includes('4110'))).toBe(true) // an account can be added again, for a department
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(true) // nothing chosen
+    await w.get('select[name=add_account]').setValue('72')
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(true) // 4110 is in the grid, without a department
     await w.get('select[name=add_account]').setValue('133')
     await w.get('[data-testid=add-row]').trigger('click')
     expect(w.find('[data-testid=row-6110]').exists()).toBe(true)
@@ -371,5 +378,73 @@ describe('BudgetEditorView statistics', () => {
     expect(w.find('[data-testid=stats-save]').exists()).toBe(false)
     const { w: none } = await mountView(['budget.view'], budget({ status: 'ACTIVE', approved_by: 3 }))
     expect(none.find('[data-testid=statistics]').exists()).toBe(false)
+  })
+})
+
+describe('BudgetEditorView by department', () => {
+  const depts = [
+    { id: 1, parent_id: null, code: 'ROOMS', name: 'Rooms', sort_order: 10, is_active: true, level: 1, child_count: 0, in_use: true },
+    { id: 2, parent_id: null, code: 'FB', name: 'Food and beverage', sort_order: 20, is_active: true, level: 1, child_count: 1, in_use: true },
+    { id: 9, parent_id: 2, code: 'REST', name: 'Restaurant', sort_order: 1, is_active: true, level: 2, child_count: 0, in_use: true },
+  ]
+  const rest = { account_id: 72, code: '4110', name: 'Room revenue', account_type: 'REVENUE', statement_group: 'REV_ROOMS', amounts: zeros({ 8: '300' }), total: '300', department_id: 9, department_code: 'REST', department_name: 'Restaurant' }
+  const none = { account_id: 72, code: '4110', name: 'Room revenue', account_type: 'REVENUE', statement_group: 'REV_ROOMS', amounts: zeros({ 8: '50' }), total: '50', department_id: null }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    resetDepartments()
+  })
+
+  it('shows a row per department of an account, with the department beside the account', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ rows: [none, rest] }), depts)
+    expect(w.find('[data-testid=row-4110]').exists()).toBe(true)
+    expect(w.find('[data-testid=row-4110-REST]').exists()).toBe(true)
+    expect(w.get('[data-testid=department-4110-REST]').text()).toBe('REST')
+    expect(w.find('[data-testid=department-4110]').exists()).toBe(false)
+    expect((w.get('input[name=a-4110-REST-9]').element as HTMLInputElement).value).toBe('300')
+    expect((w.get('input[name=a-4110-9]').element as HTMLInputElement).value).toBe('50')
+    expect(w.get('[data-testid=total-4110-REST]').text()).toBe('300')
+    expect(w.get('[data-testid=sum-REVENUE]').text()).toContain('350') // both rows are revenue
+  })
+
+  it('adds the same account again for a department, and saves the department with the row', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget(), depts)
+    await w.get('select[name=add_account]').setValue('72')
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(true) // 4110 without a department is there
+    await w.get('select[name=add_department]').setValue('9')
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(false)
+    await w.get('[data-testid=add-row]').trigger('click')
+    await w.get('select[name=add_account]').setValue('72')
+    await w.get('select[name=add_department]').setValue('9')
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(true) // not twice for the same one
+    await w.get('select[name=add_department]').setValue('1')
+    expect((w.get('[data-testid=add-row]').element as HTMLButtonElement).disabled).toBe(false) // another department is fine
+    await w.get('input[name=a-4110-9]').setValue('7')
+    PUT.mockResolvedValueOnce({ data: budget() })
+    await w.get('input[name=a-4110-REST-2]').setValue('9')
+    await w.get('[data-testid=save]').trigger('click')
+    await flushPromises()
+    const rows = (PUT.mock.calls[0]?.[1].body as { rows: { account_id: number; department_id?: number; amounts: string[] }[] }).rows
+    expect(rows).toHaveLength(3) // 4110, 5110, and 4110 for the restaurant
+    expect(rows.some((r) => r.account_id === 72 && r.department_id === 9 && r.amounts[1] === '9')).toBe(true)
+    expect(rows.some((r) => r.account_id === 72 && r.department_id === undefined && r.amounts[8] === '7')).toBe(true)
+  })
+
+  it('spreads the row of a department', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ rows: [none, rest] }), depts)
+    await w.get('[data-testid=spread-4110-REST]').trigger('click')
+    expect((w.get('input[name=spread_total]').element as HTMLInputElement).value).toBe('300')
+    await w.get('input[name=spread_total]').setValue('1200')
+    POST.mockResolvedValueOnce({ data: budget() })
+    await w.get('[data-testid=spread-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body).toEqual({ account_id: 72, department_id: 9, total: '1200', method: 'EQUAL' })
+  })
+
+  it('removes one row of an account and leaves the other', async () => {
+    const { w } = await mountView(['budget.view', 'budget.manage'], budget({ rows: [none, rest] }), depts)
+    await w.get('[data-testid=remove-4110-REST]').trigger('click')
+    expect(w.find('[data-testid=row-4110-REST]').exists()).toBe(false)
+    expect(w.find('[data-testid=row-4110]').exists()).toBe(true)
   })
 })

@@ -26,6 +26,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p, httpx.HandlerFunc(h.create))
 	mux.Handle("GET "+p+"/vs-actual", httpx.HandlerFunc(h.vsActual))
 	mux.Handle("GET "+p+"/statistics-vs-actual", httpx.HandlerFunc(h.statsVsActual))
+	mux.Handle("GET "+p+"/department-vs-actual", httpx.HandlerFunc(h.deptVsActual))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.get))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.update))
 	mux.Handle("DELETE "+p+"/{id}", httpx.HandlerFunc(h.delete))
@@ -346,6 +347,30 @@ func (h *Handler) statsVsActual(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	rep, err := h.svc.StatisticsVsActual(r.Context(), pid, q)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, rep)
+}
+
+func (h *Handler) deptVsActual(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	q, err := ReportQuery(r)
+	if err != nil {
+		return err
+	}
+	var dept *int64
+	if v := strings.TrimSpace(r.URL.Query().Get("department_id")); v != "" {
+		id, perr := strconv.ParseInt(v, 10, 64)
+		if perr != nil || id < 1 {
+			return apperr.Invalid("the report parameters are invalid", fieldErr("department_id", "INVALID_VALUE", "a department id"))
+		}
+		dept = &id
+	}
+	rep, err := h.svc.DepartmentVsActual(r.Context(), pid, q, dept)
 	if err != nil {
 		return err
 	}

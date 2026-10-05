@@ -1414,6 +1414,11 @@ export const id: Messages = {
     print: 'Cetak',
   },
   budget: {
+    department: 'Departemen',
+    noDepartment: 'Tanpa departemen',
+    byDepartmentTitle: 'Per departemen',
+    byDepartmentHint: 'Pendapatan, biaya, dan laba departemen, realisasi terhadap anggaran. Departemen menjumlahkan sub-departemennya; yang tanpa departemen ditampilkan terpisah.',
+    basis: 'Tampilkan',
     title: 'Anggaran',
     intro: 'Rencana pendapatan dan biaya satu tahun fiskal, satu angka per akun dan bulan. Hanya satu versi per tahun yang aktif; draf dikerjakan, anggaran aktif dikunci.',
     noAccess: 'Peran Anda di properti ini tidak bisa melihat anggaran: izin {permission} diperlukan.',

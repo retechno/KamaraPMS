@@ -78,7 +78,7 @@ func TestBudgetAPI(t *testing.T) {
 
 	// CSV: the export reads back through the import.
 	exp := e.raw(abc, http.MethodGet, one+"/export")
-	if exp.status != 200 || !strings.HasPrefix(exp.contentType, "text/csv") || !strings.HasPrefix(exp.body, "code,name,m1,m2,") || !strings.Contains(exp.body, "4110,") {
+	if exp.status != 200 || !strings.HasPrefix(exp.contentType, "text/csv") || !strings.HasPrefix(exp.body, "code,name,department,m1,m2,") || !strings.Contains(exp.body, "4110,") {
 		t.Fatalf("export: %d %q %q", exp.status, exp.contentType, exp.body)
 	}
 	if r := abc.do(http.MethodPost, one+"/import", map[string]any{"csv": exp.body, "dry_run": true}); r.status != 200 || r.body["dry_run"] != true || r.body["accounts"] != float64(2) {

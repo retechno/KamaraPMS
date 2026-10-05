@@ -2342,6 +2342,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/budgets/department-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Budget against actual by department (budget.view)
+         * @description Revenue, expenses and the departmental profit, the actual against the budget, for the period and the year to date, by department: a department adds up its sub-departments, what has no department is
+         *     `unassigned`, and `totals` are of everything (the actual totals are those of the income statement). Revenue and profit above the budget, and an expense below it, are favourable. The year, the range and the
+         *     version are those of the budget against actual report; `department_id` narrows it to one department or sub-department (404 `DEPARTMENT_NOT_FOUND`). 404 `NO_ACTIVE_BUDGET`.
+         */
+        get: operations["getBudgetDepartmentVsActual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/budgets/statistics-vs-actual": {
         parameters: {
             query?: never;
@@ -2527,7 +2551,7 @@ export interface paths {
         };
         /**
          * The grid of a budget as CSV (budget.view)
-         * @description The columns are code, name and m1 to m12 (the months of the fiscal year); the import reads the same layout.
+         * @description The columns are code, name, department (the code of the department, empty for none) and m1 to m12 (the months of the fiscal year); the import reads the same layout, and the department column may be left out.
          */
         get: operations["exportBudget"];
         put?: never;
@@ -8394,6 +8418,13 @@ export interface components {
             /** @description One per month of the fiscal year, on the normal side of the account. */
             amounts: string[];
             total: string;
+            /**
+             * Format: int64
+             * @description The department or sub-department the row is for: the figures of an account may be given for several departments. Null: none.
+             */
+            department_id?: number | null;
+            department_code?: string;
+            department_name?: string;
         };
         Budget: {
             /** Format: int64 */
@@ -8485,6 +8516,39 @@ export interface components {
             metrics: components["schemas"]["BudgetStatMetric"][];
             room_revenue_check: components["schemas"]["BudgetRoomRevenueCheck"];
         };
+        BudgetPair: {
+            period: components["schemas"]["BudgetCell"];
+            ytd: components["schemas"]["BudgetCell"];
+        };
+        BudgetDepartmentVariance: {
+            /**
+             * Format: int64
+             * @description 0 for the unassigned line and the totals.
+             */
+            id: number;
+            /** Format: int64 */
+            parent_id: number | null;
+            code: string;
+            name: string;
+            /** @enum {integer} */
+            level: 1 | 2;
+            is_active: boolean;
+            revenue: components["schemas"]["BudgetPair"];
+            expense: components["schemas"]["BudgetPair"];
+            profit: components["schemas"]["BudgetPair"];
+            children: components["schemas"]["BudgetDepartmentVariance"][];
+        };
+        BudgetDepartmentVsActual: {
+            year_start: components["schemas"]["Date"];
+            year_end: components["schemas"]["Date"];
+            year_label: string;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            budget: components["schemas"]["BudgetRef"];
+            departments: components["schemas"]["BudgetDepartmentVariance"][];
+            unassigned: components["schemas"]["BudgetDepartmentVariance"];
+            totals: components["schemas"]["BudgetDepartmentVariance"];
+        };
         BudgetPage: {
             data: components["schemas"]["Budget"][];
         };
@@ -8506,6 +8570,11 @@ export interface components {
         BudgetRowRequest: {
             /** Format: int64 */
             account_id: number;
+            /**
+             * Format: int64
+             * @description Optional: a department or sub-department of the property that is in use (422 `rows[N].department_id`). An account may have a row for each department, and one without; the same account and department twice is 422 `DUPLICATE`.
+             */
+            department_id?: number | null;
             /** @description Twelve amounts, one per month of the fiscal year; an empty one is zero. */
             amounts: string[];
         };
@@ -8515,6 +8584,11 @@ export interface components {
         SpreadBudgetRequest: {
             /** Format: int64 */
             account_id: number;
+            /**
+             * Format: int64
+             * @description The row of the account for this department; none: the row without a department.
+             */
+            department_id?: number | null;
             /** @description The figure of the whole year. */
             total: string;
             /** @enum {string} */
@@ -8560,6 +8634,16 @@ export interface components {
             account_id: number;
             code: string;
             name: string;
+            period: components["schemas"]["BudgetCell"];
+            ytd: components["schemas"]["BudgetCell"];
+            /** @description The cells of the account for each department and sub-department that has a figure (the figures without a department first), when it has any: they add up to the cells of the account. */
+            departments: components["schemas"]["BudgetAccountDepartment"][];
+        };
+        BudgetAccountDepartment: {
+            /** Format: int64 */
+            department_id: number | null;
+            department_code: string;
+            department_name: string;
             period: components["schemas"]["BudgetCell"];
             ytd: components["schemas"]["BudgetCell"];
         };
@@ -15149,6 +15233,37 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBudgetDepartmentVsActual: {
+        parameters: {
+            query?: {
+                year_start?: components["schemas"]["Date"];
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+                budget_id?: number;
+                department_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetDepartmentVsActual"];
                 };
             };
             403: components["responses"]["Problem"];

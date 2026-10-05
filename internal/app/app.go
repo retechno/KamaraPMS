@@ -123,6 +123,7 @@ func New(d Deps) *App {
 	nightAuditSvc.SetShiftChecker(shiftsSvc) // and an open shift stops the night audit
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
+	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department
 
 	// Business API: every route requires an authenticated principal.
 	api := http.NewServeMux()

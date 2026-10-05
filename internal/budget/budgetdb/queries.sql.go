@@ -116,15 +116,76 @@ func (q *Queries) ActualByAccount(ctx context.Context, arg ActualByAccountParams
 	return items, nil
 }
 
+const actualByAccountDepartment = `-- name: ActualByAccountDepartment :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(l.department_id, 0)::bigint AS department_id, sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND a.account_type IN ('REVENUE', 'EXPENSE')
+  AND j.journal_date >= $3::date AND j.journal_date <= $4::date AND NOT j.is_closing
+GROUP BY a.id, COALESCE(l.department_id, 0)
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY a.code, 5
+`
+
+type ActualByAccountDepartmentParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ActualByAccountDepartmentRow struct {
+	ID           int64
+	Code         string
+	Name         string
+	AccountType  string
+	DepartmentID int64
+	Balance      decimal.Decimal
+}
+
+// Debit minus credit per account and department (0: none) over a range of days, closing journals left out.
+func (q *Queries) ActualByAccountDepartment(ctx context.Context, arg ActualByAccountDepartmentParams) ([]ActualByAccountDepartmentRow, error) {
+	rows, err := q.db.Query(ctx, actualByAccountDepartment,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ActualByAccountDepartmentRow{}
+	for rows.Next() {
+		var i ActualByAccountDepartmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.DepartmentID,
+			&i.Balance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const actualByAccountMonth = `-- name: ActualByAccountMonth :many
-SELECT a.id AS account_id, date_trunc('month', j.journal_date)::date AS month_start, sum(l.debit - l.credit)::numeric AS balance
+SELECT a.id AS account_id, COALESCE(l.department_id, 0)::bigint AS department_id, date_trunc('month', j.journal_date)::date AS month_start, sum(l.debit - l.credit)::numeric AS balance
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND a.account_type IN ('REVENUE', 'EXPENSE') AND a.is_postable
   AND j.journal_date >= $3::date AND j.journal_date <= $4::date AND NOT j.is_closing
-GROUP BY a.id, date_trunc('month', j.journal_date)
-ORDER BY a.id, month_start
+GROUP BY a.id, COALESCE(l.department_id, 0), date_trunc('month', j.journal_date)
+ORDER BY a.id, COALESCE(l.department_id, 0), month_start
 `
 
 type ActualByAccountMonthParams struct {
@@ -135,12 +196,13 @@ type ActualByAccountMonthParams struct {
 }
 
 type ActualByAccountMonthRow struct {
-	AccountID  int64
-	MonthStart civil.Date
-	Balance    decimal.Decimal
+	AccountID    int64
+	DepartmentID int64
+	MonthStart   civil.Date
+	Balance      decimal.Decimal
 }
 
-// The same per account and calendar month.
+// The same per account, department (0: none) and calendar month.
 func (q *Queries) ActualByAccountMonth(ctx context.Context, arg ActualByAccountMonthParams) ([]ActualByAccountMonthRow, error) {
 	rows, err := q.db.Query(ctx, actualByAccountMonth,
 		arg.TenantID,
@@ -155,7 +217,12 @@ func (q *Queries) ActualByAccountMonth(ctx context.Context, arg ActualByAccountM
 	items := []ActualByAccountMonthRow{}
 	for rows.Next() {
 		var i ActualByAccountMonthRow
-		if err := rows.Scan(&i.AccountID, &i.MonthStart, &i.Balance); err != nil {
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.DepartmentID,
+			&i.MonthStart,
+			&i.Balance,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -238,6 +305,66 @@ func (q *Queries) BudgetByAccount(ctx context.Context, arg BudgetByAccountParams
 			&i.Name,
 			&i.AccountType,
 			&i.StatementGroup,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const budgetByAccountDepartment = `-- name: BudgetByAccountDepartment :many
+SELECT a.id, a.code, a.name, a.account_type, COALESCE(l.department_id, 0)::bigint AS department_id, sum(l.amount)::numeric AS amount
+FROM budget_lines l
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.budget_id = $3 AND l.month >= $4::smallint AND l.month <= $5::smallint
+GROUP BY a.id, COALESCE(l.department_id, 0)
+ORDER BY a.code, 5
+`
+
+type BudgetByAccountDepartmentParams struct {
+	TenantID   int64
+	PropertyID int64
+	BudgetID   int64
+	FromMonth  int16
+	ToMonth    int16
+}
+
+type BudgetByAccountDepartmentRow struct {
+	ID           int64
+	Code         string
+	Name         string
+	AccountType  string
+	DepartmentID int64
+	Amount       decimal.Decimal
+}
+
+// The budget of a range of months per account and department (0: none).
+func (q *Queries) BudgetByAccountDepartment(ctx context.Context, arg BudgetByAccountDepartmentParams) ([]BudgetByAccountDepartmentRow, error) {
+	rows, err := q.db.Query(ctx, budgetByAccountDepartment,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BudgetID,
+		arg.FromMonth,
+		arg.ToMonth,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BudgetByAccountDepartmentRow{}
+	for rows.Next() {
+		var i BudgetByAccountDepartmentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.DepartmentID,
 			&i.Amount,
 		); err != nil {
 			return nil, err
@@ -345,8 +472,8 @@ func (q *Queries) BudgetedStatistics(ctx context.Context, arg BudgetedStatistics
 }
 
 const copyBudgetLines = `-- name: CopyBudgetLines :exec
-INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
-SELECT l.tenant_id, l.property_id, $1::bigint, l.account_id, l.month, l.amount
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount)
+SELECT l.tenant_id, l.property_id, $1::bigint, l.account_id, l.department_id, l.month, l.amount
 FROM budget_lines l WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.budget_id = $4
 `
 
@@ -437,23 +564,25 @@ func (q *Queries) DeleteBudgetLines(ctx context.Context, arg DeleteBudgetLinesPa
 	return err
 }
 
-const deleteBudgetLinesOfAccount = `-- name: DeleteBudgetLinesOfAccount :exec
-DELETE FROM budget_lines WHERE tenant_id = $1 AND property_id = $2 AND budget_id = $3 AND account_id = $4
+const deleteBudgetLinesOfRow = `-- name: DeleteBudgetLinesOfRow :exec
+DELETE FROM budget_lines WHERE tenant_id = $1 AND property_id = $2 AND budget_id = $3 AND account_id = $4 AND COALESCE(department_id, 0) = $5::bigint
 `
 
-type DeleteBudgetLinesOfAccountParams struct {
-	TenantID   int64
-	PropertyID int64
-	BudgetID   int64
-	AccountID  int64
+type DeleteBudgetLinesOfRowParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BudgetID     int64
+	AccountID    int64
+	DepartmentID int64
 }
 
-func (q *Queries) DeleteBudgetLinesOfAccount(ctx context.Context, arg DeleteBudgetLinesOfAccountParams) error {
-	_, err := q.db.Exec(ctx, deleteBudgetLinesOfAccount,
+func (q *Queries) DeleteBudgetLinesOfRow(ctx context.Context, arg DeleteBudgetLinesOfRowParams) error {
+	_, err := q.db.Exec(ctx, deleteBudgetLinesOfRow,
 		arg.TenantID,
 		arg.PropertyID,
 		arg.BudgetID,
 		arg.AccountID,
+		arg.DepartmentID,
 	)
 	return err
 }
@@ -598,8 +727,8 @@ func (q *Queries) InsertBudget(ctx context.Context, arg InsertBudgetParams) (int
 }
 
 const insertBudgetLines = `-- name: InsertBudgetLines :exec
-INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
-SELECT $1::bigint, $2::bigint, $3::bigint, (c ->> 'account_id')::bigint, (c ->> 'month')::smallint, (c ->> 'amount')::numeric
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount)
+SELECT $1::bigint, $2::bigint, $3::bigint, (c ->> 'account_id')::bigint, NULLIF((c ->> 'department_id')::bigint, 0), (c ->> 'month')::smallint, (c ->> 'amount')::numeric
 FROM jsonb_array_elements($4::jsonb) AS c
 `
 
@@ -610,7 +739,7 @@ type InsertBudgetLinesParams struct {
 	Cells      []byte
 }
 
-// The cells arrive as a JSON array of {account_id, month, amount} (the amount as text), so a whole grid is one statement.
+// The cells arrive as a JSON array of {account_id, department_id (0: none), month, amount} (the amount as text), so a whole grid is one statement.
 func (q *Queries) InsertBudgetLines(ctx context.Context, arg InsertBudgetLinesParams) error {
 	_, err := q.db.Exec(ctx, insertBudgetLines,
 		arg.TenantID,
@@ -694,10 +823,10 @@ func (q *Queries) ListBudgetAccounts(ctx context.Context, arg ListBudgetAccounts
 }
 
 const listBudgetLines = `-- name: ListBudgetLines :many
-SELECT l.account_id, l.month, l.amount
+SELECT l.account_id, COALESCE(l.department_id, 0)::bigint AS department_id, l.month, l.amount
 FROM budget_lines l
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.budget_id = $3
-ORDER BY l.account_id, l.month
+ORDER BY l.account_id, COALESCE(l.department_id, 0), l.month
 `
 
 type ListBudgetLinesParams struct {
@@ -707,12 +836,13 @@ type ListBudgetLinesParams struct {
 }
 
 type ListBudgetLinesRow struct {
-	AccountID int64
-	Month     int16
-	Amount    decimal.Decimal
+	AccountID    int64
+	DepartmentID int64
+	Month        int16
+	Amount       decimal.Decimal
 }
 
-// The figures of a budget, an account per month.
+// The figures of a budget, an account and a department (0: none) per month.
 func (q *Queries) ListBudgetLines(ctx context.Context, arg ListBudgetLinesParams) ([]ListBudgetLinesRow, error) {
 	rows, err := q.db.Query(ctx, listBudgetLines, arg.TenantID, arg.PropertyID, arg.BudgetID)
 	if err != nil {
@@ -722,7 +852,12 @@ func (q *Queries) ListBudgetLines(ctx context.Context, arg ListBudgetLinesParams
 	items := []ListBudgetLinesRow{}
 	for rows.Next() {
 		var i ListBudgetLinesRow
-		if err := rows.Scan(&i.AccountID, &i.Month, &i.Amount); err != nil {
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.DepartmentID,
+			&i.Month,
+			&i.Amount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -896,6 +1031,54 @@ func (q *Queries) ListClosedDaySummaries(ctx context.Context, arg ListClosedDayS
 	for rows.Next() {
 		var i ListClosedDaySummariesRow
 		if err := rows.Scan(&i.BusinessDate, &i.Summary); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDepartments = `-- name: ListDepartments :many
+SELECT id, parent_id, code, name, sort_order, is_active FROM departments
+WHERE tenant_id = $1 AND property_id = $2
+ORDER BY COALESCE(parent_id, id), (parent_id IS NOT NULL), sort_order, code
+`
+
+type ListDepartmentsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListDepartmentsRow struct {
+	ID        int64
+	ParentID  *int64
+	Code      string
+	Name      string
+	SortOrder int32
+	IsActive  bool
+}
+
+// The departments of the property (the tree of the department report).
+func (q *Queries) ListDepartments(ctx context.Context, arg ListDepartmentsParams) ([]ListDepartmentsRow, error) {
+	rows, err := q.db.Query(ctx, listDepartments, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDepartmentsRow{}
+	for rows.Next() {
+		var i ListDepartmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Code,
+			&i.Name,
+			&i.SortOrder,
+			&i.IsActive,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

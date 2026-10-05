@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { resetDepartments } from '@/composables/useDepartments'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -58,12 +59,25 @@ const statistics = {
   room_revenue_check: { period_money: '200', period_statistics: '210', ytd_money: '200', ytd_statistics: '210', agrees: false },
 }
 
-function mountView(permissions = ['budget.view'], stats: Record<string, unknown> = statistics) {
+const cellOf = (a: string, b: string, v: string, fav: boolean | null) => cell(a, b, v, null, fav)
+const pair = (a: string, b: string, v: string, fav: boolean | null) => ({ period: cellOf(a, b, v, fav), ytd: cellOf(a, b, v, fav) })
+const deptNode = (over: Record<string, unknown>) => ({ id: 1, parent_id: null, code: 'ROOMS', name: 'Rooms', level: 1, is_active: true, revenue: pair('600', '500', '100', true), expense: pair('80', '100', '-20', true), profit: pair('520', '400', '120', true), children: [], ...over })
+const byDepartment = {
+  year_start: '2026-01-01', year_end: '2026-12-31', year_label: 'FY2026', from: '2026-09-01', to: '2026-09-30', budget: report.budget,
+  departments: [
+    deptNode({}),
+    deptNode({ id: 2, code: 'FB', name: 'Food and beverage', revenue: pair('800', '750', '50', true), expense: pair('150', '100', '50', false), profit: pair('650', '650', '0', null), children: [deptNode({ id: 9, parent_id: 2, code: 'REST', name: 'Restaurant', level: 2, revenue: pair('600', '500', '100', true), expense: pair('150', '100', '50', false), profit: pair('450', '400', '50', true) })] }),
+  ],
+  unassigned: deptNode({ id: 0, code: '', name: '', revenue: pair('100', '0', '100', true), expense: pair('0', '0', '0', null), profit: pair('100', '0', '100', true) }),
+  totals: deptNode({ id: 0, code: '', name: '', revenue: pair('1500', '1250', '250', true), expense: pair('230', '200', '30', false), profit: pair('1270', '1050', '220', true) }),
+}
+
+function mountView(permissions = ['budget.view'], stats: Record<string, unknown> = statistics, dept: Record<string, unknown> = byDepartment) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  GET = vi.fn().mockImplementation((path: string) => Promise.resolve({ data: path.endsWith('/vs-actual') ? report : path.endsWith('/statistics-vs-actual') ? stats : { data: budgets } }))
+  GET = vi.fn().mockImplementation((path: string) => Promise.resolve({ data: path.endsWith('/vs-actual') ? report : path.endsWith('/statistics-vs-actual') ? stats : path.endsWith('/department-vs-actual') ? dept : path.endsWith('/departments') ? { data: [{ id: 2, parent_id: null, code: 'FB', name: 'Food and beverage', sort_order: 20, is_active: true, level: 1, child_count: 1, in_use: true }] } : { data: budgets } }))
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(BudgetVsActualView, { global: { plugins: [pinia, router] } })
 }
@@ -72,6 +86,7 @@ const reportCalls = () => GET.mock.calls.filter(([p]) => String(p).endsWith('/vs
 
 describe('BudgetVsActualView', () => {
   beforeEach(() => {
+    resetDepartments()
     GET = vi.fn()
     downloadCsv.mockReset()
     openPdf.mockReset()
@@ -185,5 +200,55 @@ describe('BudgetVsActualView', () => {
     await flushPromises()
     expect(w.find('[data-testid=stats-none]').exists()).toBe(true)
     expect(w.find('[data-testid=stats-report]').exists()).toBe(false)
+  })
+
+  it('shows the departments under an account that has them', async () => {
+    const withDepts = { ...report, lines: report.lines.map((l) => (l.key === 'REV_ROOMS' ? { ...l, accounts: l.accounts.map((a) => (a.code === '4110' ? { ...a, departments: [
+      { department_id: null, department_code: '', department_name: '', period: cell('100000', '0', '100000', null, true), ytd: cell('100000', '0', '100000', null, true) },
+      { department_id: 9, department_code: 'REST', department_name: 'Restaurant', period: cell('200000', '200000', '0', null, null), ytd: cell('200000', '300000', '-100000', null, false) },
+    ] } : a)) } : l)) }
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['budget.view'] }] } as never
+    usePropertyStore().currentId = 7
+    GET = vi.fn(async (path: string) => (path.endsWith('/vs-actual') ? { data: withDepts } : path.endsWith('/budgets') ? { data: { data: budgets } } : path.endsWith('/departments') ? { data: { data: [] } } : { data: {} }))
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    const w = mount(BudgetVsActualView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect(w.get('[data-testid=account-4110-dept-none]').text()).toContain('No department')
+    expect(w.get('[data-testid=account-4110-dept-none]').text()).toContain('100,000')
+    expect(w.get('[data-testid=account-4110-dept-REST]').text()).toContain('REST · Restaurant')
+    expect(w.get('[data-testid=account-4110-dept-REST]').text()).toContain('unfav.') // the year to date is below the plan
+    expect(w.find('[data-testid=account-4120-dept-none]').exists()).toBe(false) // an account with no department has no sub-rows
+  })
+
+  it('sets the budget against the actual by department, with sub-departments, the unassigned and the totals', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(GET.mock.calls.some(([p]) => String(p).endsWith('/department-vs-actual'))).toBe(true)
+    const fb = w.get('[data-testid=dept-FB]')
+    expect(fb.text()).toContain('800')
+    expect(fb.text()).toContain('650')
+    expect(w.get('[data-testid=dept-REST]').text()).toContain('Restaurant')
+    expect(w.get('[data-testid=dept-REST]').text()).toContain('450')
+    expect(w.get('[data-testid=dept-unassigned]').text()).toContain('No department')
+    expect(w.get('[data-testid=dept-totals]').text()).toContain('1,500')
+    expect(fb.text()).toContain('unfav.') // the expense above the plan
+    const basis = w.get('select[name=basis]')
+    await basis.setValue('ytd')
+    expect(w.get('[data-testid=dept-ROOMS]').text()).toContain('600') // the year to date cells of the pair
+  })
+
+  it('narrows the report by department to one department', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.findAll('select[name=department_id] option').map((o) => o.text())).toEqual(['All departments', 'FB · Food and beverage'])
+    await w.get('select[name=department_id]').setValue('2')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    const call = GET.mock.calls.filter(([p]) => String(p).endsWith('/department-vs-actual')).at(-1)
+    expect(call?.[1].params.query).toMatchObject({ department_id: 2 })
+    // the money report is not narrowed
+    expect(reportCalls().at(-1)?.[1].params.query.department_id).toBeUndefined()
   })
 })

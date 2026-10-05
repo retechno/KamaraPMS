@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -13,9 +14,9 @@ import (
 	"kamarapms/internal/platform/db"
 )
 
-// The CSV of a budget has the code of the account, its name (read only) and the twelve months of the fiscal year, m1 to m12.
+// The CSV of a budget has the code of the account, its name (read only), the code of the department (optional) and the twelve months of the fiscal year, m1 to m12.
 func csvHeader() []string {
-	h := []string{"code", "name"}
+	h := []string{"code", "name", "department"}
 	for m := 1; m <= monthsInYear; m++ {
 		h = append(h, "m"+strconv.Itoa(m))
 	}
@@ -30,15 +31,16 @@ func (s *Service) ExportCSV(ctx context.Context, propertyID, id int64) (Budget, 
 	}
 	out := [][]string{csvHeader()}
 	for _, r := range b.Rows {
-		out = append(out, append([]string{r.Code, r.Name}, r.Amounts...))
+		out = append(out, append([]string{r.Code, r.Name, r.DepartmentCode}, r.Amounts...))
 	}
 	return b, out, nil
 }
 
 type importRow struct {
-	line int
-	code string
-	in   RowInput
+	line       int
+	code       string
+	department string // the code of the department, empty for none
+	in         RowInput
 }
 
 // parseCSV reads the rows of an import and returns every problem it finds, row by row. The amounts are checked against the currency here; the accounts
@@ -64,7 +66,7 @@ func parseCSV(text string, decimals int32) ([]importRow, []apperr.FieldError) {
 		}
 	}
 	get := func(rec []string, name string) string {
-		if i := col[name]; i < len(rec) {
+		if i, ok := col[name]; ok && i < len(rec) {
 			return strings.TrimSpace(rec[i])
 		}
 		return ""
@@ -86,13 +88,13 @@ func parseCSV(text string, decimals int32) ([]importRow, []apperr.FieldError) {
 			break
 		}
 		at := func(f string) string { return "rows[" + strconv.Itoa(line) + "]." + f }
-		row := importRow{line: line, code: strings.ToUpper(get(rec, "code"))}
+		row := importRow{line: line, code: strings.ToUpper(get(rec, "code")), department: strings.ToUpper(get(rec, "department"))}
 		if row.code == "" {
 			fields = append(fields, fieldErr(at("code"), "REQUIRED", "the code of the account"))
-		} else if first, dup := seen[row.code]; dup {
-			fields = append(fields, fieldErr(at("code"), "DUPLICATE", "already on row "+strconv.Itoa(first)))
+		} else if first, dup := seen[row.code+"|"+row.department]; dup {
+			fields = append(fields, fieldErr(at("code"), "DUPLICATE", "already on row "+strconv.Itoa(first)+" for the same department"))
 		}
-		seen[row.code] = line
+		seen[row.code+"|"+row.department] = line
 		row.in.Amounts = make([]string, monthsInYear)
 		for m := 1; m <= monthsInYear; m++ {
 			name := "m" + strconv.Itoa(m)
@@ -145,8 +147,17 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID, id int64, text stri
 		for _, a := range list {
 			byCode[a.Code] = a
 		}
+		names, err := s.departmentNames(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return err
+		}
+		deptByCode := map[string]int64{}
+		for _, d := range names {
+			deptByCode[d.code] = d.id
+		}
 		var problems []apperr.FieldError
 		rows := make([]RowInput, 0, len(parsed))
+		lineOf := make([]int, 0, len(parsed)) // the line of the file of each row, to report the department of a row where it is
 		for _, r := range parsed {
 			a, ok := byCode[r.code]
 			if !ok {
@@ -154,7 +165,16 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID, id int64, text stri
 				continue
 			}
 			r.in.AccountID = a.ID
+			if r.department != "" {
+				id, found := deptByCode[r.department]
+				if !found {
+					problems = append(problems, fieldErr("rows["+strconv.Itoa(r.line)+"].department", "DEPARTMENT_NOT_FOUND", "no department of this property has the code "+r.department))
+					continue
+				}
+				r.in.DepartmentID = &id
+			}
 			rows = append(rows, r.in)
+			lineOf = append(lineOf, r.line)
 		}
 		if len(problems) > 0 {
 			return apperr.Invalid("the file is invalid", problems...)
@@ -164,6 +184,13 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID, id int64, text stri
 			return err
 		}
 		grid, fields := parseGrid(rows, byID, decimals)
+		if len(fields) == 0 {
+			checked, err := s.checkRowDepartments(ctx, p.TenantID, propertyID, rows)
+			if err != nil {
+				return err
+			}
+			fields = relabel(checked, lineOf)
+		}
 		if len(fields) > 0 {
 			return apperr.Invalid("the file is invalid", fields...)
 		}
@@ -183,4 +210,15 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID, id int64, text stri
 		return out, nil
 	}
 	return out, err
+}
+
+// relabel names the department errors of the rows of a grid by the line of the file the row came from (rows[LINE].department).
+func relabel(fields []apperr.FieldError, lineOf []int) []apperr.FieldError {
+	for i, f := range fields {
+		var idx int
+		if _, err := fmt.Sscanf(f.Field, "rows[%d].department_id", &idx); err == nil && idx >= 0 && idx < len(lineOf) {
+			fields[i].Field = "rows[" + strconv.Itoa(lineOf[idx]) + "].department"
+		}
+	}
+	return fields
 }

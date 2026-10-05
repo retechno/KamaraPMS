@@ -1552,6 +1552,24 @@ SELECT expect_error('a department a charge code points to is not deleted', '2350
 SELECT expect_error('a department with sub-departments is not deleted', '23503', $q$DELETE FROM departments WHERE code = 'FB' AND property_id = pr('BALI')$q$);
 SELECT expect_ok('a department nothing points to is deleted', $q$DELETE FROM departments WHERE code = 'REST' AND property_id = pr('BALI')$q$);
 
+-- The budget by department: a line is an account, a department (or none) and a month.
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount)
+VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')),
+        (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')), 1, 100);
+INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount)
+VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), 1, 50);
+SELECT expect_error('a department has one figure per account and month', '23505',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')), 1, 5)$q$);
+SELECT expect_error('no department is one department of its own', '23505',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), 1, 7)$q$);
+SELECT expect_ok('the same account and month for another department',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')), 1, 5)$q$);
+SELECT expect_error('the department of a budget line is one of the property', '23503',
+    $q$INSERT INTO budget_lines (tenant_id, property_id, budget_id, account_id, department_id, month, amount) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM budgets WHERE name = 'Budget 2026 v2'), (SELECT id FROM gl_accounts WHERE code = '4110' AND property_id = pr('BALI')), (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('SG')), 2, 5)$q$);
+SELECT expect_error('the department of a budget line never changes', '23001',
+    $q$UPDATE budget_lines SET department_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE department_id = (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')) AND month = 1$q$);
+SELECT expect_error('a department a budget line points to is not deleted', '23503', $q$DELETE FROM departments WHERE code = 'FB' AND property_id = pr('BALI')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

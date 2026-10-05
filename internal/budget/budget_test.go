@@ -501,10 +501,10 @@ func TestCSVExportAndImport(t *testing.T) {
 	b = f.save(t, b.ID, row(f.rooms, "1000", 1, 2), row(f.payroll, "50", 1))
 	exp, rows, err := f.Budget.ExportCSV(f.viewer, f.propID, b.ID)
 	must(t, err)
-	if exp.ID != b.ID || len(rows) != 3 || len(rows[0]) != 14 || rows[0][0] != "code" || rows[0][2] != "m1" || rows[0][13] != "m12" {
+	if exp.ID != b.ID || len(rows) != 3 || len(rows[0]) != 15 || rows[0][0] != "code" || rows[0][2] != "department" || rows[0][3] != "m1" || rows[0][14] != "m12" {
 		t.Fatalf("the export: %v", rows)
 	}
-	if rows[1][0] != "4110" || rows[1][2] != "1000" || rows[2][0] != "5110" {
+	if rows[1][0] != "4110" || rows[1][3] != "1000" || rows[2][0] != "5110" {
 		t.Fatalf("the rows are by code: %v", rows)
 	}
 

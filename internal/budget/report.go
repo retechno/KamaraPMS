@@ -40,6 +40,8 @@ type Account struct {
 	Name      string `json:"name"`
 	Period    Cell   `json:"period"`
 	YTD       Cell   `json:"ytd"`
+	// Departments are the cells of the account for each department (and sub-department) that has a figure, when it has any: they add up to the cells of the account.
+	Departments []AccountDepartment `json:"departments"`
 }
 
 // Line is a group of accounts (kind GROUP) or a subtotal (SUBTOTAL, TOTAL), laid out like the income statement, with the cells of the period and of the
@@ -213,6 +215,14 @@ func (s *Service) VsActual(ctx context.Context, propertyID int64, in VsActualQue
 		}
 		layouts[k], _ = accounting.IncomeLayout(rows)
 	}
+	figs, err := s.figures(ctx, p.TenantID, propertyID, ref.ID, yearStart, from, to)
+	if err != nil {
+		return VsActual{}, err
+	}
+	names, err := s.departmentNames(ctx, p.TenantID, propertyID)
+	if err != nil {
+		return VsActual{}, err
+	}
 	out := VsActual{
 		YearStart: yearStart, YearEnd: yearEnd, YearLabel: yearLabel(yearEnd), From: periodFrom, To: periodTo,
 		Budget: BudgetRef{ID: ref.ID, Name: ref.Name, Version: int(ref.Version), Status: ref.Status}, Lines: make([]Line, 0, len(layouts[0])),
@@ -227,6 +237,7 @@ func (s *Service) VsActual(ctx context.Context, propertyID int64, in VsActualQue
 			line.Accounts = append(line.Accounts, Account{
 				AccountID: a.AccountID, Code: a.Code, Name: a.Name,
 				Period: newCell(layouts[0][i].Accounts[j].Amount, layouts[1][i].Accounts[j].Amount, better), YTD: newCell(layouts[2][i].Accounts[j].Amount, layouts[3][i].Accounts[j].Amount, better),
+				Departments: departmentsOf(a.AccountID, figs, names, better),
 			})
 		}
 		out.Lines = append(out.Lines, line)

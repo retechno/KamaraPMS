@@ -13,6 +13,7 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/budget/budgetdb"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -31,12 +32,16 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	iam   *iam.Service
+	depts *departments.Service
 }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, i *iam.Service) *Service {
 	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: i}
 }
+
+// SetDepartments gives the service the departments, to check the department of a row.
+func (s *Service) SetDepartments(d *departments.Service) { s.depts = d }
 
 func (s *Service) q(ctx context.Context) *budgetdb.Queries { return budgetdb.New(s.txm.DB(ctx)) }
 
@@ -171,18 +176,59 @@ func (s *Service) budgetable(ctx context.Context, tenantID, propertyID int64) ([
 	return list, byID, nil
 }
 
-// grid is the figures of a budget by account, twelve amounts each.
-func (s *Service) grid(ctx context.Context, tenantID, propertyID, budgetID int64) (map[int64]*[monthsInYear]decimal.Decimal, error) {
+// rowKey is a row of the grid: an account and a department (0: none).
+type rowKey struct{ account, dept int64 }
+
+func keyOf(account int64, dept *int64) rowKey {
+	if dept != nil {
+		return rowKey{account, *dept}
+	}
+	return rowKey{account, 0}
+}
+
+func deptPtr(id int64) *int64 {
+	if id == 0 {
+		return nil
+	}
+	return &id
+}
+
+// deptName is a department of the property as the budget shows it.
+type deptName struct {
+	id        int64
+	parent    *int64
+	code      string
+	name      string
+	sortOrder int
+	active    bool
+}
+
+// departmentNames lists the departments of the property by id.
+func (s *Service) departmentNames(ctx context.Context, tenantID, propertyID int64) (map[int64]deptName, error) {
+	rows, err := s.q(ctx).ListDepartments(ctx, budgetdb.ListDepartmentsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]deptName, len(rows))
+	for _, r := range rows {
+		out[r.ID] = deptName{id: r.ID, parent: r.ParentID, code: r.Code, name: r.Name, sortOrder: int(r.SortOrder), active: r.IsActive}
+	}
+	return out, nil
+}
+
+// grid is the figures of a budget by account and department, twelve amounts each.
+func (s *Service) grid(ctx context.Context, tenantID, propertyID, budgetID int64) (map[rowKey]*[monthsInYear]decimal.Decimal, error) {
 	lines, err := s.q(ctx).ListBudgetLines(ctx, budgetdb.ListBudgetLinesParams{TenantID: tenantID, PropertyID: propertyID, BudgetID: budgetID})
 	if err != nil {
 		return nil, err
 	}
-	out := map[int64]*[monthsInYear]decimal.Decimal{}
+	out := map[rowKey]*[monthsInYear]decimal.Decimal{}
 	for _, l := range lines {
-		row := out[l.AccountID]
+		k := rowKey{l.AccountID, l.DepartmentID}
+		row := out[k]
 		if row == nil {
 			row = new([monthsInYear]decimal.Decimal)
-			out[l.AccountID] = row
+			out[k] = row
 		}
 		if l.Month >= 1 && int(l.Month) <= monthsInYear {
 			row[l.Month-1] = l.Amount
@@ -201,11 +247,15 @@ func (s *Service) detail(ctx context.Context, tenantID, propertyID, id int64, de
 	}
 	b := toBudget(row, decimals)
 	b.Months = months(row.YearStart)
-	accounts, _, err := s.budgetable(ctx, tenantID, propertyID)
+	accounts, byID, err := s.budgetable(ctx, tenantID, propertyID)
 	if err != nil {
 		return Budget{}, err
 	}
 	grid, err := s.grid(ctx, tenantID, propertyID, id)
+	if err != nil {
+		return Budget{}, err
+	}
+	names, err := s.departmentNames(ctx, tenantID, propertyID)
 	if err != nil {
 		return Budget{}, err
 	}
@@ -218,15 +268,30 @@ func (s *Service) detail(ctx context.Context, tenantID, propertyID, id int64, de
 		return Budget{}, err
 	}
 	b.RoomCount = int(rc)
+	keys := make([]rowKey, 0, len(grid))
+	for k := range grid {
+		keys = append(keys, k)
+	}
+	// by the code of the account, and the rows of an account by the code of the department (the row without one first)
+	sort.Slice(keys, func(i, j int) bool {
+		a, c := keys[i], keys[j]
+		if ca, cc := byID[a.account].Code, byID[c.account].Code; ca != cc {
+			return ca < cc
+		}
+		return names[a.dept].code < names[c.dept].code
+	})
 	b.Rows = []Row{}
-	for _, a := range accounts {
-		g, ok := grid[a.ID]
+	for _, k := range keys {
+		a, ok := byID[k.account]
 		if !ok {
 			continue
 		}
 		r := Row{AccountID: a.ID, Code: a.Code, Name: a.Name, AccountType: a.AccountType, Group: a.Group, Amounts: make([]string, monthsInYear)}
+		if d, ok := names[k.dept]; ok && k.dept != 0 {
+			r.DepartmentID, r.DepartmentCode, r.DepartmentName = deptPtr(k.dept), d.code, d.name
+		}
 		total := decimal.Zero
-		for i, v := range g {
+		for i, v := range grid[k] {
 			r.Amounts[i] = v.StringFixed(decimals)
 			total = total.Add(v)
 		}
@@ -414,8 +479,9 @@ func yearLabelOf(yearStart civil.Date) string {
 
 // gridRow is the twelve amounts of an account on their way to the database.
 type gridRow struct {
-	accountID int64
-	amounts   [monthsInYear]decimal.Decimal
+	accountID    int64
+	departmentID int64 // 0: none
+	amounts      [monthsInYear]decimal.Decimal
 }
 
 // putRows adds rows to the grid of a draft (the caller holds its lock). The cells go in one statement.
@@ -426,7 +492,7 @@ func (s *Service) putRows(ctx context.Context, tenantID, propertyID, budgetID in
 	cells := make([]cell, 0, len(rows)*monthsInYear)
 	for _, r := range rows {
 		for i, a := range r.amounts {
-			cells = append(cells, cell{AccountID: r.accountID, Month: i + 1, Amount: a.StringFixed(decimals)})
+			cells = append(cells, cell{AccountID: r.accountID, DepartmentID: r.departmentID, Month: i + 1, Amount: a.StringFixed(decimals)})
 		}
 	}
 	raw, err := json.Marshal(cells)
@@ -443,23 +509,30 @@ func parseGrid(rows []RowInput, byID map[int64]AccountRef, decimals int32) ([]gr
 	if len(rows) > maxGridRows {
 		return nil, []apperr.FieldError{fieldErr("rows", "TOO_MANY_ROWS", "at most 1000 accounts")}
 	}
-	seen := map[int64]int{}
+	seen := map[rowKey]int{}
 	for i, r := range rows {
 		at := func(f string) string { return "rows[" + strconv.Itoa(i) + "]." + f }
 		if _, ok := byID[r.AccountID]; !ok {
 			fields = append(fields, fieldErr(at("account_id"), "INVALID_ACCOUNT", "a revenue or expense account of this property that takes postings"))
 			continue
 		}
-		if first, dup := seen[r.AccountID]; dup {
-			fields = append(fields, fieldErr(at("account_id"), "DUPLICATE", "already on row "+strconv.Itoa(first)))
+		if r.DepartmentID != nil && *r.DepartmentID < 1 {
+			fields = append(fields, fieldErr(at("department_id"), "DEPARTMENT_NOT_FOUND", "no such department in this property"))
 			continue
 		}
-		seen[r.AccountID] = i
+		if first, dup := seen[keyOf(r.AccountID, r.DepartmentID)]; dup {
+			fields = append(fields, fieldErr(at("account_id"), "DUPLICATE", "the account is on row "+strconv.Itoa(first)+" for the same department"))
+			continue
+		}
+		seen[keyOf(r.AccountID, r.DepartmentID)] = i
 		if len(r.Amounts) != monthsInYear {
 			fields = append(fields, fieldErr(at("amounts"), "INVALID_VALUE", "twelve amounts, one per month of the fiscal year"))
 			continue
 		}
 		row := gridRow{accountID: r.AccountID}
+		if r.DepartmentID != nil {
+			row.departmentID = *r.DepartmentID
+		}
 		ok := true
 		for m, a := range r.Amounts {
 			d, fe := parseAmount("rows["+strconv.Itoa(i)+"].amounts["+strconv.Itoa(m)+"]", a, decimals)
@@ -501,6 +574,12 @@ func (s *Service) SaveGrid(ctx context.Context, propertyID, id int64, in GridInp
 			return err
 		}
 		rows, fields := parseGrid(in.Rows, byID, decimals)
+		if len(fields) == 0 {
+			var err error
+			if fields, err = s.checkRowDepartments(ctx, p.TenantID, propertyID, in.Rows); err != nil {
+				return err
+			}
+		}
 		if len(fields) > 0 {
 			return apperr.Invalid("the figures are invalid", fields...)
 		}
@@ -514,6 +593,36 @@ func (s *Service) SaveGrid(ctx context.Context, propertyID, id int64, in GridInp
 			map[string]any{"accounts": out.AccountCount, "revenue": out.Revenue, "expense": out.Expense}))
 	})
 	return out, err
+}
+
+// checkRowDepartments says whether the departments of the rows of a grid take figures: departments of the property that are in use. It answers the field errors of the rows.
+func (s *Service) checkRowDepartments(ctx context.Context, tenantID, propertyID int64, rows []RowInput) ([]apperr.FieldError, error) {
+	var fields []apperr.FieldError
+	if s.depts == nil {
+		return nil, nil
+	}
+	checked := map[int64]error{}
+	for i, r := range rows {
+		if r.DepartmentID == nil {
+			continue
+		}
+		err, done := checked[*r.DepartmentID]
+		if !done {
+			err = s.depts.Check(ctx, tenantID, propertyID, *r.DepartmentID, "department_id")
+			checked[*r.DepartmentID] = err
+		}
+		if err == nil {
+			continue
+		}
+		var ae *apperr.Error
+		if !errors.As(err, &ae) || len(ae.Fields) == 0 {
+			return nil, err
+		}
+		for _, f := range ae.Fields {
+			fields = append(fields, fieldErr("rows["+strconv.Itoa(i)+"].department_id", f.Code, f.Message))
+		}
+	}
+	return fields, nil
 }
 
 func (s *Service) replaceGrid(ctx context.Context, tenantID, propertyID, id int64, rows []gridRow, decimals int32) error {
@@ -530,13 +639,13 @@ func previousYear(yearStart civil.Date) (start, end civil.Date) {
 }
 
 // actualMonths answers the actuals of a fiscal year by account and month number, on the normal side of each account.
-func (s *Service) actualMonths(ctx context.Context, tenantID, propertyID int64, yearStart civil.Date, types map[int64]AccountRef) (map[int64]*[monthsInYear]decimal.Decimal, error) {
+func (s *Service) actualMonths(ctx context.Context, tenantID, propertyID int64, yearStart civil.Date, types map[int64]AccountRef) (map[rowKey]*[monthsInYear]decimal.Decimal, error) {
 	_, end := fiscalYearOf(yearStart, int(yearStart.Month()))
 	rows, err := s.q(ctx).ActualByAccountMonth(ctx, budgetdb.ActualByAccountMonthParams{TenantID: tenantID, PropertyID: propertyID, FromDate: yearStart, ToDate: end})
 	if err != nil {
 		return nil, err
 	}
-	out := map[int64]*[monthsInYear]decimal.Decimal{}
+	out := map[rowKey]*[monthsInYear]decimal.Decimal{}
 	for _, r := range rows {
 		a, ok := types[r.AccountID]
 		if !ok {
@@ -546,10 +655,11 @@ func (s *Service) actualMonths(ctx context.Context, tenantID, propertyID int64, 
 		if n < 1 || n > monthsInYear {
 			continue
 		}
-		row := out[r.AccountID]
+		k := rowKey{r.AccountID, r.DepartmentID}
+		row := out[k]
 		if row == nil {
 			row = new([monthsInYear]decimal.Decimal)
-			out[r.AccountID] = row
+			out[k] = row
 		}
 		row[n-1] = natural(a.AccountType, r.Balance)
 	}
@@ -594,6 +704,11 @@ func (s *Service) Spread(ctx context.Context, propertyID, id int64, in SpreadInp
 		if _, ok := byID[in.AccountID]; !ok {
 			return apperr.Invalid("the spread is invalid", fieldErr("account_id", "INVALID_ACCOUNT", "a revenue or expense account of this property that takes postings"))
 		}
+		if in.DepartmentID != nil && s.depts != nil {
+			if err := s.depts.Check(ctx, p.TenantID, propertyID, *in.DepartmentID, "department_id"); err != nil {
+				return err
+			}
+		}
 		var amounts []decimal.Decimal
 		if in.Method == SpreadEqual {
 			amounts = spreadEqual(total, decimals)
@@ -604,7 +719,7 @@ func (s *Service) Spread(ctx context.Context, propertyID, id int64, in SpreadInp
 				return err
 			}
 			pattern := make([]decimal.Decimal, monthsInYear)
-			if a := actual[in.AccountID]; a != nil {
+			if a := actual[keyOf(in.AccountID, in.DepartmentID)]; a != nil {
 				copy(pattern, a[:])
 			}
 			var ok bool
@@ -612,9 +727,9 @@ func (s *Service) Spread(ctx context.Context, propertyID, id int64, in SpreadInp
 				return apperr.Invalid("the spread is invalid", fieldErr("method", "NO_PATTERN", "the account has no actuals in the year before to follow: spread it equally"))
 			}
 		}
-		row := gridRow{accountID: in.AccountID}
+		row := gridRow{accountID: in.AccountID, departmentID: keyOf(in.AccountID, in.DepartmentID).dept}
 		copy(row.amounts[:], amounts)
-		if err := s.q(ctx).DeleteBudgetLinesOfAccount(ctx, budgetdb.DeleteBudgetLinesOfAccountParams{TenantID: p.TenantID, PropertyID: propertyID, BudgetID: id, AccountID: in.AccountID}); err != nil {
+		if err := s.q(ctx).DeleteBudgetLinesOfRow(ctx, budgetdb.DeleteBudgetLinesOfRowParams{TenantID: p.TenantID, PropertyID: propertyID, BudgetID: id, AccountID: in.AccountID, DepartmentID: row.departmentID}); err != nil {
 			return err
 		}
 		if err := s.putRows(ctx, p.TenantID, propertyID, id, []gridRow{row}, decimals); err != nil {
@@ -624,7 +739,7 @@ func (s *Service) Spread(ctx context.Context, propertyID, id int64, in SpreadInp
 			return err
 		}
 		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.spread", id, nil,
-			map[string]any{"account_id": in.AccountID, "total": total.StringFixed(decimals), "method": in.Method}))
+			map[string]any{"account_id": in.AccountID, "department_id": in.DepartmentID, "total": total.StringFixed(decimals), "method": in.Method}))
 	})
 	return out, err
 }
@@ -682,19 +797,32 @@ func (s *Service) FillFromActuals(ctx context.Context, propertyID, id int64, in 
 		if err != nil {
 			return err
 		}
-		ids := make([]int64, 0, len(actual))
-		for aid := range actual {
-			ids = append(ids, aid)
+		keys := make([]rowKey, 0, len(actual))
+		for k := range actual {
+			keys = append(keys, k)
 		}
-		sort.Slice(ids, func(i, j int) bool { return byID[ids[i]].Code < byID[ids[j]].Code })
+		names, err := s.departmentNames(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return err
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			a, c := keys[i], keys[j]
+			if ca, cc := byID[a.account].Code, byID[c.account].Code; ca != cc {
+				return ca < cc
+			}
+			return names[a.dept].code < names[c.dept].code
+		})
 		var rows []gridRow
-		for _, aid := range ids {
-			if _, kept := have[aid]; kept && !in.Replace {
+		for _, k := range keys {
+			if _, kept := have[k]; kept && !in.Replace {
 				continue
 			}
-			row := gridRow{accountID: aid}
+			if k.dept != 0 && !names[k.dept].active { // the actuals of a department that is switched off go to no department's row
+				continue
+			}
+			row := gridRow{accountID: k.account, departmentID: k.dept}
 			zero := true
-			for m, v := range actual[aid] {
+			for m, v := range actual[k] {
 				row.amounts[m] = v.Mul(factor).Round(decimals)
 				zero = zero && row.amounts[m].IsZero()
 			}
