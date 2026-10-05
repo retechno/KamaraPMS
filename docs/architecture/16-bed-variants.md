@@ -7,6 +7,7 @@ Decisions of the owner (2026-10-06):
 1. **A variant is the bed type of the room** (`rooms.bed_type_id`, the catalogue of `bed_types`): a room type is sold as "Deluxe King" or "Deluxe Twin" according to the rooms of the type that have that bed. No bed counts.
 2. **Price**: the room type keeps its price in the rate grid; a variant may add a **fixed amount or a percentage per night, per rate plan** (nothing = the same price). The rate grid is not multiplied.
 3. **Stock**: availability is counted **per room type and per variant**. A reservation line asks for a variant, **locked** (it takes a room with that bed and uses the stock of the variant), or for **no preference** (it takes any room of the type and uses the stock of the type only).
+4. **In the configuration of a room, the room type and the bed type are both required.** A room cannot be saved without a bed type, so every room belongs to exactly one variant. (The request of a reservation line stays optional: "no preference" is a choice.)
 
 ## Today (read from the code)
 
@@ -35,6 +36,7 @@ for the type as a whole:       fixed + locked + any  <=  R           (the existi
 - `reservation_rooms.bed_locked boolean NOT NULL DEFAULT false`; CHECK `NOT bed_locked OR requested_bed_type_id IS NOT NULL`. Every existing request stays soft (`false`): nothing already booked changes meaning.
 - `rate_plan_bed_adjustments` (per rate plan, room type and bed type): `adjust_kind` AMOUNT or PERCENT, `amount numeric(18,3)` (a percentage may be negative; both may lower the price down to 0), `effective_from`. A row is never changed: a new figure is a new row from a later date (like the fee rules). The room type and the bed type are composite foreign keys with the property; unique `(rate_plan_id, room_type_id, bed_type_id, effective_from)`. No row, or an amount of 0, means the same price.
 - `reservation_room_rates` keeps what each night was priced at (the snapshot exists): a night of a locked line also keeps `bed_adjustment` (the amount added), so the price of a night never moves with a later change of an adjustment.
+- **`rooms.bed_type_id` becomes `NOT NULL`** (decision 4). The migration first gives every room that has none the first active bed type of its property by the sort order of the catalogue (the catalogue of 00037 starts with King), and then sets the constraint; the number of rooms it filled is reported in the migration log and in the audit trail (`room.bed_type_defaulted`), and Setup shows no list of them because there is nothing left to find: the owner reviews the rooms after the migration. The Down drops the constraint only.
 - Guard: a room's bed type is changed through the service (see below), never to a bed that leaves demand unmatched.
 
 ## Engine (`internal/availability`)
@@ -42,6 +44,13 @@ for the type as a whole:       fixed + locked + any  <=  R           (the existi
 - New `BedNights`/`BedInventory` replace the current one: per room type, bed type and night: `sellable` (R_B), `fixed`, `locked`, `available_bed = min(R_B - fixed - locked, available_type)`. Queries count fixed from stays and assigned CONFIRMED lines by the bed of the room, locked from CONFIRMED lines without a room (`bed_locked`).
 - `Extra` gets a second dimension: demand per (type, bed, night) next to per (type, night); `FindShortfalls` tests both lines above and a `Shortfall` carries the bed (`bed_type_id`, absent for the type line). `RequireAvailable` answers 409 `ROOM_TYPE_NOT_AVAILABLE` (the type) or the new 409 `BED_NOT_AVAILABLE` (the variant), with the nights.
 - `RemovalShortfalls`, `BlockShortfalls` and the change of a room's bed type test the bed lines too: a room leaving the stock of its bed (deactivated, moved to another type, blocked, given another bed) must not make a variant oversold.
+
+## Rooms (`internal/rooms`)
+
+- **Create and update a room**: `room_type_id` and `bed_type_id` are required (422 `REQUIRED` on the field; 422 `BED_TYPE_INACTIVE` for a bed switched off, as today). The update that gave `0` to clear the bed (`PATCH bed_type_id: 0`) is no longer accepted (422 `REQUIRED`): a room's bed can be changed, not removed. A bed type that rooms have can still be switched off: that only stops new use, as today, and the rooms keep it.
+- **Changing the bed type of a room** is an operation of the inventory: it moves the room between variants, so it is refused when it would leave a variant oversold on a night from the business date on (409 `BED_NOT_AVAILABLE`, with the nights), and it takes the same locks as moving a room to another type.
+- The room form and the room list show both as required fields; the import or the seed of rooms (`pms-seed rooms`) always gives a bed. Tests and fixtures that create rooms give them a bed type (the helper of the test setup takes one, the first of the catalogue by default).
+- Because every room has a bed, the engine has no "room without a bed": a fixed demand always counts in a bed line, and a type whose rooms all have one bed offers one variant.
 
 ## Reservations (`internal/reservations`)
 
@@ -84,7 +93,7 @@ No new lock level: the writers already hold the business day, the room types and
 
 ## Order of building (after approval, one commit per step)
 
-1. Migration 00057, constraint mappings, schema tests; `bed_locked` through the line (create, add, amend, views) without effect on stock yet; the adjustment table with its API.
+1. Migration 00057 (the bed type of a room required, `bed_locked`, the adjustment table), constraint mappings, schema tests; the rooms service and screens requiring the bed type; the fixtures and the seed giving rooms a bed; `bed_locked` through the line (create, add, amend, views) without effect on stock yet; the adjustment table with its API.
 2. The engine: bed lines in `Inventory`/`Extra`/`FindShortfalls`, the guards for blocks, removals and a change of a room's bed, and the random matching test.
 3. Reservations: `checkHolds` with the bed demand, assignment and check-in rules, room moves, unlocking.
 4. Price: the adjustments in the pricing of a line, the snapshot per night, the override order.
@@ -97,6 +106,6 @@ Bed counts per room type (1 King or 2 Twin); a variant with a rate grid of its o
 
 ## Points to confirm
 
-- A room with **no bed type** can take only soft and "any" demand; a locked variant never lands in it. Properties that have not given their rooms a bed behave exactly as today (no variant is offered).
+- **Every room has a bed type** (decision 4), so the migration fills the rooms that have none with the first active bed type of the property and says how many; check them afterwards. A type whose rooms all share one bed offers one variant, which is the same as the type.
 - A **walk-in** and a check-in of a line with no lock may take any room, as today.
 - The adjustment is **per rate plan and room type and bed type** (rows from a date); nothing is inherited between plans.
