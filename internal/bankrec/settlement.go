@@ -11,7 +11,9 @@ import (
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/taxfiling"
 )
 
 // Settlement account keys: the clearing accounts that guest payments by card and by e-wallet are posted to until the
@@ -125,33 +127,9 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		if clearing == ba.AccountID {
 			return apperr.Invalid("the settlement is invalid", fieldErr("account_key", "SAME_ACCOUNT", "the bank account is the clearing account itself"))
 		}
-		gross := decimal.Zero
-		seen := map[int64]bool{}
-		items := make([]bankrecdb.GetJournalLineRow, 0, len(in.JournalLineIDs))
-		for i, id := range in.JournalLineIDs {
-			at := fmt.Sprintf("journal_line_ids[%d]", i)
-			if seen[id] {
-				return apperr.Invalid("the settlement is invalid", fieldErr(at, "DUPLICATE", "the payment line is listed twice"))
-			}
-			seen[id] = true
-			jl, err := q.GetJournalLine(ctx, bankrecdb.GetJournalLineParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
-			switch {
-			case isNoRows(err):
-				return apperr.Invalid("the settlement is invalid", fieldErr(at, "NOT_FOUND", "no such journal line in this property"))
-			case err != nil:
-				return err
-			case jl.AccountID != clearing:
-				return apperr.Invalid("the settlement is invalid", fieldErr(at, "NOT_CLEARING_ACCOUNT", "the journal line is not on the "+strings.ToLower(strings.ReplaceAll(in.AccountKey, "_", " "))+" account"))
-			case jl.JournalDate.After(st.PeriodTo):
-				return apperr.Invalid("the settlement is invalid", fieldErr(at, "AFTER_STATEMENT", "the journal line is dated after the end of the statement"))
-			}
-			if used, err := q.IsSettledOrSettling(ctx, id); err != nil {
-				return err
-			} else if used {
-				return apperr.Conflict("ALREADY_SETTLED", "the payment line is settled already").WithContext("journal_line_id", id)
-			}
-			gross = gross.Add(jl.Amount)
-			items = append(items, jl)
+		items, gross, err := s.settlementItems(ctx, q, p.TenantID, propertyID, st.PeriodTo, clearing, in.AccountKey, in.JournalLineIDs)
+		if err != nil {
+			return err
 		}
 		net := line.Amount
 		fee := gross.Sub(net)
@@ -161,9 +139,41 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		case fee.IsNegative():
 			return apperr.Invalid("the settlement is invalid", fieldErr("journal_line_ids", "NET_EXCEEDS_GROSS", "the bank paid "+net.String()+", more than the "+gross.String()+" of the payments chosen"))
 		}
-		if fee.IsPositive() {
+		// What the bank kept is the MDR and the VAT on it. The payments settled say what they expected; the system proposes the split, the user may give the final VAT, and the final MDR is the rest.
+		prop, err := s.days.GetProperty(ctx, propertyID)
+		if err != nil {
+			return err
+		}
+		exp, err := s.expectationOf(ctx, p.TenantID, propertyID, in.JournalLineIDs)
+		if err != nil {
+			return err
+		}
+		proposed := proposeVAT(fee, exp, prop.CurrencyDecimals)
+		vat, err := finalVAT(in.VATAmount, proposed, fee, prop.CurrencyDecimals)
+		if err != nil {
+			return err
+		}
+		// The VAT is treated as the property treats it on the date of the line, and that is written to the settlement for good.
+		var treatment string
+		var inputVAT int64
+		if vat.IsPositive() {
+			if treatment, err = s.vatTreatmentOn(ctx, p.TenantID, propertyID, line.LineDate); err != nil {
+				return err
+			}
+			if treatment != taxfiling.InputVATExpense {
+				if inputVAT, err = po.SystemAccount(ctx, accounting.KeyInputVAT); err != nil {
+					return err
+				}
+			}
+		}
+		mdr := fee.Sub(vat)
+		commission := mdr // an EXPENSE VAT is part of the cost: it is booked with the commission
+		if treatment == taxfiling.InputVATExpense {
+			commission = fee
+		}
+		if commission.IsPositive() {
 			if in.FeeAccountID == 0 {
-				return apperr.Invalid("the settlement is invalid", fieldErr("fee_account_id", "REQUIRED", "choose the account for the commission of "+fee.String()))
+				return apperr.Invalid("the settlement is invalid", fieldErr("fee_account_id", "REQUIRED", "choose the account for the commission of "+commission.String()))
 			}
 			if in.FeeAccountID == ba.AccountID || in.FeeAccountID == clearing {
 				return apperr.Invalid("the settlement is invalid", fieldErr("fee_account_id", "SAME_ACCOUNT", "the commission is not the bank or the clearing account"))
@@ -189,8 +199,11 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 			ref = fmt.Sprintf("ST%d-%d", statementID, line.LineNo)
 		}
 		jlines := []accounting.SystemLine{{AccountID: ba.AccountID, Debit: net, Description: desc, SourceType: "SETTLEMENT", SourceRef: ref}}
-		if fee.IsPositive() {
-			jlines = append(jlines, accounting.SystemLine{AccountID: in.FeeAccountID, DepartmentID: in.DepartmentID, Debit: fee, Description: "Commission: " + desc, SourceType: "SETTLEMENT", SourceRef: ref})
+		if commission.IsPositive() {
+			jlines = append(jlines, accounting.SystemLine{AccountID: in.FeeAccountID, DepartmentID: in.DepartmentID, Debit: commission, Description: "Commission: " + desc, SourceType: "SETTLEMENT", SourceRef: ref})
+		}
+		if vat.IsPositive() && treatment != taxfiling.InputVATExpense {
+			jlines = append(jlines, accounting.SystemLine{AccountID: inputVAT, Debit: vat, Description: "VAT on the commission: " + desc, SourceType: "SETTLEMENT", SourceRef: ref})
 		}
 		jlines = append(jlines, accounting.SystemLine{AccountID: clearing, Credit: gross, Description: desc, SourceType: "SETTLEMENT", SourceRef: ref})
 		jid, jnum, err := po.Post(ctx, accounting.SystemJournal{Type: accounting.JournalBank, Date: line.LineDate, Description: "Bank: " + desc, Reference: ref, Lines: jlines})
@@ -205,16 +218,19 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		if err != nil {
 			return err
 		}
-		expectedFee, known, err := s.expectedFeeOf(ctx, p.TenantID, propertyID, in.JournalLineIDs)
-		if err != nil {
-			return err
+		var expectedMDR, expectedVAT *decimal.Decimal // what the payments expected, when every one of them kept a snapshot
+		if exp.known {
+			m, v := exp.mdr, exp.vat
+			expectedMDR, expectedVAT = &m, &v
 		}
-		var expected *decimal.Decimal // the fee the payments expected, when every one of them kept a snapshot
-		if known {
-			expected = &expectedFee
+		var frozen *string // the treatment of the VAT, written once
+		if vat.IsPositive() {
+			frozen = &treatment
 		}
 		sid, err := q.InsertSettlement(ctx, bankrecdb.InsertSettlementParams{
-			TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: ba.ID, AccountKey: in.AccountKey, JournalID: jid, Gross: gross, Net: net, Fee: fee, ExpectedMdr: expected, Reference: nullable(ref), ActorID: p.ActorID(),
+			TenantID: p.TenantID, PropertyID: propertyID, BankAccountID: ba.ID, AccountKey: in.AccountKey, JournalID: jid, Gross: gross, Net: net, Fee: fee, VatAmount: vat, VatTreatment: frozen,
+			ExpectedMdr: expectedMDR, ExpectedVat: expectedVAT, ProposedVat: proposed, MdrRate: exp.mdrRate, VatRate: exp.vatRate, PaymentsWithoutVatRate: int32(exp.withoutVATRate), //nolint:gosec // G115: a count of payment lines
+			Reference: nullable(ref), ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -231,10 +247,45 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.settled", "bank_statement", statementID, nil,
-			map[string]any{"line": line.LineNo, "key": in.AccountKey, "gross": gross.String(), "net": net.String(), "fee": fee.String(), "expected_mdr": expected, "payments": len(items), "journal": jnum}))
+			map[string]any{"line": line.LineNo, "key": in.AccountKey, "gross": gross.String(), "net": net.String(), "fee": fee.String(), "mdr": mdr.String(), "vat": vat.String(), "vat_treatment": treatment,
+				"proposed_vat": proposed.String(), "expected_mdr": expectedMDR, "expected_vat": expectedVAT, "payments": len(items), "journal": jnum}))
 	})
 	if err != nil {
 		return StatementDetail{}, err
 	}
 	return s.loadDetail(ctx, p.TenantID, propertyID, statementID)
+}
+
+// settlementItems reads the payment lines a settlement settles and adds them up: each is on the clearing account of the method, not after the end of the statement,
+// and not settled yet. The same checks serve the preview and the settlement.
+func (s *Service) settlementItems(ctx context.Context, q *bankrecdb.Queries, tenantID, propertyID int64, periodTo civil.Date, clearing int64, accountKey string, ids []int64) ([]bankrecdb.GetJournalLineRow, decimal.Decimal, error) {
+	gross := decimal.Zero
+	seen := map[int64]bool{}
+	items := make([]bankrecdb.GetJournalLineRow, 0, len(ids))
+	for i, id := range ids {
+		at := fmt.Sprintf("journal_line_ids[%d]", i)
+		if seen[id] {
+			return nil, gross, apperr.Invalid("the settlement is invalid", fieldErr(at, "DUPLICATE", "the payment line is listed twice"))
+		}
+		seen[id] = true
+		jl, err := q.GetJournalLine(ctx, bankrecdb.GetJournalLineParams{TenantID: tenantID, PropertyID: propertyID, ID: id})
+		switch {
+		case isNoRows(err):
+			return nil, gross, apperr.Invalid("the settlement is invalid", fieldErr(at, "NOT_FOUND", "no such journal line in this property"))
+		case err != nil:
+			return nil, gross, err
+		case jl.AccountID != clearing:
+			return nil, gross, apperr.Invalid("the settlement is invalid", fieldErr(at, "NOT_CLEARING_ACCOUNT", "the journal line is not on the "+strings.ToLower(strings.ReplaceAll(accountKey, "_", " "))+" account"))
+		case jl.JournalDate.After(periodTo):
+			return nil, gross, apperr.Invalid("the settlement is invalid", fieldErr(at, "AFTER_STATEMENT", "the journal line is dated after the end of the statement"))
+		}
+		if used, err := q.IsSettledOrSettling(ctx, id); err != nil {
+			return nil, gross, err
+		} else if used {
+			return nil, gross, apperr.Conflict("ALREADY_SETTLED", "the payment line is settled already").WithContext("journal_line_id", id)
+		}
+		gross = gross.Add(jl.Amount)
+		items = append(items, jl)
+	}
+	return items, gross, nil
 }

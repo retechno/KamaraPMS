@@ -134,6 +134,8 @@ func Setup(t *testing.T) *Env {
 	fo.SetShiftGate(sh)
 	cl.SetShiftGate(sh)
 	na.SetShiftChecker(sh)
+	br := bankrec.NewService(txm, c, aw, authz, ten, acct, ia)
+	br.SetTax(taxSvc)
 	bud := budget.NewService(txm, c, aw, authz, ten, ia)
 	docs := documents.NewService(c, ten, fo, fd, rs, gs, cl, co, acct, taxSvc, taxInv)
 	docs.SetBudget(bud)
@@ -141,7 +143,7 @@ func Setup(t *testing.T) *Env {
 	bud.SetDepartments(dept)
 	return &Env{Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
-		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: bankrec.NewService(txm, c, aw, authz, ten, acct, ia), Tax: taxSvc}
+		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: br, Tax: taxSvc}
 }
 
 // Admin returns a context authenticated as the tenant administrator.

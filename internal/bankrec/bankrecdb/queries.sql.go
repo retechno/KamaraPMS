@@ -36,6 +36,28 @@ func (q *Queries) AccountEligible(ctx context.Context, arg AccountEligibleParams
 	return i, err
 }
 
+const accountLabel = `-- name: AccountLabel :one
+SELECT code::text AS code, name::text AS name FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type AccountLabelParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type AccountLabelRow struct {
+	Code string
+	Name string
+}
+
+func (q *Queries) AccountLabel(ctx context.Context, arg AccountLabelParams) (AccountLabelRow, error) {
+	row := q.db.QueryRow(ctx, accountLabel, arg.TenantID, arg.PropertyID, arg.ID)
+	var i AccountLabelRow
+	err := row.Scan(&i.Code, &i.Name)
+	return i, err
+}
+
 const bookBalance = `-- name: BookBalance :one
 SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS balance
 FROM gl_journal_lines l
@@ -392,23 +414,32 @@ func (q *Queries) InsertClearing(ctx context.Context, arg InsertClearingParams) 
 }
 
 const insertSettlement = `-- name: InsertSettlement :one
-INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_mdr, reference, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate,
+                              payments_without_vat_rate, reference, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18)
 RETURNING id
 `
 
 type InsertSettlementParams struct {
-	TenantID      int64
-	PropertyID    int64
-	BankAccountID int64
-	AccountKey    string
-	JournalID     int64
-	Gross         decimal.Decimal
-	Net           decimal.Decimal
-	Fee           decimal.Decimal
-	ExpectedMdr   *decimal.Decimal
-	Reference     *string
-	ActorID       *int64
+	TenantID               int64
+	PropertyID             int64
+	BankAccountID          int64
+	AccountKey             string
+	JournalID              int64
+	Gross                  decimal.Decimal
+	Net                    decimal.Decimal
+	Fee                    decimal.Decimal
+	VatAmount              decimal.Decimal
+	VatTreatment           *string
+	ExpectedMdr            *decimal.Decimal
+	ExpectedVat            *decimal.Decimal
+	ProposedVat            decimal.Decimal
+	MdrRate                *decimal.Decimal
+	VatRate                *decimal.Decimal
+	PaymentsWithoutVatRate int32
+	Reference              *string
+	ActorID                *int64
 }
 
 func (q *Queries) InsertSettlement(ctx context.Context, arg InsertSettlementParams) (int64, error) {
@@ -421,7 +452,14 @@ func (q *Queries) InsertSettlement(ctx context.Context, arg InsertSettlementPara
 		arg.Gross,
 		arg.Net,
 		arg.Fee,
+		arg.VatAmount,
+		arg.VatTreatment,
 		arg.ExpectedMdr,
+		arg.ExpectedVat,
+		arg.ProposedVat,
+		arg.MdrRate,
+		arg.VatRate,
+		arg.PaymentsWithoutVatRate,
 		arg.Reference,
 		arg.ActorID,
 	)
@@ -803,7 +841,8 @@ func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([
 }
 
 const listSettlements = `-- name: ListSettlements :many
-SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_mdr, s.reference, s.created_at, j.journal_date, j.journal_number,
+SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.mdr_amount::numeric AS mdr_amount, s.vat_amount, s.vat_treatment, s.expected_mdr, s.expected_vat, s.proposed_vat, s.mdr_rate, s.vat_rate,
+       s.payments_without_vat_rate, s.reference, s.created_at, j.journal_date, j.journal_number,
        (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
@@ -820,18 +859,26 @@ type ListSettlementsParams struct {
 }
 
 type ListSettlementsRow struct {
-	ID            int64
-	BankAccountID int64
-	AccountKey    string
-	Gross         decimal.Decimal
-	Net           decimal.Decimal
-	Fee           decimal.Decimal
-	ExpectedMdr   *decimal.Decimal
-	Reference     *string
-	CreatedAt     time.Time
-	JournalDate   civil.Date
-	JournalNumber string
-	Payments      int32
+	ID                     int64
+	BankAccountID          int64
+	AccountKey             string
+	Gross                  decimal.Decimal
+	Net                    decimal.Decimal
+	Fee                    decimal.Decimal
+	MdrAmount              decimal.Decimal
+	VatAmount              decimal.Decimal
+	VatTreatment           *string
+	ExpectedMdr            *decimal.Decimal
+	ExpectedVat            *decimal.Decimal
+	ProposedVat            decimal.Decimal
+	MdrRate                *decimal.Decimal
+	VatRate                *decimal.Decimal
+	PaymentsWithoutVatRate int32
+	Reference              *string
+	CreatedAt              time.Time
+	JournalDate            civil.Date
+	JournalNumber          string
+	Payments               int32
 }
 
 func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams) ([]ListSettlementsRow, error) {
@@ -855,7 +902,15 @@ func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams
 			&i.Gross,
 			&i.Net,
 			&i.Fee,
+			&i.MdrAmount,
+			&i.VatAmount,
+			&i.VatTreatment,
 			&i.ExpectedMdr,
+			&i.ExpectedVat,
+			&i.ProposedVat,
+			&i.MdrRate,
+			&i.VatRate,
+			&i.PaymentsWithoutVatRate,
 			&i.Reference,
 			&i.CreatedAt,
 			&i.JournalDate,

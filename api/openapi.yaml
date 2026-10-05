@@ -6539,6 +6539,31 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lineId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: previewSettlement
+      summary: The split of the deduction the system would propose for the payment lines chosen (bank.view)
+      description: "Writes nothing. The deduction is what the bank kept (the payments less the line). The system proposes the VAT in it: when every payment has the same VAT rate v, `deduction x v / (100 + v)`; with different rates, or payments without a VAT rate, in proportion to the expected VAT and the expected MDR of the payments (a payment without a VAT rate expects none and is counted in `without_vat_rate`); 0 when nothing is expected. The MDR proposed is the deduction less the VAT, so the two add up exactly. `vat_treatment` is what a settlement with VAT would freeze on the date of the line (the PKP status of the property that day), and `input_vat_account` the account the VAT would go to (none for EXPENSE). 422 `NET_EXCEEDS_GROSS`, `NOT_MONEY_IN`."
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettlementPreviewRequest" }
+      responses:
+        "200":
+          description: The proposed split.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettlementPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/tax/settings:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -7366,8 +7391,8 @@ components:
         email: { type: string, maxLength: 254, description: Printed on documents. }
         tax_id: { type: string, maxLength: 40, description: "Tax registration number printed on invoices (for example NPWP)." }
         document_footer: { type: string, maxLength: 500, description: A line printed at the foot of every document. }
-        timezone: { type: string, description: IANA time zone, examples: [Asia/Jakarta] }
-        currency_code: { type: string, description: ISO 4217, examples: [IDR] }
+        timezone: { type: string, description: "IANA time zone, examples: [Asia/Jakarta]" }
+        currency_code: { type: string, description: "ISO 4217, examples: [IDR]" }
         currency_decimals: { type: integer, minimum: 0, maximum: 3 }
         check_in_time: { $ref: "#/components/schemas/TimeOfDay" }
         check_out_time: { $ref: "#/components/schemas/TimeOfDay" }
@@ -10005,7 +10030,7 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }
     CardSettlement:
       type: object
-      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, expected_mdr, mdr_variance, payments, created_at]
+      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, mdr_amount, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate, payments_without_vat_rate, mdr_variance, vat_variance, payments, created_at]
       properties:
         id: { type: integer, format: int64 }
         bank_account_id: { type: integer, format: int64 }
@@ -10014,8 +10039,17 @@ components:
         journal_number: { type: string }
         gross: { type: string }
         net: { type: string }
-        fee: { type: string }
+        fee: { type: string, description: "What the bank kept (gross less net): the MDR and the VAT booked, `fee = mdr_amount + vat_amount`." }
+        mdr_amount: { type: string, description: The MDR as booked (the fee less the VAT), frozen with the settlement. }
+        vat_amount: { type: string, description: The final VAT as booked, frozen with the settlement. }
+        vat_treatment: { type: [string, "null"], enum: [CREDITABLE, EXPENSE, DEFERRED, null], description: Frozen on the date of the statement line; null when the VAT is 0. }
         expected_mdr: { type: [string, "null"], description: Null when a payment of the settlement had no snapshot. }
+        expected_vat: { type: [string, "null"], description: Null when a payment of the settlement had no snapshot; a payment without a VAT rate counts 0. }
+        proposed_vat: { type: string, description: The VAT the system proposed, kept to show an override. }
+        mdr_rate: { type: [string, "null"], description: The MDR rate when every payment had the same one. }
+        vat_rate: { type: [string, "null"], description: The VAT rate when every payment had one and it was the same. }
+        payments_without_vat_rate: { type: integer }
+        vat_variance: { type: [string, "null"], description: "The VAT booked less the VAT expected; null when a payment had no snapshot." }
         mdr_variance: { type: [string, "null"], description: "The MDR taken less the MDR expected: positive is more than expected." }
         payments: { type: integer }
         reference: { type: string }
@@ -12367,7 +12401,42 @@ components:
         journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
         fee_account_id: { type: integer, format: int64, description: The account for the commission; needed when the payments add up to more than the line. }
         department_id: { type: [integer, "null"], format: int64, description: "The department of the commission expense, when it belongs to one." }
+        vat_amount: { type: [string, "null"], description: "The final VAT inside what the bank kept (the gross less the line). Absent: the VAT proposed from the payments is used (see settlement-preview). Present, also \"0\": it is final; between 0 and the deduction (422 `VAT_EXCEEDS_DEDUCTION`). The MDR booked is the deduction less the VAT. The VAT is booked as the property treats input VAT on the date of the line (CREDITABLE and DEFERRED to input VAT 1425, EXPENSE with the commission) and the treatment is frozen on the settlement; a settlement posted is final." }
         description: { type: string, maxLength: 300 }
+    SettlementPreviewRequest:
+      type: object
+      required: [account_key, journal_line_ids]
+      additionalProperties: false
+      properties:
+        account_key: { type: string, enum: [CARD, OTHER_PAYMENT] }
+        journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
+    SettlementPreview:
+      type: object
+      required: [statement_line_id, account_key, gross, net, deduction, expected_mdr, expected_vat, proposed_vat, proposed_mdr, mdr_rate, vat_rate, without_vat_rate, without_rate, vat_treatment, input_vat_account]
+      properties:
+        statement_line_id: { type: integer, format: int64 }
+        account_key: { type: string }
+        gross: { type: string }
+        net: { type: string, description: The line of the statement. }
+        deduction: { type: string, description: "The gross less the net: what the bank kept." }
+        expected_mdr: { type: [string, "null"], description: Null when a payment had no snapshot. }
+        expected_vat: { type: [string, "null"], description: Null when a payment had no snapshot; a payment without a VAT rate counts 0. }
+        proposed_vat: { type: string }
+        proposed_mdr: { type: string, description: The deduction less the proposed VAT. }
+        mdr_rate: { type: [string, "null"], description: The MDR rate when every payment has the same one. }
+        vat_rate: { type: [string, "null"], description: The VAT rate when every payment has one and it is the same. }
+        without_vat_rate: { type: integer, description: Payments with an MDR snapshot and no VAT rate. }
+        without_rate: { type: integer, description: Payments with no snapshot at all. }
+        vat_treatment: { type: string, enum: [CREDITABLE, EXPENSE, DEFERRED] }
+        input_vat_account:
+          oneOf:
+            - type: object
+              required: [id, code, name]
+              properties:
+                id: { type: integer, format: int64 }
+                code: { type: string }
+                name: { type: string }
+            - type: "null"
     InputVatTreatment:
       type: string
       enum: [CREDITABLE, EXPENSE, DEFERRED]

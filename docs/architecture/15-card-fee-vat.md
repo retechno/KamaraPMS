@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename) and 2 (rules, snapshots, expected report and proposal) are built; steps 3 to 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) and 3 (preview, settle, the settlements list) are built; steps 4 and 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -128,9 +128,17 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 
 1. Migration 00056, constraint mappings, the DB tests, the rename `expected_fee` to `expected_mdr`. **Built.**
 2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal. **Built.**
-3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list.
+3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list. **Built** (see "Built in step 3" below).
 4. The claims on the VAT return.
 5. OpenAPI, the front end, the documents (README, `06-api.md`, the feature map), the full checks, one commit per step.
+
+## Built in step 3
+
+- `SettleInput.VATAmount` (`vat_amount`, optional) and `POST .../settlement-preview` as in section 7; `SettlementRow` has the frozen figures and the two variances. The checks of the payment lines are shared by the preview and the settle (`settlementItems`).
+- **The commission account is needed only when there is a commission to book** (`commission > 0`): a deduction that is all VAT and booked to input VAT (CREDITABLE or DEFERRED) needs no commission account. For EXPENSE the commission is the whole deduction.
+- `payments_without_vat_rate` and the preview's `without_vat_rate` count the payments that have an MDR snapshot and no VAT rate (like the expected report); the payments with no snapshot at all are in the preview's `without_rate`. A payment with no snapshot at all counts 0 in the expected figures, and then the expected MDR and VAT of the settlement are null.
+- The VAT treatment is read with `SettingsOnDate` (a share lock on the tax settings, after the bank account in the lock order), so the preview runs in a transaction too.
+- The settlement still has no void: `Unclear` removes only the matching.
 
 ## Not in this scope
 

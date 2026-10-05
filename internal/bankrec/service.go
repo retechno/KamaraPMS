@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
 )
 
@@ -32,7 +33,11 @@ type Service struct {
 	days  *tenancy.Service
 	acct  *accounting.Service
 	iam   *iam.Service
+	tax   *taxfiling.Service // the VAT treatment of the property on the date of a settlement
 }
+
+// SetTax gives the service the tax service, for the VAT treatment that a settlement freezes.
+func (s *Service) SetTax(t *taxfiling.Service) { s.tax = t }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, acct *accounting.Service, iamSvc *iam.Service) *Service {

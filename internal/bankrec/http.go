@@ -34,6 +34,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/adjust", httpx.HandlerFunc(h.adjust))
 	mux.Handle("GET "+p+"/statements/{id}/settlement-lines", httpx.HandlerFunc(h.settlementLines))
 	mux.Handle("GET "+p+"/statements/{id}/lines/{lineId}/settlement-proposal", httpx.HandlerFunc(h.settlementProposal))
+	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/settlement-preview", httpx.HandlerFunc(h.settlementPreview))
 	mux.Handle("GET "+p+"/card-fee-rules", httpx.HandlerFunc(h.feeRules))
 	mux.Handle("POST "+p+"/card-fee-rules", httpx.HandlerFunc(h.createFeeRule))
 	mux.Handle("GET "+p+"/card-settlements/expected", httpx.HandlerFunc(h.expectedSettlements))
@@ -319,6 +320,26 @@ func (h *Handler) settle(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) settlementPreview(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := statementPath(r)
+	if err != nil {
+		return err
+	}
+	lid, err := pathID(r, "lineId", apperr.NotFound("STATEMENT_LINE_NOT_FOUND", "the line does not exist in this statement"))
+	if err != nil {
+		return err
+	}
+	var in SettleInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	pv, err := h.svc.SettlementPreview(r.Context(), pid, id, lid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, pv)
 }
 
 func (h *Handler) settlementProposal(w http.ResponseWriter, r *http.Request) error {

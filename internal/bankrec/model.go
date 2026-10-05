@@ -168,8 +168,10 @@ type SettleInput struct {
 	AccountKey     string  `json:"account_key"`
 	JournalLineIDs []int64 `json:"journal_line_ids"`
 	FeeAccountID   int64   `json:"fee_account_id"`
-	DepartmentID   *int64  `json:"department_id"` // of the commission expense, when it belongs to one
-	Description    string  `json:"description"`
+	// VATAmount is the final VAT in the deduction of the bank, the part the acquirer charged on its commission. Absent: the VAT proposed from the payments settled is used. Present (also "0"): it is final.
+	VATAmount    *string `json:"vat_amount"`
+	DepartmentID *int64  `json:"department_id"` // of the commission expense, when it belongs to one
+	Description  string  `json:"description"`
 }
 
 // AdjustInput posts what the bank shows and the books lack (a bank fee, interest) against another account.

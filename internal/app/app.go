@@ -115,6 +115,7 @@ func New(d Deps) *App {
 	maintenanceSvc := maintenance.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomsSvc)
 	payablesSvc := payables.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc, taxSvc)
 	bankrecSvc := bankrec.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, iamSvc)
+	bankrecSvc.SetTax(taxSvc)
 	lostFoundSvc := lostfound.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	groupsSvc := groups.NewService(d.TxManager, auditWriter, authz, tenancySvc)
 	shiftsSvc := shifts.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc, accountingSvc)

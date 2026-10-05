@@ -190,8 +190,10 @@ LIMIT @row_limit;
 SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = @line_id OR settling_line_id = @line_id)::boolean;
 
 -- name: InsertSettlement :one
-INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, expected_mdr, reference, created_by)
-VALUES (@tenant_id, @property_id, @bank_account_id, @account_key, @journal_id, @gross, @net, @fee, sqlc.narg(expected_mdr), sqlc.narg(reference), sqlc.narg(actor_id))
+INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate,
+                              payments_without_vat_rate, reference, created_by)
+VALUES (@tenant_id, @property_id, @bank_account_id, @account_key, @journal_id, @gross, @net, @fee, @vat_amount, sqlc.narg(vat_treatment), sqlc.narg(expected_mdr), sqlc.narg(expected_vat), @proposed_vat,
+        sqlc.narg(mdr_rate), sqlc.narg(vat_rate), @payments_without_vat_rate, sqlc.narg(reference), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: InsertSettlementItem :exec
@@ -227,8 +229,12 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND receipt_number =
 -- name: JournalLineRefs :many
 SELECT id, COALESCE(source_ref, '')::text AS source_ref FROM gl_journal_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
 
+-- name: AccountLabel :one
+SELECT code::text AS code, name::text AS name FROM gl_accounts WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
 -- name: ListSettlements :many
-SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.expected_mdr, s.reference, s.created_at, j.journal_date, j.journal_number,
+SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.mdr_amount::numeric AS mdr_amount, s.vat_amount, s.vat_treatment, s.expected_mdr, s.expected_vat, s.proposed_vat, s.mdr_rate, s.vat_rate,
+       s.payments_without_vat_rate, s.reference, s.created_at, j.journal_date, j.journal_number,
        (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id

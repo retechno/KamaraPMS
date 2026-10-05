@@ -5739,6 +5739,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The split of the deduction the system would propose for the payment lines chosen (bank.view)
+         * @description Writes nothing. The deduction is what the bank kept (the payments less the line). The system proposes the VAT in it: when every payment has the same VAT rate v, `deduction x v / (100 + v)`; with different rates, or payments without a VAT rate, in proportion to the expected VAT and the expected MDR of the payments (a payment without a VAT rate expects none and is counted in `without_vat_rate`); 0 when nothing is expected. The MDR proposed is the deduction less the VAT, so the two add up exactly. `vat_treatment` is what a settlement with VAT would freeze on the date of the line (the PKP status of the property that day), and `input_vat_account` the account the VAT would go to (none for EXPENSE). 422 `NET_EXCEEDS_GROSS`, `NOT_MONEY_IN`.
+         */
+        post: operations["previewSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/tax/settings": {
         parameters: {
             query?: never;
@@ -6429,15 +6453,9 @@ export interface components {
             tax_id?: string;
             /** @description A line printed at the foot of every document. */
             document_footer?: string;
-            /**
-             * @description IANA time zone
-             * @example Asia/Jakarta
-             */
+            /** @description IANA time zone, examples: [Asia/Jakarta] */
             timezone: string;
-            /**
-             * @description ISO 4217
-             * @example IDR
-             */
+            /** @description ISO 4217, examples: [IDR] */
             currency_code: string;
             currency_decimals: number;
             check_in_time: components["schemas"]["TimeOfDay"];
@@ -9062,9 +9080,30 @@ export interface components {
             journal_number: string;
             gross: string;
             net: string;
+            /** @description What the bank kept (gross less net): the MDR and the VAT booked, `fee = mdr_amount + vat_amount`. */
             fee: string;
+            /** @description The MDR as booked (the fee less the VAT) */
+            mdr_amount: string;
+            /** @description The final VAT as booked */
+            vat_amount: string;
+            /**
+             * @description Frozen on the date of the statement line; null when the VAT is 0.
+             * @enum {string|null}
+             */
+            vat_treatment: "CREDITABLE" | "EXPENSE" | "DEFERRED" | null;
             /** @description Null when a payment of the settlement had no snapshot. */
             expected_mdr: string | null;
+            /** @description Null when a payment of the settlement had no snapshot; a payment without a VAT rate counts 0. */
+            expected_vat: string | null;
+            /** @description The VAT the system proposed */
+            proposed_vat: string;
+            /** @description The MDR rate when every payment had the same one. */
+            mdr_rate: string | null;
+            /** @description The VAT rate when every payment had one and it was the same. */
+            vat_rate: string | null;
+            payments_without_vat_rate: number;
+            /** @description The VAT booked less the VAT expected; null when a payment had no snapshot. */
+            vat_variance: string | null;
             /** @description The MDR taken less the MDR expected: positive is more than expected. */
             mdr_variance: string | null;
             payments: number;
@@ -11294,7 +11333,47 @@ export interface components {
              * @description The department of the commission expense, when it belongs to one.
              */
             department_id?: number | null;
+            /** @description The final VAT inside what the bank kept (the gross less the line). Absent: the VAT proposed from the payments is used (see settlement-preview). Present, also "0": it is final; between 0 and the deduction (422 `VAT_EXCEEDS_DEDUCTION`). The MDR booked is the deduction less the VAT. The VAT is booked as the property treats input VAT on the date of the line (CREDITABLE and DEFERRED to input VAT 1425, EXPENSE with the commission) and the treatment is frozen on the settlement; a settlement posted is final. */
+            vat_amount?: string | null;
             description?: string;
+        };
+        SettlementPreviewRequest: {
+            /** @enum {string} */
+            account_key: "CARD" | "OTHER_PAYMENT";
+            journal_line_ids: number[];
+        };
+        SettlementPreview: {
+            /** Format: int64 */
+            statement_line_id: number;
+            account_key: string;
+            gross: string;
+            /** @description The line of the statement. */
+            net: string;
+            /** @description The gross less the net: what the bank kept. */
+            deduction: string;
+            /** @description Null when a payment had no snapshot. */
+            expected_mdr: string | null;
+            /** @description Null when a payment had no snapshot; a payment without a VAT rate counts 0. */
+            expected_vat: string | null;
+            proposed_vat: string;
+            /** @description The deduction less the proposed VAT. */
+            proposed_mdr: string;
+            /** @description The MDR rate when every payment has the same one. */
+            mdr_rate: string | null;
+            /** @description The VAT rate when every payment has one and it is the same. */
+            vat_rate: string | null;
+            /** @description Payments with an MDR snapshot and no VAT rate. */
+            without_vat_rate: number;
+            /** @description Payments with no snapshot at all. */
+            without_rate: number;
+            /** @enum {string} */
+            vat_treatment: "CREDITABLE" | "EXPENSE" | "DEFERRED";
+            input_vat_account: {
+                /** Format: int64 */
+                id: number;
+                code: string;
+                name: string;
+            } | null;
         };
         /**
          * @description How the VAT paid on purchases is treated. CREDITABLE is claimed against the VAT collected (PKP only), EXPENSE is added to the cost of the purchase, DEFERRED is kept apart and not claimed.
@@ -20942,6 +21021,38 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The proposed split. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

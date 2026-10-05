@@ -96,19 +96,30 @@ type Proposal struct {
 
 // SettlementRow is a settlement made, with the fee it was expected to cost.
 type SettlementRow struct {
-	ID            int64            `json:"id"`
-	BankAccountID int64            `json:"bank_account_id"`
-	AccountKey    string           `json:"account_key"`
-	Date          civil.Date       `json:"journal_date"`
-	JournalNumber string           `json:"journal_number"`
-	Gross         decimal.Decimal  `json:"gross"`
-	Net           decimal.Decimal  `json:"net"`
-	Fee           decimal.Decimal  `json:"fee"`
-	ExpectedMDR   *decimal.Decimal `json:"expected_mdr"`
-	MDRVariance   *decimal.Decimal `json:"mdr_variance"`
-	Payments      int              `json:"payments"`
-	Reference     string           `json:"reference,omitempty"`
-	CreatedAt     time.Time        `json:"created_at"`
+	ID            int64           `json:"id"`
+	BankAccountID int64           `json:"bank_account_id"`
+	AccountKey    string          `json:"account_key"`
+	Date          civil.Date      `json:"journal_date"`
+	JournalNumber string          `json:"journal_number"`
+	Gross         decimal.Decimal `json:"gross"`
+	Net           decimal.Decimal `json:"net"`
+	Fee           decimal.Decimal `json:"fee"`
+	// The deduction of the bank is Fee: the MDR and the VAT as they were booked (frozen with the settlement), the VAT treatment of the day, what the payments expected, what the system
+	// proposed, the rates when the payments shared one, and the variances (MDR and VAT booked less expected; null when a payment had no snapshot).
+	MDRAmount              decimal.Decimal  `json:"mdr_amount"`
+	VATAmount              decimal.Decimal  `json:"vat_amount"`
+	VATTreatment           *string          `json:"vat_treatment"`
+	ExpectedMDR            *decimal.Decimal `json:"expected_mdr"`
+	ExpectedVAT            *decimal.Decimal `json:"expected_vat"`
+	ProposedVAT            decimal.Decimal  `json:"proposed_vat"`
+	MDRRate                *string          `json:"mdr_rate"`
+	VATRate                *string          `json:"vat_rate"`
+	PaymentsWithoutVATRate int              `json:"payments_without_vat_rate"`
+	MDRVariance            *decimal.Decimal `json:"mdr_variance"`
+	VATVariance            *decimal.Decimal `json:"vat_variance"`
+	Payments               int              `json:"payments"`
+	Reference              string           `json:"reference,omitempty"`
+	CreatedAt              time.Time        `json:"created_at"`
 }
 
 func toFeeRule(r bankrecdb.CardFeeRule) FeeRule {
@@ -432,39 +443,26 @@ func (s *Service) Settlements(ctx context.Context, propertyID, before int64, lim
 	for _, r := range rows {
 		row := SettlementRow{
 			ID: r.ID, BankAccountID: r.BankAccountID, AccountKey: r.AccountKey, Date: r.JournalDate, JournalNumber: r.JournalNumber, Gross: r.Gross, Net: r.Net, Fee: r.Fee,
-			ExpectedMDR: r.ExpectedMdr, Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
+			MDRAmount: r.MdrAmount, VATAmount: r.VatAmount, VATTreatment: r.VatTreatment, ExpectedMDR: r.ExpectedMdr, ExpectedVAT: r.ExpectedVat, ProposedVAT: r.ProposedVat,
+			PaymentsWithoutVATRate: int(r.PaymentsWithoutVatRate), Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
+		}
+		if r.MdrRate != nil {
+			v := r.MdrRate.String()
+			row.MDRRate = &v
+		}
+		if r.VatRate != nil {
+			v := r.VatRate.String()
+			row.VATRate = &v
 		}
 		if r.ExpectedMdr != nil {
-			v := r.Fee.Sub(*r.ExpectedMdr)
+			v := r.MdrAmount.Sub(*r.ExpectedMdr)
 			row.MDRVariance = &v
+		}
+		if r.ExpectedVat != nil {
+			v := r.VatAmount.Sub(*r.ExpectedVat)
+			row.VATVariance = &v
 		}
 		out = append(out, row)
 	}
 	return out, nil
-}
-
-// expectedFeeOf adds up the fees the payments of some journal lines expected; known says whether every line had a snapshot.
-func (s *Service) expectedFeeOf(ctx context.Context, tenantID, propertyID int64, lineIDs []int64) (fee decimal.Decimal, known bool, err error) {
-	refs, err := s.q(ctx).JournalLineRefs(ctx, bankrecdb.JournalLineRefsParams{TenantID: tenantID, PropertyID: propertyID, Ids: lineIDs})
-	if err != nil {
-		return decimal.Zero, false, err
-	}
-	numbers := make([]string, 0, len(refs))
-	for _, r := range refs {
-		numbers = append(numbers, r.SourceRef)
-	}
-	snaps, err := s.snapshots(ctx, tenantID, propertyID, numbers)
-	if err != nil {
-		return decimal.Zero, false, err
-	}
-	known = len(refs) > 0
-	for _, r := range refs {
-		sn, ok := snaps[r.SourceRef]
-		if !ok {
-			known = false
-			continue
-		}
-		fee = fee.Add(sn.fee)
-	}
-	return fee, known, nil
 }
