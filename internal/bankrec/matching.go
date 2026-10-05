@@ -199,9 +199,11 @@ func (s *Service) Adjust(ctx context.Context, propertyID, statementID, lineID in
 		if err := po.CheckAccount(ctx, in.AccountID, "account_id"); err != nil {
 			return err
 		}
-		if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+		dept, err := po.ResolveDepartment(ctx, in.AccountID, in.DepartmentID, "department_id") // the rule of the account: its default, or a required department
+		if err != nil {
 			return err
 		}
+		in.DepartmentID = dept
 		desc := strings.TrimSpace(in.Description)
 		if desc == "" {
 			desc = deref(line.Description)

@@ -169,6 +169,23 @@ func (po *Poster) CheckDepartment(ctx context.Context, id *int64, field string) 
 	return po.svc.depts.Check(ctx, po.p.TenantID, po.propertyID, *id, field)
 }
 
+// ResolveDepartment checks the department a module gives to a line of an account it chose and applies the rule of the account: the department named (it exists and is in use),
+// else the default of the account, and none when the account takes none. A required department that is missing is refused (422 DEPARTMENT_REQUIRED on field). The module
+// uses the result for its own record and for the SystemLine.
+func (po *Poster) ResolveDepartment(ctx context.Context, accountID int64, id *int64, field string) (*int64, error) {
+	if err := po.CheckDepartment(ctx, id, field); err != nil {
+		return nil, err
+	}
+	if err := po.load(ctx); err != nil {
+		return nil, err
+	}
+	a, ok := po.byID[accountID]
+	if !ok {
+		return id, nil // CheckAccount reports it
+	}
+	return lineDepartment(a, id, false, field, "")
+}
+
 // Post writes a balanced journal of type PAYABLES and returns its id and number. The caller has checked the date and
 // the accounts of its own lines (CheckDate, CheckAccount), which Post checks again.
 func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, error) {
@@ -192,10 +209,17 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	if err := po.CheckDate(ctx, in.Date, "date"); err != nil {
 		return 0, "", err
 	}
+	depts := make([]*int64, len(in.Lines))
 	for i, l := range in.Lines {
 		if err := po.CheckAccount(ctx, l.AccountID, fmt.Sprintf("lines[%d].account_id", i)); err != nil {
 			return 0, "", err
 		}
+		// the final gate: whatever a module chose, a line takes the default of its account and a required department is never missing
+		d, err := lineDepartment(po.byID[l.AccountID], l.DepartmentID, false, fmt.Sprintf("lines[%d].department_id", i), "")
+		if err != nil {
+			return 0, "", err
+		}
+		depts[i] = d
 	}
 	number, err := po.svc.days.NextDocumentNumber(ctx, po.propertyID, tenancy.SeqJournal)
 	if err != nil {
@@ -212,7 +236,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	for i, l := range in.Lines {
 		if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 			TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Debit: l.Debit, Credit: l.Credit,
-			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: l.DepartmentID,
+			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: depts[i],
 		}); err != nil {
 			return 0, "", err
 		}

@@ -7,13 +7,18 @@ SELECT d.id, d.parent_id, p.code AS parent_code, d.code, d.name, d.sort_order, d
         OR EXISTS (SELECT 1 FROM folio_items i WHERE i.property_id = d.property_id AND i.department_id = d.id)
         OR EXISTS (SELECT 1 FROM charge_codes c WHERE c.property_id = d.property_id AND c.department_id = d.id)
         OR EXISTS (SELECT 1 FROM supplier_bill_lines b WHERE b.property_id = d.property_id AND b.department_id = d.id)
-        OR EXISTS (SELECT 1 FROM budget_lines bl WHERE bl.property_id = d.property_id AND bl.department_id = d.id))::boolean AS in_use
+        OR EXISTS (SELECT 1 FROM budget_lines bl WHERE bl.property_id = d.property_id AND bl.department_id = d.id)
+        OR EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = d.property_id AND a.default_department_id = d.id))::boolean AS in_use
 FROM departments d
 LEFT JOIN departments p ON p.property_id = d.property_id AND p.id = d.parent_id
 WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id
   AND (sqlc.narg(id)::bigint IS NULL OR d.id = sqlc.narg(id)::bigint)
   AND (sqlc.narg(active)::boolean IS NULL OR d.is_active = sqlc.narg(active)::boolean)
 ORDER BY COALESCE(p.sort_order, d.sort_order), COALESCE(p.code, d.code), (d.parent_id IS NOT NULL), d.sort_order, d.code;
+
+-- The accounts that take a department as their default, which stop it from being switched off.
+-- name: AccountsDefaultingTo :many
+SELECT a.code::text FROM gl_accounts a WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.default_department_id = @id ORDER BY a.code LIMIT 5;
 
 -- name: InsertDepartment :one
 INSERT INTO departments (tenant_id, property_id, parent_id, code, name, sort_order, created_by, updated_by)

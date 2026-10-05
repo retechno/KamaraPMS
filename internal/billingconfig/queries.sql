@@ -158,3 +158,10 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND charge_code_id =
 INSERT INTO charge_code_service_charges (tenant_id, property_id, charge_code_id, service_charge_id, sequence, is_active, created_by)
 VALUES (@tenant_id, @property_id, @charge_code_id, @service_charge_id, @sequence, true, sqlc.narg(actor_id))
 ON CONFLICT (charge_code_id, service_charge_id) DO UPDATE SET sequence = EXCLUDED.sequence, is_active = true;
+
+-- The department rule of an account, to check a charge code, a tax or a service charge against it before it is saved.
+-- name: AccountDepartmentRule :one
+SELECT a.code::text AS code, a.name::text AS name, a.department_requirement::text AS requirement, (a.default_department_id IS NOT NULL AND d.is_active)::boolean AS default_ok
+FROM gl_accounts a
+LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.default_department_id
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.code = @code;

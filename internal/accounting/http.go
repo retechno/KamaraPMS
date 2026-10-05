@@ -29,6 +29,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/account-map", httpx.HandlerFunc(h.accountMap))
 	mux.Handle("PUT "+p+"/account-map", httpx.HandlerFunc(h.setAccountMap))
 	mux.Handle("GET "+p+"/unmapped", httpx.HandlerFunc(h.unmapped))
+	mux.Handle("GET "+p+"/department-setup", httpx.HandlerFunc(h.departmentSetup))
 }
 
 func ids(r *http.Request) (propertyID, id int64, err error) {
@@ -213,6 +214,18 @@ func (h *Handler) setAccountMap(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[MapEntry]{Data: m})
+}
+
+func (h *Handler) departmentSetup(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	rep, err := h.svc.DepartmentSetup(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, rep)
 }
 
 func (h *Handler) unmapped(w http.ResponseWriter, r *http.Request) error {

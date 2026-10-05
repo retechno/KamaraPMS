@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { GlAccount } from '@/api/types'
 import { confirm } from '@/composables/useConfirm'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -30,7 +31,7 @@ const notice = ref('')
 const busy = ref(false)
 const filter = reactive({ q: '', type: '', inactive: false, headers: true })
 const editing = ref<GlAccount | 'new' | null>(null)
-const form = reactive({ code: '', name: '', account_type: 'REVENUE', normal_side: '', parent_id: 0, is_postable: true, is_active: true, statement_group: '', description: '' })
+const form = reactive({ code: '', name: '', account_type: 'REVENUE', normal_side: '', parent_id: 0, is_postable: true, is_active: true, statement_group: '', description: '', department_requirement: 'OPTIONAL', default_department_id: null as number | null })
 const importing = ref(false)
 const importText = ref('')
 const importResult = ref<{ dry_run: boolean; created: number; updated: number } | null>(null)
@@ -43,6 +44,7 @@ const columns = computed<Column<TreeRow>[]>(() => [
   { key: 'type', label: t('accountingBooks.type') },
   { key: 'normal', label: t('accountingBooks.normal') },
   { key: 'group', label: t('accountingBooks.group') },
+  { key: 'department', label: t('accountingBooks.departmentRule') },
   { key: 'status', label: t('setup.status') },
   ...(can('accounting.manage') ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
@@ -74,10 +76,15 @@ async function load(): Promise<void> {
   }
 }
 
+/** An account that takes no department has no default. */
+function onRequirement(): void {
+  if (form.department_requirement === 'NONE') form.default_department_id = null
+}
+
 function startNew(parent?: GlAccount): void {
   Object.assign(form, {
     code: '', name: '', account_type: parent?.account_type ?? 'REVENUE', normal_side: '', parent_id: parent?.id ?? 0, is_postable: true, is_active: true,
-    statement_group: parent?.statement_group ?? '', description: '',
+    statement_group: parent?.statement_group ?? '', description: '', department_requirement: 'OPTIONAL', default_department_id: null,
   })
   error.value = null
   editing.value = 'new'
@@ -86,7 +93,7 @@ function startNew(parent?: GlAccount): void {
 function startEdit(a: GlAccount): void {
   Object.assign(form, {
     code: a.code, name: a.name, account_type: a.account_type, normal_side: a.normal_side, parent_id: a.parent_id ?? 0, is_postable: a.is_postable, is_active: a.is_active,
-    statement_group: a.statement_group ?? '', description: a.description ?? '',
+    statement_group: a.statement_group ?? '', description: a.description ?? '', department_requirement: a.department_requirement, default_department_id: a.default_department_id,
   })
   error.value = null
   editing.value = a
@@ -104,7 +111,8 @@ async function save(): Promise<void> {
         body: {
           code: form.code, name: form.name, account_type: form.account_type as 'REVENUE', normal_side: (form.normal_side || undefined) as 'DEBIT' | undefined,
           parent_id: form.parent_id || null, is_postable: form.is_postable, is_active: form.is_active, statement_group: form.statement_group || undefined,
-          description: form.description || undefined,
+          description: form.description || undefined, department_requirement: form.department_requirement as 'OPTIONAL',
+          default_department_id: form.department_requirement === 'NONE' ? undefined : form.default_department_id,
         },
       })
     } else {
@@ -112,7 +120,8 @@ async function save(): Promise<void> {
         params: { path: { propertyId, id: editing.value.id } },
         body: {
           name: form.name, parent_id: form.parent_id, is_postable: form.is_postable, is_active: form.is_active, statement_group: form.statement_group,
-          description: form.description,
+          description: form.description, department_requirement: form.department_requirement as 'OPTIONAL',
+          default_department_id: form.department_requirement === 'NONE' ? undefined : (form.default_department_id ?? 0),
         },
       })
     }
@@ -256,6 +265,16 @@ watch(() => pid.value, () => {
                 </NativeSelect>
               </template>
             </FormField>
+            <FormField :label="t('accountingBooks.departmentRequirement')" :hint="t('accountingBooks.departmentRequirementHint')" :error="fieldError('department_requirement')">
+              <template #default="{ id, invalid }">
+                <NativeSelect :id="id" v-model="form.department_requirement" name="department_requirement" :aria-invalid="invalid" @change="onRequirement">
+                  <option v-for="r in ['OPTIONAL', 'REQUIRED', 'NONE']" :key="r" :value="r">{{ t(`accountingBooks.req_${r}` as 'accountingBooks.req_NONE') }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="form.department_requirement !== 'NONE'" :label="t('accountingBooks.defaultDepartment')" :hint="t('accountingBooks.defaultDepartmentHint')" :error="fieldError('default_department_id')">
+              <template #default="{ id, invalid }"><DepartmentSelect :id="id" v-model="form.default_department_id" name="default_department_id" :aria-invalid="invalid" /></template>
+            </FormField>
             <FormField class="sm:col-span-2 lg:col-span-3" :label="t('accountingBooks.description')">
               <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" maxlength="300" /></template>
             </FormField>
@@ -334,6 +353,10 @@ watch(() => pid.value, () => {
           <template #cell-type="{ row }">{{ typeLabel(row.account.account_type) }}</template>
           <template #cell-normal="{ row }">{{ t(`accountingBooks.side_${row.account.normal_side}` as 'accountingBooks.side_DEBIT') }}</template>
           <template #cell-group="{ row }"><small class="text-muted-foreground">{{ row.account.statement_group ? groupLabel(row.account.statement_group) : '' }}</small></template>
+          <template #cell-department="{ row }">
+            <small v-if="row.account.is_postable && row.account.department_requirement !== 'OPTIONAL'" class="text-muted-foreground" :data-testid="`rule-${row.account.code}`">{{ t(`accountingBooks.req_${row.account.department_requirement}` as 'accountingBooks.req_NONE') }}<template v-if="row.account.default_department_code"> · {{ row.account.default_department_code }}</template></small>
+            <small v-else-if="row.account.is_postable && row.account.default_department_code" class="text-muted-foreground">{{ row.account.default_department_code }}</small>
+          </template>
           <template #cell-status="{ row }"><Badge v-if="!row.account.is_active" variant="outline">{{ t('accountingBooks.inactive') }}</Badge></template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1.5">

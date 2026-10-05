@@ -88,6 +88,11 @@ type Account struct {
 	Description    string    `json:"description,omitempty"`
 	InUse          bool      `json:"in_use"`
 	CreatedAt      time.Time `json:"created_at"`
+	// DepartmentRequirement is NONE, OPTIONAL or REQUIRED: what a line of the account does with the department; DefaultDepartment* is the department it gets when none is named.
+	DepartmentRequirement string `json:"department_requirement"`
+	DefaultDepartmentID   *int64 `json:"default_department_id"`
+	DefaultDepartmentCode string `json:"default_department_code,omitempty"`
+	DefaultDepartmentName string `json:"default_department_name,omitempty"`
 }
 
 // AccountInput creates an account. Postable and Active default to true; NormalSide to the side of the type.
@@ -101,6 +106,9 @@ type AccountInput struct {
 	IsActive       *bool  `json:"is_active"`
 	StatementGroup string `json:"statement_group"`
 	Description    string `json:"description"`
+	// DepartmentRequirement is NONE, OPTIONAL (the default) or REQUIRED; DefaultDepartmentID is the department a line gets when none is named.
+	DepartmentRequirement string `json:"department_requirement"`
+	DefaultDepartmentID   *int64 `json:"default_department_id"`
 }
 
 // AccountPatch changes an account; nil fields stay. The code, the type and the normal side never change.
@@ -111,6 +119,9 @@ type AccountPatch struct {
 	IsActive       *bool   `json:"is_active"`
 	StatementGroup *string `json:"statement_group"`
 	Description    *string `json:"description"`
+	// DepartmentRequirement and DefaultDepartmentID change the department rule; a default below 1 removes it.
+	DepartmentRequirement *string `json:"department_requirement"`
+	DefaultDepartmentID   *int64  `json:"default_department_id"`
 }
 
 // AccountFilter narrows the account list.

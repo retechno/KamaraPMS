@@ -243,7 +243,8 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			}
 		}
 		for i, l := range in.Lines {
-			if err := po.CheckDepartment(ctx, l.DepartmentID, fmt.Sprintf("lines[%d].department_id", i)); err != nil {
+			dept, err := po.ResolveDepartment(ctx, l.AccountID, l.DepartmentID, fmt.Sprintf("lines[%d].department_id", i)) // the rule of the account: its default, or a required department
+			if err != nil {
 				var ae *apperr.Error
 				if asApp(err, &ae) && len(ae.Fields) > 0 {
 					lineErrs = append(lineErrs, ae.Fields...)
@@ -251,6 +252,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 				}
 				return err
 			}
+			in.Lines[i].DepartmentID = dept
 		}
 		if len(lineErrs) > 0 {
 			return apperr.Invalid("the bill is invalid", lineErrs...)

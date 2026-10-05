@@ -127,6 +127,7 @@ func toAccount(r accountingdb.ListAccountsRow) Account {
 	return Account{
 		ID: r.ID, Code: r.Code, Name: r.Name, AccountType: r.AccountType, NormalSide: r.NormalSide, ParentID: r.ParentID, ParentCode: deref(r.ParentCode),
 		IsPostable: r.IsPostable, IsActive: r.IsActive, StatementGroup: deref(r.StatementGroup), Description: deref(r.Description), InUse: r.InUse, CreatedAt: r.CreatedAt,
+		DepartmentRequirement: r.DepartmentRequirement, DefaultDepartmentID: r.DefaultDepartmentID, DefaultDepartmentCode: deref(r.DefaultDepartmentCode), DefaultDepartmentName: deref(r.DefaultDepartmentName),
 	}
 }
 
@@ -272,6 +273,11 @@ func (s *Service) CreateAccount(ctx context.Context, propertyID int64, in Accoun
 		fields = append(fields, fieldErr("normal_side", "INVALID_VALUE", "DEBIT or CREDIT"))
 	}
 	fields = append(fields, validateText(in.Name, in.Description)...)
+	in.DepartmentRequirement = strings.ToUpper(strings.TrimSpace(in.DepartmentRequirement))
+	if in.DepartmentRequirement == "" {
+		in.DepartmentRequirement = DeptOptional
+	}
+	fields = append(fields, validRule(in.DepartmentRequirement, in.DefaultDepartmentID)...)
 	if len(fields) > 0 {
 		return Account{}, apperr.Invalid("the account is invalid", fields...)
 	}
@@ -287,14 +293,18 @@ func (s *Service) CreateAccount(ctx context.Context, propertyID int64, in Accoun
 		if err := s.checkParent(ctx, p.TenantID, propertyID, nil, in.AccountType, in.ParentID); err != nil {
 			return err
 		}
+		if err := s.checkDefaultDepartment(ctx, p.TenantID, propertyID, in.DefaultDepartmentID); err != nil {
+			return err
+		}
 		id, err = s.q(ctx).CreateAccount(ctx, accountingdb.CreateAccountParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, AccountType: in.AccountType, NormalSide: in.NormalSide, ParentID: in.ParentID,
 			IsPostable: postable, IsActive: active, StatementGroup: nullable(in.StatementGroup), Description: nullable(in.Description), ActorID: p.ActorID(),
+			DepartmentRequirement: in.DepartmentRequirement, DefaultDepartmentID: in.DefaultDepartmentID,
 		})
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_created", "gl_account", id, nil, map[string]any{"code": in.Code, "name": in.Name, "type": in.AccountType}))
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_created", "gl_account", id, nil, map[string]any{"code": in.Code, "name": in.Name, "type": in.AccountType, "department_requirement": in.DepartmentRequirement}))
 	})
 	if err != nil {
 		return Account{}, err
@@ -327,6 +337,20 @@ func (s *Service) UpdateAccount(ctx context.Context, propertyID, id int64, patch
 		}
 		name, description, group := cur.Name, deref(cur.Description), deref(cur.StatementGroup)
 		postable, active, parent := cur.IsPostable, cur.IsActive, cur.ParentID
+		requirement, defaultDept := cur.DepartmentRequirement, cur.DefaultDepartmentID
+		if patch.DepartmentRequirement != nil {
+			requirement = strings.ToUpper(strings.TrimSpace(*patch.DepartmentRequirement))
+		}
+		if patch.DefaultDepartmentID != nil {
+			if *patch.DefaultDepartmentID < 1 {
+				defaultDept = nil
+			} else {
+				defaultDept = patch.DefaultDepartmentID
+			}
+		}
+		if requirement == DeptNone && patch.DepartmentRequirement != nil && patch.DefaultDepartmentID == nil {
+			defaultDept = nil // an account that takes no department has no default
+		}
 		if patch.Name != nil {
 			name = strings.TrimSpace(*patch.Name)
 		}
@@ -350,6 +374,7 @@ func (s *Service) UpdateAccount(ctx context.Context, propertyID, id int64, patch
 			}
 		}
 		fields := append(validGroup(cur.AccountType, group, postable), validateText(name, description)...)
+		fields = append(fields, validRule(requirement, defaultDept)...)
 		if len(fields) > 0 {
 			return apperr.Invalid("the account is invalid", fields...)
 		}
@@ -371,15 +396,26 @@ func (s *Service) UpdateAccount(ctx context.Context, propertyID, id int64, patch
 		if err := s.requireNoLines(ctx, propertyID, cur, !postable && cur.IsPostable); err != nil {
 			return err
 		}
+		if defaultDept != nil && !sameID(defaultDept, cur.DefaultDepartmentID) {
+			if err := s.checkDefaultDepartment(ctx, p.TenantID, propertyID, defaultDept); err != nil {
+				return err
+			}
+		}
 		if err := q.UpdateAccount(ctx, accountingdb.UpdateAccountParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: name, ParentID: parent, IsPostable: postable, IsActive: active,
 			StatementGroup: nullable(group), Description: nullable(description), ActorID: p.ActorID(),
+			DepartmentRequirement: requirement, DefaultDepartmentID: defaultDept,
 		}); err != nil {
 			return err
 		}
+		if requirement != cur.DepartmentRequirement || !sameOrBothNil(defaultDept, cur.DefaultDepartmentID) {
+			if err := s.requireSetup(ctx, p.TenantID, propertyID, &id); err != nil { // a required department must have a source for everything that posts here
+				return err
+			}
+		}
 		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_updated", "gl_account", id,
-			map[string]any{"name": cur.Name, "postable": cur.IsPostable, "active": cur.IsActive, "group": deref(cur.StatementGroup), "parent_id": cur.ParentID},
-			map[string]any{"name": name, "postable": postable, "active": active, "group": group, "parent_id": parent}))
+			map[string]any{"name": cur.Name, "postable": cur.IsPostable, "active": cur.IsActive, "group": deref(cur.StatementGroup), "parent_id": cur.ParentID, "department_requirement": cur.DepartmentRequirement, "default_department_id": cur.DefaultDepartmentID},
+			map[string]any{"name": name, "postable": postable, "active": active, "group": group, "parent_id": parent, "department_requirement": requirement, "default_department_id": defaultDept}))
 	})
 	if err != nil {
 		return Account{}, err
@@ -636,7 +672,7 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID int64, text string, 
 			}
 			id, err := q.CreateAccount(ctx, accountingdb.CreateAccountParams{
 				TenantID: p.TenantID, PropertyID: propertyID, Code: r.code, Name: r.name, AccountType: r.accountType, NormalSide: defaultSide(r.accountType),
-				IsPostable: r.postable, IsActive: r.active, StatementGroup: nullable(r.group), Description: nullable(r.desc), ActorID: p.ActorID(),
+				IsPostable: r.postable, IsActive: r.active, StatementGroup: nullable(r.group), Description: nullable(r.desc), ActorID: p.ActorID(), DepartmentRequirement: DeptOptional,
 			})
 			if err != nil {
 				return err
@@ -667,6 +703,7 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID int64, text string, 
 			if err := q.UpdateAccount(ctx, accountingdb.UpdateAccountParams{
 				TenantID: p.TenantID, PropertyID: propertyID, ID: ids[r.code], Name: r.name, ParentID: parent, IsPostable: r.postable, IsActive: r.active,
 				StatementGroup: nullable(r.group), Description: nullable(r.desc), ActorID: p.ActorID(),
+				DepartmentRequirement: ruleOrDefault(byCode[r.code].DepartmentRequirement), DefaultDepartmentID: byCode[r.code].DefaultDepartmentID, // the file does not carry the department rule: it stays
 			}); err != nil {
 				return err
 			}

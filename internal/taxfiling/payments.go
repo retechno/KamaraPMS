@@ -205,9 +205,11 @@ func (s *Service) payReturn(ctx context.Context, p auth.Principal, propertyID, r
 			if err := po.CheckAccount(ctx, in.PenaltyAccountID, "penalty_account_id"); err != nil {
 				return err
 			}
-			if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+			dept, err := po.ResolveDepartment(ctx, in.PenaltyAccountID, in.DepartmentID, "department_id")
+			if err != nil {
 				return err
 			}
+			in.DepartmentID = dept
 		}
 		number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqTaxPayment)
 		if err != nil {

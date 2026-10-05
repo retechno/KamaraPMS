@@ -209,6 +209,7 @@ type target struct {
 // because of configuration; GET .../unmapped lists those items.
 type resolver struct {
 	byCode map[string]accountingdb.ListAccountsRow
+	byID   map[int64]accountingdb.ListAccountsRow
 	byKey  map[string]MapEntry
 }
 
@@ -221,9 +222,10 @@ func (s *Service) newResolver(ctx context.Context, tenantID, propertyID int64) (
 	if err != nil {
 		return resolver{}, err
 	}
-	r := resolver{byCode: map[string]accountingdb.ListAccountsRow{}, byKey: map[string]MapEntry{}}
+	r := resolver{byCode: map[string]accountingdb.ListAccountsRow{}, byID: map[int64]accountingdb.ListAccountsRow{}, byKey: map[string]MapEntry{}}
 	for _, a := range accs {
 		r.byCode[a.Code] = a
+		r.byID[a.ID] = a
 	}
 	for _, e := range entries {
 		r.byKey[e.Key] = e
@@ -257,6 +259,21 @@ func (r resolver) resolve(role, key string) (target, error) {
 		return target{a.ID, a.Code, a.Name}, nil
 	}
 	return r.system(fallback)
+}
+
+// sourceOfLine names what a line of the day close comes from, for the message of a required department that is missing.
+func sourceOfLine(role, ref string) string {
+	switch role {
+	case "REVENUE":
+		return "charge code " + ref
+	case "TAX":
+		return "tax " + ref
+	case "SERVICE":
+		return "service charge " + ref
+	case "METHOD":
+		return "payment " + ref
+	}
+	return strings.ToLower(strings.ReplaceAll(role, "_", " ")) + " " + ref
 }
 
 // lineLabel is the description of a day close line: what it adds up, its reference and the reference given by the payer.
@@ -325,7 +342,21 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 			return false, err
 		}
 		names[t.id] = t
-		k := lineKey{t.id, r.SourceType, r.SourceRef, r.DepartmentID}
+		// the department rule of the account is the final gate of the day close too: the default of the account fills what the folio did not carry, and a required
+		// department that is missing stops the close with a message that says where it comes from, instead of a line without one
+		var named *int64
+		if r.DepartmentID != 0 {
+			named = &r.DepartmentID
+		}
+		dept, err := lineDepartment(res.byID[t.id], named, true, "department_id", sourceOfLine(r.Role, r.SourceRef))
+		if err != nil {
+			return false, err
+		}
+		var deptID int64
+		if dept != nil {
+			deptID = *dept
+		}
+		k := lineKey{t.id, r.SourceType, r.SourceRef, deptID}
 		sums[k] = sums[k].Add(r.Amount)
 		if r.Detail != "" {
 			details[k] = r.Detail
@@ -577,9 +608,11 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 				lineErrs = append(lineErrs, fieldErr(at, "CONTROL_ACCOUNT", "only the day close posts to the "+strings.ToLower(strings.ReplaceAll(control[a.ID], "_", " "))+" account"))
 			}
 		}
+		depts := make([]*int64, len(in.Lines)) // what each line is posted with: the department it names or the default of its account
 		for i, l := range in.Lines {
+			at := fmt.Sprintf("lines[%d].department_id", i)
 			if l.DepartmentID != nil && s.depts != nil {
-				if err := s.depts.Check(ctx, p.TenantID, propertyID, *l.DepartmentID, fmt.Sprintf("lines[%d].department_id", i)); err != nil {
+				if err := s.depts.Check(ctx, p.TenantID, propertyID, *l.DepartmentID, at); err != nil {
 					var ae *apperr.Error
 					if errors.As(err, &ae) && len(ae.Fields) > 0 {
 						lineErrs = append(lineErrs, ae.Fields...)
@@ -588,6 +621,20 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 					return err
 				}
 			}
+			a, ok := byID[l.AccountID]
+			if !ok {
+				continue // reported above
+			}
+			d, err := lineDepartment(a, l.DepartmentID, false, at, "")
+			if err != nil {
+				var ae *apperr.Error
+				if errors.As(err, &ae) && len(ae.Fields) > 0 {
+					lineErrs = append(lineErrs, ae.Fields...)
+					continue
+				}
+				return err
+			}
+			depts[i] = d
 		}
 		if len(lineErrs) > 0 {
 			return apperr.Invalid("the journal is invalid", lineErrs...)
@@ -610,7 +657,7 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 		for i, l := range in.Lines {
 			if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Debit: l.Debit, Credit: l.Credit,
-				Description: nullable(strings.TrimSpace(l.Description)), DepartmentID: l.DepartmentID,
+				Description: nullable(strings.TrimSpace(l.Description)), DepartmentID: depts[i],
 			}); err != nil {
 				return err
 			}

@@ -68,6 +68,43 @@ func (q *Queries) CardFeeRule(ctx context.Context, arg CardFeeRuleParams) (CardF
 	return i, err
 }
 
+const chargeCodeDepartmentRule = `-- name: ChargeCodeDepartmentRule :one
+SELECT c.code AS charge_code, c.gl_account_code, COALESCE(a.name, '')::text AS account_name, COALESCE(a.department_requirement, 'OPTIONAL')::text AS requirement,
+       (c.department_id IS NOT NULL OR (a.default_department_id IS NOT NULL AND dd.is_active))::boolean AS has_department
+FROM charge_codes c
+LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+LEFT JOIN departments dd ON dd.property_id = a.property_id AND dd.id = a.default_department_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.id = $3
+`
+
+type ChargeCodeDepartmentRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type ChargeCodeDepartmentRuleRow struct {
+	ChargeCode    string
+	GlAccountCode *string
+	AccountName   string
+	Requirement   string
+	HasDepartment bool
+}
+
+// The department rule of the revenue account of a charge code, to refuse a charge that would be posted without a department the account requires.
+func (q *Queries) ChargeCodeDepartmentRule(ctx context.Context, arg ChargeCodeDepartmentRuleParams) (ChargeCodeDepartmentRuleRow, error) {
+	row := q.db.QueryRow(ctx, chargeCodeDepartmentRule, arg.TenantID, arg.PropertyID, arg.ID)
+	var i ChargeCodeDepartmentRuleRow
+	err := row.Scan(
+		&i.ChargeCode,
+		&i.GlAccountCode,
+		&i.AccountName,
+		&i.Requirement,
+		&i.HasDepartment,
+	)
+	return i, err
+}
+
 const closeFolio = `-- name: CloseFolio :one
 UPDATE folios f SET status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2, version = f.version + 1, updated_by = $2,
     closed_on = (SELECT b.business_date FROM business_days b WHERE b.property_id = f.property_id AND b.status = 'OPEN')
@@ -622,10 +659,13 @@ INSERT INTO folio_items (
          THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
     END,
-    -- The department in force now (the default of the charge code); a reversal copies the department of the item it reverses.
+    -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
+    -- a reversal copies the department of the item it reverses.
     CASE WHEN $10::bigint IS NOT NULL
          THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
-         ELSE (SELECT c.department_id FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
+         ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
+                 FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+                WHERE c.property_id = $2 AND c.id = $8::bigint)
     END
 )
 RETURNING id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id

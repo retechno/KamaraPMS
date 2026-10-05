@@ -21,12 +21,12 @@ const departments = [
   dept({ id: 3, code: 'SPA', name: 'Spa', sort_order: 30, is_active: false, in_use: false }),
 ]
 
-function mountView(permissions = ['accounting.view', 'accounting.manage']) {
+function mountView(permissions = ['accounting.view', 'accounting.manage'], setup: unknown = { ok: true, issues: [] }) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  GET = vi.fn().mockResolvedValue({ data: { data: departments } })
+  GET = vi.fn().mockImplementation((path: string) => Promise.resolve(path.endsWith('/department-setup') ? { data: setup } : { data: { data: departments } }))
   POST = vi.fn().mockResolvedValue({ data: dept({ id: 10 }) })
   PATCH = vi.fn().mockResolvedValue({ data: dept({}) })
   DELETE = vi.fn().mockResolvedValue({})
@@ -36,6 +36,17 @@ function mountView(permissions = ['accounting.view', 'accounting.manage']) {
 
 describe('DepartmentsView', () => {
   beforeEach(() => vi.restoreAllMocks())
+
+  it('lists what the department setup gets wrong, and nothing when it is complete', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=setup-check]').exists()).toBe(false)
+    const issue = { severity: 'ERROR', code: 'DEPARTMENT_MISSING', source_type: 'CHARGE_CODE', source_ref: 'LAUNDRY', source_name: 'Laundry', account_id: 4, account_code: '4310', account_name: 'Laundry revenue', message: 'account 4310 - Laundry revenue requires a department, but no department is configured for charge code LAUNDRY' }
+    const w2 = mountView(['accounting.view', 'accounting.manage'], { ok: false, issues: [issue] })
+    await flushPromises()
+    expect(w2.get('[data-testid=setup-issue-ERROR]').text()).toContain('charge code LAUNDRY')
+    expect(w2.get('[data-testid=setup-check]').text()).toContain('Fix them before the next night audit')
+  })
 
   it('shows the departments with their sub-departments and state', async () => {
     const w = mountView()

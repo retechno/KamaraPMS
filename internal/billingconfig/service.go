@@ -2,7 +2,9 @@ package billingconfig
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
@@ -135,6 +137,9 @@ func (s *Service) CreateTax(ctx context.Context, propertyID int64, in TaxInput) 
 		if err != nil {
 			return err
 		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, nil, false); err != nil {
+			return err
+		}
 		row, err := s.q(ctx).CreateTax(ctx, billingconfigdb.CreateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, Rate: rate,
 			TaxOnService: in.TaxOnService, TaxKind: in.TaxKind, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
@@ -199,6 +204,9 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 				return apperr.Conflict("TAX_IN_USE", "the tax is still mapped to charge codes; remove it from their rules first").WithContext("charge_code_rules", n)
 			}
 		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, nil, false); err != nil {
+			return err
+		}
 		updated, err := q.UpdateTax(ctx, billingconfigdb.UpdateTaxParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate,
 			TaxOnService: in.TaxOnService, TaxKind: in.TaxKind, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
@@ -257,6 +265,9 @@ func (s *Service) CreateServiceCharge(ctx context.Context, propertyID int64, in 
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
 		if err != nil {
+			return err
+		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, nil, false); err != nil {
 			return err
 		}
 		row, err := s.q(ctx).CreateServiceCharge(ctx, billingconfigdb.CreateServiceChargeParams{
@@ -318,6 +329,9 @@ func (s *Service) UpdateServiceCharge(ctx context.Context, propertyID, id int64,
 				return apperr.Conflict("SERVICE_CHARGE_IN_USE", "the service charge is still mapped to charge codes; remove it from their rules first").
 					WithContext("charge_code_rules", n)
 			}
+		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, nil, false); err != nil {
+			return err
 		}
 		updated, err := q.UpdateServiceCharge(ctx, billingconfigdb.UpdateServiceChargeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Rate: rate, GlAccountCode: glOrNil(in.GLAccountCode), IsActive: in.IsActive, ActorID: p.ActorID(),
@@ -451,6 +465,9 @@ func (s *Service) CreateChargeCode(ctx context.Context, propertyID int64, in Cha
 		if err := s.checkDepartment(ctx, p.TenantID, propertyID, in.DepartmentID); err != nil {
 			return err
 		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, in.DepartmentID, true); err != nil {
+			return err
+		}
 		row, err := s.q(ctx).CreateChargeCode(ctx, billingconfigdb.CreateChargeCodeParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, ChargeType: in.ChargeType, PriceMode: in.PriceMode,
 			DefaultUnitPrice: unitPrice(in.DefaultUnitPrice), GlAccountCode: glOrNil(in.GLAccountCode), DepartmentID: in.DepartmentID, IsActive: in.IsActive, ActorID: p.ActorID(),
@@ -528,6 +545,9 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 			if err := s.checkDepartment(ctx, p.TenantID, propertyID, in.DepartmentID); err != nil {
 				return err
 			}
+		}
+		if err := s.checkAccountRule(ctx, p.TenantID, propertyID, in.GLAccountCode, in.IsActive, in.DepartmentID, true); err != nil {
+			return err
 		}
 		if row.IsSystem && in.ChargeType != before.ChargeType {
 			return apperr.Conflict("SYSTEM_CHARGE_CODE_LOCKED", "the charge type of a system charge code cannot change")
@@ -732,6 +752,33 @@ func (s *Service) ResolveRules(ctx context.Context, tenantID, propertyID, charge
 }
 
 // checkDepartment says whether a department can be the default of a charge code: it is a department of the property, in use.
+// checkAccountRule refuses what the department rule of the account would make the postings of the day close fail on (docs/architecture/12-departments.md): a charge code of an account
+// that requires a department needs one of its own or the default of the account; a tax or a service charge (which name none) needs the default; an account that takes no department
+// is not given one. An account that is not in the chart yet, or a source that is switched off, is not checked.
+func (s *Service) checkAccountRule(ctx context.Context, tenantID, propertyID int64, glCode string, active bool, department *int64, own bool) error {
+	if glCode == "" || !active {
+		return nil
+	}
+	r, err := s.q(ctx).AccountDepartmentRule(ctx, billingconfigdb.AccountDepartmentRuleParams{TenantID: tenantID, PropertyID: propertyID, Code: glCode})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	switch {
+	case r.Requirement == "REQUIRED" && !r.DefaultOk && (!own || department == nil):
+		field, msg := "gl_account_code", "account "+r.Code+" - "+r.Name+" requires a department: give it a default department first"
+		if own {
+			field, msg = "department_id", "account "+r.Code+" - "+r.Name+" requires a department: choose one, or give the account a default department"
+		}
+		return apperr.Invalid("the department is required", apperr.FieldError{Field: field, Code: "DEPARTMENT_REQUIRED", Message: msg})
+	case r.Requirement == "NONE" && own && department != nil:
+		return apperr.Invalid("the department is not allowed", apperr.FieldError{Field: "department_id", Code: "DEPARTMENT_NOT_ALLOWED", Message: "account " + r.Code + " - " + r.Name + " takes no department"})
+	}
+	return nil
+}
+
 func (s *Service) checkDepartment(ctx context.Context, tenantID, propertyID int64, id *int64) error {
 	if id == nil || s.depts == nil {
 		return nil

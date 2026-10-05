@@ -2,9 +2,11 @@ package folios
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/billingconfig"
@@ -80,6 +82,11 @@ type itemSpec struct {
 func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem, error) {
 	q := ps.s.q(ctx)
 	a := spec.amounts
+	if spec.reversesItemID == nil && spec.chargeCodeID != nil {
+		if err := ps.requireDepartment(ctx, *spec.chargeCodeID); err != nil {
+			return foliosdb.FolioItem{}, err
+		}
+	}
 	item, err := q.InsertFolioItem(ctx, foliosdb.InsertFolioItemParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, FolioID: ps.folio.ID, BusinessDate: ps.bd, TransactionAt: ps.at,
 		ServiceDate: spec.serviceDate, TransactionType: spec.transactionType, ChargeCodeID: spec.chargeCodeID, PaymentID: spec.paymentID,
@@ -100,6 +107,28 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 	}
 	err = q.BumpFolio(ctx, foliosdb.BumpFolioParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, ID: ps.folio.ID, ActorID: ps.p.ActorID()})
 	return item, err
+}
+
+// requireDepartment refuses a charge whose revenue account needs a department that neither the charge code nor the account gives, so the day close never meets
+// a line without one (the department rule of the account, docs/architecture/12-departments.md). A reversal copies the original and is not asked.
+func (ps posting) requireDepartment(ctx context.Context, chargeCodeID int64) error {
+	r, err := ps.s.q(ctx).ChargeCodeDepartmentRule(ctx, foliosdb.ChargeCodeDepartmentRuleParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, ID: chargeCodeID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // the caller reports a missing charge code
+	}
+	if err != nil {
+		return err
+	}
+	if r.Requirement == "REQUIRED" && !r.HasDepartment {
+		code := ""
+		if r.GlAccountCode != nil {
+			code = *r.GlAccountCode
+		}
+		return apperr.Invalid("the department is required", apperr.FieldError{Field: "charge_code_id", Code: "DEPARTMENT_REQUIRED",
+			Message: "account " + code + " - " + r.AccountName + " requires a department, but no department is configured for charge code " + r.ChargeCode}).
+			WithContext("account_code", code).WithContext("charge_code", r.ChargeCode)
+	}
+	return nil
 }
 
 func sourceOf(s string) string {

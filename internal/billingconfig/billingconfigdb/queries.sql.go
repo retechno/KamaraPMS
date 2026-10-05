@@ -11,6 +11,39 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const accountDepartmentRule = `-- name: AccountDepartmentRule :one
+SELECT a.code::text AS code, a.name::text AS name, a.department_requirement::text AS requirement, (a.default_department_id IS NOT NULL AND d.is_active)::boolean AS default_ok
+FROM gl_accounts a
+LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.default_department_id
+WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.code = $3
+`
+
+type AccountDepartmentRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	Code       string
+}
+
+type AccountDepartmentRuleRow struct {
+	Code        string
+	Name        string
+	Requirement string
+	DefaultOk   bool
+}
+
+// The department rule of an account, to check a charge code, a tax or a service charge against it before it is saved.
+func (q *Queries) AccountDepartmentRule(ctx context.Context, arg AccountDepartmentRuleParams) (AccountDepartmentRuleRow, error) {
+	row := q.db.QueryRow(ctx, accountDepartmentRule, arg.TenantID, arg.PropertyID, arg.Code)
+	var i AccountDepartmentRuleRow
+	err := row.Scan(
+		&i.Code,
+		&i.Name,
+		&i.Requirement,
+		&i.DefaultOk,
+	)
+	return i, err
+}
+
 const countActiveMappingsOfServiceCharge = `-- name: CountActiveMappingsOfServiceCharge :one
 SELECT count(*) FROM charge_code_service_charges
 WHERE tenant_id = $1 AND property_id = $2 AND service_charge_id = $3 AND is_active

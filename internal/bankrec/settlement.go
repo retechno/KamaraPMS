@@ -171,9 +171,11 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 			if err := po.CheckAccount(ctx, in.FeeAccountID, "fee_account_id"); err != nil {
 				return err
 			}
-			if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+			dept, err := po.ResolveDepartment(ctx, in.FeeAccountID, in.DepartmentID, "department_id")
+			if err != nil {
 				return err
 			}
+			in.DepartmentID = dept
 		}
 		desc := strings.TrimSpace(in.Description)
 		if desc == "" {

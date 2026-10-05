@@ -15,7 +15,7 @@ on its own: (1) the master and the columns (built), (2) posting: day close, manu
 8. Budget against actual drills down to the sub-department.
 9. `statement_group` stays the USALI/accounting classification. A department does not replace it.
 10. A change of the master never changes history.
-11. A department is not required on every line: bank, payable, tax control and balance sheet lines may be NULL.
+11. A department is not required on every line by default: an account says so (step 5: NONE, OPTIONAL, REQUIRED); bank, payable, tax control and balance sheet lines may be NULL unless their account requires one.
 12. No more than two levels in the MVP.
 
 ## What it means (decided in the build)
@@ -32,6 +32,22 @@ on its own: (1) the master and the columns (built), (2) posting: day close, manu
 - **Posting.** The day close groups the revenue lines by account **and** department, so the journal of a day has a revenue line per account and department. Guest ledger, tax, payments and city ledger lines have none.
   A reversal copies the department of the line it reverses. A manual journal line and a supplier bill line name their department themselves (optional). The journals the system makes from a form where the user picks the other account carry an
   optional `department_id` too (see "Departments on system journals" in the README): a bank adjustment, the commission of a card settlement, a credit note line, a write-off, a cash pay-in or pay-out, the penalty of a tax payment and the cash over and short of a shift close (chosen when closing). What the system decides itself (the closing of a year, the tax lines of a credit note) carries none.
+- **The department rule of an account (step 5, migration 00054).** `gl_accounts.department_requirement` is NONE, OPTIONAL (the default) or REQUIRED, and `default_department_id` is the department a line gets when none is named.
+  It replaces the earlier "a department is not required on every line" for the accounts a property chooses.
+  - NONE: the line has no department; a department named by a person is 422 `DEPARTMENT_NOT_ALLOWED` (field `...department_id`), one that comes from a charge code is dropped at the day close. No default on such an account.
+  - OPTIONAL: a department may be named; the default, when there is one, fills what is left empty. Nothing is refused.
+  - REQUIRED: every new line of the account has one, the one named or else the default; with neither the posting is refused (422 `DEPARTMENT_REQUIRED`, "account 4101 - Room revenue requires a department, but no department is configured for charge code ROOM"). A line is never posted with none as a warning.
+  - **One gate for every journal.** `lineDepartment` (`accounting/deptrule.go`) is applied by the manual journal, by `Poster.Post` (payables, bank, credit notes, write-offs, cash movements, tax payments) and by the day close. `Poster.ResolveDepartment` lets a module do it
+    earlier with the field name of its own form, and store what the line will carry (a supplier bill line keeps the resolved department). Reversals copy the original line and the closing entry of a year follows the balances, so neither is asked.
+  - **Folio posting.** The department snapshotted on a folio item is the charge code's, else the default of its revenue account, and none when the account takes none. A charge whose revenue account is REQUIRED and finds neither is refused when it is posted
+    (422 `DEPARTMENT_REQUIRED` on `charge_code_id`, with the account and the charge code in the message), so the night audit meets no such item. A reversal copies the department of the item.
+  - **The day close** resolves each line it makes the same way (the default of the guest ledger, tax payable, payment and city ledger accounts fills their lines); a required department that is still missing stops the close with the account and what it came from, and the whole close rolls back.
+  - **Configuration check.** `GET accounting/department-setup` lists, for every account with a rule other than OPTIONAL, what posts to it on its own (a charge code, a tax, a service charge, a system account) and has no department:
+    ERROR `DEPARTMENT_MISSING` or `DEFAULT_SWITCHED_OFF`, and the WARNING `DEPARTMENT_IGNORED` (a charge code names a department but its account takes none). The same check refuses the change that would create such a gap:
+    setting REQUIRED or removing a default on an account (409 `DEPARTMENT_SETUP_INCOMPLETE`), pointing a system key at one, saving a charge code, tax or service charge whose account would leave it without (422 `DEPARTMENT_REQUIRED` on `department_id` or `gl_account_code`).
+    A department that is the default of an account cannot be switched off or deleted (409 `DEPARTMENT_IN_USE`).
+  - **History.** A line keeps the department it was posted with; changing the rule or the default never rewrites it, and no report reads the rule.
+  - Frontend: the account form has the requirement and the default department, the chart shows the rule, and the Departments screen shows the check.
 - **Reports.** The department report adds up the revenue and the expenses by department (a department includes its sub-departments), with the departmental profit, and an Unassigned line for what has no
   department. Lines with a department on a balance sheet account are kept but not reported by it.
 - **Budget.** A budget row is an account and a department (NULL allowed), twelve months. A figure of the same account may be given for several departments. Budget against actual shows each account with a row per
@@ -42,5 +58,5 @@ on its own: (1) the master and the columns (built), (2) posting: day close, manu
 
 ## Not in the MVP
 
-A rule that makes the department required on an account; allocation of a shared expense over departments; a default department per system account; a department on the income statement as a
+Allocation of a shared expense over departments; closing entries by department (a year closes each account in one line); a department on the income statement as a
 filter other than through the department report.

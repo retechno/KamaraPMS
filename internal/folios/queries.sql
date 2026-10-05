@@ -66,13 +66,25 @@ INSERT INTO folio_items (
          THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = @property_id AND o.id = sqlc.narg(reverses_item_id)::bigint)
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
     END,
-    -- The department in force now (the default of the charge code); a reversal copies the department of the item it reverses.
+    -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
+    -- a reversal copies the department of the item it reverses.
     CASE WHEN sqlc.narg(reverses_item_id)::bigint IS NOT NULL
          THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = @property_id AND o.id = sqlc.narg(reverses_item_id)::bigint)
-         ELSE (SELECT c.department_id FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
+         ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
+                 FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+                WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
     END
 )
 RETURNING *;
+
+-- The department rule of the revenue account of a charge code, to refuse a charge that would be posted without a department the account requires.
+-- name: ChargeCodeDepartmentRule :one
+SELECT c.code AS charge_code, c.gl_account_code, COALESCE(a.name, '')::text AS account_name, COALESCE(a.department_requirement, 'OPTIONAL')::text AS requirement,
+       (c.department_id IS NOT NULL OR (a.default_department_id IS NOT NULL AND dd.is_active))::boolean AS has_department
+FROM charge_codes c
+LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+LEFT JOIN departments dd ON dd.property_id = a.property_id AND dd.id = a.default_department_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id = @id;
 
 -- name: InsertFolioItemComponent :exec
 INSERT INTO folio_item_components (

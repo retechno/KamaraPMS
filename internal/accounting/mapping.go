@@ -105,6 +105,12 @@ func (s *Service) SetAccountMap(ctx context.Context, propertyID int64, in []MapI
 		if len(fields) > 0 {
 			return apperr.Invalid("the mapping is invalid", fields...)
 		}
+		for _, e := range in { // a system account that requires a department needs a default for it
+			id := e.AccountID
+			if err := s.requireSetup(ctx, p.TenantID, propertyID, &id); err != nil {
+				return err
+			}
+		}
 		after, err := s.accountMap(ctx, p.TenantID, propertyID)
 		if err != nil {
 			return err

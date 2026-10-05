@@ -9,6 +9,37 @@ import (
 	"context"
 )
 
+const accountsDefaultingTo = `-- name: AccountsDefaultingTo :many
+SELECT a.code::text FROM gl_accounts a WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.default_department_id = $3 ORDER BY a.code LIMIT 5
+`
+
+type AccountsDefaultingToParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         *int64
+}
+
+// The accounts that take a department as their default, which stop it from being switched off.
+func (q *Queries) AccountsDefaultingTo(ctx context.Context, arg AccountsDefaultingToParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, accountsDefaultingTo, arg.TenantID, arg.PropertyID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var a_code string
+		if err := rows.Scan(&a_code); err != nil {
+			return nil, err
+		}
+		items = append(items, a_code)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteDepartment = `-- name: DeleteDepartment :exec
 DELETE FROM departments WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -63,7 +94,8 @@ SELECT d.id, d.parent_id, p.code AS parent_code, d.code, d.name, d.sort_order, d
         OR EXISTS (SELECT 1 FROM folio_items i WHERE i.property_id = d.property_id AND i.department_id = d.id)
         OR EXISTS (SELECT 1 FROM charge_codes c WHERE c.property_id = d.property_id AND c.department_id = d.id)
         OR EXISTS (SELECT 1 FROM supplier_bill_lines b WHERE b.property_id = d.property_id AND b.department_id = d.id)
-        OR EXISTS (SELECT 1 FROM budget_lines bl WHERE bl.property_id = d.property_id AND bl.department_id = d.id))::boolean AS in_use
+        OR EXISTS (SELECT 1 FROM budget_lines bl WHERE bl.property_id = d.property_id AND bl.department_id = d.id)
+        OR EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = d.property_id AND a.default_department_id = d.id))::boolean AS in_use
 FROM departments d
 LEFT JOIN departments p ON p.property_id = d.property_id AND p.id = d.parent_id
 WHERE d.tenant_id = $1 AND d.property_id = $2

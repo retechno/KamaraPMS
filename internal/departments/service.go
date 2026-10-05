@@ -219,6 +219,15 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		if len(fields) > 0 {
 			return apperr.Invalid("the department is invalid", fields...)
 		}
+		if old.Active && !next.Active {
+			codes, err := s.q(ctx).AccountsDefaultingTo(ctx, departmentsdb.AccountsDefaultingToParams{TenantID: p.TenantID, PropertyID: propertyID, ID: &id})
+			if err != nil {
+				return err
+			}
+			if len(codes) > 0 {
+				return apperr.Conflict("DEPARTMENT_IN_USE", "the department is the default department of account "+codes[0]+": choose another default first").WithContext("account_code", codes[0])
+			}
+		}
 		if old.Active && !next.Active && old.Children > 0 {
 			all, err := s.list(ctx, p.TenantID, propertyID, nil, nil)
 			if err != nil {

@@ -399,25 +399,27 @@ func (q *Queries) CountPostedDays(ctx context.Context, arg CountPostedDaysParams
 }
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_by, updated_by)
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, department_requirement, default_department_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $12)
+        $12, $13, $14, $14)
 RETURNING id
 `
 
 type CreateAccountParams struct {
-	TenantID       int64
-	PropertyID     int64
-	Code           string
-	Name           string
-	AccountType    string
-	NormalSide     string
-	ParentID       *int64
-	IsPostable     bool
-	IsActive       bool
-	StatementGroup *string
-	Description    *string
-	ActorID        *int64
+	TenantID              int64
+	PropertyID            int64
+	Code                  string
+	Name                  string
+	AccountType           string
+	NormalSide            string
+	ParentID              *int64
+	IsPostable            bool
+	IsActive              bool
+	StatementGroup        *string
+	Description           *string
+	DepartmentRequirement string
+	DefaultDepartmentID   *int64
+	ActorID               *int64
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (int64, error) {
@@ -433,6 +435,8 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 		arg.IsActive,
 		arg.StatementGroup,
 		arg.Description,
+		arg.DepartmentRequirement,
+		arg.DefaultDepartmentID,
 		arg.ActorID,
 	)
 	var id int64
@@ -621,6 +625,87 @@ func (q *Queries) DepartmentActivity(ctx context.Context, arg DepartmentActivity
 	return items, nil
 }
 
+const departmentSetupSources = `-- name: DepartmentSetupSources :many
+WITH acc AS (
+    SELECT a.id, a.code, a.name, a.department_requirement AS requirement, COALESCE(a.default_department_id, 0)::bigint AS default_department_id,
+           (a.default_department_id IS NOT NULL AND d.is_active)::boolean AS default_ok
+      FROM gl_accounts a
+      LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.default_department_id
+     WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.is_active AND a.is_postable
+       AND a.department_requirement <> 'OPTIONAL'
+       AND ($3::bigint IS NULL OR a.id = $3::bigint)
+)
+SELECT 'CHARGE_CODE'::text AS source_type, c.code::text AS source_ref, c.name::text AS source_name, acc.id AS account_id, acc.code::text AS account_code, acc.name::text AS account_name,
+       acc.requirement::text AS requirement, acc.default_department_id, acc.default_ok, (c.department_id IS NOT NULL)::boolean AS has_own
+  FROM charge_codes c JOIN acc ON acc.code = c.gl_account_code
+ WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.is_active
+UNION ALL
+SELECT 'TAX', t.code, t.name, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM taxes t JOIN acc ON acc.code = t.gl_account_code
+ WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.is_active
+UNION ALL
+SELECT 'SERVICE_CHARGE', s.code, s.name, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM service_charges s JOIN acc ON acc.code = s.gl_account_code
+ WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.is_active
+UNION ALL
+SELECT 'SYSTEM', m.map_key, m.map_key, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM gl_account_map m JOIN acc ON acc.id = m.account_id
+ WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.map_key <> 'RETAINED_EARNINGS'
+ORDER BY 5, 1, 2
+`
+
+type DepartmentSetupSourcesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  *int64
+}
+
+type DepartmentSetupSourcesRow struct {
+	SourceType          string
+	SourceRef           string
+	SourceName          string
+	AccountID           int64
+	AccountCode         string
+	AccountName         string
+	Requirement         string
+	DefaultDepartmentID int64
+	DefaultOk           bool
+	HasOwn              bool
+}
+
+// Everything that posts to an account on its own (a charge code, a tax, a service charge, a system key) next to the department rule of the account, to check that a required department
+// can always be found before the day close needs it. has_own: the source names a department itself (only a charge code does).
+func (q *Queries) DepartmentSetupSources(ctx context.Context, arg DepartmentSetupSourcesParams) ([]DepartmentSetupSourcesRow, error) {
+	rows, err := q.db.Query(ctx, departmentSetupSources, arg.TenantID, arg.PropertyID, arg.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DepartmentSetupSourcesRow{}
+	for rows.Next() {
+		var i DepartmentSetupSourcesRow
+		if err := rows.Scan(
+			&i.SourceType,
+			&i.SourceRef,
+			&i.SourceName,
+			&i.AccountID,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.Requirement,
+			&i.DefaultDepartmentID,
+			&i.DefaultOk,
+			&i.HasOwn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findJournalByKey = `-- name: FindJournalByKey :one
 SELECT id FROM gl_journals WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
@@ -639,7 +724,7 @@ func (q *Queries) FindJournalByKey(ctx context.Context, arg FindJournalByKeyPara
 }
 
 const getAccountByCode = `-- name: GetAccountByCode :one
-SELECT id, tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_at, created_by, updated_at, updated_by FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND code = $3
+SELECT id, tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_at, created_by, updated_at, updated_by, department_requirement, default_department_id FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND code = $3
 `
 
 type GetAccountByCodeParams struct {
@@ -668,12 +753,14 @@ func (q *Queries) GetAccountByCode(ctx context.Context, arg GetAccountByCodePara
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.DepartmentRequirement,
+		&i.DefaultDepartmentID,
 	)
 	return i, err
 }
 
 const getAccountRow = `-- name: GetAccountRow :one
-SELECT id, tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_at, created_by, updated_at, updated_by FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_at, created_by, updated_at, updated_by, department_requirement, default_department_id FROM gl_accounts WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetAccountRowParams struct {
@@ -702,6 +789,8 @@ func (q *Queries) GetAccountRow(ctx context.Context, arg GetAccountRowParams) (G
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.DepartmentRequirement,
+		&i.DefaultDepartmentID,
 	)
 	return i, err
 }
@@ -1045,7 +1134,8 @@ func (q *Queries) ListAccountMap(ctx context.Context, arg ListAccountMapParams) 
 
 const listAccounts = `-- name: ListAccounts :many
 SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.parent_id, p.code AS parent_code, a.is_postable, a.is_active, a.statement_group,
-       a.description, a.created_at,
+       a.description, a.created_at, a.department_requirement, a.default_department_id, dd.code AS default_department_code, dd.name AS default_department_name,
+       COALESCE(dd.is_active, false)::boolean AS default_department_active,
        (EXISTS (SELECT 1 FROM gl_accounts c WHERE c.property_id = a.property_id AND c.parent_id = a.id)
         OR EXISTS (SELECT 1 FROM gl_account_map m WHERE m.property_id = a.property_id AND m.account_id = a.id)
         OR EXISTS (SELECT 1 FROM charge_codes cc WHERE cc.property_id = a.property_id AND cc.gl_account_code = a.code)
@@ -1053,6 +1143,7 @@ SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.parent_id, p.code 
         OR EXISTS (SELECT 1 FROM service_charges s WHERE s.property_id = a.property_id AND s.gl_account_code = a.code))::boolean AS in_use
 FROM gl_accounts a
 LEFT JOIN gl_accounts p ON p.property_id = a.property_id AND p.id = a.parent_id
+LEFT JOIN departments dd ON dd.property_id = a.property_id AND dd.id = a.default_department_id
 WHERE a.tenant_id = $1 AND a.property_id = $2
   AND ($3::bigint IS NULL OR a.id = $3::bigint)
   AND ($4::text IS NULL OR a.account_type = $4::text)
@@ -1077,19 +1168,24 @@ type ListAccountsParams struct {
 }
 
 type ListAccountsRow struct {
-	ID             int64
-	Code           string
-	Name           string
-	AccountType    string
-	NormalSide     string
-	ParentID       *int64
-	ParentCode     *string
-	IsPostable     bool
-	IsActive       bool
-	StatementGroup *string
-	Description    *string
-	CreatedAt      time.Time
-	InUse          bool
+	ID                      int64
+	Code                    string
+	Name                    string
+	AccountType             string
+	NormalSide              string
+	ParentID                *int64
+	ParentCode              *string
+	IsPostable              bool
+	IsActive                bool
+	StatementGroup          *string
+	Description             *string
+	CreatedAt               time.Time
+	DepartmentRequirement   string
+	DefaultDepartmentID     *int64
+	DefaultDepartmentCode   *string
+	DefaultDepartmentName   *string
+	DefaultDepartmentActive bool
+	InUse                   bool
 }
 
 // An account with its parent's code and whether anything refers to it (children, the system map, a charge code, tax or
@@ -1126,6 +1222,11 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]L
 			&i.StatementGroup,
 			&i.Description,
 			&i.CreatedAt,
+			&i.DepartmentRequirement,
+			&i.DefaultDepartmentID,
+			&i.DefaultDepartmentCode,
+			&i.DefaultDepartmentName,
+			&i.DefaultDepartmentActive,
 			&i.InUse,
 		); err != nil {
 			return nil, err
@@ -1767,21 +1868,23 @@ func (q *Queries) TrialBalanceRows(ctx context.Context, arg TrialBalanceRowsPara
 const updateAccount = `-- name: UpdateAccount :exec
 UPDATE gl_accounts
 SET name = $1, parent_id = $2, is_postable = $3, is_active = $4, statement_group = $5,
-    description = $6, updated_by = $7
-WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+    description = $6, department_requirement = $7, default_department_id = $8, updated_by = $9
+WHERE tenant_id = $10 AND property_id = $11 AND id = $12
 `
 
 type UpdateAccountParams struct {
-	Name           string
-	ParentID       *int64
-	IsPostable     bool
-	IsActive       bool
-	StatementGroup *string
-	Description    *string
-	ActorID        *int64
-	TenantID       int64
-	PropertyID     int64
-	ID             int64
+	Name                  string
+	ParentID              *int64
+	IsPostable            bool
+	IsActive              bool
+	StatementGroup        *string
+	Description           *string
+	DepartmentRequirement string
+	DefaultDepartmentID   *int64
+	ActorID               *int64
+	TenantID              int64
+	PropertyID            int64
+	ID                    int64
 }
 
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) error {
@@ -1792,6 +1895,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) er
 		arg.IsActive,
 		arg.StatementGroup,
 		arg.Description,
+		arg.DepartmentRequirement,
+		arg.DefaultDepartmentID,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,

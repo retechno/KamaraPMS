@@ -336,7 +336,9 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				var lineErrs []apperr.FieldError
 				for i, l := range in.Lines {
 					at := func(f string) string { return "lines[" + strconv.Itoa(i) + "]." + f }
-					if derr := po.CheckDepartment(ctx, l.DepartmentID, at("department_id")); derr != nil {
+					dept, derr := po.ResolveDepartment(ctx, l.AccountID, l.DepartmentID, at("department_id"))
+					in.Lines[i].DepartmentID = dept
+					if derr != nil {
 						var ae *apperr.Error
 						if errors.As(derr, &ae) && len(ae.Fields) > 0 {
 							lineErrs = append(lineErrs, ae.Fields...)
@@ -440,7 +442,7 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				taxByAccount := map[int64]*accounting.SystemLine{}
 				var taxOrder []int64
 				for i, l := range in.Lines {
-					jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, DepartmentID: l.DepartmentID, Debit: bs[i].net, Description: strings.TrimSpace(l.Description), SourceType: "CL_CREDIT_NOTE", SourceRef: number})
+					jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, DepartmentID: in.Lines[i].DepartmentID, Debit: bs[i].net, Description: strings.TrimSpace(l.Description), SourceType: "CL_CREDIT_NOTE", SourceRef: number})
 					if bs[i].tax.IsPositive() {
 						acc, aerr := po.TaxPayableAccount(ctx, bs[i].taxGL)
 						if aerr != nil {
@@ -581,9 +583,11 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 				if cerr := po.CheckAccount(ctx, in.AccountID, "account_id"); cerr != nil {
 					return cerr
 				}
-				if cerr := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); cerr != nil {
+				dept, cerr := po.ResolveDepartment(ctx, in.AccountID, in.DepartmentID, "department_id")
+				if cerr != nil {
 					return cerr
 				}
+				in.DepartmentID = dept
 				if invoice.Status != InvoiceIssued {
 					return apperr.Conflict("INVOICE_NOT_PAYABLE", "a voided invoice has no write-off")
 				}

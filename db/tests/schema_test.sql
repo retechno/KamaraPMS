@@ -1570,6 +1570,16 @@ SELECT expect_error('the department of a budget line never changes', '23001',
     $q$UPDATE budget_lines SET department_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE department_id = (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('BALI')) AND month = 1$q$);
 SELECT expect_error('a department a budget line points to is not deleted', '23503', $q$DELETE FROM departments WHERE code = 'FB' AND property_id = pr('BALI')$q$);
 
+-- The department rule of an account (00054)
+SELECT expect_error('the department requirement is NONE, OPTIONAL or REQUIRED', '23514',
+    $q$UPDATE gl_accounts SET department_requirement = 'MAYBE' WHERE code = '1110' AND property_id = pr('BALI')$q$);
+SELECT expect_ok('an account may require a department and have a default',
+    $q$UPDATE gl_accounts SET department_requirement = 'REQUIRED', default_department_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE code = '1110' AND property_id = pr('BALI')$q$);
+SELECT expect_error('an account that takes no department has no default', '23514',
+    $q$UPDATE gl_accounts SET department_requirement = 'NONE', default_department_id = (SELECT id FROM departments WHERE code = 'ROOMS' AND property_id = pr('BALI')) WHERE code = '1110' AND property_id = pr('BALI')$q$);
+SELECT expect_error('the default department of an account is one of the property', '23503',
+    $q$UPDATE gl_accounts SET default_department_id = (SELECT id FROM departments WHERE code = 'FB' AND property_id = pr('SG')) WHERE code = '1110' AND property_id = pr('BALI')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Audit log
 ------------------------------------------------------------------------------------------

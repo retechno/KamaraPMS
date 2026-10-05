@@ -22,20 +22,22 @@ type AccountingSetting struct {
 }
 
 type GlAccount struct {
-	ID             int64
-	TenantID       int64
-	PropertyID     int64
-	Code           string
-	Name           string
-	AccountType    string
-	NormalSide     string
-	ParentID       *int64
-	IsPostable     bool
-	IsActive       bool
-	StatementGroup *string
-	Description    *string
-	CreatedAt      time.Time
-	CreatedBy      *int64
-	UpdatedAt      time.Time
-	UpdatedBy      *int64
+	ID                    int64
+	TenantID              int64
+	PropertyID            int64
+	Code                  string
+	Name                  string
+	AccountType           string
+	NormalSide            string
+	ParentID              *int64
+	IsPostable            bool
+	IsActive              bool
+	StatementGroup        *string
+	Description           *string
+	CreatedAt             time.Time
+	CreatedBy             *int64
+	UpdatedAt             time.Time
+	UpdatedBy             *int64
+	DepartmentRequirement string
+	DefaultDepartmentID   *int64
 }

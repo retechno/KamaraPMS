@@ -632,10 +632,11 @@ Permissions: `accounting.view` (read), `accounting.manage` (chart and system acc
 | Method and path | Permission | Notes |
 |---|---|---|
 | `GET {P}/accounting/accounts` | `accounting.view` | Filters `account_type`, `statement_group`, `active`, `postable`, `q`; `format=csv` exports the chart |
-| `POST {P}/accounting/accounts` | `accounting.manage` | 409 `CODE_TAKEN`; field errors for the group, parent and code |
+| `POST {P}/accounting/accounts` | `accounting.manage` | 409 `CODE_TAKEN`; field errors for the group, parent and code; `department_requirement` (NONE, OPTIONAL, REQUIRED) and `default_department_id` (422 `DEPARTMENT_NOT_ALLOWED` on a NONE account) |
 | `GET/PATCH/DELETE {P}/accounting/accounts/{id}` | read: `accounting.view`; write: `accounting.manage` | 409 `ACCOUNT_IN_USE`, `ACCOUNT_HAS_CHILDREN` |
 | `POST {P}/accounting/accounts/import` | `accounting.manage` | `{csv, dry_run}`; all or nothing; row errors as `rows[N].field` |
 | `GET/PUT {P}/accounting/account-map` | read: `accounting.view`; write: `accounting.manage` | The ten system keys; PUT `{entries: [{map_key, account_id}]}` is all or nothing |
+| `GET {P}/accounting/department-setup` | `accounting.view` | `ok`, `issues` (`severity` ERROR or WARNING, `code`, `source_type`, `source_ref`, `account_code`, `message`): what a REQUIRED account cannot find a department for; `PATCH accounts/{id}` (rule), `PUT account-map`, charge codes, taxes and service charges are refused with 409 `DEPARTMENT_SETUP_INCOMPLETE` or 422 `DEPARTMENT_REQUIRED` when they would create such a gap |
 | `GET {P}/accounting/unmapped` | `accounting.view` | Charge codes, taxes and service charges whose account code the journals cannot use, and where they are posted instead |
 
 ### 19.1 Journals and periods

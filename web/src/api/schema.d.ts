@@ -4454,6 +4454,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/department-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Whether every account that requires a department can find one (accounting.view)
+         * @description The configuration check before a night audit meets a gap. For each active account that takes a rule other than OPTIONAL it looks at what posts to the account on its own: a charge code (its own department, else the default of the account), a tax, a service charge or a system account (the default of the account only). `ERROR` issues are what would stop the day close or a charge: `DEPARTMENT_MISSING` (no department for a source of a REQUIRED account), `DEFAULT_SWITCHED_OFF`. `WARNING` `DEPARTMENT_IGNORED`: a charge code names a department but its account takes none, so it is dropped. `ok` is false when there is an ERROR.
+         */
+        get: operations["checkDepartmentSetup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/accounting/journals": {
         parameters: {
             query?: never;
@@ -10083,6 +10105,38 @@ export interface components {
             in_use: boolean;
             /** Format: date-time */
             created_at: string;
+            /**
+             * @description What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with.
+             * @enum {string}
+             */
+            department_requirement: "NONE" | "OPTIONAL" | "REQUIRED";
+            /**
+             * Format: int64
+             * @description The department a line gets when none is named (an automatic posting, or a form that leaves it empty). Not on an account that takes none. A department that is the default of an account cannot be switched off.
+             */
+            default_department_id: number | null;
+            default_department_code?: string;
+            default_department_name?: string;
+        };
+        DepartmentSetupIssue: {
+            /** @enum {string} */
+            severity: "ERROR" | "WARNING";
+            /** @enum {string} */
+            code: "DEPARTMENT_MISSING" | "DEFAULT_SWITCHED_OFF" | "DEPARTMENT_IGNORED";
+            /** @enum {string} */
+            source_type: "CHARGE_CODE" | "TAX" | "SERVICE_CHARGE" | "SYSTEM";
+            /** @description The code of the charge code */
+            source_ref: string;
+            source_name: string;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            message: string;
+        };
+        DepartmentSetupReport: {
+            ok: boolean;
+            issues: components["schemas"]["DepartmentSetupIssue"][];
         };
         GlAccountList: {
             data: components["schemas"]["GlAccount"][];
@@ -10104,6 +10158,16 @@ export interface components {
             is_active: boolean;
             statement_group?: string;
             description?: string;
+            /**
+             * @description What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with.
+             * @enum {string}
+             */
+            department_requirement?: "NONE" | "OPTIONAL" | "REQUIRED";
+            /**
+             * Format: int64
+             * @description The department a line gets when none is named (an automatic posting, or a form that leaves it empty). Not on an account that takes none. A department that is the default of an account cannot be switched off.
+             */
+            default_department_id?: number | null;
         };
         PatchGlAccount: {
             name?: string;
@@ -10116,6 +10180,16 @@ export interface components {
             is_active?: boolean;
             statement_group?: string;
             description?: string;
+            /**
+             * @description What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with.
+             * @enum {string}
+             */
+            department_requirement?: "NONE" | "OPTIONAL" | "REQUIRED";
+            /**
+             * Format: int64
+             * @description Below 1 removes the default. Switching an account to NONE removes it too. Making an account REQUIRED, or taking its default away, is 409 `DEPARTMENT_SETUP_INCOMPLETE` while a charge code, tax, service charge or system account that posts to it would have no department.
+             */
+            default_department_id?: number;
         };
         ImportGlAccounts: {
             /** @description CSV text with a header row; needs the columns code, name and type, and may have parent_code, postable, group, active and description in any order. */
@@ -18481,6 +18555,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GlCodeReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    checkDepartmentSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentSetupReport"];
                 };
             };
             403: components["responses"]["Problem"];

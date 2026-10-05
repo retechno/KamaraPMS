@@ -10,7 +10,8 @@ SELECT * FROM accounting_settings WHERE tenant_id = @tenant_id AND property_id =
 -- service charge that carries its code), which is what stops it from being deleted or deactivated.
 -- name: ListAccounts :many
 SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.parent_id, p.code AS parent_code, a.is_postable, a.is_active, a.statement_group,
-       a.description, a.created_at,
+       a.description, a.created_at, a.department_requirement, a.default_department_id, dd.code AS default_department_code, dd.name AS default_department_name,
+       COALESCE(dd.is_active, false)::boolean AS default_department_active,
        (EXISTS (SELECT 1 FROM gl_accounts c WHERE c.property_id = a.property_id AND c.parent_id = a.id)
         OR EXISTS (SELECT 1 FROM gl_account_map m WHERE m.property_id = a.property_id AND m.account_id = a.id)
         OR EXISTS (SELECT 1 FROM charge_codes cc WHERE cc.property_id = a.property_id AND cc.gl_account_code = a.code)
@@ -18,6 +19,7 @@ SELECT a.id, a.code, a.name, a.account_type, a.normal_side, a.parent_id, p.code 
         OR EXISTS (SELECT 1 FROM service_charges s WHERE s.property_id = a.property_id AND s.gl_account_code = a.code))::boolean AS in_use
 FROM gl_accounts a
 LEFT JOIN gl_accounts p ON p.property_id = a.property_id AND p.id = a.parent_id
+LEFT JOIN departments dd ON dd.property_id = a.property_id AND dd.id = a.default_department_id
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
   AND (sqlc.narg(id)::bigint IS NULL OR a.id = sqlc.narg(id)::bigint)
   AND (sqlc.narg(account_type)::text IS NULL OR a.account_type = sqlc.narg(account_type)::text)
@@ -35,15 +37,15 @@ SELECT * FROM gl_accounts WHERE tenant_id = @tenant_id AND property_id = @proper
 SELECT * FROM gl_accounts WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: CreateAccount :one
-INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, created_by, updated_by)
+INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, parent_id, is_postable, is_active, statement_group, description, department_requirement, default_department_id, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @code, @name, @account_type, @normal_side, sqlc.narg(parent_id), @is_postable, @is_active, sqlc.narg(statement_group), sqlc.narg(description),
-        sqlc.narg(actor_id), sqlc.narg(actor_id))
+        @department_requirement, sqlc.narg(default_department_id), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateAccount :exec
 UPDATE gl_accounts
 SET name = @name, parent_id = sqlc.narg(parent_id), is_postable = @is_postable, is_active = @is_active, statement_group = sqlc.narg(statement_group),
-    description = sqlc.narg(description), updated_by = sqlc.narg(actor_id)
+    description = sqlc.narg(description), department_requirement = @department_requirement, default_department_id = sqlc.narg(default_department_id), updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: DeleteAccount :exec
@@ -394,3 +396,33 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND a.account_ty
 GROUP BY COALESCE(l.department_id, 0), a.id
 HAVING sum(l.debit - l.credit) <> 0
 ORDER BY 1, a.code;
+
+-- Everything that posts to an account on its own (a charge code, a tax, a service charge, a system key) next to the department rule of the account, to check that a required department
+-- can always be found before the day close needs it. has_own: the source names a department itself (only a charge code does).
+-- name: DepartmentSetupSources :many
+WITH acc AS (
+    SELECT a.id, a.code, a.name, a.department_requirement AS requirement, COALESCE(a.default_department_id, 0)::bigint AS default_department_id,
+           (a.default_department_id IS NOT NULL AND d.is_active)::boolean AS default_ok
+      FROM gl_accounts a
+      LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.default_department_id
+     WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.is_active AND a.is_postable
+       AND a.department_requirement <> 'OPTIONAL'
+       AND (sqlc.narg(account_id)::bigint IS NULL OR a.id = sqlc.narg(account_id)::bigint)
+)
+SELECT 'CHARGE_CODE'::text AS source_type, c.code::text AS source_ref, c.name::text AS source_name, acc.id AS account_id, acc.code::text AS account_code, acc.name::text AS account_name,
+       acc.requirement::text AS requirement, acc.default_department_id, acc.default_ok, (c.department_id IS NOT NULL)::boolean AS has_own
+  FROM charge_codes c JOIN acc ON acc.code = c.gl_account_code
+ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.is_active
+UNION ALL
+SELECT 'TAX', t.code, t.name, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM taxes t JOIN acc ON acc.code = t.gl_account_code
+ WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.is_active
+UNION ALL
+SELECT 'SERVICE_CHARGE', s.code, s.name, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM service_charges s JOIN acc ON acc.code = s.gl_account_code
+ WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.is_active
+UNION ALL
+SELECT 'SYSTEM', m.map_key, m.map_key, acc.id, acc.code, acc.name, acc.requirement, acc.default_department_id, acc.default_ok, false
+  FROM gl_account_map m JOIN acc ON acc.id = m.account_id
+ WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.map_key <> 'RETAINED_EARNINGS'
+ORDER BY 5, 1, 2;

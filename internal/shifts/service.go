@@ -593,9 +593,11 @@ func (s *Service) postMovement(ctx context.Context, p auth.Principal, propertyID
 	if err := po.CheckAccount(ctx, in.AccountID, "account_id"); err != nil {
 		return 0, err
 	}
-	if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+	dept, err := po.ResolveDepartment(ctx, in.AccountID, in.DepartmentID, "department_id")
+	if err != nil {
 		return 0, err
 	}
+	in.DepartmentID = dept
 	other := accounting.SystemLine{AccountID: in.AccountID, DepartmentID: in.DepartmentID, SourceType: "SHIFT", SourceRef: shiftNumber, Description: reason}
 	till := accounting.SystemLine{AccountID: cash, SourceType: "SHIFT", SourceRef: shiftNumber, Description: reason}
 	label := "Pay-in"
@@ -781,7 +783,8 @@ func (s *Service) postOverShort(ctx context.Context, propertyID int64, bd civil.
 	if err != nil {
 		return 0, err
 	}
-	if err := po.CheckDepartment(ctx, department, "department_id"); err != nil {
+	department, err = po.ResolveDepartment(ctx, ov, department, "department_id")
+	if err != nil {
 		return 0, err
 	}
 	amount := overShort.Abs()

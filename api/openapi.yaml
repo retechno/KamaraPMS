@@ -5165,6 +5165,22 @@ paths:
               schema: { $ref: "#/components/schemas/GlCodeReport" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/department-setup:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: checkDepartmentSetup
+      summary: Whether every account that requires a department can find one (accounting.view)
+      description: "The configuration check before a night audit meets a gap. For each active account that takes a rule other than OPTIONAL it looks at what posts to the account on its own: a charge code (its own department, else the default of the account), a tax, a service charge or a system account (the default of the account only). `ERROR` issues are what would stop the day close or a charge: `DEPARTMENT_MISSING` (no department for a source of a REQUIRED account), `DEFAULT_SWITCHED_OFF`. `WARNING` `DEPARTMENT_IGNORED`: a charge code names a department but its account takes none, so it is dropped. `ok` is false when there is an ERROR."
+      tags: [accounting]
+      responses:
+        "200":
+          description: The check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartmentSetupReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/accounting/journals:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -11196,7 +11212,7 @@ components:
       enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
     GlAccount:
       type: object
-      required: [id, code, name, account_type, normal_side, parent_id, is_postable, is_active, in_use, created_at]
+      required: [id, code, name, account_type, normal_side, parent_id, is_postable, is_active, in_use, created_at, department_requirement, default_department_id]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -11211,6 +11227,31 @@ components:
         description: { type: string }
         in_use: { type: boolean, description: "Something refers to the account: children, the system map, a charge code, tax or service charge." }
         created_at: { type: string, format: date-time }
+        department_requirement: { type: string, enum: [NONE, OPTIONAL, REQUIRED], description: "What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with." }
+        default_department_id: { type: [integer, "null"], format: int64, description: "The department a line gets when none is named (an automatic posting, or a form that leaves it empty). Not on an account that takes none. A department that is the default of an account cannot be switched off." }
+        default_department_code: { type: string }
+        default_department_name: { type: string }
+    DepartmentSetupIssue:
+      type: object
+      required: [severity, code, source_type, source_ref, source_name, account_id, account_code, account_name, message]
+      properties:
+        severity: { type: string, enum: [ERROR, WARNING] }
+        code: { type: string, enum: [DEPARTMENT_MISSING, DEFAULT_SWITCHED_OFF, DEPARTMENT_IGNORED] }
+        source_type: { type: string, enum: [CHARGE_CODE, TAX, SERVICE_CHARGE, SYSTEM] }
+        source_ref: { type: string, description: The code of the charge code, tax or service charge, or the key of the system account. }
+        source_name: { type: string }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        message: { type: string }
+    DepartmentSetupReport:
+      type: object
+      required: [ok, issues]
+      properties:
+        ok: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/DepartmentSetupIssue" }
     GlAccountList:
       type: object
       required: [data]
@@ -11232,6 +11273,8 @@ components:
         is_active: { type: boolean, default: true }
         statement_group: { type: string }
         description: { type: string, maxLength: 300 }
+        department_requirement: { type: string, enum: [NONE, OPTIONAL, REQUIRED], description: "What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with." }
+        default_department_id: { type: [integer, "null"], format: int64, description: "The department a line gets when none is named (an automatic posting, or a form that leaves it empty). Not on an account that takes none. A department that is the default of an account cannot be switched off." }
     PatchGlAccount:
       type: object
       additionalProperties: false
@@ -11242,6 +11285,8 @@ components:
         is_active: { type: boolean }
         statement_group: { type: string }
         description: { type: string, maxLength: 300 }
+        department_requirement: { type: string, enum: [NONE, OPTIONAL, REQUIRED], description: "What a journal line of the account does with the department. NONE: no department (a department named is 422 `DEPARTMENT_NOT_ALLOWED`). OPTIONAL: it may have one (the default). REQUIRED: every new line has one, the one named or the default of the account, or the posting is refused (422 `DEPARTMENT_REQUIRED`). A line keeps what it was posted with." }
+        default_department_id: { type: integer, format: int64, description: "Below 1 removes the default. Switching an account to NONE removes it too. Making an account REQUIRED, or taking its default away, is 409 `DEPARTMENT_SETUP_INCOMPLETE` while a charge code, tax, service charge or system account that posts to it would have no department." }
     ImportGlAccounts:
       type: object
       required: [csv]

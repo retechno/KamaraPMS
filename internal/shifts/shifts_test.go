@@ -604,3 +604,32 @@ func TestTheCashOverShortLineCarriesTheDepartmentOfTheClose(t *testing.T) {
 		t.Fatalf("department of the over and short line: %v", got)
 	}
 }
+
+func TestTheDepartmentRuleOfTheAccountAppliesToAPayOutAndTheOverShortLine(t *testing.T) {
+	f := setup(t)
+	acct := f.account(t, "6190")
+	sh := f.open(t, f.cashier, "", "100000")
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	// required with no default: refused, with the field the form has
+	must(t, f.Exec(t, `UPDATE gl_accounts SET department_requirement = 'REQUIRED' WHERE property_id = $1 AND id = $2`, f.propID, acct))
+	_, err = f.Shifts.Move(f.cashier, f.propID, sh.ID, "m0", shifts.MovementInput{Kind: "PAY_OUT", Amount: "1000", AccountID: acct, Reason: "taxi"})
+	wantCode(t, err, "VALIDATION_FAILED")
+	// the default of the account fills it
+	must(t, f.Exec(t, `UPDATE gl_accounts SET default_department_id = $3 WHERE property_id = $1 AND id = $2`, f.propID, acct, dep.ID))
+	_, err = f.Shifts.Move(f.cashier, f.propID, sh.ID, "m1", shifts.MovementInput{Kind: "PAY_OUT", Amount: "30000", AccountID: acct, Reason: "taxi"})
+	must(t, err)
+	var got *int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT department_id FROM gl_journal_lines WHERE property_id = $1 AND account_id = $2 ORDER BY id DESC LIMIT 1`, f.propID, acct).Scan(&got))
+	if got == nil || *got != dep.ID {
+		t.Fatalf("the pay-out took the default department: %v", got)
+	}
+	// the cash over and short account that requires a department and has no default stops the close that has a difference
+	var ov int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT account_id FROM gl_account_map WHERE property_id = $1 AND map_key = 'CASH_OVER_SHORT'`, f.propID).Scan(&ov))
+	must(t, f.Exec(t, `UPDATE gl_accounts SET department_requirement = 'REQUIRED' WHERE property_id = $1 AND id = $2`, f.propID, ov))
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "60000", Reason: "a coin lost", Approval: f.approval()})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, shifts.CloseInput{CountedCash: "60000", Reason: "a coin lost", Approval: f.approval(), DepartmentID: &dep.ID})
+	must(t, err)
+}

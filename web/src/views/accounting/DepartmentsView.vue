@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Department } from '@/api/types'
+import type { Department, DepartmentSetupReport } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -31,6 +31,7 @@ const busy = ref(false)
 const adding = ref(false)
 const editing = ref<{ id: number; name: string; sort_order: string } | null>(null)
 const form = reactive({ code: '', name: '', parent_id: '', sort_order: '' })
+const setup = ref<DepartmentSetupReport | null>(null)
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -42,6 +43,8 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/departments', { params: { path: { propertyId } } })
     departments.value = data?.data ?? []
+    const check = await api.GET('/api/v1/properties/{propertyId}/accounting/department-setup', { params: { path: { propertyId } } })
+    setup.value = Array.isArray(check.data?.issues) ? check.data : null
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -123,6 +126,7 @@ async function remove(d: Department): Promise<void> {
 
 watch(() => pid.value, () => {
   departments.value = []
+  setup.value = null
   loaded.value = false
   adding.value = false
   editing.value = null
@@ -173,6 +177,18 @@ watch(() => pid.value, () => {
           </div>
         </CardContent>
       </form>
+    </Card>
+    <Card v-if="setup && setup.issues.length" class="mb-4" data-testid="setup-check">
+      <CardHeader><CardTitle>{{ t('departments.setupTitle') }}</CardTitle></CardHeader>
+      <CardContent class="flex flex-col gap-2 text-sm">
+        <p class="m-0 text-muted-foreground">{{ setup.ok ? t('departments.setupWarnings') : t('departments.setupErrors') }}</p>
+        <ul class="m-0 flex list-none flex-col gap-1 p-0">
+          <li v-for="(i, n) in setup.issues" :key="n" class="flex items-start gap-2" :data-testid="`setup-issue-${i.severity}`">
+            <Badge :variant="i.severity === 'ERROR' ? 'destructive' : 'outline'">{{ i.severity === 'ERROR' ? t('departments.setupError') : t('departments.setupWarning') }}</Badge>
+            <span>{{ i.message }}</span>
+          </li>
+        </ul>
+      </CardContent>
     </Card>
     <Card>
       <EmptyState v-if="loaded && !departments.length" :title="t('departments.empty')" data-testid="empty" />

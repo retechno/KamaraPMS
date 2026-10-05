@@ -17,13 +17,13 @@ vi.mock('@/api/client', () => ({
 
 const account = (over: Record<string, unknown>) => ({
   id: 1, code: '4110', name: 'Room revenue - transient', account_type: 'REVENUE', normal_side: 'CREDIT', parent_id: 10, parent_code: '4100', is_postable: true, is_active: true,
-  statement_group: 'REV_ROOMS', in_use: false, created_at: '2026-09-30T00:00:00Z', ...over,
+  statement_group: 'REV_ROOMS', in_use: false, created_at: '2026-09-30T00:00:00Z', department_requirement: 'OPTIONAL', default_department_id: null, ...over,
 })
 const accounts = [
   account({ id: 20, code: '4000', name: 'Operating revenue', parent_id: null, parent_code: undefined, is_postable: false, statement_group: undefined, in_use: true }),
   account({ id: 10, code: '4100', name: 'Rooms revenue', parent_id: 20, parent_code: '4000', is_postable: false, in_use: true }),
   account({}),
-  account({ id: 2, code: '4120', name: 'Room revenue - group', in_use: true }),
+  account({ id: 2, code: '4120', name: 'Room revenue - group', in_use: true, department_requirement: 'REQUIRED', default_department_id: 3, default_department_code: 'ROOMS' }),
   account({ id: 3, code: '4199', name: 'Old rooms account', is_active: false }),
   account({ id: 30, code: '1210', name: 'Guest ledger', account_type: 'ASSET', normal_side: 'DEBIT', parent_id: null, statement_group: 'RECEIVABLES', in_use: true }),
 ]
@@ -92,9 +92,33 @@ describe('ChartOfAccountsView', () => {
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toEqual({
       code: '4170', name: 'Late check-out', account_type: 'REVENUE', normal_side: undefined, parent_id: 10, is_postable: true, is_active: true,
-      statement_group: 'REV_ROOMS', description: undefined,
+      statement_group: 'REV_ROOMS', description: undefined, department_requirement: 'OPTIONAL', default_department_id: null,
     })
     expect(w.find('[data-testid=account-form]').exists()).toBe(false)
+  })
+
+  it('sets the department rule of an account, and an account that takes none has no default', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=edit-4110]').trigger('click')
+    await w.get('select[name=department_requirement]').setValue('REQUIRED')
+    await w.get('[data-testid=account-form]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[0]?.[1].body).toMatchObject({ department_requirement: 'REQUIRED', default_department_id: 0 })
+    await w.get('[data-testid=edit-4110]').trigger('click')
+    await w.get('select[name=department_requirement]').setValue('NONE')
+    await w.get('[data-testid=account-form]').trigger('submit')
+    await flushPromises()
+    const body = PATCH.mock.calls[1]?.[1].body as Record<string, unknown>
+    expect(body.department_requirement).toBe('NONE')
+    expect(body.default_department_id).toBeUndefined()
+  })
+
+  it('shows the rule of an account in the list', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=rule-4120]').text()).toBe('Required · ROOMS')
+    expect(w.find('[data-testid=rule-4110]').exists()).toBe(false) // optional with no default: nothing to show
   })
 
   it('offers only the groups of the chosen type', async () => {
