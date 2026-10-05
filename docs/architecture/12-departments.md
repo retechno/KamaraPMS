@@ -31,7 +31,7 @@ on its own: (1) the master and the columns (built), (2) posting: day close, manu
   (the default), `supplier_bill_lines.department_id`, `budget_lines.department_id`. All are composite foreign keys with the property. A line may name a department or a sub-department.
 - **Posting.** The day close groups the revenue lines by account **and** department, so the journal of a day has a revenue line per account and department. Guest ledger, tax, payments and city ledger lines have none.
   A reversal copies the department of the line it reverses. A manual journal line and a supplier bill line name their department themselves (optional). The journals the system makes from a form where the user picks the other account carry an
-  optional `department_id` too (see "Departments on system journals" in the README): a bank adjustment, the commission of a card settlement, a credit note line, a write-off, a cash pay-in or pay-out and the penalty of a tax payment. What the system decides itself (cash over and short, the closing of a year, the tax lines of a credit note) carries none.
+  optional `department_id` too (see "Departments on system journals" in the README): a bank adjustment, the commission of a card settlement, a credit note line, a write-off, a cash pay-in or pay-out, the penalty of a tax payment and the cash over and short of a shift close (chosen when closing). What the system decides itself (the closing of a year, the tax lines of a credit note) carries none.
 - **Reports.** The department report adds up the revenue and the expenses by department (a department includes its sub-departments), with the departmental profit, and an Unassigned line for what has no
   department. Lines with a department on a balance sheet account are kept but not reported by it.
 - **Budget.** A budget row is an account and a department (NULL allowed), twelve months. A figure of the same account may be given for several departments. Budget against actual shows each account with a row per
@@ -42,5 +42,5 @@ on its own: (1) the master and the columns (built), (2) posting: day close, manu
 
 ## Not in the MVP
 
-A rule that makes the department required on an account; allocation of a shared expense over departments; a default department per system account (cash over and short); a department on the income statement as a
+A rule that makes the department required on an account; allocation of a shared expense over departments; a default department per system account; a department on the income statement as a
 filter other than through the department report.

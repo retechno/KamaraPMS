@@ -8305,6 +8305,11 @@ export interface components {
              * @description The user who gets the drawer next.
              */
             hand_over_to?: number | null;
+            /**
+             * Format: int64
+             * @description The department of the cash over and short line, when there is a difference and it belongs to one (422 `DEPARTMENT_NOT_FOUND`, `DEPARTMENT_INACTIVE`).
+             */
+            department_id?: number | null;
         };
         OpenCashierShiftSummary: {
             /** Format: int64 */

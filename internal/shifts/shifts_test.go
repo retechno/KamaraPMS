@@ -586,3 +586,21 @@ func TestAPayOutCarriesTheDepartmentOfItsExpense(t *testing.T) {
 		t.Fatalf("department of the expense line: %v", got)
 	}
 }
+
+func TestTheCashOverShortLineCarriesTheDepartmentOfTheClose(t *testing.T) {
+	f := setup(t)
+	sh := f.open(t, f.cashier, "", "100000")
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	in := shifts.CloseInput{CountedCash: "99000", Reason: "a coin lost", Approval: f.approval(), DepartmentID: ptr(int64(999999))}
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, in)
+	wantCode(t, err, "VALIDATION_FAILED")
+	in.DepartmentID = &dep.ID
+	_, err = f.Shifts.Close(f.cashier, f.propID, sh.ID, in)
+	must(t, err)
+	var got *int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT department_id FROM gl_journal_lines WHERE property_id = $1 AND source_type = 'SHIFT' AND debit > 0 AND description LIKE 'Cash short%' ORDER BY id DESC LIMIT 1`, f.propID).Scan(&got))
+	if got == nil || *got != dep.ID {
+		t.Fatalf("department of the over and short line: %v", got)
+	}
+}

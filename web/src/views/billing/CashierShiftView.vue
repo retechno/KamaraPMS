@@ -36,7 +36,7 @@ const loaded = ref(false)
 
 const openForm = reactive({ drawer: '', opening_float: '' })
 const move = reactive({ kind: 'DROP' as 'DROP' | 'PAY_IN' | 'PAY_OUT', amount: '', account_id: 0, department_id: null as number | null, reason: '' })
-const closing = reactive({ open: false, counted: '', reason: '', asking: false })
+const closing = reactive({ open: false, counted: '', reason: '', department_id: null as number | null, asking: false })
 const settingsForm = reactive({ require_shift_for_cash: true, max_variance: '0', block_night_audit: true })
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
 let moveKey = newIdempotencyKey()
@@ -147,6 +147,7 @@ function startClose(): void {
   closing.asking = false
   closing.counted = ''
   closing.reason = ''
+  closing.department_id = null
   error.value = null
   notice.value = ''
 }
@@ -168,7 +169,7 @@ async function close(approval?: Approval): Promise<void> {
   try {
     await api.POST('/api/v1/properties/{propertyId}/cashier/shifts/{id}/close', {
       params: { path: { propertyId, id: sh.id } },
-      body: { counted_cash: closing.counted.trim(), reason: closing.reason.trim() || undefined, approval },
+      body: { counted_cash: closing.counted.trim(), reason: closing.reason.trim() || undefined, department_id: closing.department_id, approval },
     })
     closing.open = false
     closing.asking = false
@@ -323,6 +324,9 @@ watch(() => move.kind, (k) => {
               </FormField>
               <FormField :label="t('shifts.varianceReason')" :error="fieldError('reason')">
                 <template #default="{ id, invalid }"><Input :id="id" v-model="closing.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+              </FormField>
+              <FormField :label="t('departments.field')" :error="fieldError('department_id')">
+                <template #default="{ id }"><DepartmentSelect :id="id" v-model="closing.department_id" name="close_department" /></template>
               </FormField>
             </div>
             <p v-if="difference !== null" class="mt-3 text-sm" data-testid="difference">

@@ -735,7 +735,7 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 			} else if !approval.IsZero() {
 				approvedBy = ptr(approval.UserID())
 			}
-			if jid, err := s.postOverShort(ctx, propertyID, day.BusinessDate, row.ShiftNumber, overShort); err != nil {
+			if jid, err := s.postOverShort(ctx, propertyID, day.BusinessDate, row.ShiftNumber, overShort, in.DepartmentID); err != nil {
 				if !apperr.IsCode(err, "ACCOUNTING_NOT_SET_UP") { // a property without books has nothing to journal
 					return err
 				}
@@ -768,7 +768,7 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 }
 
 // postOverShort journals the difference of a shift: short (the count is less than expected) debits the cash over and short account and credits cash, over does the opposite.
-func (s *Service) postOverShort(ctx context.Context, propertyID int64, bd civil.Date, shiftNumber string, overShort decimal.Decimal) (int64, error) {
+func (s *Service) postOverShort(ctx context.Context, propertyID int64, bd civil.Date, shiftNumber string, overShort decimal.Decimal, department *int64) (int64, error) {
 	po, err := s.acct.BeginPosting(ctx, propertyID)
 	if err != nil {
 		return 0, err
@@ -781,9 +781,12 @@ func (s *Service) postOverShort(ctx context.Context, propertyID int64, bd civil.
 	if err != nil {
 		return 0, err
 	}
+	if err := po.CheckDepartment(ctx, department, "department_id"); err != nil {
+		return 0, err
+	}
 	amount := overShort.Abs()
 	till := accounting.SystemLine{AccountID: cash, SourceType: "SHIFT", SourceRef: shiftNumber}
-	diff := accounting.SystemLine{AccountID: ov, SourceType: "SHIFT", SourceRef: shiftNumber}
+	diff := accounting.SystemLine{AccountID: ov, DepartmentID: department, SourceType: "SHIFT", SourceRef: shiftNumber}
 	label := "Cash over, shift "
 	if overShort.IsNegative() {
 		diff.Debit, till.Credit = amount, amount

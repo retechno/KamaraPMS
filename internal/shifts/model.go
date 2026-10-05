@@ -132,6 +132,8 @@ type CloseInput struct {
 	Reason      string             `json:"reason"`
 	Approval    *iam.ApprovalInput `json:"approval"`
 	HandOverTo  *int64             `json:"hand_over_to"`
+	// DepartmentID is the department of the cash over and short line, when the difference belongs to one.
+	DepartmentID *int64 `json:"department_id"`
 }
 
 // Filter narrows the list of shifts.

@@ -9292,6 +9292,7 @@ components:
         reason: { type: string, maxLength: 500 }
         approval: { $ref: "#/components/schemas/Approval" }
         hand_over_to: { type: [integer, "null"], format: int64, description: The user who gets the drawer next. }
+        department_id: { type: [integer, "null"], format: int64, description: "The department of the cash over and short line, when there is a difference and it belongs to one (422 `DEPARTMENT_NOT_FOUND`, `DEPARTMENT_INACTIVE`)." }
     OpenCashierShiftSummary:
       type: object
       required: [id, number, drawer, user_id, user_name, opened_at]
