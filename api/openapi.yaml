@@ -2634,6 +2634,56 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/department-report:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getDepartmentReport
+      summary: Revenue, expenses and profit by department (accounting.view)
+      description: |
+        The revenue and expense accounts of the journals of a range (closing journals left out: the source of the income statement) by the department of the journal line. A department includes its
+        sub-departments (`revenue`, `expense`, `profit`; `own_revenue` and `own_expense` are what was posted to it directly), `accounts` are its direct postings by account on the normal side, and the
+        lines with no department are `unassigned`. `totals` are those of the income statement. Only the departments in use, or with something posted, are listed. `department_id` narrows it to one
+        department or sub-department (404 `DEPARTMENT_NOT_FOUND`).
+      tags: [accounting]
+      parameters:
+        - { name: from, in: query, description: Start of the range; the first day of the current business month by default., schema: { type: string, format: date } }
+        - { name: to, in: query, description: End of the range (included); the current business date by default., schema: { type: string, format: date } }
+        - { name: department_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: format, in: query, description: "`csv` answers the report as a CSV file.", schema: { type: string, enum: [csv, json] } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartmentReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/department-report.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getDepartmentReportPdf
+      summary: Revenue, expenses and profit by department as PDF (accounting.view)
+      tags: [documents]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: department_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/departments:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9239,6 +9289,47 @@ components:
         level: { type: integer, enum: [1, 2] }
         child_count: { type: integer }
         in_use: { type: boolean, description: Something was posted to it or points to it, so it is switched off and not deleted. }
+    DepartmentAccount:
+      type: object
+      required: [account_id, code, name, account_type, amount]
+      properties:
+        account_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        account_type: { type: string, enum: [REVENUE, EXPENSE] }
+        amount: { type: string, description: On the normal side of the account. }
+    DepartmentNode:
+      type: object
+      required: [id, parent_id, code, name, level, is_active, revenue, expense, profit, own_revenue, own_expense, accounts, children]
+      properties:
+        id: { type: integer, format: int64, description: 0 for the unassigned line. }
+        parent_id: { type: [integer, "null"], format: int64 }
+        code: { type: string }
+        name: { type: string }
+        level: { type: integer, enum: [1, 2] }
+        is_active: { type: boolean }
+        revenue: { type: string, description: Its own postings and those of its sub-departments. }
+        expense: { type: string }
+        profit: { type: string, description: Revenue less expense (the departmental profit). }
+        own_revenue: { type: string }
+        own_expense: { type: string }
+        accounts: { type: array, items: { $ref: "#/components/schemas/DepartmentAccount" } }
+        children: { type: array, items: { $ref: "#/components/schemas/DepartmentNode" } }
+    DepartmentReport:
+      type: object
+      required: [from, to, departments, unassigned, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        departments: { type: array, items: { $ref: "#/components/schemas/DepartmentNode" } }
+        unassigned: { $ref: "#/components/schemas/DepartmentNode" }
+        totals:
+          type: object
+          required: [revenue, expense, profit]
+          properties:
+            revenue: { type: string }
+            expense: { type: string }
+            profit: { type: string }
     DepartmentPage:
       type: object
       required: [data]

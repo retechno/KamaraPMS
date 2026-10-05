@@ -735,6 +735,7 @@ Permissions: `tax.view` (read), `tax.manage` (filing profiles), `tax.file` (file
 | `GET {P}/city-ledger/reminders/{id}` | `cityledger.read` | One reminder; 404 `REMINDER_NOT_FOUND` |
 | `GET {P}/city-ledger/reminders/{id}/reminder.pdf` | `cityledger.read` | The letter (First, Second or Final reminder), the interest column only when there is interest |
 | `GET {P}/accounting/cash-flow` | `accounting.view` | `from`, `to`, `method=INDIRECT|DIRECT`, `format=csv`, `lang`; `method`, `lines` (statement lines), `net_income`, `operating`, `investing`, `financing`, `net_change`, `opening_cash`, `closing_cash`, `difference`, `reconciled`; `cash-flow.pdf` is the same as a PDF |
+| `GET {P}/accounting/department-report` | `accounting.view` | `from`, `to`, `department_id`, `format=csv`, `lang`; `departments` (a tree: `revenue`, `expense`, `profit`, `own_revenue`, `own_expense`, `accounts`, `children`), `unassigned`, `totals`; `department-report.pdf` is the same as a PDF |
 | `GET {P}/departments` | `accounting.view` | `active`; each department followed by its sub-departments, with `level`, `child_count`, `in_use` |
 | `POST {P}/departments` | `accounting.manage` | `{code, name, parent_id?, sort_order?}`; 409 `CODE_TAKEN`; 422 `parent_id` `TOO_DEEP` or `INACTIVE` |
 | `GET {P}/departments/{id}` | `accounting.view` | 404 `DEPARTMENT_NOT_FOUND` |

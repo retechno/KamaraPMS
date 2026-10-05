@@ -151,6 +151,45 @@ func (s *Service) cashFlowPDF(ctx context.Context, propertyID int64, from, to *c
 	return Document{Filename: "cash-flow-" + cf.To.String() + ".pdf", PDF: pdf}, err
 }
 
+var departmentCols = []col{{80, "Department", "L"}, {32, "Revenue", "R"}, {32, "Expense", "R"}, {36, "Profit", "R"}}
+
+// DepartmentReportPDF is the revenue, the expenses and the profit of a range by department (accounting.view); a department includes its sub-departments.
+func (s *Service) DepartmentReportPDF(ctx context.Context, propertyID int64, from, to *civil.Date, departmentID *int64) (Document, error) {
+	rep, err := s.acct.DepartmentReport(ctx, propertyID, from, to, departmentID)
+	if err != nil {
+		return Document{}, err
+	}
+	dc, err := s.context(ctx, propertyID)
+	if err != nil {
+		return Document{}, err
+	}
+	var rows [][]string
+	bold := map[int]bool{}
+	row := func(label string, n accounting.DepartmentNode) {
+		rows = append(rows, []string{label, blankZero(dc.lang, n.Revenue, dc.decimals), blankZero(dc.lang, n.Expense, dc.decimals), dc.lang.Money(n.Profit, dc.decimals)})
+	}
+	for _, d := range rep.Departments {
+		if d.Level == 1 {
+			bold[len(rows)] = true
+		}
+		row(d.Code+" "+d.Name, d)
+		for _, c := range d.Children {
+			row("    "+c.Code+" "+c.Name, c)
+		}
+	}
+	if len(rep.Unassigned.Accounts) > 0 {
+		row(dc.lang.T("Unassigned"), rep.Unassigned)
+	}
+	bold[len(rows)] = true
+	rows = append(rows, []string{"Total", blankZero(dc.lang, rep.Totals.Revenue, dc.decimals), blankZero(dc.lang, rep.Totals.Expense, dc.decimals), dc.lang.Money(rep.Totals.Profit, dc.decimals)})
+	d, _, err := s.financial(ctx, propertyID, "DEPARTMENT REPORT", dc.lang.T("USALI layout"), dc.lang.Date(rep.From)+" - "+dc.lang.Date(rep.To), departmentCols, rows, bold)
+	if err != nil {
+		return Document{}, err
+	}
+	pdf, err := RenderFinancial(d)
+	return Document{Filename: "department-report-" + rep.To.String() + ".pdf", PDF: pdf}, err
+}
+
 // BalanceSheetPDF is the balance sheet as of a date (accounting.view).
 func (s *Service) BalanceSheetPDF(ctx context.Context, propertyID int64, asOf *civil.Date) (Document, error) {
 	bs, err := s.acct.BalanceSheet(ctx, propertyID, asOf)
@@ -250,6 +289,29 @@ func (h *Handler) registerAccounting(mux *http.ServeMux) {
 	}
 	mux.Handle("GET "+p+"/trial-balance.pdf", rangeDoc(h.svc.TrialBalancePDF))
 	mux.Handle("GET "+p+"/income-statement.pdf", rangeDoc(h.svc.IncomeStatementPDF))
+	mux.Handle("GET "+p+"/department-report.pdf", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		pid, err := tenancy.PropertyID(r)
+		if err != nil {
+			return err
+		}
+		from, to, _, err := dateParams(r)
+		if err != nil {
+			return err
+		}
+		var dept *int64
+		if v := r.URL.Query().Get("department_id"); v != "" {
+			id, perr := strconv.ParseInt(v, 10, 64)
+			if perr != nil || id < 1 {
+				return apperr.Invalid("the document parameters are invalid", apperr.FieldError{Field: "department_id", Code: "INVALID_VALUE", Message: "a department id"})
+			}
+			dept = &id
+		}
+		doc, err := h.svc.DepartmentReportPDF(langCtx(r), pid, from, to, dept)
+		if err != nil {
+			return err
+		}
+		return writePDF(w, doc)
+	}))
 	indirectPDF, directPDF := rangeDoc(h.svc.CashFlowPDF), rangeDoc(h.svc.CashFlowDirectPDF)
 	mux.Handle("GET "+p+"/cash-flow.pdf", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		switch m := strings.ToUpper(r.URL.Query().Get("method")); m {

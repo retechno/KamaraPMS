@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"kamarapms/internal/platform/apperr"
@@ -19,6 +20,7 @@ func (h *Handler) RegisterReports(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/income-statement", httpx.HandlerFunc(h.incomeStatement))
 	mux.Handle("GET "+p+"/balance-sheet", httpx.HandlerFunc(h.balanceSheet))
 	mux.Handle("GET "+p+"/cash-flow", httpx.HandlerFunc(h.cashFlow))
+	mux.Handle("GET "+p+"/department-report", httpx.HandlerFunc(h.departmentReport))
 	mux.Handle("GET "+p+"/reconciliation", httpx.HandlerFunc(h.reconciliation))
 }
 
@@ -192,4 +194,65 @@ func (h *Handler) cashFlow(w http.ResponseWriter, r *http.Request) error {
 		return writeCSV(w, "cash-flow-"+cf.To.String()+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, cf)
+}
+
+func (h *Handler) departmentReport(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	from, to, _, err := reportQuery(r)
+	if err != nil {
+		return err
+	}
+	dept, err := departmentQuery(r)
+	if err != nil {
+		return err
+	}
+	rep, err := h.svc.DepartmentReport(r.Context(), pid, from, to, dept)
+	if err != nil {
+		return err
+	}
+	if wantsCSV(r) {
+		rows := [][]string{{"department", "name", "level", "account", "account_name", "revenue", "expense", "profit"}}
+		line := func(n DepartmentNode, label string) {
+			rows = append(rows, []string{label, n.Name, strconv.Itoa(n.Level), "", "", n.Revenue.String(), n.Expense.String(), n.Profit.String()})
+			for _, a := range n.Accounts {
+				rev, exp := "", ""
+				if a.AccountType == TypeRevenue {
+					rev = a.Amount.String()
+				} else {
+					exp = a.Amount.String()
+				}
+				rows = append(rows, []string{label, n.Name, strconv.Itoa(n.Level), a.Code, a.Name, rev, exp, ""})
+			}
+		}
+		for _, d := range rep.Departments {
+			line(d, d.Code)
+			for _, c := range d.Children {
+				line(c, c.Code)
+			}
+		}
+		if len(rep.Unassigned.Accounts) > 0 {
+			line(rep.Unassigned, "")
+		}
+		rows = append(rows, []string{"", "Total", "", "", "", rep.Totals.Revenue.String(), rep.Totals.Expense.String(), rep.Totals.Profit.String()})
+		rows[0] = csvlang.Header(r, rows[0])
+		rows[len(rows)-1][1] = csvlang.Word(r, "Total")
+		return writeCSV(w, "department-report-"+rep.To.String()+".csv", rows)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, rep)
+}
+
+// departmentQuery reads the department a report is narrowed to.
+func departmentQuery(r *http.Request) (*int64, error) {
+	v := strings.TrimSpace(r.URL.Query().Get("department_id"))
+	if v == "" {
+		return nil, nil
+	}
+	id, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || id < 1 {
+		return nil, apperr.Invalid("the report parameters are invalid", fieldErr("department_id", "INVALID_VALUE", "a department id"))
+	}
+	return &id, nil
 }

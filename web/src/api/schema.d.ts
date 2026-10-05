@@ -2158,6 +2158,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/department-report": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Revenue, expenses and profit by department (accounting.view)
+         * @description The revenue and expense accounts of the journals of a range (closing journals left out: the source of the income statement) by the department of the journal line. A department includes its
+         *     sub-departments (`revenue`, `expense`, `profit`; `own_revenue` and `own_expense` are what was posted to it directly), `accounts` are its direct postings by account on the normal side, and the
+         *     lines with no department are `unassigned`. `totals` are those of the income statement. Only the departments in use, or with something posted, are listed. `department_id` narrows it to one
+         *     department or sub-department (404 `DEPARTMENT_NOT_FOUND`).
+         */
+        get: operations["getDepartmentReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/accounting/department-report.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Revenue, expenses and profit by department as PDF (accounting.view) */
+        get: operations["getDepartmentReportPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/departments": {
         parameters: {
             query?: never;
@@ -8257,6 +8307,50 @@ export interface components {
             child_count: number;
             /** @description Something was posted to it or points to it */
             in_use: boolean;
+        };
+        DepartmentAccount: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            account_type: "REVENUE" | "EXPENSE";
+            /** @description On the normal side of the account. */
+            amount: string;
+        };
+        DepartmentNode: {
+            /**
+             * Format: int64
+             * @description 0 for the unassigned line.
+             */
+            id: number;
+            /** Format: int64 */
+            parent_id: number | null;
+            code: string;
+            name: string;
+            /** @enum {integer} */
+            level: 1 | 2;
+            is_active: boolean;
+            /** @description Its own postings and those of its sub-departments. */
+            revenue: string;
+            expense: string;
+            /** @description Revenue less expense (the departmental profit). */
+            profit: string;
+            own_revenue: string;
+            own_expense: string;
+            accounts: components["schemas"]["DepartmentAccount"][];
+            children: components["schemas"]["DepartmentNode"][];
+        };
+        DepartmentReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            departments: components["schemas"]["DepartmentNode"][];
+            unassigned: components["schemas"]["DepartmentNode"];
+            totals: {
+                revenue: string;
+                expense: string;
+                profit: string;
+            };
         };
         DepartmentPage: {
             data: components["schemas"]["Department"][];
@@ -14725,6 +14819,73 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDepartmentReport: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description Start of the range; the first day of the current business month by default. */
+                from?: string;
+                /** @description End of the range (included); the current business date by default. */
+                to?: string;
+                department_id?: number;
+                /** @description `csv` answers the report as a CSV file. */
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDepartmentReportPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from?: string;
+                to?: string;
+                department_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

@@ -1,7 +1,7 @@
 # 12. Departments and sub-departments as an accounting dimension
 
 Status: **approved 2026-10-05 by the owner (decisions 1 to 12 below); the details marked "decided in the build" were chosen while writing this and can be changed.** Built in four steps, each committed
-on its own: (1) the master and the columns (built), (2) posting: day close, manual journals, supplier bills (built), (3) the department report, (4) the budget by department and the drill-down.
+on its own: (1) the master and the columns (built), (2) posting: day close, manual journals, supplier bills (built), (3) the department report (built), (4) the budget by department and the drill-down.
 
 ## The decisions of the owner
 

@@ -71,7 +71,7 @@ export const documentPath = {
   receipt: (propertyId: number, paymentId: number) => `/api/v1/properties/${propertyId}/payments/${paymentId}/receipt.pdf`,
   confirmation: (propertyId: number, reservationId: number) => `/api/v1/properties/${propertyId}/reservations/${reservationId}/confirmation.pdf`,
   /** The accounting reports as PDF: the same parameters as the JSON reports (`from`, `to`, `as_of`). */
-  accounting: (propertyId: number, report: 'trial-balance' | 'income-statement' | 'balance-sheet' | 'cash-flow', query: Record<string, string | undefined> = {}) => {
+  accounting: (propertyId: number, report: 'trial-balance' | 'income-statement' | 'balance-sheet' | 'cash-flow' | 'department-report', query: Record<string, string | undefined> = {}) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries(query)) if (v) q.set(k, v)
     const qs = q.toString()

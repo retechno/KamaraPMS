@@ -376,3 +376,21 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND j.journal_da
 GROUP BY a.id
 HAVING sum(l.credit - l.debit) <> 0
 ORDER BY a.code;
+
+-- The departments of the property for the department report.
+-- name: ListDepartmentsFlat :many
+SELECT id, parent_id, code, name, sort_order, is_active FROM departments
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+ORDER BY COALESCE(parent_id, id), (parent_id IS NOT NULL), sort_order, code;
+
+-- Debit less credit of the revenue and expense accounts in a range by the department of the line (0: none), closing journals left out.
+-- name: DepartmentActivity :many
+SELECT COALESCE(l.department_id, 0)::bigint AS department_id, a.id, a.code, a.name, a.account_type, sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND a.account_type IN ('REVENUE', 'EXPENSE')
+  AND j.journal_date >= @from_date::date AND j.journal_date <= @to_date::date AND NOT j.is_closing
+GROUP BY COALESCE(l.department_id, 0), a.id
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY 1, a.code;

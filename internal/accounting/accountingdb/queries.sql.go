@@ -560,6 +560,67 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) er
 	return err
 }
 
+const departmentActivity = `-- name: DepartmentActivity :many
+SELECT COALESCE(l.department_id, 0)::bigint AS department_id, a.id, a.code, a.name, a.account_type, sum(l.debit - l.credit)::numeric AS balance
+FROM gl_journal_lines l
+JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+JOIN gl_accounts a ON a.property_id = l.property_id AND a.id = l.account_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND a.account_type IN ('REVENUE', 'EXPENSE')
+  AND j.journal_date >= $3::date AND j.journal_date <= $4::date AND NOT j.is_closing
+GROUP BY COALESCE(l.department_id, 0), a.id
+HAVING sum(l.debit - l.credit) <> 0
+ORDER BY 1, a.code
+`
+
+type DepartmentActivityParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type DepartmentActivityRow struct {
+	DepartmentID int64
+	ID           int64
+	Code         string
+	Name         string
+	AccountType  string
+	Balance      decimal.Decimal
+}
+
+// Debit less credit of the revenue and expense accounts in a range by the department of the line (0: none), closing journals left out.
+func (q *Queries) DepartmentActivity(ctx context.Context, arg DepartmentActivityParams) ([]DepartmentActivityRow, error) {
+	rows, err := q.db.Query(ctx, departmentActivity,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DepartmentActivityRow{}
+	for rows.Next() {
+		var i DepartmentActivityRow
+		if err := rows.Scan(
+			&i.DepartmentID,
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.AccountType,
+			&i.Balance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findJournalByKey = `-- name: FindJournalByKey :one
 SELECT id FROM gl_journals WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
@@ -1134,6 +1195,54 @@ func (q *Queries) ListCodeUsage(ctx context.Context, arg ListCodeUsageParams) ([
 			&i.AccountActive,
 			&i.AccountPostable,
 			&i.AccountType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDepartmentsFlat = `-- name: ListDepartmentsFlat :many
+SELECT id, parent_id, code, name, sort_order, is_active FROM departments
+WHERE tenant_id = $1 AND property_id = $2
+ORDER BY COALESCE(parent_id, id), (parent_id IS NOT NULL), sort_order, code
+`
+
+type ListDepartmentsFlatParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListDepartmentsFlatRow struct {
+	ID        int64
+	ParentID  *int64
+	Code      string
+	Name      string
+	SortOrder int32
+	IsActive  bool
+}
+
+// The departments of the property for the department report.
+func (q *Queries) ListDepartmentsFlat(ctx context.Context, arg ListDepartmentsFlatParams) ([]ListDepartmentsFlatRow, error) {
+	rows, err := q.db.Query(ctx, listDepartmentsFlat, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDepartmentsFlatRow{}
+	for rows.Next() {
+		var i ListDepartmentsFlatRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Code,
+			&i.Name,
+			&i.SortOrder,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
