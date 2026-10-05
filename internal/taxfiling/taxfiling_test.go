@@ -12,6 +12,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
@@ -544,4 +545,28 @@ func TestTheWorksheetAndTheReturnAreDocuments(t *testing.T) {
 	wantCode(t, err, "PERMISSION_DENIED")
 	_, err = f.Docs.TaxReturnPDF(f.admin, f.propID, 999999)
 	wantCode(t, err, "TAX_RETURN_NOT_FOUND")
+}
+
+func TestThePenaltyOfATaxPaymentCarriesItsDepartment(t *testing.T) {
+	f := setup(t)
+	pr := f.profile(t)
+	f.busyMonth(t)
+	ret, err := f.Tax.FileReturn(f.admin, f.propID, taxfiling.FileInput{TaxID: pr.TaxID, PeriodStart: d("2026-09-01")}, "k1")
+	must(t, err)
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	missing := int64(999999)
+	pay := func(key string, dept *int64) error {
+		_, err := f.Tax.PayReturn(f.admin, f.propID, ret.ID, taxfiling.PayInput{
+			PaymentDate: d("2026-10-01"), Amount: dec("1000"), Penalty: dec("50"), PenaltyAccountID: f.acc["6130"], DepartmentID: dept, PaymentMethod: "BANK_TRANSFER",
+		}, key)
+		return err
+	}
+	wantCode(t, pay("p0", &missing), "VALIDATION_FAILED")
+	must(t, pay("p1", &dep.ID))
+	var got *int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT department_id FROM gl_journal_lines WHERE property_id = $1 AND account_id = $2 ORDER BY id DESC LIMIT 1`, f.propID, f.acc["6130"]).Scan(&got))
+	if got == nil || *got != dep.ID {
+		t.Fatalf("department of the penalty line: %v", got)
+	}
 }

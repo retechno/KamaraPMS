@@ -15,6 +15,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
@@ -34,7 +35,7 @@ const busy = ref(false)
 const loaded = ref(false)
 
 const openForm = reactive({ drawer: '', opening_float: '' })
-const move = reactive({ kind: 'DROP' as 'DROP' | 'PAY_IN' | 'PAY_OUT', amount: '', account_id: 0, reason: '' })
+const move = reactive({ kind: 'DROP' as 'DROP' | 'PAY_IN' | 'PAY_OUT', amount: '', account_id: 0, department_id: null as number | null, reason: '' })
 const closing = reactive({ open: false, counted: '', reason: '', asking: false })
 const settingsForm = reactive({ require_shift_for_cash: true, max_variance: '0', block_night_audit: true })
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
@@ -125,11 +126,12 @@ async function moveCash(): Promise<void> {
   try {
     await api.POST('/api/v1/properties/{propertyId}/cashier/shifts/{id}/movements', {
       params: { path: { propertyId, id: sh.id }, header: { 'Idempotency-Key': moveKey } },
-      body: { kind: move.kind, amount: move.amount.trim(), account_id: move.kind === 'DROP' ? undefined : move.account_id || undefined, reason: move.reason.trim() },
+      body: { kind: move.kind, amount: move.amount.trim(), account_id: move.kind === 'DROP' ? undefined : move.account_id || undefined, department_id: move.kind === 'DROP' ? undefined : move.department_id, reason: move.reason.trim() },
     })
     moveKey = newIdempotencyKey()
     move.amount = ''
     move.reason = ''
+    move.department_id = null
     notice.value = t('shifts.moved')
     await load()
   } catch (e) {
@@ -290,6 +292,9 @@ watch(() => move.kind, (k) => {
                   <Combobox v-if="postable.length" :id="id" v-model="move.account_id" name="account_id" :aria-invalid="invalid" :options="[{ value: 0, label: t('shifts.chooseAccount') }, ...postable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                   <Input v-else :id="id" :model-value="move.account_id || ''" name="account_id" inputmode="numeric" @update:model-value="(v) => (move.account_id = Number(v) || 0)" />
                 </template>
+              </FormField>
+              <FormField v-if="move.kind !== 'DROP'" :label="t('departments.field')">
+                <template #default="{ id }"><DepartmentSelect :id="id" v-model="move.department_id" name="department_id" /></template>
               </FormField>
               <FormField :label="t('shifts.reason')" :error="fieldError('reason')">
                 <template #default="{ id, invalid }"><Input :id="id" v-model="move.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>

@@ -171,6 +171,9 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 			if err := po.CheckAccount(ctx, in.FeeAccountID, "fee_account_id"); err != nil {
 				return err
 			}
+			if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+				return err
+			}
 		}
 		desc := strings.TrimSpace(in.Description)
 		if desc == "" {
@@ -185,7 +188,7 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		}
 		jlines := []accounting.SystemLine{{AccountID: ba.AccountID, Debit: net, Description: desc, SourceType: "SETTLEMENT", SourceRef: ref}}
 		if fee.IsPositive() {
-			jlines = append(jlines, accounting.SystemLine{AccountID: in.FeeAccountID, Debit: fee, Description: "Commission: " + desc, SourceType: "SETTLEMENT", SourceRef: ref})
+			jlines = append(jlines, accounting.SystemLine{AccountID: in.FeeAccountID, DepartmentID: in.DepartmentID, Debit: fee, Description: "Commission: " + desc, SourceType: "SETTLEMENT", SourceRef: ref})
 		}
 		jlines = append(jlines, accounting.SystemLine{AccountID: clearing, Credit: gross, Description: desc, SourceType: "SETTLEMENT", SourceRef: ref})
 		jid, jnum, err := po.Post(ctx, accounting.SystemJournal{Type: accounting.JournalBank, Date: line.LineDate, Description: "Bank: " + desc, Reference: ref, Lines: jlines})

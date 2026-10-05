@@ -120,7 +120,9 @@ type MovementInput struct {
 	Kind      string `json:"kind"`
 	Amount    string `json:"amount"`
 	AccountID int64  `json:"account_id"`
-	Reason    string `json:"reason"`
+	// DepartmentID is the department of the other account's line (an expense paid out of the till), when it has one.
+	DepartmentID *int64 `json:"department_id"`
+	Reason       string `json:"reason"`
 }
 
 // CloseInput closes a shift with the cash counted.

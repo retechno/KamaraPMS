@@ -12,6 +12,7 @@ import (
 
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/auth"
@@ -567,4 +568,21 @@ func chargeOf(t *testing.T, f *fx, amount string) folios.ChargeInput {
 	var id int64
 	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'MINIBAR'`, f.propID).Scan(&id))
 	return folios.ChargeInput{ChargeCodeID: id, Quantity: "1", UnitPrice: &amount}
+}
+
+func TestAPayOutCarriesTheDepartmentOfItsExpense(t *testing.T) {
+	f := setup(t)
+	acct := f.account(t, "6190")
+	sh := f.open(t, f.cashier, "", "100000")
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	_, err = f.Shifts.Move(f.cashier, f.propID, sh.ID, "m0", shifts.MovementInput{Kind: "PAY_OUT", Amount: "1000", AccountID: acct, DepartmentID: ptr(int64(999999)), Reason: "taxi"})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.Shifts.Move(f.cashier, f.propID, sh.ID, "m1", shifts.MovementInput{Kind: "PAY_OUT", Amount: "30000", AccountID: acct, DepartmentID: &dep.ID, Reason: "taxi"})
+	must(t, err)
+	var got *int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT department_id FROM gl_journal_lines WHERE property_id = $1 AND account_id = $2 ORDER BY id DESC LIMIT 1`, f.propID, acct).Scan(&got))
+	if got == nil || *got != dep.ID {
+		t.Fatalf("department of the expense line: %v", got)
+	}
 }

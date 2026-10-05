@@ -167,7 +167,7 @@ describe('bank views', () => {
     const call = POST.mock.calls.at(-1) as [string, { params: { path: unknown }; body: unknown }]
     expect(call[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust')
     expect(call[1].params.path).toEqual({ propertyId: 7, id: 5, lineId: 13 })
-    expect(call[1].body).toEqual({ account_id: 9, description: undefined })
+    expect(call[1].body).toEqual({ account_id: 9, department_id: null, description: undefined })
   })
 
   it('spreads one journal line over several statement lines, each taking what it needs', async () => {
@@ -229,7 +229,7 @@ describe('bank views', () => {
     const call = POST.mock.calls.at(-1) as [string, { params: { path: unknown }; body: unknown }]
     expect(call[0]).toBe('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle')
     expect(call[1].params.path).toEqual({ propertyId: 7, id: 6, lineId: 12 })
-    expect(call[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, description: 'Card settlement 1 Oct' })
+    expect(call[1].body).toEqual({ account_key: 'CARD', journal_line_ids: [301, 302], fee_account_id: 9, department_id: null, description: 'Card settlement 1 Oct' })
   })
 
   it('suggests the payments of a settlement and picks them', async () => {

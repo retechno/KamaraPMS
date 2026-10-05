@@ -593,7 +593,10 @@ func (s *Service) postMovement(ctx context.Context, p auth.Principal, propertyID
 	if err := po.CheckAccount(ctx, in.AccountID, "account_id"); err != nil {
 		return 0, err
 	}
-	other := accounting.SystemLine{AccountID: in.AccountID, SourceType: "SHIFT", SourceRef: shiftNumber, Description: reason}
+	if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+		return 0, err
+	}
+	other := accounting.SystemLine{AccountID: in.AccountID, DepartmentID: in.DepartmentID, SourceType: "SHIFT", SourceRef: shiftNumber, Description: reason}
 	till := accounting.SystemLine{AccountID: cash, SourceType: "SHIFT", SourceRef: shiftNumber, Description: reason}
 	label := "Pay-in"
 	if in.Kind == KindPayIn {

@@ -1546,6 +1546,7 @@ export const en = {
     profit: 'Profit',
     total: 'Total',
     unassigned: 'No department',
+    field: 'Department',
     showAccounts: 'Show the accounts of {name}',
     none: 'No department',
     title: 'Departments',

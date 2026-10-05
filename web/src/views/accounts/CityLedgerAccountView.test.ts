@@ -289,7 +289,7 @@ describe('CityLedgerAccountView', () => {
     expect(init.params.header['Idempotency-Key']).toBeTruthy()
     expect(init.body).toEqual({
       invoice_id: 51, payment_id: undefined, reason: 'settled after the invoice', approval: { email: 'clerk@hotel.com', password: 'secret' },
-      lines: [{ description: 'Room rate dispute', account_id: 55, net_amount: '100000', tax_id: undefined }, { description: 'Breakfast', account_id: 56, net_amount: '20000', tax_id: undefined }],
+      lines: [{ description: 'Room rate dispute', account_id: 55, department_id: null, net_amount: '100000', tax_id: undefined }, { description: 'Breakfast', account_id: 56, department_id: null, net_amount: '20000', tax_id: undefined }],
     })
     expect(w.get('[data-testid=notice]').text()).toContain('The credit note is made')
     expect(w.find('[data-testid=adjust-form]').exists()).toBe(false)
@@ -335,7 +335,7 @@ describe('CityLedgerAccountView', () => {
     await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls.at(-1)?.[0]).toBe('/api/v1/properties/{propertyId}/city-ledger/write-offs')
-    expect((POST.mock.calls.at(-1) as [string, { body: unknown }])[1].body).toEqual({ invoice_id: 51, amount: '150000', account_id: 66, reason: 'the company is closed', approval: { email: 'clerk@hotel.com', password: 'secret' } })
+    expect((POST.mock.calls.at(-1) as [string, { body: unknown }])[1].body).toEqual({ invoice_id: 51, amount: '150000', account_id: 66, department_id: null, reason: 'the company is closed', approval: { email: 'clerk@hotel.com', password: 'secret' } })
     expect(w.get('[data-testid=notice]').text()).toContain('The write-off is made')
   })
 

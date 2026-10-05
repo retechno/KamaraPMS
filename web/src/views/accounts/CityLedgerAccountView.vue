@@ -14,6 +14,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -56,9 +57,10 @@ interface AdjustForm {
   mode: 'credit' | 'writeoff'
   invoice: CityLedgerInvoice | null
   transfer: CityLedgerCandidate | null
-  lines: { description: string; account_id: number; net_amount: string; tax_id: number }[]
+  lines: { description: string; account_id: number; department_id: number | null; net_amount: string; tax_id: number }[]
   amount: string
   account_id: number
+  department_id: number | null
   reason: string
   asking: boolean
 }
@@ -247,7 +249,7 @@ async function loadChart(): Promise<void> {
 
 function startAdjust(mode: 'credit' | 'writeoff', invoice: CityLedgerInvoice | null, transfer: CityLedgerCandidate | null): void {
   adjusting.value = {
-    mode, invoice, transfer, lines: [{ description: '', account_id: 0, net_amount: '', tax_id: 0 }], amount: invoice?.outstanding ?? '', account_id: 0, reason: '', asking: false,
+    mode, invoice, transfer, lines: [{ description: '', account_id: 0, department_id: null, net_amount: '', tax_id: 0 }], amount: invoice?.outstanding ?? '', account_id: 0, department_id: null, reason: '', asking: false,
   }
   adjustKey = newIdempotencyKey()
   error.value = null
@@ -268,13 +270,13 @@ async function submitAdjust(approval: Approval): Promise<void> {
         params: { path: { propertyId }, header: { 'Idempotency-Key': adjustKey } },
         body: {
           invoice_id: a.invoice?.id, payment_id: a.transfer?.payment_id, reason: a.reason.trim(), approval,
-          lines: a.lines.map((l) => ({ description: l.description.trim(), account_id: l.account_id, net_amount: l.net_amount.trim(), tax_id: l.tax_id || undefined })),
+          lines: a.lines.map((l) => ({ description: l.description.trim(), account_id: l.account_id, department_id: l.department_id, net_amount: l.net_amount.trim(), tax_id: l.tax_id || undefined })),
         },
       })
     } else {
       await api.POST('/api/v1/properties/{propertyId}/city-ledger/write-offs', {
         params: { path: { propertyId }, header: { 'Idempotency-Key': adjustKey } },
-        body: { invoice_id: a.invoice?.id ?? 0, amount: a.amount.trim(), account_id: a.account_id, reason: a.reason.trim(), approval },
+        body: { invoice_id: a.invoice?.id ?? 0, amount: a.amount.trim(), account_id: a.account_id, department_id: a.department_id, reason: a.reason.trim(), approval },
       })
     }
     adjustKey = newIdempotencyKey()
@@ -516,6 +518,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                   <td>
                     <Combobox v-if="revenue.length" v-model="l.account_id" :name="`line_account_${i}`" :options="[{ value: 0, label: t('clAccount.chooseAccount') }, ...revenue.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                     <Input v-else :model-value="l.account_id || ''" :name="`line_account_${i}`" inputmode="numeric" @update:model-value="(v) => (l.account_id = Number(v) || 0)" />
+                    <DepartmentSelect v-model="l.department_id" class="mt-1" :name="`line_department_${i}`" :aria-invalid="!!fieldError(`lines[${i}].department_id`)" />
                   </td>
                   <td><Input v-model="l.net_amount" class="text-right" :name="`line_net_${i}`" inputmode="decimal" :aria-invalid="!!fieldError(`lines[${i}].net_amount`)" /></td>
                   <td>
@@ -524,7 +527,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                   <td><Button v-if="adjusting.lines.length > 1" type="button" variant="outline" size="sm" @click="adjusting.lines.splice(i, 1)">{{ t('clAccount.removeLine') }}</Button></td>
                 </tr>
               </tbody>
-              <tfoot><tr class="border-t border-border"><td class="pt-2"><Button type="button" variant="outline" size="sm" data-testid="add-line" @click="adjusting.lines.push({ description: '', account_id: 0, net_amount: '', tax_id: 0 })">{{ t('clAccount.addLine') }}</Button></td><td class="pt-2 text-right" colspan="2"><b>{{ t('clAccount.creditTotal') }}</b></td><td class="pt-2 text-right tabular-nums" data-testid="adjust-total"><b>{{ $money(fromMilli(adjustTotal)) }}</b></td><td /></tr></tfoot>
+              <tfoot><tr class="border-t border-border"><td class="pt-2"><Button type="button" variant="outline" size="sm" data-testid="add-line" @click="adjusting.lines.push({ description: '', account_id: 0, department_id: null, net_amount: '', tax_id: 0 })">{{ t('clAccount.addLine') }}</Button></td><td class="pt-2 text-right" colspan="2"><b>{{ t('clAccount.creditTotal') }}</b></td><td class="pt-2 text-right tabular-nums" data-testid="adjust-total"><b>{{ $money(fromMilli(adjustTotal)) }}</b></td><td /></tr></tfoot>
             </table>
             <small v-if="fieldError('lines')" role="alert" class="text-xs text-destructive">{{ fieldError('lines') }}</small>
           </template>
@@ -537,6 +540,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                 <Combobox v-if="bearers.length" :id="id" v-model="adjusting.account_id" name="writeoff_account" :aria-invalid="invalid" :options="[{ value: 0, label: t('clAccount.chooseAccount') }, ...bearers.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 <Input v-else :id="id" :model-value="adjusting.account_id || ''" name="writeoff_account" inputmode="numeric" @update:model-value="(v) => (adjusting && (adjusting.account_id = Number(v) || 0))" />
               </template>
+            </FormField>
+            <FormField :label="t('departments.field')">
+              <template #default="{ id }"><DepartmentSelect :id="id" v-model="adjusting.department_id" name="writeoff_department" /></template>
             </FormField>
           </div>
           <FormField class="mt-4 max-w-xl" :label="t('clAccount.reason')" :error="fieldError('reason')">

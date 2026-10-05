@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/cityledger"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/platform/auth"
 )
 
@@ -421,4 +422,32 @@ func TestTheControlAccountOfTheCityLedgerCountsCreditNotesAndWriteOffs(t *testin
 		}
 	}
 	t.Fatal("no control for the city ledger")
+}
+
+func TestACreditNoteAndAWriteOffCarryTheirDepartment(t *testing.T) {
+	f := setup(t)
+	c := f.chart(t)
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	inv, _ := f.invoicedOne(t, "101", "300000")
+	deptOf := func(code string) *int64 {
+		var d *int64
+		must(t, f.Pool.QueryRow(context.Background(), `SELECT l.department_id FROM gl_journal_lines l JOIN gl_accounts a ON a.id = l.account_id
+			WHERE l.property_id = $1 AND a.code = $2 ORDER BY l.id DESC LIMIT 1`, f.propID, code).Scan(&d))
+		return d
+	}
+	_, err = f.note(&inv.ID, nil, "n0", cityledger.CreditNoteLineInput{Description: "x", AccountID: c.allowance, NetAmount: "1000", DepartmentID: ptr(int64(999999))})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.note(&inv.ID, nil, "n1", cityledger.CreditNoteLineInput{Description: "x", AccountID: c.allowance, NetAmount: "1000", DepartmentID: &dep.ID})
+	must(t, err)
+	if d := deptOf("4160"); d == nil || *d != dep.ID {
+		t.Fatalf("credit note line department: %v", d)
+	}
+	_, err = f.CityLedger.CreateWriteOff(f.admin, f.propID, "w0", cityledger.WriteOffInput{InvoiceID: inv.ID, Amount: "100", AccountID: c.badDebt, DepartmentID: ptr(int64(999999)), Reason: "x", Approval: f.approval()})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.CityLedger.CreateWriteOff(f.admin, f.propID, "w1", cityledger.WriteOffInput{InvoiceID: inv.ID, Amount: "100", AccountID: c.badDebt, DepartmentID: &dep.ID, Reason: "x", Approval: f.approval()})
+	must(t, err)
+	if d := deptOf("6140"); d == nil || *d != dep.ID {
+		t.Fatalf("write-off department: %v", d)
+	}
 }

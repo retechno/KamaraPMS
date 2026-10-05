@@ -9280,6 +9280,7 @@ components:
         kind: { type: string, enum: [DROP, PAY_IN, PAY_OUT] }
         amount: { type: string }
         account_id: { type: integer, format: int64, description: "Required for a pay-in and a pay-out (the account on the other side), not allowed for a drop." }
+        department_id: { type: [integer, "null"], format: int64, description: "The department of the line on the other side of a pay-in or pay-out, when it belongs to one." }
         reason: { type: string, maxLength: 500 }
     CloseCashierShiftRequest:
       type: object
@@ -10579,6 +10580,7 @@ components:
               account_id: { type: integer, format: int64, description: A revenue account (the allowance of revenue). }
               net_amount: { type: string }
               tax_id: { type: [integer, "null"], format: int64, description: A tax of the property, taken at its rate on the net amount. }
+              department_id: { type: [integer, "null"], format: int64, description: "The department of the revenue given back, when it belongs to one (a field error on `lines[N].department_id`)." }
         approval: { $ref: "#/components/schemas/Approval" }
     CreateCityLedgerWriteOffRequest:
       type: object
@@ -10588,6 +10590,7 @@ components:
         invoice_id: { type: integer, format: int64 }
         amount: { type: string }
         account_id: { type: integer, format: int64, description: An expense account or the allowance for doubtful accounts 1240. }
+        department_id: { type: [integer, "null"], format: int64, description: "The department the expense belongs to, when it does." }
         reason: { type: string, maxLength: 500 }
         approval: { $ref: "#/components/schemas/Approval" }
     CityLedgerLateFee:
@@ -11937,6 +11940,7 @@ components:
       additionalProperties: false
       properties:
         account_id: { type: integer, format: int64, description: The account the bank item belongs to (not the bank account itself). }
+        department_id: { type: [integer, "null"], format: int64, description: "The department of that account's line, when it belongs to one (422 `DEPARTMENT_NOT_FOUND`, `DEPARTMENT_INACTIVE`)." }
         description: { type: string, maxLength: 300 }
     AutoMatchResult:
       type: object
@@ -11952,6 +11956,7 @@ components:
         account_key: { type: string, enum: [CARD, OTHER_PAYMENT] }
         journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
         fee_account_id: { type: integer, format: int64, description: The account for the commission; needed when the payments add up to more than the line. }
+        department_id: { type: [integer, "null"], format: int64, description: "The department of the commission expense, when it belongs to one." }
         description: { type: string, maxLength: 300 }
     InputVatTreatment:
       type: string
@@ -12331,6 +12336,7 @@ components:
         amount: { type: string }
         penalty: { type: string }
         penalty_account_id: { type: integer, format: int64, description: "Needed with a penalty: the expense account." }
+        department_id: { type: [integer, "null"], format: int64, description: "The department of the penalty expense, when it belongs to one." }
         payment_method: { type: string, enum: [CASH, BANK_TRANSFER, OTHER] }
         reference_number: { type: string, maxLength: 100 }
         remarks: { type: string, maxLength: 500 }

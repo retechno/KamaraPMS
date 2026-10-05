@@ -205,6 +205,9 @@ func (s *Service) payReturn(ctx context.Context, p auth.Principal, propertyID, r
 			if err := po.CheckAccount(ctx, in.PenaltyAccountID, "penalty_account_id"); err != nil {
 				return err
 			}
+			if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+				return err
+			}
 		}
 		number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqTaxPayment)
 		if err != nil {
@@ -214,7 +217,7 @@ func (s *Service) payReturn(ctx context.Context, p auth.Principal, propertyID, r
 		lines := []accounting.SystemLine{{AccountID: payable, Debit: in.Amount, Description: desc, SourceType: "TAX_PAYMENT", SourceRef: number}}
 		total := in.Amount
 		if in.Penalty.IsPositive() {
-			lines = append(lines, accounting.SystemLine{AccountID: in.PenaltyAccountID, Debit: in.Penalty, Description: "Penalty: " + desc, SourceType: "TAX_PAYMENT", SourceRef: number})
+			lines = append(lines, accounting.SystemLine{AccountID: in.PenaltyAccountID, DepartmentID: in.DepartmentID, Debit: in.Penalty, Description: "Penalty: " + desc, SourceType: "TAX_PAYMENT", SourceRef: number})
 			total = total.Add(in.Penalty)
 		}
 		lines = append(lines, accounting.SystemLine{AccountID: from, Credit: total, Description: desc, SourceType: "TAX_PAYMENT", SourceRef: number})

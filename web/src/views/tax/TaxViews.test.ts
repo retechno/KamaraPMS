@@ -166,7 +166,7 @@ describe('tax views', () => {
     expect(path).toBe('/api/v1/properties/{propertyId}/tax/returns/{id}/payments')
     expect(init.params.path).toEqual({ propertyId: 7, id: 4 })
     expect(init.params.header['Idempotency-Key']).toBeTruthy()
-    expect(init.body).toEqual({ payment_date: '2026-10-01', amount: '100000', penalty: '5000', penalty_account_id: 6, payment_method: 'BANK_TRANSFER', reference_number: undefined, remarks: undefined })
+    expect(init.body).toEqual({ payment_date: '2026-10-01', amount: '100000', penalty: '5000', penalty_account_id: 6, department_id: null, payment_method: 'BANK_TRANSFER', reference_number: undefined, remarks: undefined })
     // voiding a payment needs a reason, then the approval
     await w.get('[data-testid=void-payment-TXP000001]').trigger('click')
     expect((w.get('[data-testid=void-ask]').element as HTMLButtonElement).disabled).toBe(true)

@@ -1545,6 +1545,7 @@ export const id: Messages = {
     profit: 'Laba',
     total: 'Total',
     unassigned: 'Tanpa departemen',
+    field: 'Departemen',
     showAccounts: 'Tampilkan akun {name}',
     none: 'Tanpa departemen',
     title: 'Departemen',

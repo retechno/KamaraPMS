@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from '@/views/accounting/accountApi'
@@ -33,10 +34,10 @@ const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const selectedLines = ref<number[]>([])
-const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, description: '', lines: [] as UnclearedLine[], picked: [] as number[] })
+const settle = reactive({ open: false, key: 'CARD', fee_account_id: 0, department_id: null as number | null, description: '', lines: [] as UnclearedLine[], picked: [] as number[] })
 const picked = ref<number[]>([])
 const suggestion = ref<{ matched: boolean; difference: string; expected_fee: string } | null>(null)
-const adjust = reactive({ open: false, account_id: 0, description: '' })
+const adjust = reactive({ open: false, account_id: 0, department_id: null as number | null, description: '' })
 const reopening = ref<{ reason: string; asking: boolean } | null>(null)
 
 type StatementLine = BankStatementDetail['lines'][number]
@@ -171,14 +172,14 @@ async function autoMatch(): Promise<void> {
 }
 
 function startAdjust(): void {
-  Object.assign(adjust, { open: true, account_id: 0, description: '' })
+  Object.assign(adjust, { open: true, account_id: 0, department_id: null, description: '' })
 }
 
 async function postAdjust(): Promise<void> {
   const l = line.value
   if (!l) return
   const ok = await act(
-    () => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust', { params: { path: { ...base().path, lineId: l.id } }, body: { account_id: adjust.account_id, description: adjust.description || undefined } }),
+    () => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/adjust', { params: { path: { ...base().path, lineId: l.id } }, body: { account_id: adjust.account_id, department_id: adjust.department_id, description: adjust.description || undefined } }),
     t('reconcile.posted', { n: l.line_no }),
   )
   if (ok) {
@@ -188,7 +189,7 @@ async function postAdjust(): Promise<void> {
 }
 
 async function startSettle(): Promise<void> {
-  Object.assign(settle, { open: true, fee_account_id: 0, description: '', picked: [] })
+  Object.assign(settle, { open: true, fee_account_id: 0, department_id: null, description: '', picked: [] })
   await loadSettleLines()
 }
 
@@ -221,7 +222,7 @@ async function postSettle(): Promise<void> {
   const ok = await act(
     () => api.POST('/api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settle', {
       params: { path: { ...base().path, lineId: l.id } },
-      body: { account_key: settle.key as 'CARD', journal_line_ids: settle.picked, fee_account_id: settle.fee_account_id || undefined, description: settle.description || undefined },
+      body: { account_key: settle.key as 'CARD', journal_line_ids: settle.picked, fee_account_id: settle.fee_account_id || undefined, department_id: settle.fee_account_id ? settle.department_id : undefined, description: settle.description || undefined },
     }),
     t('reconcile.settled', { n: l.line_no }),
   )
@@ -338,6 +339,9 @@ watch([() => pid.value, sid], () => {
                   <Combobox :id="id" v-model="adjust.account_id" name="adjust_account" :options="[{ value: 0, label: `${t('reconcile.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 </template>
               </FormField>
+              <FormField :label="t('departments.field')">
+                <template #default="{ id }"><DepartmentSelect :id="id" v-model="adjust.department_id" name="adjust_department" /></template>
+              </FormField>
               <FormField :label="t('reconcile.description')">
                 <template #default="{ id }"><Input :id="id" v-model="adjust.description" name="adjust_description" maxlength="300" /></template>
               </FormField>
@@ -372,6 +376,9 @@ watch([() => pid.value, sid], () => {
                 <template #default="{ id }">
                   <Combobox :id="id" v-model="settle.fee_account_id" name="settle_fee" :options="[{ value: 0, label: `${t('reconcile.chooseAccount')}` }, ...chargeable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                 </template>
+              </FormField>
+              <FormField v-if="settleGross > settleNet" :label="t('departments.field')">
+                <template #default="{ id }"><DepartmentSelect :id="id" v-model="settle.department_id" name="settle_department" /></template>
               </FormField>
               <FormField :label="t('reconcile.description')">
                 <template #default="{ id }"><Input :id="id" v-model="settle.description" name="settle_description" maxlength="300" /></template>

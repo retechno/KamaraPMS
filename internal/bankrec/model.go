@@ -168,13 +168,15 @@ type SettleInput struct {
 	AccountKey     string  `json:"account_key"`
 	JournalLineIDs []int64 `json:"journal_line_ids"`
 	FeeAccountID   int64   `json:"fee_account_id"`
+	DepartmentID   *int64  `json:"department_id"` // of the commission expense, when it belongs to one
 	Description    string  `json:"description"`
 }
 
 // AdjustInput posts what the bank shows and the books lack (a bank fee, interest) against another account.
 type AdjustInput struct {
-	AccountID   int64  `json:"account_id"`
-	Description string `json:"description"`
+	AccountID    int64  `json:"account_id"`
+	DepartmentID *int64 `json:"department_id"` // of the other account's line, when it belongs to one
+	Description  string `json:"description"`
 }
 
 // ReopenInput reopens a reconciled statement.

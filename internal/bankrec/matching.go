@@ -199,6 +199,9 @@ func (s *Service) Adjust(ctx context.Context, propertyID, statementID, lineID in
 		if err := po.CheckAccount(ctx, in.AccountID, "account_id"); err != nil {
 			return err
 		}
+		if err := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); err != nil {
+			return err
+		}
 		desc := strings.TrimSpace(in.Description)
 		if desc == "" {
 			desc = deref(line.Description)
@@ -212,7 +215,7 @@ func (s *Service) Adjust(ctx context.Context, propertyID, statementID, lineID in
 		}
 		amount := line.Amount.Abs()
 		bankLine := accounting.SystemLine{AccountID: ba.AccountID, Description: desc, SourceType: "BANK_LINE", SourceRef: ref}
-		other := accounting.SystemLine{AccountID: in.AccountID, Description: desc, SourceType: "BANK_LINE", SourceRef: ref}
+		other := accounting.SystemLine{AccountID: in.AccountID, DepartmentID: in.DepartmentID, Description: desc, SourceType: "BANK_LINE", SourceRef: ref}
 		if line.Amount.IsPositive() { // money in: the bank account is debited
 			bankLine.Debit, other.Credit = amount, amount
 		} else {

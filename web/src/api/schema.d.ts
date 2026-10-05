@@ -8288,6 +8288,11 @@ export interface components {
              * @description Required for a pay-in and a pay-out (the account on the other side), not allowed for a drop.
              */
             account_id?: number;
+            /**
+             * Format: int64
+             * @description The department of the line on the other side of a pay-in or pay-out, when it belongs to one.
+             */
+            department_id?: number | null;
             reason: string;
         };
         CloseCashierShiftRequest: {
@@ -9503,6 +9508,11 @@ export interface components {
                  * @description A tax of the property
                  */
                 tax_id?: number | null;
+                /**
+                 * Format: int64
+                 * @description The department of the revenue given back, when it belongs to one (a field error on `lines[N].department_id`).
+                 */
+                department_id?: number | null;
             }[];
             approval: components["schemas"]["Approval"];
         };
@@ -9515,6 +9525,11 @@ export interface components {
              * @description An expense account or the allowance for doubtful accounts 1240.
              */
             account_id: number;
+            /**
+             * Format: int64
+             * @description The department the expense belongs to, when it does.
+             */
+            department_id?: number | null;
             reason: string;
             approval: components["schemas"]["Approval"];
         };
@@ -10797,6 +10812,11 @@ export interface components {
              * @description The account the bank item belongs to (not the bank account itself).
              */
             account_id: number;
+            /**
+             * Format: int64
+             * @description The department of that account's line, when it belongs to one (422 `DEPARTMENT_NOT_FOUND`, `DEPARTMENT_INACTIVE`).
+             */
+            department_id?: number | null;
             description?: string;
         };
         AutoMatchResult: {
@@ -10812,6 +10832,11 @@ export interface components {
              * @description The account for the commission; needed when the payments add up to more than the line.
              */
             fee_account_id?: number;
+            /**
+             * Format: int64
+             * @description The department of the commission expense, when it belongs to one.
+             */
+            department_id?: number | null;
             description?: string;
         };
         /**
@@ -11246,6 +11271,11 @@ export interface components {
              * @description Needed with a penalty: the expense account.
              */
             penalty_account_id?: number;
+            /**
+             * Format: int64
+             * @description The department of the penalty expense, when it belongs to one.
+             */
+            department_id?: number | null;
             /** @enum {string} */
             payment_method: "CASH" | "BANK_TRANSFER" | "OTHER";
             reference_number?: string;

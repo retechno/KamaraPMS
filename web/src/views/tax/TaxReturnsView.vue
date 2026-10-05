@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -39,7 +40,7 @@ const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const fileForm = reactive({ filed_on: '', reference: '', notes: '' })
-const payForm = reactive({ open: false, payment_date: '', amount: '', penalty: '', penalty_account_id: 0, method: 'BANK_TRANSFER', reference: '', remarks: '' })
+const payForm = reactive({ open: false, payment_date: '', amount: '', penalty: '', penalty_account_id: 0, department_id: null as number | null, method: 'BANK_TRANSFER', reference: '', remarks: '' })
 const voiding = ref<{ kind: 'return' | 'payment'; id: number; reason: string; asking: boolean } | null>(null)
 let fileKey = newIdempotencyKey()
 let payKey = newIdempotencyKey()
@@ -157,7 +158,7 @@ async function file(): Promise<void> {
 }
 
 function startPay(): void {
-  Object.assign(payForm, { open: true, payment_date: '', amount: filed.value?.outstanding ?? '', penalty: '', penalty_account_id: 0, method: 'BANK_TRANSFER', reference: '', remarks: '' })
+  Object.assign(payForm, { open: true, payment_date: '', amount: filed.value?.outstanding ?? '', penalty: '', penalty_account_id: 0, department_id: null, method: 'BANK_TRANSFER', reference: '', remarks: '' })
   payKey = newIdempotencyKey()
   error.value = null
 }
@@ -170,6 +171,7 @@ async function pay(): Promise<void> {
       params: { path: { ...base().path, id: r.id }, header: { 'Idempotency-Key': payKey } },
       body: {
         payment_date: payForm.payment_date, amount: payForm.amount.trim(), penalty: payForm.penalty.trim() || undefined, penalty_account_id: payForm.penalty_account_id || undefined,
+        department_id: payForm.penalty_account_id ? payForm.department_id : undefined,
         payment_method: payForm.method as 'CASH', reference_number: payForm.reference || undefined, remarks: payForm.remarks || undefined,
       },
     }),
@@ -359,6 +361,9 @@ watch([() => pid.value, taxId], () => {
                       <template #default="{ id, invalid }">
                         <Combobox :id="id" v-model="payForm.penalty_account_id" name="penalty_account" :aria-invalid="invalid" :options="[{ value: 0, label: `${t('taxReturns.chooseAccount')}` }, ...expenses.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
                       </template>
+                    </FormField>
+                    <FormField v-if="payForm.penalty.trim() && Number(payForm.penalty) > 0" :label="t('departments.field')">
+                      <template #default="{ id }"><DepartmentSelect :id="id" v-model="payForm.department_id" name="penalty_department" /></template>
                     </FormField>
                   </div>
                   <div class="mt-4 flex justify-end gap-2">

@@ -194,6 +194,7 @@ type PayInput struct {
 	Amount           decimal.Decimal `json:"amount"`
 	Penalty          decimal.Decimal `json:"penalty"`
 	PenaltyAccountID int64           `json:"penalty_account_id"`
+	DepartmentID     *int64          `json:"department_id"` // of the penalty expense, when it belongs to one
 	PaymentMethod    string          `json:"payment_method"`
 	ReferenceNumber  string          `json:"reference_number"`
 	Remarks          string          `json:"remarks"`

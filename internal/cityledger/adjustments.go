@@ -85,6 +85,8 @@ type CreditNoteLineInput struct {
 	AccountID   int64  `json:"account_id"`
 	NetAmount   string `json:"net_amount"`
 	TaxID       *int64 `json:"tax_id"`
+	// DepartmentID is the department of the revenue that is given back, when it belongs to one.
+	DepartmentID *int64 `json:"department_id"`
 }
 
 // CreditNoteInput makes a credit note against an invoice or against a transfer that is not on an invoice yet.
@@ -98,11 +100,13 @@ type CreditNoteInput struct {
 
 // WriteOffInput writes off all or part of what an invoice still owes, charged to an expense account (or the allowance for doubtful accounts).
 type WriteOffInput struct {
-	InvoiceID int64              `json:"invoice_id"`
-	Amount    string             `json:"amount"`
-	AccountID int64              `json:"account_id"`
-	Reason    string             `json:"reason"`
-	Approval  *iam.ApprovalInput `json:"approval"`
+	InvoiceID int64  `json:"invoice_id"`
+	Amount    string `json:"amount"`
+	AccountID int64  `json:"account_id"`
+	// DepartmentID is the department the expense belongs to, when it does.
+	DepartmentID *int64             `json:"department_id"`
+	Reason       string             `json:"reason"`
+	Approval     *iam.ApprovalInput `json:"approval"`
 }
 
 func adjustmentAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
@@ -332,6 +336,14 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				var lineErrs []apperr.FieldError
 				for i, l := range in.Lines {
 					at := func(f string) string { return "lines[" + strconv.Itoa(i) + "]." + f }
+					if derr := po.CheckDepartment(ctx, l.DepartmentID, at("department_id")); derr != nil {
+						var ae *apperr.Error
+						if errors.As(derr, &ae) && len(ae.Fields) > 0 {
+							lineErrs = append(lineErrs, ae.Fields...)
+						} else {
+							return derr
+						}
+					}
 					code, _, typ, ok, aerr := po.AccountInfo(ctx, l.AccountID)
 					if aerr != nil {
 						return aerr
@@ -428,7 +440,7 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				taxByAccount := map[int64]*accounting.SystemLine{}
 				var taxOrder []int64
 				for i, l := range in.Lines {
-					jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: bs[i].net, Description: strings.TrimSpace(l.Description), SourceType: "CL_CREDIT_NOTE", SourceRef: number})
+					jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, DepartmentID: l.DepartmentID, Debit: bs[i].net, Description: strings.TrimSpace(l.Description), SourceType: "CL_CREDIT_NOTE", SourceRef: number})
 					if bs[i].tax.IsPositive() {
 						acc, aerr := po.TaxPayableAccount(ctx, bs[i].taxGL)
 						if aerr != nil {
@@ -569,6 +581,9 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 				if cerr := po.CheckAccount(ctx, in.AccountID, "account_id"); cerr != nil {
 					return cerr
 				}
+				if cerr := po.CheckDepartment(ctx, in.DepartmentID, "department_id"); cerr != nil {
+					return cerr
+				}
 				if invoice.Status != InvoiceIssued {
 					return apperr.Conflict("INVOICE_NOT_PAYABLE", "a voided invoice has no write-off")
 				}
@@ -589,7 +604,7 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 				}
 				desc := "Write-off " + number + " invoice " + invoice.InvoiceNumber
 				jid, jnum, err := po.Post(ctx, accounting.SystemJournal{Type: accounting.JournalReceivables, Date: day.BusinessDate, Description: desc, Reference: number, Lines: []accounting.SystemLine{
-					{AccountID: in.AccountID, Debit: amount, Description: desc, SourceType: "CL_WRITE_OFF", SourceRef: number},
+					{AccountID: in.AccountID, DepartmentID: in.DepartmentID, Debit: amount, Description: desc, SourceType: "CL_WRITE_OFF", SourceRef: number},
 					{AccountID: cityLedger, Credit: amount, Description: desc, SourceType: "CL_WRITE_OFF", SourceRef: number},
 				}})
 				if err != nil {

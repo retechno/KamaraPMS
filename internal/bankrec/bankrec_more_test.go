@@ -7,6 +7,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/bankrec"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/platform/auth"
 )
 
@@ -333,5 +334,25 @@ func TestOnlyOffsettingLinesAreClearedWithoutAStatementLineWithinThePeriod(t *te
 	eq(t, "the pair cleared nothing", done.Summary.ClearedTotal, "0")
 	if len(done.Clearings) != 2 || len(f.uncleared(t, st.ID)) != 1 {
 		t.Fatalf("clearings: %+v", done.Clearings)
+	}
+}
+
+func TestABankAdjustmentCarriesTheDepartmentOfItsOtherLine(t *testing.T) {
+	f := setup(t)
+	f.books(t)
+	first := f.importFirst(t)
+	_, err := f.BankRec.AutoMatch(f.admin, f.propID, first.ID)
+	must(t, err)
+	fee := lineOf(t, first, "fee")
+	dep, err := f.Departments.Create(f.admin, f.propID, departments.Input{Code: "XTRA", Name: "Extra"})
+	must(t, err)
+	_, err = f.BankRec.Adjust(f.admin, f.propID, first.ID, fee.ID, bankrec.AdjustInput{AccountID: f.acc["6130"], DepartmentID: func() *int64 { v := int64(999999); return &v }()})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = f.BankRec.Adjust(f.admin, f.propID, first.ID, fee.ID, bankrec.AdjustInput{AccountID: f.acc["6130"], DepartmentID: &dep.ID})
+	must(t, err)
+	var got *int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT department_id FROM gl_journal_lines WHERE property_id = $1 AND account_id = $2 ORDER BY id DESC LIMIT 1`, f.propID, f.acc["6130"]).Scan(&got))
+	if got == nil || *got != dep.ID {
+		t.Fatalf("department of the bank fee line: %v", got)
 	}
 }
