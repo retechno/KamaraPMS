@@ -218,6 +218,8 @@ describe('tax views', () => {
       input: [
         { bill_id: 3, line_no: 1, bill_number: 'BILL000003', supplier_invoice_number: 'INV-B', supplier_name: 'PLN', bill_date: '2026-09-20', amount: '3000', reversal: false },
         { bill_id: 2, line_no: 1, bill_number: 'BILL000002', supplier_invoice_number: 'INV-A', supplier_name: 'PLN', bill_date: '2026-08-20', amount: '-1000', reversal: true },
+        { source: 'CREDIT_NOTE', bill_id: 0, line_no: 0, credit_id: 8, credit_line_no: 1, settlement_id: 0, bill_number: 'SCN000001', supplier_invoice_number: 'CR-77', supplier_name: 'PLN', bill_date: '2026-09-25', amount: '-400', reversal: false },
+        { source: 'SETTLEMENT', bill_id: 0, line_no: 0, credit_id: 0, credit_line_no: 0, settlement_id: 5, bill_number: 'JV000099', supplier_invoice_number: 'SETT-1', supplier_name: 'Main bank', bill_date: '2026-09-30', amount: '2200', reversal: false },
       ],
       input_claimed: '2000', credit_brought_forward: '5000', offset: '7000', payable: '5000', credit_carried_forward: '0',
     })
@@ -234,6 +236,9 @@ describe('tax views', () => {
     expect(w.get('[data-testid=offset-cf]').text()).toBe('0')
     expect(w.get('[data-testid=input-claims]').text()).toContain('BILL000003')
     expect(w.get('[data-testid=input-claims]').text()).toContain('taken back')
+    expect(w.get('[data-testid=input-claims]').text()).toContain('credit note of the supplier')
+    expect(w.get('[data-testid=input-claims]').text()).toContain('JV000099')
+    expect(w.get('[data-testid=input-claims]').text()).toContain('VAT on the card commission')
   })
 
   it('does not show the offset for a tax that has no input VAT and no credit', async () => {

@@ -2261,6 +2261,7 @@ export const id: Messages = {
     inputClaims: 'PPN masukan yang dikreditkan, per tagihan',
     takenBack: 'ditarik kembali (tagihan di-void)',
     creditNoteClaim: 'nota kredit pemasok: PPN masukan dikurangkan',
+    settlementClaim: 'PPN atas komisi kartu',
     creditNoteGivenBack: 'nota kredit dibatalkan: PPN masukan dikembalikan',
     title: 'Pengembalian pajak',
     noAccess: 'Peran Anda di properti ini tidak dapat melihat pengembalian pajak: dibutuhkan izin {permission}.',

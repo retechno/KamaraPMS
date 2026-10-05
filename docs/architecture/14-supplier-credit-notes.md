@@ -29,7 +29,7 @@ A credit note of a supplier takes input VAT back like a bill claims it, with the
 - a line whose VAT was **CREDITABLE** is claimed as a **negative** amount on the return of the month of the credit date (or the first open month after it, like a late bill), so the VAT claimed for the month goes down; if the month has only credit notes, the input VAT claimed is negative and the offset is reduced (as for a bill voided after it was claimed);
 - a credit note **voided after a return claimed it** is given back as a **positive** claim that reverses it, on the next return that is not filed; voided before any return claimed it, it is never claimed;
 - EXPENSE lines have no VAT account and no claim; DEFERRED VAT comes back to account 1425 and is not claimed (it was not claimed when the bill was entered either).
-- A worksheet and a return show each claim with its `source` (`BILL` or `CREDIT_NOTE`); for a credit note claim `bill_number`, `supplier_invoice_number` and `bill_date` are the number of the credit note, the number on the supplier's credit note and its date.
+- A worksheet and a return show each claim with its `source` (`BILL`, `CREDIT_NOTE` or, for the VAT on a card commission, `SETTLEMENT`, see `15-card-fee-vat.md`); for a credit note claim `bill_number`, `supplier_invoice_number` and `bill_date` are the number of the credit note, the number on the supplier's credit note and its date.
 
 ## Schema (00055)
 

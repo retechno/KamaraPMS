@@ -11466,7 +11466,7 @@ export interface components {
              * @description BILL: the VAT of a bill line. CREDIT_NOTE: the VAT a credit note of a supplier takes back (negative), or the positive reversal of it when the credit note was voided after it was claimed.
              * @enum {string}
              */
-            source: "BILL" | "CREDIT_NOTE";
+            source: "BILL" | "CREDIT_NOTE" | "SETTLEMENT";
             /**
              * Format: int64
              * @description Zero for a credit note claim.
@@ -11479,14 +11479,20 @@ export interface components {
              */
             credit_id: number;
             credit_line_no: number;
-            /** @description The number of the bill, or of the credit note for a credit note claim. */
+            /**
+             * Format: int64
+             * @description The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once, no reversal: a settlement is final); zero otherwise.
+             */
+            settlement_id: number;
+            /** @description The number of the bill; of the credit note for a credit note claim; of the journal of the settlement for a SETTLEMENT claim. */
             bill_number: string;
-            /** @description The number on the supplier's invoice, or on the supplier's credit note. */
+            /** @description The number on the supplier's invoice, or on the supplier's credit note; the reference of the settlement. */
             supplier_invoice_number: string;
+            /** @description The supplier; the bank account for a SETTLEMENT claim. */
             supplier_name: string;
             /**
              * Format: date
-             * @description The date of the bill or of the credit note.
+             * @description The date of the bill or of the credit note; the date of the statement line of a settlement.
              */
             bill_date: string;
             /** @description The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim. */

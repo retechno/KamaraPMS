@@ -40,6 +40,8 @@ func (s *Service) taxDoc(ctx context.Context, propertyID int64, title string, pr
 		for _, c := range input {
 			label := "Input VAT: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
 			switch {
+			case c.Source == taxfiling.ClaimSettlement:
+				label = "Input VAT on card commission: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
 			case c.Source == taxfiling.ClaimCreditNote && c.Reversal:
 				label = "Input VAT of a credit note given back: " + c.BillNumber + " " + c.SupplierName + " (" + c.SupplierInvoiceNumber + ")"
 			case c.Source == taxfiling.ClaimCreditNote:

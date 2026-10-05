@@ -691,9 +691,12 @@ func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID i
 				reverses = ptr(c.reversesID)
 			}
 			claim := taxfilingdb.InsertClaimParams{TenantID: p.TenantID, PropertyID: propertyID, ReturnID: id, Amount: c.Amount, ReversesClaimID: reverses}
-			if c.Source == ClaimCreditNote {
+			switch c.Source {
+			case ClaimCreditNote:
 				claim.CreditID, claim.CreditLineNo = ptr(c.CreditID), ptr(int64(c.CreditLineNo))
-			} else {
+			case ClaimSettlement:
+				claim.SettlementID = ptr(c.SettlementID)
+			default:
 				claim.BillID, claim.LineNo = ptr(c.BillID), ptr(int64(c.LineNo))
 			}
 			if err := q.InsertClaim(ctx, claim); err != nil {

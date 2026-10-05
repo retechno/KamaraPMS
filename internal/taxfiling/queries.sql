@@ -272,22 +272,25 @@ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND r.tax_id = @
 ORDER BY b.bill_date, b.id, c.line_no;
 
 -- name: InsertClaim :exec
-INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, credit_id, credit_line_no, amount, reverses_claim_id)
-VALUES (@tenant_id, @property_id, @return_id, sqlc.narg(bill_id), sqlc.narg(line_no)::bigint, sqlc.narg(credit_id), sqlc.narg(credit_line_no)::bigint, @amount, sqlc.narg(reverses_claim_id));
+INSERT INTO tax_return_input_claims (tenant_id, property_id, return_id, bill_id, line_no, credit_id, credit_line_no, settlement_id, amount, reverses_claim_id)
+VALUES (@tenant_id, @property_id, @return_id, sqlc.narg(bill_id), sqlc.narg(line_no)::bigint, sqlc.narg(credit_id), sqlc.narg(credit_line_no)::bigint, sqlc.narg(settlement_id), @amount, sqlc.narg(reverses_claim_id));
 
--- A claim is of a bill line or of a credit note line (a negative one, or the positive reversal of it).
+-- A claim is of a bill line, of a credit note line (a negative one, or the positive reversal of it) or of a card settlement.
 -- name: ListReturnClaims :many
 SELECT c.id, COALESCE(c.bill_id, 0)::bigint AS bill_id, COALESCE(c.line_no, 0)::bigint AS line_no, COALESCE(c.credit_id, 0)::bigint AS credit_id, COALESCE(c.credit_line_no, 0)::bigint AS credit_line_no,
-       c.amount, c.reverses_claim_id,
-       COALESCE(b.bill_number, cn.credit_number)::text AS document_number, COALESCE(b.supplier_invoice_number, cn.supplier_credit_number)::text AS supplier_document_number,
-       COALESCE(bs.name, cs.name)::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date)::date AS document_date
+       COALESCE(c.settlement_id, 0)::bigint AS settlement_id, c.amount, c.reverses_claim_id,
+       COALESCE(b.bill_number, cn.credit_number, sj.journal_number)::text AS document_number, COALESCE(b.supplier_invoice_number, cn.supplier_credit_number, ss.reference, '')::text AS supplier_document_number,
+       COALESCE(bs.name, cs.name, sb.name, '')::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date, sj.journal_date)::date AS document_date
 FROM tax_return_input_claims c
 LEFT JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
 LEFT JOIN suppliers bs ON bs.property_id = b.property_id AND bs.id = b.supplier_id
 LEFT JOIN supplier_credit_notes cn ON cn.property_id = c.property_id AND cn.id = c.credit_id
 LEFT JOIN suppliers cs ON cs.property_id = cn.property_id AND cs.id = cn.supplier_id
+LEFT JOIN card_settlements ss ON ss.property_id = c.property_id AND ss.id = c.settlement_id
+LEFT JOIN gl_journals sj ON sj.property_id = ss.property_id AND sj.id = ss.journal_id
+LEFT JOIN bank_accounts sb ON sb.property_id = ss.property_id AND sb.id = ss.bank_account_id
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.return_id = @return_id
-ORDER BY COALESCE(b.bill_date, cn.credit_date), (c.credit_id IS NOT NULL), COALESCE(b.id, cn.id), COALESCE(c.line_no, c.credit_line_no), c.id;
+ORDER BY COALESCE(b.bill_date, cn.credit_date, sj.journal_date), (c.credit_id IS NOT NULL), (c.settlement_id IS NOT NULL), COALESCE(b.id, cn.id, ss.id), COALESCE(c.line_no, c.credit_line_no), c.id;
 
 -- Lines of credit notes of suppliers whose VAT was creditable, not voided, dated up to the end of the month, and not claimed by a live return yet: they take input VAT back.
 -- name: ClaimableCreditLines :many
@@ -313,6 +316,16 @@ WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND r.tax_id = @
   AND c.status = 'VOIDED' AND vj.journal_date <= @to_date::date
   AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims y WHERE y.property_id = x.property_id AND y.reverses_claim_id = x.id AND y.released_at IS NULL)
 ORDER BY c.credit_date, c.id, x.credit_line_no;
+
+-- Card settlements whose VAT is creditable, dated (the date of the statement line) up to the end of the month, and not claimed by a live return yet. A settlement is final: it has no reversal.
+-- name: ClaimableSettlements :many
+SELECT s.id, j.journal_number, COALESCE(s.reference, '')::text AS reference, COALESCE(b.name, '')::text AS bank_name, j.journal_date, s.vat_amount
+FROM card_settlements s
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+LEFT JOIN bank_accounts b ON b.property_id = s.property_id AND b.id = s.bank_account_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.vat_treatment = 'CREDITABLE' AND s.vat_amount > 0 AND j.journal_date <= @to_date::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = s.property_id AND x.settlement_id = s.id AND x.released_at IS NULL)
+ORDER BY j.journal_date, s.id;
 
 -- name: ReleaseClaims :exec
 UPDATE tax_return_input_claims SET released_at = @now

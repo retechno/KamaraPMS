@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) and 3 (preview, settle, the settlements list) are built; steps 4 and 5 are not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) 3 (preview, settle, the settlements list) and 4 (the claims on the VAT return) are built; step 5 is not.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -129,7 +129,7 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 1. Migration 00056, constraint mappings, the DB tests, the rename `expected_fee` to `expected_mdr`. **Built.**
 2. Rules and snapshots (rules with `vat_rate`, payments and city ledger receipts), the expected report and the proposal. **Built.**
 3. The settlement: the preview, the settle with the final VAT and the frozen figures, the settlements list. **Built** (see "Built in step 3" below).
-4. The claims on the VAT return.
+4. The claims on the VAT return. **Built** (see "Built in step 4" below).
 5. OpenAPI, the front end, the documents (README, `06-api.md`, the feature map), the full checks, one commit per step.
 
 ## Built in step 3
@@ -139,6 +139,12 @@ A settlement whose `vat_treatment` is CREDITABLE is **claimed** on the VAT retur
 - `payments_without_vat_rate` and the preview's `without_vat_rate` count the payments that have an MDR snapshot and no VAT rate (like the expected report); the payments with no snapshot at all are in the preview's `without_rate`. A payment with no snapshot at all counts 0 in the expected figures, and then the expected MDR and VAT of the settlement are null.
 - The VAT treatment is read with `SettingsOnDate` (a share lock on the tax settings, after the bank account in the lock order), so the preview runs in a transaction too.
 - The settlement still has no void: `Unclear` removes only the matching.
+
+## Built in step 4
+
+- `taxfiling.Service` claims a CREDITABLE settlement (`ClaimableSettlements`): a positive claim of `vat_amount`, source `SETTLEMENT` (`ClaimSettlement`), in the return of the month of the date of the statement line (the date of the settlement journal) or the first return not filed after it; only a profile that claims input VAT claims it. EXPENSE and DEFERRED settlements are never claimed. A settlement has no reversal, so there is no reversing claim.
+- A claim of a settlement reads back on the worksheet and the return with `source` SETTLEMENT and `settlement_id`; `bill_number` is the number of the settlement journal, `supplier_invoice_number` its reference, `supplier_name` the bank account and `bill_date` the date of the line. The PDF names it "Input VAT on card commission". Voiding the return releases the claim and the next worksheet offers it again, through the existing mechanism.
+- The database keeps one live claim per settlement, exactly one source per claim and no reversal of a settlement claim (migration 00056).
 
 ## Not in this scope
 

@@ -2262,6 +2262,7 @@ export const en = {
     inputClaims: 'Input VAT claimed, by bill',
     takenBack: 'taken back (bill voided)',
     creditNoteClaim: 'credit note of the supplier: input VAT taken back',
+    settlementClaim: 'VAT on the card commission',
     creditNoteGivenBack: 'credit note voided: input VAT given back',
     title: 'Tax returns',
     noAccess: 'Your role at this property cannot see tax returns: the {permission} permission is needed.',

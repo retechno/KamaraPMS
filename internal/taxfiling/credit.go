@@ -43,17 +43,21 @@ func offsetOf(tax, input, broughtForward decimal.Decimal) VATOffset {
 const (
 	ClaimBill       = "BILL"
 	ClaimCreditNote = "CREDIT_NOTE"
+	ClaimSettlement = "SETTLEMENT"
 )
 
 // InputClaim is the VAT of a bill line claimed on a return, or (Reversal) the claim of a bill voided after it was claimed,
 // taken back with the sign changed. A credit note of a supplier takes input VAT back the same way (Source CREDIT_NOTE, a negative amount; its reversal, when the credit note is voided, is positive):
 // then BillNumber, SupplierInvoiceNumber and BillDate are the number of the credit note, the number on the supplier's credit note and its date, and CreditID and CreditLineNo name the line.
+// The VAT on the commission of a card settlement is claimed too (Source SETTLEMENT, positive, no reversal: a settlement is final): then BillNumber is the number of its journal,
+// SupplierInvoiceNumber its reference, SupplierName the bank account and BillDate the date of the statement line; SettlementID names it.
 type InputClaim struct {
 	Source                string          `json:"source"`
 	BillID                int64           `json:"bill_id"`
 	LineNo                int             `json:"line_no"`
 	CreditID              int64           `json:"credit_id"`
 	CreditLineNo          int             `json:"credit_line_no"`
+	SettlementID          int64           `json:"settlement_id"`
 	BillNumber            string          `json:"bill_number"`
 	SupplierInvoiceNumber string          `json:"supplier_invoice_number"`
 	SupplierName          string          `json:"supplier_name"`
@@ -111,6 +115,13 @@ func (s *Service) inputClaims(ctx context.Context, tenantID, propertyID int64, p
 		out = append(out, InputClaim{Source: ClaimBill, BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.BillNumber, SupplierInvoiceNumber: r.SupplierInvoiceNumber, SupplierName: r.SupplierName, BillDate: r.BillDate,
 			Amount: r.Amount.Neg(), Reversal: true, reversesID: r.ID})
 	}
+	settlements, err := q.ClaimableSettlements(ctx, taxfilingdb.ClaimableSettlementsParams{TenantID: tenantID, PropertyID: propertyID, ToDate: end})
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range settlements {
+		out = append(out, InputClaim{Source: ClaimSettlement, SettlementID: l.ID, BillNumber: l.JournalNumber, SupplierInvoiceNumber: l.Reference, SupplierName: l.BankName, BillDate: l.JournalDate, Amount: l.VatAmount})
+	}
 	creditRevs, err := q.ReversibleCreditClaims(ctx, taxfilingdb.ReversibleCreditClaimsParams{TenantID: tenantID, PropertyID: propertyID, TaxID: prof.TaxID, ToDate: end})
 	if err != nil {
 		return nil, err
@@ -131,8 +142,11 @@ func (s *Service) loadClaims(ctx context.Context, tenantID, propertyID, returnID
 	for _, r := range rows {
 		c := InputClaim{Source: ClaimBill, BillID: r.BillID, LineNo: int(r.LineNo), BillNumber: r.DocumentNumber, SupplierInvoiceNumber: r.SupplierDocumentNumber, SupplierName: r.SupplierName, BillDate: r.DocumentDate,
 			Amount: r.Amount, Reversal: r.ReversesClaimID != nil}
-		if r.CreditID != 0 {
+		switch {
+		case r.CreditID != 0:
 			c.Source, c.BillID, c.LineNo, c.CreditID, c.CreditLineNo = ClaimCreditNote, 0, 0, r.CreditID, int(r.CreditLineNo)
+		case r.SettlementID != 0:
+			c.Source, c.BillID, c.LineNo, c.SettlementID = ClaimSettlement, 0, 0, r.SettlementID
 		}
 		out = append(out, c)
 	}

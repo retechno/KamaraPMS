@@ -12521,17 +12521,18 @@ components:
         claims_input_vat: { type: boolean, description: "Taking it off is refused while returns have claimed input VAT: 409 `TAX_CLAIMS_IN_USE`." }
     TaxFilingInputClaim:
       type: object
-      required: [source, bill_id, line_no, credit_id, credit_line_no, bill_number, supplier_invoice_number, supplier_name, bill_date, amount, reversal]
+      required: [source, bill_id, line_no, credit_id, credit_line_no, settlement_id, bill_number, supplier_invoice_number, supplier_name, bill_date, amount, reversal]
       properties:
-        source: { type: string, enum: [BILL, CREDIT_NOTE], description: "BILL: the VAT of a bill line. CREDIT_NOTE: the VAT a credit note of a supplier takes back (negative), or the positive reversal of it when the credit note was voided after it was claimed." }
+        source: { type: string, enum: [BILL, CREDIT_NOTE, SETTLEMENT], description: "BILL: the VAT of a bill line. CREDIT_NOTE: the VAT a credit note of a supplier takes back (negative), or the positive reversal of it when the credit note was voided after it was claimed." }
         bill_id: { type: integer, format: int64, description: Zero for a credit note claim. }
         line_no: { type: integer }
         credit_id: { type: integer, format: int64, description: Zero for a bill claim. }
         credit_line_no: { type: integer }
-        bill_number: { type: string, description: "The number of the bill, or of the credit note for a credit note claim." }
-        supplier_invoice_number: { type: string, description: "The number on the supplier's invoice, or on the supplier's credit note." }
-        supplier_name: { type: string }
-        bill_date: { type: string, format: date, description: The date of the bill or of the credit note. }
+        settlement_id: { type: integer, format: int64, description: "The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once, no reversal: a settlement is final); zero otherwise." }
+        bill_number: { type: string, description: "The number of the bill; of the credit note for a credit note claim; of the journal of the settlement for a SETTLEMENT claim." }
+        supplier_invoice_number: { type: string, description: "The number on the supplier's invoice, or on the supplier's credit note; the reference of the settlement." }
+        supplier_name: { type: string, description: "The supplier; the bank account for a SETTLEMENT claim." }
+        bill_date: { type: string, format: date, description: "The date of the bill or of the credit note; the date of the statement line of a settlement." }
         amount: { type: string, description: "The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim." }
         reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back." }
     TaxFilingOpeningCreditRequest:
