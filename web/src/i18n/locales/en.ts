@@ -3104,6 +3104,8 @@ export const en = {
     INVALID_JSON: 'The request body must contain a single JSON object.',
     INVALID_PERIOD: 'The statement ends before it starts.',
     INVALID_TERMS: 'Payment terms between 0 and 365 days.',
+    BED_NOT_AVAILABLE: 'No room with this bed is available on some nights.',
+    ROOM_BED_LOCKED: 'A reservation keeps the bed this room has now.',
     INVENTORY_OVERSOLD: 'The change would leave the room type oversold on some nights.',
     INVOICE_ALREADY_VOIDED: 'The invoice is already voided.',
     INVOICE_COMPANY_MISMATCH: 'A receipt can only pay an invoice of its own company.',

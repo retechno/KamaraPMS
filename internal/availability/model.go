@@ -28,9 +28,11 @@ type Night struct {
 	Available int        `json:"available"`
 }
 
-// Shortfall is a night on which a room type cannot take the requested rooms.
+// Shortfall is a night on which a room type, or one bed variant of it, cannot take the requested rooms. BedTypeID is set for
+// the line of a variant (Available is then what the rooms with that bed can still take) and absent for the line of the type.
 type Shortfall struct {
 	RoomTypeID int64      `json:"room_type_id"`
+	BedTypeID  *int64     `json:"bed_type_id,omitempty"`
 	Date       civil.Date `json:"date"`
 	Available  int        `json:"available"`
 	Requested  int        `json:"requested"`

@@ -139,7 +139,7 @@ There are no endpoints to open or close days directly. That only happens through
 - **TX:** master pattern (no row locks: nothing is counted per bed type)
 
 **GET / POST `{P}/rooms`, GET / PATCH `{P}/rooms/{id}`** (write: `room.manage`)
-- **Request:** `{ room_number, room_type_id, floor?, building?, bed_type_id, is_active?, initial_housekeeping_status? }`; the bed type is required (422 `REQUIRED`), and PATCH `bed_type_id: 0` is refused too: a room always has one.
+- **Request:** `{ room_number, room_type_id, floor?, building?, bed_type_id, is_active?, initial_housekeeping_status? }`; the bed type is required (422 `REQUIRED`), and PATCH `bed_type_id: 0` is refused too: a room always has one. Changing the bed of a room, blocking it or taking it out of the stock is 409 `BED_NOT_AVAILABLE` when a bed variant would end up oversold (409 `INVENTORY_OVERSOLD` when the type would); changing the bed is also 409 `ROOM_BED_LOCKED` while a CONFIRMED line assigned to the room keeps the old bed.
 - **Rules:**
   - Creating a room also creates its `room_housekeeping` row (default DIRTY).
   - Changing `room_type_id` or setting `is_active = false` is rejected if there's an open segment or a future CONFIRMED assigned line, or if either type would be oversold.

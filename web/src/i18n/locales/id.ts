@@ -3103,6 +3103,8 @@ export const id: Messages = {
     INVALID_JSON: 'Data yang dikirim harus berupa satu objek JSON.',
     INVALID_PERIOD: 'Rekening koran berakhir sebelum dimulai.',
     INVALID_TERMS: 'Termin pembayaran harus antara 0 dan 365 hari.',
+    BED_NOT_AVAILABLE: 'Tidak ada kamar dengan bed ini pada beberapa malam.',
+    ROOM_BED_LOCKED: 'Ada reservasi yang mengunci bed kamar ini.',
     INVENTORY_OVERSOLD: 'Perubahan ini membuat tipe kamar terjual melebihi stok pada beberapa malam.',
     INVOICE_ALREADY_VOIDED: 'Invoice sudah dibatalkan.',
     INVOICE_COMPANY_MISMATCH: 'Tanda terima hanya bisa membayar invoice milik perusahaannya sendiri.',

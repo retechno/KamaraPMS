@@ -174,3 +174,11 @@ UPDATE room_blocks SET
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE'
 RETURNING *;
+
+-- CONFIRMED lines assigned to the room that keep (bed_locked) a bed other than the given one: the room cannot take that bed
+-- while they hold it.
+-- name: ListLockedLinesOfOtherBed :many
+SELECT id, reservation_id, arrival_date, departure_date FROM reservation_rooms
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id AND status = 'CONFIRMED' AND bed_locked
+  AND requested_bed_type_id <> @bed_type_id AND departure_date > @business_date::date
+ORDER BY arrival_date, id;

@@ -161,6 +161,39 @@ FROM (SELECT DISTINCT room_type_id, bed_type_id FROM rooms
 CROSS JOIN unnest(@dates::text[]) AS d (night)
 ORDER BY t.room_type_id, t.bed_type_id, d.night;
 
+-- The stock of a bed variant per night (docs/architecture/16-bed-variants.md): sellable = active rooms of the type with the bed and no
+-- active block; fixed = the demand that already sits in a room with that bed (CONFIRMED lines with the room assigned, open stays);
+-- locked = CONFIRMED lines without a room that keep this bed (bed_locked). @exclude_line_id removes one line's own demand.
+-- The type and bed arrays are crossed: pairs that do not exist give zeros and are dropped by the caller.
+-- name: BedStockNights :many
+SELECT k.room_type_id::bigint AS room_type_id, k2.bed_type_id::bigint AS bed_type_id, d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.room_type_id = k.room_type_id AND r.bed_type_id = k2.bed_type_id AND r.is_active
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED'
+         AND lr.room_type_id = k.room_type_id AND lr.bed_type_id = k2.bed_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date
+         AND (sqlc.narg(exclude_line_id)::bigint IS NULL OR l.id <> sqlc.narg(exclude_line_id)::bigint))
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = @tenant_id AND sr.property_id = @property_id AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND sroom.room_type_id = k.room_type_id AND sroom.bed_type_id = k2.bed_type_id
+          AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS fixed,
+    (SELECT count(*) FROM reservation_rooms l
+      WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND l.room_id IS NULL AND l.bed_locked
+        AND l.room_type_id = k.room_type_id AND l.requested_bed_type_id = k2.bed_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date
+        AND (sqlc.narg(exclude_line_id)::bigint IS NULL OR l.id <> sqlc.narg(exclude_line_id)::bigint))::int AS locked
+FROM unnest(@room_type_ids::bigint[]) AS k (room_type_id)
+CROSS JOIN unnest(@bed_type_ids::bigint[]) AS k2 (bed_type_id)
+CROSS JOIN unnest(@dates::text[]) AS d (night)
+ORDER BY k.room_type_id, k2.bed_type_id, d.night;
+
 -- The (room type, bed type) pairs of the active rooms with a bed, and how many rooms each has.
 -- name: ListRoomBeds :many
 SELECT r.room_type_id, r.bed_type_id::bigint AS bed_type_id, bt.code, bt.name, count(*)::int AS rooms
@@ -193,7 +226,7 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active
 GROUP BY room_type_id;
 
 -- name: GetRoomForCheck :one
-SELECT id, room_type_id, room_number, is_active FROM rooms
+SELECT id, room_type_id, room_number, is_active, bed_type_id FROM rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- Active blocks of a room (they take it out of the sellable count).

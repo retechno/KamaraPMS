@@ -441,6 +441,26 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 				}
 			}
 		}
+		if before.BedTypeID != *in.BedTypeID && before.IsActive && in.IsActive && !typeChanged {
+			// A change of the bed moves the room between variants: the bookings that keep the old bed in this room cannot stay, and
+			// the old variant must not end up oversold.
+			locked, err := q.ListLockedLinesOfOtherBed(ctx, roomsdb.ListLockedLinesOfOtherBedParams{
+				TenantID: p.TenantID, PropertyID: propertyID, RoomID: &id, BedTypeID: in.BedTypeID, BusinessDate: day.BusinessDate,
+			})
+			if err != nil {
+				return err
+			}
+			if len(locked) > 0 {
+				return apperr.Conflict("ROOM_BED_LOCKED", "a reservation keeps the bed this room has now").WithContext("lines", locked)
+			}
+			short, err := s.avail.BedChangeShortfalls(ctx, p.TenantID, propertyID, id, *in.BedTypeID, day.BusinessDate)
+			if err != nil {
+				return err
+			}
+			if err := oversold(short); err != nil {
+				return err
+			}
+		}
 		if in.IsActive && (typeChanged || !before.IsActive) {
 			if err := s.requireActiveType(ctx, p.TenantID, propertyID, in.RoomTypeID); err != nil {
 				return err
@@ -624,7 +644,7 @@ func (s *Service) CreateBlock(ctx context.Context, propertyID int64, in CreateBl
 		if err := s.requireNoConflicts(ctx, p.TenantID, propertyID, in.RoomID, day.BusinessDate, in.StartDate, in.EndDate); err != nil {
 			return err
 		}
-		short, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, in.StartDate, in.EndDate)
+		short, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, room.ID, day.BusinessDate, in.StartDate, in.EndDate)
 		if err != nil {
 			return err
 		}
@@ -729,14 +749,14 @@ func (s *Service) UpdateBlock(ctx context.Context, propertyID, id int64, patch B
 			// Only the added nights take another room out of the stock.
 			var added []availability.Shortfall
 			if start.Before(before.StartDate) {
-				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, start, before.StartDate)
+				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, room.ID, day.BusinessDate, start, before.StartDate)
 				if err != nil {
 					return err
 				}
 				added = append(added, sh...)
 			}
 			if end.After(before.EndDate) {
-				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, day.BusinessDate, before.EndDate, end)
+				sh, err := s.avail.BlockShortfalls(ctx, p.TenantID, propertyID, room.RoomTypeID, room.ID, day.BusinessDate, before.EndDate, end)
 				if err != nil {
 					return err
 				}
@@ -800,16 +820,22 @@ func (s *Service) CancelBlock(ctx context.Context, propertyID, id int64, reason 
 	return out, err
 }
 
-// oversold turns a non-empty shortfall into 409 INVENTORY_OVERSOLD (the type would have fewer sellable rooms
-// than it has demand), listing the nights.
+// oversold turns a non-empty shortfall into 409 INVENTORY_OVERSOLD (the type would have fewer sellable rooms than it has demand)
+// or, when only the rooms of one bed are short, 409 BED_NOT_AVAILABLE, listing the nights.
 func oversold(short []availability.Shortfall) error {
 	if len(short) == 0 {
 		return nil
+	}
+	code, msg := "BED_NOT_AVAILABLE", "the change would leave a bed variant oversold on some nights"
+	for _, f := range short {
+		if f.BedTypeID == nil {
+			code, msg = "INVENTORY_OVERSOLD", "the change would leave the room type oversold on some nights"
+			break
+		}
 	}
 	shown := short
 	if len(shown) > 60 {
 		shown = shown[:60]
 	}
-	return apperr.Conflict("INVENTORY_OVERSOLD", "the change would leave the room type oversold on some nights").
-		WithContext("nights", shown).WithContext("short_nights", len(short))
+	return apperr.Conflict(code, msg).WithContext("nights", shown).WithContext("short_nights", len(short))
 }

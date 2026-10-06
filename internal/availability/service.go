@@ -6,7 +6,6 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/availability/availabilitydb"
-	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 )
@@ -174,25 +173,13 @@ func (s *Service) PropertyOccupancy(ctx context.Context, tenantID, propertyID in
 
 // Shortfalls tests extra demand against the inventory and returns the nights that do not fit.
 func (s *Service) Shortfalls(ctx context.Context, tenantID, propertyID int64, bd civil.Date, extra Extra, excludeLine *int64) ([]Shortfall, error) {
-	inv, err := s.Inventory(ctx, tenantID, propertyID, extra.TypeIDs(), extra.Dates(), bd, excludeLine)
-	if err != nil {
-		return nil, err
-	}
-	return FindShortfalls(inv, extra), nil
+	return s.ShortfallsFor(ctx, tenantID, propertyID, bd, Demand{Types: extra}, excludeLine)
 }
 
 // RequireAvailable is Shortfalls as an error: 409 ROOM_TYPE_NOT_AVAILABLE with the failing nights in
 // context.nights (at most 60 are listed; context.short_nights has the total).
 func (s *Service) RequireAvailable(ctx context.Context, tenantID, propertyID int64, bd civil.Date, extra Extra, excludeLine *int64) error {
-	short, err := s.Shortfalls(ctx, tenantID, propertyID, bd, extra, excludeLine)
-	if err != nil {
-		return err
-	}
-	if len(short) == 0 {
-		return nil
-	}
-	return apperr.Conflict("ROOM_TYPE_NOT_AVAILABLE", "the room type has no availability on some nights").
-		WithContext("nights", capShortfalls(short)).WithContext("short_nights", len(short))
+	return s.RequireAvailableFor(ctx, tenantID, propertyID, bd, Demand{Types: extra}, excludeLine)
 }
 
 func capShortfalls(s []Shortfall) []Shortfall {
@@ -231,27 +218,31 @@ func (s *Service) RemovalShortfalls(ctx context.Context, tenantID, propertyID, r
 	if err != nil || !h.After(bd) {
 		return nil, err
 	}
+	room, err := s.q(ctx).GetRoomForCheck(ctx, availabilitydb.GetRoomForCheckParams{TenantID: tenantID, PropertyID: propertyID, ID: roomID})
+	if err != nil {
+		return nil, err
+	}
 	blocks, err := s.q(ctx).ListActiveRoomBlocks(ctx, availabilitydb.ListActiveRoomBlocksParams{TenantID: tenantID, PropertyID: propertyID, RoomID: roomID})
 	if err != nil {
 		return nil, err
 	}
-	extra := Extra{}
+	extra := NewDemand() // the room leaves the type and its bed: one room fewer on both lines
 	for d := bd; d.Before(h); d = d.AddDays(1) {
 		blocked := false
 		for _, b := range blocks {
 			blocked = blocked || (!d.Before(b.StartDate) && d.Before(b.EndDate))
 		}
 		if !blocked {
-			extra.Add(roomTypeID, d, d.AddDays(1), 1)
+			extra.Add(roomTypeID, room.BedTypeID, d, d.AddDays(1), 1)
 		}
 	}
-	return s.Shortfalls(ctx, tenantID, propertyID, bd, extra, nil)
+	return s.ShortfallsFor(ctx, tenantID, propertyID, bd, extra, nil)
 }
 
 // BlockShortfalls: a room of the type is blocked (OOO or OOS) on [from, to). It returns the nights on which
 // the type would then be oversold. Nights before the business date are ignored, and nights past the last
 // booked departure cannot be short (the blocked room itself was sellable there).
-func (s *Service) BlockShortfalls(ctx context.Context, tenantID, propertyID, roomTypeID int64, bd, from, to civil.Date) ([]Shortfall, error) {
+func (s *Service) BlockShortfalls(ctx context.Context, tenantID, propertyID, roomTypeID, roomID int64, bd, from, to civil.Date) ([]Shortfall, error) {
 	if from.Before(bd) {
 		from = bd
 	}
@@ -265,9 +256,13 @@ func (s *Service) BlockShortfalls(ctx context.Context, tenantID, propertyID, roo
 	if !to.After(from) {
 		return nil, nil
 	}
-	extra := Extra{}
-	extra.Add(roomTypeID, from, to, 1)
-	return s.Shortfalls(ctx, tenantID, propertyID, bd, extra, nil)
+	room, err := s.q(ctx).GetRoomForCheck(ctx, availabilitydb.GetRoomForCheckParams{TenantID: tenantID, PropertyID: propertyID, ID: roomID})
+	if err != nil {
+		return nil, err
+	}
+	extra := NewDemand() // the room leaves the type and its bed
+	extra.Add(roomTypeID, room.BedTypeID, from, to, 1)
+	return s.ShortfallsFor(ctx, tenantID, propertyID, bd, extra, nil)
 }
 
 // RoomIssues lists why a specific room is not free for [start, end): inactive, blocked, held by another

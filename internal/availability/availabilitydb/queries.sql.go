@@ -144,6 +144,96 @@ func (q *Queries) BedNightInventory(ctx context.Context, arg BedNightInventoryPa
 	return items, nil
 }
 
+const bedStockNights = `-- name: BedStockNights :many
+SELECT k.room_type_id::bigint AS room_type_id, k2.bed_type_id::bigint AS bed_type_id, d.night::date AS night,
+    (SELECT count(*) FROM rooms r
+      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.room_type_id = k.room_type_id AND r.bed_type_id = k2.bed_type_id AND r.is_active
+        AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                         WHERE b.property_id = r.property_id AND b.room_id = r.id AND b.status = 'ACTIVE'
+                           AND b.start_date <= d.night::date AND d.night::date < b.end_date))::int AS sellable,
+    ((SELECT count(*) FROM reservation_rooms l
+        JOIN rooms lr ON lr.property_id = l.property_id AND lr.id = l.room_id
+       WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED'
+         AND lr.room_type_id = k.room_type_id AND lr.bed_type_id = k2.bed_type_id
+         AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date
+         AND ($3::bigint IS NULL OR l.id <> $3::bigint))
+     + (SELECT count(*) FROM stay_rooms sr
+         JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+         JOIN rooms sroom ON sroom.property_id = sr.property_id AND sroom.id = sr.room_id
+        WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+          AND sroom.room_type_id = k.room_type_id AND sroom.bed_type_id = k2.bed_type_id
+          AND $4::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, $5::date)))::int AS fixed,
+    (SELECT count(*) FROM reservation_rooms l
+      WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED' AND l.room_id IS NULL AND l.bed_locked
+        AND l.room_type_id = k.room_type_id AND l.requested_bed_type_id = k2.bed_type_id
+        AND l.arrival_date <= d.night::date AND d.night::date < l.departure_date
+        AND ($3::bigint IS NULL OR l.id <> $3::bigint))::int AS locked
+FROM unnest($6::bigint[]) AS k (room_type_id)
+CROSS JOIN unnest($7::bigint[]) AS k2 (bed_type_id)
+CROSS JOIN unnest($8::text[]) AS d (night)
+ORDER BY k.room_type_id, k2.bed_type_id, d.night
+`
+
+type BedStockNightsParams struct {
+	TenantID      int64
+	PropertyID    int64
+	ExcludeLineID *int64
+	BusinessDate  civil.Date
+	NextDate      civil.Date
+	RoomTypeIds   []int64
+	BedTypeIds    []int64
+	Dates         []string
+}
+
+type BedStockNightsRow struct {
+	RoomTypeID int64
+	BedTypeID  int64
+	Night      civil.Date
+	Sellable   int32
+	Fixed      int32
+	Locked     int32
+}
+
+// The stock of a bed variant per night (docs/architecture/16-bed-variants.md): sellable = active rooms of the type with the bed and no
+// active block; fixed = the demand that already sits in a room with that bed (CONFIRMED lines with the room assigned, open stays);
+// locked = CONFIRMED lines without a room that keep this bed (bed_locked). @exclude_line_id removes one line's own demand.
+// The type and bed arrays are crossed: pairs that do not exist give zeros and are dropped by the caller.
+func (q *Queries) BedStockNights(ctx context.Context, arg BedStockNightsParams) ([]BedStockNightsRow, error) {
+	rows, err := q.db.Query(ctx, bedStockNights,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ExcludeLineID,
+		arg.BusinessDate,
+		arg.NextDate,
+		arg.RoomTypeIds,
+		arg.BedTypeIds,
+		arg.Dates,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BedStockNightsRow{}
+	for rows.Next() {
+		var i BedStockNightsRow
+		if err := rows.Scan(
+			&i.RoomTypeID,
+			&i.BedTypeID,
+			&i.Night,
+			&i.Sellable,
+			&i.Fixed,
+			&i.Locked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countActiveRoomsByType = `-- name: CountActiveRoomsByType :many
 SELECT room_type_id, count(*)::int AS rooms FROM rooms
 WHERE tenant_id = $1 AND property_id = $2 AND is_active
@@ -182,7 +272,7 @@ func (q *Queries) CountActiveRoomsByType(ctx context.Context, arg CountActiveRoo
 }
 
 const getRoomForCheck = `-- name: GetRoomForCheck :one
-SELECT id, room_type_id, room_number, is_active FROM rooms
+SELECT id, room_type_id, room_number, is_active, bed_type_id FROM rooms
 WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
@@ -197,6 +287,7 @@ type GetRoomForCheckRow struct {
 	RoomTypeID int64
 	RoomNumber string
 	IsActive   bool
+	BedTypeID  int64
 }
 
 func (q *Queries) GetRoomForCheck(ctx context.Context, arg GetRoomForCheckParams) (GetRoomForCheckRow, error) {
@@ -207,6 +298,7 @@ func (q *Queries) GetRoomForCheck(ctx context.Context, arg GetRoomForCheckParams
 		&i.RoomTypeID,
 		&i.RoomNumber,
 		&i.IsActive,
+		&i.BedTypeID,
 	)
 	return i, err
 }

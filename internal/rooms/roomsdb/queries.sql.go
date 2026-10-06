@@ -571,6 +571,61 @@ func (q *Queries) ListBedTypes(ctx context.Context, arg ListBedTypesParams) ([]B
 	return items, nil
 }
 
+const listLockedLinesOfOtherBed = `-- name: ListLockedLinesOfOtherBed :many
+SELECT id, reservation_id, arrival_date, departure_date FROM reservation_rooms
+WHERE tenant_id = $1 AND property_id = $2 AND room_id = $3 AND status = 'CONFIRMED' AND bed_locked
+  AND requested_bed_type_id <> $4 AND departure_date > $5::date
+ORDER BY arrival_date, id
+`
+
+type ListLockedLinesOfOtherBedParams struct {
+	TenantID     int64
+	PropertyID   int64
+	RoomID       *int64
+	BedTypeID    *int64
+	BusinessDate civil.Date
+}
+
+type ListLockedLinesOfOtherBedRow struct {
+	ID            int64
+	ReservationID int64
+	ArrivalDate   civil.Date
+	DepartureDate civil.Date
+}
+
+// CONFIRMED lines assigned to the room that keep (bed_locked) a bed other than the given one: the room cannot take that bed
+// while they hold it.
+func (q *Queries) ListLockedLinesOfOtherBed(ctx context.Context, arg ListLockedLinesOfOtherBedParams) ([]ListLockedLinesOfOtherBedRow, error) {
+	rows, err := q.db.Query(ctx, listLockedLinesOfOtherBed,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomID,
+		arg.BedTypeID,
+		arg.BusinessDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLockedLinesOfOtherBedRow{}
+	for rows.Next() {
+		var i ListLockedLinesOfOtherBedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReservationID,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoomBlocks = `-- name: ListRoomBlocks :many
 SELECT id, tenant_id, property_id, room_id, block_type, start_date, end_date, reason, status, cancelled_at, cancelled_by, created_at, created_by, updated_at, updated_by FROM room_blocks
 WHERE tenant_id = $1 AND property_id = $2
