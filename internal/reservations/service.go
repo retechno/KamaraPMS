@@ -367,6 +367,8 @@ type rateRow struct {
 	// gridRate is the price in the rate grid and yieldRules the codes of the rules that moved it to base.
 	gridRate   *decimal.Decimal
 	yieldRules []string
+	// bedAdjustment is what the kept bed adds to the sold price (already in base and amount).
+	bedAdjustment decimal.Decimal
 }
 
 type pricedLine struct {
@@ -407,14 +409,15 @@ func (s *Service) occupancyReason(ctx context.Context, propertyID, tenantID int6
 // priceLine prices every night of [arrival, departure) from the grid; overrides replace single nights and
 // need reservation.override_rate. A night with neither a grid price nor an override is 409 RATE_NOT_SET.
 // keep lists nights whose stored snapshot is retained unchanged (the caller does not rewrite them).
-func (s *Service) priceLine(ctx context.Context, propertyID, tenantID int64, prefix string, planID, typeID int64, arrival, departure civil.Date,
+func (s *Service) priceLine(ctx context.Context, propertyID, tenantID int64, prefix string, planID, typeID, bedID int64, arrival, departure civil.Date,
 	overrides []NightOverride, decimals int32, keep map[civil.Date]bool) (pricedLine, error) {
-	return s.priceLinePerm(ctx, auth.PermReservationOverrideRate, propertyID, tenantID, prefix, planID, typeID, arrival, departure, overrides, decimals, keep)
+	return s.priceLinePerm(ctx, auth.PermReservationOverrideRate, propertyID, tenantID, prefix, planID, typeID, bedID, arrival, departure, overrides, decimals, keep)
 }
 
 // priceLinePerm is priceLine with the permission overrides need (reservation.override_rate when booking,
-// frontdesk.rate_change when a room move changes rates).
-func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, propertyID, tenantID int64, prefix string, planID, typeID int64, arrival, departure civil.Date,
+// frontdesk.rate_change when a room move changes rates). bedID is the bed the line keeps (0: none): its supplement is added to the
+// price a night is sold at, before an override replaces the amount (a complimentary or house use plan stays at zero).
+func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, propertyID, tenantID int64, prefix string, planID, typeID, bedID int64, arrival, departure civil.Date,
 	overrides []NightOverride, decimals int32, keep map[civil.Date]bool) (pricedLine, error) {
 	byDate := map[civil.Date]NightOverride{}
 	if len(overrides) > 0 {
@@ -458,6 +461,12 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		return pricedLine{}, apperr.Invalid("the override is invalid", fieldErr(prefix+"nightly_overrides", "OVERRIDE_NOT_ALLOWED", "a complimentary or house use room is not priced"))
 	}
 	out := pricedLine{ratePlanID: grid.RatePlanID, kind: grid.OccupancyKind, chargeCodeID: grid.RoomChargeCodeID, priceMode: grid.PriceMode}
+	var supplements []rates.BedSupplement
+	if bedID > 0 && grid.OccupancyKind == rates.KindPaid {
+		if supplements, err = s.rates.BedSupplements(ctx, tenantID, propertyID, planID, typeID, bedID); err != nil {
+			return pricedLine{}, err
+		}
+	}
 	for _, m := range missing {
 		if _, ok := byDate[m]; !ok && !keep[m] {
 			unpriced = append(unpriced, m.String())
@@ -478,8 +487,12 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		if g, ok := gridBy[d]; ok {
 			// the price the night is sold at: the grid price after the yield rules
 			sold, gridRate := g.Amount, g.Grid
+			if sup, ok := rates.SupplementOn(supplements, d); ok {
+				row.bedAdjustment = rates.BedAdjustmentFor(sold, sup, decimals)
+				sold = sold.Add(row.bedAdjustment)
+			}
 			row.base, row.gridRate, row.yieldRules = &sold, &gridRate, g.RuleCodes()
-			row.amount = g.Amount
+			row.amount = sold
 		}
 		if o, ok := byDate[d]; ok {
 			row.isOverride = true
@@ -499,7 +512,7 @@ func (s *Service) storeRates(ctx context.Context, p auth.Principal, propertyID, 
 		if err := q.InsertNightRate(ctx, reservationsdb.InsertNightRateParams{
 			TenantID: p.TenantID, PropertyID: propertyID, LineID: lineID, StayDate: r.date, RatePlanID: priced.ratePlanID,
 			ChargeCodeID: priced.chargeCodeID, PriceMode: priced.priceMode, BaseRate: r.base, DiscountAmount: r.discount,
-			Amount: r.amount, IsOverride: r.isOverride, GridRate: r.gridRate, YieldRules: r.yieldRules, ActorID: p.ActorID(),
+			Amount: r.amount, IsOverride: r.isOverride, GridRate: r.gridRate, YieldRules: r.yieldRules, BedAdjustment: r.bedAdjustment, ActorID: p.ActorID(),
 		}); err != nil {
 			return err
 		}

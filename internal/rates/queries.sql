@@ -150,3 +150,9 @@ JOIN room_types rt ON rt.property_id = a.property_id AND rt.id = a.room_type_id
 JOIN bed_types bt ON bt.property_id = a.property_id AND bt.id = a.bed_type_id
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.rate_plan_id = @rate_plan_id
 ORDER BY rt.code, bt.sort_order, bt.id, a.effective_from DESC;
+
+-- The supplements of one bed type of one room type on a rate plan, oldest first (the one in force on a night is the latest that has started).
+-- name: ListBedSupplements :many
+SELECT adjust_kind, amount, effective_from FROM rate_plan_bed_adjustments
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND rate_plan_id = @rate_plan_id AND room_type_id = @room_type_id AND bed_type_id = @bed_type_id
+ORDER BY effective_from;

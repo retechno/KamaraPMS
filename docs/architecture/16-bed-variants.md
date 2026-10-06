@@ -1,6 +1,6 @@
 # 16. Bed variants: a bed type as a sellable variant of a room type
 
-Status: **design approved; building in six steps (step 1 done: the bed type of a room is required, `bed_locked` on a line without effect on stock, the supplement table with `GET/POST /rate-plans/{id}/bed-adjustments`; step 2 done: the engine with bed lines, `internal/availability/bed.go`; step 3 done: the reservation rules).** It answers the backlog item "bed type as a sellable variant with its own stock or rate" (`08-backlog.md`). Bed counts per room type (1 King or 2 Twin) stay out.
+Status: **design approved; building in six steps (step 1 done: the bed type of a room is required, `bed_locked` on a line without effect on stock, the supplement table with `GET/POST /rate-plans/{id}/bed-adjustments`; step 2 done: the engine with bed lines, `internal/availability/bed.go`; step 3 done: the reservation rules; step 4 done: the price).** It answers the backlog item "bed type as a sellable variant with its own stock or rate" (`08-backlog.md`). Bed counts per room type (1 King or 2 Twin) stay out.
 
 Decisions of the owner (2026-10-06):
 
@@ -63,7 +63,7 @@ for the type as a whole:       fixed + locked + any  <=  R           (the existi
 
 ## Price (`internal/rates` and the pricing of a line)
 
-- `GET/PUT {P}/rate-plans/{id}/bed-adjustments` (`rate.manage`): the figures per room type and bed type, as rows from a date; reading needs `rate.view`.
+- `GET/POST {P}/rate-plans/{id}/bed-adjustments` (`rate.manage` to write, any access to the property to read): the figures per room type and bed type, as rows from a date (append-only, so POST and not PUT). As built: the percentage is of the price the night is sold at (the grid price after the yield rules), and the amount is in the price mode of the rate plan, like the grid. `base_rate` of the night includes the supplement and `bed_adjustment` records it; locking, unlocking or changing the bed of a line prices all its nights again (as a change of plan does, so overrides on its nights are dropped); an amendment that does not touch the bed keeps the snapshot.
 - A night of a **locked** line is priced `grid price (after the yield rules) + adjustment` where the adjustment is the amount, or the percentage of the grid price, rounded to the currency decimals half away from zero, in force on the night; the result is not below 0. A line with no lock pays the grid price. The adjustment is taken when the night is priced (create, amend, new nights of an extension) and kept with the night; the override with reason and approval works on the price as it works today, after the adjustment.
 - Complimentary and house use plans stay at zero whatever the adjustment (the occupancy kind rule comes first).
 
@@ -96,7 +96,7 @@ No new lock level: the writers already hold the business day, the room types and
 1. Migration 00057 (the bed type of a room required, `bed_locked`, the adjustment table), constraint mappings, schema tests; the rooms service and screens requiring the bed type; the fixtures and the seed giving rooms a bed; `bed_locked` through the line (create, add, amend, views) without effect on stock yet; the adjustment table with its API.
 2. (done) The engine: bed lines in `Inventory`/`Extra`/`FindShortfalls`, the guards for blocks, removals and a change of a room's bed, and the random matching test.
 3. (done) Reservations: `checkHolds` with the bed demand, assignment and check-in rules, room moves, unlocking.
-4. Price: the adjustments in the pricing of a line, the snapshot per night, the override order.
+4. (done) Price: the adjustments in the pricing of a line, the snapshot per night, the override order.
 5. Search and the calendar.
 6. Front end, documents, the full checks.
 

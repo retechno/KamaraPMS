@@ -241,6 +241,8 @@ type NightRate struct {
 	// GridRate is the price in the rate grid and YieldRules the codes of the yield rules that moved it to BaseRate.
 	GridRate   *decimal.Decimal `json:"grid_rate"`
 	YieldRules []string         `json:"yield_rules"`
+	// BedAdjustment is what the kept bed added to the price the night was sold at (0 when the line keeps no bed); BaseRate includes it.
+	BedAdjustment decimal.Decimal `json:"bed_adjustment"`
 }
 
 // Estimate is the charge engine's total of a line's nights (advisory).

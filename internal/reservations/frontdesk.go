@@ -105,7 +105,7 @@ func (s *Service) ExtendNights(ctx context.Context, p auth.Principal, perm auth.
 	if err != nil {
 		return err
 	}
-	priced, err := s.priceLinePerm(ctx, perm, propertyID, p.TenantID, "", line.RatePlanID, line.RoomTypeID, from, to, overrides, decimals, nil)
+	priced, err := s.priceLinePerm(ctx, perm, propertyID, p.TenantID, "", line.RatePlanID, line.RoomTypeID, lockedBed(line.BedLocked, line.RequestedBedTypeID), from, to, overrides, decimals, nil)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (s *Service) OverrideNights(ctx context.Context, p auth.Principal, perm aut
 		}
 	}
 	keep := have // every night keeps its row unless it is overridden
-	priced, err := s.priceLinePerm(ctx, perm, propertyID, p.TenantID, "new_", line.RatePlanID, line.RoomTypeID, line.ArrivalDate, last.AddDays(1), overrides, decimals, keep)
+	priced, err := s.priceLinePerm(ctx, perm, propertyID, p.TenantID, "new_", line.RatePlanID, line.RoomTypeID, lockedBed(line.BedLocked, line.RequestedBedTypeID), line.ArrivalDate, last.AddDays(1), overrides, decimals, keep)
 	if err != nil {
 		return err
 	}

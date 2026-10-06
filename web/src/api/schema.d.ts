@@ -7666,7 +7666,9 @@ export interface components {
             grid_rate: string | null;
             /** @description The codes of the yield rules that moved the grid price to `base_rate`, in the order they applied; null when none did. */
             yield_rules: string[] | null;
-            /** @description The price the night was sold at, the grid price after the yield rules; null for an override on a night without a grid price. */
+            /** @description What the bed that the line keeps added to the price the night was sold at (negative for a discount, 0 when the line keeps no bed). `base_rate` includes it. */
+            bed_adjustment: string;
+            /** @description The price the night was sold at, the grid price after the yield rules and the supplement of the kept bed; null for an override on a night without a grid price. */
             base_rate: string | null;
             discount_amount: string;
             amount: string;

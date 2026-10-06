@@ -171,7 +171,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		}
 		for i, l := range in.Rooms {
 			prefix := fmt.Sprintf("rooms[%d].", i)
-			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, prefix, l.RatePlanID, l.RoomTypeID, l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
+			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, prefix, l.RatePlanID, l.RoomTypeID, lockedBed(l.BedLocked, l.BedTypeID), l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
 				return err
 			}
 			if reasons[i], err = s.occupancyReason(ctx, propertyID, p.TenantID, prefix, priced[i].kind, l.OccupancyReason, true, l.Arrival, l.Departure, nil); err != nil {

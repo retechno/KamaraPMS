@@ -8622,7 +8622,7 @@ components:
                     after: { type: string }
     NightRate:
       type: object
-      required: [date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override, grid_rate, yield_rules]
+      required: [date, rate_plan_id, charge_code_id, price_mode, base_rate, discount_amount, amount, is_override, grid_rate, yield_rules, bed_adjustment]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         rate_plan_id: { type: integer, format: int64 }
@@ -8635,8 +8635,11 @@ components:
           description: The codes of the yield rules that moved the grid price to `base_rate`, in the order they applied; null when none did.
           type: [array, "null"]
           items: { type: string }
+        bed_adjustment:
+          description: "What the bed that the line keeps added to the price the night was sold at (negative for a discount, 0 when the line keeps no bed). `base_rate` includes it."
+          type: string
         base_rate:
-          description: The price the night was sold at, the grid price after the yield rules; null for an override on a night without a grid price.
+          description: The price the night was sold at, the grid price after the yield rules and the supplement of the kept bed; null for an override on a night without a grid price.
           oneOf:
             - { type: string }
             - { type: "null" }

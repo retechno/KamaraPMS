@@ -3,6 +3,8 @@ package rates_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/rates"
 )
 
@@ -78,5 +80,51 @@ func TestBedAdjustments(t *testing.T) {
 	}
 	if n := f.Count(t, `SELECT count(*) FROM audit_logs WHERE action = 'rate_plan.bed_adjustment_added'`); n != 2 {
 		t.Fatalf("audit entries: %d", n)
+	}
+}
+
+func TestBedAdjustmentFor(t *testing.T) {
+	dec := func(s string) decimal.Decimal { return decimal.RequireFromString(s) }
+	cases := []struct {
+		sold     string
+		kind     string
+		amount   string
+		decimals int32
+		want     string
+	}{
+		{"1000000", "AMOUNT", "50000", 0, "50000"},
+		{"1000000", "AMOUNT", "-50000", 0, "-50000"},
+		{"1000000", "AMOUNT", "-2000000", 0, "-1000000"}, // a discount is cut at the price
+		{"1000000", "PERCENT", "10", 0, "100000"},
+		{"1000000", "PERCENT", "-100", 0, "-1000000"},
+		{"1000", "PERCENT", "12.5", 0, "125"},
+		{"995", "PERCENT", "10", 0, "100"},   // 99.5 rounds half away from zero
+		{"995", "PERCENT", "-10", 0, "-100"}, // -99.5 too
+		{"99.95", "PERCENT", "10", 2, "10"},  // 9.995 -> 10.00
+		{"100.005", "AMOUNT", "0.005", 3, "0.005"},
+		{"0", "PERCENT", "50", 0, "0"},
+		{"0", "AMOUNT", "-5", 0, "0"},
+	}
+	for _, c := range cases {
+		got := rates.BedAdjustmentFor(dec(c.sold), rates.BedSupplement{Kind: c.kind, Amount: dec(c.amount)}, c.decimals)
+		if !got.Equal(dec(c.want)) {
+			t.Errorf("%s %s %s (%d decimals): %s, want %s", c.sold, c.kind, c.amount, c.decimals, got, c.want)
+		}
+	}
+}
+
+func TestSupplementOnTakesTheLatestRowThatHasStarted(t *testing.T) {
+	rows := []rates.BedSupplement{
+		{Kind: "AMOUNT", Amount: decimal.NewFromInt(10), From: d("2026-10-01")},
+		{Kind: "AMOUNT", Amount: decimal.NewFromInt(20), From: d("2026-10-10")},
+	}
+	if _, ok := rates.SupplementOn(rows, d("2026-09-30")); ok {
+		t.Fatal("nothing has started: the same price")
+	}
+	if r, ok := rates.SupplementOn(rows, d("2026-10-09")); !ok || !r.Amount.Equal(decimal.NewFromInt(10)) {
+		t.Fatalf("the first row: %v %+v", ok, r)
+	}
+	if r, ok := rates.SupplementOn(rows, d("2026-10-10")); !ok || !r.Amount.Equal(decimal.NewFromInt(20)) {
+		t.Fatalf("a row applies from its own date: %v %+v", ok, r)
 	}
 }

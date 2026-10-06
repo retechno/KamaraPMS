@@ -72,7 +72,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		priced, err := s.priceLine(ctx, propertyID, p.TenantID, "", in.RatePlanID, in.RoomTypeID, in.Arrival, in.Departure, in.Overrides, decimals, nil)
+		priced, err := s.priceLine(ctx, propertyID, p.TenantID, "", in.RatePlanID, in.RoomTypeID, lockedBed(in.BedLocked, in.BedTypeID), in.Arrival, in.Departure, in.Overrides, decimals, nil)
 		if err != nil {
 			return err
 		}
@@ -211,8 +211,11 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		if err != nil {
 			return err
 		}
+		// Locking, unlocking or changing the bed of a locked line moves demand between the lines of the type and the bed, and the nights
+		// are priced again (the supplement changes).
+		bedChanged := next.BedLocked != old.BedLocked || (next.BedLocked && !sameBed(next.RequestedBedTypeID, old.RequestedBedTypeID))
 		var keep map[civil.Date]bool
-		if !typeChanged && !planChanged {
+		if !typeChanged && !planChanged && !bedChanged {
 			keep = map[civil.Date]bool{}
 			existing, err := s.q(ctx).ListNightRates(ctx, reservationsdb.ListNightRatesParams{TenantID: p.TenantID, PropertyID: propertyID, LineIds: []int64{lineID}})
 			if err != nil {
@@ -224,15 +227,13 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 				}
 			}
 		}
-		priced, err := s.priceLine(ctx, propertyID, p.TenantID, "", next.RatePlanID, next.RoomTypeID, next.ArrivalDate, next.DepartureDate, patch.Overrides, decimals, keep)
+		priced, err := s.priceLine(ctx, propertyID, p.TenantID, "", next.RatePlanID, next.RoomTypeID, lockedBed(next.BedLocked, next.RequestedBedTypeID), next.ArrivalDate, next.DepartureDate, patch.Overrides, decimals, keep)
 		if err != nil {
 			return err
 		}
 		if next.OccupancyReason, err = s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, reasonText, planChanged || datesChanged, next.ArrivalDate, next.DepartureDate, &lineID); err != nil {
 			return err
 		}
-		// Locking, unlocking or changing the bed of a locked line moves demand between the lines of the type and the bed.
-		bedChanged := next.BedLocked != old.BedLocked || (next.BedLocked && !sameBed(next.RequestedBedTypeID, old.RequestedBedTypeID))
 		if next.Status == LineConfirmed && (typeChanged || datesChanged || bedChanged) {
 			h := hold{lineID: lineID, typeID: st.effType(next), roomID: next.RoomID, bedID: lockedBed(next.BedLocked, next.RequestedBedTypeID), from: next.ArrivalDate, to: next.DepartureDate}
 			if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{h}, &lineID); err != nil {

@@ -673,6 +673,53 @@ func (q *Queries) ListBedAdjustments(ctx context.Context, arg ListBedAdjustments
 	return items, nil
 }
 
+const listBedSupplements = `-- name: ListBedSupplements :many
+SELECT adjust_kind, amount, effective_from FROM rate_plan_bed_adjustments
+WHERE tenant_id = $1 AND property_id = $2 AND rate_plan_id = $3 AND room_type_id = $4 AND bed_type_id = $5
+ORDER BY effective_from
+`
+
+type ListBedSupplementsParams struct {
+	TenantID   int64
+	PropertyID int64
+	RatePlanID int64
+	RoomTypeID int64
+	BedTypeID  int64
+}
+
+type ListBedSupplementsRow struct {
+	AdjustKind    string
+	Amount        decimal.Decimal
+	EffectiveFrom civil.Date
+}
+
+// The supplements of one bed type of one room type on a rate plan, oldest first (the one in force on a night is the latest that has started).
+func (q *Queries) ListBedSupplements(ctx context.Context, arg ListBedSupplementsParams) ([]ListBedSupplementsRow, error) {
+	rows, err := q.db.Query(ctx, listBedSupplements,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RatePlanID,
+		arg.RoomTypeID,
+		arg.BedTypeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBedSupplementsRow{}
+	for rows.Next() {
+		var i ListBedSupplementsRow
+		if err := rows.Scan(&i.AdjustKind, &i.Amount, &i.EffectiveFrom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChargeCodeModes = `-- name: ListChargeCodeModes :many
 SELECT id, code, price_mode FROM charge_codes WHERE tenant_id = $1 AND property_id = $2
 `

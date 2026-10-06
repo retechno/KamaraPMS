@@ -685,10 +685,10 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) (Reserva
 const insertNightRate = `-- name: InsertNightRate :exec
 INSERT INTO reservation_room_rates (
     tenant_id, property_id, reservation_room_id, stay_date, rate_plan_id, charge_code_id, price_mode,
-    base_rate, discount_amount, amount, is_override, grid_rate, yield_rules, created_by, updated_by
+    base_rate, discount_amount, amount, is_override, grid_rate, yield_rules, bed_adjustment, created_by, updated_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
-    $8, $9, $10, $11, $12, $13, $14, $14
+    $8, $9, $10, $11, $12, $13, $14, $15, $15
 )
 `
 
@@ -706,6 +706,7 @@ type InsertNightRateParams struct {
 	IsOverride     bool
 	GridRate       *decimal.Decimal
 	YieldRules     []string
+	BedAdjustment  decimal.Decimal
 	ActorID        *int64
 }
 
@@ -724,6 +725,7 @@ func (q *Queries) InsertNightRate(ctx context.Context, arg InsertNightRateParams
 		arg.IsOverride,
 		arg.GridRate,
 		arg.YieldRules,
+		arg.BedAdjustment,
 		arg.ActorID,
 	)
 	return err
