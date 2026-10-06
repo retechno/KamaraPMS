@@ -117,7 +117,7 @@ func ptrBool(b bool) *bool { return &b }
 // A line can lock the bed it asks for: the lock needs a bed type, is kept when it is not mentioned and falls away with the request.
 func TestBedLock(t *testing.T) {
 	f := setup(t)
-	king, twin := f.bed(t, "KING"), f.bed(t, "TWIN")
+	king, twin := f.twinForRoom102(t) // a twin room exists, so a kept twin can be had
 
 	// A lock without a bed type is refused, on create and on adding a room.
 	bad := f.input(true, f.line(f.dlx, "2026-10-02", "2026-10-04"))

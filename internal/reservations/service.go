@@ -279,30 +279,59 @@ func (s *Service) roomTypesOf(ctx context.Context, tenantID, propertyID int64, r
 // Inventory checks
 
 // hold is a CONFIRMED line to test against the inventory: it will consume typeID on [from, to), and hold
-// roomID when assigned.
+// roomID when assigned. bedID is the bed the line keeps (bed_locked), 0 when it has no preference; field names the
+// room_id field in the error when the room has another bed ("room_id" when empty).
 type hold struct {
 	lineID int64
 	typeID int64
 	roomID *int64
+	bedID  int64
+	field  string
 	from   civil.Date
 	to     civil.Date
+}
+
+// lockedBed is the bed a line keeps: its requested bed when the request is locked, else 0 (no preference).
+func lockedBed(locked bool, bed *int64) int64 {
+	if locked && bed != nil {
+		return *bed
+	}
+	return 0
 }
 
 // checkHolds tests that every hold fits: the room types have availability on every night (aggregated over
 // all holds) and every assigned room is free. excludeLine removes one existing line's own demand (a line
 // being amended, assigned or re-typed). Nights before the business date are not tested: they are past.
 func (s *Service) checkHolds(ctx context.Context, tenantID, propertyID int64, bd civil.Date, holds []hold, excludeLine *int64) error {
-	extra := availability.Extra{}
+	// The demand has two lines (docs/architecture/16-bed-variants.md): the room type, and the bed. A hold with a room sits in a
+	// room of its bed (a line that keeps another bed cannot take it); one without a room that keeps a bed needs a room with it;
+	// one with no preference is only in the type.
+	demand := availability.NewDemand()
 	for _, h := range holds {
+		bed := h.bedID
+		if h.roomID != nil {
+			roomBed, err := s.avail.RoomBed(ctx, tenantID, propertyID, *h.roomID)
+			if err != nil {
+				return err
+			}
+			if h.bedID != 0 && roomBed != h.bedID {
+				field := h.field
+				if field == "" {
+					field = "room_id"
+				}
+				return apperr.Invalid("the room does not have the bed that is kept", fieldErr(field, "ROOM_BED_MISMATCH", "the line keeps another bed than this room has"))
+			}
+			bed = roomBed
+		}
 		from := h.from
 		if from.Before(bd) {
 			from = bd
 		}
 		if h.to.After(from) {
-			extra.Add(h.typeID, from, h.to, 1)
+			demand.Add(h.typeID, bed, from, h.to, 1)
 		}
 	}
-	if err := s.avail.RequireAvailable(ctx, tenantID, propertyID, bd, extra, excludeLine); err != nil {
+	if err := s.avail.RequireAvailableFor(ctx, tenantID, propertyID, bd, demand, excludeLine); err != nil {
 		return err
 	}
 	for _, h := range holds {

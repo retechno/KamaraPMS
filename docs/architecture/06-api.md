@@ -373,7 +373,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **PATCH `{P}/reservations/{id}/rooms/{lineId}`** (`reservation.update`)
 - **Purpose:** amend a line.
-- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, bed_type_id?, bed_locked?, nightly_overrides? }`; `bed_type_id: 0` takes the request off (and the lock). `bed_locked` needs a bed type (422 `BED_LOCK_NEEDS_BED_TYPE`); it has no effect on stock yet (step 2 of `16-bed-variants.md`).
+- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, bed_type_id?, bed_locked?, nightly_overrides? }`; `bed_type_id: 0` takes the request off (and the lock). `bed_locked` needs a bed type (422 `BED_LOCK_NEEDS_BED_TYPE`); a locked line uses the stock of its variant (409 `BED_NOT_AVAILABLE`), a locked line takes only a room with its bed (422 `ROOM_BED_MISMATCH` on `room_id`), and locking, unlocking or changing the bed re-checks the stock.
 - **Rules:** only DRAFT or CONFIRMED lines. `bed_type_id` is the bed the guest asks for (see §5: 422 `BED_TYPE_NOT_FOUND` / `BED_TYPE_INACTIVE`); a request that was valid stays valid when it is not changed, even if the bed type was switched off since. It does not touch availability. Availability is re-checked excluding the line itself. Surviving nights keep their snapshot.
 - **TX:** `T[L1, L2 (old and new type), L3 (assigned room), L4]`
 

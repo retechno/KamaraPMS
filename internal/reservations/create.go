@@ -164,7 +164,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			if err := s.requireBedType(ctx, p.TenantID, propertyID, prefix+"bed_type_id", l.BedTypeID, nil); err != nil {
 				return err
 			}
-			holds[i] = hold{typeID: l.RoomTypeID, roomID: l.RoomID, from: l.Arrival, to: l.Departure}
+			holds[i] = hold{typeID: l.RoomTypeID, roomID: l.RoomID, bedID: lockedBed(l.BedLocked, l.BedTypeID), field: prefix + "room_id", from: l.Arrival, to: l.Departure}
 		}
 		if len(fields) > 0 {
 			return apperr.Invalid("the reservation is invalid", fields...)

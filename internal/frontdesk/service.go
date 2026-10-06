@@ -135,6 +135,9 @@ type lineFacts struct {
 	RoomID        *int64
 	Arrival       civil.Date
 	Departure     civil.Date
+	// BedLocked and RequestedBedTypeID: the line keeps this bed, so the room must have it.
+	BedLocked          bool
+	RequestedBedTypeID *int64
 }
 
 type checkInCmd struct {
@@ -181,6 +184,10 @@ func (s *Service) checkInCore(ctx context.Context, c checkInCmd) (CheckInResult,
 	if len(issues) > 0 {
 		return CheckInResult{}, apperr.Conflict("ROOM_NOT_AVAILABLE", "the room is not free for the stay").WithContext("room_id", room.ID).WithContext("issues", issues)
 	}
+	// A line that keeps its bed needs a room with it.
+	if c.line.BedLocked && c.line.RequestedBedTypeID != nil && room.BedTypeID != *c.line.RequestedBedTypeID {
+		return CheckInResult{}, apperr.Invalid("the room does not have the bed that is kept", fieldErr("room_id", "ROOM_BED_MISMATCH", "the reservation keeps another bed than this room has"))
+	}
 	// A room of another type than the one that line consumes is an upgrade: it needs the permission and the
 	// room type's inventory.
 	consumes := c.line.RoomTypeID
@@ -193,11 +200,16 @@ func (s *Service) checkInCore(ctx context.Context, c checkInCmd) (CheckInResult,
 		if err := s.authz.Require(ctx, c.propertyID, auth.PermReservationUpgrade); err != nil {
 			return CheckInResult{}, err
 		}
-		extra := availability.Extra{}
-		extra.Add(room.RoomTypeID, c.bd, c.line.Departure, 1)
-		if err := s.avail.RequireAvailable(ctx, c.p.TenantID, c.propertyID, c.bd, extra, &own); err != nil {
-			return CheckInResult{}, err
-		}
+	}
+	// The stay sits in a room of this bed whatever the type: the line of the bed must have room for it (the line's own demand
+	// is left out, so a locked line that gets its bed changes nothing). A room of another type also needs that type's stock.
+	demand := availability.NewDemand()
+	if room.RoomTypeID != consumes {
+		demand.Types.Add(room.RoomTypeID, c.bd, c.line.Departure, 1)
+	}
+	demand.Beds.Add(availability.BedKey{RoomTypeID: room.RoomTypeID, BedTypeID: room.BedTypeID}, c.bd, c.line.Departure, 1)
+	if err := s.avail.RequireAvailableFor(ctx, c.p.TenantID, c.propertyID, c.bd, demand, &own); err != nil {
+		return CheckInResult{}, err
 	}
 	prop, err := s.days.GetProperty(ctx, c.propertyID)
 	if err != nil {
@@ -386,7 +398,7 @@ func (s *Service) CheckIn(ctx context.Context, propertyID, reservationID, lineID
 				}
 				out, err = s.checkInCore(ctx, checkInCmd{
 					p: p, propertyID: propertyID, bd: locked.BusinessDate,
-					line:   lineFacts{ID: line.ID, ReservationID: reservationID, RoomTypeID: line.RoomTypeID, RoomID: line.RoomID, Arrival: line.ArrivalDate, Departure: line.DepartureDate},
+					line:   lineFacts{ID: line.ID, ReservationID: reservationID, RoomTypeID: line.RoomTypeID, RoomID: line.RoomID, Arrival: line.ArrivalDate, Departure: line.DepartureDate, BedLocked: line.BedLocked, RequestedBedTypeID: line.RequestedBedTypeID},
 					roomID: *target, guestID: in.GuestID, accompany: dedupe(in.AccompanyingGuestIDs, in.GuestID), adults: in.AdultCount, children: in.ChildCount,
 					override: in.OverrideRoomNotReady, overrideBy: strings.TrimSpace(in.OverrideReason), key: key, lockedFund: folioID,
 				})

@@ -83,7 +83,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		status := LineDraft
 		if confirmed {
 			status = LineConfirmed
-			if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{{typeID: in.RoomTypeID, roomID: in.RoomID, from: in.Arrival, to: in.Departure}}, nil); err != nil {
+			if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{{typeID: in.RoomTypeID, roomID: in.RoomID, bedID: lockedBed(in.BedLocked, in.BedTypeID), from: in.Arrival, to: in.Departure}}, nil); err != nil {
 				return err
 			}
 		}
@@ -231,8 +231,10 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		if next.OccupancyReason, err = s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, reasonText, planChanged || datesChanged, next.ArrivalDate, next.DepartureDate, &lineID); err != nil {
 			return err
 		}
-		if next.Status == LineConfirmed && (typeChanged || datesChanged) {
-			h := hold{lineID: lineID, typeID: st.effType(next), roomID: next.RoomID, from: next.ArrivalDate, to: next.DepartureDate}
+		// Locking, unlocking or changing the bed of a locked line moves demand between the lines of the type and the bed.
+		bedChanged := next.BedLocked != old.BedLocked || (next.BedLocked && !sameBed(next.RequestedBedTypeID, old.RequestedBedTypeID))
+		if next.Status == LineConfirmed && (typeChanged || datesChanged || bedChanged) {
+			h := hold{lineID: lineID, typeID: st.effType(next), roomID: next.RoomID, bedID: lockedBed(next.BedLocked, next.RequestedBedTypeID), from: next.ArrivalDate, to: next.DepartureDate}
 			if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{h}, &lineID); err != nil {
 				return err
 			}
@@ -318,7 +320,7 @@ func (s *Service) AssignRoom(ctx context.Context, propertyID, id, lineID int64, 
 				return err
 			}
 		}
-		h := hold{lineID: lineID, typeID: physical, roomID: &roomID, from: line.ArrivalDate, to: line.DepartureDate}
+		h := hold{lineID: lineID, typeID: physical, roomID: &roomID, bedID: lockedBed(line.BedLocked, line.RequestedBedTypeID), from: line.ArrivalDate, to: line.DepartureDate}
 		if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{h}, &lineID); err != nil {
 			return err
 		}
@@ -367,7 +369,7 @@ func (s *Service) UnassignRoom(ctx context.Context, propertyID, id, lineID int64
 			return apperr.Conflict("NO_ROOM_ASSIGNED", "the reservation room is not a confirmed room with an assigned room")
 		}
 		if st.roomTypes[*line.RoomID] != line.RoomTypeID {
-			h := hold{lineID: lineID, typeID: line.RoomTypeID, from: line.ArrivalDate, to: line.DepartureDate}
+			h := hold{lineID: lineID, typeID: line.RoomTypeID, bedID: lockedBed(line.BedLocked, line.RequestedBedTypeID), from: line.ArrivalDate, to: line.DepartureDate}
 			if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, []hold{h}, &lineID); err != nil {
 				return err
 			}
@@ -389,4 +391,11 @@ func (s *Service) UnassignRoom(ctx context.Context, propertyID, id, lineID int64
 		return err
 	})
 	return out, err
+}
+
+func sameBed(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

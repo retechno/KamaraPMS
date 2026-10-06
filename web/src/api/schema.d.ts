@@ -7397,7 +7397,7 @@ export interface components {
              * @description The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`.
              */
             bed_type_id?: number;
-            /** @description Keeps the bed: the line then needs a room with that bed and uses the stock of the variant. Needs `bed_type_id` (422 `BED_LOCK_NEEDS_BED_TYPE`). */
+            /** @description Keeps the bed: the line then needs a room with that bed and uses the stock of the variant. Needs `bed_type_id` (422 `BED_LOCK_NEEDS_BED_TYPE`). 409 `BED_NOT_AVAILABLE` when the variant is sold out; 422 `ROOM_BED_MISMATCH` on `room_id` when the room has another bed. */
             bed_locked?: boolean;
             /** @description Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan. */
             occupancy_reason?: string;

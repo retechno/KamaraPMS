@@ -262,3 +262,12 @@ func (s *Service) BedChangeShortfalls(ctx context.Context, tenantID, propertyID,
 	}
 	return s.ShortfallsFor(ctx, tenantID, propertyID, bd, Demand{Types: Extra{}, Beds: extra}, nil)
 }
+
+// RoomBed is the bed type of a room (every room has one).
+func (s *Service) RoomBed(ctx context.Context, tenantID, propertyID, roomID int64) (int64, error) {
+	room, err := s.q(ctx).GetRoomForCheck(ctx, availabilitydb.GetRoomForCheckParams{TenantID: tenantID, PropertyID: propertyID, ID: roomID})
+	if err != nil {
+		return 0, err
+	}
+	return room.BedTypeID, nil
+}

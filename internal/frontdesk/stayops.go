@@ -159,10 +159,20 @@ func (s *Service) Move(ctx context.Context, propertyID, stayID int64, in MoveInp
 		if err := roomIssuesError(target.ID, issues); err != nil {
 			return err
 		}
-		if target.RoomTypeID != pre.seg.RoomTypeID {
-			extra := availability.Extra{}
-			extra.Add(target.RoomTypeID, bd, effDep, 1)
-			if err := s.avail.RequireAvailable(ctx, p.TenantID, propertyID, bd, extra, nil); err != nil {
+		// The stay leaves its room for the target for the rest of the stay: the target's type needs stock when it is another type,
+		// and its bed when it is another variant (a move inside one variant changes nothing). A line that keeps its bed may be
+		// moved out of it when the check passes; the audit entry carries the original request.
+		currentBed, err := s.avail.RoomBed(ctx, p.TenantID, propertyID, pre.seg.RoomID)
+		if err != nil {
+			return err
+		}
+		if target.RoomTypeID != pre.seg.RoomTypeID || target.BedTypeID != currentBed {
+			demand := availability.NewDemand()
+			if target.RoomTypeID != pre.seg.RoomTypeID {
+				demand.Types.Add(target.RoomTypeID, bd, effDep, 1)
+			}
+			demand.Beds.Add(availability.BedKey{RoomTypeID: target.RoomTypeID, BedTypeID: target.BedTypeID}, bd, effDep, 1)
+			if err := s.avail.RequireAvailableFor(ctx, p.TenantID, propertyID, bd, demand, nil); err != nil {
 				return err
 			}
 		}
@@ -197,7 +207,7 @@ func (s *Service) Move(ctx context.Context, propertyID, stayID int64, in MoveInp
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.room_moved", stayID,
 			map[string]any{"room_id": pre.seg.RoomID, "room_number": pre.seg.RoomNumber},
-			map[string]any{"room_id": target.ID, "room_number": target.RoomNumber, "reason": reason, "rates_changed": len(in.NewNightlyRates), "override_room_not_ready": in.OverrideRoomNotReady})); err != nil {
+			mergeAudit(map[string]any{"room_id": target.ID, "room_number": target.RoomNumber, "reason": reason, "rates_changed": len(in.NewNightlyRates), "override_room_not_ready": in.OverrideRoomNotReady}, movedOutOfKeptBed(pre.line, target.BedTypeID)))); err != nil {
 			return err
 		}
 		out = MoveResult{Stay: toStay(bumped, pre.line.ReservationID), ClosedSegment: toSegment(closed, pre.seg.RoomNumber), NewSegment: toSegment(fresh, target.RoomNumber)}
@@ -346,9 +356,13 @@ func (s *Service) extend(ctx context.Context, p auth.Principal, propertyID int64
 			WithContext("suggest_room_move", true).WithContext("room_id", pre.seg.RoomID).WithContext("issues", issues).WithContext("alternative_rooms", alternatives)
 	}
 	if effDep := maxDate(cur, bd.AddDays(1)); in.DepartureDate.After(effDep) {
-		extra := availability.Extra{}
-		extra.Add(pre.seg.RoomTypeID, effDep, in.DepartureDate, 1)
-		if err := s.avail.RequireAvailable(ctx, p.TenantID, propertyID, bd, extra, nil); err != nil {
+		bed, err := s.avail.RoomBed(ctx, p.TenantID, propertyID, pre.seg.RoomID)
+		if err != nil {
+			return err
+		}
+		demand := availability.NewDemand()
+		demand.Add(pre.seg.RoomTypeID, bed, effDep, in.DepartureDate, 1) // the extra nights sit in this room: the type and its bed
+		if err := s.avail.RequireAvailableFor(ctx, p.TenantID, propertyID, bd, demand, nil); err != nil {
 			return err
 		}
 	}
@@ -557,4 +571,12 @@ func mergeAudit(data, extra map[string]any) map[string]any {
 		data[k] = v
 	}
 	return data
+}
+
+// movedOutOfKeptBed is the audit data of a move that takes a stay out of the bed its reservation keeps (nil when it does not).
+func movedOutOfKeptBed(line frontdeskdb.GetStayLineRow, targetBed int64) map[string]any {
+	if !line.BedLocked || line.RequestedBedTypeID == nil || *line.RequestedBedTypeID == targetBed {
+		return nil
+	}
+	return map[string]any{"kept_bed_type_id": *line.RequestedBedTypeID, "moved_to_bed_type_id": targetBed}
 }

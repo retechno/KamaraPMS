@@ -49,7 +49,7 @@ ORDER BY s.start_business_date, s.id;
 
 -- The reservation room of a stay, with the reservation's number.
 -- name: GetStayLine :one
-SELECT l.id, l.reservation_id, res.confirmation_number, l.room_type_id, t.code AS room_type_code, l.rate_plan_id, l.status, l.room_id, l.arrival_date, l.departure_date
+SELECT l.id, l.reservation_id, res.confirmation_number, l.room_type_id, t.code AS room_type_code, l.rate_plan_id, l.status, l.room_id, l.arrival_date, l.departure_date, l.bed_locked, l.requested_bed_type_id
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
@@ -103,7 +103,7 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = '
 ORDER BY t.sort_order, l.id;
 
 -- name: GetRoomForCheckIn :one
-SELECT r.id, r.room_number, r.room_type_id, r.is_active, h.status AS housekeeping_status
+SELECT r.id, r.room_number, r.room_type_id, r.bed_type_id, r.is_active, h.status AS housekeeping_status
 FROM rooms r JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.id = @id;
 

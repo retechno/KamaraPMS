@@ -288,7 +288,7 @@ func (q *Queries) GetOpenSegment(ctx context.Context, arg GetOpenSegmentParams) 
 }
 
 const getRoomForCheckIn = `-- name: GetRoomForCheckIn :one
-SELECT r.id, r.room_number, r.room_type_id, r.is_active, h.status AS housekeeping_status
+SELECT r.id, r.room_number, r.room_type_id, r.bed_type_id, r.is_active, h.status AS housekeeping_status
 FROM rooms r JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
 WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.id = $3
 `
@@ -303,6 +303,7 @@ type GetRoomForCheckInRow struct {
 	ID                 int64
 	RoomNumber         string
 	RoomTypeID         int64
+	BedTypeID          int64
 	IsActive           bool
 	HousekeepingStatus string
 }
@@ -314,6 +315,7 @@ func (q *Queries) GetRoomForCheckIn(ctx context.Context, arg GetRoomForCheckInPa
 		&i.ID,
 		&i.RoomNumber,
 		&i.RoomTypeID,
+		&i.BedTypeID,
 		&i.IsActive,
 		&i.HousekeepingStatus,
 	)
@@ -435,7 +437,7 @@ func (q *Queries) GetStayByKey(ctx context.Context, arg GetStayByKeyParams) (Sta
 }
 
 const getStayLine = `-- name: GetStayLine :one
-SELECT l.id, l.reservation_id, res.confirmation_number, l.room_type_id, t.code AS room_type_code, l.rate_plan_id, l.status, l.room_id, l.arrival_date, l.departure_date
+SELECT l.id, l.reservation_id, res.confirmation_number, l.room_type_id, t.code AS room_type_code, l.rate_plan_id, l.status, l.room_id, l.arrival_date, l.departure_date, l.bed_locked, l.requested_bed_type_id
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
@@ -459,6 +461,8 @@ type GetStayLineRow struct {
 	RoomID             *int64
 	ArrivalDate        civil.Date
 	DepartureDate      civil.Date
+	BedLocked          bool
+	RequestedBedTypeID *int64
 }
 
 // The reservation room of a stay, with the reservation's number.
@@ -476,6 +480,8 @@ func (q *Queries) GetStayLine(ctx context.Context, arg GetStayLineParams) (GetSt
 		&i.RoomID,
 		&i.ArrivalDate,
 		&i.DepartureDate,
+		&i.BedLocked,
+		&i.RequestedBedTypeID,
 	)
 	return i, err
 }

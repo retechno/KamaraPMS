@@ -1,6 +1,6 @@
 # 16. Bed variants: a bed type as a sellable variant of a room type
 
-Status: **design approved; building in six steps (step 1 done: the bed type of a room is required, `bed_locked` on a line without effect on stock, the supplement table with `GET/POST /rate-plans/{id}/bed-adjustments`; step 2 done: the engine with bed lines, `internal/availability/bed.go`).** It answers the backlog item "bed type as a sellable variant with its own stock or rate" (`08-backlog.md`). Bed counts per room type (1 King or 2 Twin) stay out.
+Status: **design approved; building in six steps (step 1 done: the bed type of a room is required, `bed_locked` on a line without effect on stock, the supplement table with `GET/POST /rate-plans/{id}/bed-adjustments`; step 2 done: the engine with bed lines, `internal/availability/bed.go`; step 3 done: the reservation rules).** It answers the backlog item "bed type as a sellable variant with its own stock or rate" (`08-backlog.md`). Bed counts per room type (1 King or 2 Twin) stay out.
 
 Decisions of the owner (2026-10-06):
 
@@ -95,7 +95,7 @@ No new lock level: the writers already hold the business day, the room types and
 
 1. Migration 00057 (the bed type of a room required, `bed_locked`, the adjustment table), constraint mappings, schema tests; the rooms service and screens requiring the bed type; the fixtures and the seed giving rooms a bed; `bed_locked` through the line (create, add, amend, views) without effect on stock yet; the adjustment table with its API.
 2. (done) The engine: bed lines in `Inventory`/`Extra`/`FindShortfalls`, the guards for blocks, removals and a change of a room's bed, and the random matching test.
-3. Reservations: `checkHolds` with the bed demand, assignment and check-in rules, room moves, unlocking.
+3. (done) Reservations: `checkHolds` with the bed demand, assignment and check-in rules, room moves, unlocking.
 4. Price: the adjustments in the pricing of a line, the snapshot per night, the override order.
 5. Search and the calendar.
 6. Front end, documents, the full checks.

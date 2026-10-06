@@ -201,7 +201,7 @@ func (s *Service) draftHolds(ctx context.Context, tenantID, propertyID int64, st
 			return nil, nil, err
 		}
 		drafts = append(drafts, l)
-		holds = append(holds, hold{lineID: l.ID, typeID: st.effType(l), roomID: l.RoomID, from: l.ArrivalDate, to: l.DepartureDate})
+		holds = append(holds, hold{lineID: l.ID, typeID: st.effType(l), roomID: l.RoomID, bedID: lockedBed(l.BedLocked, l.RequestedBedTypeID), from: l.ArrivalDate, to: l.DepartureDate})
 	}
 	return holds, drafts, nil
 }
@@ -373,7 +373,7 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 			if err := requireActiveType(types[l.RoomTypeID]); err != nil {
 				return err
 			}
-			holds = append(holds, hold{lineID: l.ID, typeID: l.RoomTypeID, from: l.ArrivalDate, to: l.DepartureDate})
+			holds = append(holds, hold{lineID: l.ID, typeID: l.RoomTypeID, bedID: lockedBed(l.BedLocked, l.RequestedBedTypeID), from: l.ArrivalDate, to: l.DepartureDate})
 		}
 		if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, holds, nil); err != nil {
 			return err
