@@ -269,7 +269,7 @@ func roomIssuesError(roomID int64, issues []availability.RoomIssue) error {
 // the overrides. Shortening needs the new date to be after the business date and after every charged night (reverse
 // those first); the nights beyond are dropped. The reservation room keeps its original dates.
 func (s *Service) ChangeDeparture(ctx context.Context, propertyID, stayID int64, in ChangeDepartureInput) (Stay, error) {
-	ctx = reservations.WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason)
+	ctx = reservations.WithRestrictionOverride(reservations.WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason), in.RestrictionOverride)
 	p, err := s.actor(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
 		return Stay{}, err
@@ -330,7 +330,7 @@ func (s *Service) ChangeDeparture(ctx context.Context, propertyID, stayID int64,
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.departure_changed", stayID,
-			map[string]any{"departure_date": cur}, mergeAudit(map[string]any{"departure_date": in.DepartureDate}, reservations.OverrideAudit(ctx)))); err != nil {
+			map[string]any{"departure_date": cur}, mergeAudit(mergeAudit(map[string]any{"departure_date": in.DepartureDate}, reservations.OverrideAudit(ctx)), reservations.RestrictionAudit(ctx)))); err != nil {
 			return err
 		}
 		out = toStay(updated, pre.line.ReservationID)
@@ -354,6 +354,14 @@ func (s *Service) extend(ctx context.Context, p auth.Principal, propertyID int64
 		}
 		return apperr.Conflict("ROOM_NOT_AVAILABLE_FOR_EXTENSION", "the room is not free for the extra nights: move the guest to another room").
 			WithContext("suggest_room_move", true).WithContext("room_id", pre.seg.RoomID).WithContext("issues", issues).WithContext("alternative_rooms", alternatives)
+	}
+	// The extra nights are a sale: the sales restrictions of the product that was sold (the room type and rate plan of the reservation room, whatever room the guest is in) are
+	// asked for them, the new departure and the total length. The guest is in already, so the arrival and the minimum stay are not asked.
+	if err := s.res.RequireSellableStay(ctx, p.TenantID, propertyID, pre.line.ReservationID, availability.StayRequest{
+		RoomTypeID: pre.line.RoomTypeID, RatePlanID: pre.line.RatePlanID, Arrival: pre.line.ArrivalDate, Departure: in.DepartureDate, BusinessDate: bd,
+		Previous: &availability.StayDates{Arrival: pre.line.ArrivalDate, Departure: cur}, InHouse: true,
+	}); err != nil {
+		return err
 	}
 	if effDep := maxDate(cur, bd.AddDays(1)); in.DepartureDate.After(effDep) {
 		bed, err := s.avail.RoomBed(ctx, p.TenantID, propertyID, pre.seg.RoomID)

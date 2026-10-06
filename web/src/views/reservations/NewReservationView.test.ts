@@ -407,4 +407,81 @@ describe('NewReservationView: company and group', () => {
     await w.get('select[name=bed_type_id]').setValue(0)
     expect(w.find('input[name=bed_locked]').exists()).toBe(false)
   })
+
+  async function approveInDialog() {
+    const email = document.body.querySelector('input[name=approval_email]') as HTMLInputElement
+    const password = document.body.querySelector('input[name=approval_password]') as HTMLInputElement
+    email.value = 'boss@hotel.test'
+    email.dispatchEvent(new Event('input'))
+    password.value = 'secret'
+    password.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+  }
+
+  // A stay that breaks a sales restriction (the evaluator of the server says so in each offer).
+  const closedNight = { type: 'STOP_SELL', date: '2026-10-03', room_type_id: 10, rate_plan_id: 1, scope: 'ROOM_TYPE', row_id: 4 }
+  const restrictedSearch = { ...search, room_types: [{ ...search.room_types[0]!, rate_plans: [{ ...search.room_types[0]!.rate_plans[0]!, bookable: false, restrictions: [closedNight] }, ...search.room_types[0]!.rate_plans.slice(1)] }, search.room_types[1]!] }
+
+  async function searchRestricted(permissions: string[]) {
+    document.body.innerHTML = ''
+    const { w } = mountView(permissions)
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : restrictedSearch }))
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    return w
+  }
+
+  it('marks an offer that breaks a restriction and lets only who may override book it', async () => {
+    const w = await searchRestricted(['reservation.read', 'reservation.create'])
+    expect(w.get('[data-testid=restricted-DLX-BAR]').text()).toBe('Closed')
+    expect(w.get('[data-testid=restricted-DLX-BAR]').attributes('title')).toContain('2026-10-03')
+    expect(w.get('[data-testid=pick-DLX-BAR]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=pick-DLX-BAR]').attributes('title')).toContain('sales restriction')
+    expect(w.find('[data-testid=restricted-DLX-HALF]').exists()).toBe(false) // the other plan is not restricted
+    const may = await searchRestricted(['reservation.read', 'reservation.create', 'reservation.override_restriction'])
+    expect(may.get('[data-testid=pick-DLX-BAR]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('books a restricted stay with a reason and the approval of a manager', async () => {
+    const w = await searchRestricted(['reservation.read', 'reservation.create', 'reservation.override_restriction'])
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    expect(w.get('[data-testid=restriction-notice]').text()).toContain('The night of 2026-10-03 is closed for sale.')
+    await w.get('input[name=restriction_reason]').setValue('Owner guest')
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled() // the person cannot approve: the dialog comes first
+    expect(document.body.textContent).toContain('sales restriction')
+    await approveInDialog()
+    expect(POST.mock.calls[0]?.[1].body).toMatchObject({ restriction_override: { reason: 'Owner guest', approval: { email: 'boss@hotel.test', password: 'secret' } } })
+  })
+
+  it('books a restricted stay without a dialog when the person approves it themselves', async () => {
+    const w = await searchRestricted(['reservation.read', 'reservation.create', 'reservation.override_restriction', 'reservation.restriction_approve'])
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await w.get('input[name=restriction_reason]').setValue('Regular guest')
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=approval-dialog]')).toBeNull()
+    expect(POST.mock.calls[0]?.[1].body.restriction_override).toEqual({ reason: 'Regular guest', approval: undefined })
+  })
+
+  it('does not ask for an override when the offer breaks nothing', async () => {
+    const { w } = mountView(['reservation.read', 'reservation.create', 'reservation.override_restriction'])
+    await flushPromises()
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    expect(w.find('[data-testid=restriction-notice]').exists()).toBe(false)
+  })
 })

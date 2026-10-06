@@ -19,6 +19,7 @@ import (
 // Idempotency-Key: the same key and body returns the stored reservation, the same key with another body is
 // 422 IDEMPOTENCY_KEY_REUSED. Drafts hold no inventory; confirming takes the confirm locks.
 func (s *Service) Create(ctx context.Context, propertyID int64, key string, in CreateInput) (Reservation, error) {
+	ctx = WithRestrictionOverride(ctx, in.RestrictionOverride)
 	ctx = WithFreeApproval(WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason), in.OccupancyApproval, in.ExceedFreeQuota)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationCreate)
 	if err != nil {
@@ -78,6 +79,7 @@ func (s *Service) replay(ctx context.Context, p auth.Principal, propertyID int64
 // and so cannot let the booking take those locks after a sequence). bd is the locked business date. The input
 // is validated and priced as usual; no lock is taken here.
 func (s *Service) CreateHeld(ctx context.Context, propertyID int64, bd civil.Date, in CreateInput) (Reservation, error) {
+	ctx = WithRestrictionOverride(ctx, in.RestrictionOverride)
 	ctx = WithFreeApproval(WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason), in.OccupancyApproval, in.ExceedFreeQuota)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationCreate)
 	if err != nil {
@@ -169,6 +171,15 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 		if len(fields) > 0 {
 			return apperr.Invalid("the reservation is invalid", fields...)
 		}
+		// A sale: every room, draft or confirmed, is asked the sales restrictions first (a draft that is closed is refused too; it would be refused at the confirmation).
+		asks := make([]stayAsk, len(in.Rooms))
+		for i, l := range in.Rooms {
+			line := i
+			asks[i] = askOf(l.RoomTypeID, l.RatePlanID, l.Arrival, l.Departure, bd, nil, &line)
+		}
+		if err := s.requireSellable(ctx, p.TenantID, propertyID, in.Source, asks...); err != nil {
+			return err
+		}
 		for i, l := range in.Rooms {
 			prefix := fmt.Sprintf("rooms[%d].", i)
 			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, prefix, l.RatePlanID, l.RoomTypeID, lockedBed(l.BedLocked, l.BedTypeID), l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
@@ -224,9 +235,9 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 				return err
 			}
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, nil, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
 			"confirmation_number": res.ConfirmationNumber, "status": res.Status, "rooms": len(in.Rooms), "source": res.Source,
-		})))); err != nil {
+		}))))); err != nil {
 			return err
 		}
 		if in.Confirm {

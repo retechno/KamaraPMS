@@ -49,9 +49,11 @@ type WalkInInput struct {
 	RateOverrideApproval *iam.ApprovalInput           `json:"rate_override_approval"` // the approver's credentials, unless the caller can approve
 	OccupancyApproval    *iam.ApprovalInput           `json:"occupancy_approval"`     // the manager's credentials for a complimentary or house use room, unless the caller can approve
 	ExceedFreeQuota      bool                         `json:"exceed_free_quota"`      // takes the month over the quota of free nights, knowingly
-	AccompanyingGuestIDs []int64                      `json:"accompanying_guest_ids"`
-	OverrideRoomNotReady bool                         `json:"override_room_not_ready"`
-	OverrideReason       string                       `json:"override_reason"`
+	// RestrictionOverride goes past a sales restriction (stop sell, closed to arrival, a minimum or maximum stay) of the walk-in: a reason and an approval.
+	RestrictionOverride  *reservations.RestrictionOverride `json:"restriction_override"`
+	AccompanyingGuestIDs []int64                           `json:"accompanying_guest_ids"`
+	OverrideRoomNotReady bool                              `json:"override_room_not_ready"`
+	OverrideReason       string                            `json:"override_reason"`
 }
 
 // ReverseInput undoes a check-in of the same business date.
@@ -234,6 +236,8 @@ type ChangeDepartureInput struct {
 	NightlyOverrides     []reservations.NightOverride `json:"nightly_overrides"`
 	RateOverrideReason   string                       `json:"rate_override_reason"`
 	RateOverrideApproval *iam.ApprovalInput           `json:"rate_override_approval"`
+	// RestrictionOverride goes past a sales restriction of the extra nights (stop sell, closed to departure, the maximum stay): a reason and an approval.
+	RestrictionOverride *reservations.RestrictionOverride `json:"restriction_override"`
 }
 
 // AddGuestInput adds an accompanying guest.

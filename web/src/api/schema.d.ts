@@ -7387,6 +7387,10 @@ export interface components {
             nightly: components["schemas"]["NightAmount"][];
             /** @description Nights without a rate; the plan cannot be booked without overrides when above 0. */
             missing_nights: number;
+            /** @description False when the stay breaks a sales restriction; `restrictions` says which. It does not look at the rooms left. Staff who may override can still book it. */
+            bookable: boolean;
+            /** @description The sales restrictions the stay breaks, by the one evaluator of the availability engine (empty when it breaks none). */
+            restrictions: components["schemas"]["StayViolation"][];
             estimate: components["schemas"]["Estimate"] | null;
         };
         TypeOffer: {
@@ -7480,6 +7484,7 @@ export interface components {
             occupancy_approval?: components["schemas"]["Approval"];
             /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
             exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         CreateReservationRequest: {
@@ -7510,6 +7515,7 @@ export interface components {
             occupancy_approval?: components["schemas"]["Approval"];
             /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
             exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
             /** @default false */
             confirm: boolean;
             rooms: components["schemas"]["RoomInput"][];
@@ -7535,6 +7541,37 @@ export interface components {
              * @description Below 1 clears the group.
              */
             booking_group_id?: number;
+        };
+        /** @description Goes past the sales restrictions of a sale (stop sell, closed to arrival or departure, a minimum or maximum stay): the person needs `reservation.override_restriction`, a reason, and an approval, which is their own when they also hold `reservation.restriction_approve` and otherwise the credentials of someone who does (422 `APPROVAL_REQUIRED`, `APPROVAL_INVALID_CREDENTIALS`, `APPROVAL_NOT_PERMITTED`). Never for a booking whose source is WEBSITE or OTA. The override is audited in the entry of the operation; the approval is verified and never stored. */
+        RestrictionOverride: {
+            /** @description Required (422 `REQUIRED` on `restriction_override.reason`). */
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        /** @description A sales restriction a stay breaks. `date` is the night (stop sell), the arrival date (closed to arrival, minimum and maximum stay) or the departure date (closed to departure). `row_id` and `scope` say which row of the grid decided. */
+        StayViolation: {
+            /** @description The room of a reservation request that breaks it (create only). */
+            line_index?: number;
+            /** @enum {string} */
+            type: "STOP_SELL" | "CLOSED_TO_ARRIVAL" | "CLOSED_TO_DEPARTURE" | "MIN_STAY" | "MAX_STAY";
+            date: components["schemas"]["Date"];
+            /** Format: int64 */
+            room_type_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** @enum {string} */
+            scope: "ROOM_TYPE_AND_PLAN" | "ROOM_TYPE" | "RATE_PLAN" | "PROPERTY";
+            /** @description The limit of a minimum or maximum stay. */
+            value?: number;
+            /** @description The length of the stay that broke a minimum or maximum. */
+            nights?: number;
+            /** Format: int64 */
+            row_id: number;
+        };
+        SellRequest: {
+            /** Format: int32 */
+            version: number;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
         };
         VersionRequest: {
             /** Format: int32 */
@@ -7578,6 +7615,7 @@ export interface components {
             occupancy_approval?: components["schemas"]["Approval"];
             /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
             exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AssignRoomRequest: {
@@ -8327,6 +8365,7 @@ export interface components {
             occupancy_approval?: components["schemas"]["Approval"];
             /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
             exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
             accompanying_guest_ids?: number[];
             /** @default false */
@@ -8440,6 +8479,7 @@ export interface components {
             occupancy_approval?: components["schemas"]["Approval"];
             /** @description Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`). */
             exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
             nightly_overrides?: components["schemas"]["NightOverride"][];
         };
         AddStayGuestRequest: {
@@ -14484,7 +14524,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["VersionRequest"];
+                "application/json": components["schemas"]["SellRequest"];
             };
         };
         responses: {
@@ -14546,7 +14586,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["VersionRequest"];
+                "application/json": components["schemas"]["SellRequest"];
             };
         };
         responses: {

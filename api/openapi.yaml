@@ -1670,7 +1670,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/VersionRequest" }
+            schema: { $ref: "#/components/schemas/SellRequest" }
       responses:
         "200":
           description: The result.
@@ -1720,7 +1720,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/VersionRequest" }
+            schema: { $ref: "#/components/schemas/SellRequest" }
       responses:
         "200":
           description: The result.
@@ -8384,7 +8384,7 @@ components:
         total: { type: string }
     PlanOffer:
       type: object
-      required: [id, code, name, price_mode, occupancy_kind, nightly, missing_nights, estimate]
+      required: [id, code, name, price_mode, occupancy_kind, nightly, missing_nights, estimate, bookable, restrictions]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -8395,6 +8395,11 @@ components:
           type: array
           items: { $ref: "#/components/schemas/NightAmount" }
         missing_nights: { type: integer, description: Nights without a rate; the plan cannot be booked without overrides when above 0. }
+        bookable: { type: boolean, description: "False when the stay breaks a sales restriction; `restrictions` says which. It does not look at the rooms left. Staff who may override can still book it." }
+        restrictions:
+          type: array
+          description: "The sales restrictions the stay breaks, by the one evaluator of the availability engine (empty when it breaks none)."
+          items: { $ref: "#/components/schemas/StayViolation" }
         estimate:
           oneOf:
             - { $ref: "#/components/schemas/Estimate" }
@@ -8489,6 +8494,7 @@ components:
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "Only when the room is added to an existing reservation (see `rate_override_reason`)." }
         occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -8508,6 +8514,7 @@ components:
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
         confirm: { type: boolean, default: false }
         rooms:
           type: array
@@ -8530,6 +8537,35 @@ components:
         remarks: { type: string }
         company_id: { type: integer, format: int64, description: Below 1 clears the company. }
         booking_group_id: { type: integer, format: int64, description: Below 1 clears the group. }
+    RestrictionOverride:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      description: "Goes past the sales restrictions of a sale (stop sell, closed to arrival or departure, a minimum or maximum stay): the person needs `reservation.override_restriction`, a reason, and an approval, which is their own when they also hold `reservation.restriction_approve` and otherwise the credentials of someone who does (422 `APPROVAL_REQUIRED`, `APPROVAL_INVALID_CREDENTIALS`, `APPROVAL_NOT_PERMITTED`). Never for a booking whose source is WEBSITE or OTA. The override is audited in the entry of the operation; the approval is verified and never stored."
+      properties:
+        reason: { type: string, maxLength: 500, description: Required (422 `REQUIRED` on `restriction_override.reason`). }
+        approval: { $ref: "#/components/schemas/Approval" }
+    StayViolation:
+      type: object
+      required: [type, date, room_type_id, rate_plan_id, scope, row_id]
+      description: "A sales restriction a stay breaks. `date` is the night (stop sell), the arrival date (closed to arrival, minimum and maximum stay) or the departure date (closed to departure). `row_id` and `scope` say which row of the grid decided."
+      properties:
+        line_index: { type: integer, description: "The room of a reservation request that breaks it (create only)." }
+        type: { type: string, enum: [STOP_SELL, CLOSED_TO_ARRIVAL, CLOSED_TO_DEPARTURE, MIN_STAY, MAX_STAY] }
+        date: { $ref: "#/components/schemas/Date" }
+        room_type_id: { type: integer, format: int64 }
+        rate_plan_id: { type: integer, format: int64 }
+        scope: { type: string, enum: [ROOM_TYPE_AND_PLAN, ROOM_TYPE, RATE_PLAN, PROPERTY] }
+        value: { type: integer, description: "The limit of a minimum or maximum stay." }
+        nights: { type: integer, description: "The length of the stay that broke a minimum or maximum." }
+        row_id: { type: integer, format: int64 }
+    SellRequest:
+      type: object
+      required: [version]
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int32 }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
     VersionRequest:
       type: object
       required: [version]
@@ -8569,6 +8605,7 @@ components:
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -9301,6 +9338,7 @@ components:
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }
@@ -9410,6 +9448,7 @@ components:
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "The approval of the override: the credentials of a user holding `reservation.override_rate_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         occupancy_approval: { $ref: "#/components/schemas/Approval", description: "The approval of a complimentary or house use room: the credentials of a user holding `reservation.complimentary_approve`. Not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED` otherwise, 403 `APPROVAL_NOT_PERMITTED` for an approver who may not)." }
         exceed_free_quota: { type: boolean, description: "Takes the month over its quota of free nights knowingly (otherwise 409 `FREE_NIGHT_QUOTA_EXCEEDED`, with `context.quota`, `used`, `requested`, `month`)." }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
         nightly_overrides:
           type: array
           items: { $ref: "#/components/schemas/NightOverride" }

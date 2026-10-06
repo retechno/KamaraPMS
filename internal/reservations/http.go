@@ -246,6 +246,12 @@ type versionRequest struct {
 	Version int32 `json:"version"`
 }
 
+// sellRequest is the body of the operations that sell the nights of a reservation (confirm, reinstate): the version, and an override of a sales restriction.
+type sellRequest struct {
+	Version             int32                `json:"version"`
+	RestrictionOverride *RestrictionOverride `json:"restriction_override"`
+}
+
 type reasonRequest struct {
 	Version int32  `json:"version"`
 	Reason  string `json:"reason"`
@@ -256,11 +262,11 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req versionRequest
+	var req sellRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	res, err := h.svc.Confirm(r.Context(), pid, id, req.Version)
+	res, err := h.svc.Confirm(WithRestrictionOverride(r.Context(), req.RestrictionOverride), pid, id, req.Version)
 	if err != nil {
 		return err
 	}
@@ -272,11 +278,11 @@ func (h *Handler) reinstate(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req versionRequest
+	var req sellRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return err
 	}
-	res, err := h.svc.Reinstate(r.Context(), pid, id, req.Version)
+	res, err := h.svc.Reinstate(WithRestrictionOverride(r.Context(), req.RestrictionOverride), pid, id, req.Version)
 	if err != nil {
 		return err
 	}
@@ -338,6 +344,8 @@ type patchRoomRequest struct {
 	RateOverrideApproval *iam.ApprovalInput `json:"rate_override_approval"`
 	OccupancyApproval    *iam.ApprovalInput `json:"occupancy_approval"`
 	ExceedFreeQuota      bool               `json:"exceed_free_quota"`
+	// RestrictionOverride goes past a sales restriction of the changed dates, room type or rate plan.
+	RestrictionOverride *RestrictionOverride `json:"restriction_override"`
 }
 
 func (h *Handler) patchRoom(w http.ResponseWriter, r *http.Request) error {

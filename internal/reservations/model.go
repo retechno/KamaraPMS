@@ -88,6 +88,8 @@ type LineInput struct {
 	// CreateInput).
 	OccupancyApproval *iam.ApprovalInput `json:"occupancy_approval,omitempty"`
 	ExceedFreeQuota   bool               `json:"exceed_free_quota,omitempty"`
+	// RestrictionOverride goes past a sales restriction of the line added to a reservation (see CreateInput).
+	RestrictionOverride *RestrictionOverride `json:"restriction_override,omitempty"`
 }
 
 // CreateInput creates a draft, optionally confirming it in the same transaction.
@@ -110,12 +112,19 @@ type CreateInput struct {
 	// knowingly takes a month over the quota of free nights.
 	OccupancyApproval *iam.ApprovalInput `json:"occupancy_approval,omitempty"`
 	ExceedFreeQuota   bool               `json:"exceed_free_quota,omitempty"`
+	// RestrictionOverride goes past the sales restrictions of the rooms of the request: a reason and an approval (docs/architecture/18-architecture-decisions.md). Never for a web or OTA booking.
+	RestrictionOverride *RestrictionOverride `json:"restriction_override,omitempty"`
 }
 
 // Hash identifies the request body for idempotent replays.
 func (in CreateInput) Hash() string {
 	in.RateOverrideApproval, in.OccupancyApproval = nil, nil // credentials are never part of what is stored
-	b, _ := json.Marshal(in)                                 //nolint:errchkjson // plain structs cannot fail to marshal
+	if in.RestrictionOverride != nil {
+		ro := *in.RestrictionOverride
+		ro.Approval = nil
+		in.RestrictionOverride = &ro
+	}
+	b, _ := json.Marshal(in) //nolint:errchkjson // plain structs cannot fail to marshal
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -155,6 +164,8 @@ type LinePatch struct {
 	// OccupancyApproval and ExceedFreeQuota: see CreateInput (moving a line to a free plan, or changing the dates of one).
 	OccupancyApproval *iam.ApprovalInput
 	ExceedFreeQuota   bool
+	// RestrictionOverride goes past the sales restriction of changed dates, room type or rate plan (see CreateInput).
+	RestrictionOverride *RestrictionOverride
 }
 
 // ListFilter narrows the reservation list.

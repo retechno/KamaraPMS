@@ -146,6 +146,15 @@ func (s *Service) Confirm(ctx context.Context, propertyID, id int64, version int
 		if len(drafts) == 0 {
 			return apperr.Conflict("NO_ROOMS_TO_CONFIRM", "the reservation has no draft room")
 		}
+		// Confirming is the sale of the nights of the drafts: each room is asked the sales restrictions, as a new sale.
+		asks := make([]stayAsk, len(drafts))
+		for i, l := range drafts {
+			line := i
+			asks[i] = askOf(l.RoomTypeID, l.RatePlanID, l.ArrivalDate, l.DepartureDate, st.bd, nil, &line)
+		}
+		if err := s.requireSellable(ctx, p.TenantID, propertyID, st.res.Source, asks...); err != nil {
+			return err
+		}
 		if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, holds, nil); err != nil {
 			return err
 		}
@@ -162,7 +171,7 @@ func (s *Service) Confirm(ctx context.Context, propertyID, id int64, version int
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.confirmed", id,
-			map[string]any{"status": st.res.Status}, map[string]any{"status": res.Status, "rooms": len(drafts)})); err != nil {
+			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, map[string]any{"status": res.Status, "rooms": len(drafts)}))); err != nil {
 			return err
 		}
 		if err := s.confirmed(ctx, p, propertyID, id, st.bd); err != nil {
@@ -375,6 +384,14 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 			}
 			holds = append(holds, hold{lineID: l.ID, typeID: l.RoomTypeID, bedID: lockedBed(l.BedLocked, l.RequestedBedTypeID), from: l.ArrivalDate, to: l.DepartureDate})
 		}
+		asks := make([]stayAsk, len(back))
+		for i, l := range back {
+			line := i
+			asks[i] = askOf(l.RoomTypeID, l.RatePlanID, l.ArrivalDate, l.DepartureDate, st.bd, nil, &line) // reinstating sells the nights again
+		}
+		if err := s.requireSellable(ctx, p.TenantID, propertyID, st.res.Source, asks...); err != nil {
+			return err
+		}
 		if err := s.checkHolds(ctx, p.TenantID, propertyID, st.bd, holds, nil); err != nil {
 			return err
 		}
@@ -391,7 +408,7 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.reinstated", id,
-			map[string]any{"status": st.res.Status}, map[string]any{"status": res.Status, "rooms": len(back)})); err != nil {
+			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, map[string]any{"status": res.Status, "rooms": len(back)}))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)

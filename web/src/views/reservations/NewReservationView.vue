@@ -5,7 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer } from '@/api/types'
+import type { Approval, AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer, Violation } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -79,12 +79,20 @@ const quotaOver = computed(() => {
   return { kind: String(c.occupancy_kind ?? ''), quota: Number(c.quota), month: String(c.month ?? '').slice(0, 7), used: Number(c.used), requested: Number(c.requested) }
 })
 const canApprove = computed(() => auth.can('reservation.override_rate_approve', property.currentId))
+// A stay that breaks a sales restriction: staff who hold reservation.override_restriction can still book it, with a reason and an approval.
+const canOverrideRestriction = computed(() => auth.can('reservation.override_restriction', property.currentId))
+const canApproveRestriction = computed(() => auth.can('reservation.restriction_approve', property.currentId))
+const restrictionReason = ref('')
+const restrictions = (p: { restrictions?: Violation[] } | null | undefined): Violation[] => p?.restrictions ?? []
+const isRestricted = computed(() => restrictions(picked.value?.plan).length > 0)
+const violationText = (v: Violation): string => t(`restrictions.violation_${v.type}`, { date: v.date, value: v.value ?? '', nights: v.nights ?? '' })
 const overrideNights = computed<OverrideNight[]>(() => (picked.value?.plan.nightly ?? []).map((n) => ({ date: n.date, standard: n.amount, current: n.amount })))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 /** Why a Book button is disabled (empty when it is enabled). */
-function whyNot(ty: { available_min: number; fits_occupancy: boolean }, p: { estimate?: unknown; missing_nights?: number }): string {
+function whyNot(ty: { available_min: number; fits_occupancy: boolean }, p: { estimate?: unknown; missing_nights?: number; restrictions?: Violation[] }): string {
   if (ty.available_min < 1) return t('newReservation.whyNoRooms')
+  if (restrictions(p).length && !canOverrideRestriction.value) return t('restrictions.whyRestricted')
   if (!ty.fits_occupancy) return t('newReservation.whyTooSmall')
   if (!p.estimate) return t('newReservation.whyNoRate', { n: p.missing_nights ?? 0 })
   return ''
@@ -211,7 +219,7 @@ async function findGuests(): Promise<void> {
 
 /** The button: a price change that the person cannot approve asks for an approver first. */
 function submit(): void {
-  if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value)) {
+  if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value) || (isRestricted.value && !canApproveRestriction.value)) {
     dialogError.value = null
     approving.value = true
     return
@@ -239,6 +247,7 @@ async function book(approval?: Approval): Promise<void> {
         rate_override_approval: rate.value.overrides.length ? approval : undefined,
         occupancy_approval: isFree.value ? approval : undefined,
         exceed_free_quota: exceedQuota.value || undefined,
+        restriction_override: isRestricted.value ? { reason: restrictionReason.value, approval } : undefined,
         rooms: [{
           room_type_id: picked.value.type.room_type_id,
           rate_plan_id: picked.value.plan.id,
@@ -311,7 +320,7 @@ async function book(approval?: Approval): Promise<void> {
           <template #cell-left="{ row: o }"><span :class="o.type.available_min < 1 && 'font-semibold text-destructive'">{{ o.type.available_min }}</span></template>
           <template #cell-plan="{ row: o }">
             <small v-if="!o.plan" class="text-muted-foreground">{{ t('newReservation.noPlan') }}</small>
-            <template v-else>{{ o.plan.code }} <Badge v-if="o.plan.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${o.plan.code}`">{{ t(`occupancy.kind_${o.plan.occupancy_kind}`) }}</Badge> <small class="text-muted-foreground">{{ o.plan.price_mode === 'INCLUSIVE' ? t('newReservation.inclusive') : t('newReservation.exclusive') }}</small></template>
+            <template v-else><Badge v-for="(v, i) in restrictions(o.plan)" :key="i" variant="warning" class="mr-1" :title="violationText(v)" :data-testid="`restricted-${o.type.code}-${o.plan.code}`">{{ t(`restrictions.badge_${v.type}`) }}</Badge>{{ o.plan.code }} <Badge v-if="o.plan.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${o.plan.code}`">{{ t(`occupancy.kind_${o.plan.occupancy_kind}`) }}</Badge> <small class="text-muted-foreground">{{ o.plan.price_mode === 'INCLUSIVE' ? t('newReservation.inclusive') : t('newReservation.exclusive') }}</small></template>
           </template>
           <template #cell-estimate="{ row: o }">
             <template v-if="o.plan">
@@ -320,7 +329,7 @@ async function book(approval?: Approval): Promise<void> {
             </template>
           </template>
           <template #cell-action="{ row: o }">
-            <Button v-if="o.plan" size="sm" :disabled="o.type.available_min < 1 || !o.type.fits_occupancy || !o.plan.estimate" :title="whyNot(o.type, o.plan)" :data-testid="`pick-${o.type.code}-${o.plan.code}`" @click="pick(o.type, o.plan)">{{ t('newReservation.book') }}</Button>
+            <Button v-if="o.plan" size="sm" :disabled="o.type.available_min < 1 || !o.type.fits_occupancy || !o.plan.estimate || (restrictions(o.plan).length > 0 && !canOverrideRestriction)" :title="whyNot(o.type, o.plan)" :data-testid="`pick-${o.type.code}-${o.plan.code}`" @click="pick(o.type, o.plan)">{{ t('newReservation.book') }}</Button>
           </template>
         </DataTable>
       </CardContent>
@@ -333,6 +342,13 @@ async function book(approval?: Approval): Promise<void> {
           <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>
         </CardHeader>
         <CardContent class="flex flex-col gap-4">
+          <div v-if="isRestricted" class="rounded-md border border-warning/60 bg-warning/10 p-3 text-sm" role="alert" data-testid="restriction-notice">
+            <p class="m-0 font-medium">{{ t('restrictions.overrideTitle') }}</p>
+            <ul class="m-0 mt-1 list-disc pl-5"><li v-for="(v, i) in restrictions(picked?.plan)" :key="i">{{ violationText(v) }}</li></ul>
+            <FormField class="mt-3 max-w-md" :label="t('restrictions.overrideReason')" :hint="t('restrictions.overrideHint')" :error="fieldError('restriction_override.reason')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="restrictionReason" name="restriction_reason" :aria-invalid="invalid" /></template>
+            </FormField>
+          </div>
           <div>
             <div class="flex items-end gap-3">
               <FormField class="flex-1" :label="t('newReservation.booker')" :error="fieldError('guest_id')">
@@ -413,6 +429,6 @@ async function book(approval?: Approval): Promise<void> {
         </CardContent>
       </form>
     </Card>
-    <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
+    <ApprovalDialog v-if="approving" :title="isRestricted ? t('restrictions.approvalTitle') : isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isRestricted ? t('restrictions.approvalMessage') : isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
   </template>
 </template>

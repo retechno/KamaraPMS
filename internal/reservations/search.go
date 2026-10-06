@@ -35,6 +35,10 @@ type PlanOffer struct {
 	Nightly       []NightAmount `json:"nightly"`
 	MissingNights int           `json:"missing_nights"`
 	Estimate      *Estimate     `json:"estimate"`
+	// Bookable is false when the stay breaks a sales restriction (stop sell, closed to arrival or departure, a minimum or maximum stay); Restrictions says which, by the one
+	// evaluator of the availability engine. It does not look at the rooms left (AvailableMin of the room type does). Staff who may override can still book it.
+	Bookable     bool                     `json:"bookable"`
+	Restrictions []availability.Violation `json:"restrictions"`
 }
 
 // TypeOffer is a room type's availability and prices for the searched nights.
@@ -148,8 +152,14 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 				offer.AvailableMin = n.Available
 			}
 		}
+		verdicts := map[int64]availability.Verdict{} // one question to the evaluator per plan, whatever the bed
 		for _, pl := range plans {
-			po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, 0, pl, arrival, departure)
+			v, err := s.avail.EvaluateStay(ctx, p.TenantID, propertyID, availability.StayRequest{RoomTypeID: t.ID, RatePlanID: pl.ID, Arrival: arrival, Departure: departure, BusinessDate: bd})
+			if err != nil {
+				return SearchResult{}, err
+			}
+			verdicts[pl.ID] = v
+			po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, 0, pl, v, arrival, departure)
 			if err != nil {
 				return SearchResult{}, err
 			}
@@ -170,7 +180,7 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 				}
 			}
 			for _, pl := range plans {
-				po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, b.BedTypeID, pl, arrival, departure)
+				po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, b.BedTypeID, pl, verdicts[pl.ID], arrival, departure)
 				if err != nil {
 					return SearchResult{}, err
 				}
@@ -185,7 +195,7 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 
 // planOffer prices a plan for the searched nights; with a bed type (above 0) the nights carry the supplement of that bed in force on each night
 // (a complimentary or house use plan stays at zero).
-func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID, bedID int64, pl availability.SellablePlan, arrival, departure civil.Date) (PlanOffer, error) {
+func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID, bedID int64, pl availability.SellablePlan, verdict availability.Verdict, arrival, departure civil.Date) (PlanOffer, error) {
 	prices, missing, err := s.rates.PriceNights(ctx, tenantID, propertyID, pl.ID, typeID, arrival, departure)
 	if err != nil {
 		return PlanOffer{}, err
@@ -200,7 +210,7 @@ func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID, b
 	if err != nil {
 		return PlanOffer{}, err
 	}
-	po := PlanOffer{ID: pl.ID, Code: pl.Code, Name: pl.Name, PriceMode: prices.PriceMode, OccupancyKind: pl.Kind, Nightly: make([]NightAmount, len(prices.Nights)), MissingNights: len(missing)}
+	po := PlanOffer{ID: pl.ID, Code: pl.Code, Name: pl.Name, PriceMode: prices.PriceMode, OccupancyKind: pl.Kind, Nightly: make([]NightAmount, len(prices.Nights)), MissingNights: len(missing), Bookable: verdict.Allowed(), Restrictions: verdict.Violations}
 	charges := make([]billingconfig.NightCharge, len(prices.Nights))
 	for i, n := range prices.Nights {
 		amount, adj := n.Amount, decimal.Zero

@@ -3,6 +3,7 @@ package reservations
 import (
 	"context"
 
+	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -12,6 +13,7 @@ import (
 // AddLine adds a room to a DRAFT or CONFIRMED reservation (reservation.update). On a CONFIRMED reservation
 // the room is created CONFIRMED and goes through the availability check.
 func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int32, in LineInput) (Reservation, error) {
+	ctx = WithRestrictionOverride(ctx, in.RestrictionOverride)
 	ctx = WithFreeApproval(WithOverrideApproval(ctx, in.RateOverrideApproval, in.RateOverrideReason), in.OccupancyApproval, in.ExceedFreeQuota)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
@@ -68,6 +70,9 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err := s.requireBedType(ctx, p.TenantID, propertyID, "bed_type_id", in.BedTypeID, nil); err != nil {
 			return err
 		}
+		if err := s.requireSellable(ctx, p.TenantID, propertyID, st.res.Source, askOf(in.RoomTypeID, in.RatePlanID, in.Arrival, in.Departure, st.bd, nil, nil)); err != nil {
+			return err // a room added is a sale
+		}
 		decimals, err := s.decimals(ctx, propertyID)
 		if err != nil {
 			return err
@@ -102,9 +107,9 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, nil, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
 			"reservation_room_id": line.ID, "status": status, "room_type_id": in.RoomTypeID, "arrival_date": in.Arrival, "departure_date": in.Departure,
-		})))); err != nil {
+		}))))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
@@ -117,6 +122,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 // room's own demand. Nights that survive keep their price snapshot; changing the rate plan or room type
 // prices every night again; new nights are priced from the grid.
 func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, patch LinePatch) (Reservation, error) {
+	ctx = WithRestrictionOverride(ctx, patch.RestrictionOverride)
 	ctx = WithFreeApproval(WithOverrideApproval(ctx, patch.RateOverrideApproval, patch.RateOverrideReason), patch.OccupancyApproval, patch.ExceedFreeQuota)
 	p, err := s.writer(ctx, propertyID, auth.PermReservationUpdate)
 	if err != nil {
@@ -207,6 +213,17 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		if len(fields) > 0 {
 			return apperr.Invalid("the room is invalid", fields...)
 		}
+		// Changing the dates, the room type or the rate plan sells something else: it is asked the sales restrictions, but only what it makes new (a guest keeps what was sold);
+		// another room type or plan is a new product, so everything of it is new. Changing the guests, the bed or the price is not a sale.
+		if typeChanged || planChanged || datesChanged {
+			var previous *availability.StayDates
+			if !typeChanged && !planChanged {
+				previous = &availability.StayDates{Arrival: old.ArrivalDate, Departure: old.DepartureDate}
+			}
+			if err := s.requireSellable(ctx, p.TenantID, propertyID, st.res.Source, askOf(next.RoomTypeID, next.RatePlanID, next.ArrivalDate, next.DepartureDate, st.bd, previous, nil)); err != nil {
+				return err
+			}
+		}
 		decimals, err := s.decimals(ctx, propertyID)
 		if err != nil {
 			return err
@@ -267,7 +284,7 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_amended", id,
-			lineSnapshot(old), withFreeRoomAudit(ctx, withOverrideAudit(ctx, lineSnapshot(next))))); err != nil {
+			lineSnapshot(old), withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, lineSnapshot(next)))))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
