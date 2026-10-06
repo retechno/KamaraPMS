@@ -607,14 +607,15 @@ func (q *Queries) NextDocumentNumber(ctx context.Context, arg NextDocumentNumber
 }
 
 const propertyHasFinancialData = `-- name: PropertyHasFinancialData :one
-SELECT EXISTS (SELECT 1 FROM folio_items WHERE property_id = $1)
+SELECT property_has_financial_data($1)::boolean
 `
 
+// The one definition of "the property has financial data" (migration 00058), shared with the trigger that locks the currency.
 func (q *Queries) PropertyHasFinancialData(ctx context.Context, propertyID int64) (bool, error) {
 	row := q.db.QueryRow(ctx, propertyHasFinancialData, propertyID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const updateProperty = `-- name: UpdateProperty :one

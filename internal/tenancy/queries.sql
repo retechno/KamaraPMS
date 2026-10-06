@@ -63,8 +63,9 @@ UPDATE properties SET
 WHERE tenant_id = @tenant_id AND id = @id
 RETURNING *;
 
+-- The one definition of "the property has financial data" (migration 00058), shared with the trigger that locks the currency.
 -- name: PropertyHasFinancialData :one
-SELECT EXISTS (SELECT 1 FROM folio_items WHERE property_id = @property_id);
+SELECT property_has_financial_data(@property_id)::boolean;
 
 -- name: InsertBusinessDay :one
 INSERT INTO business_days (tenant_id, property_id, business_date, opened_at, opened_by)

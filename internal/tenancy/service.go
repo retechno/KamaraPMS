@@ -257,8 +257,8 @@ type PropertyPatch struct {
 	Status                          *string
 }
 
-// UpdateProperty applies a patch. The currency is locked once financial
-// transactions exist (checked here for a clear error; the database enforces it too).
+// UpdateProperty applies a patch. The currency is locked once the property has financial data of any kind (the definition is the database function
+// property_has_financial_data; it is checked here for a clear error, and the trigger properties_currency_lock enforces the same rule for every other path).
 func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch PropertyPatch) (Property, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
@@ -314,7 +314,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 				return err
 			}
 			if locked {
-				return apperr.Conflict("CURRENCY_LOCKED", "the property currency cannot change once financial transactions exist")
+				return apperr.Conflict("CURRENCY_LOCKED", "the property currency cannot change once financial data exists")
 			}
 		}
 

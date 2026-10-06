@@ -1651,6 +1651,135 @@ SELECT expect_error('audit log is append-only', '23001',
     $q$UPDATE audit_logs SET action = 'x'$q$);
 
 ------------------------------------------------------------------------------------------
+-- The currency lock (00058): one definition of "the property has financial data"
+------------------------------------------------------------------------------------------
+-- A property of its own, so that these cases start from nothing. Every case runs in a subtransaction that is rolled back.
+INSERT INTO properties (tenant_id, code, name, timezone, currency_code, currency_decimals, check_in_time, check_out_time)
+VALUES (tn('XYZ'), 'CUR', 'Currency test', 'Asia/Singapore', 'SGD', 2, '15:00', '11:00');
+CREATE FUNCTION cu() RETURNS bigint LANGUAGE sql STABLE AS $$ SELECT id FROM properties WHERE code = 'CUR' $$;
+
+SELECT expect_ok('a property with no financial data can change its currency and decimals',
+    $q$UPDATE properties SET currency_code = 'IDR', currency_decimals = 0 WHERE code = 'CUR'$q$);
+SELECT expect_ok('the definition is false for a property with nothing',
+    $q$DO $d$ BEGIN IF property_has_financial_data(cu()) THEN RAISE EXCEPTION 'expected false'; END IF; END $d$$q$);
+SELECT expect_ok('configuration does not lock the currency: accounts, a bank account, a company',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), cu(), '1110', 'Cash', 'ASSET', 'DEBIT', 'CASH')$q$,
+    $q$INSERT INTO bank_accounts (tenant_id, property_id, account_id, name) VALUES (tn('XYZ'), cu(), (SELECT id FROM gl_accounts WHERE property_id = cu() AND code = '1110'), 'Bank')$q$,
+    $q$INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES (tn('XYZ'), cu(), 'ACME', 'Acme', 1000000)$q$,
+    $q$UPDATE properties SET currency_code = 'IDR', currency_decimals = 0 WHERE code = 'CUR'$q$);
+SELECT expect_error('a journal locks the currency', '23001',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), cu(), '1110', 'Cash', 'ASSET', 'DEBIT', 'CASH')$q$,
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), cu(), '3100', 'Capital', 'EQUITY', 'CREDIT', 'EQUITY')$q$,
+    $q$INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('XYZ'), cu(), 'J1', 'MANUAL', '2026-10-01', 'Opening')$q$,
+    $q$INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit) SELECT tn('XYZ'), cu(), (SELECT id FROM gl_journals WHERE property_id = cu()), 1, id, 100, 0 FROM gl_accounts WHERE property_id = cu() AND code = '1110'$q$,
+    $q$INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit) SELECT tn('XYZ'), cu(), (SELECT id FROM gl_journals WHERE property_id = cu()), 2, id, 0, 100 FROM gl_accounts WHERE property_id = cu() AND code = '3100'$q$,
+    $q$UPDATE properties SET currency_decimals = 3 WHERE code = 'CUR'$q$);
+SELECT expect_error('bank data locks the currency (a statement)', '23001',
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), cu(), '1110', 'Cash', 'ASSET', 'DEBIT', 'CASH')$q$,
+    $q$INSERT INTO bank_accounts (tenant_id, property_id, account_id, name) VALUES (tn('XYZ'), cu(), (SELECT id FROM gl_accounts WHERE property_id = cu() AND code = '1110'), 'Bank')$q$,
+    $q$INSERT INTO bank_statements (tenant_id, property_id, bank_account_id, period_from, period_to, opening_balance, closing_balance) VALUES (tn('XYZ'), cu(), (SELECT id FROM bank_accounts WHERE property_id = cu()), '2026-10-01', '2026-10-31', 0, 0)$q$,
+    $q$UPDATE properties SET currency_code = 'USD' WHERE code = 'CUR'$q$);
+SELECT expect_error('a city ledger receipt locks the currency', '23001',
+    $q$INSERT INTO business_days (tenant_id, property_id, business_date) VALUES (tn('XYZ'), cu(), '2026-10-01')$q$,
+    $q$INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES (tn('XYZ'), cu(), 'ACME', 'Acme', 1000000)$q$,
+    $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date) VALUES (tn('XYZ'), cu(), 'R1', (SELECT id FROM companies WHERE property_id = cu()), 10, 'CASH', '2026-10-01')$q$,
+    $q$UPDATE properties SET currency_code = 'USD' WHERE code = 'CUR'$q$);
+SELECT expect_error('a budget locks the currency', '23001',
+    $q$INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES (tn('XYZ'), cu(), '2027-01-01', 1, 'Budget')$q$,
+    $q$UPDATE properties SET currency_decimals = 0 WHERE code = 'CUR'$q$);
+SELECT expect_error('a cashier shift locks the currency', '23001',
+    $q$INSERT INTO business_days (tenant_id, property_id, business_date) VALUES (tn('XYZ'), cu(), '2026-10-01')$q$,
+    $q$INSERT INTO cashier_shifts (tenant_id, property_id, shift_number, user_id, opened_at, business_date_opened) VALUES (tn('XYZ'), cu(), 'S1', us('XYZ', 'admin@hotel.com'), now(), '2026-10-01')$q$,
+    $q$UPDATE properties SET currency_decimals = 0 WHERE code = 'CUR'$q$);
+SELECT expect_error('a property with folio items stays locked (BALI)', '23001',
+    $q$UPDATE properties SET currency_decimals = 2 WHERE code = 'BALI'$q$);
+SELECT expect_ok('an update that leaves the currency as it is passes even for a locked property',
+    $q$UPDATE properties SET currency_code = currency_code, currency_decimals = currency_decimals, name = 'Hotel Bali' WHERE code = 'BALI'$q$);
+
+-- Every table that holds an amount of money recorded in the currency is either one the definition looks at, or explained here. A new table with a money
+-- column breaks this test until it is classified: that is how a table cannot be forgotten.
+CREATE TABLE pms_test.currency_lock_classes (table_name text PRIMARY KEY, class text NOT NULL, why text NOT NULL);
+INSERT INTO pms_test.currency_lock_classes VALUES
+    ('folio_items',             'ROOT',   'the guest ledger'),
+    ('payments',                'ROOT',   'payments'),
+    ('gl_journals',             'ROOT',   'the general ledger'),
+    ('supplier_bills',          'ROOT',   'payables'),
+    ('supplier_payments',       'ROOT',   'payables'),
+    ('supplier_credit_notes',   'ROOT',   'payables'),
+    ('city_ledger_receipts',    'ROOT',   'receivables'),
+    ('city_ledger_invoices',    'ROOT',   'receivables'),
+    ('city_ledger_adjustments', 'ROOT',   'receivables'),
+    ('cashier_shifts',          'ROOT',   'the cash drawer'),
+    ('bank_statements',         'ROOT',   'the bank'),
+    ('tax_returns',             'ROOT',   'tax'),
+    ('tax_payments',            'ROOT',   'tax'),
+    ('tax_opening_credits',     'ROOT',   'tax'),
+    ('budgets',                 'ROOT',   'budgets');
+-- A child row cannot exist without a root row above: it never needs its own test.
+INSERT INTO pms_test.currency_lock_classes VALUES
+    ('folio_item_components', 'CHILD', 'of folio_items'), ('stay_charge_postings', 'CHILD', 'of folio_items'),
+    ('gl_journal_lines', 'CHILD', 'of gl_journals'), ('gl_day_posts', 'CHILD', 'of gl_journals'),
+    ('supplier_bill_lines', 'CHILD', 'of supplier_bills'), ('supplier_payment_allocations', 'CHILD', 'of supplier_payments'),
+    ('supplier_credit_note_lines', 'CHILD', 'of supplier_credit_notes'), ('supplier_credit_allocations', 'CHILD', 'of supplier_credit_notes'),
+    ('city_ledger_invoice_lines', 'CHILD', 'of city_ledger_invoices'), ('city_ledger_receipt_allocations', 'CHILD', 'of city_ledger_receipts'),
+    ('city_ledger_credit_note_lines', 'CHILD', 'of city_ledger_adjustments'), ('city_ledger_adjustment_invoices', 'CHILD', 'of city_ledger_adjustments'),
+    ('city_ledger_reminders', 'CHILD', 'of city_ledger_invoices'), ('city_ledger_reminder_items', 'CHILD', 'of city_ledger_invoices'),
+    ('cashier_shift_movements', 'CHILD', 'of cashier_shifts'), ('cashier_shift_counts', 'CHILD', 'of cashier_shifts'),
+    ('bank_statement_lines', 'CHILD', 'of bank_statements'), ('bank_clearings', 'CHILD', 'of bank_statements'),
+    ('card_settlements', 'CHILD', 'of gl_journals'), ('card_settlement_items', 'CHILD', 'of gl_journals'),
+    ('tax_return_lines', 'CHILD', 'of tax_returns'), ('tax_return_input_claims', 'CHILD', 'of tax_returns'),
+    ('tax_invoices', 'CHILD', 'of folio_items or city_ledger_invoices'), ('tax_invoice_lines', 'CHILD', 'of tax_invoices'),
+    ('tax_invoice_exports', 'CHILD', 'of tax_invoices'), ('tax_invoice_export_items', 'CHILD', 'of tax_invoices'),
+    ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets');
+-- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
+INSERT INTO pms_test.currency_lock_classes VALUES
+    ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
+    ('companies', 'CONFIG', 'credit limit'), ('city_ledger_late_fee_settings', 'CONFIG', 'late fee'), ('card_fee_rules', 'CONFIG', 'fees'),
+    ('property_cashier_settings', 'CONFIG', 'variance limit'), ('free_night_quotas', 'CONFIG', 'quotas'), ('property_tax_settings', 'CONFIG', 'tax settings'),
+    ('tax_filing_profiles', 'CONFIG', 'filing settings'), ('charge_code_taxes', 'CONFIG', 'tax mapping'), ('service_charges', 'CONFIG', 'service charge'),
+    ('taxes', 'CONFIG', 'tax rates'), ('charge_codes', 'CONFIG', 'charge codes'),
+    ('reservation_room_rates', 'PLAN', 'the nightly price of a booking: money to be charged, kept as a snapshot, not a transaction'),
+    ('reservation_rooms', 'PLAN', 'bookings'), ('reservations', 'PLAN', 'bookings'), ('stays', 'PLAN', 'stays'), ('stay_rooms', 'PLAN', 'stays');
+DO $$
+DECLARE v_missing text;
+BEGIN
+    SELECT string_agg(DISTINCT c.table_name, ', ' ORDER BY c.table_name) INTO v_missing
+      FROM information_schema.columns c
+      JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+     WHERE c.table_schema = 'public' AND c.data_type = 'numeric' AND c.numeric_precision = 18
+       AND EXISTS (SELECT 1 FROM information_schema.columns p WHERE p.table_schema = c.table_schema AND p.table_name = c.table_name AND p.column_name = 'property_id')
+       AND c.table_name NOT IN (SELECT table_name FROM pms_test.currency_lock_classes);
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION 'FAIL currency lock: tables with a money column that the currency lock does not classify: %', v_missing;
+    END IF;
+    INSERT INTO pms_test.results VALUES ('every money table is classified for the currency lock', 'accepted');
+    RAISE NOTICE 'PASS  every table with a money column is classified for the currency lock';
+END $$;
+DO $$
+DECLARE v_def text; v_t text; v_bad text; v_trg text;
+BEGIN
+    SELECT pg_get_functiondef('public.property_has_financial_data(bigint)'::regprocedure) INTO v_def;
+    FOR v_t IN SELECT table_name FROM pms_test.currency_lock_classes WHERE class = 'ROOT' LOOP
+        IF v_def NOT LIKE '%FROM ' || v_t || ' %' AND v_def NOT LIKE '%FROM public.' || v_t || ' %' THEN
+            v_bad := coalesce(v_bad || ', ', '') || v_t;
+        END IF;
+    END LOOP;
+    IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'FAIL currency lock: the definition does not look at: %', v_bad; END IF;
+    FOR v_t IN SELECT table_name FROM pms_test.currency_lock_classes WHERE class IN ('CONFIG', 'PLAN') LOOP
+        IF v_def LIKE '%FROM ' || v_t || ' %' OR v_def LIKE '%FROM public.' || v_t || ' %' THEN
+            RAISE EXCEPTION 'FAIL currency lock: % is configuration or a plan and must not lock the currency', v_t;
+        END IF;
+    END LOOP;
+    -- the trigger asks the same function, and nothing else
+    SELECT pg_get_functiondef('public.properties_currency_lock()'::regprocedure) INTO v_trg;
+    IF v_trg NOT LIKE '%property_has_financial_data(OLD.id)%' OR v_trg ~* 'FROM\s+folio_items' THEN
+        RAISE EXCEPTION 'FAIL currency lock: the trigger must use the one definition';
+    END IF;
+    INSERT INTO pms_test.results VALUES ('the lock definition looks at every root table and no configuration, and the trigger uses it', 'accepted');
+    RAISE NOTICE 'PASS  the lock definition looks at every root table and no configuration, and the trigger uses it';
+END $$;
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$

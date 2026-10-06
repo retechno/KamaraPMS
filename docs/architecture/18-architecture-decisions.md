@@ -1,6 +1,6 @@
 # 18. Architecture decisions before the pilot: folio model, rate restrictions, currency policy
 
-Status: **design for approval, nothing is built.** Written on 2026-10-06 from the code of `main` (head `b361280`). It changes no code, migration, API or screen. It does not repeat what `13-feature-map.md` already lists as built, nor what `08-backlog.md` keeps as left out on purpose; where a decision touches a built feature, the feature is named and only the change is described.
+Status: **approved by the owner on 2026-10-06; step 1 of section 14 (the currency lock) is built (migration 00058), the rest is not.** Written on 2026-10-06 from the code of `main` (head `b361280`). It changes no code, migration, API or screen. It does not repeat what `13-feature-map.md` already lists as built, nor what `08-backlog.md` keeps as left out on purpose; where a decision touches a built feature, the feature is named and only the change is described.
 
 The three decisions were chosen because each one reaches many modules later: a folio is read by the room charge posting, the night audit, check-out, invoices, tax invoices, the city ledger and the general ledger; a sales restriction has to be seen by every path that sells a night; and the currency of a property is assumed in every money column. Settling them now costs a document; settling them after the pilot costs a migration of live data.
 
@@ -332,10 +332,12 @@ See 2.3: a currency and a precision per property; a lock that looks at folio ite
 property_has_financial_data(property_id) RETURNS boolean
   TRUE when the property has any row in: folio_items, payments, gl_journals, supplier_bills,
   supplier_payments, supplier_credit_notes, city_ledger_receipts, city_ledger_invoices,
-  city_ledger_adjustments, cashier_shifts, bank_statements, tax_returns, tax_payments, budgets
+  city_ledger_adjustments, cashier_shifts, bank_statements, tax_returns, tax_payments, tax_opening_credits, budgets
 properties_currency_lock trigger: raises when currency_code or currency_decimals changes and the function is TRUE
 tenancy.UpdateProperty: asks the same function (the CURRENCY_LOCKED code stays)
 ```
+
+As built (migration 00058) the list also has `tax_opening_credits` (an amount entered by hand, like a journal), and the trigger takes the property row `FOR UPDATE` before it looks, so that a currency update and the first financial write of a property cannot race (every financial table has a foreign key to the property, which holds a key-share lock until the write commits). A schema test classifies every table that has `property_id` and a `numeric(18,x)` column as a root (looked at), a child of a root, configuration or a plan (never looked at), so a new money table cannot be added without a decision. A bank account on its own is configuration; bank statements are bank data and lock. The nightly price of a booking (`reservation_room_rates`) is classified as a plan, not a transaction: it does not lock, which means a property with bookings but no ledger entry can still change its currency (the owner may choose to include it).
 
 The list is of tables that hold **amounts of money recorded in the currency**. Configuration that holds amounts (rates, yield floors, credit limits, late fees, card fee rules) is **not** on the list: it does not make a currency unchangeable, and it is **not converted** when the currency changes (the screen says so).
 
@@ -446,7 +448,7 @@ Each step is its own commit, with database, backend, API, frontend and tests tog
 
 | Step | What | Why here |
 |---|---|---|
-| 1 | **Currency lock**: `property_has_financial_data`, the trigger, the service, the read-only fields, the tests | Smallest; it protects the data of everything that follows, and a pilot must not start with the gap open. No dependency. |
+| 1 | **Currency lock** (**built**, migration 00058): `property_has_financial_data`, the trigger, the service, the tests; the read-only fields on the property form are not done | Smallest; it protects the data of everything that follows, and a pilot must not start with the gap open. No dependency. |
 | 2 | **Restrictions, part 1**: table, resolver, evaluator, `GET`/`PUT`/`effective`, audit, the grid screen | Self-contained: no other module's schema changes. The evaluator is built and tested alone first. |
 | 3 | **Restrictions, part 2**: wire the evaluator into every sale path, the override, the search verdicts, the guard test | Needs step 2. Done as its own step because it touches `reservations` and `frontdesk`, where the review effort is. |
 | 4 | **Folio, step A**: schema (types, payer, unique index), the resolver with the **default routing only**, `AttachStayFolio` and the expected loader moved onto it, the stay and folio API fields | No behavior change by design, which makes it the safe place to move the assumption out of three lookups. Run the migration over seeded data. |
