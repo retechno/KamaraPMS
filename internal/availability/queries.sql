@@ -312,3 +312,13 @@ SELECT d.night::date AS night,
           AND @business_date::date <= d.night::date AND d.night::date < GREATEST(s.departure_date, @next_date::date)))::int AS booked
 FROM unnest(@dates::text[]) AS d (night)
 ORDER BY d.night;
+
+-- The rows of the restriction grid that can speak for a room type and a rate plan over [from, to] (a row of a scope of NULL is for all). The precedence between them is not
+-- decided here but by availability.Resolve, so that there is one place that knows it.
+-- name: ListRateRestrictions :many
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay
+FROM rate_restrictions
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_date BETWEEN @from_date::date AND @to_date::date
+  AND (room_type_id IS NULL OR room_type_id = sqlc.narg(room_type_id)::bigint)
+  AND (rate_plan_id IS NULL OR rate_plan_id = sqlc.narg(rate_plan_id)::bigint)
+ORDER BY stay_date, id;

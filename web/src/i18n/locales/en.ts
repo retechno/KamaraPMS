@@ -3049,6 +3049,7 @@ export const en = {
     BED_TYPE_NOT_FOUND: 'The bed type does not exist in this property.',
     BED_LOCK_NEEDS_BED_TYPE: 'Choose a bed type to lock the bed.',
     BED_ADJUSTMENT_EXISTS: 'A supplement already starts on this date.',
+    RESTRICTION_EXISTS: 'This date has a restriction for this room type and rate plan already.',
     BILL_ALREADY_VOIDED: 'The bill is voided already.',
     BILL_HAS_PAYMENTS: 'A bill with payments cannot be voided: void its payments first.',
     BILL_HAS_CREDIT_NOTES: 'A bill with credit notes cannot be voided: void its credit notes first.',

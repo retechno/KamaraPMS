@@ -1,6 +1,6 @@
 # 18. Architecture decisions before the pilot: folio model, rate restrictions, currency policy
 
-Status: **approved by the owner on 2026-10-06; step 1 of section 14 (the currency lock) is built (migration 00058), the rest is not.** Written on 2026-10-06 from the code of `main` (head `b361280`). It changes no code, migration, API or screen. It does not repeat what `13-feature-map.md` already lists as built, nor what `08-backlog.md` keeps as left out on purpose; where a decision touches a built feature, the feature is named and only the change is described.
+Status: **approved by the owner on 2026-10-06; steps 1 (the currency lock, migration 00058) and 2 (the restriction table and the evaluator, migration 00059) of section 14 are built, the rest is not.** Written on 2026-10-06 from the code of `main` (head `b361280`). It changes no code, migration, API or screen. It does not repeat what `13-feature-map.md` already lists as built, nor what `08-backlog.md` keeps as left out on purpose; where a decision touches a built feature, the feature is named and only the change is described.
 
 The three decisions were chosen because each one reaches many modules later: a folio is read by the room charge posting, the night audit, check-out, invoices, tax invoices, the city ledger and the general ledger; a sales restriction has to be seen by every path that sells a night; and the currency of a property is assumed in every money column. Settling them now costs a document; settling them after the pilot costs a migration of live data.
 
@@ -223,7 +223,7 @@ rate_restrictions
 
 ### 4.7 Business rules
 
-**The evaluator.** `availability.EvaluateStay(ctx, StayRequest) (Verdict, error)`, with a pure core `Resolve(rows, roomTypeID, ratePlanID, date) Effective` and `Check(request, effectiveByDate) []Violation`. `StayRequest` carries room type, rate plan, arrival, departure, the business date, what is **new** in the request (see below) and the source of the booking. A `Violation` is `{type, date, room_type_id, rate_plan_id, scope, value, row_id}`; a `Verdict` is the violations and `overridable`.
+**The evaluator.** `availability.EvaluateStay(ctx, tenantID, propertyID, StayRequest) (Verdict, error)`, with a pure core `Resolve(rows, roomTypeID, ratePlanID, date) Effective` and `Check(request, effectiveByDate) []Violation`. `StayRequest` carries room type, rate plan, arrival, departure, the business date, what is **new** in the request (as built: `Previous`, the stay as it was, nil for a whole new sale, and `InHouse` for an extension of a guest who has arrived; see below) and, in the step that wires it, the source of the booking. A `Violation` is `{type, date, room_type_id, rate_plan_id, scope, value, row_id}`; a `Verdict` is the violations and `overridable`.
 
 | Type | Evaluated on | Violation when |
 |---|---|---|
@@ -449,7 +449,7 @@ Each step is its own commit, with database, backend, API, frontend and tests tog
 | Step | What | Why here |
 |---|---|---|
 | 1 | **Currency lock** (**built**, migration 00058): `property_has_financial_data`, the trigger, the service, the tests; the read-only fields on the property form are not done | Smallest; it protects the data of everything that follows, and a pilot must not start with the gap open. No dependency. |
-| 2 | **Restrictions, part 1**: table, resolver, evaluator, `GET`/`PUT`/`effective`, audit, the grid screen | Self-contained: no other module's schema changes. The evaluator is built and tested alone first. |
+| 2 | **Restrictions, part 1** (**table, resolver and evaluator built**, migration 00059, `availability/restrictions.go`; nothing calls them yet; the `GET`/`PUT`/`effective` API, the audit and the grid screen are not done): table, resolver, evaluator, `GET`/`PUT`/`effective`, audit, the grid screen | Self-contained: no other module's schema changes. The evaluator is built and tested alone first. |
 | 3 | **Restrictions, part 2**: wire the evaluator into every sale path, the override, the search verdicts, the guard test | Needs step 2. Done as its own step because it touches `reservations` and `frontdesk`, where the review effort is. |
 | 4 | **Folio, step A**: schema (types, payer, unique index), the resolver with the **default routing only**, `AttachStayFolio` and the expected loader moved onto it, the stay and folio API fields | No behavior change by design, which makes it the safe place to move the assumption out of three lookups. Run the migration over seeded data. |
 | 5 | **Folio, step B**: billing instructions (room, charge code, all), the eager company folio, the blocker, the company check on the city ledger transfer, the invoice party and tax invoice buyer, the screens | The payer split the pilot's corporate guests need. Needs step 4. |

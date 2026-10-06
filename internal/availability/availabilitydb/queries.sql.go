@@ -8,6 +8,7 @@ package availabilitydb
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -411,6 +412,75 @@ func (q *Queries) ListFreeRooms(ctx context.Context, arg ListFreeRoomsParams) ([
 			&i.BedTypeID,
 			&i.BedTypeCode,
 			&i.BedTypeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRateRestrictions = `-- name: ListRateRestrictions :many
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay
+FROM rate_restrictions
+WHERE tenant_id = $1 AND property_id = $2 AND stay_date BETWEEN $3::date AND $4::date
+  AND (room_type_id IS NULL OR room_type_id = $5::bigint)
+  AND (rate_plan_id IS NULL OR rate_plan_id = $6::bigint)
+ORDER BY stay_date, id
+`
+
+type ListRateRestrictionsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+	RoomTypeID *int64
+	RatePlanID *int64
+}
+
+type ListRateRestrictionsRow struct {
+	ID                int64
+	RoomTypeID        *int64
+	RatePlanID        *int64
+	StayDate          civil.Date
+	StopSell          *bool
+	ClosedToArrival   *bool
+	ClosedToDeparture *bool
+	MinStay           pgtype.Int2
+	MaxStay           pgtype.Int2
+}
+
+// The rows of the restriction grid that can speak for a room type and a rate plan over [from, to] (a row of a scope of NULL is for all). The precedence between them is not
+// decided here but by availability.Resolve, so that there is one place that knows it.
+func (q *Queries) ListRateRestrictions(ctx context.Context, arg ListRateRestrictionsParams) ([]ListRateRestrictionsRow, error) {
+	rows, err := q.db.Query(ctx, listRateRestrictions,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RoomTypeID,
+		arg.RatePlanID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRateRestrictionsRow{}
+	for rows.Next() {
+		var i ListRateRestrictionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomTypeID,
+			&i.RatePlanID,
+			&i.StayDate,
+			&i.StopSell,
+			&i.ClosedToArrival,
+			&i.ClosedToDeparture,
+			&i.MinStay,
+			&i.MaxStay,
 		); err != nil {
 			return nil, err
 		}

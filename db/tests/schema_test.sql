@@ -1651,6 +1651,37 @@ SELECT expect_error('audit log is append-only', '23001',
     $q$UPDATE audit_logs SET action = 'x'$q$);
 
 ------------------------------------------------------------------------------------------
+-- Sales restrictions (00059)
+------------------------------------------------------------------------------------------
+SELECT expect_ok('the four scopes of one date live side by side: the property, a plan, a room type, a room type and a plan',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, stop_sell) VALUES (tn('ABC'), pr('BALI'), NULL, NULL, '2026-12-24', true)$q$,
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, min_stay) VALUES (tn('ABC'), pr('BALI'), NULL, rp('BAR'), '2026-12-24', 2)$q$,
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, closed_to_arrival) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), NULL, '2026-12-24', true)$q$,
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, stop_sell, max_stay) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), rp('BAR'), '2026-12-24', false, 7)$q$);
+SELECT expect_ok('an explicit FALSE is a restriction row of its own (it opens what a wider row closes)',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, closed_to_departure) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), rp('BAR'), '2026-12-25', false)$q$);
+SELECT expect_error('a restriction says something', '23514',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), NULL, '2026-12-24')$q$);
+SELECT expect_error('the minimum stay is at least one night', '23514',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, min_stay) VALUES (tn('ABC'), pr('BALI'), '2026-12-24', 0)$q$);
+SELECT expect_error('the maximum stay is at most 365 nights', '23514',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, max_stay) VALUES (tn('ABC'), pr('BALI'), '2026-12-24', 366)$q$);
+SELECT expect_error('the minimum stay is not above the maximum', '23514',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, min_stay, max_stay) VALUES (tn('ABC'), pr('BALI'), '2026-12-24', 5, 3)$q$);
+SELECT expect_error('a scope has one row a date (the whole property)', '23505',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, stop_sell) VALUES (tn('ABC'), pr('BALI'), '2026-12-24', true)$q$,
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, closed_to_arrival) VALUES (tn('ABC'), pr('BALI'), '2026-12-24', true)$q$);
+SELECT expect_error('a scope has one row a date (a room type and a plan)', '23505',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, stop_sell) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), rp('BAR'), '2026-12-24', true)$q$,
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, min_stay) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), rp('BAR'), '2026-12-24', 2)$q$);
+SELECT expect_error('the room type is one of the property', '23503',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, stay_date, stop_sell) VALUES (tn('XYZ'), pr('SG'), rt('DLX'), '2026-12-24', true)$q$);
+SELECT expect_error('the rate plan is one of the property', '23503',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, rate_plan_id, stay_date, stop_sell) VALUES (tn('XYZ'), pr('SG'), rp('BAR'), '2026-12-24', true)$q$);
+SELECT expect_error('the property is one of the tenant', '23503',
+    $q$INSERT INTO rate_restrictions (tenant_id, property_id, stay_date, stop_sell) VALUES (tn('XYZ'), pr('BALI'), '2026-12-24', true)$q$);
+
+------------------------------------------------------------------------------------------
 -- The currency lock (00058): one definition of "the property has financial data"
 ------------------------------------------------------------------------------------------
 -- A property of its own, so that these cases start from nothing. Every case runs in a subtransaction that is rolled back.
