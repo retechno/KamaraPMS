@@ -37,13 +37,13 @@ func TestRoomsHousekeepingAPIFlow(t *testing.T) {
 	// Rooms: housekeeping row is created, numbers are unique, lists page.
 	var roomIDs []string
 	for _, n := range []string{"201", "202", "203"} {
-		r := abc.do(http.MethodPost, base+"/rooms", map[string]any{"room_number": n, "room_type_id": rt.body["id"], "floor": "2"})
+		r := abc.do(http.MethodPost, base+"/rooms", map[string]any{"bed_type_id": bedOf(abc, base), "room_number": n, "room_type_id": rt.body["id"], "floor": "2"})
 		if r.status != http.StatusCreated {
 			t.Fatalf("create room %s: %d %v", n, r.status, r.body)
 		}
 		roomIDs = append(roomIDs, idOf(r))
 	}
-	if r := abc.do(http.MethodPost, base+"/rooms", map[string]any{"room_number": "201", "room_type_id": rt.body["id"]}); r.status != 409 || r.body["code"] != "ROOM_NUMBER_TAKEN" {
+	if r := abc.do(http.MethodPost, base+"/rooms", map[string]any{"bed_type_id": bedOf(abc, base), "room_number": "201", "room_type_id": rt.body["id"]}); r.status != 409 || r.body["code"] != "ROOM_NUMBER_TAKEN" {
 		t.Fatalf("duplicate number: %d %v", r.status, r.body)
 	}
 	page := abc.do(http.MethodGet, base+"/rooms?limit=2", nil)

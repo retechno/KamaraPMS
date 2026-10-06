@@ -110,7 +110,7 @@ SELECT count(*) FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND bed_typ
 type CountRoomsOfBedTypeParams struct {
 	TenantID   int64
 	PropertyID int64
-	BedTypeID  *int64
+	BedTypeID  int64
 }
 
 func (q *Queries) CountRoomsOfBedType(ctx context.Context, arg CountRoomsOfBedTypeParams) (int64, error) {
@@ -179,7 +179,7 @@ type CreateRoomParams struct {
 	RoomNumber string
 	Floor      *string
 	Building   *string
-	BedTypeID  *int64
+	BedTypeID  int64
 	IsActive   bool
 	ActorID    *int64
 }
@@ -956,7 +956,7 @@ type UpdateRoomParams struct {
 	RoomNumber string
 	Floor      *string
 	Building   *string
-	BedTypeID  *int64
+	BedTypeID  int64
 	IsActive   bool
 	ActorID    *int64
 	TenantID   int64

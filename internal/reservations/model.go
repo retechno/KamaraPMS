@@ -75,6 +75,8 @@ type LineInput struct {
 	RoomID     *int64     `json:"room_id,omitempty"`
 	// BedTypeID is the bed type the guest asks for: a request, not a reservation of inventory.
 	BedTypeID *int64 `json:"bed_type_id,omitempty"`
+	// BedLocked keeps the bed: the line then needs a room with that bed and uses the stock of the variant. Needs BedTypeID.
+	BedLocked bool `json:"bed_locked,omitempty"`
 	// OccupancyReason is why the room is given free; required (and only kept) when the rate plan is COMPLIMENTARY or HOUSE_USE.
 	OccupancyReason string          `json:"occupancy_reason,omitempty"`
 	Overrides       []NightOverride `json:"nightly_overrides,omitempty"`
@@ -142,6 +144,8 @@ type LinePatch struct {
 	Children   *int
 	// BedTypeID changes the requested bed type; 0 takes the request off.
 	BedTypeID *int64
+	// BedLocked locks or unlocks the requested bed; taking the request off (BedTypeID 0) unlocks it.
+	BedLocked *bool
 	// OccupancyReason changes the reason of a complimentary or house use room.
 	OccupancyReason *string
 	Overrides       []NightOverride
@@ -254,6 +258,7 @@ type Line struct {
 	RoomTypeID         int64       `json:"room_type_id"`
 	RoomTypeCode       string      `json:"room_type_code"`
 	BedTypeID          *int64      `json:"bed_type_id"`
+	BedLocked          bool        `json:"bed_locked"`
 	BedTypeCode        string      `json:"bed_type_code,omitempty"`
 	BedTypeName        string      `json:"bed_type_name,omitempty"`
 	RoomID             *int64      `json:"room_id"`

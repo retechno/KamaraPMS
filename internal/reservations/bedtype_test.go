@@ -113,3 +113,64 @@ func TestRequestedBedTypeValidation(t *testing.T) {
 }
 
 func ptrBool(b bool) *bool { return &b }
+
+// A line can lock the bed it asks for: the lock needs a bed type, is kept when it is not mentioned and falls away with the request.
+func TestBedLock(t *testing.T) {
+	f := setup(t)
+	king, twin := f.bed(t, "KING"), f.bed(t, "TWIN")
+
+	// A lock without a bed type is refused, on create and on adding a room.
+	bad := f.input(true, f.line(f.dlx, "2026-10-02", "2026-10-04"))
+	bad.Rooms[0].BedLocked = true
+	_, err := f.Res.Create(f.admin, f.propID, "", bad)
+	if c := code(t, err, "VALIDATION_FAILED"); len(c.Fields) != 1 || c.Fields[0].Code != "BED_LOCK_NEEDS_BED_TYPE" {
+		t.Fatalf("create: %+v", c.Fields)
+	}
+
+	in := f.input(true, f.line(f.dlx, "2026-10-02", "2026-10-04"))
+	in.Rooms[0].BedTypeID, in.Rooms[0].BedLocked = &king.ID, true
+	res, err := f.Res.Create(f.admin, f.propID, "", in)
+	must(t, err)
+	line := res.Rooms[0]
+	if !line.BedLocked {
+		t.Fatalf("the lock is shown: %+v", line)
+	}
+
+	// Changing the bed keeps the lock; unlocking keeps the request.
+	got, err := f.Res.AmendLine(f.admin, f.propID, res.ID, line.ID, reservations.LinePatch{Version: res.Version, BedTypeID: &twin.ID})
+	must(t, err)
+	if !got.Rooms[0].BedLocked || got.Rooms[0].BedTypeCode != "TWIN" {
+		t.Fatalf("kept: %+v", got.Rooms[0])
+	}
+	off := false
+	got, err = f.Res.AmendLine(f.admin, f.propID, res.ID, line.ID, reservations.LinePatch{Version: got.Version, BedLocked: &off})
+	must(t, err)
+	if got.Rooms[0].BedLocked || got.Rooms[0].BedTypeCode != "TWIN" {
+		t.Fatalf("unlocked: %+v", got.Rooms[0])
+	}
+
+	// Taking the request off with a lock asked for is refused; without one it only clears the lock.
+	on, zero := true, int64(0)
+	got, err = f.Res.AmendLine(f.admin, f.propID, res.ID, line.ID, reservations.LinePatch{Version: got.Version, BedLocked: &on})
+	must(t, err)
+	got, err = f.Res.AmendLine(f.admin, f.propID, res.ID, line.ID, reservations.LinePatch{Version: got.Version, BedTypeID: &zero})
+	must(t, err)
+	if got.Rooms[0].BedLocked || got.Rooms[0].BedTypeID != nil {
+		t.Fatalf("no request, no lock: %+v", got.Rooms[0])
+	}
+	_, err = f.Res.AmendLine(f.admin, f.propID, res.ID, line.ID, reservations.LinePatch{Version: got.Version, BedLocked: &on})
+	if c := code(t, err, "VALIDATION_FAILED"); len(c.Fields) != 1 || c.Fields[0].Code != "BED_LOCK_NEEDS_BED_TYPE" {
+		t.Fatalf("amend: %+v", c.Fields)
+	}
+
+	// A room is added with a locked bed.
+	added, err := f.Res.AddLine(f.admin, f.propID, res.ID, got.Version, func() reservations.LineInput {
+		l := f.line(f.dlx, "2026-10-02", "2026-10-03")
+		l.BedTypeID, l.BedLocked = &king.ID, true
+		return l
+	}())
+	must(t, err)
+	if !added.Rooms[1].BedLocked {
+		t.Fatalf("added room: %+v", added.Rooms[1])
+	}
+}

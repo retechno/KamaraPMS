@@ -146,6 +146,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 			ChildCount: int(l.ChildCount), CancelledAt: l.CancelledAt, CancellationReason: deref(l.CancellationReason), NoShowAt: l.NoShowAt,
 			NightlyRates: ratesBy[l.ID],
 		}
+		line.BedLocked = l.BedLocked
 		if l.RequestedBedTypeID != nil {
 			line.BedTypeID = l.RequestedBedTypeID
 			line.BedTypeCode, line.BedTypeName = bedBy[*l.RequestedBedTypeID].Code, bedBy[*l.RequestedBedTypeID].Name

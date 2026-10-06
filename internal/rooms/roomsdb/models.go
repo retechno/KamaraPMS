@@ -37,7 +37,7 @@ type Room struct {
 	CreatedBy  *int64
 	UpdatedAt  time.Time
 	UpdatedBy  *int64
-	BedTypeID  *int64
+	BedTypeID  int64
 }
 
 type RoomBlock struct {

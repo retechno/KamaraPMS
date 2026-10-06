@@ -171,6 +171,15 @@ func fieldsOf(r response) map[string]string {
 	return out
 }
 
+// bedOf is the first bed type of the property: a room needs one.
+func bedOf(c *client, base string) any {
+	rows, _ := c.do(http.MethodGet, base+"/bed-types", nil).body["data"].([]any)
+	if len(rows) == 0 {
+		return nil
+	}
+	return rows[0].(map[string]any)["id"]
+}
+
 func idOf(r response) string { return strconv.FormatInt(int64(r.body["id"].(float64)), 10) }
 
 func TestAuthHTTPFlow(t *testing.T) {

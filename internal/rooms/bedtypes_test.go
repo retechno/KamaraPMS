@@ -95,15 +95,16 @@ func TestRoomBedType(t *testing.T) {
 	otherKing := bedTypeByCode(t, mustBeds(t, e, ctx, other.ID), "KING")
 	rt := e.RoomType(t, ctx, p.ID, "DLX")
 
-	// A room can be created with a bed type, or without one.
+	// A room is created with a bed type; without one it is refused.
 	with, err := e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: rt.ID, RoomNumber: "201", BedTypeID: &king.ID, IsActive: true}})
-	if err != nil || with.BedTypeID == nil || *with.BedTypeID != king.ID {
+	if err != nil || with.BedTypeID != king.ID {
 		t.Fatalf("create with: %v %+v", err, with)
 	}
-	without := e.Room(t, ctx, p.ID, rt.ID, "202")
-	if without.BedTypeID != nil {
-		t.Fatalf("a room without a bed type has %v", *without.BedTypeID)
+	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: rt.ID, RoomNumber: "299", IsActive: true}})
+	if c := code(t, err, "VALIDATION_FAILED"); len(c.Fields) != 1 || c.Fields[0].Field != "bed_type_id" || c.Fields[0].Code != "REQUIRED" {
+		t.Fatalf("fields: %+v", c.Fields)
 	}
+	without := e.Room(t, ctx, p.ID, rt.ID, "202") // the test setup gives the first bed type
 
 	// A bed type of another property is refused, whether on create or on update.
 	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: rt.ID, RoomNumber: "203", BedTypeID: &otherKing.ID, IsActive: true}})
@@ -111,18 +112,18 @@ func TestRoomBedType(t *testing.T) {
 	_, err = e.Rooms.UpdateRoom(ctx, p.ID, without.ID, rooms.RoomPatch{BedTypeID: &otherKing.ID})
 	wantCode(t, err, "BED_TYPE_NOT_FOUND")
 
-	// Update sets it, keeps it when it is not mentioned, and takes it off with 0.
+	// Update sets it and keeps it when it is not mentioned; 0 is refused.
 	set, err := e.Rooms.UpdateRoom(ctx, p.ID, without.ID, rooms.RoomPatch{BedTypeID: &twin.ID})
-	if err != nil || set.BedTypeID == nil || *set.BedTypeID != twin.ID {
+	if err != nil || set.BedTypeID != twin.ID {
 		t.Fatalf("set: %v %+v", err, set)
 	}
 	kept, err := e.Rooms.UpdateRoom(ctx, p.ID, without.ID, rooms.RoomPatch{Floor: ptr("2")})
-	if err != nil || kept.BedTypeID == nil || *kept.BedTypeID != twin.ID {
+	if err != nil || kept.BedTypeID != twin.ID {
 		t.Fatalf("kept: %v %+v", err, kept)
 	}
-	cleared, err := e.Rooms.UpdateRoom(ctx, p.ID, without.ID, rooms.RoomPatch{BedTypeID: ptr(int64(0))})
-	if err != nil || cleared.BedTypeID != nil {
-		t.Fatalf("cleared: %v %+v", err, cleared)
+	_, err = e.Rooms.UpdateRoom(ctx, p.ID, without.ID, rooms.RoomPatch{BedTypeID: ptr(int64(0))}) // a room always has one
+	if c := code(t, err, "VALIDATION_FAILED"); len(c.Fields) != 1 || c.Fields[0].Field != "bed_type_id" {
+		t.Fatalf("zero: %+v", c.Fields)
 	}
 
 	// A bed type that is switched off is not offered for a new choice, but the rooms that have it keep it.
@@ -134,7 +135,7 @@ func TestRoomBedType(t *testing.T) {
 		t.Fatalf("fields: %+v", c.Fields)
 	}
 	still, err := e.Rooms.UpdateRoom(ctx, p.ID, with.ID, rooms.RoomPatch{Floor: ptr("2")})
-	if err != nil || still.BedTypeID == nil || *still.BedTypeID != king.ID {
+	if err != nil || still.BedTypeID != king.ID {
 		t.Fatalf("a room keeps its inactive bed type: %v %+v", err, still)
 	}
 	if active, _ := e.Rooms.ListBedTypes(ctx, p.ID, ptr(true)); len(active) != 4 {

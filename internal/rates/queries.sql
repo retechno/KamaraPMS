@@ -136,3 +136,17 @@ RETURNING *;
 
 -- name: DeleteYieldRule :execrows
 DELETE FROM yield_rules WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: InsertBedAdjustment :one
+INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from, created_by)
+VALUES (@tenant_id, @property_id, @rate_plan_id, @room_type_id, @bed_type_id, @adjust_kind, @amount, @effective_from, sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: ListBedAdjustments :many
+SELECT a.id, a.rate_plan_id, a.room_type_id, rt.code AS room_type_code, a.bed_type_id, bt.code AS bed_type_code, bt.name AS bed_type_name,
+       a.adjust_kind, a.amount, a.effective_from, a.created_at
+FROM rate_plan_bed_adjustments a
+JOIN room_types rt ON rt.property_id = a.property_id AND rt.id = a.room_type_id
+JOIN bed_types bt ON bt.property_id = a.property_id AND bt.id = a.bed_type_id
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.rate_plan_id = @rate_plan_id
+ORDER BY rt.code, bt.sort_order, bt.id, a.effective_from DESC;

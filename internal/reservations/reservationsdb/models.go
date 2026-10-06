@@ -64,6 +64,7 @@ type ReservationRoom struct {
 	UpdatedBy          *int64
 	RequestedBedTypeID *int64
 	OccupancyReason    *string
+	BedLocked          bool
 }
 
 type ReservationRoomRate struct {
@@ -84,4 +85,5 @@ type ReservationRoomRate struct {
 	UpdatedBy         *int64
 	GridRate          *decimal.Decimal
 	YieldRules        []string
+	BedAdjustment     decimal.Decimal
 }

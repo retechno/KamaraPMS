@@ -25,6 +25,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/rates", httpx.HandlerFunc(h.getRates))
 	mux.Handle("PUT "+p+"/rates", httpx.HandlerFunc(h.fillRates))
 	h.registerYield(mux)
+	h.registerBedAdjustments(mux)
 }
 
 type idCursor struct {

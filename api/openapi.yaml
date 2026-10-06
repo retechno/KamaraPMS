@@ -1265,6 +1265,42 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-plans/{id}/bed-adjustments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listBedAdjustments
+      summary: The supplements of the bed types of a rate plan
+      description: "Every row of the plan, newest first per room type and bed type; `in_force` marks the row that prices today (the latest one that has started on the business date). Readable by anyone at the property."
+      tags: [rates]
+      responses:
+        "200":
+          description: The supplements.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BedAdjustmentList" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addBedAdjustment
+      summary: Add a supplement of a bed type from a date (rate.manage)
+      description: "The price of a variant is the price of the room type plus this supplement: an amount (currency decimals) or a percentage (-100 to 1000, three decimals) of the nightly price; negative is a discount. A row is never changed: a new figure is a new row from a later date, and a night that is booked keeps the price it was given. 409 `BED_ADJUSTMENT_EXISTS` when a row of the plan, room type and bed type starts on that date already."
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BedAdjustmentRequest" }
+      responses:
+        "201":
+          description: The supplement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BedAdjustment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/yield-rules:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -7603,7 +7639,7 @@ components:
         room_number: { type: string }
         floor: { type: string }
         building: { type: string }
-        bed_type_id: { type: [integer, "null"], format: int64, description: The bed type of the room (null when none is recorded). }
+        bed_type_id: { type: integer, format: int64, description: "The bed type of the room. Every room has one; it is the variant the room is sold as." }
         is_active: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -7617,14 +7653,14 @@ components:
         next_cursor: { type: string }
     CreateRoomRequest:
       type: object
-      required: [room_number, room_type_id]
+      required: [room_number, room_type_id, bed_type_id]
       additionalProperties: false
       properties:
         room_number: { type: string, maxLength: 20 }
         room_type_id: { type: integer, format: int64 }
         floor: { type: string, maxLength: 10 }
         building: { type: string, maxLength: 50 }
-        bed_type_id: { type: integer, format: int64, description: A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off). }
+        bed_type_id: { type: integer, format: int64, minimum: 1, description: "Required. A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off)." }
         is_active: { type: boolean, default: true }
         initial_housekeeping_status: { $ref: "#/components/schemas/HousekeepingStatus" }
     PatchRoomRequest:
@@ -7635,7 +7671,7 @@ components:
         room_type_id: { type: integer, format: int64 }
         floor: { type: string, maxLength: 10 }
         building: { type: string, maxLength: 50 }
-        bed_type_id: { type: integer, format: int64, minimum: 0, description: The bed type of the room; 0 takes it off. }
+        bed_type_id: { type: integer, format: int64, minimum: 1, description: "Changes the bed type of the room; a room always has one (422 `REQUIRED` for 0)." }
         is_active: { type: boolean }
     BlockType:
       type: string
@@ -8358,6 +8394,7 @@ components:
         guest_id: { type: integer, format: int64, description: The occupant, when different from the booker. }
         room_id: { type: integer, format: int64, description: Only with confirm; must be a room of the booked type. }
         bed_type_id: { type: integer, format: int64, description: "The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`." }
+        bed_locked: { type: boolean, description: "Keeps the bed: the line then needs a room with that bed and uses the stock of the variant. Needs `bed_type_id` (422 `BED_LOCK_NEEDS_BED_TYPE`)." }
         occupancy_reason: { type: string, maxLength: 500, description: "Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan." }
         rate_override_reason: { type: string, maxLength: 500, description: "Only when the room is added to an existing reservation: creating a reservation carries the reason and the approval once, on the request, for all its rooms." }
         rate_override_approval: { $ref: "#/components/schemas/Approval", description: "Only when the room is added to an existing reservation (see `rate_override_reason`)." }
@@ -8436,6 +8473,7 @@ components:
         rate_plan_id: { type: integer, format: int64 }
         adult_count: { type: integer, minimum: 1 }
         child_count: { type: integer, minimum: 0 }
+        bed_locked: { type: boolean, description: "Locks or unlocks the requested bed. Taking the request off (`bed_type_id` 0) unlocks it; locking without a request is 422 `BED_LOCK_NEEDS_BED_TYPE`." }
         bed_type_id: { type: integer, format: int64, minimum: 0, description: The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed, even if the bed type has been switched off since. }
         occupancy_reason: { type: string, maxLength: 500, description: "The reason of a complimentary or house use room. Moving the line to such a plan needs `reservation.complimentary` and a reason." }
         rate_override_reason: { type: string, maxLength: 500, description: "Why a nightly price is changed. Required (422 `REQUIRED`) when `nightly_overrides` is used." }
@@ -8487,6 +8525,37 @@ components:
         cap_amount: { type: [string, "null"] }
         priority: { type: integer, minimum: 0, maximum: 10000, default: 100, description: Lower applies first. }
         is_active: { type: boolean, default: true }
+    BedAdjustment:
+      type: object
+      required: [id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from, in_force, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        rate_plan_id: { type: integer, format: int64 }
+        room_type_id: { type: integer, format: int64 }
+        room_type_code: { type: string }
+        bed_type_id: { type: integer, format: int64 }
+        bed_type_code: { type: string }
+        bed_type_name: { type: string }
+        adjust_kind: { type: string, enum: [AMOUNT, PERCENT] }
+        amount: { type: string, description: "A decimal; negative is a discount." }
+        effective_from: { $ref: "#/components/schemas/Date" }
+        in_force: { type: boolean }
+        created_at: { type: string, format: date-time }
+    BedAdjustmentList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/BedAdjustment" } }
+    BedAdjustmentRequest:
+      type: object
+      required: [room_type_id, bed_type_id, adjust_kind, amount, effective_from]
+      additionalProperties: false
+      properties:
+        room_type_id: { type: integer, format: int64 }
+        bed_type_id: { type: integer, format: int64 }
+        adjust_kind: { type: string, enum: [AMOUNT, PERCENT] }
+        amount: { type: string, description: "A decimal, negative for a discount. An amount has at most the decimals of the currency; a percentage is between -100 and 1000 with at most three decimals." }
+        effective_from: { $ref: "#/components/schemas/Date" }
     YieldRule:
       type: object
       required: [id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_days_min, lead_days_max, stay_nights_min, stay_nights_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, updated_at]
@@ -8576,13 +8645,14 @@ components:
         is_override: { type: boolean }
     ReservationRoom:
       type: object
-      required: [id, status, room_type_id, room_type_code, room_id, rate_plan_id, rate_plan_code, occupancy_kind, guest_id, arrival_date, departure_date, nights, adult_count, child_count, stay_id, nightly_rates, estimate]
+      required: [id, status, room_type_id, room_type_code, bed_locked, room_id, rate_plan_id, rate_plan_code, occupancy_kind, guest_id, arrival_date, departure_date, nights, adult_count, child_count, stay_id, nightly_rates, estimate]
       properties:
         id: { type: integer, format: int64 }
         status: { type: string, enum: [DRAFT, CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW] }
         room_type_id: { type: integer, format: int64 }
         room_type_code: { type: string }
         bed_type_id: { type: [integer, "null"], format: int64, description: The bed type the guest asked for. }
+        bed_locked: { type: boolean, description: The guest asked for this bed and it is kept (needs a room with that bed; uses the stock of the variant). }
         bed_type_code: { type: string }
         bed_type_name: { type: string }
         occupancy_kind: { $ref: "#/components/schemas/OccupancyKind", description: "Of the rate plan of the line." }

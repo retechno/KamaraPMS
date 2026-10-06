@@ -83,7 +83,7 @@ SELECT count(*) FROM ins;
 -- name: CreateRoom :one
 INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, floor, building, bed_type_id, is_active, created_by, updated_by)
 VALUES (
-    @tenant_id, @property_id, @room_type_id, @room_number, sqlc.narg(floor), sqlc.narg(building), sqlc.narg(bed_type_id), @is_active,
+    @tenant_id, @property_id, @room_type_id, @room_number, sqlc.narg(floor), sqlc.narg(building), @bed_type_id, @is_active,
     sqlc.narg(actor_id), sqlc.narg(actor_id)
 )
 RETURNING *;
@@ -105,7 +105,7 @@ UPDATE rooms SET
     room_number = @room_number,
     floor = sqlc.narg(floor),
     building = sqlc.narg(building),
-    bed_type_id = sqlc.narg(bed_type_id),
+    bed_type_id = @bed_type_id,
     is_active = @is_active,
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id

@@ -6,7 +6,7 @@
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
 // floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
-// (Standard: Twin or Queen, Superior: Double, Deluxe and Suite: King). Rooms that exist without a bed type get one.
+// (Standard: Twin or Queen, Superior: Double, Deluxe and Suite: King). Existing rooms are left alone.
 //
 // rates: creates the rate plan (Room Only, sold through the ROOM charge code) when the property lacks it and fills the
 // grid of every room type for the next days from the business date: a weekday price and a higher weekend price
@@ -238,7 +238,7 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 		}
 	}
 
-	created, skipped, bedsSet := 0, 0, 0
+	created, skipped := 0, 0
 	for f := 1; f <= floors; f++ {
 		for n := 1; n <= perFloor; n++ {
 			number := strconv.Itoa(f*100 + n)
@@ -246,16 +246,8 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 			if id, ok := bedID[bedCodeAt(n)]; ok {
 				bed = &id
 			}
-			if room, ok := have[number]; ok {
+			if _, ok := have[number]; ok { // an existing room already has a bed type (required)
 				skipped++
-				if room.BedTypeID == nil && bed != nil {
-					bedsSet++
-					if !dryRun {
-						if _, err := rm.UpdateRoom(ctx, propertyID, room.ID, rooms.RoomPatch{BedTypeID: bed}); err != nil {
-							return fmt.Errorf("room %s: %w", number, err)
-						}
-					}
-				}
 				continue
 			}
 			if dryRun {
@@ -276,7 +268,7 @@ func seedRooms(e *env, propertyCode string, floors, perFloor int, dryRun bool) e
 	if dryRun {
 		verb = "would create"
 	}
-	fmt.Printf("%s %d rooms in %s/%s (%d already existed, %d of them got a bed type)\n", verb, created, e.tenant.Code, propertyCode, skipped, bedsSet)
+	fmt.Printf("%s %d rooms in %s/%s (%d already existed)\n", verb, created, e.tenant.Code, propertyCode, skipped)
 	return nil
 }
 

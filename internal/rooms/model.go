@@ -136,7 +136,7 @@ type Room struct {
 	RoomNumber string    `json:"room_number"`
 	Floor      string    `json:"floor,omitempty"`
 	Building   string    `json:"building,omitempty"`
-	BedTypeID  *int64    `json:"bed_type_id"`
+	BedTypeID  int64     `json:"bed_type_id"`
 	IsActive   bool      `json:"is_active"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -148,7 +148,7 @@ type RoomInput struct {
 	RoomNumber string
 	Floor      string
 	Building   string
-	BedTypeID  *int64 // nil: no bed type recorded
+	BedTypeID  *int64 // required: every room has a bed type (the variant it is sold as)
 	IsActive   bool
 }
 
@@ -178,6 +178,9 @@ func (in RoomInput) Validate() []apperr.FieldError {
 	}
 	if in.RoomTypeID < 1 {
 		add("room_type_id", "REQUIRED", "")
+	}
+	if in.BedTypeID == nil || *in.BedTypeID < 1 {
+		add("bed_type_id", "REQUIRED", "choose the bed type of the room")
 	}
 	return errs
 }

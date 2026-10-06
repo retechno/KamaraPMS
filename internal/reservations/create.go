@@ -158,6 +158,9 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			if err := s.requireGuest(ctx, l.GuestID); err != nil {
 				return err
 			}
+			if l.BedLocked && l.BedTypeID == nil {
+				fields = append(fields, fieldErr(prefix+"bed_locked", "BED_LOCK_NEEDS_BED_TYPE", "choose a bed type to lock the bed"))
+			}
 			if err := s.requireBedType(ctx, p.TenantID, propertyID, prefix+"bed_type_id", l.BedTypeID, nil); err != nil {
 				return err
 			}
@@ -205,7 +208,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			line, err := q.InsertLine(ctx, reservationsdb.InsertLineParams{
 				TenantID: p.TenantID, PropertyID: propertyID, ReservationID: res.ID, GuestID: l.GuestID, RoomTypeID: l.RoomTypeID, RoomID: l.RoomID,
 				RatePlanID: l.RatePlanID, ArrivalDate: l.Arrival, DepartureDate: l.Departure, AdultCount: int16(l.Adults), ChildCount: int16(l.Children), //nolint:gosec // G115: bounded by validateOccupancy
-				RequestedBedTypeID: l.BedTypeID, OccupancyReason: reasons[i], Status: lineStatus, ActorID: p.ActorID(),
+				RequestedBedTypeID: l.BedTypeID, BedLocked: l.BedLocked, OccupancyReason: reasons[i], Status: lineStatus, ActorID: p.ActorID(),
 			})
 			if err != nil {
 				return err

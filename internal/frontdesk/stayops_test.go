@@ -182,7 +182,7 @@ func TestMoveWithNewRatesOnlyForUnpostedNights(t *testing.T) {
 func TestConcurrentMovesIntoOneRoom(t *testing.T) {
 	f := setup(t)
 	a := f.stay(t, f.r101.ID, "2026-10-03")
-	must(t, f.Exec(t, `INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES ($1, $2, $3, '103')`, f.tenantID, f.propID, f.dlx.ID))
+	must(t, f.Exec(t, `INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, bed_type_id) VALUES ($1, $2, $3, '103', (SELECT id FROM bed_types WHERE property_id = $2 ORDER BY sort_order, id LIMIT 1))`, f.tenantID, f.propID, f.dlx.ID))
 	f.clean(t, f.r102.ID)
 	bRoom := f.Room(t, f.admin, f.propID, f.dlx.ID, "104", housekeeping.Clean)
 	b := f.stay(t, bRoom.ID, "2026-10-03")

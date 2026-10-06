@@ -310,14 +310,12 @@ func (s *Service) CreateRoom(ctx context.Context, propertyID int64, in CreateRoo
 				return err
 			}
 		}
-		if in.BedTypeID != nil {
-			if err := s.requireActiveBedType(ctx, p.TenantID, propertyID, *in.BedTypeID); err != nil {
-				return err
-			}
+		if err := s.requireActiveBedType(ctx, p.TenantID, propertyID, *in.BedTypeID); err != nil { // the bed type is required (Validate)
+			return err
 		}
 		row, err := q.CreateRoom(ctx, roomsdb.CreateRoomParams{
 			TenantID: p.TenantID, PropertyID: propertyID, RoomTypeID: in.RoomTypeID, RoomNumber: in.RoomNumber,
-			Floor: nullable(in.Floor), Building: nullable(in.Building), BedTypeID: in.BedTypeID, IsActive: in.IsActive, ActorID: p.ActorID(),
+			Floor: nullable(in.Floor), Building: nullable(in.Building), BedTypeID: *in.BedTypeID, IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err
@@ -350,7 +348,7 @@ type RoomPatch struct {
 	RoomNumber *string
 	Floor      *string
 	Building   *string
-	// BedTypeID sets the bed type; 0 takes it off.
+	// BedTypeID changes the bed type of the room; 0 is refused (a room always has one).
 	BedTypeID *int64
 	IsActive  *bool
 }
@@ -401,7 +399,7 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 			return apperr.Busy("RESOURCE_BUSY", "the room was changed concurrently, please retry")
 		}
 		before := toRoom(row)
-		in := RoomInput{RoomTypeID: before.RoomTypeID, RoomNumber: before.RoomNumber, Floor: before.Floor, Building: before.Building, BedTypeID: before.BedTypeID, IsActive: before.IsActive}
+		in := RoomInput{RoomTypeID: before.RoomTypeID, RoomNumber: before.RoomNumber, Floor: before.Floor, Building: before.Building, BedTypeID: &before.BedTypeID, IsActive: before.IsActive}
 		apply(&in.RoomTypeID, patch.RoomTypeID)
 		apply(&in.RoomNumber, patch.RoomNumber)
 		apply(&in.Floor, patch.Floor)
@@ -417,7 +415,7 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 		if fields := in.Validate(); len(fields) > 0 {
 			return apperr.Invalid("the room is invalid", fields...)
 		}
-		if in.BedTypeID != nil && (before.BedTypeID == nil || *before.BedTypeID != *in.BedTypeID) { // a bed type that is newly chosen must be active
+		if before.BedTypeID != *in.BedTypeID { // a bed type that is newly chosen must be active
 			if err := s.requireActiveBedType(ctx, p.TenantID, propertyID, *in.BedTypeID); err != nil {
 				return err
 			}
@@ -451,7 +449,7 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 
 		updated, err := q.UpdateRoom(ctx, roomsdb.UpdateRoomParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, RoomTypeID: in.RoomTypeID, RoomNumber: in.RoomNumber,
-			Floor: nullable(in.Floor), Building: nullable(in.Building), BedTypeID: in.BedTypeID, IsActive: in.IsActive, ActorID: p.ActorID(),
+			Floor: nullable(in.Floor), Building: nullable(in.Building), BedTypeID: *in.BedTypeID, IsActive: in.IsActive, ActorID: p.ActorID(),
 		})
 		if err != nil {
 			return err

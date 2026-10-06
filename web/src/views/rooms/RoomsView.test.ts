@@ -64,7 +64,7 @@ describe('RoomsView', () => {
     await flushPromises()
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/rooms', {
       params: { path: { propertyId: 7 } },
-      body: { room_number: '301', room_type_id: 1, floor: '3', building: undefined, is_active: true, initial_housekeeping_status: 'CLEAN' },
+      body: { room_number: '301', room_type_id: 1, floor: '3', building: undefined, bed_type_id: 5, is_active: true, initial_housekeeping_status: 'CLEAN' },
     })
   })
 
@@ -100,24 +100,25 @@ describe('RoomsView', () => {
     expect(w.find('[data-testid=room-201] button').exists()).toBe(false)
   })
 
-  it('gives a room a bed type, keeps an inactive one it already has, and takes it off', async () => {
+  it('requires a bed type, keeps an inactive one the room already has, and changes it', async () => {
     const w = mountRooms(['room.manage'])
     await flushPromises()
     expect(w.get('[data-testid=room-201]').text()).toContain('King')
-    // new room: only the active beds are offered, and none by default
+    // new room: only the active beds are offered, the first is chosen, and there is no "none"
     await w.get('[data-testid=new-room]').trigger('click')
-    expect(w.findAll('select[name=bed_type_id] option').map((o) => o.text())).toEqual(['No bed type', 'King', 'Twin'])
+    expect(w.findAll('select[name=bed_type_id] option').map((o) => o.text())).toEqual(['King', 'Twin'])
+    expect((w.get('select[name=bed_type_id]').element as HTMLSelectElement).value).toBe('5')
     await w.get('input[name=room_number]').setValue('301')
     await w.get('select[name=bed_type_id]').setValue(6)
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toMatchObject({ room_number: '301', bed_type_id: 6 })
-    // editing a room that has the bed type 201 has: it stays selected; 0 takes it off
+    // editing a room that has the bed type 201 has: it stays selected; another can be chosen
     await w.get('[data-testid=room-201] button').trigger('click')
     expect((w.get('select[name=bed_type_id]').element as HTMLSelectElement).value).toBe('5')
-    await w.get('select[name=bed_type_id]').setValue(0)
+    await w.get('select[name=bed_type_id]').setValue(6)
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(PATCH.mock.calls[0]?.[1].body).toMatchObject({ bed_type_id: 0 })
+    expect(PATCH.mock.calls[0]?.[1].body).toMatchObject({ bed_type_id: 6 })
   })
 })

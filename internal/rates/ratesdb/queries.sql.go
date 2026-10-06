@@ -7,6 +7,7 @@ package ratesdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
@@ -495,6 +496,53 @@ func (q *Queries) GetYieldRuleForUpdate(ctx context.Context, arg GetYieldRuleFor
 	return i, err
 }
 
+const insertBedAdjustment = `-- name: InsertBedAdjustment :one
+INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from, created_at, created_by
+`
+
+type InsertBedAdjustmentParams struct {
+	TenantID      int64
+	PropertyID    int64
+	RatePlanID    int64
+	RoomTypeID    int64
+	BedTypeID     int64
+	AdjustKind    string
+	Amount        decimal.Decimal
+	EffectiveFrom civil.Date
+	ActorID       *int64
+}
+
+func (q *Queries) InsertBedAdjustment(ctx context.Context, arg InsertBedAdjustmentParams) (RatePlanBedAdjustment, error) {
+	row := q.db.QueryRow(ctx, insertBedAdjustment,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RatePlanID,
+		arg.RoomTypeID,
+		arg.BedTypeID,
+		arg.AdjustKind,
+		arg.Amount,
+		arg.EffectiveFrom,
+		arg.ActorID,
+	)
+	var i RatePlanBedAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.RatePlanID,
+		&i.RoomTypeID,
+		&i.BedTypeID,
+		&i.AdjustKind,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const listApplicableYieldRules = `-- name: ListApplicableYieldRules :many
 SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules
 WHERE tenant_id = $1 AND property_id = $2 AND is_active
@@ -552,6 +600,68 @@ func (q *Queries) ListApplicableYieldRules(ctx context.Context, arg ListApplicab
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBedAdjustments = `-- name: ListBedAdjustments :many
+SELECT a.id, a.rate_plan_id, a.room_type_id, rt.code AS room_type_code, a.bed_type_id, bt.code AS bed_type_code, bt.name AS bed_type_name,
+       a.adjust_kind, a.amount, a.effective_from, a.created_at
+FROM rate_plan_bed_adjustments a
+JOIN room_types rt ON rt.property_id = a.property_id AND rt.id = a.room_type_id
+JOIN bed_types bt ON bt.property_id = a.property_id AND bt.id = a.bed_type_id
+WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.rate_plan_id = $3
+ORDER BY rt.code, bt.sort_order, bt.id, a.effective_from DESC
+`
+
+type ListBedAdjustmentsParams struct {
+	TenantID   int64
+	PropertyID int64
+	RatePlanID int64
+}
+
+type ListBedAdjustmentsRow struct {
+	ID            int64
+	RatePlanID    int64
+	RoomTypeID    int64
+	RoomTypeCode  string
+	BedTypeID     int64
+	BedTypeCode   string
+	BedTypeName   string
+	AdjustKind    string
+	Amount        decimal.Decimal
+	EffectiveFrom civil.Date
+	CreatedAt     time.Time
+}
+
+func (q *Queries) ListBedAdjustments(ctx context.Context, arg ListBedAdjustmentsParams) ([]ListBedAdjustmentsRow, error) {
+	rows, err := q.db.Query(ctx, listBedAdjustments, arg.TenantID, arg.PropertyID, arg.RatePlanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBedAdjustmentsRow{}
+	for rows.Next() {
+		var i ListBedAdjustmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RatePlanID,
+			&i.RoomTypeID,
+			&i.RoomTypeCode,
+			&i.BedTypeID,
+			&i.BedTypeCode,
+			&i.BedTypeName,
+			&i.AdjustKind,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

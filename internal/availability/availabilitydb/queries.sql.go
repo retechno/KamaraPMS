@@ -287,7 +287,7 @@ type ListFreeRoomsRow struct {
 	Floor              *string
 	Building           *string
 	HousekeepingStatus string
-	BedTypeID          *int64
+	BedTypeID          int64
 	BedTypeCode        *string
 	BedTypeName        *string
 }

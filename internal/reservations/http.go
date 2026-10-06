@@ -329,6 +329,7 @@ type patchRoomRequest struct {
 	Adults     *int        `json:"adult_count"`
 	Children   *int        `json:"child_count"`
 	BedTypeID  *int64      `json:"bed_type_id"`
+	BedLocked  *bool       `json:"bed_locked"`
 	// OccupancyReason is the reason of a complimentary or house use room.
 	OccupancyReason *string         `json:"occupancy_reason"`
 	Overrides       []NightOverride `json:"nightly_overrides"`

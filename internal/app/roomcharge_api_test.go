@@ -23,7 +23,7 @@ func TestRoomChargeAPIFlow(t *testing.T) {
 		"taxes": []map[string]any{{"tax_id": mustInt(vat), "sequence": 1}}, "service_charges": []map[string]any{{"service_charge_id": mustInt(svc), "sequence": 1}},
 	})
 	dlx := idOf(abc.do(http.MethodPost, base+"/room-types", map[string]any{"code": "DLX", "name": "Deluxe", "max_adult": 2, "max_child": 0, "max_occupancy": 2, "base_occupancy": 2}))
-	r101 := idOf(abc.do(http.MethodPost, base+"/rooms", map[string]any{"room_type_id": mustInt(dlx), "room_number": "101", "initial_housekeeping_status": "CLEAN"}))
+	r101 := idOf(abc.do(http.MethodPost, base+"/rooms", map[string]any{"bed_type_id": bedOf(abc, base), "room_type_id": mustInt(dlx), "room_number": "101", "initial_housekeeping_status": "CLEAN"}))
 	plan := idOf(abc.do(http.MethodPost, base+"/rate-plans", map[string]any{"code": "BAR", "name": "Best", "meal_plan": "RO", "room_charge_code_id": roomCode}))
 	abc.do(http.MethodPut, base+"/rates", map[string]any{"rate_plan_id": mustInt(plan), "room_type_ids": []int64{mustInt(dlx)}, "from": "2026-09-30", "to": "2026-10-10", "amount": "1000000"})
 	walk := abc.doWith(http.MethodPost, base+"/walk-ins", map[string]any{"new_guest": map[string]any{"last_name": "Walker"}, "room_id": mustInt(r101), "rate_plan_id": mustInt(plan), "departure_date": "2026-10-02", "adult_count": 1, "child_count": 0},

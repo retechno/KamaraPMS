@@ -96,7 +96,7 @@ async function load(): Promise<void> {
 }
 
 function startNew(): void {
-  Object.assign(form, blank(), { room_type_id: types.value.find((t) => t.is_active)?.id ?? 0 })
+  Object.assign(form, blank(), { room_type_id: types.value.find((t) => t.is_active)?.id ?? 0, bed_type_id: beds.value.find((b) => b.is_active)?.id ?? 0 })
   error.value = null
   editing.value = 'new'
 }
@@ -121,7 +121,7 @@ async function save(): Promise<void> {
           room_type_id: Number(form.room_type_id),
           floor: form.floor || undefined,
           building: form.building || undefined,
-          bed_type_id: Number(form.bed_type_id) || undefined,
+          bed_type_id: Number(form.bed_type_id),
           is_active: form.is_active,
           initial_housekeeping_status: form.initial_housekeeping_status,
         },
@@ -196,7 +196,6 @@ watch(() => property.currentId, load, { immediate: true })
           <FormField :label="t('bedTypes.bed')" :error="fieldError('bed_type_id')">
             <template #default="{ id, invalid }">
               <NativeSelect :id="id" v-model.number="form.bed_type_id" name="bed_type_id" :aria-invalid="invalid">
-                <option :value="0">{{ t('bedTypes.none') }}</option>
                 <option v-for="b in bedChoices" :key="b.id" :value="b.id">{{ b.name }}</option>
               </NativeSelect>
             </template>

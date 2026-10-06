@@ -3018,6 +3018,8 @@ export const id: Messages = {
     BANK_ACCOUNT_INACTIVE: 'Rekening bank tidak dipakai.',
     BANK_ACCOUNT_NOT_FOUND: 'Rekening bank tidak ditemukan di properti ini.',
     BED_TYPE_NOT_FOUND: 'Tipe bed tidak ditemukan di properti ini.',
+    BED_LOCK_NEEDS_BED_TYPE: 'Pilih tipe bed untuk mengunci bed.',
+    BED_ADJUSTMENT_EXISTS: 'Sudah ada selisih harga yang mulai pada tanggal ini.',
     BILL_ALREADY_VOIDED: 'Tagihan ini sudah dibatalkan.',
     BILL_HAS_PAYMENTS: 'Tagihan yang sudah dibayar tidak bisa dibatalkan: batalkan dulu pembayarannya.',
     BILL_HAS_CREDIT_NOTES: 'Tagihan yang punya nota kredit tidak bisa dibatalkan: batalkan dulu nota kreditnya.',

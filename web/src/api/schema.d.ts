@@ -972,6 +972,33 @@ export interface paths {
         patch: operations["updateRatePlan"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/rate-plans/{id}/bed-adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The supplements of the bed types of a rate plan
+         * @description Every row of the plan, newest first per room type and bed type; `in_force` marks the row that prices today (the latest one that has started on the business date). Readable by anyone at the property.
+         */
+        get: operations["listBedAdjustments"];
+        put?: never;
+        /**
+         * Add a supplement of a bed type from a date (rate.manage)
+         * @description The price of a variant is the price of the room type plus this supplement: an amount (currency decimals) or a percentage (-100 to 1000, three decimals) of the nightly price; negative is a discount. A row is never changed: a new figure is a new row from a later date, and a night that is booked keeps the price it was given. 409 `BED_ADJUSTMENT_EXISTS` when a row of the plan, room type and bed type starts on that date already.
+         */
+        post: operations["addBedAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/yield-rules": {
         parameters: {
             query?: never;
@@ -6658,9 +6685,9 @@ export interface components {
             building?: string;
             /**
              * Format: int64
-             * @description The bed type of the room (null when none is recorded).
+             * @description The bed type of the room. Every room has one; it is the variant the room is sold as.
              */
-            bed_type_id: number | null;
+            bed_type_id: number;
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -6679,9 +6706,9 @@ export interface components {
             building?: string;
             /**
              * Format: int64
-             * @description A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off).
+             * @description Required. A bed type of the property (404-like 422 `BED_TYPE_NOT_FOUND` for another property's; 422 `BED_TYPE_INACTIVE` for one that is switched off).
              */
-            bed_type_id?: number;
+            bed_type_id: number;
             /** @default true */
             is_active: boolean;
             initial_housekeeping_status?: components["schemas"]["HousekeepingStatus"];
@@ -6694,7 +6721,7 @@ export interface components {
             building?: string;
             /**
              * Format: int64
-             * @description The bed type of the room; 0 takes it off.
+             * @description Changes the bed type of the room; a room always has one (422 `REQUIRED` for 0).
              */
             bed_type_id?: number;
             is_active?: boolean;
@@ -7370,6 +7397,8 @@ export interface components {
              * @description The bed type the guest asks for. A request, not inventory: any room of the type can still be assigned. 422 `BED_TYPE_NOT_FOUND` or `BED_TYPE_INACTIVE`.
              */
             bed_type_id?: number;
+            /** @description Keeps the bed: the line then needs a room with that bed and uses the stock of the variant. Needs `bed_type_id` (422 `BED_LOCK_NEEDS_BED_TYPE`). */
+            bed_locked?: boolean;
             /** @description Why the room is free. Required (422 `REQUIRED`) when the rate plan is COMPLIMENTARY or HOUSE_USE, ignored on a paid plan. */
             occupancy_reason?: string;
             /** @description Only when the room is added to an existing reservation: creating a reservation carries the reason and the approval once, on the request, for all its rooms. */
@@ -7461,6 +7490,8 @@ export interface components {
             rate_plan_id?: number;
             adult_count?: number;
             child_count?: number;
+            /** @description Locks or unlocks the requested bed. Taking the request off (`bed_type_id` 0) unlocks it; locking without a request is 422 `BED_LOCK_NEEDS_BED_TYPE`. */
+            bed_locked?: boolean;
             /**
              * Format: int64
              * @description The requested bed type; 0 takes the request off. A request that was valid stays valid when it is not changed
@@ -7530,6 +7561,41 @@ export interface components {
             priority: number;
             /** @default true */
             is_active: boolean;
+        };
+        BedAdjustment: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code?: string;
+            /** Format: int64 */
+            bed_type_id: number;
+            bed_type_code?: string;
+            bed_type_name?: string;
+            /** @enum {string} */
+            adjust_kind: "AMOUNT" | "PERCENT";
+            /** @description A decimal; negative is a discount. */
+            amount: string;
+            effective_from: components["schemas"]["Date"];
+            in_force: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BedAdjustmentList: {
+            data: components["schemas"]["BedAdjustment"][];
+        };
+        BedAdjustmentRequest: {
+            /** Format: int64 */
+            room_type_id: number;
+            /** Format: int64 */
+            bed_type_id: number;
+            /** @enum {string} */
+            adjust_kind: "AMOUNT" | "PERCENT";
+            /** @description A decimal, negative for a discount. An amount has at most the decimals of the currency; a percentage is between -100 and 1000 with at most three decimals. */
+            amount: string;
+            effective_from: components["schemas"]["Date"];
         };
         YieldRule: {
             /** Format: int64 */
@@ -7619,6 +7685,8 @@ export interface components {
              * @description The bed type the guest asked for.
              */
             bed_type_id?: number | null;
+            /** @description The guest asked for this bed and it is kept (needs a room with that bed; uses the stock of the variant). */
+            bed_locked: boolean;
             bed_type_code?: string;
             bed_type_name?: string;
             /** @description Of the rate plan of the line. */
@@ -13678,6 +13746,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RatePlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBedAdjustments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The supplements. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BedAdjustmentList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    addBedAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BedAdjustmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The supplement. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BedAdjustment"];
                 };
             };
             403: components["responses"]["Problem"];

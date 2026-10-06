@@ -139,7 +139,7 @@ There are no endpoints to open or close days directly. That only happens through
 - **TX:** master pattern (no row locks: nothing is counted per bed type)
 
 **GET / POST `{P}/rooms`, GET / PATCH `{P}/rooms/{id}`** (write: `room.manage`)
-- **Request:** `{ room_number, room_type_id, floor?, building?, bed_type_id?, is_active?, initial_housekeeping_status? }`; PATCH `bed_type_id: 0` takes the bed type off.
+- **Request:** `{ room_number, room_type_id, floor?, building?, bed_type_id, is_active?, initial_housekeeping_status? }`; the bed type is required (422 `REQUIRED`), and PATCH `bed_type_id: 0` is refused too: a room always has one.
 - **Rules:**
   - Creating a room also creates its `room_housekeeping` row (default DIRTY).
   - Changing `room_type_id` or setting `is_active = false` is rejected if there's an open segment or a future CONFIRMED assigned line, or if either type would be oversold.
@@ -273,6 +273,11 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 ## 10. Rate plans and rates
 
+**GET / POST `{P}/rate-plans/{id}/bed-adjustments`** (write: `rate.manage`; read: any access to the property; design: `16-bed-variants.md`)
+- **Request (POST):** `{ room_type_id, bed_type_id, adjust_kind (AMOUNT|PERCENT), amount, effective_from }`. An amount has at most the decimals of the currency, a percentage is between -100 and 1000 with at most three decimals; negative is a discount.
+- **Response:** `{ data: [{ id, rate_plan_id, room_type_id, room_type_code, bed_type_id, bed_type_code, bed_type_name, adjust_kind, amount, effective_from, in_force, created_at }] }`, newest first per room type and bed type; `in_force` is the row that prices the business date.
+- **Rules:** append-only (a new figure is a new row from a later date; GET and POST instead of the GET and PUT of the first design). 409 `BED_ADJUSTMENT_EXISTS` when a row starts on that date already; 422 `BED_TYPE_NOT_FOUND`, 404 `RATE_PLAN_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`. Audit `rate_plan.bed_adjustment_added`. The price of a night is not changed yet (step 4).
+
 **GET / POST `{P}/rate-plans`, PATCH `/{id}`** (write: `rate.manage`; read: any access to the property)
 - **Request:** `{ code, name, description?, meal_plan (RO|BB|HB|FB|AI), cancellation_policy?, is_refundable?, room_charge_code_id, occupancy_kind? (PAID|COMPLIMENTARY|HOUSE_USE, default PAID), is_active? }`. The code is upper-cased and immutable, and so is `occupancy_kind` (the PATCH has no such field). A COMPLIMENTARY or HOUSE_USE plan is priced at zero: every night costs 0 without a grid rate, price overrides are refused (422 `OVERRIDE_NOT_ALLOWED`) and the room charge posts as a zero charge (no service, no tax). Booking one needs `reservation.complimentary` and an `occupancy_reason` on the line (422 `REQUIRED` on `occupancy_reason`); the availability search lists such plans only to who has the permission. The line shows `occupancy_kind` (its plan's) and `occupancy_reason`; the reason can be edited by PATCH of the line, and a paid plan keeps no reason. Responses add `room_charge_code` (its code) and `price_mode` (the code's, i.e. how grid amounts are read).
 - **Validation:** the room charge code is an active charge code of this property with `charge_type = ROOM` (404 `CHARGE_CODE_NOT_FOUND` for another property's, 422 `CHARGE_CODE_NOT_ROOM` on `room_charge_code_id` otherwise; a trigger backs it up).
@@ -314,7 +319,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **POST `{P}/reservations`** ⓘ (`reservation.create`)
 - **Purpose:** create a draft, optionally confirming it at once.
-- **Request:** `{ guest_id?, source, market?, special_request?, remarks?, rooms: [{ room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, guest_id?, room_id?, bed_type_id?, nightly_overrides?: [{date, amount, discount_amount?}] }], confirm?: false }`
+- **Request:** `{ guest_id?, source, market?, special_request?, remarks?, rooms: [{ room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, child_count, guest_id?, room_id?, bed_type_id?, bed_locked?, nightly_overrides?: [{date, amount, discount_amount?}] }], confirm?: false }`
 - **Response 201:** the reservation (as in GET).
 - **Validation:** Step 14 §14.2 "Create". Overrides need `reservation.override_rate`, a `rate_override_reason` and an approval: `rate_override_approval` (`{email, password}` of a user holding `reservation.override_rate_approve`), which is not needed when the caller holds that permission too (422 `APPROVAL_REQUIRED`, 401 `APPROVAL_INVALID_CREDENTIALS`, 403 `APPROVAL_NOT_PERMITTED`). The same rule applies when a room is added (`POST .../rooms`), a room is amended (`PATCH .../rooms/{lineId}`), to a walk-in and to the extension of a stay (`PATCH /stays/{id}/departure`, with `nightly_overrides`); the credentials are verified once per request, never stored (the idempotency hash leaves them out) and the audit entry records `override_approved_by` and `rate_override_reason`. `room_id` requires `confirm: true`.
 - **Rules:** creates the DRAFT and snapshots the nightly rows. `confirm: true` runs **confirm** in the same transaction.
@@ -368,7 +373,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **PATCH `{P}/reservations/{id}/rooms/{lineId}`** (`reservation.update`)
 - **Purpose:** amend a line.
-- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, bed_type_id?, nightly_overrides? }`; `bed_type_id: 0` takes the request off.
+- **Request:** `{ version, arrival_date?, departure_date?, room_type_id?, rate_plan_id?, adult_count?, child_count?, bed_type_id?, bed_locked?, nightly_overrides? }`; `bed_type_id: 0` takes the request off (and the lock). `bed_locked` needs a bed type (422 `BED_LOCK_NEEDS_BED_TYPE`); it has no effect on stock yet (step 2 of `16-bed-variants.md`).
 - **Rules:** only DRAFT or CONFIRMED lines. `bed_type_id` is the bed the guest asks for (see §5: 422 `BED_TYPE_NOT_FOUND` / `BED_TYPE_INACTIVE`); a request that was valid stays valid when it is not changed, even if the bed type was switched off since. It does not touch availability. Availability is re-checked excluding the line itself. Surviving nights keep their snapshot.
 - **TX:** `T[L1, L2 (old and new type), L3 (assigned room), L4]`
 

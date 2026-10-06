@@ -125,9 +125,9 @@ func TestRoomCreateAndUpdateRules(t *testing.T) {
 		t.Fatalf("creating a room writes no housekeeping log, got %d", n)
 	}
 
-	_, err := e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: dlx.ID, RoomNumber: "201", IsActive: true}})
+	_, err := e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: dlx.ID, RoomNumber: "201", BedTypeID: ptr(e.FirstBedType(t, p.ID)), IsActive: true}})
 	wantCode(t, err, "ROOM_NUMBER_TAKEN")
-	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: foreign.ID, RoomNumber: "301", IsActive: true}})
+	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: foreign.ID, RoomNumber: "301", BedTypeID: ptr(e.FirstBedType(t, p.ID)), IsActive: true}})
 	wantCode(t, err, "ROOM_TYPE_NOT_FOUND") // another property's type is invisible
 	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: dlx.ID, RoomNumber: "301", IsActive: true}, InitialHousekeeping: "NOPE"})
 	wantCode(t, err, "VALIDATION_FAILED")
@@ -164,7 +164,7 @@ func TestRoomCreateAndUpdateRules(t *testing.T) {
 	if err := e.Exec(t, `UPDATE room_types SET is_active = false WHERE id = $1`, std.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: std.ID, RoomNumber: "401", IsActive: true}})
+	_, err = e.Rooms.CreateRoom(ctx, p.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: std.ID, RoomNumber: "401", BedTypeID: ptr(e.FirstBedType(t, p.ID)), IsActive: true}})
 	if fe := code(t, err, "VALIDATION_FAILED").Fields; len(fe) != 1 || fe[0].Code != "ROOM_TYPE_INACTIVE" {
 		t.Fatalf("fields: %v", fe)
 	}
@@ -461,7 +461,7 @@ func TestPermissionsAndIsolation(t *testing.T) {
 	wantCode(t, err, "ROOM_NOT_FOUND")
 	_, err = e.Rooms.UpdateRoom(admin, bali.ID, otherRoom.ID, rooms.RoomPatch{Floor: ptr("9")})
 	wantCode(t, err, "ROOM_NOT_FOUND")
-	_, err = e.Rooms.CreateRoom(admin, bali.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: other.ID, RoomNumber: "9", IsActive: true}})
+	_, err = e.Rooms.CreateRoom(admin, bali.ID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: other.ID, RoomNumber: "9", BedTypeID: ptr(e.FirstBedType(t, bali.ID)), IsActive: true}})
 	wantCode(t, err, "ROOM_TYPE_NOT_FOUND")
 
 	_, err = e.Rooms.ListRoomTypes(context.Background(), bali.ID, 0, nil, 10)

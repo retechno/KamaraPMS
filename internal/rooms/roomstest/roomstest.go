@@ -288,10 +288,28 @@ func (e *Env) RoomType(t *testing.T, ctx context.Context, propertyID int64, code
 func (e *Env) Room(t *testing.T, ctx context.Context, propertyID, typeID int64, number string, status ...housekeeping.Status) rooms.Room {
 	t.Helper()
 	in := rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: typeID, RoomNumber: number, Floor: number[:1], IsActive: true}}
+	bed := e.FirstBedType(t, propertyID) // a room has a bed type: the first of the catalogue unless a test gives another
+	in.BedTypeID = &bed
 	if len(status) > 0 {
 		in.InitialHousekeeping = status[0]
 	}
 	r, err := e.Rooms.CreateRoom(ctx, propertyID, in)
+	must(t, err)
+	return r
+}
+
+// FirstBedType is the first bed type of the catalogue of a property (by its sort order).
+func (e *Env) FirstBedType(t *testing.T, propertyID int64) int64 {
+	t.Helper()
+	var id int64
+	must(t, e.Pool.QueryRow(context.Background(), `SELECT id FROM bed_types WHERE property_id = $1 ORDER BY sort_order, id LIMIT 1`, propertyID).Scan(&id))
+	return id
+}
+
+// RoomWithBed creates a room that has the given bed type.
+func (e *Env) RoomWithBed(t *testing.T, ctx context.Context, propertyID, typeID, bedTypeID int64, number string) rooms.Room {
+	t.Helper()
+	r, err := e.Rooms.CreateRoom(ctx, propertyID, rooms.CreateRoomInput{RoomInput: rooms.RoomInput{RoomTypeID: typeID, RoomNumber: number, Floor: number[:1], BedTypeID: &bedTypeID, IsActive: true}})
 	must(t, err)
 	return r
 }

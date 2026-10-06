@@ -172,15 +172,19 @@ SELECT expect_error('max_occupancy <= max_adult + max_child', '23514',
     $q$INSERT INTO room_types (tenant_id, property_id, code, name, max_adult, max_child, max_occupancy, base_occupancy)
        VALUES (tn('ABC'), pr('BALI'), 'STD', 'Standard', 2, 0, 3, 2)$q$);
 
-INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES
-    (tn('ABC'), pr('BALI'), rt('DLX'), '201'),
-    (tn('ABC'), pr('BALI'), rt('DLX'), '305'),
-    (tn('ABC'), pr('BALI'), rt('DLX'), '410');
+-- every room has a bed type (00057), so the properties get a bed first
+INSERT INTO bed_types (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'KING', 'King'), (tn('XYZ'), pr('SG'), 'KING', 'King');
+INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, bed_type_id) VALUES
+    (tn('ABC'), pr('BALI'), rt('DLX'), '201', (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING')),
+    (tn('ABC'), pr('BALI'), rt('DLX'), '305', (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING')),
+    (tn('ABC'), pr('BALI'), rt('DLX'), '410', (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'));
+SELECT expect_error('a room has a bed type', '23502',
+    $q$INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES (tn('ABC'), pr('BALI'), rt('DLX'), '999')$q$);
 
 SELECT expect_error('room cannot use a room type of another property', '23503',
-    $q$INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES (tn('XYZ'), pr('SG'), rt('DLX'), '101')$q$);
+    $q$INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, bed_type_id) VALUES (tn('XYZ'), pr('SG'), rt('DLX'), '101', (SELECT id FROM bed_types WHERE property_id = pr('SG') AND code = 'KING'))$q$);
 SELECT expect_error('tenant/property pair must match', '23503',
-    $q$INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES (tn('XYZ'), pr('BALI'), rt('DLX'), '102')$q$);
+    $q$INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, bed_type_id) VALUES (tn('XYZ'), pr('BALI'), rt('DLX'), '102', (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'))$q$);
 SELECT expect_error('rooms has no status column', '42703',
     $q$UPDATE rooms SET status = 'OCCUPIED'$q$);
 
@@ -330,6 +334,38 @@ SELECT expect_error('booker must belong to the same tenant', '23503',
 INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, status) VALUES
     (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rm('201'), rp('BAR'), '2026-10-01', '2026-10-04', 2, 'CONFIRMED'),
     (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rm('305'), rp('NETT'), '2026-10-01', '2026-10-03', 1, 'CONFIRMED');
+
+-- Bed variants (00057): a locked line asks for a bed, the supplement of a variant per rate plan and room type
+SELECT expect_error('a locked bed needs a bed type', '23514',
+    $q$INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, status, bed_locked)
+       VALUES (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rp('BAR'), '2026-11-01', '2026-11-03', 2, 'DRAFT', true)$q$);
+SELECT expect_ok('a locked bed with its bed type',
+    $q$INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, rate_plan_id, arrival_date, departure_date, adult_count, status, bed_locked, requested_bed_type_id)
+       VALUES (tn('ABC'), pr('BALI'), rs('R1'), rt('DLX'), rp('BAR'), '2026-11-01', '2026-11-03', 2, 'DRAFT', true, (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'))$q$);
+SELECT expect_ok('a supplement of an amount for a variant',
+    $q$INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'AMOUNT', 50000, '2026-10-01')$q$);
+SELECT expect_error('a supplement kind is AMOUNT or PERCENT', '23514',
+    $q$INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'FREE', 1, '2026-10-02')$q$);
+SELECT expect_error('a percentage supplement is at most 1000 percent and not below -100', '23514',
+    $q$INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'PERCENT', -101, '2026-10-02')$q$);
+SELECT expect_ok('a supplement may be a percentage below zero (a discount)',
+    $q$INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'PERCENT', -10, '2026-10-02')$q$);
+SELECT expect_error('a supplement of a rate plan, room type and bed starts once', '23505',
+    $q$WITH a AS (INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'AMOUNT', 1, '2026-10-05') RETURNING 1)
+       INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'AMOUNT', 2, '2026-10-05')$q$);
+SELECT expect_error('a bed type of another property', '23503',
+    $q$INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+       VALUES (tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('SG') AND code = 'KING'), 'AMOUNT', 1, '2026-10-06')$q$);
+INSERT INTO rate_plan_bed_adjustments (tenant_id, property_id, rate_plan_id, room_type_id, bed_type_id, adjust_kind, amount, effective_from)
+SELECT tn('ABC'), pr('BALI'), rp('BAR'), rt('DLX'), (SELECT id FROM bed_types WHERE property_id = pr('BALI') AND code = 'KING'), 'AMOUNT', 50000, '2026-10-01';
+SELECT expect_error('a supplement is never changed', '23001', $q$UPDATE rate_plan_bed_adjustments SET amount = 1$q$);
+SELECT expect_error('a supplement is never deleted', '23001', $q$DELETE FROM rate_plan_bed_adjustments$q$);
 
 SELECT expect_error('double booking: overlapping CONFIRMED lines on one room', '23P01',
     $q$INSERT INTO reservation_rooms (tenant_id, property_id, reservation_id, room_type_id, room_id, rate_plan_id, arrival_date, departure_date, adult_count, status)

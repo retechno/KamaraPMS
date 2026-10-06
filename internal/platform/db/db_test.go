@@ -47,6 +47,11 @@ func setup(t *testing.T) fixture {
 	             VALUES ($1, $2, $2, 'Asia/Jakarta', 'IDR', 0, '14:00', '12:00') RETURNING id`
 	scan(&f.propertyID, property, f.tenantID, "BALI")
 	scan(&f.otherPropertyID, property, f.tenantID, "JKT")
+	for _, pid := range []int64{f.propertyID, f.otherPropertyID} { // a room has a bed type
+		if _, err := pool.Exec(ctx, `INSERT INTO bed_types (tenant_id, property_id, code, name) VALUES ($1, $2, 'KING', 'King')`, f.tenantID, pid); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
 
 	roomType := `INSERT INTO room_types (tenant_id, property_id, code, name, max_adult, max_child, max_occupancy, base_occupancy)
 	             VALUES ($1, $2, 'DLX', 'Deluxe', 2, 1, 3, 2) RETURNING id`
@@ -54,7 +59,7 @@ func setup(t *testing.T) fixture {
 	var otherRoomType int64
 	scan(&otherRoomType, roomType, f.tenantID, f.otherPropertyID)
 
-	room := `INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number) VALUES ($1, $2, $3, $4) RETURNING id`
+	room := `INSERT INTO rooms (tenant_id, property_id, room_type_id, room_number, bed_type_id) VALUES ($1, $2, $3, $4, (SELECT id FROM bed_types WHERE property_id = $2 ORDER BY sort_order, id LIMIT 1)) RETURNING id`
 	for _, n := range []string{"201", "202", "203"} {
 		var id int64
 		scan(&id, room, f.tenantID, f.propertyID, f.roomTypeID, n)

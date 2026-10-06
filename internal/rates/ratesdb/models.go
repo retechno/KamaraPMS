@@ -32,6 +32,20 @@ type RatePlan struct {
 	IsReference        bool
 }
 
+type RatePlanBedAdjustment struct {
+	ID            int64
+	TenantID      int64
+	PropertyID    int64
+	RatePlanID    int64
+	RoomTypeID    int64
+	BedTypeID     int64
+	AdjustKind    string
+	Amount        decimal.Decimal
+	EffectiveFrom civil.Date
+	CreatedAt     time.Time
+	CreatedBy     *int64
+}
+
 type YieldRule struct {
 	ID              int64
 	TenantID        int64

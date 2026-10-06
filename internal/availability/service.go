@@ -351,7 +351,7 @@ func (s *Service) FreeRooms(ctx context.Context, tenantID, propertyID, roomTypeI
 	}
 	out := make([]FreeRoom, len(rows))
 	for i, r := range rows {
-		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus, BedTypeID: r.BedTypeID}
+		out[i] = FreeRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, HousekeepingStatus: r.HousekeepingStatus, BedTypeID: &r.BedTypeID}
 		if r.BedTypeCode != nil {
 			out[i].BedTypeCode = *r.BedTypeCode
 		}
