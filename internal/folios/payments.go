@@ -602,6 +602,11 @@ func (s *Service) Transfer(ctx context.Context, propertyID, folioID int64, key s
 				if err := requireOpen(folio); err != nil {
 					return err
 				}
+				// a folio billed to a company can only be sent to that company's account
+				if folio.BillToCompanyID != nil && *folio.BillToCompanyID != in.CompanyID {
+					return apperr.Conflict("TRANSFER_COMPANY_MISMATCH", "the folio is billed to another company: it can only be transferred to that company's city ledger account").
+						WithContext("bill_to_company_id", *folio.BillToCompanyID)
+				}
 				balance, _, err := s.balanceOf(ctx, propertyID, folioID)
 				if err != nil {
 					return err

@@ -1199,12 +1199,13 @@ func (q *Queries) ListRatePlanBriefs(ctx context.Context, arg ListRatePlanBriefs
 }
 
 const listReservationFolios = `-- name: ListReservationFolios :many
-SELECT f.id, f.folio_number, f.stay_id, f.status,
+SELECT f.id, f.folio_number, f.stay_id, f.status, f.folio_type, f.bill_to_company_id, c.name AS bill_to_company_name,
        COALESCE(sum(i.debit - i.credit), 0)::numeric AS balance
 FROM folios f
 LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+LEFT JOIN companies c ON c.property_id = f.property_id AND c.id = f.bill_to_company_id
 WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.reservation_id = $3
-GROUP BY f.id
+GROUP BY f.id, c.name
 ORDER BY f.id
 `
 
@@ -1215,11 +1216,14 @@ type ListReservationFoliosParams struct {
 }
 
 type ListReservationFoliosRow struct {
-	ID          int64
-	FolioNumber string
-	StayID      *int64
-	Status      string
-	Balance     decimal.Decimal
+	ID                int64
+	FolioNumber       string
+	StayID            *int64
+	Status            string
+	FolioType         string
+	BillToCompanyID   *int64
+	BillToCompanyName *string
+	Balance           decimal.Decimal
 }
 
 func (q *Queries) ListReservationFolios(ctx context.Context, arg ListReservationFoliosParams) ([]ListReservationFoliosRow, error) {
@@ -1236,6 +1240,9 @@ func (q *Queries) ListReservationFolios(ctx context.Context, arg ListReservation
 			&i.FolioNumber,
 			&i.StayID,
 			&i.Status,
+			&i.FolioType,
+			&i.BillToCompanyID,
+			&i.BillToCompanyName,
 			&i.Balance,
 		); err != nil {
 			return nil, err

@@ -242,3 +242,47 @@ SELECT COALESCE(sum(net_amount), 0)::numeric AS net, count(*)::int AS items
 FROM folio_items
 WHERE property_id = @property_id AND folio_id = @folio_id AND charge_code_id = @charge_code_id
   AND transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL');
+
+-- ---------------------------------------------------------------------------
+-- Billing instructions and company folios (docs/architecture/18-architecture-decisions.md section 3)
+
+-- name: ListLineInstructions :many
+SELECT i.id, i.scope, i.charge_code_id, i.company_id, c.name AS company_name, cc.code AS charge_code, cc.name AS charge_code_name
+FROM folio_billing_instructions i
+JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+LEFT JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.reservation_room_id = @reservation_room_id
+ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id;
+
+-- name: DeleteLineInstructions :exec
+DELETE FROM folio_billing_instructions WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_room_id = @reservation_room_id;
+
+-- name: InsertInstruction :exec
+INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @reservation_room_id, @scope, sqlc.narg(charge_code_id), @company_id, sqlc.narg(actor_id), sqlc.narg(actor_id));
+
+-- The instructions of the lines of many stays (the resolver).
+-- name: ListStayInstructions :many
+SELECT s.id AS stay_id, i.scope, i.charge_code_id, i.company_id
+FROM stays s
+JOIN folio_billing_instructions i ON i.property_id = s.property_id AND i.reservation_room_id = s.reservation_room_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = ANY(@stay_ids::bigint[]);
+
+-- The OPEN company folios of many stays.
+-- name: ListStayOpenCompanyFolios :many
+SELECT id, stay_id, bill_to_company_id FROM folios
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = ANY(@stay_ids::bigint[]) AND status = 'OPEN' AND folio_type = 'COMPANY';
+
+-- name: InsertCompanyFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @folio_number, @reservation_id, @stay_id, 'COMPANY', @company_id, sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
+-- The stay of a reservation line, if the guest has checked in.
+-- name: GetLineStay :one
+SELECT id, status FROM stays WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_room_id = @reservation_room_id;
+
+-- The line and its reservation (a line of another reservation or property is not found).
+-- name: GetInstructionLine :one
+SELECT rr.id, rr.status FROM reservation_rooms rr
+WHERE rr.tenant_id = @tenant_id AND rr.property_id = @property_id AND rr.reservation_id = @reservation_id AND rr.id = @id;

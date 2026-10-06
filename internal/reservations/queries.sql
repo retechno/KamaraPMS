@@ -155,12 +155,13 @@ SELECT id, reservation_room_id FROM stays
 WHERE property_id = @property_id AND reservation_room_id = ANY(@line_ids::bigint[]) AND status <> 'CANCELLED';
 
 -- name: ListReservationFolios :many
-SELECT f.id, f.folio_number, f.stay_id, f.status,
+SELECT f.id, f.folio_number, f.stay_id, f.status, f.folio_type, f.bill_to_company_id, c.name AS bill_to_company_name,
        COALESCE(sum(i.debit - i.credit), 0)::numeric AS balance
 FROM folios f
 LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+LEFT JOIN companies c ON c.property_id = f.property_id AND c.id = f.bill_to_company_id
 WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.reservation_id = @reservation_id
-GROUP BY f.id
+GROUP BY f.id, c.name
 ORDER BY f.id;
 
 -- Booking facts of a room type used to validate a line.

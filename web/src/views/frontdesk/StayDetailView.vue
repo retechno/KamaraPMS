@@ -122,7 +122,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         </p>
         <p class="mb-0 mt-2 text-sm text-muted-foreground">
           {{ t('stay.reservation') }} <RouterLink :to="`/reservations/${detail.line.reservation_id}`" class="text-primary hover:underline">{{ detail.line.confirmation_number }}</RouterLink>
-          <template v-for="f in detail.folios" :key="f.id"> · {{ t('stay.folio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ t('stay.balance', { amount: $money(f.balance) }) }})</template>
+          <template v-for="f in detail.folios" :key="f.id"> · {{ t('stay.folio') }}<small v-if="f.folio_type === 'COMPANY'" class="text-muted-foreground"> ({{ t('billingInstructions.company') }})</small> <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ t('stay.balance', { amount: $money(f.balance) }) }})</template>
         </p>
         <p v-if="detail.guests.length" class="mb-0 mt-2 text-sm text-muted-foreground" data-testid="companions">{{ t('stay.with', { names: detail.guests.map((g) => `${g.first_name ?? ''} ${g.last_name}`.trim()).join(', ') }) }}</p>
         <div class="mt-4 flex flex-wrap justify-end gap-2">

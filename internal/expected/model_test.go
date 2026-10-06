@@ -21,7 +21,7 @@ func base() Snapshot {
 			{ReservationRoomID: 10, Date: d("2026-09-30"), ChargeCodeID: 5, ChargeCode: "ROOM", ChargeCodeActive: true, ChargeCodeIsRoom: true, PriceMode: "EXCLUSIVE", Amount: decimal.NewFromInt(1000000)},
 			{ReservationRoomID: 10, Date: d("2026-10-01"), ChargeCodeID: 5, ChargeCode: "ROOM", ChargeCodeActive: true, ChargeCodeIsRoom: true, PriceMode: "EXCLUSIVE", Amount: decimal.NewFromInt(1100000)},
 		},
-		Folios: map[int64]int64{1: 77},
+		Folios: map[int64]StayTargets{1: {Default: Target{FolioID: 77}}},
 	}
 }
 
@@ -79,7 +79,7 @@ func TestRule1StayNotActive(t *testing.T) {
 func TestRule2AlreadyPostedWinsOverClosedAndErrors(t *testing.T) {
 	s := base()
 	s.Postings = []Posting{{StayID: 1, ServiceDate: d("2026-09-30"), FolioItemID: 9, StayRoomID: 100}}
-	s.Folios = map[int64]int64{}
+	s.Folios = map[int64]StayTargets{}
 	s.Nights = nil
 	got := Evaluate(s, Scope{UpToDate: d("2026-10-01")})
 	eq(t, got, "ALREADY_POSTED:", "ERROR:MISSING_NIGHTLY_RATE")
@@ -114,7 +114,7 @@ func TestRules4To7Errors(t *testing.T) {
 	eq(t, Evaluate(s, up), "ERROR:INVALID_CHARGE_CODE")
 
 	s = base()
-	s.Folios = map[int64]int64{}
+	s.Folios = map[int64]StayTargets{}
 	got := Evaluate(s, up)
 	eq(t, got, "ERROR:NO_OPEN_FOLIO")
 	if got[0].FolioID != nil {
@@ -122,7 +122,7 @@ func TestRules4To7Errors(t *testing.T) {
 	}
 	// the order: no segment beats a missing rate beats a bad code beats a missing folio
 	s = base()
-	s.Segments, s.Nights, s.Folios = nil, nil, map[int64]int64{}
+	s.Segments, s.Nights, s.Folios = nil, nil, map[int64]StayTargets{}
 	eq(t, Evaluate(s, up), "ERROR:NO_ROOM_FOR_NIGHT")
 	s.Segments = base().Segments
 	eq(t, Evaluate(s, up), "ERROR:MISSING_NIGHTLY_RATE")
@@ -193,5 +193,31 @@ func TestFindInvalid(t *testing.T) {
 	}
 	if got := FindInvalid(s, Scope{StayIDs: []int64{9}}); len(got) != 0 {
 		t.Fatalf("scope: %+v", got)
+	}
+}
+
+// A billing instruction sends a night to a company folio; when that folio is not open the night is a blocker, and it is never sent to the guest folio instead.
+func TestRoutedNightsFollowTheirTarget(t *testing.T) {
+	up := Scope{UpToDate: d("2026-10-01")}
+	s := base()
+	s.Folios = map[int64]StayTargets{1: {Default: Target{FolioID: 88, Routed: true}}}
+	got := Evaluate(s, up)
+	eq(t, got, "READY:", "READY:")
+	if got[0].FolioID == nil || *got[0].FolioID != 88 {
+		t.Fatalf("the night goes to the company folio: %v", got[0].FolioID)
+	}
+
+	s.Folios = map[int64]StayTargets{1: {Default: Target{Routed: true}}}
+	got = Evaluate(s, up)
+	eq(t, got, "ERROR:ROUTING_TARGET_CLOSED", "ERROR:ROUTING_TARGET_CLOSED")
+	if got[0].FolioID != nil {
+		t.Fatal("a closed target is not named")
+	}
+
+	// a charge code named by an instruction wins over the default of the stay
+	s.Folios = map[int64]StayTargets{1: {Default: Target{FolioID: 77}, ByCode: map[int64]Target{5: {FolioID: 99, Routed: true}}}}
+	got = Evaluate(s, up)
+	if *got[0].FolioID != 99 {
+		t.Fatalf("by code: %d", *got[0].FolioID)
 	}
 }

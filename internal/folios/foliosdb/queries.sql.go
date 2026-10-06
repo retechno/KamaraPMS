@@ -188,6 +188,21 @@ func (q *Queries) CountStayChargeItems(ctx context.Context, arg CountStayChargeI
 	return column_1, err
 }
 
+const deleteLineInstructions = `-- name: DeleteLineInstructions :exec
+DELETE FROM folio_billing_instructions WHERE tenant_id = $1 AND property_id = $2 AND reservation_room_id = $3
+`
+
+type DeleteLineInstructionsParams struct {
+	TenantID          int64
+	PropertyID        int64
+	ReservationRoomID int64
+}
+
+func (q *Queries) DeleteLineInstructions(ctx context.Context, arg DeleteLineInstructionsParams) error {
+	_, err := q.db.Exec(ctx, deleteLineInstructions, arg.TenantID, arg.PropertyID, arg.ReservationRoomID)
+	return err
+}
+
 const findUnlinkedOpenFolio = `-- name: FindUnlinkedOpenFolio :one
 SELECT id FROM folios
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3 AND stay_id IS NULL AND status = 'OPEN'
@@ -444,6 +459,36 @@ func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) 
 	return i, err
 }
 
+const getInstructionLine = `-- name: GetInstructionLine :one
+SELECT rr.id, rr.status FROM reservation_rooms rr
+WHERE rr.tenant_id = $1 AND rr.property_id = $2 AND rr.reservation_id = $3 AND rr.id = $4
+`
+
+type GetInstructionLineParams struct {
+	TenantID      int64
+	PropertyID    int64
+	ReservationID int64
+	ID            int64
+}
+
+type GetInstructionLineRow struct {
+	ID     int64
+	Status string
+}
+
+// The line and its reservation (a line of another reservation or property is not found).
+func (q *Queries) GetInstructionLine(ctx context.Context, arg GetInstructionLineParams) (GetInstructionLineRow, error) {
+	row := q.db.QueryRow(ctx, getInstructionLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReservationID,
+		arg.ID,
+	)
+	var i GetInstructionLineRow
+	err := row.Scan(&i.ID, &i.Status)
+	return i, err
+}
+
 const getItemOfPayment = `-- name: GetItemOfPayment :one
 SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND payment_id = $3
 `
@@ -494,6 +539,29 @@ func (q *Queries) GetItemOfPayment(ctx context.Context, arg GetItemOfPaymentPara
 		&i.RevenueAccountCode,
 		&i.DepartmentID,
 	)
+	return i, err
+}
+
+const getLineStay = `-- name: GetLineStay :one
+SELECT id, status FROM stays WHERE tenant_id = $1 AND property_id = $2 AND reservation_room_id = $3
+`
+
+type GetLineStayParams struct {
+	TenantID          int64
+	PropertyID        int64
+	ReservationRoomID int64
+}
+
+type GetLineStayRow struct {
+	ID     int64
+	Status string
+}
+
+// The stay of a reservation line, if the guest has checked in.
+func (q *Queries) GetLineStay(ctx context.Context, arg GetLineStayParams) (GetLineStayRow, error) {
+	row := q.db.QueryRow(ctx, getLineStay, arg.TenantID, arg.PropertyID, arg.ReservationRoomID)
+	var i GetLineStayRow
+	err := row.Scan(&i.ID, &i.Status)
 	return i, err
 }
 
@@ -636,6 +704,56 @@ func (q *Queries) GetStayStatus(ctx context.Context, arg GetStayStatusParams) (s
 	var status string
 	err := row.Scan(&status)
 	return status, err
+}
+
+const insertCompanyFolio = `-- name: InsertCompanyFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, 'COMPANY', $6, $7, $7)
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id
+`
+
+type InsertCompanyFolioParams struct {
+	TenantID      int64
+	PropertyID    int64
+	FolioNumber   string
+	ReservationID int64
+	StayID        *int64
+	CompanyID     *int64
+	ActorID       *int64
+}
+
+func (q *Queries) InsertCompanyFolio(ctx context.Context, arg InsertCompanyFolioParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, insertCompanyFolio,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioNumber,
+		arg.ReservationID,
+		arg.StayID,
+		arg.CompanyID,
+		arg.ActorID,
+	)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.ClosedOn,
+		&i.BillToCompanyID,
+	)
+	return i, err
 }
 
 const insertFolio = `-- name: InsertFolio :one
@@ -879,6 +997,34 @@ func (q *Queries) InsertFolioItemComponent(ctx context.Context, arg InsertFolioI
 		arg.BaseAmount,
 		arg.Amount,
 		arg.Sequence,
+	)
+	return err
+}
+
+const insertInstruction = `-- name: InsertInstruction :exec
+INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+`
+
+type InsertInstructionParams struct {
+	TenantID          int64
+	PropertyID        int64
+	ReservationRoomID int64
+	Scope             string
+	ChargeCodeID      *int64
+	CompanyID         int64
+	ActorID           *int64
+}
+
+func (q *Queries) InsertInstruction(ctx context.Context, arg InsertInstructionParams) error {
+	_, err := q.db.Exec(ctx, insertInstruction,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ReservationRoomID,
+		arg.Scope,
+		arg.ChargeCodeID,
+		arg.CompanyID,
+		arg.ActorID,
 	)
 	return err
 }
@@ -1293,6 +1439,62 @@ func (q *Queries) ListItemComponents(ctx context.Context, arg ListItemComponents
 	return items, nil
 }
 
+const listLineInstructions = `-- name: ListLineInstructions :many
+
+SELECT i.id, i.scope, i.charge_code_id, i.company_id, c.name AS company_name, cc.code AS charge_code, cc.name AS charge_code_name
+FROM folio_billing_instructions i
+JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+LEFT JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.reservation_room_id = $3
+ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id
+`
+
+type ListLineInstructionsParams struct {
+	TenantID          int64
+	PropertyID        int64
+	ReservationRoomID int64
+}
+
+type ListLineInstructionsRow struct {
+	ID             int64
+	Scope          string
+	ChargeCodeID   *int64
+	CompanyID      int64
+	CompanyName    string
+	ChargeCode     *string
+	ChargeCodeName *string
+}
+
+// ---------------------------------------------------------------------------
+// Billing instructions and company folios (docs/architecture/18-architecture-decisions.md section 3)
+func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstructionsParams) ([]ListLineInstructionsRow, error) {
+	rows, err := q.db.Query(ctx, listLineInstructions, arg.TenantID, arg.PropertyID, arg.ReservationRoomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLineInstructionsRow{}
+	for rows.Next() {
+		var i ListLineInstructionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Scope,
+			&i.ChargeCodeID,
+			&i.CompanyID,
+			&i.CompanyName,
+			&i.ChargeCode,
+			&i.ChargeCodeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPayments = `-- name: ListPayments :many
 SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments
 WHERE tenant_id = $1 AND property_id = $2 AND id < $3::bigint
@@ -1444,6 +1646,90 @@ func (q *Queries) ListStayGuestFolios(ctx context.Context, arg ListStayGuestFoli
 	for rows.Next() {
 		var i ListStayGuestFoliosRow
 		if err := rows.Scan(&i.ID, &i.StayID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStayInstructions = `-- name: ListStayInstructions :many
+SELECT s.id AS stay_id, i.scope, i.charge_code_id, i.company_id
+FROM stays s
+JOIN folio_billing_instructions i ON i.property_id = s.property_id AND i.reservation_room_id = s.reservation_room_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = ANY($3::bigint[])
+`
+
+type ListStayInstructionsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+}
+
+type ListStayInstructionsRow struct {
+	StayID       int64
+	Scope        string
+	ChargeCodeID *int64
+	CompanyID    int64
+}
+
+// The instructions of the lines of many stays (the resolver).
+func (q *Queries) ListStayInstructions(ctx context.Context, arg ListStayInstructionsParams) ([]ListStayInstructionsRow, error) {
+	rows, err := q.db.Query(ctx, listStayInstructions, arg.TenantID, arg.PropertyID, arg.StayIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStayInstructionsRow{}
+	for rows.Next() {
+		var i ListStayInstructionsRow
+		if err := rows.Scan(
+			&i.StayID,
+			&i.Scope,
+			&i.ChargeCodeID,
+			&i.CompanyID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStayOpenCompanyFolios = `-- name: ListStayOpenCompanyFolios :many
+SELECT id, stay_id, bill_to_company_id FROM folios
+WHERE tenant_id = $1 AND property_id = $2 AND stay_id = ANY($3::bigint[]) AND status = 'OPEN' AND folio_type = 'COMPANY'
+`
+
+type ListStayOpenCompanyFoliosParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+}
+
+type ListStayOpenCompanyFoliosRow struct {
+	ID              int64
+	StayID          *int64
+	BillToCompanyID *int64
+}
+
+// The OPEN company folios of many stays.
+func (q *Queries) ListStayOpenCompanyFolios(ctx context.Context, arg ListStayOpenCompanyFoliosParams) ([]ListStayOpenCompanyFoliosRow, error) {
+	rows, err := q.db.Query(ctx, listStayOpenCompanyFolios, arg.TenantID, arg.PropertyID, arg.StayIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStayOpenCompanyFoliosRow{}
+	for rows.Next() {
+		var i ListStayOpenCompanyFoliosRow
+		if err := rows.Scan(&i.ID, &i.StayID, &i.BillToCompanyID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

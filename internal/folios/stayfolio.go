@@ -44,7 +44,7 @@ func (s *Service) LockUnlinkedFolio(ctx context.Context, tenantID, propertyID, r
 }
 
 // AttachStayFolio gives the stay its guest folio: the folio locked by LockUnlinkedFolio (a deposit folio) is
-// linked to the stay; without one (lockedID 0) a new folio is created, numbered from the sequence.
+// linked to the stay; without one (lockedID 0) a new folio is created, numbered from the sequence. It also opens the company folios the instructions of the line name.
 func (s *Service) AttachStayFolio(ctx context.Context, p auth.Principal, propertyID, reservationID, stayID, lockedID int64) (StayFolio, error) {
 	q := s.q(ctx)
 	var f foliosdb.Folio
@@ -59,6 +59,10 @@ func (s *Service) AttachStayFolio(ctx context.Context, p auth.Principal, propert
 		f, err = q.InsertFolio(ctx, foliosdb.InsertFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: reservationID, StayID: &stayID, ActorID: p.ActorID()})
 	}
 	if err != nil {
+		return StayFolio{}, err
+	}
+	// the company folios the line's billing instructions need are opened now, with the guest folio, before any posting run takes its locks
+	if _, err := s.ensureCompanyFolios(ctx, p, propertyID, reservationID, stayID); err != nil {
 		return StayFolio{}, err
 	}
 	return s.stayFolio(ctx, propertyID, f)

@@ -32,6 +32,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))
 	mux.Handle("POST "+p+"/payments/{id}/refunds", httpx.HandlerFunc(h.refund))
 	mux.Handle("POST "+p+"/reservations/{id}/deposits", httpx.HandlerFunc(h.deposit))
+	mux.Handle("GET "+p+"/reservations/{id}/rooms/{lineId}/billing-instructions", httpx.HandlerFunc(h.getInstructions))
+	mux.Handle("PUT "+p+"/reservations/{id}/rooms/{lineId}/billing-instructions", httpx.HandlerFunc(h.putInstructions))
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -343,4 +345,47 @@ func (h *Handler) transfer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func lineIDs(r *http.Request) (propertyID, reservationID, lineID int64, err error) {
+	if propertyID, reservationID, err = ids(r); err != nil {
+		return 0, 0, 0, err
+	}
+	lineID, err = strconv.ParseInt(r.PathValue("lineId"), 10, 64)
+	if err != nil || lineID < 1 {
+		return 0, 0, 0, apperr.NotFound("NOT_FOUND", "no such resource")
+	}
+	return propertyID, reservationID, lineID, nil
+}
+
+func (h *Handler) getInstructions(w http.ResponseWriter, r *http.Request) error {
+	pid, res, line, err := lineIDs(r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.GetBillingInstructions(r.Context(), pid, res, line)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) putInstructions(w http.ResponseWriter, r *http.Request) error {
+	pid, res, line, err := lineIDs(r)
+	if err != nil {
+		return err
+	}
+	var in setInstructionsRequest
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.SetBillingInstructions(r.Context(), pid, res, line, in.Instructions)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+type setInstructionsRequest struct {
+	Instructions []InstructionInput `json:"instructions"`
 }

@@ -12,6 +12,7 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -106,9 +107,11 @@ async function loadCompanies(propertyId: number): Promise<void> {
   if (!can('cityledger.transfer') || folio.value?.status !== 'OPEN') return
   try {
     const all = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/companies', { params: { path: { propertyId }, query: { limit: 200, cursor, active: true } } }))
-    companies.value = all
+    // a folio billed to a company can only be transferred to that company
+    const payer = folio.value?.bill_to_company_id ?? null
+    companies.value = payer === null ? all : all.filter((c) => c.id === payer)
     companiesDenied.value = false
-    transfer.companyId ||= all[0]?.id ?? 0
+    transfer.companyId = payer ?? (transfer.companyId || (all[0]?.id ?? 0))
   } catch (e) {
     companies.value = []
     companiesDenied.value = e instanceof ApiError && e.status === 403
@@ -293,6 +296,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <PageHeader :title="`${t('folio.title')}${folio ? ` ${folio.folio_number}` : ''}`">
     <template v-if="folio" #marks>
       <StatusBadge domain="record" :status="folio.status" data-testid="folio-status" />
+      <Badge v-if="folio.bill_to_company_name" variant="outline" data-testid="folio-company">{{ t('billingInstructions.folioFor', { company: folio.bill_to_company_name }) }}</Badge>
     </template>
     <template #actions>
       <Button v-if="folio" as-child variant="outline" size="sm">

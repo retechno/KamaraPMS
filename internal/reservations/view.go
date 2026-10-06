@@ -191,7 +191,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	out.ArrivalDate, out.DepartureDate = arrival, departure
 	out.DisplayStatus = DisplayStatus(res.Status, statuses)
 	for _, f := range folioRows {
-		out.Folios = append(out.Folios, FolioBrief{ID: f.ID, FolioNumber: f.FolioNumber, StayID: f.StayID, Status: f.Status, Balance: f.Balance})
+		out.Folios = append(out.Folios, FolioBrief{ID: f.ID, FolioNumber: f.FolioNumber, StayID: f.StayID, Status: f.Status, Balance: f.Balance, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, BillToCompanyName: deref(f.BillToCompanyName)})
 	}
 	return out, nil
 }

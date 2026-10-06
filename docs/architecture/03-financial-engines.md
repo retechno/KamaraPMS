@@ -187,7 +187,7 @@ The rules are evaluated **in order**, and the first match wins:
 | 4 | No stay segment covers N (`start_bd ≤ N < COALESCE(end_bd, ∞)`) | ERROR | `NO_ROOM_FOR_NIGHT` |
 | 5 | No `reservation_room_rates` row for N | ERROR | `MISSING_NIGHTLY_RATE` |
 | 6 | The nightly row's charge code is inactive, or its `charge_type ≠ ROOM` | ERROR | `INVALID_CHARGE_CODE` |
-| 7 | The stay has no OPEN GUEST folio | ERROR | `NO_OPEN_FOLIO` |
+| 7 | The target folio is missing: no OPEN GUEST folio (default routing), or a billing instruction sends the night to a company folio that is closed (`folios.ResolveTarget`) | ERROR | `NO_OPEN_FOLIO`, or `ROUTING_TARGET_CLOSED` for a routed night (never a fallback to the guest folio) |
 | 8 | otherwise | **READY** | none |
 
 The applicable **room** is the segment from rule 4 (the room-move rule, §38). The **rate, rate plan, charge code and price mode** all come from the **nightly snapshot row**, not from the current rate plan (§27).

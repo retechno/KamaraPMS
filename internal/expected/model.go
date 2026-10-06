@@ -27,7 +27,21 @@ const (
 	ReasonMissingNightlyRate = "MISSING_NIGHTLY_RATE"
 	ReasonInvalidChargeCode  = "INVALID_CHARGE_CODE"
 	ReasonNoOpenFolio        = "NO_OPEN_FOLIO"
+	// ReasonRoutingTargetClosed: a billing instruction sends the night to a company folio that is closed or missing. It is a blocker, never a fallback to the guest folio.
+	ReasonRoutingTargetClosed = "ROUTING_TARGET_CLOSED"
 )
+
+// Target is the folio a charge goes to as the resolver decided it. FolioID is 0 when there is none open; Routed says a billing instruction chose it (and not the default guest folio).
+type Target struct {
+	FolioID int64
+	Routed  bool
+}
+
+// StayTargets is what the resolver says about the room nights of a stay: Default for any night, ByCode for a night whose charge code a billing instruction names.
+type StayTargets struct {
+	Default Target
+	ByCode  map[int64]Target
+}
 
 // SourceRoomNight is the only charge source of the MVP.
 const SourceRoomNight = "ROOM_NIGHT"
@@ -85,7 +99,7 @@ type Snapshot struct {
 	Segments []Segment
 	Nights   []Night
 	Postings []Posting
-	Folios   map[int64]int64 // stay id -> the open folio its room nights go to (decided by the folio resolver)
+	Folios   map[int64]StayTargets // stay id -> where its room nights go (decided by the folio resolver)
 }
 
 // Scope limits the evaluation. StayIDs empty means every stay in the snapshot. UpToDate is the last night
@@ -166,12 +180,17 @@ func Evaluate(snap Snapshot, scope Scope) []Charge {
 			if hasSeg {
 				c.StayRoomID, c.RoomNumber = seg.ID, seg.RoomNumber
 			}
-			folio, hasFolio := snap.Folios[s.ID]
-			if hasFolio {
-				c.FolioID = &folio
-			}
 			item, isPosted := posted[s.ID][n]
 			night, hasNight := nights[s.ReservationRoomID][n]
+			target := snap.Folios[s.ID].Default
+			if t, ok := snap.Folios[s.ID].ByCode[night.ChargeCodeID]; ok && hasNight {
+				target = t
+			}
+			hasFolio := target.FolioID != 0
+			if hasFolio {
+				folio := target.FolioID
+				c.FolioID = &folio
+			}
 			if hasNight {
 				c.ChargeCodeID, c.ChargeCode, c.RatePlanID, c.PriceMode, c.UnitPrice = night.ChargeCodeID, night.ChargeCode, night.RatePlanID, night.PriceMode, night.Amount
 			}
@@ -188,6 +207,8 @@ func Evaluate(snap Snapshot, scope Scope) []Charge {
 				c.Status, c.Reason = StatusError, ReasonMissingNightlyRate
 			case !night.ChargeCodeActive || !night.ChargeCodeIsRoom:
 				c.Status, c.Reason = StatusError, ReasonInvalidChargeCode
+			case !hasFolio && target.Routed:
+				c.Status, c.Reason = StatusError, ReasonRoutingTargetClosed
 			case !hasFolio:
 				c.Status, c.Reason = StatusError, ReasonNoOpenFolio
 			default:

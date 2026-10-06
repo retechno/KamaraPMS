@@ -469,3 +469,26 @@ func TestSummaryCarriesTheCityLedgerAndKeepsTransfersOutOfTheTill(t *testing.T) 
 		t.Fatalf("by method: %+v", s.PaymentsByMethod)
 	}
 }
+
+// A night routed to a company folio that has been closed blocks the night audit, and the guest folio is not charged instead.
+func TestAClosedCompanyFolioBlocksTheNightAudit(t *testing.T) {
+	f := setup(t)
+	var company int64
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES ($1, $2, 'ACME', 'Acme', 100000000) RETURNING id`, f.tenantID, f.propID).Scan(&company))
+	res := f.book(t, f.dlx, "2026-09-30", "2026-10-03")
+	_, err := f.Folios.SetBillingInstructions(f.admin, f.propID, res.ID, res.Rooms[0].ID, []folios.InstructionInput{{Scope: folios.ScopeRoom, CompanyID: company}})
+	must(t, err)
+	st, err := f.Front.CheckIn(f.admin, f.propID, res.ID, res.Rooms[0].ID, "", frontdesk.CheckInInput{Version: res.Version, RoomID: &f.r101.ID, GuestID: f.guest, AdultCount: 2})
+	must(t, err)
+	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE stay_id = $1 AND folio_type = 'COMPANY'`, st.Stay.ID))
+
+	_, err = f.run(t)
+	e := code(t, err, "NIGHT_AUDIT_BLOCKED")
+	b, ok := e.Context["blockers"].(nightaudit.Blockers)
+	if !ok || len(b.ChargeErrors) != 1 || b.ChargeErrors[0].Reason != "ROUTING_TARGET_CLOSED" || b.ChargeErrors[0].StayID != st.Stay.ID {
+		t.Fatalf("blockers: %+v", e.Context)
+	}
+	if f.charges(t) != 0 || f.bd(t) != roomstest.BD {
+		t.Fatal("a blocked run leaves nothing behind, and nothing is charged to the guest folio")
+	}
+}

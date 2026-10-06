@@ -1783,6 +1783,49 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/billing-instructions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/LineId"
+    get:
+      operationId: getBillingInstructions
+      summary: Who pays what on a room of a reservation (reservation.read)
+      tags: [folios]
+      responses:
+        "200":
+          description: The instructions of the room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingInstructions" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setBillingInstructions
+      summary: Replace the billing instructions of a room (reservation.update)
+      description: |
+        An instruction names a company and what it pays: the room (every charge of a ROOM charge code), one charge code, or everything
+        not named by a more specific instruction. A charge goes to the first that applies, in that order, and to the guest folio when none does.
+        The set is replaced as a whole and applies from the next night not yet posted. For a guest in house the company folios are opened
+        at once (the folio of a stay for each company); at check-in they are opened with the guest folio. A night routed to a company folio
+        that is closed is not posted to the guest folio instead: the night audit reports it as `ROUTING_TARGET_CLOSED`.
+        A room that is over (checked out, cancelled, no-show) is 409 `INSTRUCTION_LINE_CLOSED`.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetBillingInstructionsRequest" }
+      responses:
+        "200":
+          description: The instructions after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingInstructions" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8884,13 +8927,16 @@ components:
         estimate: { $ref: "#/components/schemas/Estimate" }
     ReservationFolio:
       type: object
-      required: [id, folio_number, stay_id, status, balance]
+      required: [id, folio_number, stay_id, status, balance, folio_type, bill_to_company_id]
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         stay_id: { type: [integer, "null"], format: int64 }
         status: { type: string, enum: [OPEN, CLOSED] }
         balance: { type: string, description: Debits minus credits. }
+        folio_type: { type: string, enum: [GUEST, COMPANY] }
+        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
+        bill_to_company_name: { type: string, description: "The name of that company (absent on a guest folio)." }
     Reservation:
       type: object
       required: [id, confirmation_number, guest_id, reservation_date, source, status, display_status, arrival_date, departure_date, version, rooms, folios, created_at]
@@ -9606,7 +9652,7 @@ components:
         rounding_adjustment: { type: string }
         total: { type: string }
         status: { $ref: "#/components/schemas/RoomChargeStatus" }
-        reason: { type: string, description: "For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE or NO_OPEN_FOLIO." }
+        reason: { type: string, description: "For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE, NO_OPEN_FOLIO or ROUTING_TARGET_CLOSED (a billing instruction sends the night to a company folio that is closed or missing)." }
         folio_item_id: { type: [integer, "null"], format: int64 }
     RoomChargePreview:
       type: object
@@ -11011,6 +11057,37 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/GroupMember" }
+    BillingInstruction:
+      type: object
+      required: [scope, charge_code_id, company_id, company_name]
+      properties:
+        scope: { type: string, enum: [ALL, ROOM, CHARGE_CODE] }
+        charge_code_id: { type: [integer, "null"], format: int64 }
+        charge_code: { type: string }
+        charge_code_name: { type: string }
+        company_id: { type: integer, format: int64 }
+        company_name: { type: string }
+    BillingInstructions:
+      type: object
+      required: [instructions]
+      properties:
+        instructions:
+          type: array
+          items: { $ref: "#/components/schemas/BillingInstruction" }
+    BillingInstructionInput:
+      type: object
+      required: [scope, company_id]
+      properties:
+        scope: { type: string, enum: [ALL, ROOM, CHARGE_CODE] }
+        charge_code_id: { type: [integer, "null"], format: int64, description: "Required for CHARGE_CODE, not allowed otherwise." }
+        company_id: { type: integer, format: int64 }
+    SetBillingInstructionsRequest:
+      type: object
+      required: [instructions]
+      properties:
+        instructions:
+          type: array
+          items: { $ref: "#/components/schemas/BillingInstructionInput" }
     TransferRequest:
       type: object
       required: [company_id, amount]

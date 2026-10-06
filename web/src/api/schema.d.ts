@@ -1366,6 +1366,36 @@ export interface paths {
         patch: operations["updateReservationRoom"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/billing-instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        /** Who pays what on a room of a reservation (reservation.read) */
+        get: operations["getBillingInstructions"];
+        /**
+         * Replace the billing instructions of a room (reservation.update)
+         * @description An instruction names a company and what it pays: the room (every charge of a ROOM charge code), one charge code, or everything
+         *     not named by a more specific instruction. A charge goes to the first that applies, in that order, and to the guest folio when none does.
+         *     The set is replaced as a whole and applies from the next night not yet posted. For a guest in house the company folios are opened
+         *     at once (the folio of a stay for each company); at check-in they are opened with the guest folio. A night routed to a company folio
+         *     that is closed is not posted to the guest folio instead: the night audit reports it as `ROUTING_TARGET_CLOSED`.
+         *     A room that is over (checked out, cancelled, no-show) is 409 `INSTRUCTION_LINE_CLOSED`.
+         */
+        put: operations["setBillingInstructions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel": {
         parameters: {
             query?: never;
@@ -7923,6 +7953,15 @@ export interface components {
             status: "OPEN" | "CLOSED";
             /** @description Debits minus credits. */
             balance: string;
+            /** @enum {string} */
+            folio_type: "GUEST" | "COMPANY";
+            /**
+             * Format: int64
+             * @description The company a COMPANY folio is billed to; null on a guest folio.
+             */
+            bill_to_company_id: number | null;
+            /** @description The name of that company (absent on a guest folio). */
+            bill_to_company_name?: string;
         };
         Reservation: {
             /** Format: int64 */
@@ -8647,7 +8686,7 @@ export interface components {
             rounding_adjustment: string;
             total: string;
             status: components["schemas"]["RoomChargeStatus"];
-            /** @description For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE or NO_OPEN_FOLIO. */
+            /** @description For NOT_APPLICABLE and ERROR: STAY_NOT_ACTIVE, STAY_CLOSED, NO_ROOM_FOR_NIGHT, MISSING_NIGHTLY_RATE, INVALID_CHARGE_CODE, NO_OPEN_FOLIO or ROUTING_TARGET_CLOSED (a billing instruction sends the night to a company folio that is closed or missing). */
             reason?: string;
             /** Format: int64 */
             folio_item_id: number | null;
@@ -9964,6 +10003,34 @@ export interface components {
         };
         GroupMemberList: {
             data: components["schemas"]["GroupMember"][];
+        };
+        BillingInstruction: {
+            /** @enum {string} */
+            scope: "ALL" | "ROOM" | "CHARGE_CODE";
+            /** Format: int64 */
+            charge_code_id: number | null;
+            charge_code?: string;
+            charge_code_name?: string;
+            /** Format: int64 */
+            company_id: number;
+            company_name: string;
+        };
+        BillingInstructions: {
+            instructions: components["schemas"]["BillingInstruction"][];
+        };
+        BillingInstructionInput: {
+            /** @enum {string} */
+            scope: "ALL" | "ROOM" | "CHARGE_CODE";
+            /**
+             * Format: int64
+             * @description Required for CHARGE_CODE, not allowed otherwise.
+             */
+            charge_code_id?: number | null;
+            /** Format: int64 */
+            company_id: number;
+        };
+        SetBillingInstructionsRequest: {
+            instructions: components["schemas"]["BillingInstructionInput"][];
         };
         TransferRequest: {
             /** Format: int64 */
@@ -14691,6 +14758,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Reservation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBillingInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The instructions of the room. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInstructions"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setBillingInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBillingInstructionsRequest"];
+            };
+        };
+        responses: {
+            /** @description The instructions after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInstructions"];
                 };
             };
             403: components["responses"]["Problem"];

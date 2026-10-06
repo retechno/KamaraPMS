@@ -25,6 +25,8 @@ func setupPayer(t *testing.T) *payerFx {
 	var typeID, roomID int64
 	must(t, f.Pool.QueryRow(context.Background(), `SELECT room_type_id, id FROM rooms WHERE property_id = $1 AND room_number = '101'`, f.propID).Scan(&typeID, &roomID))
 	stay := f.Stay(t, f.tenantID, f.propID, typeID, roomID, "2026-10-01", "2026-10-03")
+	// the reservation of the stay's line (the folio fixture has a reservation of its own)
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT rr.reservation_id FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $1`, stay).Scan(&f.reservation))
 	px := &payerFx{fx: f, stay: stay, principal: p}
 	must(t, f.TxM.WithinTx(f.admin, func(ctx context.Context) error {
 		sf, err := f.Folios.AttachStayFolio(ctx, p, f.propID, f.reservation, stay, 0)
@@ -45,21 +47,21 @@ func (p *payerFx) companyFolio(t *testing.T, number string) int64 {
 
 func TestResolveTargetIsTheGuestFolio(t *testing.T) {
 	p := setupPayer(t)
-	id, ok, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
+	got, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
 	must(t, err)
-	if !ok || id != p.guestFolio {
-		t.Fatalf("target %d ok=%v, want guest folio %d", id, ok, p.guestFolio)
+	if got.FolioID != p.guestFolio || got.Routed {
+		t.Fatalf("target %+v, want guest folio %d", got, p.guestFolio)
 	}
 	// a company folio does not change the default routing
 	p.companyFolio(t, "FC1")
-	id, ok, err = p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.Route{ChargeCodeID: p.minibar})
+	got, err = p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.Route{ChargeCodeID: p.minibar})
 	must(t, err)
-	if !ok || id != p.guestFolio {
-		t.Fatalf("with a company folio: target %d ok=%v, want %d", id, ok, p.guestFolio)
+	if got.FolioID != p.guestFolio {
+		t.Fatalf("with a company folio: target %+v, want %d", got, p.guestFolio)
 	}
 	m, err := p.Folios.ResolveRoomTargets(p.admin, p.tenantID, p.propID, []int64{p.stay, 999999})
 	must(t, err)
-	if len(m) != 1 || m[p.stay] != p.guestFolio {
+	if len(m) != 2 || m[p.stay].Default.FolioID != p.guestFolio || m[999999].Default.FolioID != 0 {
 		t.Fatalf("batch: %v", m)
 	}
 }
@@ -67,9 +69,9 @@ func TestResolveTargetIsTheGuestFolio(t *testing.T) {
 func TestResolveTargetWithoutAnOpenFolio(t *testing.T) {
 	p := setupPayer(t)
 	must(t, p.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, p.guestFolio))
-	_, ok, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
+	got, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
 	must(t, err)
-	if ok {
+	if got.FolioID != 0 {
 		t.Fatal("a closed guest folio must not be a target")
 	}
 }
@@ -149,10 +151,10 @@ func TestMigration00060OverData(t *testing.T) {
 	if typ != "GUEST" || payer != nil {
 		t.Fatalf("existing folio after the round trip: %s %v", typ, payer)
 	}
-	id, ok, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
+	got, err := p.Folios.ResolveTarget(p.admin, p.tenantID, p.propID, p.stay, folios.RoomRoute)
 	must(t, err)
-	if !ok || id != p.guestFolio {
-		t.Fatalf("resolve after the round trip: %d %v", id, ok)
+	if got.FolioID != p.guestFolio {
+		t.Fatalf("resolve after the round trip: %+v", got)
 	}
 
 	cf := p.companyFolio(t, "FC1")

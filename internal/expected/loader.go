@@ -9,7 +9,7 @@ import (
 
 // FolioResolver decides the folio each room night goes to (folios.Service.ResolveRoomTargets): the only place that decides a target folio, so the evaluator does not.
 type FolioResolver interface {
-	ResolveRoomTargets(ctx context.Context, tenantID, propertyID int64, stayIDs []int64) (map[int64]int64, error)
+	ResolveRoomTargets(ctx context.Context, tenantID, propertyID int64, stayIDs []int64) (map[int64]StayTargets, error)
 }
 
 // Loader reads the snapshot the evaluator works on. It only reads, so it runs with or without locks: the

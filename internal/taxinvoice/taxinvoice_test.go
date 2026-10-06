@@ -585,3 +585,25 @@ func TestACreditNoteWithoutVATLeavesTheTaxInvoiceBe(t *testing.T) {
 		Lines: []cityledger.CreditNoteLineInput{{Description: "Goodwill", AccountID: allowance, NetAmount: "1000"}}})
 	must(t, err)
 }
+
+// A folio billed to a company has the company as its buyer (name, tax number, address), whatever buyer the request carries.
+func TestACompanyFolioHasTheCompanyAsBuyer(t *testing.T) {
+	f := setup(t, true)
+	_, stay := f.stayFolio(t, f.minibar, "1000") // the stay's guest folio (no VAT) so the stay has a room
+	var res, folio int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT l.reservation_id FROM stays s JOIN reservation_rooms l ON l.id = s.reservation_room_id WHERE s.id = $1`, stay).Scan(&res))
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES ($1, $2, 'CF1', $3, $4, 'COMPANY', $5) RETURNING id`,
+		f.tenantID, f.propID, res, stay, f.acme.ID).Scan(&folio))
+	_, err := f.Folios.PostCharge(f.admin, f.propID, folio, "cc1", folios.ChargeInput{ChargeCodeID: f.restaurant, Quantity: "1", UnitPrice: ptr("300000")})
+	must(t, err)
+	f.checkOut(t, stay)
+	f.closeFolio(t, folio)
+	// the request names someone else: the company is the buyer all the same
+	inv, err := f.TaxInvoice.Issue(f.admin, f.propID, taxinvoice.IssueInput{SourceType: taxinvoice.SourceFolio, FolioID: folio,
+		Buyer: &taxinvoice.Party{Name: "Somebody Else", NPWP: "3171012345678901"}}, "k1")
+	must(t, err)
+	if inv.Buyer.Name != "ACME Ltd" || inv.Buyer.NPWP != "023456789012000" || inv.Buyer.Address != "Jl. Mawar 2, Jakarta" {
+		t.Fatalf("buyer: %+v", inv.Buyer)
+	}
+	eq(t, "VAT", inv.VATAmount, "30000")
+}

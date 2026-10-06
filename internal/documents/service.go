@@ -155,6 +155,14 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 		Booking: res.ConfirmationNumber, Arrival: res.ArrivalDate, Departure: res.DepartureDate,
 		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)),
 	}
+	if f.BillToCompanyID != nil {
+		// a folio billed to a company: the company is the party of the invoice (its record when this user may read it, else its name)
+		bt := Party{Name: f.BillToCompanyName}
+		if co, err := s.cos.Get(ctx, propertyID, *f.BillToCompanyID); err == nil {
+			bt.Name, bt.Address, bt.City, bt.Email, bt.Phone = co.Name, co.Address, co.City, co.Email, co.Phone
+		}
+		d.BillTo = &bt
+	}
 	if f.StayID != nil {
 		if st, err := s.front.GetStay(ctx, propertyID, *f.StayID); err == nil {
 			d.Stay, d.Arrival, d.Departure = st.Stay.StayNumber, st.Stay.ArrivalDate, st.Stay.DepartureDate

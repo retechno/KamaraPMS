@@ -230,3 +230,29 @@ func TestCompanyStatement(t *testing.T) {
 	_, err = f.Docs.CompanyStatement(f.admin, f.propID, 99999, nil, nil)
 	wantCode(t, err, "COMPANY_NOT_FOUND")
 }
+
+// The invoice of a folio billed to a company is addressed to the company; the guest who stayed is still named.
+func TestInvoiceOfACompanyFolioIsAddressedToTheCompany(t *testing.T) {
+	f := setup(t)
+	co, err := f.Companies.Create(f.admin, f.propID, companies.Input{Code: "ACME", Name: "ACME Ltd", Address: "Jl. Kenanga 9", City: "Surabaya", PaymentTermsDays: 30, IsActive: true})
+	must(t, err)
+	var folio int64
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES ($1, $2, 'CF1', $3, $4, 'COMPANY', $5) RETURNING id`,
+		f.tenantID, f.propID, f.reservation.ID, f.stay.Stay.ID, co.ID).Scan(&folio))
+	_, err = f.Folios.PostCharge(f.admin, f.propID, folio, "cc1", folios.ChargeInput{ChargeCodeID: f.minibar, Quantity: "1", UnitPrice: ptr("200000")})
+	must(t, err)
+	doc, err := f.Docs.Invoice(f.admin, f.propID, folio)
+	must(t, err)
+	s := pdfText(t, doc)
+	for _, want := range []string{"Bill to", "ACME Ltd", "Jl. Kenanga 9, Surabaya", "Siti Nurhaliza", "CF1"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("company invoice lacks %q", want)
+		}
+	}
+	// the guest folio is still addressed to the guest
+	guest, err := f.Docs.Invoice(f.admin, f.propID, f.stay.Folio.ID)
+	must(t, err)
+	if strings.Contains(pdfText(t, guest), "Bill to") {
+		t.Error("a guest folio has no bill-to party")
+	}
+}

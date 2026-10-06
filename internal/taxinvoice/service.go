@@ -212,7 +212,10 @@ func (s *Service) prepare(ctx context.Context, tenantID, propertyID int64, in Is
 			return Preview{}, err
 		}
 		pv.SourceRef = row.FolioNumber
-		if in.Buyer != nil {
+		switch {
+		case row.BillToCompanyID != nil: // a company folio: the company is the buyer, whatever the request says
+			pv.Buyer = Party{Name: deref(row.CompanyName), NPWP: deref(row.CompanyTaxID), Address: joinAddress(deref(row.CompanyAddress), deref(row.CompanyCity))}
+		case in.Buyer != nil:
 			pv.Buyer = *in.Buyer
 		}
 		if row.Status != "CLOSED" {

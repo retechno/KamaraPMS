@@ -7,6 +7,7 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Approval, BedType, CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import BillingInstructions from '@/components/BillingInstructions.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -370,6 +371,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </div>
           </div>
 
+          <BillingInstructions v-if="['DRAFT', 'CONFIRMED', 'CHECKED_IN'].includes(line.status)" :reservation-id="res.id" :line-id="line.id" :editable="can('reservation.update')" />
+
           <form v-if="assigning && assigning.lineId === line.id" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
@@ -428,6 +431,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <ul class="m-0 list-none p-0 text-sm">
             <li v-for="f in res.folios" :key="f.id" class="flex items-center gap-2 py-1">
               <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink>
+              <span v-if="f.bill_to_company_name" class="text-muted-foreground" :data-testid="`folio-company-${f.id}`">· {{ t('billingInstructions.folioFor', { company: f.bill_to_company_name }) }}</span>
               <span class="text-muted-foreground">· {{ t('reservation.folioLine', { status: f.status, balance: $money(f.balance) }) }}</span>
             </li>
           </ul>

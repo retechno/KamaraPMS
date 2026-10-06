@@ -310,6 +310,10 @@ type FolioBrief struct {
 	StayID      *int64          `json:"stay_id"`
 	Status      string          `json:"status"`
 	Balance     decimal.Decimal `json:"balance"`
+	// FolioType is GUEST or COMPANY; a COMPANY folio is billed to BillToCompanyID.
+	FolioType         string `json:"folio_type"`
+	BillToCompanyID   *int64 `json:"bill_to_company_id"`
+	BillToCompanyName string `json:"bill_to_company_name,omitempty"`
 }
 
 // Reservation is the detail view.

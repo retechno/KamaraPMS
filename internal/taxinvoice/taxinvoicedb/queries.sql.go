@@ -157,7 +157,9 @@ func (q *Queries) FolioCharged(ctx context.Context, arg FolioChargedParams) (dec
 }
 
 const folioSource = `-- name: FolioSource :one
-SELECT id, folio_number, status FROM folios WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT f.id, f.folio_number, f.status, f.bill_to_company_id, c.name AS company_name, c.tax_id AS company_tax_id, c.address AS company_address, c.city AS company_city
+FROM folios f LEFT JOIN companies c ON c.property_id = f.property_id AND c.id = f.bill_to_company_id
+WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id = $3
 `
 
 type FolioSourceParams struct {
@@ -167,15 +169,30 @@ type FolioSourceParams struct {
 }
 
 type FolioSourceRow struct {
-	ID          int64
-	FolioNumber string
-	Status      string
+	ID              int64
+	FolioNumber     string
+	Status          string
+	BillToCompanyID *int64
+	CompanyName     *string
+	CompanyTaxID    *string
+	CompanyAddress  *string
+	CompanyCity     *string
 }
 
+// A folio billed to a company (folio_type COMPANY) names it: the company is the buyer of its tax invoice.
 func (q *Queries) FolioSource(ctx context.Context, arg FolioSourceParams) (FolioSourceRow, error) {
 	row := q.db.QueryRow(ctx, folioSource, arg.TenantID, arg.PropertyID, arg.ID)
 	var i FolioSourceRow
-	err := row.Scan(&i.ID, &i.FolioNumber, &i.Status)
+	err := row.Scan(
+		&i.ID,
+		&i.FolioNumber,
+		&i.Status,
+		&i.BillToCompanyID,
+		&i.CompanyName,
+		&i.CompanyTaxID,
+		&i.CompanyAddress,
+		&i.CompanyCity,
+	)
 	return i, err
 }
 

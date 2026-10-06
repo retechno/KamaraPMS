@@ -128,6 +128,7 @@ export type ReservationEmails = Schemas['ReservationEmails']
 export type EmailEntry = Schemas['EmailEntry']
 
 export type Company = Schemas['Company']
+export type BillingInstruction = Schemas['BillingInstruction']
 export type CreateCompanyRequest = Schemas['CreateCompanyRequest']
 export type PatchCompanyRequest = Schemas['PatchCompanyRequest']
 export type Group = Schemas['Group']

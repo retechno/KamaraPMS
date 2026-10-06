@@ -33,6 +33,7 @@ type InvoiceData struct {
 	Number    string
 	Final     bool
 	Guest     Party
+	BillTo    *Party // the company a COMPANY folio is billed to: it is the party of the invoice, and Guest is who stayed
 	Booking   string
 	Stay      string
 	Room      string
@@ -51,11 +52,20 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 	}
 	g := newPage(d.Hotel, d.Lang, title, d.Printed)
 	g.title(title, d.Number)
-	g.pairs([][2]string{
-		{"Guest", d.Guest.Name}, {"Reservation", d.Booking},
-		{"Address", d.Guest.addressLine()}, {"Stay", d.Stay},
-		{"Room", d.Room}, {"Stay dates", g.lang.Date(d.Arrival) + " to " + g.lang.Date(d.Departure)},
-	})
+	if d.BillTo != nil {
+		g.pairs([][2]string{
+			{"Bill to", d.BillTo.Name}, {"Reservation", d.Booking},
+			{"Address", d.BillTo.addressLine()}, {"Stay", d.Stay},
+			{"Guest", d.Guest.Name}, {"Room", d.Room},
+			{"Stay dates", g.lang.Date(d.Arrival) + " to " + g.lang.Date(d.Departure)},
+		})
+	} else {
+		g.pairs([][2]string{
+			{"Guest", d.Guest.Name}, {"Reservation", d.Booking},
+			{"Address", d.Guest.addressLine()}, {"Stay", d.Stay},
+			{"Room", d.Room}, {"Stay dates", g.lang.Date(d.Arrival) + " to " + g.lang.Date(d.Departure)},
+		})
+	}
 	g.section("Charges and payments (" + d.Currency + ")")
 	rows := make([][]string, 0, len(d.Lines))
 	for _, l := range d.Lines {

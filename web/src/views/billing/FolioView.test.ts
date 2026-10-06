@@ -38,7 +38,7 @@ const codes = [
 const companies = [{ id: 21, code: 'ACME', name: 'Acme Corp', is_active: true }]
 const ALL = ['folio.read', 'folio.post_charge', 'folio.adjust', 'folio.reverse', 'payment.post', 'payment.void', 'payment.refund']
 
-function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiError) {
+function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiError, companyList: object[] = companies) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.com', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -47,7 +47,7 @@ function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiE
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/companies') && companiesError) throw companiesError
-    return { data: path.endsWith('/charge-codes') ? { data: codes } : path.endsWith('/companies') ? { data: companies } : f }
+    return { data: path.endsWith('/charge-codes') ? { data: codes } : path.endsWith('/companies') ? { data: companyList } : f }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -258,6 +258,14 @@ describe('FolioView', () => {
     expect(opts.params.header['Idempotency-Key']).toBeTruthy()
     expect(opts.body).toEqual({ company_id: 21, amount: '15000', reference_number: 'PO-7' })
     expect(w.get('[data-testid=notice]').text()).toContain('city ledger')
+  })
+
+  it('names the company of a company folio and offers only that company for the transfer', async () => {
+    const w = mountView(folio({ folio_type: 'COMPANY', bill_to_company_id: 22, bill_to_company_name: 'Other Corp' }), [...ALL, 'cityledger.transfer'], undefined,
+      [...companies, { id: 22, code: 'OTH', name: 'Other Corp', is_active: true }])
+    await flushPromises()
+    expect(w.get('[data-testid=folio-company]').text()).toContain('Other Corp')
+    expect(w.findAll('select[name=transfer_company] option').map((o) => o.text())).toEqual(['OTH · Other Corp'])
   })
 
   it('shows a refused transfer and hides the form from other roles and closed folios', async () => {

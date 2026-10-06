@@ -1674,6 +1674,31 @@ SELECT expect_error('there is still one guest folio per stay', '23505',
     $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'))$q$);
 
 ------------------------------------------------------------------------------------------
+-- Billing instructions of a reservation line (00061)
+------------------------------------------------------------------------------------------
+SELECT expect_ok('an instruction names a company and a scope',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ROOM', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'CHARGE_CODE', cc('ROOM_EXEMPT'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'CHARGE_CODE', cc('LAUNDRY'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('one instruction for each scope of a line', '23505',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('one instruction for each charge code of a line', '23505',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'CHARGE_CODE', cc('ROOM_EXEMPT'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'CHARGE_CODE', cc('ROOM_EXEMPT'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('a charge code instruction names its code', '23514',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'CHARGE_CODE', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('only a charge code instruction names a code', '23514',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, charge_code_id, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ROOM', cc('ROOM_EXEMPT'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('a scope is one of three', '23514',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'EVERYTHING', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('the company of an instruction is one of the property', '23503',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('ABC'), pr('BALI'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('SG') AND code = 'ACME'))$q$);
+SELECT expect_error('the line of an instruction is one of the property', '23503',
+    $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('XYZ'), pr('SG'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('SG') AND code = 'ACME'))$q$);
+
+------------------------------------------------------------------------------------------
 -- Sales restrictions (00059)
 ------------------------------------------------------------------------------------------
 SELECT expect_ok('the four scopes of one date live side by side: the property, a plan, a room type, a room type and a plan',
