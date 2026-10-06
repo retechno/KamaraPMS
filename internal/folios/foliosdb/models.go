@@ -12,23 +12,24 @@ import (
 )
 
 type Folio struct {
-	ID            int64
-	TenantID      int64
-	PropertyID    int64
-	FolioNumber   string
-	ReservationID int64
-	StayID        *int64
-	FolioType     string
-	Status        string
-	OpenedAt      time.Time
-	ClosedAt      *time.Time
-	ClosedBy      *int64
-	Version       int32
-	CreatedAt     time.Time
-	CreatedBy     *int64
-	UpdatedAt     time.Time
-	UpdatedBy     *int64
-	ClosedOn      *civil.Date
+	ID              int64
+	TenantID        int64
+	PropertyID      int64
+	FolioNumber     string
+	ReservationID   int64
+	StayID          *int64
+	FolioType       string
+	Status          string
+	OpenedAt        time.Time
+	ClosedAt        *time.Time
+	ClosedBy        *int64
+	Version         int32
+	CreatedAt       time.Time
+	CreatedBy       *int64
+	UpdatedAt       time.Time
+	UpdatedBy       *int64
+	ClosedOn        *civil.Date
+	BillToCompanyID *int64
 }
 
 type FolioItem struct {

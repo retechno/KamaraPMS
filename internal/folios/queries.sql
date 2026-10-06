@@ -211,9 +211,26 @@ RETURNING *;
 -- name: GetFolioOfStay :one
 SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND folio_type = 'GUEST';
 
+-- The OPEN guest folio of each of the stays: the default target of a charge (see ResolveTarget).
+-- name: ListStayGuestFolios :many
+SELECT id, stay_id FROM folios
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = ANY(@stay_ids::bigint[]) AND status = 'OPEN' AND folio_type = 'GUEST';
+
+-- name: GetCompanyName :one
+SELECT name FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The CHARGE items on every folio of a stay (a check-in cannot be reversed once a night is charged, whatever the folio).
+-- name: CountStayChargeItems :one
+SELECT count(*)::int FROM folio_items i JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id
+WHERE f.property_id = @property_id AND f.stay_id = @stay_id AND i.transaction_type = 'CHARGE';
+
 -- name: CountChargeItems :one
 SELECT count(*)::int FROM folio_items
 WHERE property_id = @property_id AND folio_id = @folio_id AND transaction_type = 'CHARGE';
+
+-- Every folio of a stay (the guest folio first, then the companies).
+-- name: ListStayFolios :many
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id ORDER BY (folio_type = 'GUEST') DESC, id;
 
 -- name: ListStayOpenFolios :many
 SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'OPEN' ORDER BY id;

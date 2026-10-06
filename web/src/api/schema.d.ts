@@ -8205,7 +8205,18 @@ export interface components {
             /** Format: int64 */
             id: number;
             folio_number: string;
-            folio_type: string;
+            /**
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
+             * @enum {string}
+             */
+            folio_type: "GUEST" | "COMPANY";
+            /**
+             * Format: int64
+             * @description The company a COMPANY folio is billed to; null on a guest folio.
+             */
+            bill_to_company_id: number | null;
+            /** @description The name of that company (absent on a guest folio). */
+            bill_to_company_name?: string;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
             /** Format: int64 */
@@ -8226,6 +8237,16 @@ export interface components {
             /** Format: int64 */
             id: number;
             folio_number: string;
+            /**
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
+             * @enum {string}
+             */
+            folio_type: "GUEST" | "COMPANY";
+            /**
+             * Format: int64
+             * @description The company a COMPANY folio is billed to; null on a guest folio.
+             */
+            bill_to_company_id: number | null;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
             /** Format: int64 */
@@ -8423,6 +8444,16 @@ export interface components {
             /** Format: int64 */
             id: number;
             folio_number: string;
+            /**
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
+             * @enum {string}
+             */
+            folio_type: "GUEST" | "COMPANY";
+            /**
+             * Format: int64
+             * @description The company a COMPANY folio is billed to; null on a guest folio.
+             */
+            bill_to_company_id: number | null;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
             balance: string;

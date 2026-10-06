@@ -226,30 +226,35 @@ type Totals struct {
 
 // Folio is the detail view. Balance is debit minus credit; it is never stored.
 type Folio struct {
-	ID            int64      `json:"id"`
-	FolioNumber   string     `json:"folio_number"`
-	FolioType     string     `json:"folio_type"`
-	Status        string     `json:"status"`
-	ReservationID int64      `json:"reservation_id"`
-	StayID        *int64     `json:"stay_id"`
-	OpenedAt      time.Time  `json:"opened_at"`
-	ClosedAt      *time.Time `json:"closed_at"`
-	Version       int32      `json:"version"`
-	Balance       string     `json:"balance"`
-	Totals        Totals     `json:"totals"`
-	Items         []Item     `json:"items"`
+	ID          int64  `json:"id"`
+	FolioNumber string `json:"folio_number"`
+	FolioType   string `json:"folio_type"`
+	// BillToCompanyID is the company a COMPANY folio is billed to (nil on a guest folio).
+	BillToCompanyID   *int64     `json:"bill_to_company_id"`
+	BillToCompanyName string     `json:"bill_to_company_name,omitempty"`
+	Status            string     `json:"status"`
+	ReservationID     int64      `json:"reservation_id"`
+	StayID            *int64     `json:"stay_id"`
+	OpenedAt          time.Time  `json:"opened_at"`
+	ClosedAt          *time.Time `json:"closed_at"`
+	Version           int32      `json:"version"`
+	Balance           string     `json:"balance"`
+	Totals            Totals     `json:"totals"`
+	Items             []Item     `json:"items"`
 }
 
 // FolioSummary is a row of the folio list.
 type FolioSummary struct {
-	ID            int64     `json:"id"`
-	FolioNumber   string    `json:"folio_number"`
-	Status        string    `json:"status"`
-	ReservationID int64     `json:"reservation_id"`
-	StayID        *int64    `json:"stay_id"`
-	OpenedAt      time.Time `json:"opened_at"`
-	Version       int32     `json:"version"`
-	Balance       string    `json:"balance"`
+	ID              int64     `json:"id"`
+	FolioNumber     string    `json:"folio_number"`
+	FolioType       string    `json:"folio_type"`
+	BillToCompanyID *int64    `json:"bill_to_company_id"`
+	Status          string    `json:"status"`
+	ReservationID   int64     `json:"reservation_id"`
+	StayID          *int64    `json:"stay_id"`
+	OpenedAt        time.Time `json:"opened_at"`
+	Version         int32     `json:"version"`
+	Balance         string    `json:"balance"`
 }
 
 // Payment is a payment or refund.

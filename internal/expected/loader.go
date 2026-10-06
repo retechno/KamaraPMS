@@ -7,12 +7,22 @@ import (
 	"kamarapms/internal/platform/db"
 )
 
+// FolioResolver decides the folio each room night goes to (folios.Service.ResolveRoomTargets): the only place that decides a target folio, so the evaluator does not.
+type FolioResolver interface {
+	ResolveRoomTargets(ctx context.Context, tenantID, propertyID int64, stayIDs []int64) (map[int64]int64, error)
+}
+
 // Loader reads the snapshot the evaluator works on. It only reads, so it runs with or without locks: the
 // posting service calls it after locking the stays, a preview calls it with plain reads.
-type Loader struct{ txm *db.TxManager }
+type Loader struct {
+	txm    *db.TxManager
+	folios FolioResolver
+}
 
-// NewLoader returns the snapshot loader.
-func NewLoader(txm *db.TxManager) *Loader { return &Loader{txm: txm} }
+// NewLoader returns the snapshot loader; folios decides the target folio of a room night.
+func NewLoader(txm *db.TxManager, folios FolioResolver) *Loader {
+	return &Loader{txm: txm, folios: folios}
+}
 
 // OpenStayIDs lists the OPEN stays of a property, ascending (the scope of "all eligible stays").
 func (l *Loader) OpenStayIDs(ctx context.Context, tenantID, propertyID int64) ([]int64, error) {
@@ -29,7 +39,7 @@ func (l *Loader) Load(ctx context.Context, tenantID, propertyID int64, stayIDs [
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snap := Snapshot{Folios: map[int64]int64{}}
+	snap := Snapshot{}
 	ids := make([]int64, 0, len(stays))
 	lineIDs := make([]int64, 0, len(stays))
 	for _, s := range stays {
@@ -67,14 +77,8 @@ func (l *Loader) Load(ctx context.Context, tenantID, propertyID int64, stayIDs [
 	for _, p := range posts {
 		snap.Postings = append(snap.Postings, Posting{StayID: p.StayID, ServiceDate: p.ServiceDate, FolioItemID: p.FolioItemID, StayRoomID: p.StayRoomID})
 	}
-	folios, err := q.ListScopeFolios(ctx, expecteddb.ListScopeFoliosParams{TenantID: tenantID, PropertyID: propertyID, StayIds: ids})
-	if err != nil {
+	if snap.Folios, err = l.folios.ResolveRoomTargets(ctx, tenantID, propertyID, ids); err != nil {
 		return Snapshot{}, err
-	}
-	for _, f := range folios {
-		if f.StayID != nil {
-			snap.Folios[*f.StayID] = f.ID
-		}
 	}
 	return snap, nil
 }

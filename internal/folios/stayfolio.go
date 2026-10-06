@@ -20,8 +20,11 @@ import (
 type StayFolio struct {
 	ID          int64  `json:"id"`
 	FolioNumber string `json:"folio_number"`
-	Status      string `json:"status"`
-	Balance     string `json:"balance"`
+	// FolioType is GUEST, or COMPANY for a folio billed to a company (BillToCompanyID).
+	FolioType       string `json:"folio_type"`
+	BillToCompanyID *int64 `json:"bill_to_company_id"`
+	Status          string `json:"status"`
+	Balance         string `json:"balance"`
 }
 
 // LockUnlinkedFolio locks (L4) the reservation's open folio that has no stay, if there is one, and returns its
@@ -67,10 +70,10 @@ func (s *Service) stayFolio(ctx context.Context, propertyID int64, f foliosdb.Fo
 		return StayFolio{}, err
 	}
 	balance, _, err := s.balanceOf(ctx, propertyID, f.ID)
-	return StayFolio{ID: f.ID, FolioNumber: f.FolioNumber, Status: f.Status, Balance: fixed(balance, decimals)}, err
+	return StayFolio{ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, Status: f.Status, Balance: fixed(balance, decimals)}, err
 }
 
-// DetachStayFolio unlinks the stay's folio again (a reversed check-in). The folio must hold no CHARGE items:
+// DetachStayFolio unlinks the stay's folio again (a reversed check-in). No folio of the stay may hold a CHARGE item:
 // once a night is charged the check-in cannot be undone. Lock order: the reservation and the stay first.
 func (s *Service) DetachStayFolio(ctx context.Context, p auth.Principal, propertyID, stayID int64) (StayFolio, error) {
 	q := s.q(ctx)
@@ -81,7 +84,7 @@ func (s *Service) DetachStayFolio(ctx context.Context, p auth.Principal, propert
 	if _, err := s.lockFolio(ctx, p.TenantID, propertyID, f.ID); err != nil {
 		return StayFolio{}, err
 	}
-	n, err := q.CountChargeItems(ctx, foliosdb.CountChargeItemsParams{PropertyID: propertyID, FolioID: f.ID})
+	n, err := q.CountStayChargeItems(ctx, foliosdb.CountStayChargeItemsParams{PropertyID: propertyID, StayID: &stayID}) // on any folio of the stay
 	if err != nil {
 		return StayFolio{}, err
 	}
@@ -95,18 +98,21 @@ func (s *Service) DetachStayFolio(ctx context.Context, p auth.Principal, propert
 	return s.stayFolio(ctx, propertyID, f)
 }
 
-// StayFolios lists the folios of a stay with their balances.
+// StayFolios lists the folios of a stay with their balances: the guest folio first, then those billed to a company.
 func (s *Service) StayFolios(ctx context.Context, tenantID, propertyID, stayID int64) ([]StayFolio, error) {
-	q := s.q(ctx)
-	f, err := q.GetFolioOfStay(ctx, foliosdb.GetFolioOfStayParams{TenantID: tenantID, PropertyID: propertyID, StayID: &stayID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return []StayFolio{}, nil
-	}
+	rows, err := s.q(ctx).ListStayFolios(ctx, foliosdb.ListStayFoliosParams{TenantID: tenantID, PropertyID: propertyID, StayID: &stayID})
 	if err != nil {
 		return nil, err
 	}
-	sf, err := s.stayFolio(ctx, propertyID, f)
-	return []StayFolio{sf}, err
+	out := make([]StayFolio, 0, len(rows))
+	for _, f := range rows {
+		sf, err := s.stayFolio(ctx, propertyID, f)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sf)
+	}
+	return out, nil
 }
 
 // ClosedFolio is a folio closed by a check-out.

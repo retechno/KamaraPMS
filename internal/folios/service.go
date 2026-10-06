@@ -215,8 +215,14 @@ func (s *Service) loadFolio(ctx context.Context, tenantID, propertyID int64, f f
 	if err != nil {
 		return Folio{}, err
 	}
+	company := ""
+	if f.BillToCompanyID != nil {
+		if company, err = s.q(ctx).GetCompanyName(ctx, foliosdb.GetCompanyNameParams{TenantID: tenantID, PropertyID: propertyID, ID: *f.BillToCompanyID}); err != nil {
+			return Folio{}, err
+		}
+	}
 	return Folio{
-		ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, Status: f.Status, ReservationID: f.ReservationID, StayID: f.StayID,
+		ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, BillToCompanyName: company, Status: f.Status, ReservationID: f.ReservationID, StayID: f.StayID,
 		OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
 		Totals: Totals{Debit: fixed(totals.Debit, decimals), Credit: fixed(totals.Credit, decimals)}, Items: items,
 	}, nil
@@ -269,7 +275,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 	}
 	out := make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, Status: r.Status, ReservationID: r.ReservationID, StayID: r.StayID,
+		out[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Debit.Sub(r.Credit), decimals)}
 	}
 	return out, nil

@@ -1651,6 +1651,29 @@ SELECT expect_error('audit log is append-only', '23001',
     $q$UPDATE audit_logs SET action = 'x'$q$);
 
 ------------------------------------------------------------------------------------------
+-- A stay with a folio for each payer (00060)
+------------------------------------------------------------------------------------------
+SELECT expect_ok('a stay has a guest folio and a company folio',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_ok('a stay has a folio for each company',
+    $q$INSERT INTO companies (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 'Other Corp')$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC2', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'OTHER'))$q$);
+SELECT expect_error('a company has one folio of a stay', '23505',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC2', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('a company folio names its company', '23514',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'), 'COMPANY')$q$);
+SELECT expect_error('a guest folio names no company', '23514',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S2'), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_error('the company of a folio is one of the property', '23503',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('SG') AND code = 'ACME'))$q$);
+SELECT expect_error('a master folio is not built yet', '23514',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), NULL, 'MASTER')$q$);
+SELECT expect_error('there is still one guest folio per stay', '23505',
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id) VALUES (tn('ABC'), pr('BALI'), 'FC1', rs('R1'), st('S1'))$q$);
+
+------------------------------------------------------------------------------------------
 -- Sales restrictions (00059)
 ------------------------------------------------------------------------------------------
 SELECT expect_ok('the four scopes of one date live side by side: the property, a plan, a room type, a room type and a plan',

@@ -479,7 +479,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **TX:** R
 
 **GET `{P}/folios/{id}`**
-- **Response:** `{ id, folio_number, folio_type, status, reservation_id, stay_id, balance, totals: {debit, credit}, items: [{ id, transaction_type, business_date, service_date, transaction_at, description, charge_code, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components: [{ component_type, code, name, rate, base_amount, amount, sequence }], reverses_item_id, reversed_by_item_id, stay_room: {room_number}, created_by }] }`
+- **Response:** `{ id, folio_number, folio_type, bill_to_company_id, bill_to_company_name, status, reservation_id, stay_id, balance, totals: {debit, credit}, items: [{ id, transaction_type, business_date, service_date, transaction_at, description, charge_code, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components: [{ component_type, code, name, rate, base_amount, amount, sequence }], reverses_item_id, reversed_by_item_id, stay_room: {room_number}, created_by }] }`
 - **Rules:** `balance = Σdebit − Σcredit`.
 - **TX:** R
 

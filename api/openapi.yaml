@@ -9194,11 +9194,13 @@ components:
         credit: { type: string }
     Folio:
       type: object
-      required: [id, folio_number, folio_type, status, reservation_id, stay_id, opened_at, closed_at, version, balance, totals, items]
+      required: [id, folio_number, folio_type, bill_to_company_id, status, reservation_id, stay_id, opened_at, closed_at, version, balance, totals, items]
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
-        folio_type: { type: string }
+        folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
+        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
+        bill_to_company_name: { type: string, description: "The name of that company (absent on a guest folio)." }
         status: { type: string, enum: [OPEN, CLOSED] }
         reservation_id: { type: integer, format: int64 }
         stay_id: { type: [integer, "null"], format: int64 }
@@ -9212,10 +9214,12 @@ components:
           items: { $ref: "#/components/schemas/FolioItem" }
     FolioSummary:
       type: object
-      required: [id, folio_number, status, reservation_id, stay_id, opened_at, version, balance]
+      required: [id, folio_number, folio_type, bill_to_company_id, status, reservation_id, stay_id, opened_at, version, balance]
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
+        folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
+        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
         status: { type: string, enum: [OPEN, CLOSED] }
         reservation_id: { type: integer, format: int64 }
         stay_id: { type: [integer, "null"], format: int64 }
@@ -9389,10 +9393,12 @@ components:
         move_reason: { type: string }
     StayFolio:
       type: object
-      required: [id, folio_number, status, balance]
+      required: [id, folio_number, folio_type, bill_to_company_id, status, balance]
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
+        folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
+        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
         status: { type: string, enum: [OPEN, CLOSED] }
         balance: { type: string }
     ReservationRef:

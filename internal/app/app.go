@@ -99,7 +99,7 @@ func New(d Deps) *App {
 	reservationsSvc := reservations.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, ratesSvc, billingSvc, guestsSvc)
 	reservationsSvc.SetApprover(iamSvc) // a rate override is approved with the credentials of someone who may
 
-	roomChargeSvc := roomcharge.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, expected.NewLoader(d.TxManager), billingSvc, foliosSvc.RoomPoster())
+	roomChargeSvc := roomcharge.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, expected.NewLoader(d.TxManager, foliosSvc), billingSvc, foliosSvc.RoomPoster())
 	nightAuditSvc := nightaudit.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, roomChargeSvc, reservationsSvc, hkSvc)
 	nightAuditSvc.SetJournaler(accountingSvc) // the journal of the day is made before the day closes
 	reportsSvc := reports.NewService(d.TxManager, authz, tenancySvc, nightAuditSvc)

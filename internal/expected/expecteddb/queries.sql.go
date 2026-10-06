@@ -43,42 +43,6 @@ func (q *Queries) ListOpenStayIDs(ctx context.Context, arg ListOpenStayIDsParams
 	return items, nil
 }
 
-const listScopeFolios = `-- name: ListScopeFolios :many
-SELECT id, stay_id FROM folios
-WHERE tenant_id = $1 AND property_id = $2 AND stay_id = ANY($3::bigint[]) AND status = 'OPEN' AND folio_type = 'GUEST'
-`
-
-type ListScopeFoliosParams struct {
-	TenantID   int64
-	PropertyID int64
-	StayIds    []int64
-}
-
-type ListScopeFoliosRow struct {
-	ID     int64
-	StayID *int64
-}
-
-func (q *Queries) ListScopeFolios(ctx context.Context, arg ListScopeFoliosParams) ([]ListScopeFoliosRow, error) {
-	rows, err := q.db.Query(ctx, listScopeFolios, arg.TenantID, arg.PropertyID, arg.StayIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListScopeFoliosRow{}
-	for rows.Next() {
-		var i ListScopeFoliosRow
-		if err := rows.Scan(&i.ID, &i.StayID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listScopeNights = `-- name: ListScopeNights :many
 SELECT n.reservation_room_id, n.stay_date, n.rate_plan_id, n.charge_code_id, c.code AS charge_code, c.is_active, (c.charge_type = 'ROOM')::boolean AS is_room,
        n.price_mode, n.amount

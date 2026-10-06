@@ -94,7 +94,9 @@ var constraintErrors = map[string]mapped{
 	"stay_rooms_open_stay_uk":         {apperr.KindConflict, "STAY_ALREADY_IN_ROOM", "the stay already occupies a room"},
 
 	// Ledger
-	"folios_stay_guest_uk":                         {apperr.KindConflict, "FOLIO_ALREADY_EXISTS", "the stay already has a guest folio"},
+	"folios_stay_payer_uk":                         {apperr.KindConflict, "FOLIO_ALREADY_EXISTS", "the stay already has a folio for this payer"},
+	"folios_payer_ck":                              {apperr.KindInvalid, "INVALID_VALUE", "a company folio names its company and a guest folio does not"},
+	"folios_company_fk":                            {apperr.KindNotFound, "COMPANY_NOT_FOUND", "the company does not exist in this property"},
 	"folios_unlinked_open_uk":                      {apperr.KindConflict, "FOLIO_ALREADY_EXISTS", "the reservation already has an open folio"},
 	"folio_items_payment_uk":                       {apperr.KindConflict, "PAYMENT_ALREADY_POSTED", "the payment is already posted to the ledger"},
 	"folio_items_reverses_uk":                      {apperr.KindConflict, "ALREADY_REVERSED", "the item has already been reversed"},

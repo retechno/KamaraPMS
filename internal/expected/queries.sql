@@ -32,6 +32,3 @@ ORDER BY n.reservation_room_id, n.stay_date;
 SELECT stay_id, service_date, folio_item_id, stay_room_id FROM stay_charge_postings
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = ANY(@stay_ids::bigint[]) AND status = 'POSTED' AND charge_source = 'ROOM_NIGHT';
 
--- name: ListScopeFolios :many
-SELECT id, stay_id FROM folios
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = ANY(@stay_ids::bigint[]) AND status = 'OPEN' AND folio_type = 'GUEST';

@@ -120,7 +120,7 @@ func Setup(t *testing.T) *Env {
 	co := companies.NewService(txm, c, aw, authz, ten)
 	fo.SetCompanyGate(co)
 	cl := cityledger.NewService(txm, c, aw, authz, ten, ia, co, acct)
-	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm), billing, fo.RoomPoster())
+	rc := roomcharge.NewService(txm, c, aw, authz, ten, expected.NewLoader(txm, fo), billing, fo.RoomPoster())
 	rs := reservations.NewService(txm, c, aw, authz, ten, avail, rt, billing, gs)
 	rs.SetApprover(ia)
 	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)

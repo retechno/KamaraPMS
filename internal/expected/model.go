@@ -85,7 +85,7 @@ type Snapshot struct {
 	Segments []Segment
 	Nights   []Night
 	Postings []Posting
-	Folios   map[int64]int64 // stay id -> its OPEN guest folio
+	Folios   map[int64]int64 // stay id -> the open folio its room nights go to (decided by the folio resolver)
 }
 
 // Scope limits the evaluation. StayIDs empty means every stay in the snapshot. UpToDate is the last night
