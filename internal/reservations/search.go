@@ -19,6 +19,8 @@ import (
 type NightAmount struct {
 	Date   civil.Date      `json:"date"`
 	Amount decimal.Decimal `json:"amount"`
+	// BedAdjustment is what the kept bed adds to the price (already in Amount); 0 on the line of the room type.
+	BedAdjustment decimal.Decimal `json:"bed_adjustment"`
 }
 
 // PlanOffer is a rate plan's price for the searched nights. A plan with nights that have no rate is shown
@@ -44,6 +46,29 @@ type TypeOffer struct {
 	AvailableMin  int                  `json:"available_min"`
 	PerNight      []availability.Night `json:"per_night"`
 	RatePlans     []PlanOffer          `json:"rate_plans"`
+	// Beds are the variants of the type, one per bed type its rooms have, with their own stock and the price of a line that keeps the bed.
+	// The line above (the type) is "any bed".
+	Beds []BedOffer `json:"beds"`
+}
+
+// BedNightOffer is the stock of a variant on a night: the rooms with the bed that can be sold, the rooms of it that sit in a room or are kept,
+// and what is left (never above the room type's).
+type BedNightOffer struct {
+	Date      civil.Date `json:"date"`
+	Sellable  int        `json:"sellable"`
+	Kept      int        `json:"kept"`
+	Available int        `json:"available"`
+}
+
+// BedOffer is a bed type of a room type for the searched nights: how many rooms are left, and the price of every plan when the line keeps the bed
+// (the grid price plus the supplement in force on each night).
+type BedOffer struct {
+	BedTypeID    int64           `json:"bed_type_id"`
+	Code         string          `json:"code"`
+	Name         string          `json:"name"`
+	AvailableMin int             `json:"available_min"`
+	PerNight     []BedNightOffer `json:"per_night"`
+	RatePlans    []PlanOffer     `json:"rate_plans"`
 }
 
 // SearchResult is the answer to an availability search (advisory: only booking decides).
@@ -94,6 +119,18 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 	if err != nil {
 		return SearchResult{}, err
 	}
+	beds, err := s.avail.RoomBeds(ctx, p.TenantID, propertyID)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	keys := make([]availability.BedKey, len(beds))
+	for i, b := range beds {
+		keys[i] = availability.BedKey{RoomTypeID: b.RoomTypeID, BedTypeID: b.BedTypeID}
+	}
+	stock, err := s.avail.BedStock(ctx, p.TenantID, propertyID, keys, nights, bd, nil)
+	if err != nil {
+		return SearchResult{}, err
+	}
 	out := SearchResult{Nights: nights, RoomTypes: make([]TypeOffer, 0, len(types))}
 	for _, t := range types {
 		offer := TypeOffer{
@@ -112,27 +149,67 @@ func (s *Service) SearchAvailability(ctx context.Context, propertyID int64, arri
 			}
 		}
 		for _, pl := range plans {
-			po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, pl, arrival, departure)
+			po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, 0, pl, arrival, departure)
 			if err != nil {
 				return SearchResult{}, err
 			}
 			offer.RatePlans = append(offer.RatePlans, po)
+		}
+		offer.Beds = []BedOffer{}
+		for _, b := range beds {
+			if b.RoomTypeID != t.ID {
+				continue
+			}
+			bo := BedOffer{BedTypeID: b.BedTypeID, Code: b.Code, Name: b.Name, PerNight: make([]BedNightOffer, 0, len(nights)), RatePlans: []PlanOffer{}}
+			for i, d := range nights {
+				st := stock[availability.BedKey{RoomTypeID: t.ID, BedTypeID: b.BedTypeID}][d]
+				avail := max(min(st.Free(), offer.PerNight[i].Available), 0)
+				bo.PerNight = append(bo.PerNight, BedNightOffer{Date: d, Sellable: st.Sellable, Kept: st.Fixed + st.Locked, Available: avail})
+				if i == 0 || avail < bo.AvailableMin {
+					bo.AvailableMin = avail
+				}
+			}
+			for _, pl := range plans {
+				po, err := s.planOffer(ctx, p.TenantID, propertyID, t.ID, b.BedTypeID, pl, arrival, departure)
+				if err != nil {
+					return SearchResult{}, err
+				}
+				bo.RatePlans = append(bo.RatePlans, po)
+			}
+			offer.Beds = append(offer.Beds, bo)
 		}
 		out.RoomTypes = append(out.RoomTypes, offer)
 	}
 	return out, nil
 }
 
-func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID int64, pl availability.SellablePlan, arrival, departure civil.Date) (PlanOffer, error) {
+// planOffer prices a plan for the searched nights; with a bed type (above 0) the nights carry the supplement of that bed in force on each night
+// (a complimentary or house use plan stays at zero).
+func (s *Service) planOffer(ctx context.Context, tenantID, propertyID, typeID, bedID int64, pl availability.SellablePlan, arrival, departure civil.Date) (PlanOffer, error) {
 	prices, missing, err := s.rates.PriceNights(ctx, tenantID, propertyID, pl.ID, typeID, arrival, departure)
+	if err != nil {
+		return PlanOffer{}, err
+	}
+	var supplements []rates.BedSupplement
+	if bedID > 0 && prices.OccupancyKind == rates.KindPaid {
+		if supplements, err = s.rates.BedSupplements(ctx, tenantID, propertyID, pl.ID, typeID, bedID); err != nil {
+			return PlanOffer{}, err
+		}
+	}
+	decimals, err := s.decimals(ctx, propertyID)
 	if err != nil {
 		return PlanOffer{}, err
 	}
 	po := PlanOffer{ID: pl.ID, Code: pl.Code, Name: pl.Name, PriceMode: prices.PriceMode, OccupancyKind: pl.Kind, Nightly: make([]NightAmount, len(prices.Nights)), MissingNights: len(missing)}
 	charges := make([]billingconfig.NightCharge, len(prices.Nights))
 	for i, n := range prices.Nights {
-		po.Nightly[i] = NightAmount{Date: n.Date, Amount: n.Amount}
-		charges[i] = billingconfig.NightCharge{ChargeCodeID: prices.RoomChargeCodeID, PriceMode: chargecalc.PriceMode(prices.PriceMode), Amount: n.Amount}
+		amount, adj := n.Amount, decimal.Zero
+		if sup, ok := rates.SupplementOn(supplements, n.Date); ok {
+			adj = rates.BedAdjustmentFor(amount, sup, decimals)
+			amount = amount.Add(adj)
+		}
+		po.Nightly[i] = NightAmount{Date: n.Date, Amount: amount, BedAdjustment: adj}
+		charges[i] = billingconfig.NightCharge{ChargeCodeID: prices.RoomChargeCodeID, PriceMode: chargecalc.PriceMode(prices.PriceMode), Amount: amount}
 	}
 	if len(missing) == 0 {
 		est, err := s.billing.Estimate(ctx, tenantID, propertyID, charges)

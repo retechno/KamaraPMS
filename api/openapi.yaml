@@ -8307,10 +8307,11 @@ components:
         available: { type: integer }
     NightAmount:
       type: object
-      required: [date, amount]
+      required: [date, amount, bed_adjustment]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         amount: { type: string }
+        bed_adjustment: { type: string, description: "What the kept bed adds to the price (already in amount); 0 on the line of the room type." }
     Estimate:
       type: object
       required: [net, service, tax, total]
@@ -8338,7 +8339,7 @@ components:
             - { type: "null" }
     TypeOffer:
       type: object
-      required: [room_type_id, code, name, fits_occupancy, available_min, per_night, rate_plans]
+      required: [room_type_id, code, name, fits_occupancy, available_min, per_night, rate_plans, beds]
       properties:
         room_type_id: { type: integer, format: int64 }
         code: { type: string }
@@ -8350,6 +8351,32 @@ components:
           items: { $ref: "#/components/schemas/Night" }
         rate_plans:
           type: array
+          items: { $ref: "#/components/schemas/PlanOffer" }
+        beds:
+          type: array
+          description: "The variants of the type, one per bed type its rooms have, in the order of the catalogue; the line above (the type) is any bed. A line that keeps a variant (`bed_locked`) uses its stock."
+          items: { $ref: "#/components/schemas/BedOffer" }
+    BedOffer:
+      type: object
+      required: [bed_type_id, code, name, available_min, per_night, rate_plans]
+      properties:
+        bed_type_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        available_min: { type: integer, description: "The rooms with this bed that can still be kept on every night of the stay (never above the room type's)." }
+        per_night:
+          type: array
+          items:
+            type: object
+            required: [date, sellable, kept, available]
+            properties:
+              date: { $ref: "#/components/schemas/Date" }
+              sellable: { type: integer, description: The rooms with this bed that can be sold (no block). }
+              kept: { type: integer, description: The rooms with this bed that sit in a room or are kept for it. }
+              available: { type: integer, description: Sellable minus kept, never above the room type's availability and never below 0. }
+        rate_plans:
+          type: array
+          description: "The price of every plan when the line keeps this bed: the grid price plus the supplement in force on each night."
           items: { $ref: "#/components/schemas/PlanOffer" }
     AvailabilitySearch:
       type: object
@@ -8811,6 +8838,8 @@ components:
         in_house: { type: integer, description: Rooms of open stays held that night (a part of held). }
         arrivals: { type: integer, description: Rooms arriving that night - CONFIRMED lines arriving plus stays (walk-ins included) whose arrival date it is. }
         reservations: { type: integer, description: Rooms of CONFIRMED lines held that night, not checked in yet (the other part of held; held = in_house + reservations). }
+        locked: { type: integer, description: "Only on the row of a bed type: the rooms of CONFIRMED lines that keep this bed without a room yet (a part of held)." }
+        bed_limited: { type: boolean, description: "Only on the row of a bed type: the bed is sold out although the room type still has rooms." }
     AvailabilityCalendar:
       type: object
       required: [from, to, room_types, totals]

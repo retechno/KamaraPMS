@@ -105,7 +105,7 @@ func TestAvailabilityCalendarBeds(t *testing.T) {
 	res := f.book(t, f.dlx, "2026-10-02", "2026-10-04")
 	_, err := f.Res.AssignRoom(f.admin, f.propID, res.ID, res.Rooms[0].ID, res.Version, f.r101.ID, false)
 	must(t, err)
-	f.book(t, f.dlx, "2026-10-02", "2026-10-04") // no room yet: not counted per bed
+	f.book(t, f.dlx, "2026-10-02", "2026-10-04") // no room yet, no preference: not held per bed, but it uses the type
 
 	plain, err := f.Res.AvailabilityCalendar(f.admin, f.propID, d("2026-10-02"), d("2026-10-04"), false)
 	must(t, err)
@@ -123,7 +123,8 @@ func TestAvailabilityCalendarBeds(t *testing.T) {
 	if k.Code != "KING" || k.RoomsTotal != 1 || k.Nights[0].Sellable != 1 || k.Nights[0].Held != 1 || k.Nights[0].Available != 0 {
 		t.Fatalf("DLX King: %+v", k)
 	}
-	if tw.Code != "TWIN" || tw.Nights[0].Held != 0 || tw.Nights[0].Available != 1 {
+	// the twin room is free, but the booking with no room will need a room of the type: the variant never offers more than the type has left
+	if tw.Code != "TWIN" || tw.Nights[0].Held != 0 || tw.Nights[0].Available != 0 || tw.Nights[0].BedLimited {
 		t.Fatalf("DLX Twin: %+v", tw)
 	}
 	if std.Beds[0].Code != "KING" || std.Beds[0].Nights[0].Available != 1 {

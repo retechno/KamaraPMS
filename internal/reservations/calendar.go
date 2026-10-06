@@ -29,6 +29,11 @@ type CalendarNight struct {
 	// Complimentary and HouseUse are the held rooms given free or used by the hotel (parts of Held, sold at zero).
 	Complimentary int `json:"complimentary"`
 	HouseUse      int `json:"house_use"`
+	// On the row of a bed type: Held is the rooms with that bed that sit in a room or are kept for it (fixed + locked), Locked is the part that
+	// keeps the bed without a room yet, Available is the rooms of the bed still to sell (never above the type's), and BedLimited says the
+	// bed is sold out although the type still has rooms (the bed is what limits it that night).
+	Locked     int  `json:"locked,omitempty"`
+	BedLimited bool `json:"bed_limited,omitempty"`
 }
 
 // CalendarType is the nights of one active room type.
@@ -77,7 +82,7 @@ type Calendar struct {
 // AvailabilityCalendar lists, per active room type and night of [from, to), the rooms to sell, blocked, held and still
 // available, with the occupancy of each type and of the whole property (reservation.read). The window is after from and
 // at most 62 days. With byBed each type also lists its bed types, counted over the rooms with that bed and only the
-// bookings already assigned to a room (see availability.BedInventory); the totals stay per room type. It reads committed
+// rooms that are held or kept (see availability.BedStock); the totals stay per room type. It reads committed
 // data and takes no locks; like a search it is advisory, only booking decides.
 func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, from, to civil.Date, byBed bool) (Calendar, error) {
 	p, err := s.writer(ctx, propertyID, auth.PermReservationRead)
@@ -117,11 +122,19 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	}
 	var beds []availability.RoomBed
 	var bedInv map[availability.BedKey]map[civil.Date]availability.BedNight
+	var stock map[availability.BedKey]map[civil.Date]availability.BedStock
 	if byBed {
 		if beds, err = s.avail.RoomBeds(ctx, p.TenantID, propertyID); err != nil {
 			return Calendar{}, err
 		}
 		if bedInv, err = s.avail.BedInventory(ctx, p.TenantID, propertyID, nights, day.BusinessDate); err != nil {
+			return Calendar{}, err
+		}
+		keys := make([]availability.BedKey, len(beds))
+		for i, b := range beds {
+			keys[i] = availability.BedKey{RoomTypeID: b.RoomTypeID, BedTypeID: b.BedTypeID}
+		}
+		if stock, err = s.avail.BedStock(ctx, p.TenantID, propertyID, keys, nights, day.BusinessDate, nil); err != nil {
 			return Calendar{}, err
 		}
 	}
@@ -156,8 +169,14 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 			}
 			cb := CalendarBed{BedTypeID: b.BedTypeID, Code: b.Code, Name: b.Name, RoomsTotal: b.Rooms, Nights: make([]CalendarNight, len(nights))}
 			for i, d := range nights {
-				n := bedInv[availability.BedKey{RoomTypeID: t.ID, BedTypeID: b.BedTypeID}][d]
-				cb.Nights[i] = night(d, b.Rooms, n.Sellable, n.Held, n.Parts)
+				key := availability.BedKey{RoomTypeID: t.ID, BedTypeID: b.BedTypeID}
+				st := stock[key][d]
+				held := st.Fixed + st.Locked // the rooms of the bed that sit in a room or are kept for it
+				cn := night(d, b.Rooms, st.Sellable, held, bedInv[key][d].Parts)
+				typeAvail := ct.Nights[i].Available
+				cn.Locked, cn.BedLimited = st.Locked, st.Free() <= 0 && typeAvail > 0
+				cn.Available = min(st.Free(), typeAvail)
+				cb.Nights[i] = cn
 			}
 			ct.Beds = append(ct.Beds, cb)
 		}

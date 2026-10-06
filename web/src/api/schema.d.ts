@@ -7320,6 +7320,8 @@ export interface components {
         NightAmount: {
             date: components["schemas"]["Date"];
             amount: string;
+            /** @description What the kept bed adds to the price (already in amount); 0 on the line of the room type. */
+            bed_adjustment: string;
         };
         Estimate: {
             net: string;
@@ -7347,6 +7349,27 @@ export interface components {
             fits_occupancy: boolean;
             available_min: number;
             per_night: components["schemas"]["Night"][];
+            rate_plans: components["schemas"]["PlanOffer"][];
+            /** @description The variants of the type, one per bed type its rooms have, in the order of the catalogue; the line above (the type) is any bed. A line that keeps a variant (`bed_locked`) uses its stock. */
+            beds: components["schemas"]["BedOffer"][];
+        };
+        BedOffer: {
+            /** Format: int64 */
+            bed_type_id: number;
+            code: string;
+            name: string;
+            /** @description The rooms with this bed that can still be kept on every night of the stay (never above the room type's). */
+            available_min: number;
+            per_night: {
+                date: components["schemas"]["Date"];
+                /** @description The rooms with this bed that can be sold (no block). */
+                sellable: number;
+                /** @description The rooms with this bed that sit in a room or are kept for it. */
+                kept: number;
+                /** @description Sellable minus kept */
+                available: number;
+            }[];
+            /** @description The price of every plan when the line keeps this bed: the grid price plus the supplement in force on each night. */
             rate_plans: components["schemas"]["PlanOffer"][];
         };
         AvailabilitySearch: {
@@ -7853,6 +7876,10 @@ export interface components {
             arrivals: number;
             /** @description Rooms of CONFIRMED lines held that night */
             reservations: number;
+            /** @description Only on the row of a bed type: the rooms of CONFIRMED lines that keep this bed without a room yet (a part of held). */
+            locked?: number;
+            /** @description Only on the row of a bed type: the bed is sold out although the room type still has rooms. */
+            bed_limited?: boolean;
         };
         AvailabilityCalendar: {
             from: components["schemas"]["Date"];
