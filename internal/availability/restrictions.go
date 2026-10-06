@@ -297,14 +297,7 @@ func (s *Service) EvaluateStay(ctx context.Context, tenantID, propertyID int64, 
 	if err != nil {
 		return Verdict{}, err
 	}
-	grid := make([]Restriction, len(rows))
-	for i, r := range rows {
-		grid[i] = Restriction{
-			ID: r.ID, RoomTypeID: r.RoomTypeID, RatePlanID: r.RatePlanID, Date: r.StayDate,
-			StopSell: r.StopSell, ClosedToArrival: r.ClosedToArrival, ClosedToDeparture: r.ClosedToDeparture,
-			MinStay: intOf(r.MinStay), MaxStay: intOf(r.MaxStay),
-		}
-	}
+	grid := gridOf(rows)
 	return Verdict{Violations: append([]Violation{}, Check(grid, req)...)}, nil
 }
 
@@ -314,4 +307,86 @@ func intOf(v pgtype.Int2) *int {
 	}
 	n := int(v.Int16)
 	return &n
+}
+
+// Source says which row of the grid decided an attribute of a night.
+type Source struct {
+	RowID int64  `json:"row_id"`
+	Scope string `json:"scope"`
+}
+
+// EffectiveDay is what one night is under, after the precedence, in the form the API and the screens show. An attribute no row speaks of is open (false, or no limit);
+// Sources has an entry only for the attributes a row decided, so a screen can say where a value comes from. The screens never resolve the precedence themselves.
+type EffectiveDay struct {
+	Date              civil.Date        `json:"date"`
+	StopSell          bool              `json:"stop_sell"`
+	ClosedToArrival   bool              `json:"closed_to_arrival"`
+	ClosedToDeparture bool              `json:"closed_to_departure"`
+	MinStay           *int              `json:"min_stay"`
+	MaxStay           *int              `json:"max_stay"`
+	Sources           map[string]Source `json:"sources"`
+}
+
+// EffectiveOf turns the result of Resolve into an EffectiveDay.
+func EffectiveOf(date civil.Date, e Effective) EffectiveDay {
+	out := EffectiveDay{
+		Date: date, StopSell: e.StopSell.Value, ClosedToArrival: e.ClosedToArrival.Value, ClosedToDeparture: e.ClosedToDeparture.Value,
+		MinStay: e.MinStay.Value, MaxStay: e.MaxStay.Value, Sources: map[string]Source{},
+	}
+	add := func(name string, row int64, sc Scope) {
+		if row != 0 {
+			out.Sources[name] = Source{RowID: row, Scope: sc.String()}
+		}
+	}
+	add("stop_sell", e.StopSell.Row, e.StopSell.Scope)
+	add("closed_to_arrival", e.ClosedToArrival.Row, e.ClosedToArrival.Scope)
+	add("closed_to_departure", e.ClosedToDeparture.Row, e.ClosedToDeparture.Scope)
+	add("min_stay", e.MinStay.Row, e.MinStay.Scope)
+	add("max_stay", e.MaxStay.Row, e.MaxStay.Scope)
+	return out
+}
+
+// EffectiveRestrictions is the effective restrictions of a room type and a rate plan for every date of [from, to), by the same Resolve that EvaluateStay uses. It is what a grid
+// screen shows and what a channel manager would export. At most 366 dates.
+func (s *Service) EffectiveRestrictions(ctx context.Context, tenantID, propertyID, roomTypeID, ratePlanID int64, from, to civil.Date) ([]EffectiveDay, error) {
+	var fields []apperr.FieldError
+	if roomTypeID < 1 {
+		fields = append(fields, apperr.FieldError{Field: "room_type_id", Code: "REQUIRED", Message: "a room type"})
+	}
+	if ratePlanID < 1 {
+		fields = append(fields, apperr.FieldError{Field: "rate_plan_id", Code: "REQUIRED", Message: "a rate plan"})
+	}
+	if !to.After(from) || from.DaysUntil(to) > MaxRestrictionDays {
+		fields = append(fields, apperr.FieldError{Field: "to", Code: "OUT_OF_RANGE", Message: "after from (exclusive), at most 366 days"})
+	}
+	if len(fields) > 0 {
+		return nil, apperr.Invalid("the request is invalid", fields...)
+	}
+	rows, err := s.q(ctx).ListRateRestrictions(ctx, availabilitydb.ListRateRestrictionsParams{
+		TenantID: tenantID, PropertyID: propertyID, RoomTypeID: &roomTypeID, RatePlanID: &ratePlanID, FromDate: from, ToDate: to.AddDays(-1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	grid := gridOf(rows)
+	out := make([]EffectiveDay, 0, from.DaysUntil(to))
+	for d := from; d.Before(to); d = d.AddDays(1) {
+		out = append(out, EffectiveOf(d, Resolve(grid, roomTypeID, ratePlanID, d)))
+	}
+	return out, nil
+}
+
+// MaxRestrictionDays bounds a window of the grid: a request, a fill or a list.
+const MaxRestrictionDays = 366
+
+func gridOf(rows []availabilitydb.ListRateRestrictionsRow) []Restriction {
+	grid := make([]Restriction, len(rows))
+	for i, r := range rows {
+		grid[i] = Restriction{
+			ID: r.ID, RoomTypeID: r.RoomTypeID, RatePlanID: r.RatePlanID, Date: r.StayDate,
+			StopSell: r.StopSell, ClosedToArrival: r.ClosedToArrival, ClosedToDeparture: r.ClosedToDeparture,
+			MinStay: intOf(r.MinStay), MaxStay: intOf(r.MaxStay),
+		}
+	}
+	return grid
 }

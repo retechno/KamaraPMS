@@ -156,3 +156,74 @@ ORDER BY rt.code, bt.sort_order, bt.id, a.effective_from DESC;
 SELECT adjust_kind, amount, effective_from FROM rate_plan_bed_adjustments
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND rate_plan_id = @rate_plan_id AND room_type_id = @room_type_id AND bed_type_id = @bed_type_id
 ORDER BY effective_from;
+
+-- ---------------------------------------------------------------- sales restrictions (the grid; the evaluator is availability.EvaluateStay)
+
+-- The rows of the grid in [from, to) that can speak for a room type and a rate plan (a row of a scope of NULL is for all); without a filter, every row.
+-- name: ListRestrictionRows :many
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, note
+FROM rate_restrictions
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_date >= @from_date::date AND stay_date < @to_date::date
+  AND (sqlc.narg(room_type_id)::bigint IS NULL OR room_type_id IS NULL OR room_type_id = sqlc.narg(room_type_id)::bigint)
+  AND (sqlc.narg(rate_plan_id)::bigint IS NULL OR rate_plan_id IS NULL OR rate_plan_id = sqlc.narg(rate_plan_id)::bigint)
+ORDER BY stay_date, room_type_id NULLS FIRST, rate_plan_id NULLS FIRST;
+
+-- Applies a change to the rows that exist for one exact scope (NULL is the scope "all") on the given dates: an attribute with its set flag takes the value, one with its
+-- clear flag goes back to NULL, the others stay.
+-- name: UpdateRestrictions :one
+WITH changed AS (
+    UPDATE rate_restrictions SET
+        stop_sell           = CASE WHEN @set_stop_sell::boolean THEN sqlc.narg(stop_sell)::boolean WHEN @clear_stop_sell::boolean THEN NULL ELSE stop_sell END,
+        closed_to_arrival   = CASE WHEN @set_cta::boolean THEN sqlc.narg(closed_to_arrival)::boolean WHEN @clear_cta::boolean THEN NULL ELSE closed_to_arrival END,
+        closed_to_departure = CASE WHEN @set_ctd::boolean THEN sqlc.narg(closed_to_departure)::boolean WHEN @clear_ctd::boolean THEN NULL ELSE closed_to_departure END,
+        min_stay            = CASE WHEN @set_min::boolean THEN sqlc.narg(min_stay)::smallint WHEN @clear_min::boolean THEN NULL ELSE min_stay END,
+        max_stay            = CASE WHEN @set_max::boolean THEN sqlc.narg(max_stay)::smallint WHEN @clear_max::boolean THEN NULL ELSE max_stay END,
+        note                = CASE WHEN @set_note::boolean THEN sqlc.narg(note)::varchar WHEN @clear_note::boolean THEN NULL ELSE note END,
+        updated_by          = sqlc.narg(actor_id)::bigint
+    WHERE tenant_id = @tenant_id AND property_id = @property_id
+      AND room_type_id IS NOT DISTINCT FROM sqlc.narg(room_type_id)::bigint AND rate_plan_id IS NOT DISTINCT FROM sqlc.narg(rate_plan_id)::bigint
+      AND stay_date = ANY(@dates::date[])
+    RETURNING 1
+)
+SELECT count(*)::bigint FROM changed;
+
+-- Sets attributes for one exact scope on the given dates, creating the rows that are missing and applying the set and clear flags to those that exist, in one atomic statement
+-- (two fills of the same rows merge instead of losing one of them). Used when at least one of the five attributes is set: a row must say something.
+-- name: UpsertRestrictions :one
+WITH written AS (
+    INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, note, created_by, updated_by)
+    SELECT @tenant_id::bigint, @property_id::bigint, sqlc.narg(room_type_id)::bigint, sqlc.narg(rate_plan_id)::bigint, d.stay_date,
+           CASE WHEN @set_stop_sell::boolean THEN sqlc.narg(stop_sell)::boolean END, CASE WHEN @set_cta::boolean THEN sqlc.narg(closed_to_arrival)::boolean END,
+           CASE WHEN @set_ctd::boolean THEN sqlc.narg(closed_to_departure)::boolean END, CASE WHEN @set_min::boolean THEN sqlc.narg(min_stay)::smallint END,
+           CASE WHEN @set_max::boolean THEN sqlc.narg(max_stay)::smallint END, CASE WHEN @set_note::boolean THEN sqlc.narg(note)::varchar END,
+           sqlc.narg(actor_id)::bigint, sqlc.narg(actor_id)::bigint
+    FROM unnest(@dates::date[]) AS d (stay_date)
+    ON CONFLICT (property_id, COALESCE(room_type_id, 0), COALESCE(rate_plan_id, 0), stay_date) DO UPDATE SET
+        stop_sell           = CASE WHEN @set_stop_sell::boolean THEN EXCLUDED.stop_sell WHEN @clear_stop_sell::boolean THEN NULL ELSE rate_restrictions.stop_sell END,
+        closed_to_arrival   = CASE WHEN @set_cta::boolean THEN EXCLUDED.closed_to_arrival WHEN @clear_cta::boolean THEN NULL ELSE rate_restrictions.closed_to_arrival END,
+        closed_to_departure = CASE WHEN @set_ctd::boolean THEN EXCLUDED.closed_to_departure WHEN @clear_ctd::boolean THEN NULL ELSE rate_restrictions.closed_to_departure END,
+        min_stay            = CASE WHEN @set_min::boolean THEN EXCLUDED.min_stay WHEN @clear_min::boolean THEN NULL ELSE rate_restrictions.min_stay END,
+        max_stay            = CASE WHEN @set_max::boolean THEN EXCLUDED.max_stay WHEN @clear_max::boolean THEN NULL ELSE rate_restrictions.max_stay END,
+        note                = CASE WHEN @set_note::boolean THEN EXCLUDED.note WHEN @clear_note::boolean THEN NULL ELSE rate_restrictions.note END,
+        updated_by          = EXCLUDED.updated_by
+    RETURNING (xmax = 0) AS inserted
+)
+SELECT (count(*) FILTER (WHERE inserted))::bigint AS created, (count(*) FILTER (WHERE NOT inserted))::bigint AS updated FROM written;
+
+-- Removes the rows of one exact scope on the given dates that would say nothing after the change (every attribute is NULL already, or is being cleared and not set): a row must say
+-- something, so they are removed before the update rather than emptied by it.
+-- name: DeleteEmptiedRestrictions :one
+WITH gone AS (
+    DELETE FROM rate_restrictions
+    WHERE tenant_id = @tenant_id AND property_id = @property_id
+      AND room_type_id IS NOT DISTINCT FROM sqlc.narg(room_type_id)::bigint AND rate_plan_id IS NOT DISTINCT FROM sqlc.narg(rate_plan_id)::bigint
+      AND stay_date = ANY(@dates::date[])
+      AND NOT @has_set::boolean -- when the request sets an attribute, a row that loses another one still says something
+      AND (stop_sell IS NULL OR (@clear_stop_sell::boolean AND NOT @set_stop_sell::boolean))
+      AND (closed_to_arrival IS NULL OR (@clear_cta::boolean AND NOT @set_cta::boolean))
+      AND (closed_to_departure IS NULL OR (@clear_ctd::boolean AND NOT @set_ctd::boolean))
+      AND (min_stay IS NULL OR (@clear_min::boolean AND NOT @set_min::boolean))
+      AND (max_stay IS NULL OR (@clear_max::boolean AND NOT @set_max::boolean))
+    RETURNING 1
+)
+SELECT count(*)::bigint FROM gone;

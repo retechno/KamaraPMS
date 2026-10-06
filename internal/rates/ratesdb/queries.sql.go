@@ -218,6 +218,68 @@ func (q *Queries) CreateYieldRule(ctx context.Context, arg CreateYieldRuleParams
 	return i, err
 }
 
+const deleteEmptiedRestrictions = `-- name: DeleteEmptiedRestrictions :one
+WITH gone AS (
+    DELETE FROM rate_restrictions
+    WHERE tenant_id = $1 AND property_id = $2
+      AND room_type_id IS NOT DISTINCT FROM $3::bigint AND rate_plan_id IS NOT DISTINCT FROM $4::bigint
+      AND stay_date = ANY($5::date[])
+      AND NOT $6::boolean -- when the request sets an attribute, a row that loses another one still says something
+      AND (stop_sell IS NULL OR ($7::boolean AND NOT $8::boolean))
+      AND (closed_to_arrival IS NULL OR ($9::boolean AND NOT $10::boolean))
+      AND (closed_to_departure IS NULL OR ($11::boolean AND NOT $12::boolean))
+      AND (min_stay IS NULL OR ($13::boolean AND NOT $14::boolean))
+      AND (max_stay IS NULL OR ($15::boolean AND NOT $16::boolean))
+    RETURNING 1
+)
+SELECT count(*)::bigint FROM gone
+`
+
+type DeleteEmptiedRestrictionsParams struct {
+	TenantID      int64
+	PropertyID    int64
+	RoomTypeID    *int64
+	RatePlanID    *int64
+	Dates         []civil.Date
+	HasSet        bool
+	ClearStopSell bool
+	SetStopSell   bool
+	ClearCta      bool
+	SetCta        bool
+	ClearCtd      bool
+	SetCtd        bool
+	ClearMin      bool
+	SetMin        bool
+	ClearMax      bool
+	SetMax        bool
+}
+
+// Removes the rows of one exact scope on the given dates that would say nothing after the change (every attribute is NULL already, or is being cleared and not set): a row must say
+// something, so they are removed before the update rather than emptied by it.
+func (q *Queries) DeleteEmptiedRestrictions(ctx context.Context, arg DeleteEmptiedRestrictionsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteEmptiedRestrictions,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomTypeID,
+		arg.RatePlanID,
+		arg.Dates,
+		arg.HasSet,
+		arg.ClearStopSell,
+		arg.SetStopSell,
+		arg.ClearCta,
+		arg.SetCta,
+		arg.ClearCtd,
+		arg.SetCtd,
+		arg.ClearMin,
+		arg.SetMin,
+		arg.ClearMax,
+		arg.SetMax,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteYieldRule = `-- name: DeleteYieldRule :execrows
 DELETE FROM yield_rules WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -915,6 +977,78 @@ func (q *Queries) ListRates(ctx context.Context, arg ListRatesParams) ([]ListRat
 	return items, nil
 }
 
+const listRestrictionRows = `-- name: ListRestrictionRows :many
+
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, note
+FROM rate_restrictions
+WHERE tenant_id = $1 AND property_id = $2 AND stay_date >= $3::date AND stay_date < $4::date
+  AND ($5::bigint IS NULL OR room_type_id IS NULL OR room_type_id = $5::bigint)
+  AND ($6::bigint IS NULL OR rate_plan_id IS NULL OR rate_plan_id = $6::bigint)
+ORDER BY stay_date, room_type_id NULLS FIRST, rate_plan_id NULLS FIRST
+`
+
+type ListRestrictionRowsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+	RoomTypeID *int64
+	RatePlanID *int64
+}
+
+type ListRestrictionRowsRow struct {
+	ID                int64
+	RoomTypeID        *int64
+	RatePlanID        *int64
+	StayDate          civil.Date
+	StopSell          *bool
+	ClosedToArrival   *bool
+	ClosedToDeparture *bool
+	MinStay           pgtype.Int2
+	MaxStay           pgtype.Int2
+	Note              *string
+}
+
+// ---------------------------------------------------------------- sales restrictions (the grid; the evaluator is availability.EvaluateStay)
+// The rows of the grid in [from, to) that can speak for a room type and a rate plan (a row of a scope of NULL is for all); without a filter, every row.
+func (q *Queries) ListRestrictionRows(ctx context.Context, arg ListRestrictionRowsParams) ([]ListRestrictionRowsRow, error) {
+	rows, err := q.db.Query(ctx, listRestrictionRows,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RoomTypeID,
+		arg.RatePlanID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRestrictionRowsRow{}
+	for rows.Next() {
+		var i ListRestrictionRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomTypeID,
+			&i.RatePlanID,
+			&i.StayDate,
+			&i.StopSell,
+			&i.ClosedToArrival,
+			&i.ClosedToDeparture,
+			&i.MinStay,
+			&i.MaxStay,
+			&i.Note,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listYieldRules = `-- name: ListYieldRules :many
 SELECT id, tenant_id, property_id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_min, lead_max, stay_min, stay_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, created_by, updated_at, updated_by FROM yield_rules
 WHERE tenant_id = $1 AND property_id = $2
@@ -1054,6 +1188,85 @@ func (q *Queries) UpdateRatePlan(ctx context.Context, arg UpdateRatePlanParams) 
 	return i, err
 }
 
+const updateRestrictions = `-- name: UpdateRestrictions :one
+WITH changed AS (
+    UPDATE rate_restrictions SET
+        stop_sell           = CASE WHEN $1::boolean THEN $2::boolean WHEN $3::boolean THEN NULL ELSE stop_sell END,
+        closed_to_arrival   = CASE WHEN $4::boolean THEN $5::boolean WHEN $6::boolean THEN NULL ELSE closed_to_arrival END,
+        closed_to_departure = CASE WHEN $7::boolean THEN $8::boolean WHEN $9::boolean THEN NULL ELSE closed_to_departure END,
+        min_stay            = CASE WHEN $10::boolean THEN $11::smallint WHEN $12::boolean THEN NULL ELSE min_stay END,
+        max_stay            = CASE WHEN $13::boolean THEN $14::smallint WHEN $15::boolean THEN NULL ELSE max_stay END,
+        note                = CASE WHEN $16::boolean THEN $17::varchar WHEN $18::boolean THEN NULL ELSE note END,
+        updated_by          = $19::bigint
+    WHERE tenant_id = $20 AND property_id = $21
+      AND room_type_id IS NOT DISTINCT FROM $22::bigint AND rate_plan_id IS NOT DISTINCT FROM $23::bigint
+      AND stay_date = ANY($24::date[])
+    RETURNING 1
+)
+SELECT count(*)::bigint FROM changed
+`
+
+type UpdateRestrictionsParams struct {
+	SetStopSell       bool
+	StopSell          *bool
+	ClearStopSell     bool
+	SetCta            bool
+	ClosedToArrival   *bool
+	ClearCta          bool
+	SetCtd            bool
+	ClosedToDeparture *bool
+	ClearCtd          bool
+	SetMin            bool
+	MinStay           pgtype.Int2
+	ClearMin          bool
+	SetMax            bool
+	MaxStay           pgtype.Int2
+	ClearMax          bool
+	SetNote           bool
+	Note              *string
+	ClearNote         bool
+	ActorID           *int64
+	TenantID          int64
+	PropertyID        int64
+	RoomTypeID        *int64
+	RatePlanID        *int64
+	Dates             []civil.Date
+}
+
+// Applies a change to the rows that exist for one exact scope (NULL is the scope "all") on the given dates: an attribute with its set flag takes the value, one with its
+// clear flag goes back to NULL, the others stay.
+func (q *Queries) UpdateRestrictions(ctx context.Context, arg UpdateRestrictionsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateRestrictions,
+		arg.SetStopSell,
+		arg.StopSell,
+		arg.ClearStopSell,
+		arg.SetCta,
+		arg.ClosedToArrival,
+		arg.ClearCta,
+		arg.SetCtd,
+		arg.ClosedToDeparture,
+		arg.ClearCtd,
+		arg.SetMin,
+		arg.MinStay,
+		arg.ClearMin,
+		arg.SetMax,
+		arg.MaxStay,
+		arg.ClearMax,
+		arg.SetNote,
+		arg.Note,
+		arg.ClearNote,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomTypeID,
+		arg.RatePlanID,
+		arg.Dates,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateYieldRule = `-- name: UpdateYieldRule :one
 UPDATE yield_rules SET
     name = $1, rate_plan_id = $2, room_type_id = $3,
@@ -1190,5 +1403,93 @@ func (q *Queries) UpsertRates(ctx context.Context, arg UpsertRatesParams) (Upser
 	)
 	var i UpsertRatesRow
 	err := row.Scan(&i.Written, &i.Created)
+	return i, err
+}
+
+const upsertRestrictions = `-- name: UpsertRestrictions :one
+WITH written AS (
+    INSERT INTO rate_restrictions (tenant_id, property_id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, note, created_by, updated_by)
+    SELECT $1::bigint, $2::bigint, $3::bigint, $4::bigint, d.stay_date,
+           CASE WHEN $5::boolean THEN $6::boolean END, CASE WHEN $7::boolean THEN $8::boolean END,
+           CASE WHEN $9::boolean THEN $10::boolean END, CASE WHEN $11::boolean THEN $12::smallint END,
+           CASE WHEN $13::boolean THEN $14::smallint END, CASE WHEN $15::boolean THEN $16::varchar END,
+           $17::bigint, $17::bigint
+    FROM unnest($18::date[]) AS d (stay_date)
+    ON CONFLICT (property_id, COALESCE(room_type_id, 0), COALESCE(rate_plan_id, 0), stay_date) DO UPDATE SET
+        stop_sell           = CASE WHEN $5::boolean THEN EXCLUDED.stop_sell WHEN $19::boolean THEN NULL ELSE rate_restrictions.stop_sell END,
+        closed_to_arrival   = CASE WHEN $7::boolean THEN EXCLUDED.closed_to_arrival WHEN $20::boolean THEN NULL ELSE rate_restrictions.closed_to_arrival END,
+        closed_to_departure = CASE WHEN $9::boolean THEN EXCLUDED.closed_to_departure WHEN $21::boolean THEN NULL ELSE rate_restrictions.closed_to_departure END,
+        min_stay            = CASE WHEN $11::boolean THEN EXCLUDED.min_stay WHEN $22::boolean THEN NULL ELSE rate_restrictions.min_stay END,
+        max_stay            = CASE WHEN $13::boolean THEN EXCLUDED.max_stay WHEN $23::boolean THEN NULL ELSE rate_restrictions.max_stay END,
+        note                = CASE WHEN $15::boolean THEN EXCLUDED.note WHEN $24::boolean THEN NULL ELSE rate_restrictions.note END,
+        updated_by          = EXCLUDED.updated_by
+    RETURNING (xmax = 0) AS inserted
+)
+SELECT (count(*) FILTER (WHERE inserted))::bigint AS created, (count(*) FILTER (WHERE NOT inserted))::bigint AS updated FROM written
+`
+
+type UpsertRestrictionsParams struct {
+	TenantID          int64
+	PropertyID        int64
+	RoomTypeID        *int64
+	RatePlanID        *int64
+	SetStopSell       bool
+	StopSell          *bool
+	SetCta            bool
+	ClosedToArrival   *bool
+	SetCtd            bool
+	ClosedToDeparture *bool
+	SetMin            bool
+	MinStay           pgtype.Int2
+	SetMax            bool
+	MaxStay           pgtype.Int2
+	SetNote           bool
+	Note              *string
+	ActorID           *int64
+	Dates             []civil.Date
+	ClearStopSell     bool
+	ClearCta          bool
+	ClearCtd          bool
+	ClearMin          bool
+	ClearMax          bool
+	ClearNote         bool
+}
+
+type UpsertRestrictionsRow struct {
+	Created int64
+	Updated int64
+}
+
+// Sets attributes for one exact scope on the given dates, creating the rows that are missing and applying the set and clear flags to those that exist, in one atomic statement
+// (two fills of the same rows merge instead of losing one of them). Used when at least one of the five attributes is set: a row must say something.
+func (q *Queries) UpsertRestrictions(ctx context.Context, arg UpsertRestrictionsParams) (UpsertRestrictionsRow, error) {
+	row := q.db.QueryRow(ctx, upsertRestrictions,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomTypeID,
+		arg.RatePlanID,
+		arg.SetStopSell,
+		arg.StopSell,
+		arg.SetCta,
+		arg.ClosedToArrival,
+		arg.SetCtd,
+		arg.ClosedToDeparture,
+		arg.SetMin,
+		arg.MinStay,
+		arg.SetMax,
+		arg.MaxStay,
+		arg.SetNote,
+		arg.Note,
+		arg.ActorID,
+		arg.Dates,
+		arg.ClearStopSell,
+		arg.ClearCta,
+		arg.ClearCtd,
+		arg.ClearMin,
+		arg.ClearMax,
+		arg.ClearNote,
+	)
+	var i UpsertRestrictionsRow
+	err := row.Scan(&i.Created, &i.Updated)
 	return i, err
 }

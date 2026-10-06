@@ -1301,6 +1301,68 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-restrictions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listRateRestrictions
+      summary: The rows of the sales restriction grid
+      description: "The rows of the grid with `stay_date` in [from, to) (at most 366 days). With `room_type_id` or `rate_plan_id` it lists the rows that can speak for that room type or plan, a row of a scope of all included; without them, every row. Readable by anyone at the property."
+      tags: [rates]
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, description: Exclusive., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: rate_plan_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The rows.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RateRestrictionList" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: fillRateRestrictions
+      summary: Set or clear sales restrictions for a range of dates (rate.manage)
+      description: "Sets or clears attributes of the grid for the scopes of the request on every selected date of [from, to), in one transaction with one audit entry. The scopes are the room types listed times the rate plans listed; an empty list is the scope all. A date with no row for a scope gets one when an attribute is set; a row that says nothing after the change is removed; clearing where nothing is does nothing. Two fills of the same rows merge. Reservations that exist are never touched: a restriction is read when a stay is sold. 404 `ROOM_TYPE_NOT_FOUND`, `RATE_PLAN_NOT_FOUND`; 422 for a bad request."
+      tags: [rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FillRateRestrictionsRequest" }
+      responses:
+        "200":
+          description: What the fill did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FillRateRestrictionsResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/rate-restrictions/effective:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: effectiveRateRestrictions
+      summary: What each date is under for a room type and a rate plan
+      description: "The effective restrictions of every date of [from, to) (at most 366 days) for one room type and one rate plan, by the one precedence of the availability engine: for each attribute, the value of the most specific row that has one (room type and plan, then room type, then plan, then the whole property; the room type beats the plan). `sources` says which row decided each attribute. Screens and a future channel manager read this and never resolve the precedence themselves. Readable by anyone at the property."
+      tags: [rates]
+      parameters:
+        - { name: room_type_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: rate_plan_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, required: true, description: Exclusive., schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: One entry per date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EffectiveRestrictionList" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/yield-rules:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8583,6 +8645,83 @@ components:
         adjust_kind: { type: string, enum: [AMOUNT, PERCENT] }
         amount: { type: string, description: "A decimal, negative for a discount. An amount has at most the decimals of the currency; a percentage is between -100 and 1000 with at most three decimals." }
         effective_from: { $ref: "#/components/schemas/Date" }
+    RateRestriction:
+      type: object
+      required: [id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay]
+      properties:
+        id: { type: integer, format: int64 }
+        room_type_id: { type: [integer, "null"], format: int64, description: Null is every room type. }
+        rate_plan_id: { type: [integer, "null"], format: int64, description: Null is every rate plan. }
+        stay_date: { $ref: "#/components/schemas/Date" }
+        stop_sell: { type: [boolean, "null"], description: "Null: no opinion at this level. True: the night cannot be sold. False: explicitly open, which beats a wider row that closes." }
+        closed_to_arrival: { type: [boolean, "null"], description: "The date cannot be an arrival date." }
+        closed_to_departure: { type: [boolean, "null"], description: "The date cannot be a departure date." }
+        min_stay: { type: [integer, "null"], minimum: 1, maximum: 365, description: "The shortest stay that may arrive on this date." }
+        max_stay: { type: [integer, "null"], minimum: 1, maximum: 365, description: "The longest stay that may arrive on this date." }
+        note: { type: string }
+    RateRestrictionList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/RateRestriction" } }
+    FillRateRestrictionsRequest:
+      type: object
+      required: [from, to, set]
+      additionalProperties: false
+      properties:
+        room_type_ids: { type: [array, "null"], items: { type: integer, format: int64 }, description: "Omitted, null or empty is the scope every room type." }
+        rate_plan_ids: { type: [array, "null"], items: { type: integer, format: int64 }, description: "Omitted, null or empty is the scope every rate plan. At most 100 room type and rate plan pairs." }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        weekdays: { type: [array, "null"], items: { type: string, enum: [MON, TUE, WED, THU, FRI, SAT, SUN] }, description: "Empty is every day." }
+        set:
+          type: object
+          additionalProperties: false
+          description: "The attributes to set; one that is left out is not changed. An empty note clears the note."
+          properties:
+            stop_sell: { type: boolean }
+            closed_to_arrival: { type: boolean }
+            closed_to_departure: { type: boolean }
+            min_stay: { type: integer, minimum: 1, maximum: 365 }
+            max_stay: { type: integer, minimum: 1, maximum: 365 }
+            note: { type: string, maxLength: 200 }
+        clear:
+          type: [array, "null"]
+          description: "Attributes to take back to no opinion (null). One cannot be both set and cleared."
+          items: { type: string, enum: [stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, note] }
+    FillRateRestrictionsResult:
+      type: object
+      required: [dates, scopes, created, updated, deleted]
+      properties:
+        dates: { type: integer, description: The dates of the range on the selected weekdays. }
+        scopes: { type: integer, description: Room type and rate plan scopes written. }
+        created: { type: integer, format: int64 }
+        updated: { type: integer, format: int64 }
+        deleted: { type: integer, format: int64, description: Rows removed because nothing was left in them. }
+    EffectiveRestriction:
+      type: object
+      required: [date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay, sources]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        stop_sell: { type: boolean }
+        closed_to_arrival: { type: boolean }
+        closed_to_departure: { type: boolean }
+        min_stay: { type: [integer, "null"] }
+        max_stay: { type: [integer, "null"] }
+        sources:
+          type: object
+          description: "Only the attributes a row decided; the keys are stop_sell, closed_to_arrival, closed_to_departure, min_stay and max_stay."
+          additionalProperties:
+            type: object
+            required: [row_id, scope]
+            properties:
+              row_id: { type: integer, format: int64 }
+              scope: { type: string, enum: [ROOM_TYPE_AND_PLAN, ROOM_TYPE, RATE_PLAN, PROPERTY] }
+    EffectiveRestrictionList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/EffectiveRestriction" } }
     YieldRule:
       type: object
       required: [id, code, name, rate_plan_id, room_type_id, stay_from, stay_to, weekdays, occupancy_from, occupancy_to, lead_days_min, lead_days_max, stay_nights_min, stay_nights_max, adjustment_type, adjustment_value, floor_amount, cap_amount, priority, is_active, created_at, updated_at]

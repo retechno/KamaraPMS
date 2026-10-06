@@ -999,6 +999,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/rate-restrictions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The rows of the sales restriction grid
+         * @description The rows of the grid with `stay_date` in [from, to) (at most 366 days). With `room_type_id` or `rate_plan_id` it lists the rows that can speak for that room type or plan, a row of a scope of all included; without them, every row. Readable by anyone at the property.
+         */
+        get: operations["listRateRestrictions"];
+        /**
+         * Set or clear sales restrictions for a range of dates (rate.manage)
+         * @description Sets or clears attributes of the grid for the scopes of the request on every selected date of [from, to), in one transaction with one audit entry. The scopes are the room types listed times the rate plans listed; an empty list is the scope all. A date with no row for a scope gets one when an attribute is set; a row that says nothing after the change is removed; clearing where nothing is does nothing. Two fills of the same rows merge. Reservations that exist are never touched: a restriction is read when a stay is sold. 404 `ROOM_TYPE_NOT_FOUND`, `RATE_PLAN_NOT_FOUND`; 422 for a bad request.
+         */
+        put: operations["fillRateRestrictions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/rate-restrictions/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What each date is under for a room type and a rate plan
+         * @description The effective restrictions of every date of [from, to) (at most 366 days) for one room type and one rate plan, by the one precedence of the availability engine: for each attribute, the value of the most specific row that has one (room type and plan, then room type, then plan, then the whole property; the room type beats the plan). `sources` says which row decided each attribute. Screens and a future channel manager read this and never resolve the precedence themselves. Readable by anyone at the property.
+         */
+        get: operations["effectiveRateRestrictions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/yield-rules": {
         parameters: {
             query?: never;
@@ -7620,6 +7668,91 @@ export interface components {
             amount: string;
             effective_from: components["schemas"]["Date"];
         };
+        RateRestriction: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description Null is every room type.
+             */
+            room_type_id: number | null;
+            /**
+             * Format: int64
+             * @description Null is every rate plan.
+             */
+            rate_plan_id: number | null;
+            stay_date: components["schemas"]["Date"];
+            /** @description Null: no opinion at this level. True: the night cannot be sold. False: explicitly open, which beats a wider row that closes. */
+            stop_sell: boolean | null;
+            /** @description The date cannot be an arrival date. */
+            closed_to_arrival: boolean | null;
+            /** @description The date cannot be a departure date. */
+            closed_to_departure: boolean | null;
+            /** @description The shortest stay that may arrive on this date. */
+            min_stay: number | null;
+            /** @description The longest stay that may arrive on this date. */
+            max_stay: number | null;
+            note?: string;
+        };
+        RateRestrictionList: {
+            data: components["schemas"]["RateRestriction"][];
+        };
+        FillRateRestrictionsRequest: {
+            /** @description Omitted, null or empty is the scope every room type. */
+            room_type_ids?: number[] | null;
+            /** @description Omitted, null or empty is the scope every rate plan. At most 100 room type and rate plan pairs. */
+            rate_plan_ids?: number[] | null;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            /** @description Empty is every day. */
+            weekdays?: ("MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN")[] | null;
+            /** @description The attributes to set; one that is left out is not changed. An empty note clears the note. */
+            set: {
+                stop_sell?: boolean;
+                closed_to_arrival?: boolean;
+                closed_to_departure?: boolean;
+                min_stay?: number;
+                max_stay?: number;
+                note?: string;
+            };
+            /** @description Attributes to take back to no opinion (null). One cannot be both set and cleared. */
+            clear?: ("stop_sell" | "closed_to_arrival" | "closed_to_departure" | "min_stay" | "max_stay" | "note")[] | null;
+        };
+        FillRateRestrictionsResult: {
+            /** @description The dates of the range on the selected weekdays. */
+            dates: number;
+            /** @description Room type and rate plan scopes written. */
+            scopes: number;
+            /** Format: int64 */
+            created: number;
+            /** Format: int64 */
+            updated: number;
+            /**
+             * Format: int64
+             * @description Rows removed because nothing was left in them.
+             */
+            deleted: number;
+        };
+        EffectiveRestriction: {
+            date: components["schemas"]["Date"];
+            stop_sell: boolean;
+            closed_to_arrival: boolean;
+            closed_to_departure: boolean;
+            min_stay: number | null;
+            max_stay: number | null;
+            /** @description Only the attributes a row decided; the keys are stop_sell, closed_to_arrival, closed_to_departure, min_stay and max_stay. */
+            sources: {
+                [key: string]: {
+                    /** Format: int64 */
+                    row_id: number;
+                    /** @enum {string} */
+                    scope: "ROOM_TYPE_AND_PLAN" | "ROOM_TYPE" | "RATE_PLAN" | "PROPERTY";
+                };
+            };
+        };
+        EffectiveRestrictionList: {
+            data: components["schemas"]["EffectiveRestriction"][];
+        };
         YieldRule: {
             /** Format: int64 */
             id: number;
@@ -13837,6 +13970,96 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listRateRestrictions: {
+        parameters: {
+            query: {
+                from: components["schemas"]["Date"];
+                /** @description Exclusive. */
+                to: components["schemas"]["Date"];
+                room_type_id?: number;
+                rate_plan_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateRestrictionList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    fillRateRestrictions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FillRateRestrictionsRequest"];
+            };
+        };
+        responses: {
+            /** @description What the fill did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillRateRestrictionsResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    effectiveRateRestrictions: {
+        parameters: {
+            query: {
+                room_type_id: number;
+                rate_plan_id: number;
+                from: components["schemas"]["Date"];
+                /** @description Exclusive. */
+                to: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per date. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveRestrictionList"];
+                };
+            };
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
