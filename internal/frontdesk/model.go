@@ -162,7 +162,9 @@ type Arrival struct {
 	// RequestedBedType is the bed type the guest asked for; RoomBedType is the bed type of the assigned room (each empty when none).
 	RequestedBedTypeID   *int64 `json:"requested_bed_type_id"`
 	RequestedBedTypeCode string `json:"requested_bed_type_code,omitempty"`
-	RoomBedTypeCode      string `json:"room_bed_type_code,omitempty"`
+	// BedLocked says the guest keeps the requested bed: the room must have it.
+	BedLocked       bool   `json:"bed_locked"`
+	RoomBedTypeCode string `json:"room_bed_type_code,omitempty"`
 	// HousekeepingStatus is the current status of the assigned room (empty when no room is assigned).
 	HousekeepingStatus string     `json:"housekeeping_status,omitempty"`
 	ArrivalDate        civil.Date `json:"arrival_date"`

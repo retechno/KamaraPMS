@@ -134,4 +134,19 @@ describe('AvailabilityCalendarView', () => {
     await flushPromises()
     expect(w.find('[data-testid=empty]').exists()).toBe(true)
   })
+
+  it('marks the nights on which a bed is the limit and says how many rooms are kept', async () => {
+    const limited = { ...night('2026-10-01', 1, 0), held: 1, locked: 1, bed_limited: true }
+    const withBeds = { ...calendar, room_types: [{ ...calendar.room_types[0], beds: [
+      { bed_type_id: 3, code: 'KING', name: 'King', rooms_total: 1, nights: [limited, night('2026-10-02', 1, 1), night('2026-10-03', 1, 1)] },
+    ] }, ...calendar.room_types.slice(1)] }
+    const w = mountView(['reservation.read'], withBeds)
+    await flushPromises()
+    await w.get('input[name=by_bed]').setValue(true)
+    await flushPromises()
+    const cell = w.get('[data-testid=cell-DLX-KING-2026-10-01]')
+    expect(cell.attributes('title')).toContain('1 room(s) of this bed kept')
+    expect(cell.attributes('title')).toContain('sold out although the room type is not')
+    expect(cell.classes().join(' ')).toContain('bg-warning')
+  })
 })

@@ -39,6 +39,8 @@ const reason = ref('')
 const beds = ref<BedType[]>([])
 // The bed a line is being changed to, by line (until it is saved).
 const bedPick = reactive<Record<number, number>>({})
+// Whether the bed is kept, by line (until it is saved).
+const lockPick = reactive<Record<number, boolean>>({})
 const assigning = ref<{ lineId: number; typeId: number; rooms: FreeRoom[]; roomId: number | null } | null>(null)
 const header = reactive({ source: 'PHONE', remarks: '' })
 const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
@@ -120,7 +122,7 @@ const saveHeader = () => run(() => api.PATCH('/api/v1/properties/{propertyId}/re
   params: base(), body: { version: version(), source: header.source as Reservation['source'], remarks: header.remarks },
 }))
 const saveBed = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', {
-  params: lineParams(line.id), body: { version: version(), bed_type_id: bedPick[line.id] ?? line.bed_type_id ?? 0 },
+  params: lineParams(line.id), body: { version: version(), bed_type_id: bedPick[line.id] ?? line.bed_type_id ?? 0, bed_locked: lockOf(line) },
 }))
 // The price changes being prepared, by line, and the line whose change waits for an approver.
 const rates = reactive<Record<number, RateChange>>({})
@@ -158,7 +160,9 @@ const saveReason = (line: ReservationRoom) => run(() => api.PATCH('/api/v1/prope
   params: lineParams(line.id), body: { version: version(), occupancy_reason: reasonPick[line.id] ?? line.occupancy_reason ?? '' },
 }))
 const reasonChanged = (line: ReservationRoom) => (reasonPick[line.id] ?? line.occupancy_reason ?? '') !== (line.occupancy_reason ?? '')
-const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type_id ?? 0) !== (line.bed_type_id ?? 0)
+/** Whether the line keeps its bed as the form stands: never without a bed. */
+const lockOf = (line: ReservationRoom): boolean => (bedPick[line.id] ?? line.bed_type_id ?? 0) > 0 && (lockPick[line.id] ?? line.bed_locked)
+const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type_id ?? 0) !== (line.bed_type_id ?? 0) || lockOf(line) !== line.bed_locked
 const unassign = (lineId: number) => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room', { params: lineParams(lineId), body: { version: version() } }))
 
 function ask(kind: 'cancel' | 'cancel-room' | 'no-show', lineId?: number): void {
@@ -290,7 +294,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <span v-else class="text-sm text-muted-foreground">{{ t('reservation.noRoom') }}</span>
           <StatusBadge domain="reservation" :status="line.status" :data-testid="`line-status-${line.id}`" />
           <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
-          <Badge v-if="line.bed_type_code" variant="outline" :data-testid="`bed-${line.id}`">{{ t('bedTypes.bed') }}: {{ line.bed_type_name || line.bed_type_code }}</Badge>
+          <Badge v-if="line.bed_type_code" variant="outline" :data-testid="`bed-${line.id}`">{{ t('bedTypes.bed') }}: {{ line.bed_type_name || line.bed_type_code }}<template v-if="line.bed_locked"> · {{ t('bedTypes.kept') }}</template></Badge>
           <Badge v-if="line.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${line.id}`">{{ t(`occupancy.kind_${line.occupancy_kind}`) }}</Badge>
           <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
           <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
@@ -352,6 +356,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                 </NativeSelect>
               </template>
             </FormField>
+            <label v-if="(bedPick[line.id] ?? line.bed_type_id ?? 0) > 0" class="flex items-center gap-2 pb-2 text-sm">
+              <input type="checkbox" class="size-4 accent-primary" :name="`bed_locked_${line.id}`" :checked="lockOf(line)" @change="(e) => (lockPick[line.id] = (e.target as HTMLInputElement).checked)" />
+              <span>{{ t('bedTypes.keepBed') }}</span>
+            </label>
             <Button type="submit" variant="outline" size="sm" :disabled="busy || !bedChanged(line)" :data-testid="`save-bed-${line.id}`">{{ t('common.save') }}</Button>
           </form>
 

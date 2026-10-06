@@ -67,7 +67,7 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 			GuestID: firstID(r.LineGuestID, r.BookerID), GuestName: guestNameOpt(r.GuestFirstName, r.GuestLastName), RoomTypeID: r.RoomTypeID,
 			RoomTypeCode: r.RoomTypeCode, RoomID: r.RoomID, RoomNumber: deref(r.RoomNumber), HousekeepingStatus: deref(r.HousekeepingStatus), ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate,
 			AdultCount: int(r.AdultCount), ChildCount: int(r.ChildCount),
-			RequestedBedTypeID: r.RequestedBedTypeID, RequestedBedTypeCode: deref(r.RequestedBedTypeCode), RoomBedTypeCode: deref(r.RoomBedTypeCode),
+			RequestedBedTypeID: r.RequestedBedTypeID, BedLocked: r.BedLocked, RequestedBedTypeCode: deref(r.RequestedBedTypeCode), RoomBedTypeCode: deref(r.RoomBedTypeCode),
 		}
 	}
 	return out, nil

@@ -374,4 +374,37 @@ describe('NewReservationView: company and group', () => {
     expect(m.w.find('select[name=booking_group_id]').exists()).toBe(false)
   })
 
+  it('offers the variants with what is left and keeps the bed that was chosen, with its supplement', async () => {
+    const { w } = mountView()
+    const nightly = (adj: string) => [{ date: '2026-10-02', amount: String(1000000 + Number(adj)), bed_adjustment: adj }, { date: '2026-10-03', amount: String(1000000 + Number(adj)), bed_adjustment: adj }]
+    const plan = (adj: string) => ({ id: 1, code: 'BAR', name: 'Best', price_mode: 'EXCLUSIVE', occupancy_kind: 'PAID', nightly: nightly(adj), missing_nights: 0, estimate: { net: '1', service: '0', tax: '0', total: '1' } })
+    const variants = {
+      ...search,
+      room_types: [{ ...search.room_types[0], beds: [
+        { bed_type_id: 5, code: 'KING', name: 'King', available_min: 0, per_night: [], rate_plans: [plan('50000')] },
+        { bed_type_id: 6, code: 'TWIN', name: 'Twin', available_min: 1, per_night: [], rate_plans: [plan('30000')] },
+      ] }, search.room_types[1]],
+    }
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : variants }))
+    await flushPromises()
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    expect(w.findAll('select[name=bed_type_id] option').map((o) => o.text())).toEqual(['No preference', 'King · sold out', 'Twin · 1 left'])
+    expect(w.find('input[name=bed_locked]').exists()).toBe(false) // nothing to keep without a bed
+    await w.get('select[name=bed_type_id]').setValue(6)
+    await w.get('input[name=bed_locked]').setValue(true)
+    expect(w.get('[data-testid=bed-supplement]').text()).toContain('60,000') // 30,000 a night for two nights
+    await w.get('input[name=guest_q]').setValue('siti')
+    await w.get('[data-testid=find-guest]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=guest-GST000001]').trigger('click')
+    await w.get('form[data-testid=book-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body.rooms[0]).toMatchObject({ room_type_id: 10, bed_type_id: 6, bed_locked: true })
+    // taking the bed off takes the lock off
+    await w.get('select[name=bed_type_id]').setValue(0)
+    expect(w.find('input[name=bed_locked]').exists()).toBe(false)
+  })
 })

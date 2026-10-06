@@ -9348,6 +9348,7 @@ components:
         room_number: { type: string }
         requested_bed_type_id: { type: [integer, "null"], format: int64 }
         requested_bed_type_code: { type: string, description: The bed type the guest asked for (absent when none). }
+        bed_locked: { type: boolean, description: "The guest keeps the requested bed: the room must have it." }
         room_bed_type_code: { type: string, description: The bed type of the assigned room (absent when none or no room is assigned). }
         housekeeping_status: { type: string, description: The current housekeeping status of the assigned room (absent when no room is assigned). }
         arrival_date: { $ref: "#/components/schemas/Date" }

@@ -5,11 +5,7 @@ this list only keeps them from being forgotten. Move an item to the README statu
 
 ## Rooms and availability
 
-- **Bed counts per room type** (for example 1 King or 2 Twin in one room type) and **bed type as a sellable variant** with
-  its own stock or rate. Today a bed type is a description: availability is counted per room type, and a room with
-  another bed than the one asked for can still be assigned (see "Bed types" in the README). Touches the availability
-  engine (inventory per type and bed), the search, the rate grid and the calendar. Decide first whether a variant
-  has its own price or only its own stock.
+- **Bed counts per room type** (for example 1 King or 2 Twin in one room type). The bed type as a sellable variant with its own stock and supplement is built (`16-bed-variants.md`); what stays out is a room that holds several beds, and a bed variant that has a price of its own instead of a supplement on the room type.
 
 ## Finance (recommended order, 2026-10-03; item 1 started: PKP settings built, see 09-pkp-input-vat.md)
 

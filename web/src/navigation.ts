@@ -124,6 +124,7 @@ export const navigation: NavSection[] = [
       { id: 'ratePlans', to: '/setup/rate-plans' },
       { id: 'freeQuotas', to: '/setup/free-quotas' },
       { id: 'rateGrid', to: '/setup/rates' },
+      { id: 'bedSupplements', to: '/setup/bed-supplements' },
       { id: 'yieldRules', to: '/setup/yield-rules' },
       { id: 'auditTrail', to: '/audit' },
     ],

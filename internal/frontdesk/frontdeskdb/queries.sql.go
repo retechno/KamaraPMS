@@ -666,7 +666,7 @@ const listArrivals = `-- name: ListArrivals :many
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name,
-       l.requested_bed_type_id, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code
+       l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
@@ -704,6 +704,7 @@ type ListArrivalsRow struct {
 	GuestFirstName       *string
 	GuestLastName        *string
 	RequestedBedTypeID   *int64
+	BedLocked            bool
 	RequestedBedTypeCode *string
 	RoomBedTypeCode      *string
 }
@@ -737,6 +738,7 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			&i.GuestFirstName,
 			&i.GuestLastName,
 			&i.RequestedBedTypeID,
+			&i.BedLocked,
 			&i.RequestedBedTypeCode,
 			&i.RoomBedTypeCode,
 		); err != nil {

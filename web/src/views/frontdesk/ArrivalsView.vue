@@ -96,7 +96,7 @@ watch(() => property.currentId, () => {
       </template>
       <template #cell-guest_name="{ row }">
         {{ row.guest_name || '—' }}
-        <Badge v-if="row.requested_bed_type_code" variant="outline" class="ml-1.5" :data-testid="`bed-${row.reservation_room_id}`">{{ t('bedTypes.bed') }}: {{ row.requested_bed_type_code }}</Badge>
+        <Badge v-if="row.requested_bed_type_code" variant="outline" class="ml-1.5" :data-testid="`bed-${row.reservation_room_id}`">{{ t('bedTypes.bed') }}: {{ row.requested_bed_type_code }}<template v-if="row.bed_locked"> · {{ t('bedTypes.kept') }}</template></Badge>
       </template>
       <template #cell-room_number="{ row }">
         <span v-if="row.room_number" class="inline-flex items-center gap-1.5">

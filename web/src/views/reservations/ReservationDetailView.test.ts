@@ -325,4 +325,22 @@ describe('ReservationDetailView', () => {
     expect(w.get('[data-testid=bed-4]').text()).toContain('King')
     expect(w.find('[data-testid=bed-form-4]').exists()).toBe(false)
   })
+
+  it('keeps and releases the bed of a line', async () => {
+    const beds = { data: [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }] }
+    const w = mountView(reservation({ rooms: [line({ bed_type_id: 5, bed_type_code: 'KING', bed_type_name: 'King', bed_locked: false })] }), ALL, { '/bed-types': beds })
+    await flushPromises()
+    expect(w.get('[data-testid=bed-4]').text()).not.toContain('kept')
+    expect((w.get('[data-testid=save-bed-4]').element as HTMLButtonElement).disabled).toBe(true)
+    PATCH.mockResolvedValue({ data: reservation({ rooms: [line({ bed_type_id: 5, bed_type_code: 'KING', bed_type_name: 'King', bed_locked: true })] }) })
+    await w.get('input[name=bed_locked_4]').setValue(true)
+    expect((w.get('[data-testid=save-bed-4]').element as HTMLButtonElement).disabled).toBe(false)
+    await w.get('[data-testid=bed-form-4]').trigger('submit')
+    await flushPromises()
+    expect(PATCH.mock.calls[0]?.[1].body).toMatchObject({ bed_type_id: 5, bed_locked: true })
+    expect(w.get('[data-testid=bed-4]').text()).toContain('kept')
+    // no bed, no lock
+    await w.get('select[name=bed_4]').setValue(0)
+    expect(w.find('input[name=bed_locked_4]').exists()).toBe(false)
+  })
 })

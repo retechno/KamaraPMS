@@ -29,6 +29,8 @@ interface Night {
   reservations: number
   complimentary: number
   house_use: number
+  locked?: number
+  bed_limited?: boolean
 }
 
 /** What a cell can show. `available` alone is the compact view; more than one makes it the detailed view. */
@@ -112,13 +114,16 @@ function value(n: Night, m: Metric): string {
 }
 
 function tooltip(n: Night): string {
-  return t('availabilityCalendar.cellTitle', { date: n.date, sellable: n.sellable, held: n.held, blocked: n.blocked, percent: n.occupancy_percent })
+  const base = t('availabilityCalendar.cellTitle', { date: n.date, sellable: n.sellable, held: n.held, blocked: n.blocked, percent: n.occupancy_percent })
+  const kept = n.locked ? ` ${t('availabilityCalendar.keptTitle', { n: n.locked })}` : ''
+  return base + kept + (n.bed_limited ? ` ${t('availabilityCalendar.bedLimited')}` : '')
 }
 
 /** Colour of an `available` cell: oversold is red, a full type is amber, the rest is neutral. */
 function tone(n: Night, m: Metric): string {
   if (m !== 'available') return ''
   if (n.available < 0) return 'bg-destructive/15 font-semibold text-destructive'
+  if (n.bed_limited) return 'bg-warning/30 font-semibold' // the bed is sold out although the room type is not
   if (n.available === 0) return 'bg-warning/20 font-medium'
   return ''
 }

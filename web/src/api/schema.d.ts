@@ -8383,6 +8383,8 @@ export interface components {
             requested_bed_type_id?: number | null;
             /** @description The bed type the guest asked for (absent when none). */
             requested_bed_type_code?: string;
+            /** @description The guest keeps the requested bed: the room must have it. */
+            bed_locked?: boolean;
             /** @description The bed type of the assigned room (absent when none or no room is assigned). */
             room_bed_type_code?: string;
             /** @description The current housekeeping status of the assigned room (absent when no room is assigned). */

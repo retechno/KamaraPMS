@@ -37,9 +37,26 @@ const guestQuery = ref('')
 const guestResults = ref<Guest[]>([])
 const guest = ref<Guest | null>(null)
 const beds = ref<BedType[]>([])
-const form = reactive({ source: 'PHONE' as ReservationSource, bedTypeId: 0, occupancyReason: '', confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
+const form = reactive({ source: 'PHONE' as ReservationSource, bedTypeId: 0, bedLocked: false, occupancyReason: '', confirm: true, remarks: '', companyId: 0, groupId: Number(route.query.group) || 0 })
 const companies = ref<Company[]>([])
 const groups = ref<Group[]>([])
+/** The variants the picked room type offers, with what is left and the supplement of the picked plan; falls back to the catalogue of beds. */
+interface BedChoice { id: number; label: string; left: number | null; soldOut: boolean; supplement: string }
+const bedChoices = computed<BedChoice[]>(() => {
+  const pk = picked.value
+  if (!pk) return []
+  const variants = pk.type.beds ?? []
+  if (!variants.length) return beds.value.map((b) => ({ id: b.id, label: b.name, left: null, soldOut: false, supplement: '0' }))
+  return variants.map((v) => {
+    const plan = v.rate_plans.find((p) => p.id === pk.plan.id)
+    const adj = (plan?.nightly ?? []).reduce((sum, n) => sum + Number(n.bed_adjustment), 0)
+    return { id: v.bed_type_id, label: v.name, left: v.available_min, soldOut: v.available_min < 1, supplement: String(adj) }
+  })
+})
+const chosenBed = computed(() => bedChoices.value.find((b) => b.id === form.bedTypeId))
+watch(() => form.bedTypeId, (id) => {
+  if (!id) form.bedLocked = false
+})
 const chosenGroup = computed(() => groups.value.find((g) => g.id === form.groupId))
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
@@ -230,6 +247,7 @@ async function book(approval?: Approval): Promise<void> {
           adult_count: search.adults,
           child_count: search.children,
           bed_type_id: form.bedTypeId || undefined,
+          bed_locked: form.bedTypeId && form.bedLocked ? true : undefined,
           occupancy_reason: picked.value.plan.occupancy_kind !== 'PAID' ? form.occupancyReason : undefined,
           nightly_overrides: rate.value.overrides.length ? rate.value.overrides : undefined,
         }],
@@ -343,12 +361,20 @@ async function book(approval?: Approval): Promise<void> {
                 </NativeSelect>
               </template>
             </FormField>
-            <FormField v-if="beds.length" :label="t('bedTypes.requested')">
+            <FormField v-if="bedChoices.length" :label="t('bedTypes.requested')">
               <template #default="{ id }">
                 <NativeSelect :id="id" v-model.number="form.bedTypeId" name="bed_type_id">
                   <option :value="0">{{ t('bedTypes.noPreference') }}</option>
-                  <option v-for="b in beds" :key="b.id" :value="b.id">{{ b.name }}</option>
+                  <option v-for="b in bedChoices" :key="b.id" :value="b.id" :disabled="b.soldOut && form.bedLocked">{{ b.label }}{{ b.left === null ? '' : b.soldOut ? ` · ${t('bedTypes.soldOut')}` : ` · ${t('bedTypes.left', { n: b.left })}` }}</option>
                 </NativeSelect>
+                <label v-if="form.bedTypeId" class="mt-2 flex items-center gap-2 text-sm">
+                  <input v-model="form.bedLocked" type="checkbox" name="bed_locked" class="size-4 accent-primary" />
+                  <span>{{ t('bedTypes.keepBed') }}</span>
+                </label>
+                <small v-if="form.bedTypeId && form.bedLocked" class="text-xs text-muted-foreground" data-testid="bed-supplement">
+                  {{ chosenBed && Number(chosenBed.supplement) !== 0 ? t('bedTypes.supplement', { amount: $money(chosenBed.supplement) }) : t('bedTypes.noSupplement') }}
+                  <template v-if="chosenBed?.soldOut"> · {{ t('bedTypes.soldOut') }}</template>
+                </small>
               </template>
             </FormField>
             <FormField v-if="picked.plan.occupancy_kind !== 'PAID'" :label="t('occupancy.reason')" :error="fieldError('rooms[0].occupancy_reason')">
