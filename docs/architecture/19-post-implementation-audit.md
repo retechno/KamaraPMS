@@ -25,7 +25,7 @@ The findings that decide the verdict:
 
 1. **F-01 (Critical): CI has been red on every run since the first commit.** *(Resolved, see the update on F-01.)* The cause is an exit code 126 on the steps that call `scripts/sqlc.sh` and `scripts/db-test.sh`: the scripts are stored with mode `100644` in git, so a Linux runner cannot execute them. The lint, the race-detector test run, the sqlc freshness check and the schema tests on PostgreSQL 16 and 18 have therefore **never run in CI**. Locally everything is green, including a new run of the schema tests on PostgreSQL 18, so the fix is probably small, but until it is made none of those guarantees is evidence. The "all checks pass" reported after each step of this project was true of the local machine; the CI status was not consulted, which is how this stayed unseen for 16 runs.
 2. **F-02 (Medium): the race detector has run on only 6 of the 43 test packages (all clean) and never in CI** *(resolved: the whole suite passes under `-race` in CI run 17)*, although the code base has 57 concurrency tests.
-3. **F-03 and F-04 (High): there is no deployable artefact and no backup, restore or disaster-recovery procedure.** No Dockerfile, no production compose, no reverse-proxy or TLS guidance, no place where the SPA is served, and not one line about backup, RPO or RTO.
+3. **F-03 and F-04 (High): there is no deployable artefact and no backup, restore or disaster-recovery procedure.** No Dockerfile, no production compose, no reverse-proxy or TLS guidance, no place where the SPA is served, and not one line about backup, RPO or RTO. *Update, later the same day: a deployment recipe exists (P0 #3) and backup scripts with one real restore exist (P0 #4); an agreed RPO and RTO, a backup schedule, an off-machine copy and point-in-time recovery do not. See F-03, F-04 and the verdict.*
 4. **F-05 (High): the rate limits trust only the connection address.** Behind the reverse proxy that production needs, every client is the proxy: one shared bucket for the whole hotel, and the login and approval throttles are in memory per process.
 5. **F-06 (Medium): reverse check-in leaves company folios open on a cancelled stay**, and a payment on such a folio is stranded there. Small, but it is money.
 
@@ -157,7 +157,7 @@ Compared with `13-feature-map.md`, `08-backlog.md` and the architecture document
 | Point of sale integration | MISSING | none | out of the pilot | later |
 | Fixed assets, purchase orders, withholding tax on payables | MISSING | backlog "later" | out of the pilot | later |
 | Multi-currency | MISSING (non-goal) | `18` section 5.9 describes the future shape | by decision | later |
-| Deployment, backup and restore, monitoring | **MISSING** | F-03, F-04, F-13 | **blocks the pilot** | P0 / P1 |
+| Deployment, backup and restore, monitoring | **PARTIAL** (deployment and backup scripts exist; schedule, RPO and RTO decision, off-machine copy and monitoring do not) | F-03, F-04, F-13 | **blocks the pilot** | P0 / P1 |
 | Browser-level end-to-end tests | MISSING | only API-level `e2e_test.go` and mocked component tests (F-27) | the UI has never been driven against the real API by a test | P1 |
 
 ## 5. Financial Integrity
@@ -497,7 +497,7 @@ Commit under verification: `f77e016`; the smoke-test extension below is `2f25be7
 
 The DB-down and TLS checks were manual in the first verification and are now part of `scripts/prod-smoke.sh` (`SMOKE_DB_DOWN=0`, `SMOKE_TLS=0` skip them).
 
-**Status after verification.** F-03: resolved for a single machine. F-05: resolved (throttles still per process; one API instance is the supported shape). **F-04 is still open and is P0 #4**: nothing was done on backup or restore.
+**Status after verification.** F-03: resolved for a single machine. F-05: resolved (throttles still per process; one API instance is the supported shape). **F-04 was still open when this block was written and was then worked as P0 #4**: nothing had been done on backup or restore at that moment (the later state is in the F-04 update and in the verdict).
 
 **Remaining limitations.** No deployment to a real server and no certificate from an authority (needs a server and a domain). The throttles are per process. The smoke test does not read the headers of an error produced by nginx itself beyond the cases listed. Branch protection for `main` is not set.
 
@@ -790,10 +790,12 @@ Why not NOT READY: the system does what a hotel needs for the whole cycle, the m
 Why not PILOT READY: a pilot needs evidence that the checks hold and a way to run and recover the system, and both are missing.
 
 - **Blocker 1, F-01 (resolved 2026-10-07)**: CI had failed on all 16 runs since the first commit because the scripts were not executable. After `c38ca68` run 17 is green in every job; what is left is to make the checks required for `main`.
-- **Blocker 2, F-03 and F-04**: there is no deployable artefact, no definition of where the SPA is served or TLS terminated, and no backup, restore, RPO or RTO.
+- **Blocker 2, F-03 and F-04** (as found; later state in brackets): there is no deployable artefact, no definition of where the SPA is served or TLS terminated, and no backup, restore, RPO or RTO. [F-03: a one-machine recipe exists and is verified (CI run 18). F-04: scripts exist and one real restore was compared table by table on the development machine (CI run 19 is green, but CI does not run the scripts). **Not closed:** RPO 24 h and RTO 4 h are PROPOSED, not agreed, and the RTO was not measured on production-sized data; no backup schedule, no off-machine copy, no point-in-time recovery, no encryption of the files; tables that were empty in the source (city ledger, supplier payables, tax filing, bank statements) are UNVERIFIED with data. The system is **not** declared recovery-ready for production.]
 - **Blocker 3, F-05**: the rate limit would be one shared bucket behind the proxy.
 - **Condition, F-02 (resolved 2026-10-07)**: the race detector passed on the six packages checked in the container, and then on the whole suite in CI run 17.
 - **Condition, F-15**: the pilot property must have accounting set up before its first night audit; the system does not say so.
+
+**Situation after P0 #1 to #5 (2026-10-07), still CONDITIONAL PILOT:** open are P0 #6 (go-live checklist, F-15), the decisions and the schedule of P0 #4, and branch protection of P0 #1.
 
 The verdict becomes **PILOT READY** when P0 items 3 to 6 are closed (items 1 and 2 are done) and branch protection requires the green CI. It would become **PRODUCTION READY** after the P1 list, with the rehearsed restore, the monitoring and the route-by-permission test as the items that matter most. Nothing in this audit is a feeling: every line above has the evidence next to it.
 
