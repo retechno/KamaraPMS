@@ -1,6 +1,6 @@
 # 19. Post-implementation audit (after Architecture 18)
 
-Status: **audit only, written on 2026-10-07 from `main` at `fbecf6f`** (156 commits). **Update, same day: F-01 and F-02 are resolved by `c38ca68` (CI run 17 is green, including the race detector over the whole suite); sections 1, 17, 18 and 20 carry a line saying so, and the rest of the text is the audit as it was written.** It changes no migration, Go code, API, OpenAPI, frontend or test; this file is the only change. Language of the audit: English, like the other documents; the owner's chat is in Indonesian.
+Status: **audit only, written on 2026-10-07 from `main` at `fbecf6f`** (156 commits). **Update, same day: F-01 and F-02 are resolved by `c38ca68` (CI run 17 is green, including the race detector over the whole suite); sections 1, 17, 18 and 20 carry a line saying so, and the rest of the text is the audit as it was written. Later the same day: P0 #3 (deployment, F-03 and F-05) was verified and CI run 18 is green; see "P0 #3 final verification" after F-05 in section 17.** It changes no migration, Go code, API, OpenAPI, frontend or test; this file is the only change. Language of the audit: English, like the other documents; the owner's chat is in Indonesian.
 
 How to read it. Every claim is tagged **VERIFIED** (a file, a line, a command or a test run that was seen) or **UNVERIFIED** (it could not be proved from the repository or from what could be run). A feature or finding is classified **DONE**, **PARTIAL**, **MISSING**, **DOCUMENTATION DRIFT** or **UNVERIFIED**. Nothing is called done because a document says so.
 
@@ -459,7 +459,7 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Risk | There is no defined way to put the system in front of users: where the SPA is hosted, who terminates TLS, which headers are set, which environment variables a server needs, how it restarts |
 | Recommendation | A production recipe: a multi-stage Dockerfile for the API, a `compose` (or systemd) file with the API, PostgreSQL and a reverse proxy that serves `web/dist`, terminates TLS and sets CSP, HSTS, `X-Frame-Options` and `Referrer-Policy`; a page of required variables; a smoke test after start |
 | Suggested next step | Write `docs/architecture/` or `docs/operations/` "Deploy" with the recipe and run it once on a clean machine |
-| **Update (2026-10-07): RESOLVED for a single machine** · VERIFIED | P0 #3: `Dockerfile` (targets `api` and `web`), `deploy/compose.yaml`, the nginx proxy with the security headers, `deploy/compose.tls.yaml`, `deploy/.env.example`, `scripts/prod-smoke.sh` and `docs/deployment.md`. The stack was built and run, the smoke test passed and the builds were reproducible (the checks are listed in section 12 of the deployment document). Still open: a deployment to a real server and a certificate from an authority, which need a server and a domain |
+| **Update (2026-10-07): RESOLVED for a single machine** · VERIFIED | P0 #3: `Dockerfile` (targets `api` and `web`), `deploy/compose.yaml`, the nginx proxy with the security headers, `deploy/compose.tls.yaml`, `deploy/.env.example`, `scripts/prod-smoke.sh` and `docs/deployment.md`. The stack was built and run, the smoke test passed and the builds were reproducible (the checks are listed in section 12 of the deployment document; the final verification, with CI run 18 green, is recorded after F-05). Still open: a deployment to a real server and a certificate from an authority, which need a server and a domain |
 
 #### F-04 · High · Backup, restore and disaster recovery
 
@@ -481,6 +481,26 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Recommendation | A trusted-proxy setting (`PMS_TRUSTED_PROXIES`) that reads `X-Forwarded-For` only from those addresses; keep the login throttle keyed by tenant and e-mail (it already is) and store failed attempts in the database or document that one instance is the supported shape for the pilot |
 | Suggested next step | Decide "one instance behind a proxy" for the pilot, implement the trusted-proxy setting, add a test |
 | **Update (2026-10-07): RESOLVED** · VERIFIED | `PMS_TRUSTED_PROXIES` and `httpx.ResolveClientIP`: `X-Forwarded-For` is believed only from a trusted proxy and is read from the right; the proxy overwrites the header. Unit tests for a direct client, a trusted proxy, spoofing from an untrusted peer and several clients behind one proxy; the smoke test repeats them with clients that have addresses of their own. The throttles are still per process, so the supported shape stays one API instance (documented) |
+
+#### P0 #3 final verification (2026-10-07) · VERIFIED
+
+Commit under verification: `f77e016`; the smoke-test extension below is `2f25be7`, which is the commit CI ran. Findings above are not rewritten.
+
+| Check | Result |
+|---|---|
+| `taxfiling`, `taxinvoice`, `tenancy` (one at a time, after the earlier runs were stopped for low memory) | all three pass |
+| Web `npm test` | 736 tests pass |
+| Images rebuilt with `--no-cache` from `f77e016` (api 44 MB, web 50 MB, migrate is the api image) | built; the Go binaries have the same SHA-256 as two earlier independent no-cache builds; the web `dist` (113 files) has the same hash as the earlier build (reproducible) |
+| `scripts/prod-smoke.sh` on the rebuilt images, project `kamarapms-deploy` | **PASSED, 57 checks**: migration job, API start, `/healthz`, `/readyz`, SPA and deep link, API proxy, security headers (once, no version), 413 over the body limit, containers (healthy, nonroot, read-only, no published API or database port), client address (forged header replaced, ignored from an untrusted peer, claiming to be the proxy fails), rate limit per real client, **PostgreSQL stopped: `/healthz` 200, `/readyz` 503 `NOT_READY`, 200 again without restarting the API**, **TLS variant: https page, fallback, `/api`, HSTS only on https, 308 from http, probes on http, TLS 1.2 and 1.3 accepted, 1.1 refused** |
+| CI for `2f25be7` | **run 18, success**: https://github.com/retechno/KamaraPMS/actions/runs/37584132744. Go (build, vet, sqlc diff, lint, `go test -race ./...`), schema on PostgreSQL 16 and 18, web (types, tests, build): all green |
+
+The DB-down and TLS checks were manual in the first verification and are now part of `scripts/prod-smoke.sh` (`SMOKE_DB_DOWN=0`, `SMOKE_TLS=0` skip them).
+
+**Status after verification.** F-03: resolved for a single machine. F-05: resolved (throttles still per process; one API instance is the supported shape). **F-04 is still open and is P0 #4**: nothing was done on backup or restore.
+
+**Remaining limitations.** No deployment to a real server and no certificate from an authority (needs a server and a domain). The throttles are per process. The smoke test does not read the headers of an error produced by nginx itself beyond the cases listed. Branch protection for `main` is not set.
+
+**Incident during the work: the compose project name.** The first run of `docker compose -f deploy/compose.yaml up` had no project name of its own, so Compose used the default `kamarapms`, the project of the development database. It **recreated the development container `kamarapms-db-1`** (it lost its published port 55432 for a while, and the migration job failed on the password because the new container used the deployment's variables). The development volume `kamarapms_pms-db` was **not deleted or damaged**: the stack was brought down without `-v`, the development database was started again from the root `compose.yaml`, and port 55432, goose version 58 and the 100 tables were checked. The deployment file now says `name: kamarapms-deploy` (own containers, network and volume `kamarapms-deploy_pms-db`). In the final verification the development container had the same id and start time as after the repair, the same volume (created 2026-09-30), version 58, 100 tables and port 55432. **Warning, kept in `CLAUDE.md` and `docs/deployment.md`: never run the deployment stack under the project name `kamarapms`, and never use `down -v` on it without looking at the project.**
 
 #### F-06 · Medium · Reverse check-in leaves company folios on a cancelled stay
 
@@ -712,7 +732,7 @@ The order follows the evidence of this audit, not the order in which things were
 |---|---|---|---|
 | 1 | **Make CI run and green, and required for `main`.** Execute bit on the scripts, first full run, fix what it finds | F-01 | Until this is done no guarantee of the project is evidence. **Done on 2026-10-07 (`c38ca68`, run 17 green); still open: branch protection** |
 | 2 | **(Done: CI run 17, 264 s, clean)** **Run the race detector over the whole suite** (CI after item 1; the container command for a local run, package by package because of memory) and fix reports | F-02 | The locking design is the heart of the system; six packages are clean, the rest is unproved |
-| 3 | **(Done for one machine, 2026-10-07: `docs/deployment.md`)** **A deployment recipe**: Dockerfile, production compose or service files, reverse proxy with TLS and headers serving `web/dist`, the variables, a smoke test, and the decision "one instance" for the pilot | F-03 | Nothing exists to put in front of users |
+| 3 | **(Done for one machine and verified, 2026-10-07: `docs/deployment.md`, CI run 18 green)** **A deployment recipe**: Dockerfile, production compose or service files, reverse proxy with TLS and headers serving `web/dist`, the variables, a smoke test, and the decision "one instance" for the pilot | F-03 | Nothing exists to put in front of users |
 | 4 | **Backup, restore and rollback runbook with one rehearsed restore** and agreed RPO and RTO | F-04 | The whole ledger is one database |
 | 5 | **(Done, 2026-10-07)** **Client address and rate limits behind the proxy** (trusted proxy setting) | F-05 | Part of the recipe: without it one bucket serves the whole hotel |
 | 6 | **Go-live checklist**: accounting settings and start date, charge-code accounts, department setup check, cashier settings, PKP settings, a first night audit preview | F-15 | A property can go live without a GL and nothing says so |
