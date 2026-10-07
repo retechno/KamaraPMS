@@ -228,7 +228,9 @@ On the machine that wrote it (Docker Desktop, Windows), with the repository at t
 | headless Chrome on the proxy | the sign-in form is rendered; no Content-Security-Policy violation was logged. Nobody looked at the screens |
 | backup and restore | `scripts/restore-drill.sh` passed on this stack, and a real restore of the development database was compared table by table: see backup-restore.md, section 6 |
 
-Not done here, on purpose: a deployment to a server, a certificate from an authority, load testing, a rehearsed rollback of a release, backup scheduling (the scripts exist, no schedule is installed), monitoring and alerting.
+The smoke test does not check the `backup` service, on purpose: that service is not operationally ready until the owner has set the secondary destination, the encryption recipient and the alert (`backup-restore.md`, section 14.6), and the smoke test must not pass it before. A green smoke test says nothing about the backup.
+
+Not done here, on purpose: a deployment to a server, a certificate from an authority, load testing, a rehearsed rollback of a release, the owner configuration of the backup (the `backup` service exists, its destination, key and alert are not set), monitoring of the stack.
 
 ## 13. Moving to a VPS or a cloud instance
 

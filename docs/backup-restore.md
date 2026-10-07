@@ -41,7 +41,7 @@ PMS_PG_CONTAINER=kamarapms-deploy-db-1 PMS_BACKUP_DIR=/var/backups/kamarapms scr
 |---|---|---|
 | `PGDATABASE` | `pms` | the database to back up |
 | `PMS_BACKUP_DIR` | `./backups` | where the files go; created `0700` |
-| `PMS_BACKUP_KEEP` | `14` | the newest N backups are kept (`0` keeps all) |
+| `PMS_BACKUP_KEEP` | `14` | the newest N backup **files** are kept (`0` keeps all). File-based, not calendar-day-based |
 
 - **Format:** `pg_dump -Fc -Z 6 --no-owner --no-acl`: PostgreSQL custom format, compressed (level 6), without owners and grants so that it restores under any user. It is a consistent snapshot of the whole database taken in one transaction, while the application keeps running. Restore it with `pg_restore`, not with `psql`.
 - **Name:** `pms-<UTC timestamp>.dump`, for example `pms-20261007T071236Z.dump`, and `pms-<timestamp>.dump.sha256` next to it. The timestamp is UTC (the hotel's business date is not involved).
@@ -121,7 +121,7 @@ Data seen in the source and in the copy (counts equal; the content hash equal): 
 
 ## 9. Retention
 
-Provider-agnostic. **Pilot (decided):** 14 daily backups on the machine; on the secondary copy 14 daily backups **plus** 4 weekly ones. The weekly ones are in addition to the daily ones, never instead of them: the secondary must always hold a recovery point of the last 24 hours, because that is the RPO (section 13). **Production (decided as a target):** 14 daily, 8 weekly, 12 monthly and 1 fiscal-year snapshot, with the retention of accounting and tax records to be confirmed by the owner and the accountant; the monthly and the year-end tiers are not implemented.
+Provider-agnostic. **Pilot (decided):** on the machine the 14 most recent backup files (Local retention: 14 most recent backup files. This is file-based, not calendar-day-based. Multiple backups on the same day may consume multiple retention slots.); on the secondary copy 14 daily recovery points (one per calendar day) **plus** 4 weekly ones. The weekly ones are in addition to the daily ones, never instead of them: the secondary must always hold a recovery point of the last 24 hours, because that is the RPO (section 13). **Production (decided as a target):** 14 daily, 8 weekly, 12 monthly and 1 fiscal-year snapshot, with the retention of accounting and tax records to be confirmed by the owner and the accountant; the monthly and the year-end tiers are not implemented.
 
 - The scripts keep the newest N files on the machine (`PMS_BACKUP_KEEP`, default 14) and apply the rule of section 14.5 on the secondary copy. A failed backup removes nothing.
 - A backup is not the legal archive of the books. The database is; how long records must be kept is for the owner and the accountant, and it is not stated here.
@@ -172,7 +172,7 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 - [ ] Someone other than the author has run the restore from this page.
 - [ ] The people of the pilot know that the recovery point is 24 hours, and that the old system is the system of record until KamaraPMS is.
 
-**Production (TARGETS: none of these exists yet).** WAL archiving and a point-in-time restore, drilled; an off-site copy with separate or write-only credentials; 14 daily, 8 weekly, 12 monthly and 1 fiscal-year retention; encryption at rest; a drill on data of realistic size that reaches the 1 hour RTO; the accountant's retention requirement.
+**Production (TARGETS: none of these exists yet).** WAL archiving and a point-in-time restore, drilled; an off-site copy with separate or write-only credentials; 14 daily (calendar days), 8 weekly, 12 monthly and 1 fiscal-year retention; encryption at rest; a drill on data of realistic size that reaches the 1 hour RTO; the accountant's retention requirement.
 
 ## 13. Decisions (approved by the owner on 2026-10-07)
 
@@ -182,7 +182,7 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 | 2 | RTO | 4 hours, measured by the drill | 1 hour, not to be claimed before a drill on realistic data |
 | 3 | Frequency | once a day after the night audit, and a backup before every upgrade | daily base backup, continuous WAL, and a backup before every upgrade |
 | 4 | Secondary copy | mandatory, on a machine or disk other than the main database | off-site, a different failure domain, separate or write-only credentials |
-| 5 | Retention | 14 daily on the machine; on the secondary copy 14 daily **plus** 4 weekly (the weekly ones are an addition, never a replacement of daily recovery points) | 14 daily, 8 weekly, 12 monthly, 1 fiscal-year snapshot; accounting and tax retention to be confirmed with the accountant |
+| 5 | Retention | on the machine the 14 most recent backup files (file-based, not calendar days); on the secondary copy 14 daily recovery points (calendar days) **plus** 4 weekly (the weekly ones are an addition, never a replacement of daily recovery points) | 14 daily, 8 weekly, 12 monthly, 1 fiscal-year snapshot; accounting and tax retention to be confirmed with the accountant |
 | 6 | WAL / PITR | not required | planned as the production mechanism for the 15 minute RPO; **not to be built as part of the pilot** |
 | 7 | Encryption | mandatory for the secondary (off-machine) copy | mandatory at rest |
 
@@ -211,7 +211,7 @@ The `backup` service of `deploy/compose.yaml` (image target `backup` of the `Doc
 
 ### 14.2 What one run does
 
-1. `db-backup.sh`: the verified local dump (section 3); the newest 14 are kept (`PMS_BACKUP_KEEP`).
+1. `db-backup.sh`: the verified local dump (section 3); the 14 most recent files are kept (`PMS_BACKUP_KEEP`; file-based, not calendar-day-based).
 2. **The secondary copy is mandatory.** Without one the run fails (exit 3) and says so, after making the local backup (`PMS_BACKUP_REQUIRE_COPY=0` is for a trial only).
 3. The destination is checked: a directory must be writable and on **another file system** than the local backups (a second directory on the same disk is refused, exit 5; `PMS_BACKUP_COPY_ALLOW_SAME_DISK=1` lifts it for a trial and is logged as a warning). An SSH destination must be reachable with its host key checked.
 4. The dump is encrypted (14.4), copied through a temporary name, renamed, and its SHA-256 is checked **at the destination**.
@@ -233,11 +233,13 @@ A failure of any step posts JSON (`{"text": ..., "content": ..., "level": ..., "
 
 ### 14.5 Retention (pilot: 14 daily + 4 weekly)
 
-Local: the newest 14 files (`PMS_BACKUP_KEEP`). Secondary: **14 daily recovery points plus 4 weekly ones.** Concretely, a backup is kept when it is the newest of one of the last 14 calendar days (UTC) that have a backup (`PMS_BACKUP_COPY_KEEP_DAILY`), **or** the newest of one of the last 4 ISO weeks that have a backup (`PMS_BACKUP_COPY_KEEP_WEEKS`). The weekly ones reach further back than the daily ones and are an addition: they never remove a daily backup, so after the loss of the main machine the secondary always holds a recovery point from the last 24 hours (the RPO). A day with several backups (a backup before an upgrade) keeps its newest. Only files named `pms-<stamp>.dump.age` and their `.sha256` are ever removed; other files in the destination are never touched. Retention runs after a verified copy.
+**Local retention: 14 most recent backup files. This is file-based, not calendar-day-based. Multiple backups on the same day may consume multiple retention slots.** (`PMS_BACKUP_KEEP`). Secondary, by contrast, counts calendar days: **14 daily recovery points plus 4 weekly ones.** Concretely, a backup is kept when it is the newest of one of the last 14 calendar days (UTC) that have a backup (`PMS_BACKUP_COPY_KEEP_DAILY`), **or** the newest of one of the last 4 ISO weeks that have a backup (`PMS_BACKUP_COPY_KEEP_WEEKS`). The weekly ones reach further back than the daily ones and are an addition: they never remove a daily backup, so after the loss of the main machine the secondary always holds a recovery point from the last 24 hours (the RPO). A day with several backups (a backup before an upgrade) keeps its newest. Only files named `pms-<stamp>.dump.age` and their `.sha256` are ever removed; other files in the destination are never touched. Retention runs after a verified copy.
 
 ### 14.6 Enabling it (the values the owner must give)
 
-In `deploy/.env` (the variables are in `deploy/.env.example`): `TZ` and `PMS_BACKUP_AT`; the secondary place (`PMS_BACKUP_SECONDARY_PATH` with `PMS_BACKUP_COPY_DIR=/secondary`, or `PMS_BACKUP_COPY_SSH` with `PMS_BACKUP_SSH_DIR`); `PMS_BACKUP_AGE_RECIPIENT`; `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`). These are the OWNER CONFIGURATION values of section 13. Then `docker compose -f deploy/compose.yaml up -d --build backup`. Until the secondary place and the key are set, the service runs, makes the local backup, and **fails and alerts every day**: that is intended.
+In `deploy/.env` (the variables are in `deploy/.env.example`): `TZ` and `PMS_BACKUP_AT`; the secondary place (`PMS_BACKUP_SECONDARY_PATH` with `PMS_BACKUP_COPY_DIR=/secondary`, or `PMS_BACKUP_COPY_SSH` with `PMS_BACKUP_SSH_DIR`); `PMS_BACKUP_AGE_RECIPIENT`; `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`). These are the OWNER CONFIGURATION values of section 13.
+
+**The `backup` service and `scripts/prod-smoke.sh`.** The smoke test does not check the `backup` service, on purpose. The service is **not operationally ready** until the secondary destination, the encryption recipient and the alert configuration are filled in; until then it makes the local backup, fails (exit 3 or 4) and alerts, and its container reports unhealthy after the first day. The smoke test is not changed to make the service pass while the owner configuration is incomplete: a green smoke test must not be read as a working backup. The checks of the backup are its own: the container health, the state of the last run (`/var/lib/pms-backup/status`), the alert, and the restore drill (section 16). Then `docker compose -f deploy/compose.yaml up -d --build backup`. Until the secondary place and the key are set, the service runs, makes the local backup, and **fails and alerts every day**: that is intended.
 
 ## 15. Backup before an upgrade (procedure; mandatory)
 
