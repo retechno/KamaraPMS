@@ -11,6 +11,8 @@
 #
 #   PMS_SMOKE_URL           the address of the proxy at the host, default http://127.0.0.1:${PMS_PUBLIC_PORT:-8080}
 #   SMOKE_NETWORK_TESTS=0   skip the tests that need Docker network access
+#   SMOKE_DB_DOWN=0         skip the test that stops the database for a few seconds
+#   SMOKE_TLS=0             skip the test of the TLS variant (it makes a self-signed certificate in deploy/certs if there is none, and restores the plain proxy after)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -79,10 +81,22 @@ db_id="$("${COMPOSE[@]}" ps -q db)"
 [ -z "$(docker port "$db_id")" ]; expect "the database has no published port" $?
 [ "$(docker inspect --format '{{.State.ExitCode}}' "$("${COMPOSE[@]}" ps -a -q migrate)")" = 0 ]; expect "the migration job ended with success" $?
 
-if [ "${SMOKE_NETWORK_TESTS:-1}" = 0 ]; then
-  echo "(network tests skipped)"
-  [ "$fails" = 0 ] && exit 0 || exit 1
+if [ "${SMOKE_DB_DOWN:-1}" != 0 ]; then
+  echo "== the database is unavailable: alive, not ready, and back without a restart"
+  "${COMPOSE[@]}" stop db >/dev/null 2>&1
+  sleep 3
+  [ "$(status "$BASE/healthz")" = 200 ]; expect "/healthz stays 200 while the database is down" $?
+  [ "$(status "$BASE/readyz")" = 503 ]; expect "/readyz is 503 while the database is down" $?
+  contains "$(body "$BASE/readyz")" NOT_READY; expect "/readyz says NOT_READY (stable code)" $?
+  ready_again=0
+  "${COMPOSE[@]}" start db >/dev/null 2>&1
+  for _ in $(seq 1 45); do [ "$(status "$BASE/readyz")" = 200 ] && ready_again=1 && break; sleep 2; done
+  [ "$ready_again" = 1 ]; expect "/readyz is 200 again once the database is back, without a restart of the API" $?
 fi
+
+SKIP_NET=0
+[ "${SMOKE_NETWORK_TESTS:-1}" = 0 ] && SKIP_NET=1
+if [ "$SKIP_NET" = 0 ]; then
 
 echo "== the client address behind the proxy"
 A=172.29.0.51
@@ -133,6 +147,31 @@ direct="$(printf '%s\n' "$f_codes" | awk '/---/ { n++ } n == 2 && !/---/')"
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api >/dev/null 2>&1
 for _ in $(seq 1 40); do [ "$(status "$BASE/readyz")" = 200 ] && break; sleep 1; done
 [ "$(status "$BASE/readyz")" = 200 ]; expect "the API is restored with its normal limit" $?
+
+fi
+
+if [ "${SMOKE_TLS:-1}" != 0 ]; then
+  echo "== TLS on the proxy (deploy/compose.tls.yaml, a self-signed certificate)"
+  TLS_PORT="${PMS_PUBLIC_TLS_PORT:-8443}"
+  [ -f deploy/certs/tls.crt ] || bash deploy/make-dev-cert.sh >/dev/null 2>&1
+  TLS=(docker compose -f deploy/compose.yaml -f deploy/compose.tls.yaml)
+  "${TLS[@]}" up -d --no-deps --force-recreate proxy >/dev/null 2>&1
+  S="https://127.0.0.1:$TLS_PORT"
+  for _ in $(seq 1 30); do [ "$(status -k "$S/healthz")" = 200 ] && break; sleep 1; done
+  [ "$(status -k "$S/")" = 200 ]; expect "https serves the page" $?
+  [ "$(status -k "$S/some/deep/link")" = 200 ]; expect "https keeps the router fallback" $?
+  [ "$(status -k "$S/api/v1/properties")" = 401 ]; expect "https forwards /api" $?
+  contains "$(curl -sk -D - -o /dev/null "$S/")" "Strict-Transport-Security"; expect "https carries Strict-Transport-Security" $?
+  contains "$(curl -s -D - -o /dev/null "$BASE/")" "Strict-Transport-Security"; [ $? -ne 0 ]; expect "plain http never carries Strict-Transport-Security" $?
+  [ "$(status "$BASE/")" = 308 ]; expect "plain http redirects to https (308)" $?
+  [ "$(status "$BASE/healthz")" = 200 ] && [ "$(status "$BASE/readyz")" = 200 ]; expect "the probes stay on plain http" $?
+  [ "$(status -k --tlsv1.2 --tls-max 1.2 "$S/")" = 200 ]; expect "TLS 1.2 is accepted" $?
+  [ "$(status -k --tlsv1.3 "$S/")" = 200 ]; expect "TLS 1.3 is accepted" $?
+  [ "$(status -k --tlsv1.1 --tls-max 1.1 "$S/")" = 000 ]; expect "TLS 1.1 is refused" $?
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate proxy >/dev/null 2>&1
+  for _ in $(seq 1 30); do [ "$(status "$BASE/healthz")" = 200 ] && break; sleep 1; done
+  [ "$(status "$BASE/")" = 200 ]; expect "the plain proxy is restored" $?
+fi
 
 echo
 if [ "$fails" = 0 ]; then echo "SMOKE TEST PASSED"; else echo "SMOKE TEST FAILED: $fails check(s)"; exit 1; fi
