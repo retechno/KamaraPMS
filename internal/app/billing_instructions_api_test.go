@@ -94,4 +94,24 @@ func TestBillingInstructionsAPIFlow(t *testing.T) {
 	if r := abc.doWith(http.MethodPost, base+"/folios/"+idOf(response{body: c})+"/city-ledger-transfers", map[string]any{"company_id": mustInt(other), "amount": "1000"}, map[string]string{"Idempotency-Key": "t1"}); r.status != 409 || r.body["code"] != "TRANSFER_COMPANY_MISMATCH" {
 		t.Fatalf("mismatch: %d %v", r.status, r.body)
 	}
+	// a charge on the guest folio moves to the company folio: a reversal and a copy, with the balance of each folio
+	guestFolio := idOf(response{body: g})
+	ch := abc.doWith(http.MethodPost, base+"/folios/"+guestFolio+"/charges", map[string]any{"charge_code_id": minibar, "quantity": "1", "unit_price": "250000"}, map[string]string{"Idempotency-Key": "c2"})
+	item := idOf(response{body: ch.body["item"].(map[string]any)})
+	approval := map[string]any{"email": "admin@hotel.com", "password": testPassword}
+	move := base + "/folio-items/" + item + "/transfer"
+	companyFolio := mustInt(idOf(response{body: c}))
+	if r := abc.do(http.MethodPost, move, map[string]any{"folio_id": companyFolio, "reason": "", "approval": approval}); r.status != 422 {
+		t.Fatalf("no reason: %d %v", r.status, r.body)
+	}
+	tr := abc.do(http.MethodPost, move, map[string]any{"folio_id": companyFolio, "reason": "the company pays the minibar", "approval": approval})
+	if tr.status != 201 || tr.body["reversal"].(map[string]any)["folio_balance"] != "0" || tr.body["charge"].(map[string]any)["item"].(map[string]any)["transaction_type"] != "CHARGE" {
+		t.Fatalf("transfer: %d %v", tr.status, tr.body)
+	}
+	if r := abc.do(http.MethodPost, move, map[string]any{"folio_id": companyFolio, "reason": "again", "approval": approval}); r.status != 409 || r.body["code"] != "ALREADY_REVERSED" {
+		t.Fatalf("twice: %d %v", r.status, r.body)
+	}
+	if r := abc.do(http.MethodPost, base+"/folio-items/"+idOf(response{body: tr.body["charge"].(map[string]any)["item"].(map[string]any)})+"/transfer", map[string]any{"folio_id": mustInt(idOf(response{body: c})) + 1000, "reason": "x", "approval": approval}); r.status != 404 {
+		t.Fatalf("unknown folio: %d %v", r.status, r.body)
+	}
 }

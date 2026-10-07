@@ -1697,6 +1697,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/folio-items/{id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a charge to another folio of the same reservation (folio.reverse, needs approval)
+         * @description The charge is reversed on its folio and charged again on the target folio as a copy of the original (amounts, components, revenue account, department and service date),
+         *     so nothing is recomputed and the two entries net to zero in every account. The new item has the source `TRANSFER`, and both items carry the reference `FOLIO_TRANSFER`
+         *     with the id of the original. Both folios must be OPEN and of the same reservation, and the target must belong to a stay; a payment is voided, never transferred;
+         *     an item is moved once (409 `ALREADY_REVERSED`). A room night stays posted, once, so the night audit does not charge it again.
+         *     409 `FOLIO_TRANSFER_INVALID` for another reservation, the same folio, the deposit folio, or an item that is not a charge; 409 `FOLIO_CLOSED` for a closed folio.
+         */
+        post: operations["transferFolioItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reservations/{id}/deposits": {
         parameters: {
             query?: never;
@@ -8168,6 +8195,19 @@ export interface components {
         CorrectionRequest: {
             reason: string;
             approval: components["schemas"]["Approval"];
+        };
+        TransferItemRequest: {
+            /**
+             * Format: int64
+             * @description The folio the charge moves to.
+             */
+            folio_id: number;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        TransferItemResult: {
+            reversal: components["schemas"]["ItemResult"];
+            charge: components["schemas"]["ItemResult"];
         };
         PostPaymentRequest: {
             amount: string;
@@ -15226,6 +15266,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    transferFolioItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal on the source folio and the new charge on the target folio, each with the balance of its folio. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferItemResult"];
                 };
             };
             401: components["responses"]["Problem"];

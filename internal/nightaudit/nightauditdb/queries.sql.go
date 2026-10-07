@@ -490,13 +490,12 @@ func (q *Queries) SummaryRevenueByType(ctx context.Context, arg SummaryRevenueBy
 }
 
 const summaryRoomNights = `-- name: SummaryRoomNights :one
-SELECT count(*)::int FROM folio_items i
-LEFT JOIN stays s ON s.property_id = i.property_id AND s.id = i.stay_id
-LEFT JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+SELECT count(*)::int FROM stay_charge_postings p
+JOIN stays s ON s.property_id = p.property_id AND s.id = p.stay_id
+JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
 LEFT JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
-WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.service_date = $3::date
-  AND i.transaction_type = 'CHARGE' AND i.source = 'ROOM_POSTING' AND COALESCE(rp.occupancy_kind, 'PAID') = 'PAID'
-  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.service_date = $3::date
+  AND p.charge_source = 'ROOM_NIGHT' AND p.status = 'POSTED' AND COALESCE(rp.occupancy_kind, 'PAID') = 'PAID'
 `
 
 type SummaryRoomNightsParams struct {
@@ -505,8 +504,8 @@ type SummaryRoomNightsParams struct {
 	Bd         civil.Date
 }
 
-// Paid room nights charged by the room posting service for the business date (and not reversed): the nights of
-// complimentary and house use plans post as zero and are not sold.
+// Paid room nights charged for the business date and not reversed: the nights of complimentary and house use plans post as zero and are not sold. It reads the posting
+// register, which holds one POSTED row for a night and for the stay that earned it, wherever the charge sits (a transfer to another folio keeps the row).
 func (q *Queries) SummaryRoomNights(ctx context.Context, arg SummaryRoomNightsParams) (int32, error) {
 	row := q.db.QueryRow(ctx, summaryRoomNights, arg.TenantID, arg.PropertyID, arg.Bd)
 	var column_1 int32

@@ -61,15 +61,15 @@ INSERT INTO folio_items (
     sqlc.narg(reverses_item_id), sqlc.narg(stay_id), sqlc.narg(stay_room_id), sqlc.narg(reference_type), sqlc.narg(reference_id), @description, @quantity, @unit_price, @price_mode,
     @base_amount, @discount_amount, @net_amount, @rounding_adjustment, @service_charge_total, @tax_total, @debit, @credit,
     @source, sqlc.narg(reason), sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(approved_by),
-    -- The revenue account in force now; a reversal copies the account of the item it reverses.
-    CASE WHEN sqlc.narg(reverses_item_id)::bigint IS NOT NULL
-         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = @property_id AND o.id = sqlc.narg(reverses_item_id)::bigint)
+    -- The revenue account in force now; a reversal copies the account of the item it reverses, and so does the copy a transfer charges on the target folio (copies_item_id).
+    CASE WHEN COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint) IS NOT NULL
+         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = @property_id AND o.id = COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint))
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
     END,
     -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
     -- a reversal copies the department of the item it reverses.
-    CASE WHEN sqlc.narg(reverses_item_id)::bigint IS NOT NULL
-         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = @property_id AND o.id = sqlc.narg(reverses_item_id)::bigint)
+    CASE WHEN COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint) IS NOT NULL
+         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = @property_id AND o.id = COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint))
          ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
                  FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
                 WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
@@ -135,6 +135,16 @@ ORDER BY i.transaction_at, i.id;
 
 -- name: GetReversalOf :one
 SELECT id FROM folio_items WHERE property_id = @property_id AND reverses_item_id = @item_id;
+
+-- The posting register row of a room night item (POSTED), for a transfer that has to keep the night posted.
+-- name: GetPostingOfItem :one
+SELECT stay_id, stay_room_id, service_date, charge_code_id FROM stay_charge_postings
+WHERE property_id = @property_id AND folio_item_id = @item_id AND status = 'POSTED' AND charge_source = 'ROOM_NIGHT';
+
+-- The register row of the item a transfer charged again: the night stays posted once, for the stay that earned it.
+-- name: InsertTransferPosting :exec
+INSERT INTO stay_charge_postings (tenant_id, property_id, stay_id, stay_room_id, service_date, charge_source, charge_code_id, folio_item_id, business_date, posting_trigger, created_by)
+VALUES (@tenant_id, @property_id, @stay_id, @stay_room_id, @service_date, 'ROOM_NIGHT', @charge_code_id, @folio_item_id, @business_date, 'MANUAL', sqlc.narg(actor_id));
 
 -- A reversed room-charge item flips its posting register row (POSTED -> REVERSED); other items have none.
 -- name: FlipPostingRegister :exec

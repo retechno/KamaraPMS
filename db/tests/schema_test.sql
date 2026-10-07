@@ -497,6 +497,16 @@ SELECT expect_error('debit and credit cannot both be set', '23514',
                                 description, quantity, unit_price, price_mode, base_amount, net_amount, debit, credit, source, reason)
        VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'ADJUSTMENT', cc('LAUNDRY'),
                'x', 1, 0, 'EXCLUSIVE', 0, 0, 10, 10, 'MANUAL', 'x')$q$);
+SELECT expect_ok('a transferred charge has the source TRANSFER (00062)',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1')$q$);
+SELECT expect_error('a source is one of the known ones (00062)', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'MAGIC')$q$);
 SELECT expect_error('ledger amount = net + service + tax', '23514',
     $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
                                 description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source)

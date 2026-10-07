@@ -2153,6 +2153,37 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folio-items/{id}/transfer:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: transferFolioItem
+      summary: Move a charge to another folio of the same reservation (folio.reverse, needs approval)
+      description: |
+        The charge is reversed on its folio and charged again on the target folio as a copy of the original (amounts, components, revenue account, department and service date),
+        so nothing is recomputed and the two entries net to zero in every account. The new item has the source `TRANSFER`, and both items carry the reference `FOLIO_TRANSFER`
+        with the id of the original. Both folios must be OPEN and of the same reservation, and the target must belong to a stay; a payment is voided, never transferred;
+        an item is moved once (409 `ALREADY_REVERSED`). A room night stays posted, once, so the night audit does not charge it again.
+        409 `FOLIO_TRANSFER_INVALID` for another reservation, the same folio, the deposit folio, or an item that is not a charge; 409 `FOLIO_CLOSED` for a closed folio.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferItemRequest" }
+      responses:
+        "201":
+          description: The reversal on the source folio and the new charge on the target folio, each with the balance of its folio.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferItemResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reservations/{id}/deposits:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9166,6 +9197,20 @@ components:
       properties:
         reason: { type: string, maxLength: 500 }
         approval: { $ref: "#/components/schemas/Approval" }
+    TransferItemRequest:
+      type: object
+      required: [folio_id, reason, approval]
+      additionalProperties: false
+      properties:
+        folio_id: { type: integer, format: int64, description: The folio the charge moves to. }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    TransferItemResult:
+      type: object
+      required: [reversal, charge]
+      properties:
+        reversal: { $ref: "#/components/schemas/ItemResult" }
+        charge: { $ref: "#/components/schemas/ItemResult" }
     PostPaymentRequest:
       type: object
       required: [amount, payment_method]

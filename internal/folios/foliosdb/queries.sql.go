@@ -657,6 +657,36 @@ func (q *Queries) GetPaymentByKey(ctx context.Context, arg GetPaymentByKeyParams
 	return i, err
 }
 
+const getPostingOfItem = `-- name: GetPostingOfItem :one
+SELECT stay_id, stay_room_id, service_date, charge_code_id FROM stay_charge_postings
+WHERE property_id = $1 AND folio_item_id = $2 AND status = 'POSTED' AND charge_source = 'ROOM_NIGHT'
+`
+
+type GetPostingOfItemParams struct {
+	PropertyID int64
+	ItemID     int64
+}
+
+type GetPostingOfItemRow struct {
+	StayID       int64
+	StayRoomID   int64
+	ServiceDate  civil.Date
+	ChargeCodeID int64
+}
+
+// The posting register row of a room night item (POSTED), for a transfer that has to keep the night posted.
+func (q *Queries) GetPostingOfItem(ctx context.Context, arg GetPostingOfItemParams) (GetPostingOfItemRow, error) {
+	row := q.db.QueryRow(ctx, getPostingOfItem, arg.PropertyID, arg.ItemID)
+	var i GetPostingOfItemRow
+	err := row.Scan(
+		&i.StayID,
+		&i.StayRoomID,
+		&i.ServiceDate,
+		&i.ChargeCodeID,
+	)
+	return i, err
+}
+
 const getReservationStatus = `-- name: GetReservationStatus :one
 SELECT status FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -816,15 +846,15 @@ INSERT INTO folio_items (
     $10, $11, $12, $13, $14, $15, $16, $17, $18,
     $19, $20, $21, $22, $23, $24, $25, $26,
     $27, $28, $29, $30, $31,
-    -- The revenue account in force now; a reversal copies the account of the item it reverses.
-    CASE WHEN $10::bigint IS NOT NULL
-         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
+    -- The revenue account in force now; a reversal copies the account of the item it reverses, and so does the copy a transfer charges on the target folio (copies_item_id).
+    CASE WHEN COALESCE($10::bigint, $32::bigint) IS NOT NULL
+         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $32::bigint))
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
     END,
     -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
     -- a reversal copies the department of the item it reverses.
-    CASE WHEN $10::bigint IS NOT NULL
-         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = $10::bigint)
+    CASE WHEN COALESCE($10::bigint, $32::bigint) IS NOT NULL
+         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $32::bigint))
          ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
                  FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
                 WHERE c.property_id = $2 AND c.id = $8::bigint)
@@ -865,6 +895,7 @@ type InsertFolioItemParams struct {
 	IdempotencyKey     *string
 	ActorID            *int64
 	ApprovedBy         *int64
+	CopiesItemID       *int64
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +933,7 @@ func (q *Queries) InsertFolioItem(ctx context.Context, arg InsertFolioItemParams
 		arg.IdempotencyKey,
 		arg.ActorID,
 		arg.ApprovedBy,
+		arg.CopiesItemID,
 	)
 	var i FolioItem
 	err := row.Scan(
@@ -1125,6 +1157,39 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		&i.MdrVat,
 	)
 	return i, err
+}
+
+const insertTransferPosting = `-- name: InsertTransferPosting :exec
+INSERT INTO stay_charge_postings (tenant_id, property_id, stay_id, stay_room_id, service_date, charge_source, charge_code_id, folio_item_id, business_date, posting_trigger, created_by)
+VALUES ($1, $2, $3, $4, $5, 'ROOM_NIGHT', $6, $7, $8, 'MANUAL', $9)
+`
+
+type InsertTransferPostingParams struct {
+	TenantID     int64
+	PropertyID   int64
+	StayID       int64
+	StayRoomID   int64
+	ServiceDate  civil.Date
+	ChargeCodeID int64
+	FolioItemID  int64
+	BusinessDate civil.Date
+	ActorID      *int64
+}
+
+// The register row of the item a transfer charged again: the night stays posted once, for the stay that earned it.
+func (q *Queries) InsertTransferPosting(ctx context.Context, arg InsertTransferPostingParams) error {
+	_, err := q.db.Exec(ctx, insertTransferPosting,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StayID,
+		arg.StayRoomID,
+		arg.ServiceDate,
+		arg.ChargeCodeID,
+		arg.FolioItemID,
+		arg.BusinessDate,
+		arg.ActorID,
+	)
+	return err
 }
 
 const linkFolioToStay = `-- name: LinkFolioToStay :one

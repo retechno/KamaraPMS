@@ -28,6 +28,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/folios/{id}/city-ledger-transfers", httpx.HandlerFunc(h.transfer))
 	mux.Handle("POST "+p+"/folios/{id}/close", httpx.HandlerFunc(h.closeFolio))
 	mux.Handle("POST "+p+"/folio-items/{id}/reverse", httpx.HandlerFunc(h.reverse))
+	mux.Handle("POST "+p+"/folio-items/{id}/transfer", httpx.HandlerFunc(h.transferItem))
 	mux.Handle("GET "+p+"/payments", httpx.HandlerFunc(h.listPayments))
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))
 	mux.Handle("POST "+p+"/payments/{id}/refunds", httpx.HandlerFunc(h.refund))
@@ -180,6 +181,22 @@ func (h *Handler) reverse(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.Reverse(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) transferItem(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in TransferItemInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.TransferItem(r.Context(), pid, id, in)
 	if err != nil {
 		return err
 	}

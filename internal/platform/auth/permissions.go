@@ -170,7 +170,7 @@ var Catalogue = []PermissionInfo{
 	{PermFolioRead, "Billing", "View folios", "M9"},
 	{PermFolioPostCharge, "Billing", "Post charges", "M9"},
 	{PermFolioAdjust, "Billing", "Post adjustments", "M9"},
-	{PermFolioReverse, "Billing", "Reverse same-day postings", "M9"},
+	{PermFolioReverse, "Billing", "Reverse same-day postings and move a charge to another folio", "M9"},
 	{PermFolioPostAfterCheckout, "Billing", "Post late charges after check-out", "M9"},
 	{PermFolioReopen, "Billing", "Reopen closed folios", "M9"},
 

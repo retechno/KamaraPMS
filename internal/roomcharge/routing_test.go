@@ -2,10 +2,12 @@ package roomcharge_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/rooms/roomstest"
@@ -116,5 +118,50 @@ func TestInstructionAppliesFromTheNextNight(t *testing.T) {
 	must(t, err)
 	if f.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1`, st.Folio.ID) != 1 || f.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1`, cf) != 1 {
 		t.Fatalf("guest folio %d items, company folio %d items", f.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1`, st.Folio.ID), f.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1`, cf))
+	}
+}
+
+// A room night moved to the company folio stays posted once: the register keeps one POSTED row for it, so no run charges it again, and the ledger holds the copy.
+func TestMovedRoomNightIsNotChargedAgain(t *testing.T) {
+	f := setup(t)
+	acme := f.company(t, "ACME")
+	st := f.stay(t, f.r101, "2026-10-02")
+	res, err := f.Charges.PostManual(f.admin, f.propID, roomstest.BD, nil)
+	must(t, err)
+	item := *res.Results[0].FolioItemID
+	var reservationID, lineID int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT rr.reservation_id, rr.id FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $1`, st.Stay.ID).Scan(&reservationID, &lineID))
+	_, err = f.Folios.SetBillingInstructions(f.admin, f.propID, reservationID, lineID, []folios.InstructionInput{{Scope: folios.ScopeRoom, CompanyID: acme}})
+	must(t, err)
+	cf := f.companyFolioID(t, st.Stay.ID, acme)
+
+	moved, err := f.Folios.TransferItem(f.admin, f.propID, item, folios.TransferItemInput{FolioID: cf, Reason: "the company pays the room", Approval: &iam.ApprovalInput{Email: f.adminEmail, Password: roomstest.Password}})
+	must(t, err)
+	if moved.Charge.FolioBalance != "1221000" || moved.Reversal.FolioBalance != "0" {
+		t.Fatalf("balances: %+v %+v", moved.Reversal.FolioBalance, moved.Charge.FolioBalance)
+	}
+	// the night is still posted: the preview has nothing to charge and a run posts nothing
+	for _, line := range f.preview(t) {
+		if !strings.HasSuffix(line, ":ALREADY_POSTED") {
+			t.Fatalf("preview: %v", f.preview(t))
+		}
+	}
+	again, err := f.Charges.PostManual(f.admin, f.propID, roomstest.BD, nil)
+	must(t, err)
+	if again.Revalidation.Ready != 0 || len(again.Revalidation.Errors) != 0 || len(again.Revalidation.Invalid) != 0 {
+		t.Fatalf("revalidation: %+v", again.Revalidation)
+	}
+	if n := f.Count(t, `SELECT count(*) FROM folio_items WHERE transaction_type = 'CHARGE'`); n != 2 {
+		t.Fatalf("charges in the ledger (the original and the copy): %d", n)
+	}
+	// the register: one POSTED row, for the copy; the original's row is REVERSED
+	if f.Count(t, `SELECT count(*) FROM stay_charge_postings WHERE status = 'POSTED' AND folio_item_id = $1`, moved.Charge.Item.ID) != 1 ||
+		f.Count(t, `SELECT count(*) FROM stay_charge_postings WHERE status = 'REVERSED' AND folio_item_id = $1`, item) != 1 ||
+		f.Count(t, `SELECT count(*) FROM stay_charge_postings WHERE status = 'POSTED'`) != 1 {
+		t.Fatal("the register must hold one POSTED row, for the copy")
+	}
+	// the room nights of the day are counted once
+	if n := f.Count(t, `SELECT count(*) FROM stay_charge_postings WHERE status = 'POSTED' AND service_date = $1::date`, roomstest.BD.String()); n != 1 {
+		t.Fatalf("room nights of the day: %d", n)
 	}
 }

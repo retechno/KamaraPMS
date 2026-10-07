@@ -64,6 +64,7 @@ type itemSpec struct {
 	chargeCodeID    *int64
 	paymentID       *int64
 	reversesItemID  *int64
+	copiesItemID    *int64 // a transfer's new charge: the revenue account and the department of this item are copied
 	stayRoomID      *int64
 	source          string // MANUAL when empty
 	referenceType   *string
@@ -82,7 +83,7 @@ type itemSpec struct {
 func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem, error) {
 	q := ps.s.q(ctx)
 	a := spec.amounts
-	if spec.reversesItemID == nil && spec.chargeCodeID != nil {
+	if spec.reversesItemID == nil && spec.copiesItemID == nil && spec.chargeCodeID != nil {
 		if err := ps.requireDepartment(ctx, *spec.chargeCodeID); err != nil {
 			return foliosdb.FolioItem{}, err
 		}
@@ -90,7 +91,7 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 	item, err := q.InsertFolioItem(ctx, foliosdb.InsertFolioItemParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, FolioID: ps.folio.ID, BusinessDate: ps.bd, TransactionAt: ps.at,
 		ServiceDate: spec.serviceDate, TransactionType: spec.transactionType, ChargeCodeID: spec.chargeCodeID, PaymentID: spec.paymentID,
-		ReversesItemID: spec.reversesItemID, StayID: ps.folio.StayID, StayRoomID: spec.stayRoomID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
+		ReversesItemID: spec.reversesItemID, CopiesItemID: spec.copiesItemID, StayID: ps.folio.StayID, StayRoomID: spec.stayRoomID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
 		Description: spec.description, Quantity: a.quantity, UnitPrice: a.unitPrice, PriceMode: a.priceMode, BaseAmount: a.base,
 		DiscountAmount: a.discount, NetAmount: a.net, RoundingAdjustment: a.rounding, ServiceChargeTotal: a.service, TaxTotal: a.tax,
 		Debit: a.debit, Credit: a.credit, Source: sourceOf(spec.source), Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
@@ -300,6 +301,11 @@ func (ps posting) postRefundEntry(ctx context.Context, pay foliosdb.Payment, rea
 // reverse writes the same-day reversal of an item: debit and credit swapped, every signed column and every
 // component negated. A room-charge item flips its posting register row to REVERSED.
 func (ps posting) reverse(ctx context.Context, orig foliosdb.FolioItem, reason string, approval iam.Approval) (foliosdb.FolioItem, error) {
+	return ps.reverseAs(ctx, orig, reason, approval, orig.ReferenceType, orig.ReferenceID)
+}
+
+// reverseAs is reverse with the reference the reversal carries (a transfer gives both of its items the reference FOLIO_TRANSFER).
+func (ps posting) reverseAs(ctx context.Context, orig foliosdb.FolioItem, reason string, approval iam.Approval, refType, refID *string) (foliosdb.FolioItem, error) {
 	if approval.IsZero() {
 		return foliosdb.FolioItem{}, errApprovalRequired()
 	}
@@ -317,7 +323,7 @@ func (ps posting) reverse(ctx context.Context, orig foliosdb.FolioItem, reason s
 	}
 	by, origID := approval.UserID(), orig.ID
 	spec := itemSpec{
-		transactionType: TypeReversal, chargeCodeID: orig.ChargeCodeID, reversesItemID: &origID, referenceType: orig.ReferenceType, referenceID: orig.ReferenceID,
+		transactionType: TypeReversal, chargeCodeID: orig.ChargeCodeID, reversesItemID: &origID, referenceType: refType, referenceID: refID,
 		serviceDate: orig.ServiceDate, description: "Reversal: " + orig.Description, reason: &reason, approvedBy: &by, components: specComps,
 		amounts: itemAmounts{
 			quantity: orig.Quantity, unitPrice: orig.UnitPrice, priceMode: orig.PriceMode, base: orig.BaseAmount.Neg(), discount: orig.DiscountAmount.Neg(),

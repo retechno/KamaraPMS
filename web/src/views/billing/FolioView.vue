@@ -5,7 +5,7 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, ChargeCode, Company, Folio, FolioItem, PaymentMethod } from '@/api/types'
+import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, PaymentMethod } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -50,10 +50,13 @@ type Pending =
   | { kind: 'reverse'; item: FolioItem }
   | { kind: 'void'; item: FolioItem }
   | { kind: 'refund'; item: FolioItem }
+  | { kind: 'move'; item: FolioItem }
 const pending = ref<Pending | null>(null)
 // The methods the property allows for a refund (cash unless configured otherwise).
 const refundMethods = computed(() => (property.current?.refund_methods?.length ? property.current.refund_methods : ['CASH']))
-const correction = reactive({ reason: '', amount: '', method: '', reference: '' })
+const correction = reactive({ reason: '', amount: '', method: '', reference: '', targetFolio: 0 })
+// The other open folios of this reservation that belong to a stay: where a charge can move to.
+const siblings = ref<FolioSummary[]>([])
 const approving = ref(false)
 // One key per attempt; it is kept while a request may have been lost and renewed once the server has answered.
 const keys: Record<string, string> = {}
@@ -96,8 +99,21 @@ async function load(): Promise<void> {
     charge.codeId ||= chargeCodes.value[0]?.id ?? 0
     if (!adjustCodes.value.some((c) => c.id === adjust.codeId)) adjust.codeId = adjustCodes.value[0]?.id ?? 0
     await loadCompanies(propertyId)
+    await loadSiblings(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+async function loadSiblings(propertyId: number): Promise<void> {
+  siblings.value = []
+  const f = folio.value
+  if (!f || f.status !== 'OPEN' || !can('folio.reverse')) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', { params: { path: { propertyId }, query: { reservation_id: f.reservation_id, status: 'OPEN', limit: 50 } } })
+    siblings.value = (data?.data ?? []).filter((s) => s.id !== f.id && s.stay_id !== null)
+  } catch {
+    siblings.value = [] // the move is an extra: the folio itself still works
   }
 }
 
@@ -178,9 +194,10 @@ function startAdjust(): void {
   approving.value = true
 }
 
-function startCorrection(kind: 'reverse' | 'void' | 'refund', item: FolioItem): void {
+function startCorrection(kind: 'reverse' | 'void' | 'refund' | 'move', item: FolioItem): void {
   pending.value = { kind, item }
   correction.reason = ''
+  correction.targetFolio = siblings.value[0]?.id ?? 0
   correction.amount = kind === 'refund' ? item.credit : ''
   correction.method = refundMethods.value[0] ?? 'CASH'
   correction.reference = ''
@@ -212,6 +229,9 @@ async function approve(approval: Approval): Promise<void> {
     } else if (p.kind === 'reverse') {
       await api.POST('/api/v1/properties/{propertyId}/folio-items/{id}/reverse', { params: { path: { propertyId, id: p.item.id } }, body: { reason: correction.reason, approval } })
       notice.value = t('folio.noticeReverse')
+    } else if (p.kind === 'move') {
+      await api.POST('/api/v1/properties/{propertyId}/folio-items/{id}/transfer', { params: { path: { propertyId, id: p.item.id } }, body: { folio_id: correction.targetFolio, reason: correction.reason, approval } })
+      notice.value = t('folio.noticeMove')
     } else if (p.kind === 'void') {
       await api.POST('/api/v1/properties/{propertyId}/payments/{id}/void', { params: { path: { propertyId, id: p.item.payment_id as number } }, body: { reason: correction.reason, approval } })
       notice.value = t('folio.noticeVoid')
@@ -243,6 +263,8 @@ async function approve(approval: Approval): Promise<void> {
 }
 
 const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id
+const movable = (i: FolioItem) => isOpen.value && can('folio.reverse') && siblings.value.length > 0 && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id
+const folioLabel = (f: FolioSummary): string => (f.folio_type === 'COMPANY' ? `${f.folio_number} · ${t('billingInstructions.company')}` : f.folio_number)
 const voidable = (i: FolioItem) => isOpen.value && can('payment.void') && i.transaction_type === 'PAYMENT' && i.business_date === businessDate.value && !i.reversed_by_item_id
 // A transfer to a company is settled by the company's receipt, never refunded (its description names the method).
 const isTransfer = (i: FolioItem) => i.description.includes('(CITY_LEDGER)')
@@ -253,6 +275,7 @@ const dialogTitle = computed(() => {
     case 'reverse': return t('folio.approveReverse')
     case 'void': return t('folio.approveVoid')
     case 'refund': return t('folio.approveRefund')
+    case 'move': return t('folio.approveMove')
     default: return ''
   }
 })
@@ -357,6 +380,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <template #cell-actions="{ row: i }">
           <span class="inline-flex flex-wrap justify-end gap-1.5 no-underline">
             <Button v-if="reversible(i)" variant="outline" size="sm" :data-testid="`reverse-${i.id}`" @click="startCorrection('reverse', i)">{{ t('folio.reverse') }}</Button>
+            <Button v-if="movable(i)" variant="outline" size="sm" :data-testid="`move-${i.id}`" @click="startCorrection('move', i)">{{ t('folio.move') }}</Button>
             <Button v-if="voidable(i)" variant="outline" size="sm" :data-testid="`void-${i.id}`" @click="startCorrection('void', i)">{{ t('folio.void') }}</Button>
             <Button v-if="refundable(i)" variant="outline" size="sm" :data-testid="`refund-${i.id}`" @click="startCorrection('refund', i)">{{ t('folio.refund') }}</Button>
             <Button v-if="i.payment_id && canPrint && pid !== null" variant="ghost" size="sm" :data-testid="`receipt-${i.id}`" @click="print(documentPath.receipt(pid, i.payment_id))">{{ t('folio.receipt') }}</Button>
@@ -391,6 +415,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </FormField>
             <FormField v-if="pending.kind === 'refund'" :label="t('folio.referenceOptional')">
               <template #default="{ id }"><Input :id="id" v-model="correction.reference" name="refund_reference" maxlength="100" /></template>
+            </FormField>
+            <FormField v-if="pending.kind === 'move'" :label="t('folio.moveTo')" :hint="t('folio.moveHint')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="correction.targetFolio" name="move_folio" data-testid="move-folio">
+                  <option v-for="s in siblings" :key="s.id" :value="s.id">{{ folioLabel(s) }}</option>
+                </NativeSelect>
+              </template>
             </FormField>
             <FormField :label="t('folio.reason')">
               <template #default="{ id }"><Input :id="id" v-model="correction.reason" name="reason" maxlength="500" /></template>

@@ -38,7 +38,7 @@ const codes = [
 const companies = [{ id: 21, code: 'ACME', name: 'Acme Corp', is_active: true }]
 const ALL = ['folio.read', 'folio.post_charge', 'folio.adjust', 'folio.reverse', 'payment.post', 'payment.void', 'payment.refund']
 
-function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiError, companyList: object[] = companies) {
+function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiError, companyList: object[] = companies, siblings: object[] = []) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.com', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -47,6 +47,7 @@ function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiE
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/companies') && companiesError) throw companiesError
+    if (path.endsWith('/folios')) return { data: { data: siblings } }
     return { data: path.endsWith('/charge-codes') ? { data: codes } : path.endsWith('/companies') ? { data: companyList } : f }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
@@ -150,6 +151,36 @@ describe('FolioView', () => {
     }])
     expect(!!document.body.querySelector('[data-testid=approval-dialog]')).toBe(false)
     expect(w.get('[data-testid=notice]').text()).toBe('Item reversed.')
+  })
+
+  it('moves a charge to another open folio of the reservation after a reason and an approval', async () => {
+    const siblings = [
+      { id: 3, folio_number: 'FOL000001', folio_type: 'GUEST', stay_id: 4, status: 'OPEN' },
+      { id: 12, folio_number: 'FOL000002', folio_type: 'COMPANY', stay_id: 4, status: 'OPEN' },
+      { id: 13, folio_number: 'DEP', folio_type: 'GUEST', stay_id: null, status: 'OPEN' },
+    ]
+    const w = mountView(folio(), ALL, undefined, companies, siblings)
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/folios') && JSON.stringify(c[1]).includes('"reservation_id":9'))).toBe(true)
+    expect(w.find('[data-testid=move-2]').exists()).toBe(false) // a payment is not moved
+    await w.get('[data-testid=move-1]').trigger('click')
+    // the folio itself and the deposit folio (no stay) are not offered
+    expect(w.findAll('select[name=move_folio] option').map((o) => o.text())).toEqual(['FOL000002 · Company'])
+    await w.get('input[name=reason]').setValue('company pays')
+    await w.get('form[data-testid=correction-form]').trigger('submit')
+    await dlg('input[name=approval_password]').setValue('right')
+    await dlg('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/folio-items/{id}/transfer', {
+      params: { path: { propertyId: 7, id: 1 } }, body: { folio_id: 12, reason: 'company pays', approval: { email: 'clerk@hotel.com', password: 'right' } },
+    }])
+    expect(w.get('[data-testid=notice]').text()).toContain('moved')
+  })
+
+  it('has no move without another folio to move to', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=move-1]').exists()).toBe(false)
   })
 
   it('refunds with the amount, a reason and an approval', async () => {
