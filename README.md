@@ -37,6 +37,12 @@ The dev API port is 18080 because 8080 is often taken by other local services. O
 - Every request re-checks the session in the database, so logout and deactivation take effect immediately.
 - Local development uses `PMS_COOKIE_SECURE=false` (plain `http://localhost`). Production refuses it.
 
+## Deployment
+
+A production-like stack (reverse proxy serving the single-page app, the API, PostgreSQL, a migration job) runs on one machine with Docker:
+`docker compose -f deploy/compose.yaml up -d --build`, then `scripts/prod-smoke.sh`. The images, the proxy, TLS, the trusted proxy setting, health and readiness, the migration
+procedure and the move to a server are in [`docs/deployment.md`](docs/deployment.md).
+
 ## Cloud / sandboxes without Docker
 
 `scripts/cloud-setup.sh` prepares a Linux sandbox: it installs and starts PostgreSQL, writes `.env`

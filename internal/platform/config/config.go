@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -45,6 +46,9 @@ type Config struct {
 	SMTPFromName    string        // PMS_SMTP_FROM_NAME
 	SMTPTLS         string        // PMS_SMTP_TLS: starttls (default), tls or none
 	RateLimit       int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
+	// TrustedProxies is PMS_TRUSTED_PROXIES: the addresses (or CIDR ranges) of the reverse proxies whose X-Forwarded-For is believed. Empty, the default, trusts nobody:
+	// the client is the peer of the connection and the header is ignored.
+	TrustedProxies []netip.Prefix
 }
 
 // Load reads the configuration from the process environment.
@@ -161,10 +165,69 @@ func LoadFrom(lookup func(string) (string, bool)) (Config, error) {
 		cfg.RateLimit = n
 	}
 
+	proxies, err := ParseTrustedProxies(get("PMS_TRUSTED_PROXIES", ""))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("PMS_TRUSTED_PROXIES: %w", err))
+	}
+	cfg.TrustedProxies = proxies
+
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))
 	}
 	return cfg, nil
+}
+
+// ParseTrustedProxies reads a comma separated list of addresses (10.0.0.5, ::1) and CIDR ranges (172.29.0.0/24). A single address becomes a range of one. It refuses a range that
+// would trust the whole internet (0.0.0.0/0, ::/0): that is a spoofable header again, not a proxy.
+func ParseTrustedProxies(list string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, item := range strings.Split(list, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		var p netip.Prefix
+		if strings.Contains(item, "/") {
+			var err error
+			if p, err = netip.ParsePrefix(item); err != nil {
+				return nil, fmt.Errorf("%q is not an address or a CIDR range", item)
+			}
+		} else {
+			a, err := netip.ParseAddr(item)
+			if err != nil {
+				return nil, fmt.Errorf("%q is not an address or a CIDR range", item)
+			}
+			p = netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen())
+		}
+		bits := unmappedBits(p)
+		if bits < 0 {
+			return nil, fmt.Errorf("%q is not a usable range", item)
+		}
+		p = netip.PrefixFrom(p.Addr().Unmap(), bits).Masked()
+		if p.Bits() == 0 {
+			return nil, fmt.Errorf("%q would trust every address: list the proxies, not the internet", item)
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// unmappedBits is the prefix length of p once an IPv4-mapped IPv6 address is read as IPv4.
+func unmappedBits(p netip.Prefix) int {
+	if p.Addr().Is4In6() {
+		return p.Bits() - 96
+	}
+	return p.Bits()
+}
+
+// LoadDatabaseURL reads only PMS_DATABASE_URL, for the tools that talk to the database and need nothing else (the migration job has no use for the JWT secret).
+func LoadDatabaseURL(lookup func(string) (string, bool)) (string, error) {
+	if v, ok := lookup("PMS_DATABASE_URL"); ok {
+		if v = strings.TrimSpace(v); v != "" {
+			return v, nil
+		}
+	}
+	return "", errors.New("invalid configuration: PMS_DATABASE_URL: required")
 }
 
 func positiveDuration(get func(string, string) string, key, def string, errs *[]error) time.Duration {

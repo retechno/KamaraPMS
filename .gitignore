@@ -22,3 +22,6 @@ coverage.*
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# TLS material of the production-like stack
+/deploy/certs/

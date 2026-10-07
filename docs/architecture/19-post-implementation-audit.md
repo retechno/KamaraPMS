@@ -459,6 +459,7 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Risk | There is no defined way to put the system in front of users: where the SPA is hosted, who terminates TLS, which headers are set, which environment variables a server needs, how it restarts |
 | Recommendation | A production recipe: a multi-stage Dockerfile for the API, a `compose` (or systemd) file with the API, PostgreSQL and a reverse proxy that serves `web/dist`, terminates TLS and sets CSP, HSTS, `X-Frame-Options` and `Referrer-Policy`; a page of required variables; a smoke test after start |
 | Suggested next step | Write `docs/architecture/` or `docs/operations/` "Deploy" with the recipe and run it once on a clean machine |
+| **Update (2026-10-07): RESOLVED for a single machine** · VERIFIED | P0 #3: `Dockerfile` (targets `api` and `web`), `deploy/compose.yaml`, the nginx proxy with the security headers, `deploy/compose.tls.yaml`, `deploy/.env.example`, `scripts/prod-smoke.sh` and `docs/deployment.md`. The stack was built and run, the smoke test passed and the builds were reproducible (the checks are listed in section 12 of the deployment document). Still open: a deployment to a real server and a certificate from an authority, which need a server and a domain |
 
 #### F-04 · High · Backup, restore and disaster recovery
 
@@ -479,6 +480,7 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Risk | Behind the reverse proxy that production needs (F-03) every client has the proxy's address: **one bucket for the whole hotel**. A busy front desk (several screens, several calls per screen) can reach 600 requests a minute and get 429 for everyone. With two instances the limits double, and a restart clears the login throttle, which weakens brute-force protection |
 | Recommendation | A trusted-proxy setting (`PMS_TRUSTED_PROXIES`) that reads `X-Forwarded-For` only from those addresses; keep the login throttle keyed by tenant and e-mail (it already is) and store failed attempts in the database or document that one instance is the supported shape for the pilot |
 | Suggested next step | Decide "one instance behind a proxy" for the pilot, implement the trusted-proxy setting, add a test |
+| **Update (2026-10-07): RESOLVED** · VERIFIED | `PMS_TRUSTED_PROXIES` and `httpx.ResolveClientIP`: `X-Forwarded-For` is believed only from a trusted proxy and is read from the right; the proxy overwrites the header. Unit tests for a direct client, a trusted proxy, spoofing from an untrusted peer and several clients behind one proxy; the smoke test repeats them with clients that have addresses of their own. The throttles are still per process, so the supported shape stays one API instance (documented) |
 
 #### F-06 · Medium · Reverse check-in leaves company folios on a cancelled stay
 
@@ -710,9 +712,9 @@ The order follows the evidence of this audit, not the order in which things were
 |---|---|---|---|
 | 1 | **Make CI run and green, and required for `main`.** Execute bit on the scripts, first full run, fix what it finds | F-01 | Until this is done no guarantee of the project is evidence. **Done on 2026-10-07 (`c38ca68`, run 17 green); still open: branch protection** |
 | 2 | **(Done: CI run 17, 264 s, clean)** **Run the race detector over the whole suite** (CI after item 1; the container command for a local run, package by package because of memory) and fix reports | F-02 | The locking design is the heart of the system; six packages are clean, the rest is unproved |
-| 3 | **A deployment recipe**: Dockerfile, production compose or service files, reverse proxy with TLS and headers serving `web/dist`, the variables, a smoke test, and the decision "one instance" for the pilot | F-03 | Nothing exists to put in front of users |
+| 3 | **(Done for one machine, 2026-10-07: `docs/deployment.md`)** **A deployment recipe**: Dockerfile, production compose or service files, reverse proxy with TLS and headers serving `web/dist`, the variables, a smoke test, and the decision "one instance" for the pilot | F-03 | Nothing exists to put in front of users |
 | 4 | **Backup, restore and rollback runbook with one rehearsed restore** and agreed RPO and RTO | F-04 | The whole ledger is one database |
-| 5 | **Client address and rate limits behind the proxy** (trusted proxy setting) | F-05 | Part of the recipe: without it one bucket serves the whole hotel |
+| 5 | **(Done, 2026-10-07)** **Client address and rate limits behind the proxy** (trusted proxy setting) | F-05 | Part of the recipe: without it one bucket serves the whole hotel |
 | 6 | **Go-live checklist**: accounting settings and start date, charge-code accounts, department setup check, cashier settings, PKP settings, a first night audit preview | F-15 | A property can go live without a GL and nothing says so |
 
 ### P1: important, does not block the pilot

@@ -1,0 +1,67 @@
+# KamaraPMS reverse proxy (HTTP). It serves the single-page app, forwards /api to the Go API, and sets the security headers. It is a template: the image substitutes
+# ${API_UPSTREAM} (host:port of the API, default api:8080) when the container starts. No domain name is written here: this server answers for any host name.
+#
+# TLS is the business of the layer that has the certificate. Either use deploy/compose.tls.yaml (this proxy terminates TLS, see tls.conf.template) or put a TLS terminating
+# load balancer in front of this one; docs/deployment.md describes both.
+
+upstream pms_api {
+    server ${API_UPSTREAM};
+    keepalive 16;
+}
+
+# The request id of the proxy is the correlation id of the API (X-Request-ID is accepted by the API when it is well formed) and is returned to the caller.
+log_format pms '$remote_addr "$request" $status $body_bytes_sent rt=$request_time rid=$request_id';
+
+server {
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
+    server_name _;
+    server_tokens off;
+    access_log /dev/stdout pms;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Walls, outside the limits of the API: a JSON body over 1 MiB is refused by the API with a clear error, so the wall is a little above it.
+    client_max_body_size 2m;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 16k;
+    client_header_timeout 15s;
+    client_body_timeout 30s;
+    send_timeout 60s;
+    keepalive_timeout 65s;
+
+    # The API sets Cache-Control: no-store on its answers itself; the proxy does not cache them.
+    location /api/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        proxy_pass http://pms_api;
+    }
+
+    # The probes are reachable through the proxy, so that a monitor outside sees what a user sees. They answer with a status word and nothing else.
+    location = /healthz {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        proxy_pass http://pms_api;
+    }
+    location = /readyz {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        proxy_pass http://pms_api;
+    }
+
+    # Built files carry a hash in their name, so they never change: cache them for a year. A missing one is a 404, not the page (a stale tab asking for an old build).
+    location /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # The page, and the router of the app: any path that is not a file is the page, and the app decides what to show (history mode). The page itself is never cached,
+    # so a new release is picked up at the next load.
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /index.html;
+    }
+}

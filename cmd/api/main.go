@@ -19,11 +19,15 @@ import (
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/config"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/health"
 	"kamarapms/internal/platform/logging"
 	"kamarapms/internal/platform/migrate"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" { // the container health check: no configuration, no secret
+		healthcheckMain()
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "kamara-pms api:", err)
 		os.Exit(1)
@@ -70,7 +74,14 @@ func run() error {
 	} else {
 		logger.Info("e-mail is off (PMS_SMTP_HOST is not set)")
 	}
+	if len(cfg.TrustedProxies) > 0 {
+		logger.Info("trusted proxies", "count", len(cfg.TrustedProxies))
+	} else if cfg.Env == config.EnvProduction {
+		logger.Warn("no trusted proxies (PMS_TRUSTED_PROXIES is empty): X-Forwarded-For is ignored, so behind a reverse proxy every client has the address of the proxy and shares one rate limit")
+	}
 	application := app.New(app.Deps{
+		TrustedProxies:     cfg.TrustedProxies,
+		ReadyChecks:        []health.Check{migrate.SchemaCheck(pool)},
 		Mail:               mailer,
 		Logger:             logger,
 		DB:                 pool,

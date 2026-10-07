@@ -1,0 +1,84 @@
+# KamaraPMS reverse proxy with TLS (used by deploy/compose.tls.yaml). Same routes as default.conf.template; port 8080 only redirects to https, 8443 serves.
+# The certificate and key are files you provide (docs/deployment.md, "TLS strategy"): nothing is requested or renewed here, no domain is written here.
+#
+# Mounted at /etc/nginx/templates/default.conf.template instead of the HTTP one; the variable ${API_UPSTREAM} is substituted at start.
+
+upstream pms_api {
+    server ${API_UPSTREAM};
+    keepalive 16;
+}
+
+log_format pms '$remote_addr "$request" $status $body_bytes_sent rt=$request_time rid=$request_id';
+
+# Plain HTTP only sends the visitor to the same address over https. The probes stay on http so that a load balancer or a monitor can reach them without a certificate.
+server {
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
+    server_name _;
+    server_tokens off;
+    access_log /dev/stdout pms;
+
+    location = /healthz { proxy_pass http://pms_api; include /etc/nginx/snippets/proxy-api.conf; }
+    location = /readyz  { proxy_pass http://pms_api; include /etc/nginx/snippets/proxy-api.conf; }
+    location / { return 308 https://$host$request_uri; }
+}
+
+server {
+    listen 8443 ssl default_server;
+    listen [::]:8443 ssl default_server;
+    http2 on;
+    server_name _;
+    server_tokens off;
+    access_log /dev/stdout pms;
+
+    ssl_certificate     /etc/nginx/certs/tls.crt;
+    ssl_certificate_key /etc/nginx/certs/tls.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    client_max_body_size 2m;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 16k;
+    client_header_timeout 15s;
+    client_body_timeout 30s;
+    send_timeout 60s;
+    keepalive_timeout 65s;
+
+    # HSTS (browsers use https only for this host from now on) is added in each location below, because nginx does not inherit add_header into a location that has its own. It is
+    # set only here, where TLS is certain, never in the plain http configuration.
+
+    location /api/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        proxy_pass http://pms_api;
+    }
+    location = /healthz {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        proxy_pass http://pms_api;
+    }
+    location = /readyz {
+        include /etc/nginx/snippets/security-headers.conf;
+        include /etc/nginx/snippets/proxy-api.conf;
+        proxy_pass http://pms_api;
+    }
+    location /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /index.html;
+    }
+}

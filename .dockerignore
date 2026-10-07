@@ -1,0 +1,24 @@
+# The build context is the repository; only what the images need is sent to the Docker daemon.
+.git
+.github
+.claude
+.env
+.env.*
+!.env.example
+bin
+docs
+scripts
+db
+api
+sqlc.yaml
+compose.yaml
+**/*_test.go
+web/node_modules
+web/dist
+web/src/**/*.test.ts
+**/*.log
+**/.DS_Store
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+deploy/certs

@@ -6,7 +6,7 @@
 //	migrate status      list migrations and their state
 //	migrate version     print the current schema version
 //
-// It reads PMS_DATABASE_URL (see internal/platform/config).
+// It reads PMS_DATABASE_URL (see internal/platform/config) and nothing else. Changes to the schema hold a database lock, so two jobs started together take turns.
 package main
 
 import (
@@ -35,12 +35,12 @@ func run(args []string) error {
 	if err := config.LoadDotEnv(".env"); err != nil {
 		return err
 	}
-	cfg, err := config.Load()
+	databaseURL, err := config.LoadDatabaseURL(os.LookupEnv) // the job needs the database and nothing else: no JWT secret
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
-	pool, err := db.Open(ctx, cfg.DatabaseURL, 2)
+	pool, err := db.Open(ctx, databaseURL, 2)
 	if err != nil {
 		return err
 	}

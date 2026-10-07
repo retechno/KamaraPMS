@@ -176,3 +176,51 @@ func TestSMTPSettings(t *testing.T) {
 		t.Errorf("an unauthenticated relay without TLS is allowed: %v", err)
 	}
 }
+
+func TestTrustedProxies(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://x@y/z", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(list string) (Config, error) {
+		m := map[string]string{"PMS_TRUSTED_PROXIES": list}
+		for k, v := range base {
+			m[k] = v
+		}
+		return LoadFrom(env(m))
+	}
+	// the default trusts nobody
+	cfg, err := LoadFrom(env(base))
+	if err != nil || len(cfg.TrustedProxies) != 0 {
+		t.Fatalf("default: %v %v", err, cfg.TrustedProxies)
+	}
+	// addresses and ranges, spaces and empty items allowed, a single address is a range of one, IPv4-mapped IPv6 is read as IPv4
+	cfg, err = with(" 10.0.0.5, 172.29.0.0/24 ,, ::1, ::ffff:192.168.1.7, fd00::/8 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range cfg.TrustedProxies {
+		got = append(got, p.String())
+	}
+	want := []string{"10.0.0.5/32", "172.29.0.0/24", "::1/128", "192.168.1.7/32", "fd00::/8"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("parsed %v, want %v", got, want)
+	}
+	// a range is masked to its network
+	if cfg, err = with("172.29.0.77/24"); err != nil || cfg.TrustedProxies[0].String() != "172.29.0.0/24" {
+		t.Fatalf("masked: %v %v", err, cfg.TrustedProxies)
+	}
+	// refused: not an address, a bad range, and a range that trusts the internet
+	for _, bad := range []string{"proxy.example.com", "10.0.0.0/33", "300.1.1.1", "0.0.0.0/0", "::/0", "::ffff:0:0/80"} {
+		if _, err := with(bad); err == nil || !strings.Contains(err.Error(), "PMS_TRUSTED_PROXIES") {
+			t.Fatalf("%q must be refused: %v", bad, err)
+		}
+	}
+}
+
+func TestLoadDatabaseURLNeedsNothingElse(t *testing.T) {
+	if u, err := LoadDatabaseURL(env(map[string]string{"PMS_DATABASE_URL": " postgres://x@y/z "})); err != nil || u != "postgres://x@y/z" {
+		t.Fatalf("%q %v", u, err)
+	}
+	if _, err := LoadDatabaseURL(env(nil)); err == nil || !strings.Contains(err.Error(), "PMS_DATABASE_URL") {
+		t.Fatalf("missing URL: %v", err)
+	}
+}

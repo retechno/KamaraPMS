@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"kamarapms/internal/accounting"
@@ -58,6 +59,10 @@ type Deps struct {
 	Mail notifications.Sender
 	// RateLimitPerMinute limits requests per client address (0 = off).
 	RateLimitPerMinute int
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed when the client address is resolved; none means the peer of the connection is the client.
+	TrustedProxies []netip.Prefix
+	// ReadyChecks are what /readyz asks besides the database (for example that the schema has the migrations of this release).
+	ReadyChecks []health.Check
 }
 
 // App is the assembled application: the API handler and the background work that goes with it.
@@ -167,12 +172,13 @@ func New(d Deps) *App {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", health.Live())
-	mux.Handle("GET /readyz", health.Ready(d.DB))
+	mux.Handle("GET /readyz", health.Ready(d.DB, d.ReadyChecks...))
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
 	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(api)))
 
 	return &App{notifier: notifierSvc, Handler: httpx.Chain(mux,
-		httpx.RequestID(d.Logger),
+		httpx.RequestID(d.Logger, d.TrustedProxies...),
+		httpx.SecurityHeaders,
 		httpx.AccessLog,
 		httpx.Recover,
 		httpx.RateLimit(d.RateLimitPerMinute, d.Clock.Now),

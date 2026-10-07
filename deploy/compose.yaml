@@ -1,0 +1,134 @@
+# KamaraPMS, production-like stack that runs on one machine:
+#
+#   browser -> proxy (nginx: the single-page app, /api) -> api (Go) -> db (PostgreSQL)
+#
+# It builds the images from the repository (the Dockerfile at the root), runs the migrations as a job before the API starts, and publishes one port, the proxy's.
+# The database and the API are on a private network and have no published port.
+#
+#   cp deploy/.env.example deploy/.env      # fill in POSTGRES_PASSWORD and PMS_JWT_SECRET
+#   docker compose -f deploy/compose.yaml up -d --build
+#
+# The same files move to any server that has Docker: nothing here names a provider or a domain. docs/deployment.md has the procedure, the first administrator, TLS and backup.
+
+# The project has a name of its own so that its containers, network and volume (kamarapms-deploy_pms-db) can never be confused with the development database of the root
+# compose.yaml (project kamarapms, volume kamarapms_pms-db, port 55432). The two can run on one machine side by side.
+name: kamarapms-deploy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pms}
+      POSTGRES_USER: ${POSTGRES_USER:-pms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pms-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    stop_grace_period: 30s
+    networks: [backend]
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  # The migration job: applies the migrations this release needs and ends. It takes a database lock while it works, so a second job started together waits and finds nothing to
+  # do. It needs the database and nothing else (no JWT secret). The API is not started before it has succeeded.
+  migrate:
+    image: kamarapms-api:${PMS_VERSION:-local}
+    build: { context: .., dockerfile: Dockerfile, target: api }
+    entrypoint: ["/usr/local/bin/migrate"]
+    command: ["up"]
+    environment:
+      PMS_DATABASE_URL: postgres://${POSTGRES_USER:-pms}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pms}?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [backend]
+    logging: *logging
+
+  api:
+    image: kamarapms-api:${PMS_VERSION:-local}
+    build: { context: .., dockerfile: Dockerfile, target: api }
+    restart: unless-stopped
+    environment:
+      PMS_ENV: production
+      PMS_HTTP_ADDR: ":8080"
+      PMS_DATABASE_URL: postgres://${POSTGRES_USER:-pms}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pms}?sslmode=disable
+      PMS_JWT_SECRET: ${PMS_JWT_SECRET:?set PMS_JWT_SECRET in deploy/.env}
+      PMS_LOG_LEVEL: ${PMS_LOG_LEVEL:-info}
+      PMS_LOG_FORMAT: json
+      PMS_COOKIE_SECURE: ${PMS_COOKIE_SECURE:-true}
+      PMS_ACCESS_TOKEN_TTL: ${PMS_ACCESS_TOKEN_TTL:-15m}
+      PMS_REFRESH_TOKEN_TTL: ${PMS_REFRESH_TOKEN_TTL:-720h}
+      PMS_DB_MAX_CONNS: ${PMS_DB_MAX_CONNS:-10}
+      PMS_DB_LOCK_TIMEOUT: ${PMS_DB_LOCK_TIMEOUT:-5s}
+      PMS_SHUTDOWN_TIMEOUT: ${PMS_SHUTDOWN_TIMEOUT:-15s}
+      PMS_RATE_LIMIT_PER_MINUTE: ${PMS_RATE_LIMIT_PER_MINUTE:-600}
+      PMS_TRUSTED_PROXIES: ${PMS_TRUSTED_PROXIES:-172.29.0.10}
+      PMS_MIGRATE_ON_START: "false"
+      PMS_SMTP_HOST: ${PMS_SMTP_HOST:-}
+      PMS_SMTP_PORT: ${PMS_SMTP_PORT:-587}
+      PMS_SMTP_TLS: ${PMS_SMTP_TLS:-starttls}
+      PMS_SMTP_USERNAME: ${PMS_SMTP_USERNAME:-}
+      PMS_SMTP_PASSWORD: ${PMS_SMTP_PASSWORD:-}
+      PMS_SMTP_FROM: ${PMS_SMTP_FROM:-}
+      PMS_SMTP_FROM_NAME: ${PMS_SMTP_FROM_NAME:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/api", "healthcheck", "-ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # SIGTERM reaches the API as process 1: it stops taking connections, finishes the requests in flight and exits (PMS_SHUTDOWN_TIMEOUT), well inside this period.
+    stop_grace_period: 30s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [backend]
+    logging: *logging
+
+  proxy:
+    image: kamarapms-web:${PMS_VERSION:-local}
+    build: { context: .., dockerfile: Dockerfile, target: web }
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: api:8080
+    ports:
+      - "${PMS_BIND:-127.0.0.1}:${PMS_PUBLIC_PORT:-8080}:8080"
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      backend:
+        # A fixed address: the API trusts X-Forwarded-For from this address and from no other (PMS_TRUSTED_PROXIES).
+        ipv4_address: 172.29.0.10
+    logging: *logging
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+
+volumes:
+  pms-db:

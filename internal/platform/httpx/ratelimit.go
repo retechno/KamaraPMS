@@ -67,7 +67,7 @@ func (l *RateLimiter) sweep(now time.Time) {
 }
 
 // RateLimit rejects requests over the limit with 429 TOO_MANY_REQUESTS and a Retry-After header. The key is the
-// direct peer address (see ClientIPFrom). Health probes are exempt; a limit of 0 or less disables it.
+// client address (see ClientIPFrom: behind a trusted proxy it is the address the proxy forwarded, one bucket per person). Health probes are exempt; a limit of 0 or less disables it.
 func RateLimit(perMinute int, now func() time.Time) Middleware {
 	if perMinute <= 0 {
 		return func(next http.Handler) http.Handler { return next }

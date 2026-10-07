@@ -43,16 +43,17 @@ func RequestIDFrom(ctx context.Context) string {
 	return id
 }
 
-// ClientIPFrom returns the caller's IP address (the direct peer; proxies are
-// not trusted until a trusted-proxy setting exists).
+// ClientIPFrom returns the caller's IP address: the peer of the connection, or, when the peer is a trusted proxy (see ResolveClientIP), the client it forwarded.
 func ClientIPFrom(ctx context.Context) (netip.Addr, bool) {
 	ip, ok := ctx.Value(clientIPKey{}).(netip.Addr)
 	return ip, ok
 }
 
 // RequestID assigns a correlation id to every request, echoes it in the
-// response, and stores a logger tagged with it in the request context.
-func RequestID(base *slog.Logger) Middleware {
+// response, and stores a logger tagged with it in the request context. It also
+// resolves the client address (the rate limiter, the audit trail and the
+// sign-in throttle read it): X-Forwarded-For counts only from the trusted proxies.
+func RequestID(base *slog.Logger, trusted ...netip.Prefix) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id := r.Header.Get(RequestIDHeader)
@@ -61,10 +62,12 @@ func RequestID(base *slog.Logger) Middleware {
 			}
 			w.Header().Set(RequestIDHeader, id)
 			ctx := context.WithValue(r.Context(), requestIDKey{}, id)
-			if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
-				ctx = context.WithValue(ctx, clientIPKey{}, ap.Addr().Unmap())
+			logger := base.With("request_id", id)
+			if ip, ok := ResolveClientIP(r, trusted); ok {
+				ctx = context.WithValue(ctx, clientIPKey{}, ip)
+				logger = logger.With("client_ip", ip.String())
 			}
-			ctx = logging.WithLogger(ctx, base.With("request_id", id))
+			ctx = logging.WithLogger(ctx, logger)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -102,7 +105,8 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 // Unwrap lets http.ResponseController reach the underlying writer.
 func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
-// AccessLog logs one line per request with its route pattern, status and duration.
+// AccessLog logs one line per request with its route pattern, status and duration. A probe that succeeds (/healthz, /readyz: a container asks every few seconds) is logged at
+// debug level, so it does not drown the log; a probe that fails is logged like any other request.
 func AccessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now() //nolint:forbidigo // request latency is a server-time measurement, not a business date
@@ -112,8 +116,11 @@ func AccessLog(next http.Handler) http.Handler {
 			rec.status = http.StatusOK
 		}
 		level := slog.LevelInfo
-		if rec.status >= 500 {
+		switch {
+		case rec.status >= 500:
 			level = slog.LevelError
+		case rec.status < 400 && (r.URL.Path == "/healthz" || r.URL.Path == "/readyz"):
+			level = slog.LevelDebug
 		}
 		logging.FromContext(r.Context()).Log(r.Context(), level, "http request",
 			"method", r.Method,
