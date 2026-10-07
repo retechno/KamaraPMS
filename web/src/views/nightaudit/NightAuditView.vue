@@ -34,7 +34,8 @@ const can = (p: string) => auth.can(p, pid.value)
 const blockers = computed(() => preview.value?.blockers)
 const arrivals = computed(() => blockers.value?.unresolved_arrivals ?? [])
 const departures = computed(() => blockers.value?.unresolved_departures ?? [])
-const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0))
+const accountingBlockers = computed(() => blockers.value?.accounting_readiness ?? [])
+const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0) + accountingBlockers.value.length)
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
 
 // How many steps still need someone: the clock, the arrivals, the departures and the room charges.
@@ -240,6 +241,12 @@ watch(pid, () => {
             <li v-for="c in blockers.invalid_charges" :key="c.folio_item_id">
               <RouterLink :to="`/stays/${c.stay_id}`">{{ c.stay_number }}</RouterLink> {{ $date(c.service_date) }} ({{ c.reason }}): {{ t('nightAudit.reverseOnFolio') }}
             </li>
+          </ul>
+        </div>
+        <div v-if="accountingBlockers.length" class="alert mb-0 mt-3" data-testid="accounting-readiness">
+          <strong>{{ t('nightAudit.accountingNotReady', { n: accountingBlockers.length }) }}</strong>
+          <ul class="m-0 mt-1 pl-5">
+            <li v-for="b in accountingBlockers" :key="`${b.code}-${b.ref ?? ''}`"><code>{{ b.code }}</code> {{ b.message }}</li>
           </ul>
         </div>
       </StepCard>

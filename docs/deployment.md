@@ -239,5 +239,5 @@ Nothing in the stack changes; the checklist is:
 3. `deploy/.env` with new secrets (`POSTGRES_PASSWORD`, `PMS_JWT_SECRET`), `PMS_BIND=0.0.0.0`, `PMS_PUBLIC_PORT=80`, `PMS_PUBLIC_TLS_PORT=443`.
 4. A certificate for your host name in `deploy/certs/` and the TLS file (option A), or a TLS balancer in front (option B).
 5. `docker compose ... up -d`, create the first tenant and administrator, run `scripts/prod-smoke.sh` against the public address (`PMS_SMOKE_URL=https://...`, with `SMOKE_NETWORK_TESTS=0` unless you run it on the host).
-6. Before the first night audit: accounting set up, backups scheduled and watched, one restore rehearsed on the production data (backup-restore.md, section 12; audit F-15).
+6. Before the first night audit: ask `GET /api/v1/properties/{id}/accounting/readiness` (accounting.view): it must say `READY`. The night audit asks the same question and **refuses to close a day** while it says `NOT_READY` (`409 NIGHT_AUDIT_BLOCKED`, `blockers.accounting_readiness`; the blocker codes are in audit F-15). Also: backups scheduled and watched, one restore rehearsed on the production data (backup-restore.md, section 12).
 7. Keep one API instance for the pilot (section 6.3).

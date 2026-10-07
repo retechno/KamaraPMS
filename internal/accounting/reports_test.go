@@ -236,7 +236,9 @@ func TestReconciliationAgainstTheFolios(t *testing.T) {
 	}
 	// a closed day that was never journaled is reported
 	must(t, h.Exec(t, `DELETE FROM accounting_settings WHERE property_id = $1`, h.propID))
+	h.Audit.SetJournaler(nil) // a day that closed before the readiness check existed
 	h.closeDay(t)
+	h.Audit.SetJournaler(h.Accounting)
 	must(t, h.Exec(t, `INSERT INTO accounting_settings (tenant_id, property_id, start_date) VALUES ($1, $2, '2026-09-30')`, h.tenantID, h.propID))
 	later := civil.MustParseDate("2026-10-01")
 	rec, err = h.Accounting.Reconciliation(h.admin, h.propID, &later)

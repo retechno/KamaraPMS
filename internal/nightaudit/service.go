@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/housekeeping"
@@ -40,6 +41,8 @@ type Service struct {
 // transaction, so a day cannot close without its journal.
 type Journaler interface {
 	PostDay(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error
+	// JournalReadiness says whether the journal of the date can be made (accounting.Readiness). With lock it holds the accounting settings row until the end of the transaction.
+	JournalReadiness(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, lock bool) (accounting.Readiness, error)
 }
 
 // ShiftChecker lists the cashier shifts that are open and says whether they block the night audit (shifts.Service).
@@ -85,7 +88,7 @@ type analysis struct {
 func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, decimals int32, withWarnings bool) (analysis, error) {
 	q := s.q(ctx)
 	a := analysis{
-		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}},
+		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
 		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, BlocksEnding: []EndingBlock{}},
 	}
@@ -116,6 +119,13 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 		if blocks && len(open) > 0 {
 			a.blockers.OpenShifts = open
 		}
+	}
+	if s.journal != nil { // a day must not close without its journal: the same check is made again, with the accounting row locked, just before the journal (Run)
+		ready, err := s.journal.JournalReadiness(ctx, p, propertyID, bd, false)
+		if err != nil {
+			return a, err
+		}
+		a.blockers.AccountingReadiness = ready.Blockers
 	}
 	cmd := roomcharge.PostCmd{BusinessDate: bd, Trigger: roomcharge.TriggerNightAudit}
 	dry := cmd
@@ -291,6 +301,17 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 			return blocked(b)
 		}
 		if s.journal != nil {
+			// the authoritative check: the accounting settings row is locked FOR SHARE from here to the commit, so the setup cannot change between this check and the journal.
+			// A blocker rolls the whole transaction back (the charges too), the business day stays open and nothing is journalled.
+			ready, err := s.journal.JournalReadiness(ctx, p, propertyID, bd, true)
+			if err != nil {
+				return err
+			}
+			if !ready.Ready {
+				b := a.blockers
+				b.AccountingReadiness = ready.Blockers
+				return blocked(b)
+			}
 			if err := s.journal.PostDay(ctx, p, propertyID, bd); err != nil {
 				return err
 			}

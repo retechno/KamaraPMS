@@ -344,6 +344,22 @@ func (q *Queries) CountClosedPeriodsBetween(ctx context.Context, arg CountClosed
 	return column_1, err
 }
 
+const countJournalSequence = `-- name: CountJournalSequence :one
+SELECT count(*)::int FROM document_sequences WHERE tenant_id = $1 AND property_id = $2 AND sequence_type = 'JOURNAL'
+`
+
+type CountJournalSequenceParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) CountJournalSequence(ctx context.Context, arg CountJournalSequenceParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countJournalSequence, arg.TenantID, arg.PropertyID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countPendingDays = `-- name: CountPendingDays :one
 SELECT count(*)::int FROM business_days b
 WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'CLOSED'
@@ -1614,6 +1630,61 @@ func (q *Queries) ListPeriods(ctx context.Context, arg ListPeriodsParams) ([]Lis
 			&i.ReopenedAt,
 			&i.ReopenedBy,
 			&i.ReopenReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoomChargeCodes = `-- name: ListRoomChargeCodes :many
+
+SELECT c.id, c.code, c.gl_account_code, a.id AS account_id, a.is_active AS account_active, a.is_postable AS account_postable, a.account_type
+FROM charge_codes c
+LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.charge_type = 'ROOM' AND c.is_active
+ORDER BY c.code
+`
+
+type ListRoomChargeCodesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListRoomChargeCodesRow struct {
+	ID              int64
+	Code            string
+	GlAccountCode   *string
+	AccountID       *int64
+	AccountActive   *bool
+	AccountPostable *bool
+	AccountType     *string
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Go-live readiness (the checks the night audit makes before the day close; plain reads)
+// The active charge codes of type ROOM with the account they point to: the night audit posts the room nights to them, so their revenue must reach a revenue account and not the suspense account.
+func (q *Queries) ListRoomChargeCodes(ctx context.Context, arg ListRoomChargeCodesParams) ([]ListRoomChargeCodesRow, error) {
+	rows, err := q.db.Query(ctx, listRoomChargeCodes, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoomChargeCodesRow{}
+	for rows.Next() {
+		var i ListRoomChargeCodesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.GlAccountCode,
+			&i.AccountID,
+			&i.AccountActive,
+			&i.AccountPostable,
+			&i.AccountType,
 		); err != nil {
 			return nil, err
 		}

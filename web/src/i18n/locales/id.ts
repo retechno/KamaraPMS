@@ -296,6 +296,7 @@ export const id: Messages = {
     chargeCountsBefore: '{missing} malam belum dibebankan dari hari sebelumnya, {tonight} malam malam ini (total {total}). Proses ini memostingnya;',
     chargeCountsAfter: 'bisa memostingnya lebih dulu.',
     chargeErrors: '{n} malam tidak bisa dibebankan:',
+    accountingNotReady: 'Akuntansi belum siap, sehingga hari tidak dapat ditutup beserta jurnalnya ({n}):',
     invalidCharges: '{n} malam yang sudah diposting seharusnya tidak ada:',
     reverseOnFolio: 'koreksi (reverse) di folio.',
     warnings: 'Peringatan',

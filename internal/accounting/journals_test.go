@@ -295,13 +295,15 @@ func TestAnItemWithoutAnAccountGoesToSuspense(t *testing.T) {
 	h.requireBalanced(t)
 }
 
-func TestWithoutAccountingTheDayClosesAndBackfillCatchesUp(t *testing.T) {
+func TestDaysClosedBeforeAccountingWasSetUpAreBackfilled(t *testing.T) {
 	h := setupHotel(t)
 	st := h.checkIn(t, h.book(t, "2026-09-30", "2026-10-05"), h.r101)
 	h.charge(t, st.Folio.ID, "RESTAURANT", "100000", "r1")
 	must(t, h.Exec(t, `DELETE FROM accounting_settings WHERE property_id = $1`, h.propID))
+	h.Audit.SetJournaler(nil) // days that closed before the readiness check existed: a night audit now refuses to close a day without its journal (TestTheNightAuditRefuses...)
 	h.closeDay(t)
 	h.closeDay(t)
+	h.Audit.SetJournaler(h.Accounting)
 	if n := h.Count(t, `SELECT count(*) FROM gl_journals`); n != 0 {
 		t.Fatalf("%d journals without accounting", n)
 	}
@@ -330,7 +332,9 @@ func TestPostPendingNeedsPermissionAndRunsOnce(t *testing.T) {
 	st := h.checkIn(t, h.book(t, "2026-09-30", "2026-10-05"), h.r101)
 	h.charge(t, st.Folio.ID, "RESTAURANT", "100000", "r1")
 	must(t, h.Exec(t, `DELETE FROM accounting_settings WHERE property_id = $1`, h.propID))
+	h.Audit.SetJournaler(nil) // a day that closed before the readiness check existed
 	h.closeDay(t)
+	h.Audit.SetJournaler(h.Accounting)
 	must(t, h.Exec(t, `INSERT INTO accounting_settings (tenant_id, property_id, start_date) VALUES ($1, $2, '2026-09-30')`, h.tenantID, h.propID))
 	poster := h.User(t, h.tenantID, h.propID, auth.PermAccountingPost, auth.PermAccountingView)
 	_, err := h.Accounting.PostPending(poster, h.propID)

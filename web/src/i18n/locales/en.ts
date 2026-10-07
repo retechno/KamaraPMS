@@ -297,6 +297,7 @@ export const en = {
     chargeCountsBefore: '{missing} missing night(s) from earlier days, {tonight} night(s) tonight (total {total}). The run posts them;',
     chargeCountsAfter: 'posts them beforehand.',
     chargeErrors: '{n} night(s) cannot be charged:',
+    accountingNotReady: 'Accounting is not ready, so the day cannot close with its journal ({n}):',
     invalidCharges: '{n} posted night(s) should not exist:',
     reverseOnFolio: 'reverse it on the folio.',
     warnings: 'Warnings',

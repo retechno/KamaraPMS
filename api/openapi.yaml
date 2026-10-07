@@ -5419,6 +5419,22 @@ paths:
               schema: { $ref: "#/components/schemas/DepartmentSetupReport" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/accounting/readiness:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: checkAccountingReadiness
+      summary: Whether the night audit of the current business date can make its journal (accounting.view)
+      description: "The go-live check, the same one the night audit makes before it closes a day (a day is never closed without its journal). `status` is READY or NOT_READY; `blockers` say why, each with a stable `code` (ACCOUNTING_NOT_SET_UP, ACCOUNTING_NOT_STARTED, ACCOUNT_MAP_MISSING, ACCOUNT_MAP_UNUSABLE, ROOM_CHARGE_CODE_UNMAPPED, DEPARTMENT_SETUP_INCOMPLETE, JOURNAL_SEQUENCE_MISSING) and the `ref` it is about. `warnings` never stop the night audit (CODE_UNMAPPED, ACCOUNT_MAP_OPTIONAL). The answer is 200 in both cases; it writes nothing."
+      tags: [accounting]
+      responses:
+        "200":
+          description: The check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountingReadiness" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/accounting/journals:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9780,8 +9796,12 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
     NightAuditBlockers:
       type: object
-      required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges, open_shifts]
+      required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges, open_shifts, accounting_readiness]
       properties:
+        accounting_readiness:
+          type: array
+          description: Why the day close could not make its journal (accounting not set up, the system accounts, the room revenue account, the departments). The same blockers as GET .../accounting/readiness.
+          items: { $ref: "#/components/schemas/AccountingReadinessBlocker" }
         open_shifts:
           type: array
           description: Cashier shifts still open, when the property wants the cash counted before the day closes.
@@ -11946,6 +11966,25 @@ components:
         account_code: { type: string }
         account_name: { type: string }
         message: { type: string }
+    AccountingReadinessBlocker:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        ref: { type: string, description: The map key, charge code, source or date the finding is about. }
+    AccountingReadiness:
+      type: object
+      required: [ready, status, blockers, warnings]
+      properties:
+        ready: { type: boolean }
+        status: { type: string, enum: [READY, NOT_READY] }
+        blockers:
+          type: array
+          items: { $ref: "#/components/schemas/AccountingReadinessBlocker" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/AccountingReadinessBlocker" }
     DepartmentSetupReport:
       type: object
       required: [ok, issues]

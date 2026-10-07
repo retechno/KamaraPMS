@@ -4698,6 +4698,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/accounting/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Whether the night audit of the current business date can make its journal (accounting.view)
+         * @description The go-live check, the same one the night audit makes before it closes a day (a day is never closed without its journal). `status` is READY or NOT_READY; `blockers` say why, each with a stable `code` (ACCOUNTING_NOT_SET_UP, ACCOUNTING_NOT_STARTED, ACCOUNT_MAP_MISSING, ACCOUNT_MAP_UNUSABLE, ROOM_CHARGE_CODE_UNMAPPED, DEPARTMENT_SETUP_INCOMPLETE, JOURNAL_SEQUENCE_MISSING) and the `ref` it is about. `warnings` never stop the night audit (CODE_UNMAPPED, ACCOUNT_MAP_OPTIONAL). The answer is 200 in both cases; it writes nothing.
+         */
+        get: operations["checkAccountingReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/accounting/journals": {
         parameters: {
             query?: never;
@@ -8795,6 +8817,8 @@ export interface components {
             departure_date: components["schemas"]["Date"];
         };
         NightAuditBlockers: {
+            /** @description Why the day close could not make its journal (accounting not set up, the system accounts, the room revenue account, the departments). The same blockers as GET .../accounting/readiness. */
+            accounting_readiness: components["schemas"]["AccountingReadinessBlocker"][];
             /** @description Cashier shifts still open, when the property wants the cash counted before the day closes. */
             open_shifts: components["schemas"]["OpenCashierShiftSummary"][];
             unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
@@ -10847,6 +10871,19 @@ export interface components {
             account_code: string;
             account_name: string;
             message: string;
+        };
+        AccountingReadinessBlocker: {
+            code: string;
+            message: string;
+            /** @description The map key */
+            ref?: string;
+        };
+        AccountingReadiness: {
+            ready: boolean;
+            /** @enum {string} */
+            status: "READY" | "NOT_READY";
+            blockers: components["schemas"]["AccountingReadinessBlocker"][];
+            warnings: components["schemas"]["AccountingReadinessBlocker"][];
         };
         DepartmentSetupReport: {
             ok: boolean;
@@ -19816,6 +19853,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepartmentSetupReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    checkAccountingReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountingReadiness"];
                 };
             };
             403: components["responses"]["Problem"];

@@ -73,6 +73,18 @@ describe('NightAuditView', () => {
     expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeDefined()
   })
 
+  it('shows why the day could not close with its journal, and will not run', async () => {
+    const w = mountView({
+      ...clean(), can_run: false,
+      blockers: { ...clean().blockers, accounting_readiness: [{ code: 'ACCOUNT_MAP_MISSING', ref: 'CASH', message: 'the system account CASH is not mapped' }] },
+    })
+    await flushPromises()
+    const box = w.get('[data-testid=accounting-readiness]')
+    expect(box.text()).toContain('ACCOUNT_MAP_MISSING')
+    expect(box.text()).toContain('the system account CASH is not mapped')
+    expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeDefined()
+  })
+
   it('marks exactly the selected arrivals as no-show, after a confirmation, and reloads', async () => {
     const w = mountView(blocked())
     await flushPromises()

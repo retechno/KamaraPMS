@@ -426,3 +426,17 @@ SELECT 'SYSTEM', m.map_key, m.map_key, acc.id, acc.code, acc.name, acc.requireme
   FROM gl_account_map m JOIN acc ON acc.id = m.account_id
  WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.map_key <> 'RETAINED_EARNINGS'
 ORDER BY 5, 1, 2;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Go-live readiness (the checks the night audit makes before the day close; plain reads)
+
+-- The active charge codes of type ROOM with the account they point to: the night audit posts the room nights to them, so their revenue must reach a revenue account and not the suspense account.
+-- name: ListRoomChargeCodes :many
+SELECT c.id, c.code, c.gl_account_code, a.id AS account_id, a.is_active AS account_active, a.is_postable AS account_postable, a.account_type
+FROM charge_codes c
+LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.charge_type = 'ROOM' AND c.is_active
+ORDER BY c.code;
+
+-- name: CountJournalSequence :one
+SELECT count(*)::int FROM document_sequences WHERE tenant_id = @tenant_id AND property_id = @property_id AND sequence_type = 'JOURNAL';

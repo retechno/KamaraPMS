@@ -20,7 +20,7 @@ func TestReportsAPIFlow(t *testing.T) {
 			roomCode = int64(m["id"].(float64))
 		}
 	}
-	abc.do(http.MethodPatch, base+"/charge-codes/"+itoaID(roomCode), map[string]any{"gl_account_code": "4-1100"})
+	abc.do(http.MethodPatch, base+"/charge-codes/"+itoaID(roomCode), map[string]any{"gl_account_code": "4110"})
 	dlx := idOf(abc.do(http.MethodPost, base+"/room-types", map[string]any{"code": "DLX", "name": "Deluxe", "max_adult": 2, "max_child": 0, "max_occupancy": 2, "base_occupancy": 2}))
 	r101 := idOf(abc.do(http.MethodPost, base+"/rooms", map[string]any{"bed_type_id": bedOf(abc, base), "room_type_id": mustInt(dlx), "room_number": "101", "initial_housekeeping_status": "CLEAN"}))
 	plan := idOf(abc.do(http.MethodPost, base+"/rate-plans", map[string]any{"code": "BAR", "name": "Best", "meal_plan": "RO", "room_charge_code_id": roomCode}))
@@ -36,7 +36,7 @@ func TestReportsAPIFlow(t *testing.T) {
 
 	rev := abc.do(http.MethodGet, base+"/reports/revenue?from=2026-09-30&to=2026-09-30", nil)
 	line := rev.body["by_charge_code"].([]any)[0].(map[string]any)
-	if rev.status != 200 || line["charge_code"] != "ROOM" || line["revenue_account_code"] != "4-1100" || line["net_amount"] != "1000000" || rev.body["totals"].(map[string]any)["total"] != "1000000" {
+	if rev.status != 200 || line["charge_code"] != "ROOM" || line["revenue_account_code"] != "4110" || line["net_amount"] != "1000000" || rev.body["totals"].(map[string]any)["total"] != "1000000" {
 		t.Fatalf("revenue: %d %v", rev.status, rev.body)
 	}
 	cashier := abc.do(http.MethodGet, base+"/reports/cashier?from=2026-09-30&to=2026-09-30", nil)

@@ -9,6 +9,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/folios"
+	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/platform/apperr"
 )
 
@@ -260,16 +261,19 @@ func TestTheFolioAndTheDayCloseRefuseARequiredDepartmentThatIsMissing(t *testing
 	if e, _ := apperr.As(err); e.Fields[0].Message == "" || e.Context["charge_code"] != "OTHER" {
 		t.Fatalf("it names the charge code: %+v", e)
 	}
-	// the day close meets the charge that has no department
+	// the night audit does not even start the close: the readiness check finds the required department that nothing supplies and says where it is missing
 	day, err := h.Tenancy.CurrentBusinessDay(h.admin, h.propID)
 	must(t, err)
 	h.Clock.Set(time.Date(day.BusinessDate.Year(), day.BusinessDate.Month(), day.BusinessDate.Day(), 17, 30, 0, 0, time.UTC).AddDate(0, 0, 1))
 	_, err = h.Audit.Run(h.admin, h.propID, day.BusinessDate)
-	if c := fieldOf(t, err, "department_id"); c != "DEPARTMENT_REQUIRED" {
-		t.Fatalf("the night audit: %s", c)
+	e, ok := apperr.As(err)
+	if !ok || e.Code != "NIGHT_AUDIT_BLOCKED" {
+		t.Fatalf("the night audit: %v", err)
 	}
-	if e, _ := apperr.As(err); !strings.Contains(e.Fields[0].Message, "charge code OTHER") {
-		t.Fatalf("it says where the department is missing: %q", e.Fields[0].Message)
+	blockers, _ := e.Context["blockers"].(nightaudit.Blockers)
+	if len(blockers.AccountingReadiness) != 1 || blockers.AccountingReadiness[0].Code != "DEPARTMENT_SETUP_INCOMPLETE" || blockers.AccountingReadiness[0].Ref != "OTHER" ||
+		!strings.Contains(blockers.AccountingReadiness[0].Message, "charge code OTHER") {
+		t.Fatalf("it says where the department is missing: %+v", blockers.AccountingReadiness)
 	}
 	// nothing was journaled: the whole close rolled back
 	if n := len(h.journals(t, accounting.JournalFilter{Type: "DAY_CLOSE"})); n != 0 {
