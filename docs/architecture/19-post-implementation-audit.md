@@ -739,6 +739,23 @@ The order follows the evidence of this audit, not the order in which things were
 | 5 | **(Done, 2026-10-07)** **Client address and rate limits behind the proxy** (trusted proxy setting) | F-05 | Part of the recipe: without it one bucket serves the whole hotel |
 | 6 | **(Done, 2026-10-07: the night audit refuses a day it cannot journal; see F-15)** **Go-live checklist**: accounting settings and start date, charge-code accounts, department setup check, cashier settings, PKP settings, a first night audit preview | F-15 | A property can go live without a GL and nothing says so |
 
+### P0 close-out status (2026-10-07, after `7ee10c4`)
+
+| # | Status | Evidence | What is left |
+|---|---|---|---|
+| 1 | CI **DONE**; branch protection **OWNER ACTION, open** | CI run 17 onward green; run 21 green for `deab8f8` | the owner sets the rule in GitHub (below); it cannot be set from the repository |
+| 2 | **DONE** | `go test -race ./...` in CI, runs 17 to 21 | none |
+| 3 | **DONE for one machine** | CI run 18; `scripts/prod-smoke.sh` 57 checks | a real server and a certificate (need a server and a domain) |
+| 4 | **Mechanism DONE and proved; disaster recovery NOT production-ready; OWNER / OPERATIONAL DECISIONS open** | real restore compared table by table, `restore-drill.sh`, 14 failure cases, CI run 19 (CI does not run the scripts) | the seven decisions in `docs/backup-restore.md`, section 13 (RPO, RTO, frequency, second copy, retention, WAL/PITR, encryption), then the schedule, the second copy and a drill on production-sized data |
+| 5 | **DONE** | `PMS_TRUSTED_PROXIES`, smoke test | none |
+| 6 | **DONE** | `deab8f8`, CI run 21 green: the night audit asks the readiness check twice (in the preview, and in `Run` after the charges and with the accounting settings row locked FOR SHARE, before the journal and the day move); a blocker gives `409 NIGHT_AUDIT_BLOCKED` with `blockers.accounting_readiness`, rolls the whole transaction back and leaves the business day OPEN (tests assert no closed day, journal, day post or ledger row) | none for new days |
+
+**Branch protection for `main` (owner action in GitHub, Settings, Branches).** Required status checks, as the green runs show them (the names are the job names of `.github/workflows/ci.yml`): `Go (lint, vet, test)`; `Schema (migrations up/down/up + integrity tests) (postgres:16-alpine)`; `Schema (migrations up/down/up + integrity tests) (postgres:18-alpine)`; `Web (types, tests, build)`. The workflow runs on pushes to `main` and on pull requests, so the checks exist for both. Suggested with it: require a pull request, require the branches to be up to date, no force pushes. Nothing in the repository sets or checks this; until the owner does it, a red or skipped CI does not stop a push to `main`.
+
+**Historical closed days.** A business day that closed without a journal before P0 #6 is **not** repaired automatically, on purpose: a journal made later for a past date changes reports that may already have been used. Such days are found by the accounting reconciliation (`PendingDays`) and repaired by the separate, explicit backfill (`PostPending`, permission `accounting.close`, at most 400 days a call). It is a decision for the owner whether and when to run it on a real property.
+
+**Engineering work left in P0: none.** What remains is owner action (branch protection) and owner decisions with the operations that follow from them (P0 #4). The verdict stays **CONDITIONAL PILOT**; the sentence below about PILOT READY now reads: item 4 is closed only when the decisions are made and carried out, not when the scripts exist.
+
 ### P1: important, does not block the pilot
 
 | # | What | Findings |

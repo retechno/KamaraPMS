@@ -167,3 +167,20 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 - [ ] A backup is taken just before every upgrade, and the upgrade steps say so.
 - [ ] `deploy/.env`, the JWT secret and the certificate are stored somewhere that is not the dumps.
 - [ ] Someone other than the author has run the restore from this page.
+
+## 13. Owner decisions required before production
+
+These are decisions, not engineering tasks. Nothing here is decided; the proposals are starting points. Until they are made, the mechanism (sections 3 to 6) is proved and **disaster recovery is not production-ready**.
+
+| # | Decision | Proposed starting point (not agreed) | What depends on it |
+|---|---|---|---|
+| 1 | RPO: how much data may be lost | 24 hours (section 7) | the backup frequency; below a day it needs WAL/PITR |
+| 2 | RTO: how long may the system be down | 4 hours (section 8), to be replaced by the time measured on production-sized data | whether the drill time is acceptable, standby or not |
+| 3 | Backup frequency | daily, after the night audit | RPO; the scheduler (not installed: cron or Task Scheduler runs `db-backup.sh`) |
+| 4 | Where the second copy lives | another machine or disk, at least weekly, any provider, access controlled | the off-machine copy (not implemented; the repository chooses no provider) |
+| 5 | Retention | 14 newest on the machine, one a week kept 3 months elsewhere (section 9); the legal retention of accounting records is the owner's to state | disk size, the second copy |
+| 6 | Is WAL archiving / point-in-time recovery required | only if the answer to 1 is "less than a day" | a different mechanism (not built) |
+| 7 | Is encryption at rest mandatory before production | the files hold guest data and password hashes; if yes, encrypt the destination or add `age` or `gpg` to the copy step (not built) | the copy step, key custody |
+
+After the decisions: install the schedule, set up the second copy, run `scripts/restore-drill.sh` on the production database, write the measured time in section 8, and tick section 12. A CI job that runs the drill is also not built; CI does not run these scripts.
+
