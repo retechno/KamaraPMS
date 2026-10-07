@@ -53,6 +53,24 @@ describe('StayActions', () => {
     expect(w.emitted('changed')?.[0]?.[0]).toContain('102')
   })
 
+  it('shows the rules an extension breaks and sends it again with the override', async () => {
+    const w = mountActions([...all, 'reservation.override_restriction', 'reservation.restriction_approve'])
+    await w.get('[data-testid=open-departure]').trigger('click')
+    await w.get('input[name=departure]').setValue('2026-10-05')
+    POST.mockRejectedValueOnce(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'STAY_RESTRICTED', detail: 'the stay breaks a sales restriction',
+      context: { violations: [{ type: 'STOP_SELL', date: '2026-10-03', room_type_id: 1, rate_plan_id: null, scope: 'ROOM_TYPE', row_id: 1 }], overridable: true } } as never))
+    await w.get('form[data-testid=departure-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=restriction-refusal]').text()).toContain('The night of 2026-10-03 is closed for sale.')
+    await w.get('input[name=restriction_reason]').setValue('guest asked to stay')
+    await w.get('[data-testid=restriction-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/stays/{id}/change-departure', {
+      params: { path: { propertyId: 7, id: 5 } }, body: { version: 3, departure_date: '2026-10-05', restriction_override: { reason: 'guest asked to stay' } },
+    }])
+    expect(w.find('[data-testid=restriction-refusal]').exists()).toBe(false)
+  })
+
   it('changes the departure and shows the server refusal with its hint', async () => {
     const w = mountActions()
     await w.get('[data-testid=open-departure]').trigger('click')

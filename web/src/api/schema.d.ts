@@ -6612,6 +6612,8 @@ export interface components {
         };
         PropertyWithDay: components["schemas"]["Property"] & {
             business_date: components["schemas"]["Date"];
+            /** @description True once the property has financial data (a folio item, a payment, a journal, a bill, a receipt, a shift, a bank statement, a tax filing, a budget): the currency and the decimals can no longer change (409 `CURRENCY_LOCKED`) and nothing is converted. */
+            currency_locked: boolean;
         };
         PropertyPage: {
             data: components["schemas"]["Property"][];
@@ -8117,6 +8119,10 @@ export interface components {
             locked?: number;
             /** @description Only on the row of a bed type: the bed is sold out although the room type still has rooms. */
             bed_limited?: boolean;
+            /** @description Only on the row of a room type: the sales restrictions in force that night for at least one active rate plan. They are not about stock and change none of the numbers above. Absent when there is none. */
+            restrictions?: ("STOP_SELL" | "CLOSED_TO_ARRIVAL" | "CLOSED_TO_DEPARTURE" | "MIN_STAY" | "MAX_STAY")[];
+            /** @description Only on the row of a room type: the night is closed for sale for every active rate plan. */
+            stop_sell_all?: boolean;
         };
         AvailabilityCalendar: {
             from: components["schemas"]["Date"];

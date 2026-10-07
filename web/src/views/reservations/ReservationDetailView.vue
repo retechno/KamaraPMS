@@ -12,6 +12,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
+import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import ReservationEmails from '@/components/ReservationEmails.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +25,7 @@ import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
+import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -38,6 +40,8 @@ const types = ref<RoomType[]>([])
 const asking = ref<{ kind: 'cancel' | 'cancel-room' | 'no-show'; lineId?: number } | null>(null)
 const reason = ref('')
 const beds = ref<BedType[]>([])
+// A sale the sales restrictions refused, and how to send it again with an override.
+const restriction = ref<{ refusal: RestrictionRefusal; again: (o: RestrictionOverrideInput) => Promise<void> } | null>(null)
 // The bed a line is being changed to, by line (until it is saved).
 const bedPick = reactive<Record<number, number>>({})
 // Whether the bed is kept, by line (until it is saved).
@@ -86,7 +90,7 @@ async function load(): Promise<void> {
 }
 
 /** Runs one action; the reservation in the answer replaces the one on screen. A version conflict reloads it. */
-async function run(action: () => Promise<{ data?: Reservation | CancelResult }>): Promise<void> {
+async function run(action: () => Promise<{ data?: Reservation | CancelResult }>, again?: (o: RestrictionOverrideInput) => Promise<void>): Promise<void> {
   busy.value = true
   error.value = null
   notice.value = ''
@@ -101,9 +105,12 @@ async function run(action: () => Promise<{ data?: Reservation | CancelResult }>)
     asking.value = null
     assigning.value = null
     reason.value = ''
+    restriction.value = null
   } catch (e) {
     const failure = e instanceof ApiError ? e : null
     error.value = failure
+    const refusal = refusalOf(failure)
+    if (refusal && again) restriction.value = { refusal, again }
     if (failure?.code === 'VERSION_CONFLICT') {
       await load() // show the current state, and keep the message that explains why the action did not happen
       error.value = failure
@@ -117,8 +124,9 @@ const base = () => ({ path: { propertyId: pid.value as number, id: Number(props.
 const lineParams = (lineId: number) => ({ path: { ...base().path, lineId } })
 const version = () => res.value?.version ?? 0
 
-const confirm = () => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: base(), body: { version: version() } }))
-const reinstate = () => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/reinstate', { params: base(), body: { version: version() } }))
+// Confirming and reinstating sell the nights again, so the sales restrictions are asked: a refusal is shown with its rules and the sale can go past them with an override.
+const confirm = (o?: RestrictionOverrideInput): Promise<void> => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: base(), body: { version: version(), restriction_override: o } }), confirm)
+const reinstate = (o?: RestrictionOverrideInput): Promise<void> => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/reinstate', { params: base(), body: { version: version(), restriction_override: o } }), reinstate)
 const saveHeader = () => run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}', {
   params: base(), body: { version: version(), source: header.source as Reservation['source'], remarks: header.remarks },
 }))
@@ -262,8 +270,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </template>
     <template #actions>
       <template v-if="res">
-        <Button v-if="status === 'DRAFT' && can('reservation.create')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm">{{ t('reservation.confirm') }}</Button>
-        <Button v-if="status === 'CANCELLED' && can('reservation.reinstate')" size="sm" :disabled="busy" data-testid="reinstate" @click="reinstate">{{ t('reservation.reinstate') }}</Button>
+        <Button v-if="status === 'DRAFT' && can('reservation.create')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm()">{{ t('reservation.confirm') }}</Button>
+        <Button v-if="status === 'CANCELLED' && can('reservation.reinstate')" size="sm" :disabled="busy" data-testid="reinstate" @click="reinstate()">{{ t('reservation.reinstate') }}</Button>
         <Button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" variant="outline" size="sm" data-testid="print-confirmation" @click="printConfirmation"><Printer />{{ t('reservation.confirmationPdf') }}</Button>
         <Button v-if="status !== 'CANCELLED' && can('reservation.cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
       </template>
@@ -278,6 +286,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
   <div v-else-if="res" class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <div class="min-w-0">
+      <RestrictionOverride v-if="restriction" :violations="restriction.refusal.violations" :overridable="restriction.refusal.overridable" :busy="busy" :error="error"
+        @override="(o) => restriction?.again(o)" @cancel="restriction = null" />
+
       <Card v-if="asking" class="mb-4 border-primary/50">
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="reason-form" @submit.prevent="submitReason">
           <FormField class="min-w-56 flex-1" :label="asking.kind === 'no-show' ? t('reservation.reasonOptional') : t('reservation.reason')" :error="fieldError('reason')">

@@ -149,7 +149,14 @@ func TestEveryPathRefusesTheCurrencyOnceFinancialDataExists(t *testing.T) {
 			if err := e.rawChange(e.pool, p.ID, "SGD", 2); err != nil {
 				t.Fatalf("trigger before: %v", err)
 			}
+			// the property says whether it is locked, by the same definition (the form shows the currency read-only)
+			if v, err := e.svc.GetPropertyWithDay(admin(tn.ID), p.ID); err != nil || v.CurrencyLocked {
+				t.Fatalf("before the data the currency is not locked: %v %v", v.CurrencyLocked, err)
+			}
 			c.add(t, e, tn.ID, p.ID)
+			if v, err := e.svc.GetPropertyWithDay(admin(tn.ID), p.ID); err != nil || !v.CurrencyLocked {
+				t.Fatalf("after the data the currency is locked: %v %v", v.CurrencyLocked, err)
+			}
 			if has := mustID(t, e.pool, `SELECT CASE WHEN property_has_financial_data($1) THEN 1 ELSE 0 END`, p.ID); has != 1 {
 				t.Fatal("the definition sees the data")
 			}

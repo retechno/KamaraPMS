@@ -9,11 +9,13 @@ import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
+import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -126,8 +128,24 @@ async function loadNights(): Promise<void> {
   }
 }
 
+// The sales restrictions are asked for the nights of the walk-in: a refusal is shown with its rules and the walk-in can go past them with an override.
+const refusal = ref<RestrictionRefusal | null>(null)
+const overriding = ref<RestrictionOverrideInput | undefined>() // the override waiting for the approval of the price change that goes with it
+
+/** The walk-in again with the override. A price change or a free night that the person cannot approve needs its approver once more: the credentials are never kept. */
+function retryWithOverride(o: RestrictionOverrideInput): void {
+  if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value)) {
+    overriding.value = o
+    dialogError.value = null
+    approving.value = true
+    return
+  }
+  void submit(undefined, o)
+}
+
 /** The button: a price change that the person cannot approve asks for an approver first. */
 function onSubmit(): void {
+  overriding.value = undefined
   if ((rate.value.overrides.length && !canApprove.value) || (isFree.value && !canApproveFree.value)) {
     dialogError.value = null
     approving.value = true
@@ -136,7 +154,7 @@ function onSubmit(): void {
   void submit()
 }
 
-async function submit(approval?: Approval): Promise<void> {
+async function submit(approval?: Approval, restrictionOverride?: RestrictionOverrideInput): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null || form.roomId === null) return
   busy.value = true
@@ -155,11 +173,17 @@ async function submit(approval?: Approval): Promise<void> {
         rate_override_approval: rate.value.overrides.length ? approval : undefined,
         occupancy_approval: isFree.value ? approval : undefined,
         exceed_free_quota: exceedQuota.value || undefined,
+        restriction_override: restrictionOverride,
       },
     })
     if (data) await router.push(`/stays/${data.stay.id}`)
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'FREE_NIGHT_QUOTA_EXCEEDED') {
+    const refused = refusalOf(e instanceof ApiError ? e : null)
+    if (refused) {
+      refusal.value = refused
+      approving.value = false
+      error.value = e as ApiError
+    } else if (e instanceof ApiError && e.code === 'FREE_NIGHT_QUOTA_EXCEEDED') {
       approving.value = false // the page shows the quota and asks whether to go over it
       error.value = e
     } else if (approval) {
@@ -193,6 +217,7 @@ watch(businessDate, (bd) => {
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('walkIn.noAccess') }}</p>
 
   <Card v-else>
+    <RestrictionOverride v-if="refusal" :violations="refusal.violations" :overridable="refusal.overridable" :busy="busy" :error="error" @override="retryWithOverride" @cancel="refusal = null" />
     <form novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
@@ -275,5 +300,5 @@ watch(businessDate, (bd) => {
       </CardContent>
     </form>
   </Card>
-  <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a)" @cancel="approving = false" />
+  <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a, overriding)" @cancel="approving = false" />
 </template>

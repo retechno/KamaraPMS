@@ -304,6 +304,35 @@ func (q *Queries) GetRoomForCheck(ctx context.Context, arg GetRoomForCheckParams
 	return i, err
 }
 
+const listActiveRatePlanIDs = `-- name: ListActiveRatePlanIDs :many
+SELECT id FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND is_active ORDER BY id
+`
+
+type ListActiveRatePlanIDsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) ListActiveRatePlanIDs(ctx context.Context, arg ListActiveRatePlanIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listActiveRatePlanIDs, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveRoomBlocks = `-- name: ListActiveRoomBlocks :many
 SELECT block_type, start_date, end_date FROM room_blocks
 WHERE tenant_id = $1 AND property_id = $2 AND room_id = $3 AND status = 'ACTIVE'
@@ -471,6 +500,68 @@ func (q *Queries) ListRateRestrictions(ctx context.Context, arg ListRateRestrict
 	items := []ListRateRestrictionsRow{}
 	for rows.Next() {
 		var i ListRateRestrictionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomTypeID,
+			&i.RatePlanID,
+			&i.StayDate,
+			&i.StopSell,
+			&i.ClosedToArrival,
+			&i.ClosedToDeparture,
+			&i.MinStay,
+			&i.MaxStay,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRestrictionRowsInWindow = `-- name: ListRestrictionRowsInWindow :many
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay
+FROM rate_restrictions
+WHERE tenant_id = $1 AND property_id = $2 AND stay_date BETWEEN $3::date AND $4::date
+ORDER BY stay_date, id
+`
+
+type ListRestrictionRowsInWindowParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ListRestrictionRowsInWindowRow struct {
+	ID                int64
+	RoomTypeID        *int64
+	RatePlanID        *int64
+	StayDate          civil.Date
+	StopSell          *bool
+	ClosedToArrival   *bool
+	ClosedToDeparture *bool
+	MinStay           pgtype.Int2
+	MaxStay           pgtype.Int2
+}
+
+// Every row of the grid in a window of dates, whatever its scope: the calendar marks the nights that carry a restriction.
+func (q *Queries) ListRestrictionRowsInWindow(ctx context.Context, arg ListRestrictionRowsInWindowParams) ([]ListRestrictionRowsInWindowRow, error) {
+	rows, err := q.db.Query(ctx, listRestrictionRowsInWindow,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRestrictionRowsInWindowRow{}
+	for rows.Next() {
+		var i ListRestrictionRowsInWindowRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.RoomTypeID,

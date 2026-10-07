@@ -322,3 +322,13 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_date BETWEE
   AND (room_type_id IS NULL OR room_type_id = sqlc.narg(room_type_id)::bigint)
   AND (rate_plan_id IS NULL OR rate_plan_id = sqlc.narg(rate_plan_id)::bigint)
 ORDER BY stay_date, id;
+
+-- Every row of the grid in a window of dates, whatever its scope: the calendar marks the nights that carry a restriction.
+-- name: ListRestrictionRowsInWindow :many
+SELECT id, room_type_id, rate_plan_id, stay_date, stop_sell, closed_to_arrival, closed_to_departure, min_stay, max_stay
+FROM rate_restrictions
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_date BETWEEN @from_date::date AND @to_date::date
+ORDER BY stay_date, id;
+
+-- name: ListActiveRatePlanIDs :many
+SELECT id FROM rate_plans WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active ORDER BY id;

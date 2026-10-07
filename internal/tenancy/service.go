@@ -91,6 +91,8 @@ type CreatePropertyInput struct {
 type PropertyWithDay struct {
 	Property
 	BusinessDate civil.Date `json:"business_date"`
+	// CurrencyLocked says the property has financial data, so its currency and its decimals can no longer change (the same answer as the lock itself).
+	CurrencyLocked bool `json:"currency_locked"`
 }
 
 // CreateProperty opens a property: the property row, its first OPEN business
@@ -208,7 +210,11 @@ func (s *Service) GetPropertyWithDay(ctx context.Context, propertyID int64) (Pro
 	if err != nil {
 		return PropertyWithDay{}, err
 	}
-	return PropertyWithDay{Property: prop, BusinessDate: day.BusinessDate}, nil
+	locked, err := s.store.q(ctx).PropertyHasFinancialData(ctx, prop.ID)
+	if err != nil {
+		return PropertyWithDay{}, err
+	}
+	return PropertyWithDay{Property: prop, BusinessDate: day.BusinessDate, CurrencyLocked: locked}, nil
 }
 
 // ListProperties returns the properties the caller may access, by id, after afterID.

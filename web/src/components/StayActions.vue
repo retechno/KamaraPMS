@@ -7,6 +7,7 @@ import type { Approval, FreeRoom, Guest, RoomType, StayDetail } from '@/api/type
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
+import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
 import { guestLabel } from '@/utils/reservations'
+import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
 
 const props = defineProps<{ detail: StayDetail }>()
 const emit = defineEmits<{ changed: [message: string] }>()
@@ -111,11 +113,16 @@ async function submitMove(): Promise<void> {
 
 // Departure.
 const departure = ref('')
+// The extra nights of an extension are sold, so the sales restrictions are asked: a refusal is shown with its rules and the extension can go past them with an override.
+const refusal = ref<RestrictionRefusal | null>(null)
+const overriding = ref<RestrictionOverrideInput | undefined>() // the override waiting for the approval of the price change that goes with it
 const departureChanged = computed(() => !!departure.value && departure.value !== props.detail.stay.departure_date)
 
 function showDeparture(): void {
   departure.value = props.detail.stay.departure_date
   rate.value = { overrides: [], reason: '' }
+  refusal.value = null
+  overriding.value = undefined
   show('departure')
   void loadLine()
 }
@@ -172,7 +179,18 @@ function onSubmitDeparture(): void {
   void submitDeparture()
 }
 
-async function submitDeparture(approval?: Approval): Promise<void> {
+/** The extension again with the override of the restriction. A price change that the person cannot approve needs its approver once more: the credentials are never kept. */
+function retryWithOverride(o: RestrictionOverrideInput): void {
+  if (extending.value && rate.value.overrides.length && !canApprove.value) {
+    overriding.value = o
+    dialogError.value = null
+    approving.value = true
+    return
+  }
+  void submitDeparture(undefined, o)
+}
+
+async function submitDeparture(approval?: Approval, restrictionOverride?: RestrictionOverrideInput): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   busy.value = true
@@ -185,13 +203,20 @@ async function submitDeparture(approval?: Approval): Promise<void> {
       body: {
         version: props.detail.stay.version, departure_date: departure.value,
         nightly_overrides: changed ? rate.value.overrides : undefined, rate_override_reason: changed ? rate.value.reason : undefined, rate_override_approval: changed ? approval : undefined,
+        restriction_override: restrictionOverride,
       },
     })
     open.value = ''
     approving.value = false
+    refusal.value = null
     emit('changed', t('stayActions.departureNow', { date: departure.value }))
   } catch (e) {
-    if (approval) dialogError.value = e instanceof ApiError ? e : null
+    const refused = refusalOf(e instanceof ApiError ? e : null)
+    if (refused) {
+      refusal.value = refused
+      approving.value = false
+    }
+    if (approval && !refused) dialogError.value = e instanceof ApiError ? e : null
     else fail(e)
     if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') emit('changed', '')
   } finally {
@@ -296,6 +321,9 @@ async function addGuest(g: Guest): Promise<void> {
         </div>
       </form>
 
+      <RestrictionOverride v-if="open === 'departure' && refusal" class="mt-3" :violations="refusal.violations" :overridable="refusal.overridable" :busy="busy" :error="error"
+        @override="retryWithOverride" @cancel="refusal = null" />
+
       <div v-if="open === 'guest'" class="mt-4 border-t border-border pt-4" data-testid="guest-form">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.guestTitle') }}</h2>
         <div class="flex flex-wrap items-end gap-3">
@@ -311,5 +339,5 @@ async function addGuest(g: Guest): Promise<void> {
       </div>
     </CardContent>
   </Card>
-  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submitDeparture(a)" @cancel="approving = false" />
+  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submitDeparture(a, overriding)" @cancel="approving = false" />
 </template>

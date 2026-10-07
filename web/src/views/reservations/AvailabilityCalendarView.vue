@@ -31,6 +31,8 @@ interface Night {
   house_use: number
   locked?: number
   bed_limited?: boolean
+  restrictions?: string[]
+  stop_sell_all?: boolean
 }
 
 /** What a cell can show. `available` alone is the compact view; more than one makes it the detailed view. */
@@ -116,8 +118,13 @@ function value(n: Night, m: Metric): string {
 function tooltip(n: Night): string {
   const base = t('availabilityCalendar.cellTitle', { date: n.date, sellable: n.sellable, held: n.held, blocked: n.blocked, percent: n.occupancy_percent })
   const kept = n.locked ? ` ${t('availabilityCalendar.keptTitle', { n: n.locked })}` : ''
-  return base + kept + (n.bed_limited ? ` ${t('availabilityCalendar.bedLimited')}` : '')
+  const marks = n.restrictions?.length ? ` ${t(n.stop_sell_all ? 'availabilityCalendar.restrictedAll' : 'availabilityCalendar.restrictedSome', { list: n.restrictions.map((r) => t(`restrictions.badge_${r}` as never)).join(', ') })}` : ''
+  return base + kept + (n.bed_limited ? ` ${t('availabilityCalendar.bedLimited')}` : '') + marks
 }
+
+const MARKS: Record<string, string> = { STOP_SELL: 'markStopSell', CLOSED_TO_ARRIVAL: 'markCta', CLOSED_TO_DEPARTURE: 'markCtd', MIN_STAY: 'markMin', MAX_STAY: 'markMax' }
+/** The marks of a night (sales restrictions), as the grid of restrictions writes them. They say nothing about stock. */
+const marksOf = (n: Night): string => (n.restrictions ?? []).map((r) => t(`restrictions.${MARKS[r]}` as never)).join(' ')
 
 /** Colour of an `available` cell: oversold is red, a full type is amber, the rest is neutral. */
 function tone(n: Night, m: Metric): string {
@@ -248,6 +255,7 @@ watch(businessDate, () => {
                 :class="cn('border-b border-l border-border px-1 py-1 text-center tabular-nums', g.level === 'bed' && 'bg-muted/20 text-muted-foreground', g.level === 'total' && 'border-t-2 font-semibold', !detailed && g.level === 'type' && 'py-1.5', tone(n, m))"
               >
                 {{ value(n, m) }}
+                <span v-if="m === metrics[0] && n.restrictions?.length" :class="cn('block text-[10px] font-semibold', n.stop_sell_all ? 'text-destructive' : 'text-warning-foreground')" :data-testid="`marks-${g.code}-${n.date}`">{{ marksOf(n) }}</span>
                 <span v-if="!detailed && g.level === 'total'" class="block text-[10px] font-normal text-muted-foreground" :data-testid="`occupancy-${n.date}`">{{ n.occupancy_percent }}%</span>
               </td>
             </tr>

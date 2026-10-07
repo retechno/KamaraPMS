@@ -86,3 +86,36 @@ describe('PropertyFormView (create)', () => {
     expect(router.currentRoute.value.path).toBe('/setup/properties')
   })
 })
+
+describe('PropertyFormView (edit)', () => {
+  const property = (over: object = {}) => ({
+    id: 5, code: 'BALI', name: 'Hotel Bali', timezone: 'Asia/Makassar', currency_code: 'IDR', currency_decimals: 0, check_in_time: '14:00', check_out_time: '12:00',
+    night_audit_earliest_time: '23:00', require_room_inspection_for_checkin: false, night_audit_marks_occupied_dirty: true, refund_methods: ['CASH'], status: 'ACTIVE',
+    business_date: '2026-10-01', currency_locked: false, ...over,
+  })
+
+  async function mountEdit(data: object) {
+    GET = vi.fn().mockResolvedValue({ data })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    const wrapper = mount(PropertyFormView, { props: { id: '5' }, global: { plugins: [pinia, router] } })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('lets the currency change while the property has no financial data, and says it will lock', async () => {
+    const w = await mountEdit(property())
+    expect(w.get('input[name=currency_code]').attributes('readonly')).toBeUndefined()
+    expect(w.get('select[name=currency_decimals]').attributes('disabled')).toBeUndefined()
+    expect(w.find('[data-testid=currency-locked]').exists()).toBe(false)
+  })
+
+  it('shows the currency and the decimals read-only, with the reason, once the property has financial data', async () => {
+    const w = await mountEdit(property({ currency_locked: true }))
+    expect((w.get('input[name=currency_code]').element as HTMLInputElement).value).toBe('IDR')
+    expect(w.get('input[name=currency_code]').attributes('readonly')).toBeDefined()
+    expect(w.get('select[name=currency_decimals]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=currency-locked]').text()).toContain('nothing is converted')
+  })
+})

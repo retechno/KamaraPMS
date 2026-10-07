@@ -58,6 +58,25 @@ describe('AvailabilityCalendarView', () => {
     expect(w.get('[data-testid=occupancy-2026-10-01]').text()).toBe('50%')
   })
 
+  it('marks the nights that carry a sales restriction, and leaves the numbers alone', async () => {
+    const marked = { ...calendar, room_types: [{ ...calendar.room_types[0], nights: [
+      { ...night('2026-10-01', 2, 1), restrictions: ['STOP_SELL'], stop_sell_all: true },
+      { ...night('2026-10-02', 2, 2), restrictions: ['CLOSED_TO_ARRIVAL', 'MIN_STAY'] },
+      night('2026-10-03', 1, 2, 1),
+    ] }] }
+    const w = mountView(['reservation.read'], marked)
+    await flushPromises()
+    expect(w.get('[data-testid=marks-DLX-2026-10-01]').text()).toBe('SS')
+    expect(w.get('[data-testid=marks-DLX-2026-10-01]').classes().join(' ')).toContain('text-destructive') // closed for every rate plan
+    expect(w.get('[data-testid=marks-DLX-2026-10-02]').text()).toBe('CTA ≥')
+    expect(w.get('[data-testid=marks-DLX-2026-10-02]').classes().join(' ')).not.toContain('text-destructive')
+    expect(w.find('[data-testid=marks-DLX-2026-10-03]').exists()).toBe(false)
+    expect(w.get('[data-testid=cell-DLX-2026-10-01]').attributes('title')).toContain('for every rate plan: Closed')
+    expect(w.get('[data-testid=cell-DLX-2026-10-02]').attributes('title')).toContain('for at least one rate plan: No arrival, Min stay')
+    expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toContain('1') // the rooms left are the same
+    expect(w.get('[data-testid=cell-DLX-2026-10-02]').classes().join(' ')).toContain('bg-warning') // sold out is still sold out
+  })
+
   it('shows a row per bed type under each room type when asked', async () => {
     const withBeds = { ...calendar, room_types: [{ ...calendar.room_types[0], beds: [
       { bed_type_id: 3, code: 'KING', name: 'King', rooms_total: 1, nights: [night('2026-10-01', 1, 1), night('2026-10-02', 1, 0), night('2026-10-03', 1, 0)] },

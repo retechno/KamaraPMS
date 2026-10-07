@@ -65,7 +65,7 @@
 **POST `/properties`** (tenant admin)
 - **Purpose:** create a property.
 - **Request:** `{ code, name, address?, city?, country_code?, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin?, night_audit_marks_occupied_dirty?, night_audit_earliest_time?, opening_business_date }`
-- **Response 201:** the property, including `business_date`.
+- **Response 201:** the property, including `business_date` and `currency_locked` (true once the property has financial data; `GET` and `PATCH` of a property carry it too).
 - **Validation:** the timezone is a valid IANA name. The currency is ISO 4217. Decimals are 0–3. The code is unique in the tenant.
 - **Rules:** creates the first OPEN business day, the 4 document sequences and the ten seeded system charge codes (`seed_charge_codes`, migration 00014; all EXCLUSIVE, with no tax or service mappings).
 - **TX:** `T[—]`: all inserts.
@@ -335,6 +335,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 
 **GET `{P}/availability/calendar?from&to`** (`reservation.read`)
 - **Purpose:** the availability of every active room type for each night of `[from, to)`, as a grid: `sellable`, `blocked`, `held`, `available` (`sellable - held`, negative when oversold) and `occupancy_percent` per type and night, the parts of `held` (`in_house` = rooms of open stays, `reservations` = rooms of CONFIRMED lines not yet checked in; `held = in_house + reservations`) and `arrivals` (rooms arriving that night: CONFIRMED lines arriving plus stays, walk-ins included, whose arrival date it is), and `totals` per night, and `complimentary` / `house_use` (the held rooms that belong to a plan of that occupancy kind; they stay part of `held`). At most 62 days.
+- **Sales restrictions:** the night of a room type has `restrictions` (STOP_SELL, CLOSED_TO_ARRIVAL, CLOSED_TO_DEPARTURE, MIN_STAY, MAX_STAY in force for at least one active rate plan, by the precedence of a sale) and `stop_sell_all` (closed for every active plan). They are marks, not stock: no number changes. Not on the bed rows or the totals.
 - **Optional `by_bed=true`:** each room type also lists `beds`: per bed type of its active rooms the same numbers, counted over the rooms with that bed. Only bookings already assigned to a room (and open stays) count there; a booking without a room may still end up in any bed, so it is not counted, and the bed rows can show more free rooms than the type row. The type rows and `totals` are unchanged. Bed type stays a description, not inventory: this is a view of the free rooms, not a rule for booking. **From the bed variants (step 5):** on those rows `held` is the rooms with that bed that sit in a room or are kept for it (`fixed + locked`), `locked` is the part kept without a room, `available` is `min(sellable - held, the type's available)` (so a booking with no room and no preference lowers it too), and `bed_limited` marks the nights on which the bed is sold out although the type still has rooms.
 - **Rules:** read-only and advisory (only booking decides); the numbers are the availability engine's own (`NightInventory`), so the calendar can never disagree with a booking attempt. Inactive rooms count nowhere; blocked rooms are `blocked`, not `sellable`.
 - **TX:** R

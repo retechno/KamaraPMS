@@ -34,6 +34,10 @@ type CalendarNight struct {
 	// bed is sold out although the type still has rooms (the bed is what limits it that night).
 	Locked     int  `json:"locked,omitempty"`
 	BedLimited bool `json:"bed_limited,omitempty"`
+	// Restrictions are the sales restrictions in force that night for at least one active rate plan (STOP_SELL, CLOSED_TO_ARRIVAL, CLOSED_TO_DEPARTURE, MIN_STAY, MAX_STAY), and
+	// StopSellAll says the night is closed for every active rate plan. Only on the row of a room type; a restriction is not about stock, it never changes the numbers above.
+	Restrictions []string `json:"restrictions,omitempty"`
+	StopSellAll  bool     `json:"stop_sell_all,omitempty"`
 }
 
 // CalendarType is the nights of one active room type.
@@ -120,6 +124,10 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 	if err != nil {
 		return Calendar{}, err
 	}
+	marks, err := s.avail.NightMarks(ctx, p.TenantID, propertyID, typeIDs, from, to)
+	if err != nil {
+		return Calendar{}, err
+	}
 	var beds []availability.RoomBed
 	var bedInv map[availability.BedKey]map[civil.Date]availability.BedNight
 	var stock map[availability.BedKey]map[civil.Date]availability.BedStock
@@ -152,6 +160,12 @@ func (s *Service) AvailabilityCalendar(ctx context.Context, propertyID int64, fr
 			n := inv[t.ID][d]
 			pt := parts[t.ID][d]
 			ct.Nights[i] = night(d, ct.RoomsTotal, n.Sellable, n.Demand, pt)
+			if m, ok := marks[t.ID][d]; ok {
+				for _, ty := range m.Types {
+					ct.Nights[i].Restrictions = append(ct.Nights[i].Restrictions, string(ty))
+				}
+				ct.Nights[i].StopSellAll = m.StopSellAll
+			}
 			tot := &out.Totals[i]
 			tot.Sellable += n.Sellable
 			tot.Blocked += ct.RoomsTotal - n.Sellable

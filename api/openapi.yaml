@@ -7593,9 +7593,10 @@ components:
       allOf:
         - $ref: "#/components/schemas/Property"
         - type: object
-          required: [business_date]
+          required: [business_date, currency_locked]
           properties:
             business_date: { $ref: "#/components/schemas/Date" }
+            currency_locked: { type: boolean, description: "True once the property has financial data (a folio item, a payment, a journal, a bill, a receipt, a shift, a bank statement, a tax filing, a budget): the currency and the decimals can no longer change (409 `CURRENCY_LOCKED`) and nothing is converted." }
     PropertyPage:
       type: object
       required: [data]
@@ -9093,6 +9094,11 @@ components:
         reservations: { type: integer, description: Rooms of CONFIRMED lines held that night, not checked in yet (the other part of held; held = in_house + reservations). }
         locked: { type: integer, description: "Only on the row of a bed type: the rooms of CONFIRMED lines that keep this bed without a room yet (a part of held)." }
         bed_limited: { type: boolean, description: "Only on the row of a bed type: the bed is sold out although the room type still has rooms." }
+        restrictions:
+          type: array
+          description: "Only on the row of a room type: the sales restrictions in force that night for at least one active rate plan. They are not about stock and change none of the numbers above. Absent when there is none."
+          items: { type: string, enum: [STOP_SELL, CLOSED_TO_ARRIVAL, CLOSED_TO_DEPARTURE, MIN_STAY, MAX_STAY] }
+        stop_sell_all: { type: boolean, description: "Only on the row of a room type: the night is closed for sale for every active rate plan." }
     AvailabilityCalendar:
       type: object
       required: [from, to, room_types, totals]

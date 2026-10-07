@@ -390,3 +390,88 @@ func gridOf(rows []availabilitydb.ListRateRestrictionsRow) []Restriction {
 	}
 	return grid
 }
+
+// NightMark says what the grid does to a room type on one night, over the active rate plans: which restrictions are in force for at least one of them, and whether the
+// night is closed for sale for every one of them (nothing can be sold). The calendar shows it; the rules are those of Resolve, never repeated.
+type NightMark struct {
+	Types       []ViolationType
+	StopSellAll bool
+}
+
+// NightMarks is the NightMark of each room type and night of [from, to). A night with nothing in force has no entry.
+func (s *Service) NightMarks(ctx context.Context, tenantID, propertyID int64, roomTypeIDs []int64, from, to civil.Date) (map[int64]map[civil.Date]NightMark, error) {
+	out := map[int64]map[civil.Date]NightMark{}
+	if !to.After(from) || len(roomTypeIDs) == 0 {
+		return out, nil
+	}
+	q := s.q(ctx)
+	plans, err := q.ListActiveRatePlanIDs(ctx, availabilitydb.ListActiveRatePlanIDsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil || len(plans) == 0 {
+		return out, err
+	}
+	rows, err := q.ListRestrictionRowsInWindow(ctx, availabilitydb.ListRestrictionRowsInWindowParams{TenantID: tenantID, PropertyID: propertyID, FromDate: from, ToDate: to.AddDays(-1)})
+	if err != nil {
+		return nil, err
+	}
+	byDate := map[civil.Date][]Restriction{}
+	for _, r := range gridOf2(rows) {
+		byDate[r.Date] = append(byDate[r.Date], r)
+	}
+	for _, typeID := range roomTypeIDs {
+		for d := from; d.Before(to); d = d.AddDays(1) {
+			day := byDate[d]
+			if len(day) == 0 {
+				continue
+			}
+			var m NightMark
+			seen := map[ViolationType]bool{}
+			closed := 0
+			for _, planID := range plans {
+				e := Resolve(day, typeID, planID, d)
+				if e.StopSell.Value {
+					seen[StopSell] = true
+					closed++
+				}
+				if e.ClosedToArrival.Value {
+					seen[ClosedToArrival] = true
+				}
+				if e.ClosedToDeparture.Value {
+					seen[ClosedToDeparture] = true
+				}
+				if e.MinStay.Value != nil {
+					seen[MinStay] = true
+				}
+				if e.MaxStay.Value != nil {
+					seen[MaxStay] = true
+				}
+			}
+			for _, t := range []ViolationType{StopSell, ClosedToArrival, ClosedToDeparture, MinStay, MaxStay} {
+				if seen[t] {
+					m.Types = append(m.Types, t)
+				}
+			}
+			m.StopSellAll = closed == len(plans)
+			if len(m.Types) == 0 {
+				continue
+			}
+			if out[typeID] == nil {
+				out[typeID] = map[civil.Date]NightMark{}
+			}
+			out[typeID][d] = m
+		}
+	}
+	return out, nil
+}
+
+// gridOf2 is gridOf for the rows of the window query (the same columns).
+func gridOf2(rows []availabilitydb.ListRestrictionRowsInWindowRow) []Restriction {
+	grid := make([]Restriction, len(rows))
+	for i, r := range rows {
+		grid[i] = Restriction{
+			ID: r.ID, RoomTypeID: r.RoomTypeID, RatePlanID: r.RatePlanID, Date: r.StayDate,
+			StopSell: r.StopSell, ClosedToArrival: r.ClosedToArrival, ClosedToDeparture: r.ClosedToDeparture,
+			MinStay: intOf(r.MinStay), MaxStay: intOf(r.MaxStay),
+		}
+	}
+	return grid
+}

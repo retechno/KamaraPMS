@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import WalkInView from './WalkInView.vue'
@@ -92,6 +93,25 @@ describe('WalkInView', () => {
     const { w } = mountView()
     await flushPromises()
     expect(w.find('[data-testid=rate-override]').exists()).toBe(false)
+  })
+
+  it('shows the rules a walk-in breaks and sends it again with the override', async () => {
+    const { w, push } = mountView(['frontdesk.checkin', 'reservation.create', 'reservation.read', 'reservation.override_restriction', 'reservation.restriction_approve'])
+    await flushPromises()
+    await w.get('input[name=last_name]').setValue('Walker')
+    POST.mockRejectedValueOnce(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'STAY_RESTRICTED', detail: 'the stay breaks a sales restriction',
+      context: { violations: [{ type: 'STOP_SELL', date: '2026-09-30', room_type_id: 1, rate_plan_id: null, scope: 'ROOM_TYPE', row_id: 1 }], overridable: true } } as never))
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=restriction-refusal]').text()).toContain('The night of 2026-09-30 is closed for sale.')
+    expect(push).not.toHaveBeenCalled()
+    POST.mockResolvedValue({ data: { stay: { id: 8 } } })
+    await w.get('input[name=restriction_reason]').setValue('arrived at the door')
+    await w.get('[data-testid=restriction-form]').trigger('submit')
+    await flushPromises()
+    const body = (POST.mock.calls.at(-1) as [string, { body: Record<string, unknown> }])[1].body
+    expect(body.restriction_override).toEqual({ reason: 'arrived at the door' })
+    expect(push).toHaveBeenCalledWith('/stays/8')
   })
 
   it('searches free rooms from the business date and walks in a new guest', async () => {

@@ -47,6 +47,8 @@ const form = reactive({
 })
 
 let original: PropertyWithDay | null = null
+// The property has financial data: the currency and the decimals are read-only and say why.
+const currencyLocked = ref(false)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
@@ -76,6 +78,7 @@ onMounted(async () => {
     const { data } = await api.GET('/api/v1/properties/{propertyId}', { params: { path: { propertyId: Number(props.id) } } })
     if (data) {
       original = data
+      currencyLocked.value = data.currency_locked
       Object.assign(form, {
         code: data.code,
         name: data.name,
@@ -232,11 +235,11 @@ function changedFields(): PatchPropertyRequest {
             </template>
           </FormField>
           <FormField :label="t('propertyForm.currency')" :error="fieldError('currency_code')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.currency_code" name="currency_code" maxlength="3" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.currency_code" name="currency_code" maxlength="3" :readonly="currencyLocked" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('propertyForm.decimals')" :hint="t('propertyForm.decimalsHint')" :error="fieldError('currency_decimals')">
             <template #default="{ id, invalid }">
-              <NativeSelect :id="id" v-model.number="form.currency_decimals" name="currency_decimals" :aria-invalid="invalid">
+              <NativeSelect :id="id" v-model.number="form.currency_decimals" name="currency_decimals" :disabled="currencyLocked" :aria-invalid="invalid">
                 <option :value="0">{{ t('propertyForm.decimals0') }}</option>
                 <option :value="2">{{ t('propertyForm.decimals2') }}</option>
                 <option :value="3">{{ t('propertyForm.decimals3') }}</option>
@@ -244,6 +247,7 @@ function changedFields(): PatchPropertyRequest {
             </template>
           </FormField>
         </div>
+        <p v-if="currencyLocked" class="mb-0 mt-3 text-sm text-muted-foreground" data-testid="currency-locked">{{ t('propertyForm.currencyLocked') }}</p>
       </CardContent>
     </Card>
 

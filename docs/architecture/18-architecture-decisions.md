@@ -357,7 +357,7 @@ The list is of tables that hold **amounts of money recorded in the currency**. C
 ### 5.8 API, UI, accounting, migration impact
 
 - API: no new endpoint. `CURRENCY_LOCKED` stays; its message names the first financial record found when that is cheap (an optional `context.reason`).
-- UI: the property form shows the currency fields as read-only with the reason once locked, and says before the lock that rates, limits and fees are **not** converted.
+- UI: the property form shows the currency fields as read-only with the reason once locked, and says before the lock that rates, limits and fees are **not** converted. *(Done: `currency_locked` on the property, the form and the CURRENCY_LOCKED text.)*
 - Accounting: none (the ledgers do not change).
 - Migration: one function and a replacement of the trigger body (Up and Down); no data change. Existing properties that already have folio items stay locked; properties with only journals or bills become locked, which is the intended fix.
 

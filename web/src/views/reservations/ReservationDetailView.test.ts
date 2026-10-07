@@ -103,6 +103,23 @@ describe('ReservationDetailView', () => {
     expect(w.find('[data-testid=confirm]').exists()).toBe(false)
   })
 
+  it('shows the rules a confirmation breaks and sends it again with the override', async () => {
+    const w = mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT', version: 1, rooms: [line({ status: 'DRAFT' })] }), [...ALL, 'reservation.override_restriction', 'reservation.restriction_approve'])
+    await flushPromises()
+    POST.mockRejectedValueOnce(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'STAY_RESTRICTED', detail: 'the stay breaks a sales restriction',
+      context: { violations: [{ type: 'STOP_SELL', date: '2026-10-02', room_type_id: 10, rate_plan_id: null, scope: 'ROOM_TYPE', row_id: 1 }], overridable: true } } as never))
+    await w.get('[data-testid=confirm]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=restriction-refusal]').text()).toContain('The night of 2026-10-02 is closed for sale.')
+    POST.mockResolvedValue({ data: reservation({ version: 2 }) })
+    await w.get('input[name=restriction_reason]').setValue('the owner asked')
+    await w.get('[data-testid=restriction-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: { path: { propertyId: 7, id: 1 } }, body: { version: 1, restriction_override: { reason: 'the owner asked' } } }])
+    expect(w.find('[data-testid=restriction-refusal]').exists()).toBe(false)
+    expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+  })
+
   it('cancels only with a reason and reports what is left on the folios', async () => {
     const w = mountView()
     await flushPromises()
