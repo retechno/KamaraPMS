@@ -2184,6 +2184,64 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folio-items/{id}/group:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: setFolioItemGroup
+      summary: Move a ledger line to another transaction group of its folio (folio.post_charge)
+      description: |
+        A transaction group (A to D in the screens) is a presentation and operational grouping dimension within one folio: the heading of the bill a line is shown and printed under. It is not
+        a financial folio, creates no separate receivable and has no effect on the folio balance or the general ledger. Moving a line changes the group and nothing else: no amount, account,
+        department, tax or service snapshot, no reversal, no posting, no journal. Every line starts in group `A`.
+        CHARGE, ADJUSTMENT, PAYMENT and REFUND lines can be moved; a REVERSAL is shown in the group of the line it reverses and cannot be moved by itself (409 `FOLIO_ITEM_GROUP_NOT_ALLOWED`).
+        The folio must be OPEN (409 `FOLIO_CLOSED`). Moving a line to the group it is in answers 200 with `changed: false` and writes nothing. 422 for a group that is not offered.
+        This does not move a line between folios; that is the transfer, a correction with a reason and an approval.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FolioGroupRequest" }
+      responses:
+        "200":
+          description: Where the line is now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioGroupResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/payments/{id}/group:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: setPaymentGroup
+      summary: Move the ledger line of a payment or refund to another transaction group (folio.post_charge)
+      description: "A payment is a ledger line of its folio, so this is the same move as for a folio item, on the line of the payment. The payment stays on its folio and its amount, method and allocation do not change. Same rules and errors as `setFolioItemGroup`."
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FolioGroupRequest" }
+      responses:
+        "200":
+          description: Where the line of the payment is now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioGroupResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reservations/{id}/deposits:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -3619,6 +3677,12 @@ paths:
     get:
       operationId: getInvoicePdf
       summary: Invoice of a folio, or a guest bill while it is open (folio.read and reservation.read)
+      parameters:
+        - name: group
+          in: query
+          required: false
+          schema: { type: string, enum: [ALL, A, B, C, D], default: ALL }
+          description: "ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`). A group is a heading of the bill, not a folio: its page shows sub-totals marked `in this group`, and the total charges, the payments and the balance are always those of the whole folio and are marked `(whole folio)`. 422 for another value."
       description: "A closed folio prints as an INVOICE with the file name `invoice-<folio number>.pdf`; an open one as a GUEST BILL that says it is not final (`bill-<folio number>.pdf`). It lists every ledger line, the charges net of service and tax, each service charge and tax by name and rate (from the posted components), the payments and the balance. The guest profile (address) is shown only to callers with guest.read."
       tags: [documents]
       responses:
@@ -9264,9 +9328,25 @@ components:
         amount: { type: string }
         sequence: { type: integer }
         gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The account the tax or service charge was mapped to when the item was posted. }
+    FolioGroupRequest:
+      type: object
+      required: [group_code]
+      additionalProperties: false
+      properties:
+        group_code: { type: string, enum: [A, B, C, D], description: The group to show the line under. }
+    FolioGroupResult:
+      type: object
+      required: [item_id, folio_id, payment_id, group_code, previous_group_code, changed]
+      properties:
+        item_id: { type: integer, format: int64 }
+        folio_id: { type: integer, format: int64 }
+        payment_id: { type: [integer, "null"], format: int64 }
+        group_code: { type: string }
+        previous_group_code: { type: string }
+        changed: { type: boolean, description: False when the line was in that group already (nothing was written). }
     FolioItem:
       type: object
-      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code]
+      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code, group_code]
       properties:
         id: { type: integer, format: int64 }
         folio_id: { type: integer, format: int64 }
@@ -9295,6 +9375,7 @@ components:
         payment_id: { type: [integer, "null"], format: int64 }
         reverses_item_id: { type: [integer, "null"], format: int64 }
         reversed_by_item_id: { type: [integer, "null"], format: int64 }
+        group_code: { type: string, pattern: "^[A-Z]$", description: "The transaction group the line is shown under (A when it was never moved; a reversal has the group of the line it reverses). Presentation only." }
         reason: { type: string }
         room_number: { type: string }
         created_by: { type: [integer, "null"], format: int64 }
@@ -9355,8 +9436,9 @@ components:
         folio_balance: { type: string }
     Payment:
       type: object
-      required: [id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, refund_of_payment_id, status, voided_at, created_by, approved_by, company_id]
+      required: [id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, refund_of_payment_id, status, voided_at, created_by, approved_by, company_id, group_code]
       properties:
+        group_code: { type: string, pattern: "^[A-Z]$", description: "The transaction group of the ledger line of this payment (A by default). Presentation only: the payment stays on its folio." }
         mdr_rate: { type: string, description: "The fee rate (percent) that applied on the day, for a card or e-wallet payment that had a rule." }
         mdr_fee: { type: string, description: The fee the acquirer is expected to keep. }
         mdr_vat_rate: { type: string, description: "The VAT rate (percent) of the rule on the day; absent for a payment taken before the VAT was kept (without rate)." }

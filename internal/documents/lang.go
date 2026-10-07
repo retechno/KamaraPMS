@@ -181,7 +181,11 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"Stay": "Menginap", "Room": "Kamar", "Stay dates": "Tanggal menginap", "Date": "Tanggal", "Description": "Keterangan", "Debit": "Debit", "Credit": "Kredit",
 	"Charges (net)": "Biaya (neto)", "Total charges": "Total biaya", "Payments received": "Pembayaran diterima", "Balance due": "Saldo terutang",
 	"Balance (credit)": "Saldo (kredit)",
-	"This bill is not final: charges can still be posted until check-out. A final invoice is issued when the folio is closed.": "Tagihan ini belum final: biaya masih bisa diposting sampai check-out. Invoice final diterbitkan saat folio ditutup.",
+	"Group":            "Grup", "Charges in this group": "Biaya dalam grup ini", "Payments in this group": "Pembayaran dalam grup ini",
+	"Total charges (whole folio)": "Total biaya (seluruh folio)", "Payments received (whole folio)": "Pembayaran diterima (seluruh folio)",
+	"Balance due (whole folio)": "Saldo terutang (seluruh folio)", "Balance (credit, whole folio)": "Saldo (kredit, seluruh folio)",
+	"This page lists one group of the lines of the folio. A group has no balance of its own: the figures marked (whole folio) are those of the entire folio.": "Halaman ini memuat satu grup dari baris folio. Sebuah grup tidak punya saldo sendiri: angka bertanda (seluruh folio) adalah angka seluruh folio.",
+	"This bill is not final: charges can still be posted until check-out. A final invoice is issued when the folio is closed.":                                "Tagihan ini belum final: biaya masih bisa diposting sampai check-out. Invoice final diterbitkan saat folio ditutup.",
 	// registration card
 	"Registration card": "Kartu registrasi", "REGISTRATION CARD": "KARTU REGISTRASI", "Arrival": "Kedatangan", "Departure": "Keberangkatan", "Nights": "Malam",
 	"Guests": "Tamu", "Rate plan": "Rate plan", "Rate": "Tarif", "Name": "Nama", "Nationality": "Kewarganegaraan", "Date of birth": "Tanggal lahir",

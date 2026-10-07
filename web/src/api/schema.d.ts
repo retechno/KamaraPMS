@@ -1724,6 +1724,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/folio-items/{id}/group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Move a ledger line to another transaction group of its folio (folio.post_charge)
+         * @description A transaction group (A to D in the screens) is a presentation and operational grouping dimension within one folio: the heading of the bill a line is shown and printed under. It is not
+         *     a financial folio, creates no separate receivable and has no effect on the folio balance or the general ledger. Moving a line changes the group and nothing else: no amount, account,
+         *     department, tax or service snapshot, no reversal, no posting, no journal. Every line starts in group `A`.
+         *     CHARGE, ADJUSTMENT, PAYMENT and REFUND lines can be moved; a REVERSAL is shown in the group of the line it reverses and cannot be moved by itself (409 `FOLIO_ITEM_GROUP_NOT_ALLOWED`).
+         *     The folio must be OPEN (409 `FOLIO_CLOSED`). Moving a line to the group it is in answers 200 with `changed: false` and writes nothing. 422 for a group that is not offered.
+         *     This does not move a line between folios; that is the transfer, a correction with a reason and an approval.
+         */
+        patch: operations["setFolioItemGroup"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/payments/{id}/group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Move the ledger line of a payment or refund to another transaction group (folio.post_charge)
+         * @description A payment is a ledger line of its folio, so this is the same move as for a folio item, on the line of the payment. The payment stays on its folio and its amount, method and allocation do not change. Same rules and errors as `setFolioItemGroup`.
+         */
+        patch: operations["setPaymentGroup"];
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reservations/{id}/deposits": {
         parameters: {
             query?: never;
@@ -8262,6 +8313,25 @@ export interface components {
             /** @description The account the tax or service charge was mapped to when the item was posted. */
             gl_account_code: components["schemas"]["GlAccountCode"];
         };
+        FolioGroupRequest: {
+            /**
+             * @description The group to show the line under.
+             * @enum {string}
+             */
+            group_code: "A" | "B" | "C" | "D";
+        };
+        FolioGroupResult: {
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            folio_id: number;
+            /** Format: int64 */
+            payment_id: number | null;
+            group_code: string;
+            previous_group_code: string;
+            /** @description False when the line was in that group already (nothing was written). */
+            changed: boolean;
+        };
         FolioItem: {
             /** Format: int64 */
             id: number;
@@ -8297,6 +8367,8 @@ export interface components {
             reverses_item_id?: number | null;
             /** Format: int64 */
             reversed_by_item_id?: number | null;
+            /** @description The transaction group the line is shown under (A when it was never moved; a reversal has the group of the line it reverses). Presentation only. */
+            group_code: string;
             reason?: string;
             room_number?: string;
             /** Format: int64 */
@@ -8375,6 +8447,8 @@ export interface components {
             folio_balance: string;
         };
         Payment: {
+            /** @description The transaction group of the ledger line of this payment (A by default). Presentation only: the payment stays on its folio. */
+            group_code: string;
             /** @description The fee rate (percent) that applied on the day, for a card or e-wallet payment that had a rule. */
             mdr_rate?: string;
             /** @description The fee the acquirer is expected to keep. */
@@ -15354,6 +15428,72 @@ export interface operations {
             429: components["responses"]["Problem"];
         };
     };
+    setFolioItemGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolioGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Where the line is now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioGroupResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    setPaymentGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolioGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Where the line of the payment is now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioGroupResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
     postDeposit: {
         parameters: {
             query?: never;
@@ -17318,6 +17458,8 @@ export interface operations {
             query?: {
                 /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
                 lang?: components["parameters"]["Lang"];
+                /** @description ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`). A group is a heading of the bill, not a folio: its page shows sub-totals marked `in this group`, and the total charges, the payments and the balance are always those of the whole folio and are marked `(whole folio)`. 422 for another value. */
+                group?: "ALL" | "A" | "B" | "C" | "D";
             };
             header?: never;
             path: {

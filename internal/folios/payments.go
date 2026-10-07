@@ -36,6 +36,11 @@ func (s *Service) paymentView(ctx context.Context, propertyID int64, pay foliosd
 		rate, vat := pay.MdrVatRate.String(), fixed(*pay.MdrVat, decimals)
 		v.MDRVATRate, v.MDRVAT = &rate, &vat
 	}
+	g, err := s.q(ctx).GetPaymentGroup(ctx, foliosdb.GetPaymentGroupParams{TenantID: pay.TenantID, PropertyID: propertyID, PaymentID: &pay.ID})
+	if err != nil {
+		return Payment{}, err
+	}
+	v.GroupCode = g
 	if pay.PaymentType == PaymentTypePayment && pay.Status == PaymentPosted {
 		sum, err := s.q(ctx).SumRefundsOf(ctx, foliosdb.SumRefundsOfParams{PropertyID: propertyID, PaymentID: &pay.ID})
 		if err != nil {

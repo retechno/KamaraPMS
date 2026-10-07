@@ -212,10 +212,12 @@ type Item struct {
 	PaymentID          *int64      `json:"payment_id"`
 	ReversesItemID     *int64      `json:"reverses_item_id"`
 	ReversedByItemID   *int64      `json:"reversed_by_item_id"`
-	Reason             string      `json:"reason,omitempty"`
-	RoomNumber         string      `json:"room_number,omitempty"`
-	CreatedBy          *int64      `json:"created_by"`
-	ApprovedBy         *int64      `json:"approved_by"`
+	// GroupCode is the transaction group the line is shown under (GroupDefault when it was never moved; a reversal has the group of the line it reverses). Presentation only.
+	GroupCode  string `json:"group_code"`
+	Reason     string `json:"reason,omitempty"`
+	RoomNumber string `json:"room_number,omitempty"`
+	CreatedBy  *int64 `json:"created_by"`
+	ApprovedBy *int64 `json:"approved_by"`
 }
 
 // Totals are the debit and credit sums of a folio.
@@ -275,6 +277,8 @@ type Payment struct {
 	VoidReason        string     `json:"void_reason,omitempty"`
 	Remarks           string     `json:"remarks,omitempty"`
 	Refundable        *string    `json:"refundable,omitempty"`
+	// GroupCode is the transaction group of the ledger line of this payment (presentation only; the payment stays on its folio).
+	GroupCode string `json:"group_code"`
 	// The fee the acquirer is expected to keep, from the rate that applied on the day (card and e-wallet payments only), and the day it should pay out.
 	MDRRate *string `json:"mdr_rate,omitempty"`
 	MDRFee  *string `json:"mdr_fee,omitempty"`

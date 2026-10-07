@@ -62,7 +62,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
   references impossible. Another tenant's or unassigned property → 404 `PROPERTY_NOT_FOUND`, missing
   permission → 403 `PERMISSION_DENIED` (`auth.Authorizer`).
 - **Audit:** every state change writes `audit.Writer.Write` in the same transaction.
-- **Ledger:** folio items are append-only; corrections are reversals/adjustments. Only
+- **Ledger:** folio items are append-only; corrections are reversals/adjustments. A transaction group (`folio_item_groups`) is presentation only: no money query may read it, and moving a line between groups writes no reversal, posting or journal (`docs/architecture/20-transaction-group.md`). Only
   `ChargeCalculationEngine` computes tax/service; only `FolioPostingService` writes `folio_items`;
   only `RoomChargePostingService` posts room charges (design: 03-financial-engines.md).
 - **Migrations:** never edit an applied migration; add a new numbered file (goose format, with Down).

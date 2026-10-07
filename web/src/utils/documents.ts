@@ -66,7 +66,8 @@ export async function downloadExport(path: string, body: unknown): Promise<{ inv
 
 /** The path of a document of a property. */
 export const documentPath = {
-  invoice: (propertyId: number, folioId: number) => `/api/v1/properties/${propertyId}/folios/${folioId}/invoice.pdf`,
+  /** The invoice or bill of a folio: the whole folio, or the lines of one transaction group of it (`group` A to D). */
+  invoice: (propertyId: number, folioId: number, group?: string) => `/api/v1/properties/${propertyId}/folios/${folioId}/invoice.pdf${group && group !== 'ALL' ? `?group=${encodeURIComponent(group)}` : ''}`,
   registrationCard: (propertyId: number, stayId: number) => `/api/v1/properties/${propertyId}/stays/${stayId}/registration-card.pdf`,
   receipt: (propertyId: number, paymentId: number) => `/api/v1/properties/${propertyId}/payments/${paymentId}/receipt.pdf`,
   confirmation: (propertyId: number, reservationId: number) => `/api/v1/properties/${propertyId}/reservations/${reservationId}/confirmation.pdf`,

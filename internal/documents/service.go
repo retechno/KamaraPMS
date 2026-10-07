@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/guests"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/reservations"
@@ -138,6 +139,15 @@ func money(d decimal.Decimal, decimals int32) string {
 
 // Invoice renders a folio: the final invoice once the folio is closed, a guest bill while it is open.
 func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Document, error) {
+	return s.InvoiceGroup(ctx, propertyID, folioID, "")
+}
+
+// InvoiceGroup renders a folio, or only the lines of one transaction group of it (group "" is the whole folio). A group is a heading of the bill and not a folio: the page lists the
+// lines of the group, its own sub-totals are said to be "in this group", and the total charges, the payments and the balance are always those of the WHOLE folio and are marked so.
+func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, group string) (Document, error) {
+	if group != "" && !folios.ValidGroup(group) {
+		return Document{}, apperr.Invalid("the group is invalid", apperr.FieldError{Field: "group", Code: "INVALID_VALUE", Message: "one of " + strings.Join(folios.GroupCodes, ", ") + ", or empty for the whole folio"})
+	}
 	dc, err := s.context(ctx, propertyID)
 	if err != nil {
 		return Document{}, err
@@ -153,7 +163,7 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	d := InvoiceData{
 		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: f.FolioNumber, Final: f.Status == "CLOSED", Currency: dc.prop.CurrencyCode,
 		Booking: res.ConfirmationNumber, Arrival: res.ArrivalDate, Departure: res.DepartureDate,
-		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)),
+		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)), Group: group,
 	}
 	if f.BillToCompanyID != nil {
 		// a folio billed to a company: the company is the party of the invoice (its record when this user may read it, else its name)
@@ -184,8 +194,18 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	}
 	var order []key
 	parts := map[key]*agg{}
-	net, charges, payments := decimal.Zero, decimal.Zero, decimal.Zero
+	net, charges, payments := decimal.Zero, decimal.Zero, decimal.Zero // of the lines shown
+	folioCharges, folioPayments := decimal.Zero, decimal.Zero          // of the whole folio, whatever is shown
 	for _, it := range f.Items {
+		fd, fc := dec(it.Debit), dec(it.Credit)
+		if it.TransactionType == "PAYMENT" || it.TransactionType == "REFUND" {
+			folioPayments = folioPayments.Add(fc.Sub(fd))
+		} else {
+			folioCharges = folioCharges.Add(fd.Sub(fc))
+		}
+		if group != "" && it.GroupCode != group {
+			continue
+		}
 		debit, credit := dec(it.Debit), dec(it.Credit)
 		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: it.Description,
 			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
@@ -224,7 +244,17 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	if balance.IsNegative() {
 		label = "Balance (credit)"
 	}
-	d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
+	if group == "" {
+		d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
+	} else {
+		// the figures of the group are sub-totals of the lines shown; the folio figures are the same as on the page of the whole folio and are the only balance there is
+		whole := "Balance due (whole folio)"
+		if balance.IsNegative() {
+			whole = "Balance (credit, whole folio)"
+		}
+		d.Summary = append(d.Summary, Amount{"Charges in this group", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments in this group", dc.lang.Money(payments, dc.decimals)},
+			Amount{"Total charges (whole folio)", dc.lang.Money(folioCharges, dc.decimals)}, Amount{"Payments received (whole folio)", dc.lang.Money(folioPayments, dc.decimals)}, Amount{whole, dc.lang.Money(balance, dc.decimals)})
+	}
 	pdf, err := RenderInvoice(d)
 	if err != nil {
 		return Document{}, err
@@ -233,7 +263,11 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	if !d.Final {
 		prefix = "bill-"
 	}
-	return Document{Filename: prefix + f.FolioNumber + ".pdf", PDF: pdf}, nil
+	suffix := ""
+	if group != "" {
+		suffix = "-" + group
+	}
+	return Document{Filename: prefix + f.FolioNumber + suffix + ".pdf", PDF: pdf}, nil
 }
 
 // RegistrationCard renders the card a guest signs at check-in.

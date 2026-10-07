@@ -331,6 +331,13 @@ func boolInt(b bool) int {
 // totals prints right-aligned label/amount lines; the last one is emphasised.
 func (g *page) totals(items [][2]string) {
 	g.p.Ln(2)
+	// the block starts at the middle of the page; a long label (the figures of a transaction group say "(whole folio)") gets more room, so that it never runs into the amount
+	left, label := 0.5, 0.3
+	for _, it := range items {
+		if len([]rune(g.lang.T(it[0]))) > 26 {
+			left, label = 0.3, 0.5
+		}
+	}
 	for i, it := range items {
 		last := i == len(items)-1
 		if last {
@@ -341,8 +348,8 @@ func (g *page) totals(items [][2]string) {
 		if g.p.GetY() > footerAt-24 {
 			g.p.AddPage()
 		}
-		g.p.SetX(margin + bodyW*0.5)
-		g.p.CellFormat(bodyW*0.3, 5.6, g.tr(g.lang.T(it[0])), "", 0, "L", false, 0, "")
+		g.p.SetX(margin + bodyW*left)
+		g.p.CellFormat(bodyW*label, 5.6, g.tr(g.lang.T(it[0])), "", 0, "L", false, 0, "")
 		g.p.CellFormat(bodyW*0.2, 5.6, g.tr(it[1]), "", 1, "R", false, 0, "")
 	}
 }

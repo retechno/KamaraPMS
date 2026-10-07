@@ -29,6 +29,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/folios/{id}/close", httpx.HandlerFunc(h.closeFolio))
 	mux.Handle("POST "+p+"/folio-items/{id}/reverse", httpx.HandlerFunc(h.reverse))
 	mux.Handle("POST "+p+"/folio-items/{id}/transfer", httpx.HandlerFunc(h.transferItem))
+	mux.Handle("PATCH "+p+"/folio-items/{id}/group", httpx.HandlerFunc(h.itemGroup))
+	mux.Handle("PATCH "+p+"/payments/{id}/group", httpx.HandlerFunc(h.paymentGroup))
 	mux.Handle("GET "+p+"/payments", httpx.HandlerFunc(h.listPayments))
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))
 	mux.Handle("POST "+p+"/payments/{id}/refunds", httpx.HandlerFunc(h.refund))
@@ -405,4 +407,36 @@ func (h *Handler) putInstructions(w http.ResponseWriter, r *http.Request) error 
 
 type setInstructionsRequest struct {
 	Instructions []InstructionInput `json:"instructions"`
+}
+
+func (h *Handler) itemGroup(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in GroupInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.SetItemGroup(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) paymentGroup(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in GroupInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.SetPaymentGroup(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
 }

@@ -190,7 +190,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			BaseAmount: fixed(r.BaseAmount, decimals), DiscountAmount: fixed(r.DiscountAmount, decimals), NetAmount: fixed(r.NetAmount, decimals),
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),
 			TaxTotal: fixed(r.TaxTotal, decimals), Debit: fixed(r.Debit, decimals), Credit: fixed(r.Credit, decimals), Components: cs,
-			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, Reason: deref(r.Reason),
+			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, GroupCode: r.GroupCode, Reason: deref(r.Reason),
 			RoomNumber: deref(r.RoomNumber), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
 		}
 	}

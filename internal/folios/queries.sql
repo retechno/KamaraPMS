@@ -124,8 +124,10 @@ ORDER BY folio_item_id, component_type, sequence;
 -- Items of a folio in posting order, with what a screen needs: the charge code, the reversal that undid the item
 -- and the room of the stay segment.
 -- name: ListFolioItems :many
-SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number
+SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number,
+       COALESCE(g.group_code, 'A')::text AS group_code -- a reversal is printed with the line it reverses; a line without a row is in group A
 FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
 LEFT JOIN stay_rooms sr ON sr.property_id = i.property_id AND sr.id = i.stay_room_id
@@ -296,3 +298,25 @@ SELECT id, status FROM stays WHERE tenant_id = @tenant_id AND property_id = @pro
 -- name: GetInstructionLine :one
 SELECT rr.id, rr.status FROM reservation_rooms rr
 WHERE rr.tenant_id = @tenant_id AND rr.property_id = @property_id AND rr.reservation_id = @reservation_id AND rr.id = @id;
+
+-- ---------------------------------------------------------------------------
+-- Transaction groups (docs/architecture/20-transaction-group.md): a presentation dimension inside one folio. Nothing here reads or writes an amount.
+
+-- The group a ledger line is printed under. A reversal follows the line it reverses; a line with no row is in group A.
+-- name: GetItemGroup :one
+SELECT COALESCE(g.group_code, 'A')::text AS group_code
+FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.id = @item_id;
+
+-- name: SetItemGroup :exec
+INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code, updated_by)
+VALUES (@tenant_id, @property_id, @folio_item_id, @group_code, sqlc.narg(actor_id))
+ON CONFLICT (property_id, folio_item_id) DO UPDATE SET group_code = EXCLUDED.group_code, updated_by = EXCLUDED.updated_by;
+
+-- The group of the ledger line of a payment or refund (one line per payment).
+-- name: GetPaymentGroup :one
+SELECT COALESCE(g.group_code, 'A')::text AS group_code
+FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = i.id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.payment_id = @payment_id;

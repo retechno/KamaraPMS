@@ -152,7 +152,7 @@ Compared with `13-feature-map.md`, `08-backlog.md` and the architecture document
 | Reports, PDF documents, CSV, Indonesian | DONE | `reports`, `documents` | none found | – |
 | Confirmation e-mail (outbox, SMTP optional) | DONE | `notifications` | e-mail of invoices and receipts is out of scope by decision | later |
 | Currency lock, bank statement guard | DONE | section 3.3 | none beyond the owner's accepted exclusions | – |
-| **Transaction Group / Split Bill** | **PLANNED** | decided in concept, nothing built (section 16) | design first | P1 |
+| **Transaction Group / Split Bill** | **BUILT** (was PLANNED) | `20-transaction-group.md`, migration 00063; a presentation grouping inside one folio, not a financial folio | demand UNVERIFIED | P1 |
 | Channel manager, OTA, web booking engine | MISSING | not in any document as scheduled; restrictions are designed to feed it | out of the pilot | later |
 | Point of sale integration | MISSING | none | out of the pilot | later |
 | Fixed assets, purchase orders, withholding tax on payables | MISSING | backlog "later" | out of the pilot | later |
@@ -407,7 +407,7 @@ No principle is violated. Two are partly enforced by convention (11) or have one
 
 ## 16. Planned Transaction Group / Split Bill
 
-**Status: PLANNED. Nothing is built, no migration, API, screen or code was written for it by this audit.**
+**Status: PLANNED when this audit was written; BUILT later (2026-10-08): see `20-transaction-group.md`.** The text below is the plan as it was. What the build decided on each point: (1) the change of group after posting is a **side table** (`folio_item_groups`, migration 00063) that leaves the append-only ledger untouched, the history being the audit trail; a line with no row is in group A; (2) the limit of four is in the application, the table accepts one capital letter; (3) a reversal and a void are shown in the group of the line they reverse, but a refund and the copy of a transfer start in group A (follow-up); (4) the print takes `?group=`, the tax invoice is untouched and stays per folio; (5) the print of a group says which figures are of the group and which of the whole folio, and that a group has no balance; (6) the general ledger does not know groups; (7) demand is still UNVERIFIED.
 
 The concept, as decided: a folio has at most four transaction groups (A to D). `group_code` lives on the transaction (`folio_items`, `payments`), default `A`. A group is not a financial folio: the balance stays per folio. The screen and the print can choose group A, B, C, D or all groups. The group only organises transactions for operations and for printing.
 
@@ -773,7 +773,7 @@ The order follows the evidence of this audit, not the order in which things were
 | 17 | One browser end-to-end smoke test; `govulncheck` and `npm audit` in CI | F-27 |
 | 18 | Documentation sync (section 19) | F-26 |
 | 19 | Cancellation and no-show fee: decide automatic or manual for the pilot | F-08 |
-| 20 | **Transaction Group / Split Bill**: a design document first (section 16), then the feature | section 16 |
+| 20 | **(Built, 2026-10-08: `20-transaction-group.md`)** **Transaction Group / Split Bill**: a design document first (section 16), then the feature | section 16 |
 
 **Where Transaction Group sits and why.** It is P1 and the first new feature after the P0 list and the folio correctness items (7 and 9), for three reasons from the evidence: it adds a column to the two append-only ledger tables and a filter to every folio view and document, so it must land on a green CI and on tests that already cover transfers; the payer split that pilots with corporate guests need is already built (several folios, instructions, transfer), so no evidence makes it a blocker; and the design has one open question the ledger forces (how a group changes after posting). It is not a P0.
 

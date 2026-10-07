@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/platform/apperr"
@@ -20,7 +21,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 // Register mounts the routes.
 func (h *Handler) Register(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}"
-	mux.Handle("GET "+p+"/folios/{id}/invoice.pdf", httpx.HandlerFunc(h.serve(h.svc.Invoice)))
+	mux.Handle("GET "+p+"/folios/{id}/invoice.pdf", httpx.HandlerFunc(h.invoice))
 	mux.Handle("GET "+p+"/stays/{id}/registration-card.pdf", httpx.HandlerFunc(h.serve(h.svc.RegistrationCard)))
 	mux.Handle("GET "+p+"/payments/{id}/receipt.pdf", httpx.HandlerFunc(h.serve(h.svc.Receipt)))
 	mux.Handle("GET "+p+"/reservations/{id}/confirmation.pdf", httpx.HandlerFunc(h.serve(h.svc.Confirmation)))
@@ -83,4 +84,25 @@ func writePDF(w http.ResponseWriter, doc Document) error {
 		_, err := w.Write(doc.PDF)
 		return err
 	}
+}
+
+// invoice serves the invoice or guest bill of a folio: the whole folio, or one transaction group of it with ?group=A..D (docs/architecture/20-transaction-group.md).
+func (h *Handler) invoice(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		return apperr.NotFound("NOT_FOUND", "no such document")
+	}
+	group := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("group")))
+	if group == "ALL" {
+		group = ""
+	}
+	doc, err := h.svc.InvoiceGroup(langCtx(r), pid, id, group)
+	if err != nil {
+		return err
+	}
+	return writePDF(w, doc)
 }

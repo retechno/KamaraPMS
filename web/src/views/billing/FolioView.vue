@@ -52,6 +52,10 @@ type Pending =
   | { kind: 'refund'; item: FolioItem }
   | { kind: 'move'; item: FolioItem }
 const pending = ref<Pending | null>(null)
+// Transaction groups: a heading of the bill inside this folio, not a folio. ALL shows every line; the balance is always the balance of the whole folio.
+const GROUPS = ['A', 'B', 'C', 'D'] as const
+const shownGroup = ref<'ALL' | (typeof GROUPS)[number]>('ALL')
+const printGroup = ref<'ALL' | (typeof GROUPS)[number]>('ALL')
 // The methods the property allows for a refund (cash unless configured otherwise).
 const refundMethods = computed(() => (property.current?.refund_methods?.length ? property.current.refund_methods : ['CASH']))
 const correction = reactive({ reason: '', amount: '', method: '', reference: '', targetFolio: 0 })
@@ -286,6 +290,7 @@ const itemColumns = computed<Column<FolioItem>[]>(() => [
   { key: 'business_date', label: t('folio.date'), format: 'date' as const },
   { key: 'description', label: t('folio.description') },
   { key: 'charge_code', label: t('folio.code') },
+  { key: 'group_code', label: t('folio.group') },
   { key: 'debit', label: t('folio.debit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'credit', label: t('folio.credit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'actions', label: '', align: 'right' },
@@ -302,6 +307,14 @@ const postTabs = computed(() => [
 const activeTab = computed(() => (postTabs.value.some((x) => x.value === postTab.value) ? postTab.value : (postTabs.value[0]?.value ?? '')))
 
 const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
+
+const shownItems = computed(() => (folio.value?.items ?? []).filter((i) => shownGroup.value === 'ALL' || i.group_code === shownGroup.value))
+const groupCount = (g: string) => (folio.value?.items ?? []).filter((i) => i.group_code === g).length
+// A reversal is shown with the line it reverses: it moves with it and is not moved alone.
+const groupable = (i: FolioItem) => isOpen.value && can('folio.post_charge') && i.transaction_type !== 'REVERSAL'
+const moveToGroup = (i: FolioItem, group: string) => run(`group-${i.id}`, async () => {
+  await api.PATCH('/api/v1/properties/{propertyId}/folio-items/{id}/group', { params: { path: { propertyId: pid.value as number, id: i.id } }, body: { group_code: group as (typeof GROUPS)[number] } })
+})
 
 async function print(path: string): Promise<void> {
   error.value = null
@@ -354,16 +367,26 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <div class="ml-auto flex flex-wrap gap-2">
         <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
         <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
-        <Button v-if="canPrint && pid !== null" variant="outline" size="sm" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id))">
+        <NativeSelect v-if="canPrint" v-model="printGroup" class="w-auto" name="print_group" data-testid="print-group" :aria-label="t('folio.printGroup')">
+          <option value="ALL">{{ t('folio.groupAll') }}</option>
+          <option v-for="g in GROUPS" :key="g" :value="g">{{ t('folio.groupN', { code: g }) }}</option>
+        </NativeSelect>
+        <Button v-if="canPrint && pid !== null" variant="outline" size="sm" data-testid="print-invoice" @click="print(documentPath.invoice(pid, folio.id, printGroup))">
           <Printer />{{ isOpen ? t('folio.printBill') : t('folio.printInvoice') }}
         </Button>
       </div>
     </Card>
 
+    <div class="mb-2 flex flex-wrap items-center gap-2" data-testid="group-filter" role="group" :aria-label="t('folio.groups')">
+      <Button v-for="g in (['ALL', ...GROUPS] as const)" :key="g" size="sm" :variant="shownGroup === g ? 'default' : 'outline'" :data-testid="`group-${g}`" :aria-pressed="shownGroup === g" @click="shownGroup = g">
+        {{ g === 'ALL' ? t('folio.groupAll') : t('folio.groupN', { code: g }) }}<span class="ml-1 text-xs opacity-70">{{ g === 'ALL' ? folio.items.length : groupCount(g) }}</span>
+      </Button>
+      <span v-if="shownGroup !== 'ALL'" class="text-sm text-muted-foreground" data-testid="group-note">{{ t('folio.groupNote', { code: shownGroup }) }}</span>
+    </div>
     <Card class="mb-4" data-testid="items">
       <DataTable
         :columns="itemColumns"
-        :rows="folio.items"
+        :rows="shownItems"
         row-key="id"
         :row-test-id="(i) => `item-${i.id}`"
         :row-class="(i) => (i.reversed_by_item_id ? 'struck text-muted-foreground line-through' : undefined)"
@@ -374,6 +397,12 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <template #cell-description="{ row: i }">
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
           <small class="ml-1 text-muted-foreground">{{ i.transaction_type }}</small>
+        </template>
+        <template #cell-group_code="{ row: i }">
+          <NativeSelect v-if="groupable(i)" class="w-auto" :model-value="i.group_code" :name="`group_${i.id}`" :data-testid="`item-group-${i.id}`" :aria-label="t('folio.group')" :disabled="busy" @update:model-value="moveToGroup(i, String($event))">
+            <option v-for="g in GROUPS" :key="g" :value="g">{{ g }}</option>
+          </NativeSelect>
+          <span v-else :data-testid="`item-group-${i.id}`">{{ i.group_code }}</span>
         </template>
         <template #cell-debit="{ row: i }"><span :class="Number(i.debit) === 0 && 'text-muted-foreground'">{{ $money(i.debit) }}</span></template>
         <template #cell-credit="{ row: i }"><span :class="Number(i.credit) === 0 && 'text-muted-foreground'">{{ $money(i.credit) }}</span></template>

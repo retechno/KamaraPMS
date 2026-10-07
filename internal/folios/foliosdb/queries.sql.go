@@ -489,6 +489,30 @@ func (q *Queries) GetInstructionLine(ctx context.Context, arg GetInstructionLine
 	return i, err
 }
 
+const getItemGroup = `-- name: GetItemGroup :one
+
+SELECT COALESCE(g.group_code, 'A')::text AS group_code
+FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.id = $3
+`
+
+type GetItemGroupParams struct {
+	TenantID   int64
+	PropertyID int64
+	ItemID     int64
+}
+
+// ---------------------------------------------------------------------------
+// Transaction groups (docs/architecture/20-transaction-group.md): a presentation dimension inside one folio. Nothing here reads or writes an amount.
+// The group a ledger line is printed under. A reversal follows the line it reverses; a line with no row is in group A.
+func (q *Queries) GetItemGroup(ctx context.Context, arg GetItemGroupParams) (string, error) {
+	row := q.db.QueryRow(ctx, getItemGroup, arg.TenantID, arg.PropertyID, arg.ItemID)
+	var group_code string
+	err := row.Scan(&group_code)
+	return group_code, err
+}
+
 const getItemOfPayment = `-- name: GetItemOfPayment :one
 SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND payment_id = $3
 `
@@ -655,6 +679,27 @@ func (q *Queries) GetPaymentByKey(ctx context.Context, arg GetPaymentByKeyParams
 		&i.MdrVat,
 	)
 	return i, err
+}
+
+const getPaymentGroup = `-- name: GetPaymentGroup :one
+SELECT COALESCE(g.group_code, 'A')::text AS group_code
+FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = i.id
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.payment_id = $3
+`
+
+type GetPaymentGroupParams struct {
+	TenantID   int64
+	PropertyID int64
+	PaymentID  *int64
+}
+
+// The group of the ledger line of a payment or refund (one line per payment).
+func (q *Queries) GetPaymentGroup(ctx context.Context, arg GetPaymentGroupParams) (string, error) {
+	row := q.db.QueryRow(ctx, getPaymentGroup, arg.TenantID, arg.PropertyID, arg.PaymentID)
+	var group_code string
+	err := row.Scan(&group_code)
+	return group_code, err
 }
 
 const getPostingOfItem = `-- name: GetPostingOfItem :one
@@ -1242,8 +1287,10 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 }
 
 const listFolioItems = `-- name: ListFolioItems :many
-SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number
+SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number,
+       COALESCE(g.group_code, 'A')::text AS group_code -- a reversal is printed with the line it reverses; a line without a row is in group A
 FROM folio_items i
+LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
 LEFT JOIN stay_rooms sr ON sr.property_id = i.property_id AND sr.id = i.stay_room_id
@@ -1297,6 +1344,7 @@ type ListFolioItemsRow struct {
 	ChargeCode         *string
 	ReversedByItemID   *int64
 	RoomNumber         *string
+	GroupCode          string
 }
 
 // Items of a folio in posting order, with what a screen needs: the charge code, the reversal that undid the item
@@ -1349,6 +1397,7 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 			&i.ChargeCode,
 			&i.ReversedByItemID,
 			&i.RoomNumber,
+			&i.GroupCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1895,6 +1944,31 @@ func (q *Queries) PaymentTotals(ctx context.Context, arg PaymentTotalsParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const setItemGroup = `-- name: SetItemGroup :exec
+INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code, updated_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (property_id, folio_item_id) DO UPDATE SET group_code = EXCLUDED.group_code, updated_by = EXCLUDED.updated_by
+`
+
+type SetItemGroupParams struct {
+	TenantID    int64
+	PropertyID  int64
+	FolioItemID int64
+	GroupCode   string
+	ActorID     *int64
+}
+
+func (q *Queries) SetItemGroup(ctx context.Context, arg SetItemGroupParams) error {
+	_, err := q.db.Exec(ctx, setItemGroup,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioItemID,
+		arg.GroupCode,
+		arg.ActorID,
+	)
+	return err
 }
 
 const sumNetOfChargeCodeOnFolio = `-- name: SumNetOfChargeCodeOnFolio :one

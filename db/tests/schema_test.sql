@@ -1709,6 +1709,31 @@ SELECT expect_error('the line of an instruction is one of the property', '23503'
     $q$INSERT INTO folio_billing_instructions (tenant_id, property_id, reservation_room_id, scope, company_id) VALUES (tn('XYZ'), pr('SG'), (SELECT min(id) FROM reservation_rooms WHERE reservation_id = rs('R1')), 'ALL', (SELECT id FROM companies WHERE property_id = pr('SG') AND code = 'ACME'))$q$);
 
 ------------------------------------------------------------------------------------------
+-- Transaction groups (00063): a presentation dimension of a folio, in a table of its own so that the append-only ledger is not touched
+------------------------------------------------------------------------------------------
+SELECT expect_ok('a ledger line can be put in a group, and moved to another: the group table is not append-only',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'B')$q$,
+    $q$UPDATE folio_item_groups SET group_code = 'C' WHERE folio_item_id = (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001')$q$);
+SELECT expect_error('a line has one group', '23505',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'B')$q$,
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'D')$q$);
+SELECT expect_error('a group is one capital letter (lower case)', '23514', $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'b')$q$);
+SELECT expect_error('a group is one capital letter (two letters)', '23514', $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'AB')$q$);
+SELECT expect_error('a group is one capital letter (a digit)', '23514', $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), '1')$q$);
+SELECT expect_error('a group is not empty', '23514', $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), '')$q$);
+SELECT expect_error('moving a line to a bad group is refused too', '23514',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'B')$q$,
+    $q$UPDATE folio_item_groups SET group_code = 'x'$q$);
+SELECT expect_error('the line of a group is one of the property', '23503',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('XYZ'), pr('SG'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'B')$q$);
+SELECT expect_error('the property of a group belongs to its tenant', '23503',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('XYZ'), pr('BALI'), (SELECT id FROM folio_items WHERE idempotency_key = 'RC-S1-1001'), 'B')$q$);
+SELECT expect_error('a group of a line that does not exist', '23503',
+    $q$INSERT INTO folio_item_groups (tenant_id, property_id, folio_item_id, group_code) VALUES (tn('ABC'), pr('BALI'), 999999999, 'B')$q$);
+SELECT expect_error('the ledger line itself is still append-only', '23001',
+    $q$UPDATE folio_items SET description = 'x' WHERE idempotency_key = 'RC-S1-1001'$q$);
+
+------------------------------------------------------------------------------------------
 -- Sales restrictions (00059)
 ------------------------------------------------------------------------------------------
 SELECT expect_ok('the four scopes of one date live side by side: the property, a plan, a room type, a room type and a plan',

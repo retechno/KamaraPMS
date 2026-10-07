@@ -13,15 +13,16 @@ const dlg = (sel: string) => new DOMWrapper(document.body.querySelector(sel) as 
 
 let GET = vi.fn()
 let POST = vi.fn()
+let PATCH = vi.fn()
 let openPdf = vi.fn()
 vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
-vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
+vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a) } }))
 
 const item = (over: object = {}) => ({
   id: 1, folio_id: 3, transaction_type: 'CHARGE', business_date: '2026-09-30', service_date: '2026-09-30', transaction_at: '2026-09-30T13:00:00Z',
   description: 'Minibar', charge_code: 'MINIBAR', quantity: '1', unit_price: '100000', price_mode: 'EXCLUSIVE', base_amount: '100000', discount_amount: '0',
   net_amount: '100000', rounding_adjustment: '0', service_charge_total: '10000', tax_total: '12100', debit: '122100', credit: '0', payment_id: null,
-  reversed_by_item_id: null, components: [
+  reversed_by_item_id: null, group_code: 'A', components: [
     { component_type: 'SERVICE_CHARGE', code: 'SVC', name: 'Service', rate: '10.0000', base_amount: '100000', amount: '10000', sequence: 1 },
     { component_type: 'TAX', code: 'VAT', name: 'VAT', rate: '11.0000', base_amount: '110000', amount: '12100', sequence: 1 },
   ], ...over,
@@ -51,6 +52,7 @@ function mountView(f: object = folio(), permissions = ALL, companiesError?: ApiE
     return { data: path.endsWith('/charge-codes') ? { data: codes } : path.endsWith('/companies') ? { data: companyList } : f }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
+  PATCH = vi.fn().mockResolvedValue({ data: {} })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(FolioView, { props: { id: '3' }, global: { plugins: [pinia, router] }, attachTo: document.body })
 }
@@ -60,6 +62,7 @@ describe('FolioView', () => {
     document.body.innerHTML = ''
     GET = vi.fn()
     POST = vi.fn()
+    PATCH = vi.fn()
     openPdf = vi.fn().mockResolvedValue(undefined)
     document.body.innerHTML = ''
   })
@@ -443,5 +446,66 @@ describe('FolioView', () => {
     await dlg('[data-testid=approval-dialog]').trigger('submit')
     await flushPromises()
     expect(dlg('[data-testid=approval-error]').text()).toContain('ADJUSTMENT_EXCEEDS_POSTED')
+  })
+  describe('transaction groups', () => {
+    const grouped = () => folio({
+      items: [
+        item({ id: 1, group_code: 'A' }),
+        item({ id: 2, transaction_type: 'PAYMENT', description: 'Payment PAY000001 (CASH)', charge_code: undefined, debit: '0', credit: '100000', payment_id: 7, components: [], group_code: 'B' }),
+        item({ id: 3, transaction_type: 'REVERSAL', description: 'Reversal: Minibar', reverses_item_id: 1, group_code: 'A', debit: '0', credit: '122100' }),
+      ],
+    })
+
+    it('shows every line by default, filters by group, and says a group is not a folio', async () => {
+      const w = mountView(grouped())
+      await flushPromises()
+      expect(w.findAll('[data-testid^=item-]').filter((x) => /^item-\d+$/.test(x.attributes('data-testid') ?? ''))).toHaveLength(3)
+      expect(w.get('[data-testid=group-ALL]').attributes('aria-pressed')).toBe('true')
+      expect(w.get('[data-testid=group-A]').text()).toContain('2')
+      expect(w.get('[data-testid=group-B]').text()).toContain('1')
+      expect(w.get('[data-testid=group-C]').text()).toContain('0') // a group stays available when it is empty
+      await w.get('[data-testid=group-B]').trigger('click')
+      expect(w.find('[data-testid=item-2]').exists()).toBe(true)
+      expect(w.find('[data-testid=item-1]').exists()).toBe(false)
+      expect(w.get('[data-testid=group-note]').text()).toContain('not a folio')
+      // the balance is the balance of the whole folio, whatever is shown
+      expect(w.get('[data-testid=balance]').text()).toBe('22,100')
+      await w.get('[data-testid=group-C]').trigger('click')
+      expect(w.find('[data-testid=empty]').exists()).toBe(true)
+      expect(w.get('[data-testid=balance]').text()).toBe('22,100')
+    })
+
+    it('moves a line to another group with one call, and reloads the folio', async () => {
+      const w = mountView(grouped())
+      await flushPromises()
+      await w.get('[data-testid=item-group-1]').setValue('C')
+      await flushPromises()
+      expect(PATCH).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/folio-items/{id}/group', { params: { path: { propertyId: 7, id: 1 } }, body: { group_code: 'C' } })
+      expect(GET.mock.calls.filter((c) => String(c[0]).endsWith('/folios/{id}')).length).toBeGreaterThan(1) // reloaded
+      expect(POST).not.toHaveBeenCalled() // no reversal, no posting
+    })
+
+    it('does not let a reversal be moved alone, a closed folio be regrouped, or a reader move anything', async () => {
+      const w = mountView(grouped())
+      await flushPromises()
+      expect(w.get('[data-testid=item-group-3]').element.tagName).not.toBe('SELECT')
+      const closed = mountView(folio({ status: 'CLOSED', items: grouped().items }))
+      await flushPromises()
+      expect(closed.get('[data-testid=item-group-1]').element.tagName).not.toBe('SELECT')
+      const reader = mountView(grouped(), ['folio.read'])
+      await flushPromises()
+      expect(reader.get('[data-testid=item-group-1]').element.tagName).not.toBe('SELECT')
+      expect(reader.get('[data-testid=item-group-1]').text()).toBe('A')
+    })
+
+    it('prints the whole folio or one group', async () => {
+      const w = mountView(grouped(), [...ALL, 'reservation.read'])
+      await flushPromises()
+      await w.get('[data-testid=print-invoice]').trigger('click')
+      expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/folios/3/invoice.pdf')
+      await w.get('[data-testid=print-group]').setValue('B')
+      await w.get('[data-testid=print-invoice]').trigger('click')
+      expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/folios/3/invoice.pdf?group=B')
+    })
   })
 })
