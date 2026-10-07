@@ -25,3 +25,9 @@ Thumbs.db
 
 # TLS material of the production-like stack
 /deploy/certs/
+
+# Local database backups (confidential: they hold the whole database)
+/backups/
+*.dump
+*.dump.sha256
+*.dump.partial

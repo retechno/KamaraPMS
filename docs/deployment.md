@@ -2,13 +2,13 @@
 
 How to run KamaraPMS as it would run on a server, on one machine, and what has to be true when it moves to a server of your choice. Nothing here names a provider, a domain or a certificate authority: the same files run on a laptop, a VPS or a cloud instance that has Docker.
 
-Status of this document: written with the production-like stack of `deploy/` and checked by running it (section 12 says what was run). It is **not** a statement that the system is production ready: backup and restore (section 9), monitoring and a rehearsed rollback are separate work (`architecture/19-post-implementation-audit.md`, F-04 and F-13).
+Status of this document: written with the production-like stack of `deploy/` and checked by running it (section 12 says what was run). It is **not** a statement that the system is production ready: backup and restore (section 9, `backup-restore.md`) now exist and were rehearsed on one machine, but scheduling, an agreed RPO and RTO, monitoring and a rehearsed rollback are open work (`architecture/19-post-implementation-audit.md`, F-04 and F-13).
 
 ## 1. Prerequisites
 
 - Docker with Compose v2.24 or newer (the stack uses `!override` in the TLS file), about 2 GB of free memory and 1 GB of disk.
 - A shell with `bash` and `curl` for the smoke test (Git Bash on Windows is enough).
-- For a real server later: a host name you control, a way to get a certificate (section 7), a firewall that opens 80 and 443 only, and a place for backups that is not the same disk.
+- For a real server later: a host name you control, a way to get a certificate (section 7), a firewall that opens 80 and 443 only, and a place for backups that is not the same disk (`backup-restore.md`).
 
 The images are built from the repository, so no registry is needed. The base images are `golang:1.26-trixie`, `node:22-alpine`, `nginxinc/nginx-unprivileged:1.27-alpine` and `gcr.io/distroless/static-debian12:nonroot`; the PostgreSQL image is `postgres:16-alpine`. All are overridable build arguments (see the top of the `Dockerfile`), and a digest can be given instead of a tag when you want a build that never moves.
 
@@ -173,20 +173,17 @@ The image has no shell and no curl, so the container health check is the binary:
 
 Graceful shutdown: SIGTERM reaches the API as process 1; it stops accepting connections, lets requests in flight finish (`PMS_SHUTDOWN_TIMEOUT`) and exits 0. Checked: `docker compose stop api` ended in under a second with exit code 0 and the log line `shutting down`.
 
-## 9. Backup dependency
+## 9. Backup and restore
 
-All state is in PostgreSQL (the volume `pms-db`, or your external database): the images hold no data, and there are no uploaded files. **A backup of the database is therefore the backup of the system.** The procedure, the schedule and the recovery targets are a separate piece of work that is not done (audit F-04); until it is, this is the minimum, and it has been run once:
+All state is in PostgreSQL (the volume `pms-db`, or your external database): the images hold no data, and there are no uploaded files. **A backup of the database is therefore the backup of the system.** The procedure, the targets, the retention, the failure handling and the checklist are in **[backup-restore.md](backup-restore.md)**, the only place that describes them. In short:
 
 ```bash
-# a backup (custom format, compressed)
-docker compose -f deploy/compose.yaml exec -T db pg_dump -U pms -Fc pms > pms-$(date +%F).dump
-
-# a restore into an empty database (here a scratch one, to check the backup)
-docker compose -f deploy/compose.yaml exec -T db psql -U pms -d postgres -c "CREATE DATABASE restore_check"
-docker compose -f deploy/compose.yaml exec -T db pg_restore -U pms -d restore_check --no-owner < pms-2026-10-07.dump
+PMS_PG_CONTAINER=kamarapms-deploy-db-1 PMS_BACKUP_DIR=/var/backups/kamarapms scripts/db-backup.sh      # a verified backup
+PMS_PG_CONTAINER=<a new empty postgres> PGPASSWORD=... PMS_RESTORE_DB=pms scripts/db-restore.sh <file>   # into an EMPTY database
+scripts/restore-drill.sh kamarapms-deploy-db-1                                                          # the whole rehearsal
 ```
 
-Checked on the stack above: a dump of 0.7 MB restored with all 62 migrations, the tenant and the user. Keep dumps on another disk or machine, test a restore regularly, and decide how much data you can afford to lose (RPO) and how long you can be down (RTO) before the pilot starts.
+Take a backup before every upgrade: the way back from a migration on a populated database is a restore (section 8). RPO and RTO are **proposed, not agreed**, in that document.
 
 ## 10. Logs
 
@@ -226,12 +223,12 @@ On the machine that wrote it (Docker Desktop, Windows), with the repository at t
 | `/readyz` with the database stopped, then started | 503 then 200 without restart; `/healthz` 200 throughout |
 | an API whose database has no migrations | `/healthz` 200, `/readyz` 503 |
 | `docker compose stop api` | stopped in 0.9 s, exit 0, log `shutting down` |
-| `scripts/prod-smoke.sh` | 42 checks passed (page, fallback, assets, headers, 413, probes, containers non-root and read-only, no published API or database port, client address with forged headers, rate limit per real client) |
+| `scripts/prod-smoke.sh` | 57 checks passed (page, fallback, assets, headers, 413, probes, containers non-root and read-only, no published API or database port, the database stopped and started, client address with forged headers, rate limit per real client, the TLS variant) |
 | the TLS variant with a self-signed certificate | 308 from http, https 200 with HSTS, TLS 1.2 and 1.3 accepted, 1.1 refused, probes on http |
 | headless Chrome on the proxy | the sign-in form is rendered; no Content-Security-Policy violation was logged. Nobody looked at the screens |
-| `pg_dump` and `pg_restore` of the database | restored with 62 migrations, the tenant and the user |
+| backup and restore | `scripts/restore-drill.sh` passed on this stack, and a real restore of the development database was compared table by table: see backup-restore.md, section 6 |
 
-Not done here, on purpose: a deployment to a server, a certificate from an authority, load testing, a rehearsed rollback of a release, backup scheduling, monitoring and alerting.
+Not done here, on purpose: a deployment to a server, a certificate from an authority, load testing, a rehearsed rollback of a release, backup scheduling (the scripts exist, no schedule is installed), monitoring and alerting.
 
 ## 13. Moving to a VPS or a cloud instance
 
@@ -242,5 +239,5 @@ Nothing in the stack changes; the checklist is:
 3. `deploy/.env` with new secrets (`POSTGRES_PASSWORD`, `PMS_JWT_SECRET`), `PMS_BIND=0.0.0.0`, `PMS_PUBLIC_PORT=80`, `PMS_PUBLIC_TLS_PORT=443`.
 4. A certificate for your host name in `deploy/certs/` and the TLS file (option A), or a TLS balancer in front (option B).
 5. `docker compose ... up -d`, create the first tenant and administrator, run `scripts/prod-smoke.sh` against the public address (`PMS_SMOKE_URL=https://...`, with `SMOKE_NETWORK_TESTS=0` unless you run it on the host).
-6. Before the first night audit: accounting set up, backups running, one restore rehearsed (section 9 and audit F-04, F-15).
+6. Before the first night audit: accounting set up, backups scheduled and watched, one restore rehearsed on the production data (backup-restore.md, section 12; audit F-15).
 7. Keep one API instance for the pilot (section 6.3).

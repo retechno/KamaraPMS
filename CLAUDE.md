@@ -36,6 +36,7 @@ go run ./cmd/pms-seed rooms -tenant DEMO -property BALI   # demo data for a DEVE
 go run ./cmd/pms-seed rates -tenant DEMO -property BALI   # demo rate plan RO and 90 days of prices per room type, higher on Fri/Sat (idempotent)
 cd web && npm test && npm run type-check && npm run build
 docker compose -f deploy/compose.yaml up -d --build   # the production-like stack (docs/deployment.md); then scripts/prod-smoke.sh. Its project name is kamarapms-deploy: never rename it to kamarapms (that is the dev database)
+scripts/db-backup.sh | db-restore.sh | restore-drill.sh   # backup, restore into an EMPTY database, full rehearsal (docs/backup-restore.md). Restore targets are new containers (kamarapms-backup-test), never the dev database
 cd web && npm run gen:api         # after editing api/openapi.yaml (the TS types are generated, never hand-edited)
 ```
 
