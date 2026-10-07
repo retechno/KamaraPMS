@@ -1,6 +1,6 @@
 # Backup and restore
 
-Status: written on 2026-10-07 with the scripts it describes, and checked by a real restore (section 6 says what was run and what was not). This is the single place for backup and restore; `deployment.md` points here. Targets that the owner has not decided are marked **PROPOSED** and are not agreed numbers.
+Status: written on 2026-10-07 with the scripts it describes, and checked by a real restore (section 6 says what was run and what was not). This is the single place for backup and restore; `deployment.md` points here. The owner approved the Backup/DR decisions on 2026-10-07 (section 13): **pilot values are decided; production values are TARGETS, not capabilities** (nothing in the repository reaches them yet, and none may be claimed before the mechanism is built and drilled).
 
 ## 1. Scope
 
@@ -107,24 +107,22 @@ Data seen in the source and in the copy (counts equal; the content hash equal): 
 
 ## 7. RPO
 
-- **Fact:** a daily `db-backup.sh` gives a recovery point of up to **24 hours** of lost data (everything since the last backup). Nothing in this repository takes continuous backups.
-- **PROPOSED, owner decision required:** RPO 24 hours for the pilot, with the night audit as a natural time for the backup (after the day closed, the ledger of the day is complete). A hotel that cannot re-key a day of reservations, payments and folios needs a smaller RPO, which means WAL archiving or a managed database with point-in-time recovery (section 11), not more dumps.
-- **Assumption:** one property, a few hundred transactions a day, so that one day of entries could be re-entered from paper and cash records if it had to be. If that is not true for the hotel, the target is wrong.
+- **Decided for the pilot (owner, 2026-10-07): 24 hours.** A daily backup after the night audit gives a recovery point of up to 24 hours of lost data. The assumption that makes it acceptable: during the parallel pilot the old system stays the system of record, so a lost day can be entered again from it.
+- **Production TARGET (not a capability): 15 minutes**, to be reached with continuous WAL archiving (section 13, decision 6). It is not implemented. Until WAL archiving exists and a point-in-time restore has been drilled, the real RPO of this repository is 24 hours, and nobody may state 15 minutes as something the system delivers.
 
 ## 8. RTO
 
-- **Fact:** not measured at a realistic size (section 6). With a 0.7 MB database the restore and the checks took seconds, which says nothing about a year of data.
-- **PROPOSED, owner decision required:** RTO 4 hours for the pilot: a person notices, a new PostgreSQL is started, the latest backup is restored, `migrate up`, the API starts, the staff check one folio. Time the real restore with real data volume and replace this number with the measured one.
-- **Assumption:** someone who has done the drill is available. A procedure that nobody has practised has a much longer RTO.
+- **Decided for the pilot (owner): 4 hours, as a target that the recovery drill must measure.** Measured so far: only on 0.7 MB of data (seconds), which says nothing about a year of data. The drill results are written in section 14.
+- **Production TARGET (not a capability): 1 hour.** It must not be claimed before a drill on data of realistic size has achieved it, with the mechanism of production (WAL, off-site copy, decryption) in the path.
+- **Assumption:** someone who has done the drill is available. A procedure nobody has practised has a much longer RTO.
 
 ## 9. Retention
 
-Simple and provider-agnostic; the tooling supports exactly this:
+Provider-agnostic. **Pilot (decided):** 14 daily backups on the machine, and 4 weekly backups on the secondary copy (section 13). **Production (decided as a target):** 14 daily, 8 weekly, 12 monthly and 1 fiscal-year snapshot, with the retention of accounting and tax records to be confirmed by the owner and the accountant; the monthly and the year-end tiers are not implemented.
 
-- `db-backup.sh` keeps the **newest N** (default 14: two weeks of daily backups on the machine).
-- **PROPOSED:** copy at least one backup a week to another machine or disk (any provider; this repository chooses none and uploads nothing) and keep those for 3 months. The copy of a backup is its file and its `.sha256`.
-- Tiered retention (daily, weekly, monthly in one directory) is not implemented. Do not delete the newest verified backup by hand, and never keep the only copy on the disk that holds the database.
-- The month-end backup before a tax filing or a closing of the fiscal year is worth keeping longer; accounting rules on how long records must be kept are the owner's to decide and are not stated here.
+- The scripts keep the newest N on the machine (`PMS_BACKUP_KEEP`, default 14) and apply the weekly rule on the secondary copy (section 14). A failed backup removes nothing.
+- A backup is not the legal archive of the books. The database is; how long records must be kept is for the owner and the accountant, and it is not stated here.
+- Never delete the newest verified backup by hand, and never keep the only copy on the disk that holds the database.
 
 ## 10. Failure handling
 
@@ -168,19 +166,20 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 - [ ] `deploy/.env`, the JWT secret and the certificate are stored somewhere that is not the dumps.
 - [ ] Someone other than the author has run the restore from this page.
 
-## 13. Owner decisions required before production
+## 13. Decisions (approved by the owner on 2026-10-07)
 
-These are decisions, not engineering tasks. Nothing here is decided; the proposals are starting points. Until they are made, the mechanism (sections 3 to 6) is proved and **disaster recovery is not production-ready**.
-
-| # | Decision | Proposed starting point (not agreed) | What depends on it |
+| # | Decision | Pilot (decided, to be built and drilled) | Production (decided as a TARGET: not a capability until built and drilled) |
 |---|---|---|---|
-| 1 | RPO: how much data may be lost | 24 hours (section 7) | the backup frequency; below a day it needs WAL/PITR |
-| 2 | RTO: how long may the system be down | 4 hours (section 8), to be replaced by the time measured on production-sized data | whether the drill time is acceptable, standby or not |
-| 3 | Backup frequency | daily, after the night audit | RPO; the scheduler (not installed: cron or Task Scheduler runs `db-backup.sh`) |
-| 4 | Where the second copy lives | another machine or disk, at least weekly, any provider, access controlled | the off-machine copy (not implemented; the repository chooses no provider) |
-| 5 | Retention | 14 newest on the machine, one a week kept 3 months elsewhere (section 9); the legal retention of accounting records is the owner's to state | disk size, the second copy |
-| 6 | Is WAL archiving / point-in-time recovery required | only if the answer to 1 is "less than a day" | a different mechanism (not built) |
-| 7 | Is encryption at rest mandatory before production | the files hold guest data and password hashes; if yes, encrypt the destination or add `age` or `gpg` to the copy step (not built) | the copy step, key custody |
+| 1 | RPO | 24 hours | 15 minutes |
+| 2 | RTO | 4 hours, measured by the drill | 1 hour, not to be claimed before a drill on realistic data |
+| 3 | Frequency | once a day after the night audit, and a backup before every upgrade | daily base backup, continuous WAL, and a backup before every upgrade |
+| 4 | Secondary copy | mandatory, on a machine or disk other than the main database | off-site, a different failure domain, separate or write-only credentials |
+| 5 | Retention | 14 daily on the machine, 4 weekly on the secondary copy | 14 daily, 8 weekly, 12 monthly, 1 fiscal-year snapshot; accounting and tax retention to be confirmed with the accountant |
+| 6 | WAL / PITR | not required | planned as the production mechanism for the 15 minute RPO; **not to be built as part of the pilot** |
+| 7 | Encryption | mandatory for the secondary (off-machine) copy | mandatory at rest |
 
-After the decisions: install the schedule, set up the second copy, run `scripts/restore-drill.sh` on the production database, write the measured time in section 8, and tick section 12. A CI job that runs the drill is also not built; CI does not run these scripts.
+Not decided by the owner and **not guessable from the repository** (OWNER DECISIONS still open): the time of day of the backup (it depends on when the hotel's night audit is done), the channel that receives the failure alert (a webhook URL), where the secondary copy physically is (which machine, disk or off-site location, and over what protocol), who holds the private key of the encryption, and the accountant's answer on record retention.
 
+Consequence for the pilot: the secondary copy gets **every** backup, and its retention keeps the 4 weekly ones **plus the newest few** (`PMS_BACKUP_COPY_KEEP_RECENT`, default 2). If the secondary kept weekly copies only, losing the main machine would lose up to a week, which contradicts the 24 hour RPO. This reading of "4 weekly" is mine; the owner can confirm or reject it.
+
+What the pilot needs: a scheduled daily backup, a failure alert, a secondary copy, its encryption, retention, a backup before every upgrade, and a drill that restores from the secondary copy.
