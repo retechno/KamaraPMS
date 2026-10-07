@@ -1,6 +1,6 @@
 # 19. Post-implementation audit (after Architecture 18)
 
-Status: **audit only, written on 2026-10-07 from `main` at `fbecf6f`** (156 commits). It changes no migration, Go code, API, OpenAPI, frontend or test; this file is the only change. Language of the audit: English, like the other documents; the owner's chat is in Indonesian.
+Status: **audit only, written on 2026-10-07 from `main` at `fbecf6f`** (156 commits). **Update, same day: F-01 and F-02 are resolved by `c38ca68` (CI run 17 is green, including the race detector over the whole suite); sections 1, 17, 18 and 20 carry a line saying so, and the rest of the text is the audit as it was written.** It changes no migration, Go code, API, OpenAPI, frontend or test; this file is the only change. Language of the audit: English, like the other documents; the owner's chat is in Indonesian.
 
 How to read it. Every claim is tagged **VERIFIED** (a file, a line, a command or a test run that was seen) or **UNVERIFIED** (it could not be proved from the repository or from what could be run). A feature or finding is classified **DONE**, **PARTIAL**, **MISSING**, **DOCUMENTATION DRIFT** or **UNVERIFIED**. Nothing is called done because a document says so.
 
@@ -23,8 +23,8 @@ What was run for this audit (all read-only for the code; the scratch database wa
 
 The findings that decide the verdict:
 
-1. **F-01 (Critical): CI has been red on every run since the first commit.** The cause is an exit code 126 on the steps that call `scripts/sqlc.sh` and `scripts/db-test.sh`: the scripts are stored with mode `100644` in git, so a Linux runner cannot execute them. The lint, the race-detector test run, the sqlc freshness check and the schema tests on PostgreSQL 16 and 18 have therefore **never run in CI**. Locally everything is green, including a new run of the schema tests on PostgreSQL 18, so the fix is probably small, but until it is made none of those guarantees is evidence. The "all checks pass" reported after each step of this project was true of the local machine; the CI status was not consulted, which is how this stayed unseen for 16 runs.
-2. **F-02 (Medium): the race detector has run on only 6 of the 43 test packages (all clean) and never in CI**, although the code base has 57 concurrency tests.
+1. **F-01 (Critical): CI has been red on every run since the first commit.** *(Resolved, see the update on F-01.)* The cause is an exit code 126 on the steps that call `scripts/sqlc.sh` and `scripts/db-test.sh`: the scripts are stored with mode `100644` in git, so a Linux runner cannot execute them. The lint, the race-detector test run, the sqlc freshness check and the schema tests on PostgreSQL 16 and 18 have therefore **never run in CI**. Locally everything is green, including a new run of the schema tests on PostgreSQL 18, so the fix is probably small, but until it is made none of those guarantees is evidence. The "all checks pass" reported after each step of this project was true of the local machine; the CI status was not consulted, which is how this stayed unseen for 16 runs.
+2. **F-02 (Medium): the race detector has run on only 6 of the 43 test packages (all clean) and never in CI** *(resolved: the whole suite passes under `-race` in CI run 17)*, although the code base has 57 concurrency tests.
 3. **F-03 and F-04 (High): there is no deployable artefact and no backup, restore or disaster-recovery procedure.** No Dockerfile, no production compose, no reverse-proxy or TLS guidance, no place where the SPA is served, and not one line about backup, RPO or RTO.
 4. **F-05 (High): the rate limits trust only the connection address.** Behind the reverse proxy that production needs, every client is the proxy: one shared bucket for the whole hotel, and the login and approval throttles are in memory per process.
 5. **F-06 (Medium): reverse check-in leaves company folios open on a cancelled stay**, and a payment on such a folio is stranded there. Small, but it is money.
@@ -437,6 +437,7 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Risk | Everything `CLAUDE.md` says is enforced is, in CI, not run: lint, the race detector, the stale-generated-code check, the schema tests on two PostgreSQL versions. A red CI that has always been red is ignored, so a real regression would be ignored too. The Go test suite itself has never run on a Linux runner in CI (`CLAUDE.md` describes a Linux cloud sandbox where it runs; whether it passed there recently is not recorded) |
 | Recommendation | Give the scripts the execute bit in git (`git update-index --chmod=+x scripts/*.sh`) or call them with `bash`; run the workflow; fix what then turns red (unknown until it runs: UNVERIFIED); make the checks required for `main` (branch protection) |
 | Suggested next step | One commit, "CI: make the scripts executable", then read the first complete run and list what it finds |
+| **Update (2026-10-07): RESOLVED** · VERIFIED | `c38ca68` gave the four scripts the mode `100755`. CI run 17 (`https://github.com/retechno/KamaraPMS/actions/runs/37575543159`) is green in all four jobs: Go (vet 36 s, sqlc up to date 6 s, lint 15 s, `go test -race` of every package 264 s), schema on PostgreSQL 16 (23 s) and 18 (27 s), web (tests 90 s, build 31 s). Nothing else had to be fixed: the first complete run found no failure. What remains of F-01 is the second recommendation, **make the checks required for `main`** (branch protection), which is a repository setting and is not done |
 
 #### F-02 · Medium · Race detector
 
@@ -447,6 +448,7 @@ Severity: **Critical** defeats a safeguard the project relies on; **High** would
 | Risk | The code base relies on row locks and a lock order for correctness, and has 57 concurrency tests. Without `-race` a data race in Go memory (a shared map, a counter) is not seen by any of them. The six packages that were checked are the ones with most shared state around posting and stays; the rest is UNVERIFIED |
 | Recommendation | Let CI run `go test -race` (F-01) and keep the container command below for a local run on Windows: `docker run --rm -v <repo>:/src -w /src -e CGO_ENABLED=1 -e PMS_TEST_DATABASE_URL=postgres://pms:pms@host.docker.internal:55432/pms?sslmode=disable golang:1.26-trixie go test -race -p 1 ./...` |
 | Suggested next step | After F-01, run the whole suite under `-race` once and record the result here |
+| **Update (2026-10-07): RESOLVED** · VERIFIED | The step "Test (race detector)" of CI run 17 ran `go test -race -count=1 ./...` over all packages on the runner and passed in 264 s: no race report anywhere, including the 37 packages that were not checked in the container |
 
 #### F-03 · High · Deployment artefacts and headers
 
@@ -706,8 +708,8 @@ The order follows the evidence of this audit, not the order in which things were
 
 | # | What | Findings | Why it is P0 |
 |---|---|---|---|
-| 1 | **Make CI run and green, and required for `main`.** Execute bit on the scripts, first full run, fix what it finds | F-01 | Until this is done no guarantee of the project is evidence |
-| 2 | **Run the race detector over the whole suite** (CI after item 1; the container command for a local run, package by package because of memory) and fix reports | F-02 | The locking design is the heart of the system; six packages are clean, the rest is unproved |
+| 1 | **Make CI run and green, and required for `main`.** Execute bit on the scripts, first full run, fix what it finds | F-01 | Until this is done no guarantee of the project is evidence. **Done on 2026-10-07 (`c38ca68`, run 17 green); still open: branch protection** |
+| 2 | **(Done: CI run 17, 264 s, clean)** **Run the race detector over the whole suite** (CI after item 1; the container command for a local run, package by package because of memory) and fix reports | F-02 | The locking design is the heart of the system; six packages are clean, the rest is unproved |
 | 3 | **A deployment recipe**: Dockerfile, production compose or service files, reverse proxy with TLS and headers serving `web/dist`, the variables, a smoke test, and the decision "one instance" for the pilot | F-03 | Nothing exists to put in front of users |
 | 4 | **Backup, restore and rollback runbook with one rehearsed restore** and agreed RPO and RTO | F-04 | The whole ledger is one database |
 | 5 | **Client address and rate limits behind the proxy** (trusted proxy setting) | F-05 | Part of the recipe: without it one bucket serves the whole hotel |
@@ -764,11 +766,11 @@ Why not NOT READY: the system does what a hotel needs for the whole cycle, the m
 
 Why not PILOT READY: a pilot needs evidence that the checks hold and a way to run and recover the system, and both are missing.
 
-- **Blocker 1, F-01**: CI has failed on all 16 runs since the first commit because the scripts are not executable. Lint, the race detector, the schema job and the generated-code check have never run in CI.
+- **Blocker 1, F-01 (resolved 2026-10-07)**: CI had failed on all 16 runs since the first commit because the scripts were not executable. After `c38ca68` run 17 is green in every job; what is left is to make the checks required for `main`.
 - **Blocker 2, F-03 and F-04**: there is no deployable artefact, no definition of where the SPA is served or TLS terminated, and no backup, restore, RPO or RTO.
 - **Blocker 3, F-05**: the rate limit would be one shared bucket behind the proxy.
-- **Condition, F-02**: the race detector passed on the six packages with the most concurrency and has never run on the other 37 test packages or in CI; once CI runs (F-01) a report there is a finding, not a surprise.
+- **Condition, F-02 (resolved 2026-10-07)**: the race detector passed on the six packages checked in the container, and then on the whole suite in CI run 17.
 - **Condition, F-15**: the pilot property must have accounting set up before its first night audit; the system does not say so.
 
-The verdict becomes **PILOT READY** when P0 items 1 to 6 are closed and the first complete CI run is green. It would become **PRODUCTION READY** after the P1 list, with the rehearsed restore, the monitoring and the route-by-permission test as the items that matter most. Nothing in this audit is a feeling: every line above has the evidence next to it.
+The verdict becomes **PILOT READY** when P0 items 3 to 6 are closed (items 1 and 2 are done) and branch protection requires the green CI. It would become **PRODUCTION READY** after the P1 list, with the rehearsed restore, the monitoring and the route-by-permission test as the items that matter most. Nothing in this audit is a feeling: every line above has the evidence next to it.
 
