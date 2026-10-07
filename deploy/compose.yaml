@@ -96,6 +96,52 @@ services:
     networks: [backend]
     logging: *logging
 
+  # The scheduled backup (docs/backup-restore.md): every day at PMS_BACKUP_AT a verified dump, encrypted with the PUBLIC key PMS_BACKUP_AGE_RECIPIENT, copied to the secondary location,
+  # retention applied, and an alert to PMS_BACKUP_ALERT_WEBHOOK when anything fails. `docker compose -f deploy/compose.yaml run --rm backup now` is the backup before an upgrade.
+  backup:
+    image: kamarapms-backup:${PMS_VERSION:-local}
+    build: { context: .., dockerfile: Dockerfile, target: backup }
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-pms}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-pms}
+      PMS_BACKUP_AT: ${PMS_BACKUP_AT:-03:30}
+      PMS_BACKUP_KEEP: ${PMS_BACKUP_KEEP:-14}
+      PMS_BACKUP_COPY_DIR: ${PMS_BACKUP_COPY_DIR:-}
+      PMS_BACKUP_COPY_SSH: ${PMS_BACKUP_COPY_SSH:-}
+      PMS_BACKUP_SSH_KEY: ${PMS_BACKUP_SSH_KEY:-/run/backup/ssh_key}
+      PMS_BACKUP_SSH_KNOWN_HOSTS: ${PMS_BACKUP_SSH_KNOWN_HOSTS:-/run/backup/known_hosts}
+      PMS_BACKUP_SSH_PORT: ${PMS_BACKUP_SSH_PORT:-22}
+      PMS_BACKUP_COPY_KEEP_WEEKS: ${PMS_BACKUP_COPY_KEEP_WEEKS:-4}
+      PMS_BACKUP_COPY_KEEP_RECENT: ${PMS_BACKUP_COPY_KEEP_RECENT:-2}
+      PMS_BACKUP_COPY_ALLOW_SAME_DISK: ${PMS_BACKUP_COPY_ALLOW_SAME_DISK:-0}
+      PMS_BACKUP_AGE_RECIPIENT: ${PMS_BACKUP_AGE_RECIPIENT:-}
+      PMS_BACKUP_ALERT_WEBHOOK: ${PMS_BACKUP_ALERT_WEBHOOK:-}
+      PMS_BACKUP_PING_URL: ${PMS_BACKUP_PING_URL:-}
+      PMS_BACKUP_REQUIRE_COPY: ${PMS_BACKUP_REQUIRE_COPY:-1}
+    volumes:
+      # local backups; set PMS_BACKUP_HOST_DIR to a host directory to keep them outside Docker volumes
+      - ${PMS_BACKUP_HOST_DIR:-pms-backups}:/backups
+      - pms-backup-state:/var/lib/pms-backup
+      # the secondary copy: a directory on ANOTHER disk or share (PMS_BACKUP_SECONDARY_PATH). The default, a Docker volume, is on the same disk and the service refuses it: a second copy
+      # on the same disk is not a second copy
+      - ${PMS_BACKUP_SECONDARY_PATH:-pms-backup-secondary}:/secondary
+      # for an SSH destination: a directory with the files ssh_key and known_hosts (PMS_BACKUP_SSH_DIR)
+      - ${PMS_BACKUP_SSH_DIR:-pms-backup-ssh}:/run/backup:ro
+    depends_on:
+      db: { condition: service_healthy }
+    read_only: true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [backend]
+    logging: *logging
+
   proxy:
     image: kamarapms-web:${PMS_VERSION:-local}
     build: { context: .., dockerfile: Dockerfile, target: web }
@@ -132,3 +178,7 @@ networks:
 
 volumes:
   pms-db:
+  pms-backups:
+  pms-backup-state:
+  pms-backup-secondary:
+  pms-backup-ssh:

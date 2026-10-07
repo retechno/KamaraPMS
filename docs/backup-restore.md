@@ -16,6 +16,9 @@ Status: written on 2026-10-07 with the scripts it describes, and checked by a re
 | `scripts/db-verify.sql` | fingerprint of a database: row count and row hash per table (compare source and copy) |
 | `scripts/restore-drill.sh` | the whole rehearsal in one command, with a throwaway PostgreSQL and the API on the copy |
 | `scripts/lib-pg.sh` | shared: runs the PostgreSQL tools in a container or on the host |
+| `scripts/backup-agent.sh` | the scheduler of the `backup` service: waits for the time of the day, runs the backup, repeats; `now` runs it once; `healthcheck` |
+| `scripts/backup-run.sh` | one scheduled run: backup, encryption, secondary copy, retention, alert |
+| `scripts/lib-backup.sh` | the alert, the secondary copy (a directory or SSH) and its retention |
 
 ## 2. Backup prerequisites
 
@@ -112,7 +115,7 @@ Data seen in the source and in the copy (counts equal; the content hash equal): 
 
 ## 8. RTO
 
-- **Decided for the pilot (owner): 4 hours, as a target that the recovery drill must measure.** Measured so far: only on 0.7 MB of data (seconds), which says nothing about a year of data. The drill results are written in section 14.
+- **Decided for the pilot (owner): 4 hours, as a target that the recovery drill must measure.** Measured so far: only on 0.7 MB of data (seconds), which says nothing about a year of data. The drill results are in section 16.
 - **Production TARGET (not a capability): 1 hour.** It must not be claimed before a drill on data of realistic size has achieved it, with the mechanism of production (WAL, off-site copy, decryption) in the path.
 - **Assumption:** someone who has done the drill is available. A procedure nobody has practised has a much longer RTO.
 
@@ -155,16 +158,21 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 - **After a restore:** the business day, the document sequences and the folio numbers continue from the backup. Anything created after the backup is gone, so numbers issued after it (for example a tax invoice already given to a guest) can be issued again. Check the last numbers against paper before opening the day.
 - **Not covered, needed later:** WAL archiving or a managed database with point-in-time recovery (an RPO of minutes), a standby, restore of the Docker host, backup of `deploy/.env` and the TLS certificate (store them in a secret store, not with the dumps), encryption of the backup files at rest (encrypt the destination, or add `age` or `gpg` to the copy step; the scripts do not).
 
-## 12. Production checklist
+## 12. Checklists
 
-- [ ] RPO and RTO decided by the owner and written here (replace the **PROPOSED** lines).
-- [ ] A daily scheduled `db-backup.sh`; the log and the exit code are watched, and a failure reaches a person.
-- [ ] Backups are copied to another machine or disk, at least weekly, by a method that does not make them public. The copies are access controlled.
-- [ ] The backup directory is not in a Git checkout (`/backups/` and `*.dump` are ignored by `.gitignore`), not in a web root, and not world readable.
-- [ ] `restore-drill.sh` passed on the production database (or a copy of it), with its time written down as the measured RTO.
-- [ ] A backup is taken just before every upgrade, and the upgrade steps say so.
+**Pilot (the minimum before one property starts a parallel pilot).** Everything below is built (section 14); each line needs its value from the owner, or its drill:
+
+- [ ] The decisions of section 13 are in force; the open ones (the hour, the alert channel, the place of the secondary copy, the holder of the key, the accountant's answer) are answered.
+- [ ] The `backup` service runs, with `PMS_BACKUP_AT` after the usual night audit, and its container is healthy (`docker compose -f deploy/compose.yaml ps`).
+- [ ] The alert reaches a person: a deliberate failure was sent and received (section 14.3).
+- [ ] The secondary copy is on **another machine or disk** (the service refuses the same file system), is encrypted with the public key of the owner, and the private key is **not** on the server and is stored in two places that are not the server (section 14.4).
+- [ ] `restore-drill.sh` with `DRILL_FROM` and `DRILL_IDENTITY` restored the **latest file of the real secondary copy**, and the time is written in section 16.
+- [ ] A backup is taken just before every upgrade (section 15).
 - [ ] `deploy/.env`, the JWT secret and the certificate are stored somewhere that is not the dumps.
 - [ ] Someone other than the author has run the restore from this page.
+- [ ] The people of the pilot know that the recovery point is 24 hours, and that the old system is the system of record until KamaraPMS is.
+
+**Production (TARGETS: none of these exists yet).** WAL archiving and a point-in-time restore, drilled; an off-site copy with separate or write-only credentials; 14 daily, 8 weekly, 12 monthly and 1 fiscal-year retention; encryption at rest; a drill on data of realistic size that reaches the 1 hour RTO; the accountant's retention requirement.
 
 ## 13. Decisions (approved by the owner on 2026-10-07)
 
@@ -183,3 +191,77 @@ Not decided by the owner and **not guessable from the repository** (OWNER DECISI
 Consequence for the pilot: the secondary copy gets **every** backup, and its retention keeps the 4 weekly ones **plus the newest few** (`PMS_BACKUP_COPY_KEEP_RECENT`, default 2). If the secondary kept weekly copies only, losing the main machine would lose up to a week, which contradicts the 24 hour RPO. This reading of "4 weekly" is mine; the owner can confirm or reject it.
 
 What the pilot needs: a scheduled daily backup, a failure alert, a secondary copy, its encryption, retention, a backup before every upgrade, and a drill that restores from the secondary copy.
+
+## 14. The pilot mechanism (built)
+
+The `backup` service of `deploy/compose.yaml` (image target `backup` of the `Dockerfile`: Alpine with the PostgreSQL 16 client tools, age, ssh, curl and the scripts; not root; read-only file system; no Docker socket). It reaches the database over the private network like the API does and needs no cron, no systemd and no host feature, so it runs wherever the stack runs. It replaces nothing: `db-backup.sh` and `db-restore.sh` are what it calls.
+
+### 14.1 The scheduler
+
+`scripts/backup-agent.sh` waits for `PMS_BACKUP_AT` (HH:MM, 24 hour clock, in the time zone `TZ`; default 03:30 UTC) and runs `scripts/backup-run.sh`, every day. **Choose the time after your night audit is normally done** (the dump is a consistent snapshot even while the system is in use, so a late audit does not corrupt it; it is only that the late audit is then in the next day's backup). If the service starts and the last successful backup is older than 24 hours, or there is none, it runs at once (a machine that was off at the scheduled time does not wait another day). The health of the container is "the last run succeeded less than 26 hours ago" (`docker compose ps`).
+
+### 14.2 What one run does
+
+1. `db-backup.sh`: the verified local dump (section 3); the newest 14 are kept (`PMS_BACKUP_KEEP`).
+2. **The secondary copy is mandatory.** Without one the run fails (exit 3) and says so, after making the local backup (`PMS_BACKUP_REQUIRE_COPY=0` is for a trial only).
+3. The destination is checked: a directory must be writable and on **another file system** than the local backups (a second directory on the same disk is refused, exit 5; `PMS_BACKUP_COPY_ALLOW_SAME_DISK=1` lifts it for a trial and is logged as a warning). An SSH destination must be reachable with its host key checked.
+4. The dump is encrypted (14.4), copied through a temporary name, renamed, and its SHA-256 is checked **at the destination**.
+5. Retention of the secondary copy (14.5).
+6. The result is written to the state volume, and a success requests `PMS_BACKUP_PING_URL` if it is set.
+
+Exit codes of a run: `0` done · `1` configuration · `2` the local backup failed · `3` no secondary copy configured · `4` encryption failed (also: no key configured; nothing is copied) · `5` the secondary copy failed · `6` retention failed.
+
+### 14.3 The alert
+
+A failure of any step posts JSON (`{"text": ..., "content": ..., "level": ..., "service": ..., "host": ...}`) to `PMS_BACKUP_ALERT_WEBHOOK`: any URL that accepts a JSON POST (Slack-style and Discord-style incoming webhooks read `text` and `content`; ntfy, Mattermost or a script of your own can read it too). The URL usually holds a token: it is read from the environment and never logged. If the webhook itself fails, the log says so and the result of the backup is unchanged. A script cannot report that it never ran: for that, set `PMS_BACKUP_PING_URL` to a dead-man's-switch address (any service of that kind, or your own) that is requested after every success and alerts when the pings stop. The health of the container (14.1) is the third signal. **Which webhook, and who receives it, is an owner decision**; test it once with a deliberate failure (for example start the service without a secondary copy).
+
+### 14.4 The secondary copy: place, format, encryption and keys
+
+- **Place** (provider-agnostic, one of): `PMS_BACKUP_COPY_DIR` (the container path `/secondary`, mounted from `PMS_BACKUP_SECONDARY_PATH`: a second disk, a NAS or USB share, a folder that another tool replicates), or `PMS_BACKUP_COPY_SSH=user@host:/absolute/path` with a directory (`PMS_BACKUP_SSH_DIR`) holding `ssh_key` and `known_hosts` (the host key is verified, never accepted blindly). No cloud provider is named or assumed. Where it physically is stays an owner decision.
+- **Format:** `pms-<UTC timestamp>.dump.age` (the custom-format dump, encrypted) and `pms-<timestamp>.dump.age.sha256` (the checksum of the encrypted file).
+- **Encryption:** [age](https://age-encryption.org) with the **public** key(s) in `PMS_BACKUP_AGE_RECIPIENT`. The server can encrypt and **cannot decrypt**: a server that is stolen or hacked does not give up the old backups. Make the key pair once, off the server: `age-keygen -o kamarapms-backup.key` (it prints the public key `age1...`). The **private key file is the only way to read a secondary copy**: store it in at least two places that are not the server and not the secondary copy itself (the owner's password manager, a sealed paper copy), and write down who holds it. A lost key is a lost backup. The local backups on the machine are not encrypted (the decision asks encryption for the copy that leaves the machine; encrypt the disk of the machine, BitLocker or LUKS).
+- **Restore from it:** `db-restore.sh pms-....dump.age` with `PMS_BACKUP_AGE_IDENTITY=<the key file>` checks the checksum, decrypts into a private temporary directory that is removed at the end, and restores (a wrong key, a changed file and a missing key each exit 2).
+
+### 14.5 Retention (pilot)
+
+Local: the newest 14 (`PMS_BACKUP_KEEP`). Secondary: the newest backup of each of the last 4 ISO weeks (`PMS_BACKUP_COPY_KEEP_WEEKS`), **plus the 2 newest** (`PMS_BACKUP_COPY_KEEP_RECENT`). The two newest are there so that the recovery point stays 24 hours when only the secondary survives; with weekly copies only it would be a week (section 13; the owner may reject this reading). Only files named `pms-<stamp>.dump.age` and their `.sha256` are ever removed; other files in the destination are never touched. Retention runs after a verified copy.
+
+### 14.6 Enabling it (the values the owner must give)
+
+In `deploy/.env` (the variables are in `deploy/.env.example`): `TZ` and `PMS_BACKUP_AT`; the secondary place (`PMS_BACKUP_SECONDARY_PATH` with `PMS_BACKUP_COPY_DIR=/secondary`, or `PMS_BACKUP_COPY_SSH` with `PMS_BACKUP_SSH_DIR`); `PMS_BACKUP_AGE_RECIPIENT`; `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`). Then `docker compose -f deploy/compose.yaml up -d --build backup`. Until the secondary place and the key are set, the service runs, makes the local backup, and **fails and alerts every day**: that is intended.
+
+## 15. Backup before an upgrade (procedure; mandatory)
+
+Before every upgrade (new images, `migrate up`), in this order:
+
+1. `docker compose -f deploy/compose.yaml run --rm backup now`. It is the full run: dump, encryption, secondary copy. **Do not go on unless it exits 0** (a failed copy means the upgrade has no safe way back).
+2. Note the file name (`pms-<timestamp>.dump`) in the upgrade record.
+3. Upgrade (`up -d --build`, which runs the migration job).
+4. Run `scripts/prod-smoke.sh` and the readiness check (`GET .../accounting/readiness`).
+5. Keep that backup until the release is accepted. The way back from a migration on a populated database is a restore of it (section 11), never `migrate down`.
+
+## 16. Drill record
+
+How to run the drill from the secondary copy (`DRILL_FROM` is the file, `DRILL_IDENTITY` the private key; `DRILL_COMPARE=0` when the source changed since that backup was made):
+
+```bash
+DRILL_FROM=/path/to/secondary/pms-<stamp>.dump.age DRILL_IDENTITY=/path/to/kamarapms-backup.key scripts/restore-drill.sh kamarapms-deploy-db-1
+```
+
+It decrypts and restores in the `backup` image onto a throwaway PostgreSQL (`kamarapms-backup-test`, its own network), compares the row counts and row hashes of all tables with the source, runs `migrate up` on the copy, starts the API on it, and prints the time. It removes what it made.
+
+**Run on 2026-10-07 on the development machine (stack `kamarapms-deploy`, 101 tables, 1.3 MB dump, 69 rows):**
+
+| What | Result |
+|---|---|
+| Scheduled run (the service waited for 14:48 UTC and ran at 14:48:00) | encrypted copy verified at the destination, state `ok`, container healthy |
+| Catch-up at start (no successful backup on record) | ran at once |
+| Secondary on a host directory (another file system than the volume) | accepted; the same Docker volume is refused (exit 5) |
+| Secondary over SSH, host key checked | copied and checksum-verified; a wrong host key is refused (exit 5) |
+| Retention on 45 fake daily files | kept the newest backup of the weeks 38 to 41 and the 2 newest, removed the rest, left `notes.txt` alone |
+| Alert | received by a local webhook for: no secondary (exit 3), no key (exit 4); an unreachable webhook is logged and the exit code stays |
+| **Restore from the encrypted secondary copy** | checksum ok, decrypted, restored (migration 62, 101 tables), fingerprint **identical** to the source, `migrate up` applied 0, API ready |
+| **Recovery time measured** | file restored after 20 s, API ready after **25 s**; the file was 1 minute old (the recovery point of that drill) |
+| Wrong private key, changed file, no key | each exit 2, nothing restored |
+
+**What this does not prove.** The 25 seconds are for 1.3 MB; they are **not** the pilot RTO of 4 hours being met in practice, and nothing here says what a year of data takes. The drill was run by someone who knows the system; a person doing it for the first time during an incident will take longer. The recovery point of the drill (1 minute) is the age of one file, not the 24 hours that the schedule gives in the worst case. The alert was received by a local test receiver, not by the owner's real channel; the secondary copy was a host directory and an SSH container on the same machine, not another machine; the private key was a test key. The production values (15 minutes, 1 hour, WAL, off-site, 14/8/12/1) are **not built and not drilled**.

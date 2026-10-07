@@ -183,7 +183,7 @@ PMS_PG_CONTAINER=<a new empty postgres> PGPASSWORD=... PMS_RESTORE_DB=pms script
 scripts/restore-drill.sh kamarapms-deploy-db-1                                                          # the whole rehearsal
 ```
 
-Take a backup before every upgrade: the way back from a migration on a populated database is a restore (section 8). RPO and RTO are **proposed, not agreed**, in that document.
+The stack has a `backup` service (scheduler, failure alert, encrypted secondary copy): `backup-restore.md`, sections 14 to 16, lists what it needs from the owner (the hour, the alert webhook, the secondary place, the public key) and until those are set it fails and alerts every day, on purpose. **Take a backup before every upgrade** (`docker compose -f deploy/compose.yaml run --rm backup now`, `backup-restore.md` section 15): the way back from a migration on a populated database is a restore (section 8). The pilot values (RPO 24 h, RTO 4 h) are decided; the production values are targets, not capabilities.
 
 ## 10. Logs
 

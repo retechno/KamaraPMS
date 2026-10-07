@@ -7,7 +7,6 @@
 !.env.example
 bin
 docs
-scripts
 db
 api
 sqlc.yaml

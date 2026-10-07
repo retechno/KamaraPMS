@@ -10,6 +10,8 @@
 # one; the empty-target rule is the guard it can enforce. After the restore it reads the migration version, compares the number of tables with the table of contents of the
 # dump, and prints the same fingerprint as scripts/db-verify.sql.
 #
+#   The file may be a plain backup or an encrypted one (.age, with PMS_BACKUP_AGE_IDENTITY).
+#
 # Exit codes: 0 restored and checked · 1 wrong usage · 2 the backup file is unusable (missing, checksum differs, pg_restore cannot read it) · 3 the server cannot be
 # reached or the credentials are refused · 4 the target database is not empty · 5 pg_restore failed · 6 the restored database failed the checks.
 set -uo pipefail
@@ -24,7 +26,24 @@ case "$TARGET" in postgres | template0 | template1) die 1 "refusing to restore i
 
 # 1. the file
 [ -f "$FILE" ] && [ -s "$FILE" ] || die 2 "$FILE is missing or empty"
-if [ -f "$FILE.sha256" ]; then
+# an encrypted backup (the secondary copy: pms-<stamp>.dump.age): its checksum is checked first, then it is decrypted with the PRIVATE key of the owner (PMS_BACKUP_AGE_IDENTITY, a file the
+# server never has) into a private temporary directory that is removed at the end
+if [ "${FILE%.age}" != "$FILE" ]; then
+  if [ -f "$FILE.sha256" ]; then
+    [ "$(file_sha256 "$FILE")" = "$(cut -d' ' -f1 <"$FILE.sha256")" ] || die 2 "the checksum of $FILE differs from $FILE.sha256: the copy is damaged or was changed"
+    echo "checksum of the encrypted file ok"
+  else
+    echo "warning: no $FILE.sha256, the checksum was not checked" >&2
+  fi
+  [ -r "${PMS_BACKUP_AGE_IDENTITY:-}" ] || die 2 "$FILE is encrypted: set PMS_BACKUP_AGE_IDENTITY to the file with the private key"
+  command -v age >/dev/null 2>&1 || die 2 "the age program is needed to decrypt $FILE"
+  umask 077
+  TMPD="$(mktemp -d)" || die 2 "no temporary directory"
+  trap 'rm -rf "$TMPD"' EXIT
+  age -d -i "$PMS_BACKUP_AGE_IDENTITY" -o "$TMPD/restore.dump" "$FILE" 2>"$TMPD/age.err" || die 2 "cannot decrypt $FILE (wrong key, or damaged): $(tr '\n' ' ' <"$TMPD/age.err")"
+  FILE="$TMPD/restore.dump"
+  echo "decrypted"
+elif [ -f "$FILE.sha256" ]; then
   want="$(cut -d' ' -f1 <"$FILE.sha256")"
   [ "$(file_sha256 "$FILE")" = "$want" ] || die 2 "the checksum of $FILE differs from $FILE.sha256: the file is damaged or was changed"
   echo "checksum ok"
