@@ -12,7 +12,7 @@ A folio can show its lines under up to four headings, A to D: room and breakfast
 - Not a balance. The folio balance is `sum(debit) - sum(credit)` of the whole folio (`FolioTotals`), as before. Group A may hold 500,000 of charges and group B a payment of 500,000: the folio balance is 0, and there is no balance, settlement or receivable per group anywhere in the money layer.
 - Not a general ledger dimension. The day journal reads `folio_item_gl`, which does not know groups.
 - Not a transfer. A charge moves between **folios** by the transfer of Architecture 18 (`POST /folio-items/{id}/transfer`: a reversal and a copy, a reason and an approval). Moving a line between **groups** is not a correction: no reversal, no posting, no journal. A payment never leaves its folio.
-- Not the booking group of the groups module (`reservations.group_code`, a block of rooms of one event). The two are unrelated; the words overlap only in the name of the field.
+- Not the booking group of the groups module. The name `group_code` exists twice, on purpose (decided by the owner, not renamed): **`reservations.group_code` is the booking/group identifier** (the code of a block of rooms of one event, from `booking_groups`), and **`folio_item_groups.group_code` is the billing/folio transaction group** (a heading A to D of one folio's bill). They are different tables, different schemas in the API (`Reservation` and `FolioItem`/`Payment`) and have nothing in common.
 
 ## 2. Data model
 
@@ -65,7 +65,7 @@ What was not touched: the tax invoice (faktur) is per folio, as before; whether 
 - A **refund** is a new line and starts in group A; it does not inherit the group of the payment it refunds (a user moves it).
 - The **copy made by a transfer** to another folio starts in group A.
 - The **room night** and every posting start in group A.
-These are consistent with the rule and cost nothing to change later (a write at posting time); the first two are listed as follow-ups in the audit.
+These are consistent with the rule and cost nothing to change later (a write at posting time). **Known follow-ups, not blockers for this step (decided by the owner):** (1) a refund and the copy made by a transfer start in group A; (2) the tax invoice stays per folio, and no buyer or tax ownership is derived from a group.
 
 ## 9. Evidence
 
