@@ -5,7 +5,7 @@
 #
 #   database        PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (the compose file sets them)
 #   PMS_BACKUP_DIR              local backups (default /backups); PMS_BACKUP_KEEP: how many (default 14)
-#   secondary copy              PMS_BACKUP_COPY_DIR or PMS_BACKUP_COPY_SSH (scripts/lib-backup.sh); PMS_BACKUP_COPY_KEEP_WEEKS (default 4), PMS_BACKUP_COPY_KEEP_RECENT (default 2)
+#   secondary copy              PMS_BACKUP_COPY_DIR or PMS_BACKUP_COPY_SSH (scripts/lib-backup.sh); PMS_BACKUP_COPY_KEEP_DAILY (default 14) and PMS_BACKUP_COPY_KEEP_WEEKS (default 4, in addition to the daily ones)
 #   encryption                  PMS_BACKUP_AGE_RECIPIENT: the age PUBLIC key(s), comma separated. The server never holds the private key: it can encrypt, it cannot decrypt.
 #   alert                       PMS_BACKUP_ALERT_WEBHOOK, PMS_BACKUP_PING_URL (scripts/lib-backup.sh)
 #   PMS_BACKUP_STATE_DIR        where the result of the last run is written (default /var/lib/pms-backup); the health check of the container reads it
@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 DIR="${PMS_BACKUP_DIR:-/backups}"
 STATE="${PMS_BACKUP_STATE_DIR:-/var/lib/pms-backup}"
 WEEKS="${PMS_BACKUP_COPY_KEEP_WEEKS:-4}"
-RECENT="${PMS_BACKUP_COPY_KEEP_RECENT:-2}"
+DAILY="${PMS_BACKUP_COPY_KEEP_DAILY:-14}"
 export PMS_BACKUP_DIR="$DIR"
 mkdir -p "$STATE" 2>/dev/null || true
 
@@ -37,7 +37,7 @@ fail() { # fail <code> <message>
   exit "$1"
 }
 
-case "$WEEKS$RECENT" in "" | *[!0-9]*) fail 1 "PMS_BACKUP_COPY_KEEP_WEEKS and PMS_BACKUP_COPY_KEEP_RECENT must be numbers" ;; esac
+case "$WEEKS$DAILY" in "" | *[!0-9]*) fail 1 "PMS_BACKUP_COPY_KEEP_WEEKS and PMS_BACKUP_COPY_KEEP_DAILY must be numbers" ;; esac
 
 log "backup run starts"
 bash scripts/db-backup.sh || fail 2 "the local backup failed (see the log of the backup service)"
@@ -70,7 +70,7 @@ copy_put "$work/$name.age" || fail 5 "copying $name.age to the secondary copy fa
 copy_put "$work/$name.age.sha256" || fail 5 "copying the checksum of $name.age failed"
 log "secondary copy: $name.age ($(wc -c <"$work/$name.age" | tr -d ' ') bytes, encrypted) verified at the destination"
 
-retention_apply "$WEEKS" "$RECENT" || fail 6 "retention of the secondary copy failed"
+retention_apply "$WEEKS" "$DAILY" || fail 6 "retention of the secondary copy failed"
 record ok "$name backed up, encrypted and copied"
 ping_alive
 log "backup run done: $name"

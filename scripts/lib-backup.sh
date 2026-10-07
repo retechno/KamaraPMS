@@ -110,36 +110,38 @@ copy_rm() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Retention of the secondary copy (pilot): the newest backup of each of the WEEKS most recent ISO weeks (default 4), and the RECENT newest backups (default 2) so that the recovery point
-# stays 24 hours when only the secondary survives. Everything else named pms-<stamp>.dump.age is removed, with its .sha256. Other files are never touched.
+# Retention of the secondary copy (pilot): 14 DAILY recovery points plus 4 WEEKLY ones. The weekly ones are in addition to the daily ones, never instead of them: the newest backup of each of the
+# DAILY most recent calendar days (UTC) that have a backup, AND the newest backup of each of the WEEKS most recent ISO weeks that have a backup (these reach further back than the daily ones).
+# A day with several backups (a backup before an upgrade) keeps its newest. Everything else named pms-<stamp>.dump.age is removed, with its .sha256. Other files are never touched.
 
 stamp_of() { local n="${1#pms-}"; echo "${n%%.*}"; } # 20261007T071236Z
 week_of() { local s; s="$(stamp_of "$1")"; date -u -d "${s:0:4}-${s:4:2}-${s:6:2}" +%G-%V; }
 
-# retention_keep <weeks> <recent>: reads the backup names (any order) on stdin, prints the names to KEEP: the newest <recent> names, and the newest name of each of the <weeks> most recent
-# ISO weeks that have a backup (a week without a backup does not use up one of the <weeks>).
+# retention_keep <weeks> <daily>: reads the backup names (any order) on stdin, prints the names to KEEP
 retention_keep() {
-  local weeks="$1" recent="$2" n=0 weekcount=0 name wk
-  local -A seen=()
+  local weeks="$1" daily="$2" daycount=0 weekcount=0 name wk day s keep
+  local -A seenday=() seenweek=()
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    n=$((n + 1))
-    wk="$(week_of "$name")"
-    if [ -z "${seen[$wk]+x}" ]; then
-      seen[$wk]=1
-      weekcount=$((weekcount + 1))
-      if [ "$weekcount" -le "$weeks" ]; then echo "$name"; continue; fi
+    s="$(stamp_of "$name")"; day="${s:0:8}"; wk="$(week_of "$name")"; keep=0
+    if [ -z "${seenday[$day]+x}" ]; then
+      seenday[$day]=1; daycount=$((daycount + 1))
+      [ "$daycount" -le "$daily" ] && keep=1
     fi
-    if [ "$n" -le "$recent" ]; then echo "$name"; fi
+    if [ -z "${seenweek[$wk]+x}" ]; then
+      seenweek[$wk]=1; weekcount=$((weekcount + 1))
+      [ "$weekcount" -le "$weeks" ] && keep=1
+    fi
+    [ "$keep" = 1 ] && echo "$name"
   done < <(sort -r)
 }
 
-# retention_apply <weeks> <recent>: removes what retention_keep does not keep
+# retention_apply <weeks> <daily>: removes what retention_keep does not keep
 retention_apply() {
-  local weeks="$1" recent="$2" all keep name
+  local weeks="$1" daily="$2" all keep name
   all="$(copy_list | grep -E '^pms-[0-9]{8}T[0-9]{6}Z\.dump\.age$' || true)"
   [ -n "$all" ] || return 0
-  keep="$(printf '%s\n' "$all" | retention_keep "$weeks" "$recent")"
+  keep="$(printf '%s\n' "$all" | retention_keep "$weeks" "$daily")"
   while IFS= read -r name; do
     if ! printf '%s\n' "$keep" | grep -qx "$name"; then
       copy_rm "$name" && copy_rm "$name.sha256" && log "retention: removed $name from the secondary copy"

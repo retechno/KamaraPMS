@@ -1,6 +1,6 @@
 # Backup and restore
 
-Status: written on 2026-10-07 with the scripts it describes, and checked by a real restore (section 6 says what was run and what was not). This is the single place for backup and restore; `deployment.md` points here. The owner approved the Backup/DR decisions on 2026-10-07 (section 13): **pilot values are decided; production values are TARGETS, not capabilities** (nothing in the repository reaches them yet, and none may be claimed before the mechanism is built and drilled).
+Status: written on 2026-10-07 with the scripts it describes, and checked by a real restore (section 6 says what was run and what was not). This is the single place for backup and restore; `deployment.md` points here. Three states are kept apart. **Pilot mechanism: implemented and drilled once on one machine** (sections 14 to 16). **Pilot configuration: not complete** until the owner sets the OWNER CONFIGURATION values (section 13) and the final drill is done with the real secondary copy and key. **Production DR: not ready.** The owner approved the Backup/DR decisions on 2026-10-07 (section 13): pilot values are decided; production values are TARGETS, not capabilities (nothing in the repository reaches them yet, and none may be claimed before the mechanism is built and drilled).
 
 ## 1. Scope
 
@@ -121,9 +121,9 @@ Data seen in the source and in the copy (counts equal; the content hash equal): 
 
 ## 9. Retention
 
-Provider-agnostic. **Pilot (decided):** 14 daily backups on the machine, and 4 weekly backups on the secondary copy (section 13). **Production (decided as a target):** 14 daily, 8 weekly, 12 monthly and 1 fiscal-year snapshot, with the retention of accounting and tax records to be confirmed by the owner and the accountant; the monthly and the year-end tiers are not implemented.
+Provider-agnostic. **Pilot (decided):** 14 daily backups on the machine; on the secondary copy 14 daily backups **plus** 4 weekly ones. The weekly ones are in addition to the daily ones, never instead of them: the secondary must always hold a recovery point of the last 24 hours, because that is the RPO (section 13). **Production (decided as a target):** 14 daily, 8 weekly, 12 monthly and 1 fiscal-year snapshot, with the retention of accounting and tax records to be confirmed by the owner and the accountant; the monthly and the year-end tiers are not implemented.
 
-- The scripts keep the newest N on the machine (`PMS_BACKUP_KEEP`, default 14) and apply the weekly rule on the secondary copy (section 14). A failed backup removes nothing.
+- The scripts keep the newest N files on the machine (`PMS_BACKUP_KEEP`, default 14) and apply the rule of section 14.5 on the secondary copy. A failed backup removes nothing.
 - A backup is not the legal archive of the books. The database is; how long records must be kept is for the owner and the accountant, and it is not stated here.
 - Never delete the newest verified backup by hand, and never keep the only copy on the disk that holds the database.
 
@@ -162,7 +162,7 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 
 **Pilot (the minimum before one property starts a parallel pilot).** Everything below is built (section 14); each line needs its value from the owner, or its drill:
 
-- [ ] The decisions of section 13 are in force; the open ones (the hour, the alert channel, the place of the secondary copy, the holder of the key, the accountant's answer) are answered.
+- [ ] The decisions of section 13 are in force, and the OWNER CONFIGURATION values of that section are set (the hour, the alert webhook, the secondary place, the key and its two storage places; the accountant's answer for the production tiers).
 - [ ] The `backup` service runs, with `PMS_BACKUP_AT` after the usual night audit, and its container is healthy (`docker compose -f deploy/compose.yaml ps`).
 - [ ] The alert reaches a person: a deliberate failure was sent and received (section 14.3).
 - [ ] The secondary copy is on **another machine or disk** (the service refuses the same file system), is encrypted with the public key of the owner, and the private key is **not** on the server and is stored in two places that are not the server (section 14.4).
@@ -182,13 +182,22 @@ Not run: `pg_dump` and `pg_restore` of different major versions in host mode; a 
 | 2 | RTO | 4 hours, measured by the drill | 1 hour, not to be claimed before a drill on realistic data |
 | 3 | Frequency | once a day after the night audit, and a backup before every upgrade | daily base backup, continuous WAL, and a backup before every upgrade |
 | 4 | Secondary copy | mandatory, on a machine or disk other than the main database | off-site, a different failure domain, separate or write-only credentials |
-| 5 | Retention | 14 daily on the machine, 4 weekly on the secondary copy | 14 daily, 8 weekly, 12 monthly, 1 fiscal-year snapshot; accounting and tax retention to be confirmed with the accountant |
+| 5 | Retention | 14 daily on the machine; on the secondary copy 14 daily **plus** 4 weekly (the weekly ones are an addition, never a replacement of daily recovery points) | 14 daily, 8 weekly, 12 monthly, 1 fiscal-year snapshot; accounting and tax retention to be confirmed with the accountant |
 | 6 | WAL / PITR | not required | planned as the production mechanism for the 15 minute RPO; **not to be built as part of the pilot** |
 | 7 | Encryption | mandatory for the secondary (off-machine) copy | mandatory at rest |
 
-Not decided by the owner and **not guessable from the repository** (OWNER DECISIONS still open): the time of day of the backup (it depends on when the hotel's night audit is done), the channel that receives the failure alert (a webhook URL), where the secondary copy physically is (which machine, disk or off-site location, and over what protocol), who holds the private key of the encryption, and the accountant's answer on record retention.
+**OWNER CONFIGURATION** (values only the owner can give; the repository does not guess them, and the pilot configuration is **not complete** until they are set; `deploy/.env.example` has the variable for each):
 
-Consequence for the pilot: the secondary copy gets **every** backup, and its retention keeps the 4 weekly ones **plus the newest few** (`PMS_BACKUP_COPY_KEEP_RECENT`, default 2). If the secondary kept weekly copies only, losing the main machine would lose up to a week, which contradicts the 24 hour RPO. This reading of "4 weekly" is mine; the owner can confirm or reject it.
+| # | Value | Who / when | Variable |
+|---|---|---|---|
+| 1 | The time of the daily backup, after the night audit | the owner, from the time of the hotel's night audit | `PMS_BACKUP_AT`, `TZ` |
+| 2 | The alert webhook | the owner, at deployment | `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`) |
+| 3 | The secondary location (which machine or disk, over what protocol) | the owner, at deployment | `PMS_BACKUP_SECONDARY_PATH` + `PMS_BACKUP_COPY_DIR`, or `PMS_BACKUP_COPY_SSH` + `PMS_BACKUP_SSH_DIR` |
+| 4 | The owner's private key and its two storage locations | the owner, at deployment (the public key goes to the server) | `PMS_BACKUP_AGE_RECIPIENT` (public key only) |
+| 5 | The accounting and tax retention requirement | the owner with the accountant | none yet: it decides the production tiers (monthly, fiscal year) |
+| 6 | Secondary retention | **decided: 14 daily + 4 weekly (in addition)** | `PMS_BACKUP_COPY_KEEP_DAILY=14`, `PMS_BACKUP_COPY_KEEP_WEEKS=4` |
+
+The final drill (section 16) is done after 1 to 4 are set, with the real secondary copy, the real private key and the real deployment, and its time is written down.
 
 What the pilot needs: a scheduled daily backup, a failure alert, a secondary copy, its encryption, retention, a backup before every upgrade, and a drill that restores from the secondary copy.
 
@@ -222,13 +231,13 @@ A failure of any step posts JSON (`{"text": ..., "content": ..., "level": ..., "
 - **Encryption:** [age](https://age-encryption.org) with the **public** key(s) in `PMS_BACKUP_AGE_RECIPIENT`. The server can encrypt and **cannot decrypt**: a server that is stolen or hacked does not give up the old backups. Make the key pair once, off the server: `age-keygen -o kamarapms-backup.key` (it prints the public key `age1...`). The **private key file is the only way to read a secondary copy**: store it in at least two places that are not the server and not the secondary copy itself (the owner's password manager, a sealed paper copy), and write down who holds it. A lost key is a lost backup. The local backups on the machine are not encrypted (the decision asks encryption for the copy that leaves the machine; encrypt the disk of the machine, BitLocker or LUKS).
 - **Restore from it:** `db-restore.sh pms-....dump.age` with `PMS_BACKUP_AGE_IDENTITY=<the key file>` checks the checksum, decrypts into a private temporary directory that is removed at the end, and restores (a wrong key, a changed file and a missing key each exit 2).
 
-### 14.5 Retention (pilot)
+### 14.5 Retention (pilot: 14 daily + 4 weekly)
 
-Local: the newest 14 (`PMS_BACKUP_KEEP`). Secondary: the newest backup of each of the last 4 ISO weeks (`PMS_BACKUP_COPY_KEEP_WEEKS`), **plus the 2 newest** (`PMS_BACKUP_COPY_KEEP_RECENT`). The two newest are there so that the recovery point stays 24 hours when only the secondary survives; with weekly copies only it would be a week (section 13; the owner may reject this reading). Only files named `pms-<stamp>.dump.age` and their `.sha256` are ever removed; other files in the destination are never touched. Retention runs after a verified copy.
+Local: the newest 14 files (`PMS_BACKUP_KEEP`). Secondary: **14 daily recovery points plus 4 weekly ones.** Concretely, a backup is kept when it is the newest of one of the last 14 calendar days (UTC) that have a backup (`PMS_BACKUP_COPY_KEEP_DAILY`), **or** the newest of one of the last 4 ISO weeks that have a backup (`PMS_BACKUP_COPY_KEEP_WEEKS`). The weekly ones reach further back than the daily ones and are an addition: they never remove a daily backup, so after the loss of the main machine the secondary always holds a recovery point from the last 24 hours (the RPO). A day with several backups (a backup before an upgrade) keeps its newest. Only files named `pms-<stamp>.dump.age` and their `.sha256` are ever removed; other files in the destination are never touched. Retention runs after a verified copy.
 
 ### 14.6 Enabling it (the values the owner must give)
 
-In `deploy/.env` (the variables are in `deploy/.env.example`): `TZ` and `PMS_BACKUP_AT`; the secondary place (`PMS_BACKUP_SECONDARY_PATH` with `PMS_BACKUP_COPY_DIR=/secondary`, or `PMS_BACKUP_COPY_SSH` with `PMS_BACKUP_SSH_DIR`); `PMS_BACKUP_AGE_RECIPIENT`; `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`). Then `docker compose -f deploy/compose.yaml up -d --build backup`. Until the secondary place and the key are set, the service runs, makes the local backup, and **fails and alerts every day**: that is intended.
+In `deploy/.env` (the variables are in `deploy/.env.example`): `TZ` and `PMS_BACKUP_AT`; the secondary place (`PMS_BACKUP_SECONDARY_PATH` with `PMS_BACKUP_COPY_DIR=/secondary`, or `PMS_BACKUP_COPY_SSH` with `PMS_BACKUP_SSH_DIR`); `PMS_BACKUP_AGE_RECIPIENT`; `PMS_BACKUP_ALERT_WEBHOOK` (and optionally `PMS_BACKUP_PING_URL`). These are the OWNER CONFIGURATION values of section 13. Then `docker compose -f deploy/compose.yaml up -d --build backup`. Until the secondary place and the key are set, the service runs, makes the local backup, and **fails and alerts every day**: that is intended.
 
 ## 15. Backup before an upgrade (procedure; mandatory)
 
@@ -258,7 +267,7 @@ It decrypts and restores in the `backup` image onto a throwaway PostgreSQL (`kam
 | Catch-up at start (no successful backup on record) | ran at once |
 | Secondary on a host directory (another file system than the volume) | accepted; the same Docker volume is refused (exit 5) |
 | Secondary over SSH, host key checked | copied and checksum-verified; a wrong host key is refused (exit 5) |
-| Retention on 45 fake daily files | kept the newest backup of the weeks 38 to 41 and the 2 newest, removed the rest, left `notes.txt` alone |
+| Retention on 46 daily files (rule 14 daily + 4 weekly) | kept the 14 daily recovery points and the weekly one that reaches further back (15 files), removed the rest, left `notes.txt` alone. An earlier version kept one a week plus the 2 newest, which could lose up to a week; it was replaced the next day |
 | Alert | received by a local webhook for: no secondary (exit 3), no key (exit 4); an unreachable webhook is logged and the exit code stays |
 | **Restore from the encrypted secondary copy** | checksum ok, decrypted, restored (migration 62, 101 tables), fingerprint **identical** to the source, `migrate up` applied 0, API ready |
 | **Recovery time measured** | file restored after 20 s, API ready after **25 s**; the file was 1 minute old (the recovery point of that drill) |
