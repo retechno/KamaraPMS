@@ -2194,6 +2194,8 @@ export const en = {
     reconcile: 'Reconcile',
     view: 'View',
     csvPlaceholder: 'date,description,reference,amount',
+    currency: 'Currency of the statement (optional)',
+    currencyHint: 'Amounts are in {currency}, the currency of the property. A statement in another currency is refused.',
   },
   reconcile: {
     title: 'Reconcile {statement}',
@@ -3123,6 +3125,7 @@ export const en = {
     ALREADY_CHECKED_IN: 'This reservation room is already checked in.',
     ALREADY_CLEARED: 'The journal line is cleared already, in this or another statement.',
     ALREADY_REVERSED: 'The item has already been reversed.',
+    STATEMENT_CURRENCY_MISMATCH: 'The statement is in another currency than the property: a bank account is reconciled in the property currency.',
     FOLIO_TRANSFER_INVALID: 'The charge cannot move there: both folios must be open and of the same reservation, and only a charge moves.',
     ALREADY_SETTLED: 'The payment line is settled already.',
     APPROVAL_INVALID_CREDENTIALS: 'The approver\'s email or password is incorrect.',

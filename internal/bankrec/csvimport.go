@@ -29,6 +29,7 @@ var headerAliases = map[string]string{
 	"amount": "amount", "jumlah": "amount",
 	"credit": "in", "deposit": "in", "money in": "in", "cr": "in", "kredit": "in",
 	"debit": "out", "withdrawal": "out", "money out": "out", "dr": "out",
+	"currency": "currency", "ccy": "currency", "curr": "currency", "mata uang": "currency",
 }
 
 // parseDate reads YYYY-MM-DD, DD/MM/YYYY and DD-MM-YYYY.
@@ -68,7 +69,8 @@ func parseAmount(s string) (decimal.Decimal, bool) {
 // parseStatement reads the lines of a statement from CSV. The header names the columns in any order: date, description,
 // reference (optional), and either amount (signed: money in positive) or two columns for money in (credit, deposit) and
 // money out (debit, withdrawal). A bad file changes nothing: every problem is reported by row.
-func parseStatement(text string, decimals int32) ([]parsedLine, error) {
+// An optional currency column is checked against the property currency (docs/architecture/18-architecture-decisions.md section 5.7 rule 7): a statement of another currency is refused.
+func parseStatement(text, currency string, decimals int32) ([]parsedLine, error) {
 	text = strings.TrimPrefix(text, "\ufeff")
 	if strings.TrimSpace(text) == "" {
 		return nil, apperr.Invalid("the statement is invalid", fieldErr("csv", "REQUIRED", "paste or upload the lines of the statement"))
@@ -122,6 +124,9 @@ func parseStatement(text string, decimals int32) ([]parsedLine, error) {
 			continue
 		}
 		at := func(f string) string { return fmt.Sprintf("rows[%d].%s", row, f) }
+		if c := get(rec, "currency"); c != "" && !strings.EqualFold(c, currency) {
+			return nil, errCurrencyMismatch(currency, c).WithContext("row", row)
+		}
 		d, ok := parseDate(get(rec, "date"))
 		if !ok {
 			fields = append(fields, fieldErr(at("date"), "INVALID_DATE", "a date as YYYY-MM-DD or DD/MM/YYYY"))
@@ -139,8 +144,8 @@ func parseStatement(text string, decimals int32) ([]parsedLine, error) {
 		switch {
 		case !okAmount:
 			fields = append(fields, fieldErr(at("amount"), "INVALID_AMOUNT", "a number"))
-		case !amount.Equal(amount.Round(3)):
-			fields = append(fields, fieldErr(at("amount"), "TOO_PRECISE", "at most 3 decimals"))
+		case !amount.Equal(amount.Round(decimals)):
+			fields = append(fields, fieldErr(at("amount"), "TOO_PRECISE", fmt.Sprintf("at most %d decimals, as the currency of the property", decimals)))
 		case amount.IsZero():
 			continue // a line without an amount (a heading, a balance row) is skipped
 		}
@@ -150,7 +155,6 @@ func parseStatement(text string, decimals int32) ([]parsedLine, error) {
 		}
 		out = append(out, parsedLine{date: d, description: get(rec, "description"), reference: get(rec, "reference"), amount: amount})
 	}
-	_ = decimals
 	if len(fields) > 0 {
 		if len(fields) > 20 {
 			fields = fields[:20]
@@ -158,4 +162,10 @@ func parseStatement(text string, decimals int32) ([]parsedLine, error) {
 		return nil, apperr.Invalid("the statement has rows that cannot be read", fields...)
 	}
 	return out, nil
+}
+
+// errCurrencyMismatch refuses a statement that is not in the currency of the property: a bank account is a property-currency account, and nothing is converted.
+func errCurrencyMismatch(property, statement string) *apperr.Error {
+	return apperr.New(apperr.KindInvalid, "STATEMENT_CURRENCY_MISMATCH", "the statement is in another currency than the property: a bank account is reconciled in the currency of the property").
+		WithContext("property_currency", property).WithContext("statement_currency", statement)
 }

@@ -3,6 +3,7 @@ package bankrec
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -416,6 +417,9 @@ func (s *Service) ImportStatement(ctx context.Context, propertyID int64, in Impo
 	if err != nil {
 		return StatementDetail{}, err
 	}
+	if c := strings.TrimSpace(in.Currency); c != "" && !strings.EqualFold(c, prop.CurrencyCode) {
+		return StatementDetail{}, errCurrencyMismatch(prop.CurrencyCode, c)
+	}
 	var fields []apperr.FieldError
 	switch {
 	case in.PeriodFrom.IsZero() || in.PeriodTo.IsZero():
@@ -426,10 +430,12 @@ func (s *Service) ImportStatement(ctx context.Context, propertyID int64, in Impo
 	if len([]rune(in.Note)) > 300 {
 		fields = append(fields, fieldErr("note", "TOO_LONG", "at most 300 characters"))
 	}
-	lines, perr := parseStatement(in.CSV, prop.CurrencyDecimals)
+	lines, perr := parseStatement(in.CSV, prop.CurrencyCode, prop.CurrencyDecimals)
 	if perr != nil {
 		var ae *apperr.Error
-		if errors.As(perr, &ae) {
+		if errors.As(perr, &ae) && ae.Code == "STATEMENT_CURRENCY_MISMATCH" {
+			return StatementDetail{}, perr
+		} else if errors.As(perr, &ae) {
 			fields = append(fields, ae.Fields...)
 		} else {
 			return StatementDetail{}, perr
@@ -441,6 +447,14 @@ func (s *Service) ImportStatement(ctx context.Context, propertyID int64, in Impo
 		if !in.PeriodFrom.IsZero() && (l.date.Before(in.PeriodFrom) || l.date.After(in.PeriodTo)) {
 			fields = append(fields, fieldErr("csv", "OUTSIDE_PERIOD", "line "+itoa(i+1)+" is dated "+l.date.String()+", outside the period of the statement"))
 			break
+		}
+	}
+	for _, b := range []struct {
+		field string
+		v     decimal.Decimal
+	}{{"opening_balance", in.OpeningBalance}, {"closing_balance", in.ClosingBalance}} {
+		if !b.v.Equal(b.v.Round(prop.CurrencyDecimals)) {
+			fields = append(fields, fieldErr(b.field, "TOO_PRECISE", fmt.Sprintf("at most %d decimals, as the currency of the property", prop.CurrencyDecimals)))
 		}
 	}
 	if len(fields) == 0 && !in.OpeningBalance.Add(net).Equal(in.ClosingBalance) {

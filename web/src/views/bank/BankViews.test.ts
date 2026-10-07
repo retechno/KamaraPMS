@@ -100,6 +100,21 @@ describe('bank views', () => {
     expect(w.get('[data-testid=bank-error]').text()).toContain('BANK_ACCOUNT_EXISTS')
   })
 
+  it('sends the currency of the statement and shows the refusal of another currency', async () => {
+    const w = await mountView(BankStatementsView, undefined, {}, '/bank/statements?bank=1')
+    await flushPromises()
+    await w.get('[data-testid=new-statement]').trigger('click')
+    await w.get('input[name=period_to]').setValue('2026-10-31')
+    await w.get('input[name=closing_balance]').setValue('735100')
+    await w.get('textarea[name=csv]').setValue('date,amount' + String.fromCharCode(10) + '2026-10-02,100' + String.fromCharCode(10))
+    await w.get('input[name=currency]').setValue('USD')
+    POST.mockRejectedValue(new ApiError({ type: 't', title: 'Invalid', status: 422, code: 'STATEMENT_CURRENCY_MISMATCH', detail: 'the statement is in another currency than the property' }))
+    await w.get('[data-testid=import-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1].body.currency).toBe('USD')
+    expect(w.get('[data-testid=import-error]').text()).toContain('STATEMENT_CURRENCY_MISMATCH')
+  })
+
   it('imports a statement that follows the last one and shows the rows that are wrong', async () => {
     const w = await mountView(BankStatementsView, undefined, {}, '/bank/statements?bank=1')
     await flushPromises()

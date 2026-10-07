@@ -6371,7 +6371,7 @@ paths:
     post:
       operationId: importBankStatement
       summary: Import a bank statement (bank.reconcile)
-      description: "The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`."
+      description: "The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`. 422 `STATEMENT_CURRENCY_MISMATCH` when the request or a row of the `currency` column names another currency than the property; an amount or balance with more decimals than the property currency is `TOO_PRECISE`."
       tags: [bank]
       requestBody:
         required: true
@@ -12748,7 +12748,8 @@ components:
         opening_balance: { type: string }
         closing_balance: { type: string }
         note: { type: string, maxLength: 300 }
-        csv: { type: string, description: The lines of the statement as CSV with a header row. }
+        csv: { type: string, description: The lines of the statement as CSV with a header row. An optional `currency` column is checked row by row. }
+        currency: { type: string, minLength: 3, maxLength: 3, description: "Optional. When the statement says its currency it must be the currency of the property (422 `STATEMENT_CURRENCY_MISMATCH`): a bank account is a property-currency account and nothing is converted." }
     UnclearedLine:
       type: object
       required: [journal_line_id, journal_date, journal_id, journal_number, journal_type, amount, cleared, remaining]

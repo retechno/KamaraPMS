@@ -30,7 +30,7 @@ const notice = ref('')
 const busy = ref(false)
 const bank = ref(Number(route.query.bank) || 0)
 const importing = ref(false)
-const form = reactive({ period_from: '', period_to: '', opening_balance: '', closing_balance: '', note: '', csv: '' })
+const form = reactive({ period_from: '', period_to: '', opening_balance: '', closing_balance: '', note: '', csv: '', currency: '' })
 
 const columns = computed<Column<BankStatement>[]>(() => [
   { key: 'bank_name', label: t('bankStatements.bank') },
@@ -66,7 +66,7 @@ async function load(): Promise<void> {
 }
 
 function startImport(): void {
-  Object.assign(form, { period_from: '', period_to: '', opening_balance: '', closing_balance: '', note: '', csv: '' })
+  Object.assign(form, { period_from: '', period_to: '', opening_balance: '', closing_balance: '', note: '', csv: '', currency: '' })
   // the next statement starts the day after the latest one and opens with its closing balance
   const last = statements.value.filter((s) => s.bank_account_id === bank.value).sort((a, b) => a.period_to.localeCompare(b.period_to)).at(-1)
   if (last) {
@@ -95,7 +95,7 @@ async function runImport(): Promise<void> {
       params: { path: { propertyId } },
       body: {
         bank_account_id: bank.value, period_from: form.period_from, period_to: form.period_to, opening_balance: form.opening_balance.trim(), closing_balance: form.closing_balance.trim(),
-        note: form.note || undefined, csv: form.csv,
+        note: form.note || undefined, csv: form.csv, currency: form.currency.trim() || undefined,
       },
     })
     importing.value = false
@@ -176,7 +176,10 @@ watch(() => pid.value, () => {
             <FormField :label="t('bankStatements.closing')" :error="fieldError('closing_balance')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.closing_balance" name="closing_balance" inputmode="decimal" :aria-invalid="invalid" /></template>
             </FormField>
-            <FormField class="sm:col-span-2 lg:col-span-4" :label="t('bankStatements.note')">
+            <FormField :label="t('bankStatements.currency')" :hint="t('bankStatements.currencyHint', { currency: property.current?.currency_code ?? '' })" :error="fieldError('currency')">
+              <template #default="{ id, invalid }"><Input :id="id" v-model="form.currency" name="currency" maxlength="3" :aria-invalid="invalid" /></template>
+            </FormField>
+            <FormField class="sm:col-span-2 lg:col-span-3" :label="t('bankStatements.note')">
               <template #default="{ id }"><Input :id="id" v-model="form.note" name="note" maxlength="300" /></template>
             </FormField>
           </div>

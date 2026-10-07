@@ -142,6 +142,8 @@ type ImportInput struct {
 	ClosingBalance decimal.Decimal `json:"closing_balance"`
 	Note           string          `json:"note"`
 	CSV            string          `json:"csv"`
+	// Currency is optional: when the statement says its currency it must be the one of the property (a bank account is a property-currency account).
+	Currency string `json:"currency"`
 }
 
 // ClearInput matches journal lines with statement lines. Either `journal_line_ids` (each cleared for what is left of it,

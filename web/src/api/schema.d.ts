@@ -5550,7 +5550,7 @@ export interface paths {
         put?: never;
         /**
          * Import a bank statement (bank.reconcile)
-         * @description The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`.
+         * @description The lines come as CSV: a header names the columns in any order (date, description, reference, and amount or credit/debit columns; money in is positive); dates as YYYY-MM-DD or DD/MM/YYYY. Everything is checked first and a mistake changes nothing (422 with one field error per row, `rows[N].field`): the lines must lie within the period and add up to the difference of the printed balances (`closing_balance`), and the opening balance must be the closing balance of the statement before (`opening_balance`). 409 `STATEMENT_OVERLAPS`, `STATEMENT_OUT_OF_ORDER`, `BANK_ACCOUNT_INACTIVE`. 422 `STATEMENT_CURRENCY_MISMATCH` when the request or a row of the `currency` column names another currency than the property; an amount or balance with more decimals than the property currency is `TOO_PRECISE`.
          */
         post: operations["importBankStatement"];
         delete?: never;
@@ -11674,8 +11674,10 @@ export interface components {
             opening_balance: string;
             closing_balance: string;
             note?: string;
-            /** @description The lines of the statement as CSV with a header row. */
+            /** @description The lines of the statement as CSV with a header row. An optional `currency` column is checked row by row. */
             csv: string;
+            /** @description Optional. When the statement says its currency it must be the currency of the property (422 `STATEMENT_CURRENCY_MISMATCH`): a bank account is a property-currency account and nothing is converted. */
+            currency?: string;
         };
         UnclearedLine: {
             /** Format: int64 */

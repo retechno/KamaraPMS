@@ -2193,6 +2193,8 @@ export const id: Messages = {
     reconcile: 'Rekonsiliasi',
     view: 'Lihat',
     csvPlaceholder: 'date,description,reference,amount',
+    currency: 'Mata uang statement (opsional)',
+    currencyHint: 'Jumlah dalam {currency}, mata uang properti. Statement dalam mata uang lain ditolak.',
   },
   reconcile: {
     title: 'Rekonsiliasi {statement}',
@@ -3122,6 +3124,7 @@ export const id: Messages = {
     ALREADY_CHECKED_IN: 'Kamar reservasi ini sudah check-in.',
     ALREADY_CLEARED: 'Baris jurnal ini sudah dicocokkan, di rekening koran ini atau yang lain.',
     ALREADY_REVERSED: 'Item ini sudah dibalik.',
+    STATEMENT_CURRENCY_MISMATCH: 'Statement dalam mata uang lain dari properti: rekening bank direkonsiliasi dalam mata uang properti.',
     FOLIO_TRANSFER_INVALID: 'Biaya tidak bisa dipindah ke sana: kedua folio harus terbuka dan satu reservasi, dan hanya biaya yang bisa dipindah.',
     ALREADY_SETTLED: 'Baris pembayaran ini sudah diselesaikan.',
     APPROVAL_INVALID_CREDENTIALS: 'Email atau kata sandi penyetuju salah.',
