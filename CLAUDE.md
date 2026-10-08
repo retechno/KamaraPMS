@@ -55,7 +55,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
 - **Transactions:** a use case opens `TxManager.WithinTx`; services join the ambient transaction and never
   commit. Row locks only via `db.LockRows` / `db.EnterLockLevel` (global lock order is enforced at runtime:
   business day → room types → rooms → reservations → stays → folios → payments/cashier shifts → companies → groups → accounting → suppliers → bank accounts → tax profiles/budgets → sequences).
-- **Every business-dated write** first calls `RequireOpenBusinessDay(ctx, propertyID, db.ForShare, …)`.
+- **Every business-dated write** first calls `RequireOpenBusinessDay(ctx, propertyID, db.ForShare, …)`. That is the application gate; behind it a database trigger (`business_day_must_be_open`, migration 00065) refuses a ledger or cash row (folio items, payments, room-night postings, city ledger receipts, adjustments and invoices, shift movements and shifts) dated a CLOSED day (`BUSINESS_DAY_CLOSED`). A new table that holds posting rows dated by the business day needs the same trigger; journals, supplier and tax documents and operational records are not covered.
 - **Errors:** return `*apperr.Error` with a stable code. DB constraint names map to codes in
   `internal/platform/db/errors.go` (a test verifies every name exists). New constraint → add a mapping.
 - **Tenancy isolation:** every query is scoped by `tenant_id`/`property_id`; composite FKs make cross-tenant

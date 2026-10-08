@@ -1918,6 +1918,59 @@ BEGIN
 END $$;
 
 ------------------------------------------------------------------------------------------
+-- Financial rows are written only on the OPEN business day (00065, audit F-07)
+------------------------------------------------------------------------------------------
+-- The helper takes a row that exists in the table (made by the tests above, so it is a valid one), closes the OPEN business day of its property (or takes a closed one) and inserts
+-- a copy dated that closed day, with the columns of the row as they are (the identity column is left to its default). The trigger runs before the unique and foreign key checks, so
+-- what the test asks is only whether the database lets a ledger row be dated a closed day. It is a direct insert: no service, no RequireOpenBusinessDay.
+CREATE FUNCTION pms_test.insert_on_closed_day(p_table text, p_date_col text) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_row    jsonb;
+    v_prop   bigint;
+    v_day    date;
+    v_cols   text;
+BEGIN
+    EXECUTE format('SELECT to_jsonb(t) FROM %I t ORDER BY id LIMIT 1', p_table) INTO v_row;
+    IF v_row IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'PT404', MESSAGE = format('no row in %s to copy', p_table);
+    END IF;
+    v_prop := (v_row ->> 'property_id')::bigint;
+    SELECT business_date INTO v_day FROM business_days WHERE property_id = v_prop AND status = 'OPEN';
+    IF v_day IS NOT NULL THEN
+        UPDATE business_days SET status = 'CLOSED', closed_at = now() WHERE property_id = v_prop AND business_date = v_day;
+    ELSE
+        SELECT max(business_date) INTO v_day FROM business_days WHERE property_id = v_prop AND status = 'CLOSED';
+    END IF;
+    SELECT string_agg(format('%I', column_name), ', ' ORDER BY ordinal_position) INTO v_cols
+      FROM information_schema.columns WHERE table_schema = 'public' AND table_name = p_table AND is_identity = 'NO' AND is_generated = 'NEVER';
+    v_row := (v_row - 'id') || jsonb_build_object(p_date_col, v_day);
+    EXECUTE format('INSERT INTO %1$I (%2$s) SELECT %2$s FROM jsonb_populate_record(NULL::%1$I, $1)', p_table, v_cols) USING v_row;
+END
+$$;
+SELECT expect_error('folio_items: a ledger line cannot be dated a closed business day, whoever inserts it', '23514', $q$SELECT pms_test.insert_on_closed_day('folio_items', 'business_date')$q$);
+SELECT expect_error('payments: a payment cannot be dated a closed business day', '23514', $q$SELECT pms_test.insert_on_closed_day('payments', 'business_date')$q$);
+SELECT expect_error('stay_charge_postings: a posted room night cannot be dated a closed business day', '23514', $q$SELECT pms_test.insert_on_closed_day('stay_charge_postings', 'business_date')$q$);
+SELECT expect_error('city_ledger_receipts: a receipt cannot be dated a closed business day', '23514', $q$SELECT pms_test.insert_on_closed_day('city_ledger_receipts', 'business_date')$q$);
+-- the other five tables (adjustments, invoices, shift movements, shifts opened and closed) have no row in this fixture; the Go tests of cityledger and shifts copy a real row of each
+-- onto a closed day. What is checked here for all nine is that the trigger is there, on the right column, in the right moment.
+DO $$
+DECLARE v_missing text;
+BEGIN
+    SELECT string_agg(e.t || '.' || e.c, ', ') INTO v_missing
+      FROM (VALUES ('folio_items', 'business_date'), ('payments', 'business_date'), ('stay_charge_postings', 'business_date'), ('city_ledger_receipts', 'business_date'),
+                   ('city_ledger_adjustments', 'business_date'), ('city_ledger_invoices', 'invoice_date'), ('cashier_shift_movements', 'business_date'),
+                   ('cashier_shifts', 'business_date_opened'), ('cashier_shifts', 'business_date_closed')) AS e (t, c)
+     WHERE NOT EXISTS (SELECT 1 FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid
+                        WHERE c.relname = e.t AND NOT g.tgisinternal AND g.tgfoid = 'public.business_day_must_be_open'::regproc
+                          AND (g.tgtype & 2) = 2 -- BEFORE
+                          AND (string_to_array(encode(g.tgargs, 'escape'), '\000'))[1] = e.c);
+    IF v_missing IS NOT NULL THEN RAISE EXCEPTION 'FAIL business day guard: no BEFORE trigger on %', v_missing; END IF;
+    INSERT INTO pms_test.results VALUES ('the nine ledger and cash date columns each have the business-day guard', 'accepted');
+    RAISE NOTICE 'PASS  the nine ledger and cash date columns each have the business-day guard';
+END $$;
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$

@@ -23,6 +23,8 @@
 
 A transaction may skip levels, but it may **never take a lower-numbered lock after a higher-numbered one**.
 
+**The business day row and the database guard (F-07).** The first lock of every business-dated write is the OPEN day `FOR SHARE` (the night audit takes it `FOR UPDATE`). The trigger `business_day_must_be_open` (migration 00065) reads the same row `FOR SHARE` when a ledger or cash row is inserted, so a write that reaches the database during the close waits for the commit and is refused, and a write in flight makes the close wait. For a service call the share lock is already held and nothing new is taken, so the order is unchanged; a direct insert that skipped the service takes it late, which can wait for the night audit but is not a new lock level.
+
 **Strength of the stay lock (F-06).** A posting to a folio of a stay holds the folio and then key-shares the stay row through the foreign key `folio_items.stay_id`. A use case that holds the stay `FOR UPDATE` and then waits for that folio waits for a transaction that waits for it (a deadlock, `40P01`). The reversal of a check-in therefore locks the stay `FOR NO KEY UPDATE` (`db.ForNoKeyUpdate`), which excludes other writers of the row but not the key share, and then locks all folios of the stay in ascending id. Check-out and the room-night posting still take the stay `FOR UPDATE`: the same cycle with a payment on the same stay is possible there and ends in a deadlock error, never in a wrong ledger (a known follow-up).
 
 ## 2. Operations

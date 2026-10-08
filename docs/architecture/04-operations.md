@@ -29,7 +29,7 @@ Property created ──▶ INSERT business_days(opening_date, OPEN)      (setup,
 | Only night audit closes and opens days | `BusinessDayService.CloseAndOpenNext` is package-private to the `nightaudit` wiring |
 | A CLOSED day is immutable and never reopens | 🛡 trigger |
 | Financial rows reference a real day | 🛡 FK `(property_id, business_date) → business_days` |
-| Writes happen only on the OPEN day | The service locks the OPEN row `FOR SHARE` and compares dates |
+| Writes happen only on the OPEN day | **Application gate:** the service locks the OPEN row `FOR SHARE` and compares dates (`RequireOpenBusinessDay`). 🛡 **Database safety net (migration 00065):** a trigger refuses a ledger or cash row (folio items, payments, room-night postings, city ledger receipts, adjustments and invoices, shift movements and shifts) whose business date is a CLOSED day, reading the day `FOR SHARE` so it is serialised with the night audit (`BUSINESS_DAY_CLOSED`). It covers those tables only: journals, supplier and tax documents and operational records are not covered (audit F-07) |
 | No write interleaves with closing | Writers take `FOR SHARE` and night audit takes `FOR UPDATE` |
 | BD never runs ahead of reality | **Night-audit time guard:** closing BD is allowed only if `local_date > BD`, **or** `local_date = BD AND local_time ≥ properties.night_audit_earliest_time` (default 20:00) |
 | Overdue audit is visible | `GET /business-date` → `night_audit_overdue = local_date > BD + 1` |

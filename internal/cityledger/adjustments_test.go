@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/dbtest"
 )
 
 type chart struct {
@@ -449,5 +450,26 @@ func TestACreditNoteAndAWriteOffCarryTheirDepartment(t *testing.T) {
 	must(t, err)
 	if d := deptOf("6140"); d == nil || *d != dep.ID {
 		t.Fatalf("write-off department: %v", d)
+	}
+}
+
+// Audit F-07 (migration 00065): the database refuses an invoice, a receipt or an adjustment dated a closed business day, with no service in the way.
+func TestTheDatabaseRefusesCityLedgerRowsDatedAClosedDay(t *testing.T) {
+	f := setup(t)
+	c := f.chart(t)
+	inv, _ := f.invoicedOne(t, "101", "300000")
+	_, err := f.receive(f.acme.ID, "r1", "100000")
+	must(t, err)
+	_, err = f.CityLedger.CreateWriteOff(f.admin, f.propID, "w1", cityledger.WriteOffInput{InvoiceID: inv.ID, Amount: "50000", AccountID: c.badDebt, Reason: "the company is closed", Approval: f.approval()})
+	must(t, err)
+	id := func(table string) int64 {
+		var n int64
+		must(t, f.Pool.QueryRow(context.Background(), `SELECT min(id) FROM `+table).Scan(&n))
+		return n
+	}
+	for _, c := range []struct{ table, column string }{{"city_ledger_receipts", "business_date"}, {"city_ledger_adjustments", "business_date"}, {"city_ledger_invoices", "invoice_date"}} {
+		if err := dbtest.InsertCopyOnClosedDay(t, f.Pool, c.table, c.column, id(c.table)); !dbtest.IsClosedDayRefusal(err) {
+			t.Errorf("%s: the database must refuse a row dated a closed day, got %v", c.table, err)
+		}
 	}
 }

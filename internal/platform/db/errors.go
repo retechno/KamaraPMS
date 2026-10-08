@@ -61,6 +61,7 @@ var constraintErrors = map[string]mapped{
 	"business_days_one_open_uk":        {apperr.KindConflict, "BUSINESS_DAY_ALREADY_OPEN", "the property already has an open business day"},
 	"business_days_consecutive":        {apperr.KindConflict, "BUSINESS_DAY_NOT_CONSECUTIVE", "business days must be consecutive"},
 	"business_days_closed_immutable":   {apperr.KindConflict, "BUSINESS_DAY_CLOSED", "the business day is closed"},
+	"business_day_must_be_open":        {apperr.KindConflict, "BUSINESS_DAY_CLOSED", "the business day of the posting is closed: nothing can be posted to it"}, // the safety net of RequireOpenBusinessDay (00065)
 	"business_days_property_date_uk":   {apperr.KindConflict, "BUSINESS_DAY_EXISTS", "the business day already exists"},
 	"business_days_identity_immutable": {apperr.KindConflict, "RECORD_IMMUTABLE", "the business day cannot be changed"},
 	"business_days_no_delete":          {apperr.KindConflict, "RECORD_IMMUTABLE", "business days cannot be deleted"},

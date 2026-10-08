@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/db"
 	"kamarapms/migrations"
@@ -23,6 +25,16 @@ func TestMapErrorPassesThroughNonDatabaseErrors(t *testing.T) {
 	app := apperr.Conflict("X", "x")
 	if !errors.Is(db.MapError(app), app) {
 		t.Fatal("*apperr.Error must be returned unchanged")
+	}
+}
+
+// The refusal of a ledger row dated a closed business day (migration 00065, audit F-07) reaches the API as BUSINESS_DAY_CLOSED, never as the raw PostgreSQL error.
+func TestMapErrorClosedBusinessDayTrigger(t *testing.T) {
+	raw := &pgconn.PgError{Code: "23514", ConstraintName: "business_day_must_be_open", Message: "folio_items business_date of property 1 is on business day 2026-10-01, which is not open"}
+	got := db.MapError(raw)
+	var ae *apperr.Error
+	if !errors.As(got, &ae) || ae.Code != "BUSINESS_DAY_CLOSED" || ae.Kind != apperr.KindConflict || ae.Message == raw.Message {
+		t.Fatalf("mapped to %#v", got)
 	}
 }
 

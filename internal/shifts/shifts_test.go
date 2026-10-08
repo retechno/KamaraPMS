@@ -733,3 +733,26 @@ func TestTheReportOfAShiftIsZWhenClosedAndXWhileOpen(t *testing.T) {
 	_, err = f.Shifts.Report(f.admin, f.propID, 999999)
 	wantCode(t, err, "SHIFT_NOT_FOUND")
 }
+
+// Audit F-07 (migration 00065): the database refuses a shift opened, a cash movement or a shift closed on a closed business day, with no service in the way.
+func TestTheDatabaseRefusesShiftRowsDatedAClosedDay(t *testing.T) {
+	f := setup(t)
+	sh := f.open(t, f.cashier, "", "0")
+	_, err := f.Shifts.Move(f.cashier, f.propID, sh.ID, "m1", shifts.MovementInput{Kind: "PAY_IN", Amount: "20000", AccountID: f.account(t, "4590"), Reason: "found in the lobby"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var movement int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT min(id) FROM cashier_shift_movements`).Scan(&movement))
+	if err := dbtest.InsertCopyOnClosedDay(t, f.Pool, "cashier_shift_movements", "business_date", movement); !dbtest.IsClosedDayRefusal(err) {
+		t.Errorf("a movement dated a closed day: %v", err)
+	}
+	if err := dbtest.InsertCopyOnClosedDay(t, f.Pool, "cashier_shifts", "business_date_opened", sh.ID); !dbtest.IsClosedDayRefusal(err) {
+		t.Errorf("a shift opened on a closed day: %v", err)
+	}
+	// and a shift cannot be closed on it either (the day is closed by now)
+	_, err = f.Pool.Exec(context.Background(), `UPDATE cashier_shifts SET business_date_closed = (SELECT max(business_date) FROM business_days WHERE status = 'CLOSED') WHERE id = $1`, sh.ID)
+	if !dbtest.IsClosedDayRefusal(err) {
+		t.Errorf("a shift closed on a closed day: %v", err)
+	}
+}
