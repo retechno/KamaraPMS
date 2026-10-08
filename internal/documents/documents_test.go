@@ -257,8 +257,7 @@ func TestInvoiceOfACompanyFolioIsAddressedToTheCompany(t *testing.T) {
 	}
 }
 
-// Printing one transaction group (docs/architecture/20-transaction-group.md): the page lists the lines of the group, its sub-totals are said to be of the group, and the total charges,
-// the payments and the balance are always those of the whole folio.
+// Printing one transaction group (docs/architecture/20-transaction-group.md): the bill of a group is the lines of that group and their totals, and nothing about the other groups.
 func TestInvoiceOfOneTransactionGroup(t *testing.T) {
 	f := setup(t)
 	fo, err := f.Folios.GetFolio(f.admin, f.propID, f.stay.Folio.ID)
@@ -280,51 +279,59 @@ func TestInvoiceOfOneTransactionGroup(t *testing.T) {
 	whole, err := f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "")
 	must(t, err)
 	ws := pdfText(t, whole)
-	for _, want := range []string{"MINIBAR", "Payment PAY", "Total charges", "Payments received", "Balance due", "72,100"} {
+	for _, want := range []string{"MINIBAR", "Payment PAY", "Total charges", "122,100", "Payments received", "50,000", "Balance due", "72,100"} {
 		if !strings.Contains(ws, want) {
 			t.Errorf("the whole folio lacks %q", want)
 		}
 	}
-	if strings.Contains(ws, "in this group") || strings.Contains(ws, "whole folio") || whole.Filename != "bill-"+fo.FolioNumber+".pdf" {
+	if strings.Contains(ws, "Group") || whole.Filename != "bill-"+fo.FolioNumber+".pdf" {
 		t.Fatalf("the whole folio is printed as it always was: %s", whole.Filename)
 	}
-	// "All" is the same document as no group
 	all, err := f.Docs.Invoice(f.admin, f.propID, f.stay.Folio.ID)
 	must(t, err)
 	if string(all.PDF[:5]) != "%PDF-" || all.Filename != whole.Filename {
 		t.Fatal("Invoice is the whole folio")
 	}
 
+	// group B: the charge and the total of the charge; the payment (group C) and the folio balance (72,100) are not on the page
 	b, err := f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "B")
 	must(t, err)
 	bs := pdfText(t, b)
 	if b.Filename != "bill-"+fo.FolioNumber+"-B.pdf" {
 		t.Fatalf("file name %s", b.Filename)
 	}
-	for _, want := range []string{"MINIBAR", "Charges in this group", "122,100", "Payments in this group", "Total charges", "whole folio", "Payments received", "50,000", "Balance due", "72,100", "has no balance of its own"} {
+	for _, want := range []string{"Group", "MINIBAR", "Total charges", "122,100", "Payments received", "Balance due"} {
 		if !strings.Contains(bs, want) {
 			t.Errorf("group B lacks %q", want)
 		}
 	}
-	if strings.Contains(bs, "Payment PAY") {
-		t.Error("group B shows a line of group C")
+	for _, not := range []string{"Payment PAY", "50,000", "72,100", "whole folio", "in this group", "balance of its own"} {
+		if strings.Contains(bs, not) {
+			t.Errorf("group B must not show %q", not)
+		}
 	}
+	// group C: the payment and its total
 	c, err := f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "C")
 	must(t, err)
 	cs := pdfText(t, c)
-	if strings.Contains(cs, "MINIBAR") || !strings.Contains(cs, "Payment PAY") || !strings.Contains(cs, "Payments in this group") || !strings.Contains(cs, "whole folio") || !strings.Contains(cs, "72,100") {
-		t.Errorf("group C is the payment only, with the balance of the whole folio")
+	if strings.Contains(cs, "MINIBAR") || strings.Contains(cs, "72,100") || strings.Contains(cs, "122,100") || !strings.Contains(cs, "Payment PAY") || !strings.Contains(cs, "Payments received") || !strings.Contains(cs, "50,000") || !strings.Contains(cs, "credit") {
+		t.Error("group C is the payment and its own total only")
 	}
-	// a group with no line is an empty page with the same folio figures, not an error
+	// a group with no line is an empty page with zero totals, not an error
 	dd, err := f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "D")
 	must(t, err)
 	ds := pdfText(t, dd)
-	if strings.Contains(ds, "MINIBAR") || strings.Contains(ds, "Payment PAY") || !strings.Contains(ds, "whole folio") || !strings.Contains(ds, "72,100") {
-		t.Error("group D is empty and still says the balance of the folio")
+	if strings.Contains(ds, "MINIBAR") || strings.Contains(ds, "Payment PAY") || strings.Contains(ds, "72,100") || !strings.Contains(ds, "Balance due") {
+		t.Error("group D is empty with zero totals")
 	}
-	// nothing was written by printing
+	// nothing was written by printing, and the folio balance did not move
 	if n := f.Count(t, `SELECT count(*) FROM folio_item_groups`); n != 2 {
 		t.Fatalf("printing wrote rows: %d", n)
+	}
+	after, err := f.Folios.GetFolio(f.admin, f.propID, f.stay.Folio.ID)
+	must(t, err)
+	if after.Balance != fo.Balance {
+		t.Fatalf("the folio balance moved: %s -> %s", fo.Balance, after.Balance)
 	}
 	_, err = f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "E")
 	wantCode(t, err, "VALIDATION_FAILED")

@@ -17458,7 +17458,7 @@ export interface operations {
             query?: {
                 /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
                 lang?: components["parameters"]["Lang"];
-                /** @description ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`). A group is a heading of the bill, not a folio: its page shows sub-totals marked `in this group`, and the total charges, the payments and the balance are always those of the whole folio and are marked `(whole folio)`. 422 for another value. */
+                /** @description ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`), with the totals of those lines (total charges, payments received and the balance of the lines shown). It is a print of a heading of the bill: it changes nothing, and the folio balance is not printed on it. 422 for another value. */
                 group?: "ALL" | "A" | "B" | "C" | "D";
             };
             header?: never;

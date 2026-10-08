@@ -142,8 +142,9 @@ func (s *Service) Invoice(ctx context.Context, propertyID, folioID int64) (Docum
 	return s.InvoiceGroup(ctx, propertyID, folioID, "")
 }
 
-// InvoiceGroup renders a folio, or only the lines of one transaction group of it (group "" is the whole folio). A group is a heading of the bill and not a folio: the page lists the
-// lines of the group, its own sub-totals are said to be "in this group", and the total charges, the payments and the balance are always those of the WHOLE folio and are marked so.
+// InvoiceGroup renders a folio, or only the lines of one transaction group of it (group "" is the whole folio). The bill of a group is an ordinary bill of those lines: the lines of the
+// group and their totals (charges, payments and the balance of the lines shown). It is a print of a heading of the bill; the balance of the folio is not changed by it and is not
+// printed on it.
 func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, group string) (Document, error) {
 	if group != "" && !folios.ValidGroup(group) {
 		return Document{}, apperr.Invalid("the group is invalid", apperr.FieldError{Field: "group", Code: "INVALID_VALUE", Message: "one of " + strings.Join(folios.GroupCodes, ", ") + ", or empty for the whole folio"})
@@ -195,14 +196,7 @@ func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, g
 	var order []key
 	parts := map[key]*agg{}
 	net, charges, payments := decimal.Zero, decimal.Zero, decimal.Zero // of the lines shown
-	folioCharges, folioPayments := decimal.Zero, decimal.Zero          // of the whole folio, whatever is shown
 	for _, it := range f.Items {
-		fd, fc := dec(it.Debit), dec(it.Credit)
-		if it.TransactionType == "PAYMENT" || it.TransactionType == "REFUND" {
-			folioPayments = folioPayments.Add(fc.Sub(fd))
-		} else {
-			folioCharges = folioCharges.Add(fd.Sub(fc))
-		}
 		if group != "" && it.GroupCode != group {
 			continue
 		}
@@ -239,22 +233,15 @@ func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, g
 			}
 		}
 	}
-	balance := dec(f.Balance)
+	balance := dec(f.Balance) // the folio's own balance
+	if group != "" {
+		balance = charges.Sub(payments) // a bill of one group: the balance of the lines shown
+	}
 	label := "Balance due"
 	if balance.IsNegative() {
 		label = "Balance (credit)"
 	}
-	if group == "" {
-		d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
-	} else {
-		// the figures of the group are sub-totals of the lines shown; the folio figures are the same as on the page of the whole folio and are the only balance there is
-		whole := "Balance due (whole folio)"
-		if balance.IsNegative() {
-			whole = "Balance (credit, whole folio)"
-		}
-		d.Summary = append(d.Summary, Amount{"Charges in this group", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments in this group", dc.lang.Money(payments, dc.decimals)},
-			Amount{"Total charges (whole folio)", dc.lang.Money(folioCharges, dc.decimals)}, Amount{"Payments received (whole folio)", dc.lang.Money(folioPayments, dc.decimals)}, Amount{whole, dc.lang.Money(balance, dc.decimals)})
-	}
+	d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
 	pdf, err := RenderInvoice(d)
 	if err != nil {
 		return Document{}, err

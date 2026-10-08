@@ -41,8 +41,7 @@ type InvoiceData struct {
 	Departure civil.Date
 	Currency  string
 	Lines     []InvoiceLine
-	// Group is the transaction group the page is limited to ("" for the whole folio). A group is a heading of the bill, not a folio: the page then lists the lines of that group and the
-	// summary says which figures are those of the group and which of the whole folio.
+	// Group is the transaction group the page is limited to ("" for the whole folio): the page lists the lines of that group and their totals.
 	Group   string
 	Summary []Amount // net, service charges, taxes, total charges, payments, balance (the last one is emphasised)
 }
@@ -90,11 +89,6 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 		items[i] = [2]string{a.Label, a.Value}
 	}
 	g.totals(items)
-	if d.Group != "" {
-		g.p.Ln(3)
-		g.color(muted)
-		g.note("This page lists one group of the lines of the folio. A group has no balance of its own: the figures marked (whole folio) are those of the entire folio.", "I", 8.5)
-	}
 	if !d.Final {
 		g.p.Ln(3)
 		g.color(muted)

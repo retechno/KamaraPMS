@@ -3682,7 +3682,7 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [ALL, A, B, C, D], default: ALL }
-          description: "ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`). A group is a heading of the bill, not a folio: its page shows sub-totals marked `in this group`, and the total charges, the payments and the balance are always those of the whole folio and are marked `(whole folio)`. 422 for another value."
+          description: "ALL (the default) prints the whole folio. A to D print only the lines of that transaction group (file name `bill-<folio number>-<group>.pdf`), with the totals of those lines (total charges, payments received and the balance of the lines shown). It is a print of a heading of the bill: it changes nothing, and the folio balance is not printed on it. 422 for another value."
       description: "A closed folio prints as an INVOICE with the file name `invoice-<folio number>.pdf`; an open one as a GUEST BILL that says it is not final (`bill-<folio number>.pdf`). It lists every ledger line, the charges net of service and tax, each service charge and tax by name and rate (from the posted components), the payments and the balance. The guest profile (address) is shown only to callers with guest.read."
       tags: [documents]
       responses:
