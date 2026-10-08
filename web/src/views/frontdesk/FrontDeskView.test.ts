@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import ArrivalsView from './ArrivalsView.vue'
 import FrontDeskView from './FrontDeskView.vue'
 
 let GET = vi.fn()
@@ -12,10 +13,9 @@ vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POS
 
 const arrival = (id: number, guest: string, over: object = {}) => ({
   reservation_id: id, confirmation_number: `RES00000${id}`, reservation_room_id: id, reservation_version: 1, guest_id: 3, guest_name: guest,
-  room_type_id: 10, room_type_code: 'DLX', room_id: null, arrival_date: '2026-09-30', departure_date: '2026-10-02', adult_count: 2, child_count: 0, ...over,
-})
-const stay = (id: number, number: string, guest: string, departure: string) => ({
-  id, stay_number: number, guest_name: guest, room_number: `10${id}`, arrival_date: '2026-09-28', departure_date: departure, adult_count: 2, child_count: 1,
+  room_type_id: 10, room_type_code: 'DLX', room_type_name: 'Deluxe', room_id: null, arrival_date: '2026-09-30', departure_date: '2026-10-02', adult_count: 2, child_count: 0,
+  status: 'CONFIRMED', reservation_status: 'CONFIRMED', rate: { rate_plan_code: 'BAR', rate_plan_name: 'Best', amount: '1000000', price_mode: 'EXCLUSIVE' }, company: null, deposit: null,
+  readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_ASSIGNED'] }, ...over,
 })
 const inHouse = (id: number, number: string, guest: string, departure: string) => ({
   id, stay_number: number, version: 1, reservation_id: id, confirmation_number: `RES00000${id}`,
@@ -23,6 +23,7 @@ const inHouse = (id: number, number: string, guest: string, departure: string) =
   rate: { rate_plan_code: 'BAR', rate_plan_name: 'Best', amount: '1000000', price_mode: 'EXCLUSIVE', is_override: false },
   stay: { arrival_date: '2026-09-28', departure_date: departure, nights: 5, adults: 2, children: 1 },
   balance: { amount: '0', status: 'SETTLED', folios: [{ id: 80 + id, folio_number: `FOL00000${id}`, folio_type: 'GUEST', bill_to_company_id: null, status: 'OPEN', balance: '0' }] },
+  checkout: { status: 'READY', uncharged_nights: 0 },
 })
 
 let mounted: VueWrapper | null = null
@@ -35,12 +36,12 @@ async function mountDesk(tab: 'arrivals' | 'in-house' | 'departures' = 'arrivals
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
   property.current = { require_room_inspection_for_checkin: false } as never
-  GET = vi.fn(async (path: string) => {
+  GET = vi.fn(async (path: string, init?: { params?: { query?: { departure_until?: string } } }) => {
     if (path.endsWith('/arrivals')) return { data: { data: [arrival(1, 'Siti'), arrival(2, 'Budi', { room_id: 30, room_number: '301', housekeeping_status: 'DIRTY' })] } }
+    if (path.endsWith('/stays/in-house') && init?.params?.query?.departure_until) return { data: { data: [inHouse(5, 'STY000005', 'Wayan', '2026-09-29')] } } // departures: overdue
     if (path.endsWith('/stays/in-house')) {
       return { data: { data: [inHouse(5, 'STY000005', 'Wayan', '2026-09-29'), inHouse(6, 'STY000006', 'Dewi', '2026-10-03'), inHouse(7, 'STY000007', 'Agus', '2026-10-04')], next_cursor: 'c2' } }
     }
-    if (path.endsWith('/stays')) return { data: { data: [stay(5, 'STY000005', 'Wayan', '2026-09-29')] } } // departures: overdue
     return { data: { data: [] } }
   })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -111,10 +112,19 @@ describe('FrontDeskView', () => {
   it('marks an overdue departure and offers check-out to those who may', async () => {
     await mountDesk('departures')
     expect(mounted!.get('[data-testid=overdue]').text()).toBe('overdue')
-    expect(mounted!.get('[data-testid=checkout-STY000005]').attributes('href')).toBe('/stays/5')
+    expect(mounted!.get('[data-testid=checkOut-STY000005]').text()).toBe('Check out')
     mounted!.unmount()
     await mountDesk('departures', ['reservation.read'])
-    expect(mounted!.find('[data-testid=checkout-STY000005]').exists()).toBe(false)
+    expect(mounted!.find('[data-testid=checkOut-STY000005]').exists()).toBe(false)
+  })
+
+  it('reads the other lists again after a check-in', async () => {
+    await mountDesk('arrivals')
+    const reads = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/stays/in-house')).length
+    const before = reads()
+    mounted!.findComponent(ArrivalsView).vm.$emit('changed')
+    await flushPromises()
+    expect(reads()).toBe(before + 2) // the in-house and the departures lists
   })
 
   it('sorts a list by a column', async () => {
@@ -136,6 +146,6 @@ describe('FrontDeskView', () => {
     await mountDesk()
     expect(mounted!.get('[data-testid=tab-departures]').text()).toContain('Keberangkatan')
     expect(mounted!.get('[data-testid=open-1]').text()).toBe('Check-in')
-    expect(mounted!.get('[data-testid=panel-arrivals] thead').text()).toContain('Tipe kamar')
+    expect(mounted!.get('[data-testid=panel-arrivals] thead').text()).toContain('Siap check-in')
   })
 })

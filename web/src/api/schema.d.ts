@@ -1951,8 +1951,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Confirmed rooms arriving on a date (reservation.read)
-         * @description `date` defaults to the business date. A room that is checked in is no longer an arrival.
+         * Rooms arriving on a date (reservation.read)
+         * @description `date` defaults to the business date. `status` is the status of the reservation room: CONFIRMED by default (a room that is checked in is no longer a CONFIRMED arrival), or CHECKED_IN,
+         *     CANCELLED, NO_SHOW. `q` searches the guest, the confirmation number and the room; `room_type_id` narrows by type. Every row carries the company, the booked rate of the arrival night
+         *     (snapshot), the deposit and a readiness for check-in computed with the rules the check-in applies (it is not a status; the check-in still validates). The list is not paged: it is one day.
          */
         get: operations["listArrivals"];
         put?: never;
@@ -8901,14 +8903,21 @@ export interface components {
                 children: number;
             };
             balance: {
-                /** @description The sum of the balances of the folios of the stay; each is also in `folios`. */
+                /** @description The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO. */
                 amount: string;
                 /**
-                 * @description Zero, above zero or below zero for `amount`.
+                 * @description Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance).
                  * @enum {string}
                  */
-                status: "SETTLED" | "OUTSTANDING" | "CREDIT";
+                status: "SETTLED" | "OUTSTANDING" | "CREDIT" | "NO_FOLIO";
                 folios: components["schemas"]["StayFolio"][];
+            };
+            /** @description What is known before a check-out; the check-out itself applies every rule, so a zero balance is no promise. */
+            checkout: {
+                /** @enum {string} */
+                status: "READY" | "BALANCE_DUE" | "COMPANY_BILL" | "CHARGES_PENDING" | "FOLIO_ISSUE";
+                /** @description Room nights up to the business date that a check-out would still charge. */
+                uncharged_nights: number;
             };
         };
         StayPage: {
@@ -8946,6 +8955,42 @@ export interface components {
             departure_date: components["schemas"]["Date"];
             adult_count: number;
             child_count: number;
+            /**
+             * @description The status of the reservation room.
+             * @enum {string}
+             */
+            status: "CONFIRMED" | "CHECKED_IN" | "CANCELLED" | "NO_SHOW";
+            reservation_status: string;
+            room_type_name: string;
+            rate: {
+                rate_plan_code: string;
+                rate_plan_name: string;
+                /** @description The booked price of the arrival night (empty when the night has no snapshot). */
+                amount: string;
+                price_mode: string;
+            };
+            /** @description The company of the first billing instruction of the line; null when the guest pays. */
+            company: null | components["schemas"]["InHouseCompany"];
+            /** @description What the reservation holds before check-in; null when it has no deposit folio. */
+            deposit: null | {
+                /** Format: int64 */
+                folio_id: number;
+                /** @description The credit balance of the deposit folio */
+                paid: string;
+            };
+            readiness: {
+                /**
+                 * @description NONE for a room that is not waiting for check-in.
+                 * @enum {string}
+                 */
+                status: "READY" | "BLOCKED" | "NONE";
+                blockers: ("NOT_BUSINESS_DATE" | "GUEST_MISSING" | "ROOM_NOT_ASSIGNED" | "ROOM_NOT_READY" | "ROOM_OCCUPIED" | "ROOM_BLOCKED" | "ROOM_NOT_AVAILABLE")[];
+            };
+        };
+        InHouseCompany: {
+            /** Format: int64 */
+            id: number;
+            name: string;
         };
         ChangeRatesRequest: {
             /** Format: int32 */
@@ -15935,6 +15980,9 @@ export interface operations {
         parameters: {
             query?: {
                 date?: components["schemas"]["Date"];
+                status?: "CONFIRMED" | "CHECKED_IN" | "CANCELLED" | "NO_SHOW";
+                q?: string;
+                room_type_id?: number;
             };
             header?: never;
             path: {
@@ -16001,6 +16049,13 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Opaque cursor from a previous page's next_cursor. */
                 cursor?: components["parameters"]["Cursor"];
+                departure_date?: components["schemas"]["Date"];
+                /** @description Stays leaving on or before this date (the departures list). */
+                departure_until?: components["schemas"]["Date"];
+                /** @description The type of the room the guest is in. */
+                room_type_id?: number;
+                /** @description Searches the guest */
+                q?: string;
             };
             header?: never;
             path: {

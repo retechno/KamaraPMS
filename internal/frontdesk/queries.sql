@@ -107,7 +107,7 @@ JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservati
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 JOIN LATERAL (
-    SELECT sr.room_id, r.room_number, t.code AS room_type_code, t.name AS room_type_name
+    SELECT sr.room_id, r.room_number, t.id AS room_type_id, t.code AS room_type_code, t.name AS room_type_name
     FROM stay_rooms sr
     JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
     JOIN room_types t ON t.property_id = r.property_id AND t.id = r.room_type_id
@@ -115,8 +115,23 @@ JOIN LATERAL (
     ORDER BY sr.check_out_at IS NULL DESC, sr.id DESC LIMIT 1
 ) cur ON true
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status = 'OPEN' AND (@before_id::bigint = 0 OR s.id < @before_id::bigint)
+  AND (sqlc.narg(departure_date)::date IS NULL OR s.departure_date = sqlc.narg(departure_date)::date)
+  AND (sqlc.narg(departure_until)::date IS NULL OR s.departure_date <= sqlc.narg(departure_until)::date)
+  AND (sqlc.narg(room_type_id)::bigint IS NULL OR cur.room_type_id = sqlc.narg(room_type_id)::bigint)
+  AND (sqlc.narg(q)::text IS NULL OR s.stay_number ILIKE '%' || sqlc.narg(q)::text || '%' OR res.confirmation_number ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR cur.room_number ILIKE '%' || sqlc.narg(q)::text || '%' OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || sqlc.narg(q)::text || '%')
 ORDER BY s.id DESC
 LIMIT @row_limit;
+
+-- Room nights up to a date that are not charged yet, for many stays: what a check-out would still post.
+-- name: ListUnchargedNights :many
+SELECT s.id AS stay_id, count(*)::int AS nights
+FROM stays s
+JOIN reservation_room_rates x ON x.property_id = s.property_id AND x.reservation_room_id = s.reservation_room_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = ANY(@stay_ids::bigint[])
+  AND x.stay_date < s.departure_date AND x.stay_date <= @through::date
+  AND NOT EXISTS (SELECT 1 FROM stay_charge_postings p WHERE p.property_id = s.property_id AND p.stay_id = s.id AND p.service_date = x.stay_date AND p.status = 'POSTED')
+GROUP BY s.id;
 
 -- The price of the night the stay is in (the last night of its snapshot that is not after the date; the arrival date when no date is given): the snapshot of the booking, never the rate master.
 -- name: ListInHouseRates :many
@@ -140,21 +155,37 @@ ORDER BY s.id, (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id;
 -- name: ListCompanyNames :many
 SELECT id, name FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
 
--- CONFIRMED rooms arriving on a date (the arrivals list).
+-- The rooms arriving on a date (the arrivals list): CONFIRMED by default, or CHECKED_IN, CANCELLED or NO_SHOW. The search reads the guest, the confirmation number and the room; the type narrows
+-- the list. The company is the one of the first billing instruction of the line; the rate is the booked night of the arrival date (the snapshot, never the rate master).
 -- name: ListArrivals :many
-SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
+SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code, t.name AS room_type_name,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name,
-       l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code
+       l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code,
+       l.status AS line_status, res.status AS reservation_status,
+       rp.code AS rate_plan_code, rp.name AS rate_plan_name,
+       night.amount AS night_amount, night.price_mode AS night_price_mode,
+       COALESCE(co.id, 0)::bigint AS company_id, COALESCE(co.name, '')::text AS company_name
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
 LEFT JOIN bed_types rbt ON rbt.property_id = l.property_id AND rbt.id = l.requested_bed_type_id
 LEFT JOIN bed_types abt ON abt.property_id = r.property_id AND abt.id = r.bed_type_id
 LEFT JOIN room_housekeeping hk ON hk.property_id = l.property_id AND hk.room_id = l.room_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
-WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.arrival_date = @arrival
+LEFT JOIN reservation_room_rates night ON night.property_id = l.property_id AND night.reservation_room_id = l.id AND night.stay_date = l.arrival_date
+LEFT JOIN LATERAL (
+    SELECT c.id, c.name FROM folio_billing_instructions i JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+    WHERE i.property_id = l.property_id AND i.reservation_room_id = l.id
+    ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id LIMIT 1
+) co ON true
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.arrival_date = @arrival
+  AND l.status = @line_status::text AND (@line_status::text <> 'CONFIRMED' OR res.status = 'CONFIRMED')
+  AND (sqlc.narg(room_type_id)::bigint IS NULL OR l.room_type_id = sqlc.narg(room_type_id)::bigint)
+  AND (sqlc.narg(q)::text IS NULL OR res.confirmation_number ILIKE '%' || sqlc.narg(q)::text || '%' OR r.room_number ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || sqlc.narg(q)::text || '%')
 ORDER BY t.sort_order, l.id;
 
 -- name: GetRoomForCheckIn :one

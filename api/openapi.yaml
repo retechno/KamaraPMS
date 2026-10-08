@@ -2439,11 +2439,17 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listArrivals
-      summary: Confirmed rooms arriving on a date (reservation.read)
-      description: "`date` defaults to the business date. A room that is checked in is no longer an arrival."
+      summary: Rooms arriving on a date (reservation.read)
+      description: |
+        `date` defaults to the business date. `status` is the status of the reservation room: CONFIRMED by default (a room that is checked in is no longer a CONFIRMED arrival), or CHECKED_IN,
+        CANCELLED, NO_SHOW. `q` searches the guest, the confirmation number and the room; `room_type_id` narrows by type. Every row carries the company, the booked rate of the arrival night
+        (snapshot), the deposit and a readiness for check-in computed with the rules the check-in applies (it is not a status; the check-in still validates). The list is not paged: it is one day.
       tags: [frontdesk]
       parameters:
         - { name: date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: status, in: query, schema: { type: string, enum: [CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 } }
       responses:
         "200":
           description: The arrivals.
@@ -2495,6 +2501,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - { name: departure_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: departure_until, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Stays leaving on or before this date (the departures list). }
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 }, description: The type of the room the guest is in. }
+        - { name: q, in: query, schema: { type: string }, description: Searches the guest, the stay and confirmation numbers and the room. }
       responses:
         "200":
           description: A page of in-house rows.
@@ -9820,7 +9830,7 @@ components:
         next_cursor: { type: string }
     InHouseRow:
       type: object
-      required: [id, stay_number, version, reservation_id, confirmation_number, guest, room, company, billing, rate, stay, balance]
+      required: [id, stay_number, version, reservation_id, confirmation_number, guest, room, company, billing, rate, stay, balance, checkout]
       properties:
         id: { type: integer, format: int64 }
         stay_number: { type: string }
@@ -9883,11 +9893,18 @@ components:
           type: object
           required: [amount, status, folios]
           properties:
-            amount: { type: string, description: The sum of the balances of the folios of the stay; each is also in `folios`. }
-            status: { type: string, enum: [SETTLED, OUTSTANDING, CREDIT], description: "Zero, above zero or below zero for `amount`." }
+            amount: { type: string, description: "The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO." }
+            status: { type: string, enum: [SETTLED, OUTSTANDING, CREDIT, NO_FOLIO], description: "Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance)." }
             folios:
               type: array
               items: { $ref: "#/components/schemas/StayFolio" }
+        checkout:
+          type: object
+          required: [status, uncharged_nights]
+          description: What is known before a check-out; the check-out itself applies every rule, so a zero balance is no promise.
+          properties:
+            status: { type: string, enum: [READY, BALANCE_DUE, COMPANY_BILL, CHARGES_PENDING, FOLIO_ISSUE] }
+            uncharged_nights: { type: integer, description: Room nights up to the business date that a check-out would still charge. }
     StayPage:
       type: object
       required: [data]
@@ -9898,7 +9915,7 @@ components:
         next_cursor: { type: string }
     Arrival:
       type: object
-      required: [reservation_id, confirmation_number, reservation_room_id, reservation_version, guest_id, room_type_id, room_type_code, room_id, arrival_date, departure_date, adult_count, child_count]
+      required: [reservation_id, confirmation_number, reservation_room_id, reservation_version, guest_id, room_type_id, room_type_code, room_type_name, room_id, arrival_date, departure_date, adult_count, child_count, status, reservation_status, rate, company, deposit, readiness]
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
@@ -9919,6 +9936,45 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
         adult_count: { type: integer }
         child_count: { type: integer }
+        status: { type: string, enum: [CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW], description: The status of the reservation room. }
+        reservation_status: { type: string }
+        room_type_name: { type: string }
+        rate:
+          type: object
+          required: [rate_plan_code, rate_plan_name, amount, price_mode]
+          properties:
+            rate_plan_code: { type: string }
+            rate_plan_name: { type: string }
+            amount: { type: string, description: The booked price of the arrival night (empty when the night has no snapshot). }
+            price_mode: { type: string }
+        company:
+          description: The company of the first billing instruction of the line; null when the guest pays.
+          oneOf:
+            - type: "null"
+            - { $ref: "#/components/schemas/InHouseCompany" }
+        deposit:
+          description: What the reservation holds before check-in; null when it has no deposit folio.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [folio_id, paid]
+              properties:
+                folio_id: { type: integer, format: int64 }
+                paid: { type: string, description: The credit balance of the deposit folio, from the ledger. }
+        readiness:
+          type: object
+          required: [status, blockers]
+          properties:
+            status: { type: string, enum: [READY, BLOCKED, NONE], description: NONE for a room that is not waiting for check-in. }
+            blockers:
+              type: array
+              items: { type: string, enum: [NOT_BUSINESS_DATE, GUEST_MISSING, ROOM_NOT_ASSIGNED, ROOM_NOT_READY, ROOM_OCCUPIED, ROOM_BLOCKED, ROOM_NOT_AVAILABLE] }
+    InHouseCompany:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
     ChangeRatesRequest:
       type: object
       required: [version, apply_to, date, amount, reason]

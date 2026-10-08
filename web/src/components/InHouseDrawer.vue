@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { InHouseRow } from '@/api/types'
+import CheckoutStatus from '@/components/CheckoutStatus.vue'
 import InHouseBalance from '@/components/InHouseBalance.vue'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -11,7 +12,7 @@ import { usePropertyStore } from '@/stores/property'
 
 /** The detail of an in-house stay beside the list, so the list keeps its place. It only reads and offers the actions of the row; nothing is posted from here. */
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ row: InHouseRow | null }>()
+const props = withDefaults(defineProps<{ row: InHouseRow | null; mode?: 'in-house' | 'departures' }>(), { mode: 'in-house' })
 const emit = defineEmits<{ act: [action: InHouseAction, row: InHouseRow] }>()
 
 const auth = useAuthStore()
@@ -41,7 +42,7 @@ const folioLabel = (type: string) => (type === 'COMPANY' ? t('frontDesk.inHouse.
           <dt class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('frontDesk.inHouse.sectionRate') }}</dt>
           <dd class="m-0 mt-1" data-testid="drawer-rate">
             <div>{{ row.rate.rate_plan_code }} · {{ row.rate.rate_plan_name }}</div>
-            <div class="tabular-nums">{{ $money(row.rate.amount) }} {{ t('frontDesk.inHouse.perNight') }}<span v-if="row.rate.is_override" class="text-muted-foreground"> · {{ t('frontDesk.inHouse.override') }}</span></div>
+            <div class="tabular-nums">{{ row.rate.amount ? $money(row.rate.amount) : '—' }} {{ t('frontDesk.inHouse.perNight') }}<span v-if="row.rate.is_override" class="text-muted-foreground"> · {{ t('frontDesk.inHouse.override') }}</span></div>
           </dd>
         </div>
         <div>
@@ -60,6 +61,7 @@ const folioLabel = (type: string) => (type === 'COMPANY' ? t('frontDesk.inHouse.
           <dt class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('frontDesk.inHouse.sectionBalance') }}</dt>
           <dd class="m-0 mt-1">
             <InHouseBalance :balance="row.balance" />
+            <CheckoutStatus v-if="mode === 'departures'" class="ml-2" :checkout="row.checkout" data-testid="drawer-checkout" />
             <ul class="m-0 mt-2 list-none p-0" data-testid="drawer-folios">
               <li v-for="f in row.balance.folios" :key="f.id" class="flex justify-between gap-3">
                 <span>{{ folioLabel(f.folio_type) }} <span class="text-muted-foreground">{{ f.folio_number }}</span></span>

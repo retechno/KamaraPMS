@@ -248,7 +248,7 @@ func TestAChangedMasterRateDoesNotMoveAStayAndAStayRateSurvivesIt(t *testing.T) 
 			t.Fatalf("%s: %s, want %s", date, got, want)
 		}
 	}
-	rows, err := f.Front.ListInHouse(f.admin, f.propID, 0, 50)
+	rows, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 || rows[0].Rate.Amount != "1000000" || res.Stay.ID != st.Stay.ID {
 		t.Fatalf("in-house rate: %+v", rows)

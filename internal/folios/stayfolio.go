@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
@@ -238,6 +239,37 @@ func (s *Service) CloseStayFolios(ctx context.Context, p auth.Principal, propert
 			return nil, err
 		}
 		out = append(out, ClosedFolio{ID: c.ID, FolioNumber: c.FolioNumber, Status: c.Status})
+	}
+	return out, nil
+}
+
+// ReservationDeposit is what a reservation holds before check-in: its deposit folio (the open folio that has no stay yet) and the amount paid into it.
+type ReservationDeposit struct {
+	FolioID int64  `json:"folio_id"`
+	Paid    string `json:"paid"`
+}
+
+// ReservationDeposits reads the deposit folios of many reservations (the arrivals list); a reservation without one is absent from the map. Paid is the credit balance of the folio
+// (what was paid in), from the ledger like every balance; a folio that owes (a charge before check-in) has paid 0.
+func (s *Service) ReservationDeposits(ctx context.Context, tenantID, propertyID int64, reservationIDs []int64) (map[int64]ReservationDeposit, error) {
+	out := map[int64]ReservationDeposit{}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range reservationIDs {
+		fid, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: id})
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		bal, _, err := s.balanceOf(ctx, propertyID, fid)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = ReservationDeposit{FolioID: fid, Paid: fixed(decimal.Max(bal.Neg(), decimal.Zero), decimals)}
 	}
 	return out, nil
 }

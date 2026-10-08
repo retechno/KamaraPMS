@@ -5,6 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/rates"
 )
@@ -16,7 +17,7 @@ func TestInHouseShowsGuestRoomRateAndBalance(t *testing.T) {
 	res := f.book(t, f.dlx, "2026-09-30", "2026-10-02")
 	out, err := f.checkIn(t, f.admin, res, &f.r101, "")
 	must(t, err)
-	rows, err := f.Front.ListInHouse(f.admin, f.propID, 0, 50)
+	rows, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 {
 		t.Fatalf("rows: %+v", rows)
@@ -43,7 +44,7 @@ func TestInHouseBalanceIsTheFolioBalancesAndKeepsTheCompanyFolioApart(t *testing
 	s := withCompanyFolio(t)
 	s.pay(t, s.stay.Folio.ID, "p-guest", "300000")
 	s.pay(t, s.companyFol, "p-company", "100000")
-	rows, err := s.Front.ListInHouse(s.admin, s.propID, 0, 50)
+	rows, err := s.Front.ListInHouse(s.admin, s.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 {
 		t.Fatalf("rows: %+v", rows)
@@ -72,7 +73,7 @@ func TestInHouseBalanceIsTheFolioBalancesAndKeepsTheCompanyFolioApart(t *testing
 func TestInHouseCompanyOfAnEmptyInstructionSetComesFromItsCompanyFolio(t *testing.T) {
 	s := withCompanyFolio(t)
 	must(t, s.Exec(t, `DELETE FROM folio_billing_instructions WHERE reservation_room_id = $1`, s.res.Rooms[0].ID))
-	rows, err := s.Front.ListInHouse(s.admin, s.propID, 0, 50)
+	rows, err := s.Front.ListInHouse(s.admin, s.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 || rows[0].Company == nil || rows[0].Company.Name != "Acme Corp" || len(rows[0].Billing) != 0 {
 		t.Fatalf("company folio: %+v", rows)
@@ -86,7 +87,7 @@ func TestInHouseRateIsTheSnapshotNotTheRateMaster(t *testing.T) {
 	must(t, err)
 	_, err = f.Rates.FillRates(f.admin, f.propID, rates.FillInput{RatePlanID: f.plan, RoomTypeIDs: []int64{f.dlx.ID}, From: d("2026-09-30"), To: d("2026-10-21"), Amount: "2500000"})
 	must(t, err)
-	rows, err := f.Front.ListInHouse(f.admin, f.propID, 0, 50)
+	rows, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 || rows[0].Rate.Amount != "1000000" {
 		t.Fatalf("the price of the booking must not follow the master: %+v", rows)
@@ -101,18 +102,18 @@ func TestInHouseListsOnlyOpenStaysAndPages(t *testing.T) {
 	b := f.book(t, f.std, "2026-09-30", "2026-10-02")
 	second, err := f.checkIn(t, f.admin, b, &f.r201, "")
 	must(t, err)
-	first, err := f.Front.ListInHouse(f.admin, f.propID, 0, 1)
+	first, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, 0, 1)
 	must(t, err)
 	if len(first) != 1 || first[0].ID != second.Stay.ID || first[0].Rate.Amount != "500000" || first[0].Room.RoomTypeCode != "STD" {
 		t.Fatalf("first page (newest first): %+v", first)
 	}
-	next, err := f.Front.ListInHouse(f.admin, f.propID, first[0].ID, 10)
+	next, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, first[0].ID, 10)
 	must(t, err)
 	if len(next) != 1 || next[0].Room.Number != "101" {
 		t.Fatalf("next page: %+v", next)
 	}
 	must(t, f.Exec(t, `UPDATE stays SET status = 'CHECKED_OUT', actual_check_out_at = now() WHERE id = $1`, second.Stay.ID))
-	rows, err := f.Front.ListInHouse(f.admin, f.propID, 0, 50)
+	rows, err := f.Front.ListInHouse(f.admin, f.propID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 1 || rows[0].Room.Number != "101" {
 		t.Fatalf("a stay that left is not in house: %+v", rows)
@@ -126,21 +127,21 @@ func TestInHouseIsScopedAndAuthorized(t *testing.T) {
 	must(t, err)
 	// another property of the same tenant does not show it, and another tenant cannot ask for this property
 	ubud := f.Property(t, f.tenantID, "UBUD")
-	rows, err := f.Front.ListInHouse(f.admin, ubud.ID, 0, 50)
+	rows, err := f.Front.ListInHouse(f.admin, ubud.ID, frontdesk.InHouseFilter{}, 0, 50)
 	must(t, err)
 	if len(rows) != 0 {
 		t.Fatalf("another property: %+v", rows)
 	}
 	other := f.Tenant(t, "XYZ")
 	stranger, _ := f.AdminAccount(t, other.ID)
-	if _, err := f.Front.ListInHouse(stranger, f.propID, 0, 50); err == nil {
+	if _, err := f.Front.ListInHouse(stranger, f.propID, frontdesk.InHouseFilter{}, 0, 50); err == nil {
 		t.Fatal("another tenant must not read the in-house list")
 	}
 	noRead := f.User(t, f.tenantID, f.propID, auth.PermGuestRead)
-	_, err = f.Front.ListInHouse(noRead, f.propID, 0, 50)
+	_, err = f.Front.ListInHouse(noRead, f.propID, frontdesk.InHouseFilter{}, 0, 50)
 	wantCode(t, err, "PERMISSION_DENIED")
 	reader := f.User(t, f.tenantID, f.propID, auth.PermReservationRead)
-	if rows, err := f.Front.ListInHouse(reader, f.propID, 0, 50); err != nil || len(rows) != 1 {
+	if rows, err := f.Front.ListInHouse(reader, f.propID, frontdesk.InHouseFilter{}, 0, 50); err != nil || len(rows) != 1 {
 		t.Fatalf("a reader sees the list: %v %+v", err, rows)
 	}
 }

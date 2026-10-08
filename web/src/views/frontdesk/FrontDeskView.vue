@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CalendarPlus, DoorOpen } from 'lucide-vue-next'
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,8 @@ const property = usePropertyStore()
 const router = useRouter()
 
 const counts = reactive<Record<Tab, string>>({ arrivals: '', 'in-house': '', departures: '' })
+// A check-in changes the in-house and departures lists, so the tabs are told to read again.
+const refresh = ref(0)
 
 const pid = computed(() => property.currentId)
 const can = (permission: string) => pid.value !== null && auth.can(permission, pid.value)
@@ -74,13 +76,13 @@ function setCount(tab: Tab, count: number, more = false): void {
       </TabsTrigger>
     </TabsList>
     <TabsContent value="arrivals" force-mount :class="tab !== 'arrivals' && 'hidden'" data-testid="panel-arrivals">
-      <ArrivalsView @loaded="(n: number) => setCount('arrivals', n)" />
+      <ArrivalsView :refresh="refresh" @loaded="(n: number) => setCount('arrivals', n)" @changed="refresh++" />
     </TabsContent>
     <TabsContent value="in-house" force-mount :class="tab !== 'in-house' && 'hidden'" data-testid="panel-in-house">
-      <InHouseView @loaded="(n: number, more: boolean) => setCount('in-house', n, more)" />
+      <InHouseView :refresh="refresh" @loaded="(n: number, more: boolean) => setCount('in-house', n, more)" />
     </TabsContent>
     <TabsContent value="departures" force-mount :class="tab !== 'departures' && 'hidden'" data-testid="panel-departures">
-      <DeparturesView @loaded="(n: number, more: boolean) => setCount('departures', n, more)" />
+      <DeparturesView :refresh="refresh" @loaded="(n: number, more: boolean) => setCount('departures', n, more)" />
     </TabsContent>
   </Tabs>
 </template>

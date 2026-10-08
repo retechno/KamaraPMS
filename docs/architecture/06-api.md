@@ -834,3 +834,8 @@ Permissions: `rate.manage` changes rules; reading rules and quotes needs only ac
 | `GET {P}/rate-quotes?rate_plan_id&room_type_id&arrival_date&departure_date` | property access | Per night: `grid_rate`, `occupancy_percent`, `steps` (code, before, after), `amount`; `total`, `grid_total`, `missing_nights` |
 
 Reservation nights (`nightly_rates[]`) carry `grid_rate` and `yield_rules`; `base_rate` is the price the night was sold at.
+
+### Arrivals and departures read models (UI phase 2)
+
+- **`GET {P}/arrivals`** (`reservation.read`): `date` (the business date by default), `status` (CONFIRMED by default; CHECKED_IN, CANCELLED, NO_SHOW), `q` (guest, confirmation number, room; a text, not a pattern), `room_type_id`. One day, not paged. Each row adds the company (first billing instruction), the booked rate of the arrival night (snapshot, never the master), the deposit (credit balance of the deposit folio, from the ledger) and `readiness`: READY, BLOCKED with blockers (`NOT_BUSINESS_DATE`, `GUEST_MISSING`, `ROOM_NOT_ASSIGNED`, `ROOM_NOT_READY` by the inspection rule of the property, `ROOM_OCCUPIED`, `ROOM_BLOCKED`, `ROOM_NOT_AVAILABLE`), or NONE for a room that is not waiting. It is not a status; the check-in applies every rule again. There is no payment or restriction blocker because the check-in has no such rule.
+- **`GET {P}/stays/in-house`** also answers the departures tab: `departure_until`, `departure_date`, `room_type_id`, `q`. A row adds `checkout.status` (READY = no known blocker, BALANCE_DUE, COMPANY_BILL, CHARGES_PENDING, FOLIO_ISSUE) and `uncharged_nights`; a stay without a folio has `balance.status` NO_FOLIO and no amount (never a zero). The check-out itself applies every rule, so a zero balance is no promise.

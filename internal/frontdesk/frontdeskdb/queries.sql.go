@@ -684,19 +684,34 @@ func (q *Queries) LastPostedNight(ctx context.Context, arg LastPostedNightParams
 }
 
 const listArrivals = `-- name: ListArrivals :many
-SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code,
+SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code, t.name AS room_type_name,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name,
-       l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code
+       l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code,
+       l.status AS line_status, res.status AS reservation_status,
+       rp.code AS rate_plan_code, rp.name AS rate_plan_name,
+       night.amount AS night_amount, night.price_mode AS night_price_mode,
+       COALESCE(co.id, 0)::bigint AS company_id, COALESCE(co.name, '')::text AS company_name
 FROM reservation_rooms l
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
 LEFT JOIN bed_types rbt ON rbt.property_id = l.property_id AND rbt.id = l.requested_bed_type_id
 LEFT JOIN bed_types abt ON abt.property_id = r.property_id AND abt.id = r.bed_type_id
 LEFT JOIN room_housekeeping hk ON hk.property_id = l.property_id AND hk.room_id = l.room_id
 LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
-WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.arrival_date = $3
+LEFT JOIN reservation_room_rates night ON night.property_id = l.property_id AND night.reservation_room_id = l.id AND night.stay_date = l.arrival_date
+LEFT JOIN LATERAL (
+    SELECT c.id, c.name FROM folio_billing_instructions i JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+    WHERE i.property_id = l.property_id AND i.reservation_room_id = l.id
+    ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id LIMIT 1
+) co ON true
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.arrival_date = $3
+  AND l.status = $4::text AND ($4::text <> 'CONFIRMED' OR res.status = 'CONFIRMED')
+  AND ($5::bigint IS NULL OR l.room_type_id = $5::bigint)
+  AND ($6::text IS NULL OR res.confirmation_number ILIKE '%' || $6::text || '%' OR r.room_number ILIKE '%' || $6::text || '%'
+       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $6::text || '%')
 ORDER BY t.sort_order, l.id
 `
 
@@ -704,6 +719,9 @@ type ListArrivalsParams struct {
 	TenantID   int64
 	PropertyID int64
 	Arrival    civil.Date
+	LineStatus string
+	RoomTypeID *int64
+	Q          *string
 }
 
 type ListArrivalsRow struct {
@@ -713,6 +731,7 @@ type ListArrivalsRow struct {
 	ReservationVersion   int32
 	RoomTypeID           int64
 	RoomTypeCode         string
+	RoomTypeName         string
 	RoomID               *int64
 	RoomNumber           *string
 	HousekeepingStatus   *string
@@ -728,11 +747,27 @@ type ListArrivalsRow struct {
 	BedLocked            bool
 	RequestedBedTypeCode *string
 	RoomBedTypeCode      *string
+	LineStatus           string
+	ReservationStatus    string
+	RatePlanCode         string
+	RatePlanName         string
+	NightAmount          *decimal.Decimal
+	NightPriceMode       *string
+	CompanyID            int64
+	CompanyName          string
 }
 
-// CONFIRMED rooms arriving on a date (the arrivals list).
+// The rooms arriving on a date (the arrivals list): CONFIRMED by default, or CHECKED_IN, CANCELLED or NO_SHOW. The search reads the guest, the confirmation number and the room; the type narrows
+// the list. The company is the one of the first billing instruction of the line; the rate is the booked night of the arrival date (the snapshot, never the rate master).
 func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]ListArrivalsRow, error) {
-	rows, err := q.db.Query(ctx, listArrivals, arg.TenantID, arg.PropertyID, arg.Arrival)
+	rows, err := q.db.Query(ctx, listArrivals,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Arrival,
+		arg.LineStatus,
+		arg.RoomTypeID,
+		arg.Q,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -747,6 +782,7 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			&i.ReservationVersion,
 			&i.RoomTypeID,
 			&i.RoomTypeCode,
+			&i.RoomTypeName,
 			&i.RoomID,
 			&i.RoomNumber,
 			&i.HousekeepingStatus,
@@ -762,6 +798,14 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			&i.BedLocked,
 			&i.RequestedBedTypeCode,
 			&i.RoomBedTypeCode,
+			&i.LineStatus,
+			&i.ReservationStatus,
+			&i.RatePlanCode,
+			&i.RatePlanName,
+			&i.NightAmount,
+			&i.NightPriceMode,
+			&i.CompanyID,
+			&i.CompanyName,
 		); err != nil {
 			return nil, err
 		}
@@ -819,7 +863,7 @@ JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservati
 JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
 JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
 JOIN LATERAL (
-    SELECT sr.room_id, r.room_number, t.code AS room_type_code, t.name AS room_type_name
+    SELECT sr.room_id, r.room_number, t.id AS room_type_id, t.code AS room_type_code, t.name AS room_type_name
     FROM stay_rooms sr
     JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
     JOIN room_types t ON t.property_id = r.property_id AND t.id = r.room_type_id
@@ -827,15 +871,24 @@ JOIN LATERAL (
     ORDER BY sr.check_out_at IS NULL DESC, sr.id DESC LIMIT 1
 ) cur ON true
 WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status = 'OPEN' AND ($3::bigint = 0 OR s.id < $3::bigint)
+  AND ($4::date IS NULL OR s.departure_date = $4::date)
+  AND ($5::date IS NULL OR s.departure_date <= $5::date)
+  AND ($6::bigint IS NULL OR cur.room_type_id = $6::bigint)
+  AND ($7::text IS NULL OR s.stay_number ILIKE '%' || $7::text || '%' OR res.confirmation_number ILIKE '%' || $7::text || '%'
+       OR cur.room_number ILIKE '%' || $7::text || '%' OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $7::text || '%')
 ORDER BY s.id DESC
-LIMIT $4
+LIMIT $8
 `
 
 type ListInHouseParams struct {
-	TenantID   int64
-	PropertyID int64
-	BeforeID   int64
-	RowLimit   int32
+	TenantID       int64
+	PropertyID     int64
+	BeforeID       int64
+	DepartureDate  *civil.Date
+	DepartureUntil *civil.Date
+	RoomTypeID     *int64
+	Q              *string
+	RowLimit       int32
 }
 
 type ListInHouseRow struct {
@@ -865,6 +918,10 @@ func (q *Queries) ListInHouse(ctx context.Context, arg ListInHouseParams) ([]Lis
 		arg.TenantID,
 		arg.PropertyID,
 		arg.BeforeID,
+		arg.DepartureDate,
+		arg.DepartureUntil,
+		arg.RoomTypeID,
+		arg.Q,
 		arg.RowLimit,
 	)
 	if err != nil {
@@ -1361,6 +1418,54 @@ func (q *Queries) ListStays(ctx context.Context, arg ListStaysParams) ([]ListSta
 			&i.RoomNumber,
 			&i.RoomID,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnchargedNights = `-- name: ListUnchargedNights :many
+SELECT s.id AS stay_id, count(*)::int AS nights
+FROM stays s
+JOIN reservation_room_rates x ON x.property_id = s.property_id AND x.reservation_room_id = s.reservation_room_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = ANY($3::bigint[])
+  AND x.stay_date < s.departure_date AND x.stay_date <= $4::date
+  AND NOT EXISTS (SELECT 1 FROM stay_charge_postings p WHERE p.property_id = s.property_id AND p.stay_id = s.id AND p.service_date = x.stay_date AND p.status = 'POSTED')
+GROUP BY s.id
+`
+
+type ListUnchargedNightsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+	Through    civil.Date
+}
+
+type ListUnchargedNightsRow struct {
+	StayID int64
+	Nights int32
+}
+
+// Room nights up to a date that are not charged yet, for many stays: what a check-out would still post.
+func (q *Queries) ListUnchargedNights(ctx context.Context, arg ListUnchargedNightsParams) ([]ListUnchargedNightsRow, error) {
+	rows, err := q.db.Query(ctx, listUnchargedNights,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StayIds,
+		arg.Through,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnchargedNightsRow{}
+	for rows.Next() {
+		var i ListUnchargedNightsRow
+		if err := rows.Scan(&i.StayID, &i.Nights); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

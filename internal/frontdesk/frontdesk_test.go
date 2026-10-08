@@ -546,13 +546,13 @@ func TestArrivalsShowTheStatusOfTheAssignedRoom(t *testing.T) {
 	_, err := f.Res.AssignRoom(f.admin, f.propID, res.ID, res.Rooms[0].ID, res.Version, f.r101.ID, false)
 	must(t, err)
 	must(t, f.Exec(t, `UPDATE room_housekeeping SET status = 'INSPECTED' WHERE room_id = $1`, f.r101.ID))
-	arr, err := f.Front.Arrivals(f.admin, f.propID, nil)
+	arr, err := f.Front.Arrivals(f.admin, f.propID, nil, frontdesk.ArrivalFilter{})
 	must(t, err)
 	if len(arr) != 1 || arr[0].RoomNumber != "101" || arr[0].HousekeepingStatus != "INSPECTED" {
 		t.Fatalf("arrivals: %+v", arr)
 	}
 	f.book(t, f.std, "2026-09-30", "2026-10-01")
-	arr, _ = f.Front.Arrivals(f.admin, f.propID, nil)
+	arr, _ = f.Front.Arrivals(f.admin, f.propID, nil, frontdesk.ArrivalFilter{})
 	for _, a := range arr {
 		if a.RoomID == nil && a.HousekeepingStatus != "" {
 			t.Fatalf("no room, no status: %+v", a)
@@ -565,20 +565,20 @@ func TestStayReads(t *testing.T) {
 	a := f.book(t, f.dlx, "2026-09-30", "2026-10-02")
 	f.book(t, f.std, "2026-09-30", "2026-10-01")
 	f.book(t, f.std, "2026-10-05", "2026-10-06")
-	arr, err := f.Front.Arrivals(f.admin, f.propID, nil)
+	arr, err := f.Front.Arrivals(f.admin, f.propID, nil, frontdesk.ArrivalFilter{})
 	must(t, err)
 	if len(arr) != 2 || arr[0].GuestName != "Guest" || arr[0].ReservationVersion == 0 || arr[0].RoomTypeCode == "" {
 		t.Fatalf("arrivals: %+v", arr)
 	}
 	day := d("2026-10-05")
-	later, err := f.Front.Arrivals(f.admin, f.propID, &day)
+	later, err := f.Front.Arrivals(f.admin, f.propID, &day, frontdesk.ArrivalFilter{})
 	must(t, err)
 	if len(later) != 1 {
 		t.Fatalf("arrivals on the 5th: %+v", later)
 	}
 	out, err := f.checkIn(t, f.admin, a, &f.r101, "")
 	must(t, err)
-	arr, _ = f.Front.Arrivals(f.admin, f.propID, nil)
+	arr, _ = f.Front.Arrivals(f.admin, f.propID, nil, frontdesk.ArrivalFilter{})
 	if len(arr) != 1 {
 		t.Fatalf("a checked-in room is no longer an arrival: %+v", arr)
 	}

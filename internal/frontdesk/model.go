@@ -166,6 +166,15 @@ type InHouseRow struct {
 	Rate               InHouseRate      `json:"rate"`
 	Stay               InHouseStay      `json:"stay"`
 	Balance            InHouseBalance   `json:"balance"`
+	Checkout           InHouseCheckout  `json:"checkout"`
+}
+
+// InHouseCheckout is what the front desk can know before a check-out: Status is READY (no known blocker), BALANCE_DUE (the guest folio is not at zero), COMPANY_BILL (a company folio is not at
+// zero), CHARGES_PENDING (room nights are not charged yet, so the folio will change) or FOLIO_ISSUE (no folio, or a closed guest folio). The check-out itself applies every rule; a zero balance
+// is no promise that it goes through.
+type InHouseCheckout struct {
+	Status          string `json:"status"`
+	UnchargedNights int    `json:"uncharged_nights"`
 }
 
 // InHouseGuest is the guest of the stay.
@@ -215,7 +224,7 @@ type InHouseStay struct {
 }
 
 // InHouseBalance is what the stay owes. Amount is the sum of the balances of its folios (the guest folio and the company folios), each of which is given in Folios with its own balance;
-// Status is SETTLED (zero), OUTSTANDING (above zero) or CREDIT (below zero) for that sum.
+// Status is SETTLED (zero), OUTSTANDING (above zero) or CREDIT (below zero) for that sum, or NO_FOLIO when the stay has no folio (Amount is then empty: no folio is not a zero balance).
 type InHouseBalance struct {
 	Amount string             `json:"amount"`
 	Status string             `json:"status"`
@@ -246,6 +255,48 @@ type Arrival struct {
 	DepartureDate      civil.Date `json:"departure_date"`
 	AdultCount         int        `json:"adult_count"`
 	ChildCount         int        `json:"child_count"`
+	// Status is the status of the reservation room (CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW); ReservationStatus is the one of the reservation.
+	Status            string `json:"status"`
+	ReservationStatus string `json:"reservation_status"`
+	RoomTypeName      string `json:"room_type_name"`
+	// Rate is the booked night of the arrival date (the snapshot of the booking); Amount is empty when the night has no snapshot.
+	Rate ArrivalRate `json:"rate"`
+	// Company is the company of the first billing instruction of the line (nil: the guest pays).
+	Company *InHouseCompany `json:"company"`
+	// Deposit is what the reservation holds before check-in (nil: no deposit folio).
+	Deposit *folios.ReservationDeposit `json:"deposit"`
+	// Readiness says what stands in the way of a check-in, with the rules the check-in itself applies; the check-in still validates.
+	Readiness Readiness `json:"readiness"`
+}
+
+// ArrivalRate is the rate plan of the booking and the price of its arrival night.
+type ArrivalRate struct {
+	RatePlanCode string `json:"rate_plan_code"`
+	RatePlanName string `json:"rate_plan_name"`
+	Amount       string `json:"amount"`
+	PriceMode    string `json:"price_mode"`
+}
+
+// Readiness of an arrival: READY, or BLOCKED with the blockers. A blocker is one of NOT_BUSINESS_DATE, GUEST_MISSING, ROOM_NOT_ASSIGNED, ROOM_NOT_READY, ROOM_OCCUPIED, ROOM_BLOCKED, ROOM_NOT_AVAILABLE.
+// It is not a status of the reservation. NOT_READY and NOT_ASSIGNED can be dealt with at the check-in itself (the room is chosen there, an unready room can be overridden with the right).
+type Readiness struct {
+	Status   string   `json:"status"`
+	Blockers []string `json:"blockers"`
+}
+
+// ArrivalFilter narrows the arrivals of a date: the status of the reservation room (CONFIRMED when empty), a room type, and a search of the guest, the confirmation number and the room.
+type ArrivalFilter struct {
+	Status     string
+	RoomTypeID *int64
+	Q          string
+}
+
+// InHouseFilter narrows the in-house list; the departures list is the in-house list that leaves on or before a date.
+type InHouseFilter struct {
+	DepartureDate  *civil.Date
+	DepartureUntil *civil.Date
+	RoomTypeID     *int64
+	Q              string
 }
 
 // NightView is a night of the stay's price snapshot with whether it has been charged.

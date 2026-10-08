@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { useToasts } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import ArrivalsView from './ArrivalsView.vue'
@@ -13,7 +14,9 @@ vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POS
 
 const arrival = (over: object = {}) => ({
   reservation_id: 9, confirmation_number: 'RES000009', reservation_room_id: 4, reservation_version: 2, guest_id: 3, guest_name: 'Siti Nurhaliza',
-  room_type_id: 10, room_type_code: 'DLX', room_id: null, arrival_date: '2026-09-30', departure_date: '2026-10-02', adult_count: 2, child_count: 0, ...over,
+  room_type_id: 10, room_type_code: 'DLX', room_type_name: 'Deluxe', room_id: null, arrival_date: '2026-09-30', departure_date: '2026-10-02', adult_count: 2, child_count: 0,
+  status: 'CONFIRMED', reservation_status: 'CONFIRMED', rate: { rate_plan_code: 'BAR', rate_plan_name: 'Best available', amount: '1000000', price_mode: 'EXCLUSIVE' }, company: null, deposit: null,
+  readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_ASSIGNED'] }, ...over,
 })
 const types = [{ id: 10, code: 'DLX', is_active: true }, { id: 11, code: 'STD', is_active: true }]
 const free = [
@@ -35,7 +38,7 @@ function mountView(permissions = ['reservation.read', 'frontdesk.checkin'], arri
     if (path.endsWith('/availability/rooms')) return { data: { data: free } }
     return { data: {} }
   })
-  POST = vi.fn().mockResolvedValue({ data: { stay: { id: 55 } } })
+  POST = vi.fn().mockResolvedValue({ data: { stay: { id: 55, stay_number: 'STY000055' }, stay_room: { room_number: '102' } } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   const push = vi.spyOn(router, 'push')
   const w = mount(ArrivalsView, { attachTo: document.body, global: { plugins: [pinia, router] } })
@@ -110,7 +113,10 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(path).toBe('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/check-in')
     expect(init.params.header['Idempotency-Key']).toBeTruthy()
     expect(init.body).toMatchObject({ version: 2, room_id: 22, guest_id: 3, adult_count: 2, child_count: 0, override_room_not_ready: false })
-    expect(push).toHaveBeenCalledWith('/stays/55')
+    // the desk stays on the list: it is read again, and the stay is named in a message
+    expect(push).not.toHaveBeenCalled()
+    expect(GET.mock.calls.filter((c) => String(c[0]).endsWith('/arrivals'))).toHaveLength(2)
+    expect(useToasts().items.value.some((x) => x.message.includes('STY000055'))).toBe(true)
   })
 
   it('needs the override permission and a reason to use a room that is not ready', async () => {
@@ -206,5 +212,103 @@ describe('ArrivalsView and the check-in panel', () => {
     const options = Array.from(document.body.querySelectorAll('select[name=room] option')).map((o) => o.textContent)
     expect(options).toEqual(['102 · CLEAN · King ✓ matches the request', '101 · CLEAN · Twin'])
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('22')
+  })
+
+  it('shows the company, the booked rate, the deposit and the readiness the server sent', async () => {
+    const { w } = mountView(['reservation.read'], [
+      arrival({ company: { id: 2, name: 'ABC Indonesia' }, deposit: { folio_id: 80, paid: '300000' }, room_id: 21, room_number: '101', readiness: { status: 'READY', blockers: [] } }),
+      arrival({ reservation_room_id: 5, reservation_id: 10, confirmation_number: 'RES000010', rate: { rate_plan_code: 'BAR', rate_plan_name: 'Best', amount: '', price_mode: '' }, readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_ASSIGNED', 'GUEST_MISSING'] } }),
+    ])
+    await flushPromises()
+    expect(w.get('[data-testid=company-4]').text()).toBe('ABC Indonesia')
+    expect(w.get('[data-testid=rate-4]').text()).toContain('1,000,000')
+    expect(w.get('[data-testid=deposit-4]').text()).toBe('300,000')
+    expect(w.get('[data-testid=arrival-4] [data-testid=readiness]').attributes('data-status')).toBe('READY')
+    // a missing value is a dash, never a zero or a rate taken from somewhere else
+    expect(w.get('[data-testid=company-5]').text()).toBe('—')
+    expect(w.get('[data-testid=deposit-5]').text()).toBe('—')
+    expect(w.get('[data-testid=rate-5]').text()).toContain('—')
+    const blockers = w.findAll('[data-testid=arrival-5] [data-blocker]').map((b) => b.attributes('data-blocker'))
+    expect(blockers).toEqual(['ROOM_NOT_ASSIGNED', 'GUEST_MISSING'])
+    expect(w.get('[data-testid=no-room-5]').text()).toBe('Not assigned')
+  })
+
+  it('asks the server for the date, status, search and room type, and does not filter the page itself', async () => {
+    const { w } = mountView(['reservation.read'], [arrival(), arrival({ reservation_room_id: 5, guest_name: 'Someone Else', confirmation_number: 'RES000010' })])
+    await flushPromises()
+    expect(GET.mock.calls.find((c) => String(c[0]).endsWith('/arrivals'))?.[1]).toMatchObject({ params: { query: { date: undefined, status: 'CONFIRMED', q: undefined, room_type_id: undefined } } })
+    await w.get('input[name=date]').setValue('2026-10-05')
+    await flushPromises()
+    await w.get('select[name=status]').setValue('CHECKED_IN')
+    await flushPromises()
+    await w.get('input[name=q]').setValue('Siti')
+    await flushPromises()
+    await w.get('select[name=room_type_id]').setValue('11')
+    await flushPromises()
+    const last = GET.mock.calls.filter((c) => String(c[0]).endsWith('/arrivals')).at(-1)
+    expect(last?.[1]).toMatchObject({ params: { query: { date: '2026-10-05', status: 'CHECKED_IN', q: 'Siti', room_type_id: 11 } } })
+    // the server answered with both rows whatever the search: the screen shows what it was given
+    expect(w.findAll('tbody tr[data-testid^=arrival-]')).toHaveLength(2)
+    await w.get('[data-testid=clear-filters]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.filter((c) => String(c[0]).endsWith('/arrivals')).at(-1)?.[1]).toMatchObject({ params: { query: { date: undefined, status: 'CONFIRMED', q: undefined } } })
+  })
+
+  it('offers only the actions that fit the status and the permissions', async () => {
+    const all = ['reservation.read', 'frontdesk.checkin', 'guest.write', 'reservation.update', 'folio.read', 'payment.post']
+    const { w } = mountView(all, [arrival({ guest_id: 3, deposit: { folio_id: 80, paid: '1' } }), arrival({ reservation_room_id: 5, guest_id: null, status: 'CHECKED_IN' })])
+    await flushPromises()
+    expect(w.find('[data-testid=open-4]').exists()).toBe(true)
+    expect(w.find('[data-testid=editGuest-4]').exists()).toBe(true)
+    expect(w.find('[data-testid=open-5]').exists()).toBe(false) // already checked in
+    expect(w.find('[data-testid=editGuest-5]').exists()).toBe(false) // no guest to edit
+    await w.get('[data-testid=more-4]').trigger('click')
+    await flushPromises()
+    const menu = document.body.querySelector('[data-testid=menu-4]')?.textContent ?? ''
+    for (const label of ['View reservation', 'Edit reservation', 'Folio', 'Deposit / payment']) expect(menu).toContain(label)
+    reset()
+    const reader = mountView(['reservation.read'], [arrival()])
+    await flushPromises()
+    expect(reader.w.find('[data-testid=open-4]').exists()).toBe(false)
+    expect(reader.w.find('[data-testid=editGuest-4]').exists()).toBe(false)
+  })
+
+  it('does not offer check-in for an arrival that is not on the business date', async () => {
+    const { w } = mountView(undefined, [arrival({ arrival_date: '2026-10-05', readiness: { status: 'BLOCKED', blockers: ['NOT_BUSINESS_DATE'] } })])
+    await flushPromises()
+    expect(w.find('[data-testid=open-4]').exists()).toBe(false)
+    expect(w.get('[data-testid=arrival-4] [data-blocker=NOT_BUSINESS_DATE]').text()).toBe('Not today')
+  })
+
+  it('opens the drawer from the guest, and Edit guest saves and renames the row without a reload', async () => {
+    const { w } = mountView(['reservation.read', 'guest.write', 'frontdesk.checkin'])
+    await flushPromises()
+    await w.get('[data-testid=detail-4]').trigger('click')
+    await flushPromises()
+    const drawer = document.body.querySelector('[data-testid=arrival-drawer]')
+    expect(drawer?.textContent).toContain('Siti Nurhaliza')
+    expect(drawer?.textContent).toContain('Best available')
+    expect(drawer?.querySelector('[data-testid=drawer-deposit]')?.textContent).toBe('No deposit')
+    ;(drawer?.querySelector('[data-testid=drawer-editGuest]') as HTMLElement).click()
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=guest-edit-dialog]')).not.toBeNull()
+    expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/guests/{id}', { params: { path: { id: 3 } } }])
+  })
+
+  it('shows a failure with a retry, not an empty list', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    GET.mockImplementation(async () => {
+      throw new ApiError({ type: 't', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'try later' })
+    })
+    await w.get('input[name=q]').setValue('x')
+    await flushPromises()
+    expect(w.get('[data-testid=form-error]').text()).toContain('SERVICE_UNAVAILABLE')
+    expect(w.find('[data-testid=empty]').exists()).toBe(false)
+    expect(w.get('[data-testid=not-loaded]').text()).toContain('could not be loaded') // a failure is not an empty list
+    GET.mockImplementation(async (path: string) => (path.endsWith('/arrivals') ? { data: { data: [arrival()] } } : { data: { data: [] } }))
+    await w.get('[data-testid=retry]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=form-error]').exists()).toBe(false)
   })
 })

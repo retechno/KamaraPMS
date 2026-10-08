@@ -111,7 +111,15 @@ func (h *Handler) arrivals(w http.ResponseWriter, r *http.Request) error {
 		}
 		date = &d
 	}
-	rows, err := h.svc.Arrivals(r.Context(), pid, date)
+	f := ArrivalFilter{Status: r.URL.Query().Get("status"), Q: r.URL.Query().Get("q")}
+	if s := r.URL.Query().Get("room_type_id"); s != "" {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || id < 1 {
+			return apperr.Invalid("the filter is invalid", fieldErr("room_type_id", "INVALID_VALUE", "a positive integer"))
+		}
+		f.RoomTypeID = &id
+	}
+	rows, err := h.svc.Arrivals(r.Context(), pid, date, f)
 	if err != nil {
 		return err
 	}
@@ -198,7 +206,33 @@ func (h *Handler) inHouse(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	items, err := h.svc.ListInHouse(r.Context(), pid, cur.Before, page.Limit+1)
+	var f InHouseFilter
+	var errs []apperr.FieldError
+	f.Q = r.URL.Query().Get("q")
+	for _, d := range []struct {
+		name string
+		to   **civil.Date
+	}{{"departure_date", &f.DepartureDate}, {"departure_until", &f.DepartureUntil}} {
+		if s := r.URL.Query().Get(d.name); s != "" {
+			v, err := civil.ParseDate(s)
+			if err != nil {
+				errs = append(errs, fieldErr(d.name, "INVALID_FORMAT", "YYYY-MM-DD"))
+				continue
+			}
+			*d.to = &v
+		}
+	}
+	if s := r.URL.Query().Get("room_type_id"); s != "" {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || id < 1 {
+			errs = append(errs, fieldErr("room_type_id", "INVALID_VALUE", "a positive integer"))
+		}
+		f.RoomTypeID = &id
+	}
+	if len(errs) > 0 {
+		return apperr.Invalid("the filter is invalid", errs...)
+	}
+	items, err := h.svc.ListInHouse(r.Context(), pid, f, cur.Before, page.Limit+1)
 	if err != nil {
 		return err
 	}
