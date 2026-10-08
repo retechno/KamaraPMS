@@ -160,15 +160,17 @@ func componentsOf(b chargecalc.Breakdown) []foliosdb.InsertFolioItemComponentPar
 
 // chargeCmd is a manual charge to post.
 type chargeCmd struct {
-	chargeCodeID int64
-	quantity     decimal.Decimal
-	unitPrice    *decimal.Decimal
-	priceMode    *chargecalc.PriceMode
-	discount     decimal.Decimal
-	serviceDate  civil.Date
-	description  string
-	key          string
-	room         *int64 // set only by RoomPoster: the stay segment of the night, which makes it a room charge
+	chargeCodeID               int64
+	quantity                   decimal.Decimal
+	unitPrice                  *decimal.Decimal
+	priceMode                  *chargecalc.PriceMode
+	discount                   decimal.Decimal
+	serviceDate                civil.Date
+	description                string
+	key                        string
+	reason                     *string // what a fee is charged for (audit F-08); nil for a plain charge
+	referenceType, referenceID *string
+	room                       *int64 // set only by RoomPoster: the stay segment of the night, which makes it a room charge
 }
 
 // postCharge posts a manual charge. Its breakdown comes only from the charge calculation service. A ROOM
@@ -205,7 +207,7 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 	id := cmd.chargeCodeID
 	spec := itemSpec{
 		transactionType: TypeCharge, chargeCodeID: &id, serviceDate: cmd.serviceDate, description: desc, amounts: amountsOf(b),
-		key: nullable(cmd.key), components: componentsOf(b),
+		key: nullable(cmd.key), components: componentsOf(b), reason: cmd.reason, referenceType: cmd.referenceType, referenceID: cmd.referenceID,
 	}
 	if cmd.room != nil {
 		spec.stayRoomID, spec.source = cmd.room, "ROOM_POSTING"

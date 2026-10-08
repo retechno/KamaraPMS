@@ -320,3 +320,16 @@ SELECT COALESCE(g.group_code, 'A')::text AS group_code
 FROM folio_items i
 LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = i.id
 WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.payment_id = @payment_id;
+
+-- ---------------------------------------------------------------------------
+-- Cancellation and no-show fees (audit F-08): the facts of the reservation that identify the event a fee is charged for.
+
+-- name: GetReservationForFee :one
+SELECT status, cancelled_at, confirmation_number FROM reservations WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetLineForFee :one
+SELECT status, no_show_at, reservation_id FROM reservation_rooms WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetChargeCodeByCode :one
+SELECT id, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id AND code = @code;
+

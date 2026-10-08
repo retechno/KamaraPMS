@@ -261,6 +261,28 @@ func (q *Queries) FolioTotals(ctx context.Context, arg FolioTotalsParams) (Folio
 	return i, err
 }
 
+const getChargeCodeByCode = `-- name: GetChargeCodeByCode :one
+SELECT id, is_active FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND code = $3
+`
+
+type GetChargeCodeByCodeParams struct {
+	TenantID   int64
+	PropertyID int64
+	Code       string
+}
+
+type GetChargeCodeByCodeRow struct {
+	ID       int64
+	IsActive bool
+}
+
+func (q *Queries) GetChargeCodeByCode(ctx context.Context, arg GetChargeCodeByCodeParams) (GetChargeCodeByCodeRow, error) {
+	row := q.db.QueryRow(ctx, getChargeCodeByCode, arg.TenantID, arg.PropertyID, arg.Code)
+	var i GetChargeCodeByCodeRow
+	err := row.Scan(&i.ID, &i.IsActive)
+	return i, err
+}
+
 const getCompanyName = `-- name: GetCompanyName :one
 SELECT name FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -566,6 +588,29 @@ func (q *Queries) GetItemOfPayment(ctx context.Context, arg GetItemOfPaymentPara
 	return i, err
 }
 
+const getLineForFee = `-- name: GetLineForFee :one
+SELECT status, no_show_at, reservation_id FROM reservation_rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetLineForFeeParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetLineForFeeRow struct {
+	Status        string
+	NoShowAt      *time.Time
+	ReservationID int64
+}
+
+func (q *Queries) GetLineForFee(ctx context.Context, arg GetLineForFeeParams) (GetLineForFeeRow, error) {
+	row := q.db.QueryRow(ctx, getLineForFee, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetLineForFeeRow
+	err := row.Scan(&i.Status, &i.NoShowAt, &i.ReservationID)
+	return i, err
+}
+
 const getLineStay = `-- name: GetLineStay :one
 SELECT id, status FROM stays WHERE tenant_id = $1 AND property_id = $2 AND reservation_room_id = $3
 `
@@ -729,6 +774,32 @@ func (q *Queries) GetPostingOfItem(ctx context.Context, arg GetPostingOfItemPara
 		&i.ServiceDate,
 		&i.ChargeCodeID,
 	)
+	return i, err
+}
+
+const getReservationForFee = `-- name: GetReservationForFee :one
+
+SELECT status, cancelled_at, confirmation_number FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetReservationForFeeParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetReservationForFeeRow struct {
+	Status             string
+	CancelledAt        *time.Time
+	ConfirmationNumber string
+}
+
+// ---------------------------------------------------------------------------
+// Cancellation and no-show fees (audit F-08): the facts of the reservation that identify the event a fee is charged for.
+func (q *Queries) GetReservationForFee(ctx context.Context, arg GetReservationForFeeParams) (GetReservationForFeeRow, error) {
+	row := q.db.QueryRow(ctx, getReservationForFee, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetReservationForFeeRow
+	err := row.Scan(&i.Status, &i.CancelledAt, &i.ConfirmationNumber)
 	return i, err
 }
 

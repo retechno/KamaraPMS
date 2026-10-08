@@ -1775,6 +1775,35 @@ export interface paths {
         patch: operations["setPaymentGroup"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reservations/{id}/fees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a cancellation fee or a no-show fee to a reservation (folio.post_charge)
+         * @description A manual fee, posted as an ordinary charge (the charge code `CANCEL_FEE` or `NO_SHOW_FEE` of the property, with its own tax, service charge, department and revenue account) on the current
+         *     OPEN business day. The amount is given by the person; the cancellation policy text of a rate plan is not used, and nothing posts a fee by itself (not the cancellation, not the no-show, not the
+         *     bulk no-show, not the night audit). `CANCEL_FEE` is for a CANCELLED reservation (409 `RESERVATION_NOT_CANCELLED` otherwise); `NO_SHOW_FEE` needs `reservation_room_id`, a room line that is
+         *     marked NO_SHOW (409 `RESERVATION_ROOM_NOT_NO_SHOW` otherwise). The same event is charged once: a second request for the same cancellation, or for the same no-show of the same room, answers 409
+         *     `FEE_ALREADY_POSTED` whatever the amount, also when the first fee was reversed (a replacement goes through the correction that exists); a reservation cancelled again after a reinstatement is
+         *     another event. The fee goes to the open folio of the reservation that has no stay (the folio deposits go to), which is opened when there is none (`folio_created`); billing instructions route
+         *     charges of a stay in house and do not apply to a reservation without a stay. No `Idempotency-Key` is needed: the event is the key.
+         */
+        post: operations["postReservationFee"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reservations/{id}/deposits": {
         parameters: {
             query?: never;
@@ -8313,6 +8342,26 @@ export interface components {
             sequence: number;
             /** @description The account the tax or service charge was mapped to when the item was posted. */
             gl_account_code: components["schemas"]["GlAccountCode"];
+        };
+        ReservationFeeRequest: {
+            /** @enum {string} */
+            type: "CANCEL_FEE" | "NO_SHOW_FEE";
+            /**
+             * Format: int64
+             * @description Required for NO_SHOW_FEE (the room that did not arrive); not allowed for CANCEL_FEE.
+             */
+            reservation_room_id?: number | null;
+            /** @description The unit price of the charge, as for any manual charge (net for an EXCLUSIVE charge code, gross for an INCLUSIVE one), above zero, with at most the currency's decimals. */
+            amount: string;
+            reason: string;
+        };
+        ReservationFeeResult: {
+            item: components["schemas"]["FolioItem"];
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_created: boolean;
+            folio_balance: string;
         };
         FolioGroupRequest: {
             /**
@@ -15487,6 +15536,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FolioGroupResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    postReservationFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationFeeRequest"];
+            };
+        };
+        responses: {
+            /** @description The fee, the folio it went to, and whether the folio was opened by it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationFeeResult"];
                 };
             };
             401: components["responses"]["Problem"];

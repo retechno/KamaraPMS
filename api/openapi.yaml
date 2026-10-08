@@ -2242,6 +2242,39 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/fees:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: postReservationFee
+      summary: Post a cancellation fee or a no-show fee to a reservation (folio.post_charge)
+      description: |
+        A manual fee, posted as an ordinary charge (the charge code `CANCEL_FEE` or `NO_SHOW_FEE` of the property, with its own tax, service charge, department and revenue account) on the current
+        OPEN business day. The amount is given by the person; the cancellation policy text of a rate plan is not used, and nothing posts a fee by itself (not the cancellation, not the no-show, not the
+        bulk no-show, not the night audit). `CANCEL_FEE` is for a CANCELLED reservation (409 `RESERVATION_NOT_CANCELLED` otherwise); `NO_SHOW_FEE` needs `reservation_room_id`, a room line that is
+        marked NO_SHOW (409 `RESERVATION_ROOM_NOT_NO_SHOW` otherwise). The same event is charged once: a second request for the same cancellation, or for the same no-show of the same room, answers 409
+        `FEE_ALREADY_POSTED` whatever the amount, also when the first fee was reversed (a replacement goes through the correction that exists); a reservation cancelled again after a reinstatement is
+        another event. The fee goes to the open folio of the reservation that has no stay (the folio deposits go to), which is opened when there is none (`folio_created`); billing instructions route
+        charges of a stay in house and do not apply to a reservation without a stay. No `Idempotency-Key` is needed: the event is the key.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReservationFeeRequest" }
+      responses:
+        "201":
+          description: The fee, the folio it went to, and whether the folio was opened by it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationFeeResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reservations/{id}/deposits:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9330,6 +9363,24 @@ components:
         amount: { type: string }
         sequence: { type: integer }
         gl_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The account the tax or service charge was mapped to when the item was posted. }
+    ReservationFeeRequest:
+      type: object
+      required: [type, amount, reason]
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [CANCEL_FEE, NO_SHOW_FEE] }
+        reservation_room_id: { type: [integer, "null"], format: int64, description: Required for NO_SHOW_FEE (the room that did not arrive); not allowed for CANCEL_FEE. }
+        amount: { type: string, description: "The unit price of the charge, as for any manual charge (net for an EXCLUSIVE charge code, gross for an INCLUSIVE one), above zero, with at most the currency's decimals." }
+        reason: { type: string, maxLength: 500 }
+    ReservationFeeResult:
+      type: object
+      required: [item, folio_id, folio_number, folio_created, folio_balance]
+      properties:
+        item: { $ref: "#/components/schemas/FolioItem" }
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_created: { type: boolean }
+        folio_balance: { type: string }
     FolioGroupRequest:
       type: object
       required: [group_code]

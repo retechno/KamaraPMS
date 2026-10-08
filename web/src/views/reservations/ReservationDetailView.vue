@@ -174,6 +174,37 @@ const lockOf = (line: ReservationRoom): boolean => (bedPick[line.id] ?? line.bed
 const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type_id ?? 0) !== (line.bed_type_id ?? 0) || lockOf(line) !== line.bed_locked
 const unassign = (lineId: number) => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room', { params: lineParams(lineId), body: { version: version() } }))
 
+// A manual fee (audit F-08): the person gives the amount and the reason; nothing is calculated and nothing is posted by the cancellation or the no-show itself.
+const feeFor = ref<{ type: 'CANCEL_FEE' | 'NO_SHOW_FEE'; lineId?: number } | null>(null)
+const fee = reactive({ amount: '', reason: '' })
+function askFee(type: 'CANCEL_FEE' | 'NO_SHOW_FEE', lineId?: number): void {
+  feeFor.value = { type, lineId }
+  fee.amount = ''
+  fee.reason = ''
+  asking.value = null
+  error.value = null
+}
+async function postFee(): Promise<void> {
+  const f = feeFor.value
+  if (!f || pid.value === null) return
+  busy.value = true
+  error.value = null
+  notice.value = ''
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/reservations/{id}/fees', {
+      params: base(),
+      body: { type: f.type, reservation_room_id: f.type === 'NO_SHOW_FEE' ? f.lineId : null, amount: fee.amount.trim(), reason: fee.reason.trim() },
+    })
+    notice.value = t('reservation.feePosted', { folio: data?.folio_number ?? '', amount: data?.item.debit ?? '' })
+    feeFor.value = null
+    await load()
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  } finally {
+    busy.value = false
+  }
+}
+
 function ask(kind: 'cancel' | 'cancel-room' | 'no-show', lineId?: number): void {
   asking.value = { kind, lineId }
   reason.value = ''
@@ -272,6 +303,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <template v-if="res">
         <Button v-if="status === 'DRAFT' && can('reservation.create')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm()">{{ t('reservation.confirm') }}</Button>
         <Button v-if="status === 'CANCELLED' && can('reservation.reinstate')" size="sm" :disabled="busy" data-testid="reinstate" @click="reinstate()">{{ t('reservation.reinstate') }}</Button>
+        <Button v-if="status === 'CANCELLED' && can('folio.post_charge')" variant="outline" size="sm" :disabled="busy" data-testid="post-cancel-fee" @click="askFee('CANCEL_FEE')">{{ t('reservation.postCancelFee') }}</Button>
         <Button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" variant="outline" size="sm" data-testid="print-confirmation" @click="printConfirmation"><Printer />{{ t('reservation.confirmationPdf') }}</Button>
         <Button v-if="status !== 'CANCELLED' && can('reservation.cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
       </template>
@@ -288,6 +320,21 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <div class="min-w-0">
       <RestrictionOverride v-if="restriction" :violations="restriction.refusal.violations" :overridable="restriction.refusal.overridable" :busy="busy" :error="error"
         @override="(o) => restriction?.again(o)" @cancel="restriction = null" />
+
+      <Card v-if="feeFor" class="mb-4 border-primary/50">
+        <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="fee-form" @submit.prevent="postFee">
+          <p class="m-0 w-full text-sm font-medium">{{ feeFor.type === 'CANCEL_FEE' ? t('reservation.postCancelFee') : t('reservation.postNoShowFee') }}</p>
+          <FormField class="w-44" :label="t('reservation.feeAmount')" :error="fieldError('amount')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.amount" name="fee_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField class="min-w-56 flex-1" :label="t('reservation.reason')" :error="fieldError('reason')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.reason" name="fee_reason" maxlength="500" :aria-invalid="invalid" /></template>
+          </FormField>
+          <Button type="submit" :disabled="busy || !fee.amount.trim() || !fee.reason.trim()">{{ t('reservation.postFee') }}</Button>
+          <Button type="button" variant="outline" @click="feeFor = null">{{ t('common.cancel') }}</Button>
+          <p class="m-0 w-full text-xs text-muted-foreground">{{ t('reservation.feeHint') }}</p>
+        </form>
+      </Card>
 
       <Card v-if="asking" class="mb-4 border-primary/50">
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="reason-form" @submit.prevent="submitReason">
@@ -345,6 +392,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && !line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`assign-${line.id}`" @click="startAssign(line)">{{ t('reservation.assignRoom') }}</Button>
             <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`unassign-${line.id}`" @click="unassign(line.id)">{{ t('reservation.unassignRoom') }}</Button>
             <Button v-if="canNoShow(line)" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-${line.id}`" @click="ask('no-show', line.id)">{{ t('reservation.noShow') }}</Button>
+            <Button v-if="line.status === 'NO_SHOW' && can('folio.post_charge')" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-fee-${line.id}`" @click="askFee('NO_SHOW_FEE', line.id)">{{ t('reservation.postNoShowFee') }}</Button>
             <Button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" variant="outline" size="sm" class="text-destructive" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">{{ t('reservation.cancelRoom') }}</Button>
           </div>
 

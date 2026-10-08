@@ -35,6 +35,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))
 	mux.Handle("POST "+p+"/payments/{id}/refunds", httpx.HandlerFunc(h.refund))
 	mux.Handle("POST "+p+"/reservations/{id}/deposits", httpx.HandlerFunc(h.deposit))
+	mux.Handle("POST "+p+"/reservations/{id}/fees", httpx.HandlerFunc(h.fee))
 	mux.Handle("GET "+p+"/reservations/{id}/rooms/{lineId}/billing-instructions", httpx.HandlerFunc(h.getInstructions))
 	mux.Handle("PUT "+p+"/reservations/{id}/rooms/{lineId}/billing-instructions", httpx.HandlerFunc(h.putInstructions))
 }
@@ -439,4 +440,20 @@ func (h *Handler) paymentGroup(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) fee(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in FeeInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.PostReservationFee(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
 }

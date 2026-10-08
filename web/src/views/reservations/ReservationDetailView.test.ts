@@ -360,4 +360,64 @@ describe('ReservationDetailView', () => {
     await w.get('select[name=bed_4]').setValue(0)
     expect(w.find('input[name=bed_locked_4]').exists()).toBe(false)
   })
+
+  describe('manual fees', () => {
+    const WITH_FEES = [...ALL, 'folio.post_charge']
+
+    it('offers the cancellation fee only on a cancelled reservation, to someone who may post charges', async () => {
+      const cancelled = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED' }), WITH_FEES)
+      await flushPromises()
+      expect(cancelled.find('[data-testid=post-cancel-fee]').exists()).toBe(true)
+      const confirmed = mountView(reservation(), WITH_FEES)
+      await flushPromises()
+      expect(confirmed.find('[data-testid=post-cancel-fee]').exists()).toBe(false)
+      const clerk = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED' }), ALL)
+      await flushPromises()
+      expect(clerk.find('[data-testid=post-cancel-fee]').exists()).toBe(false)
+    })
+
+    it('posts the cancellation fee with the amount and the reason the person gave, and says where it went', async () => {
+      const w = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED' }), WITH_FEES)
+      await flushPromises()
+      POST.mockResolvedValue({ data: { item: { debit: '500000' }, folio_id: 8, folio_number: 'FOL000009', folio_created: true, folio_balance: '500000' } })
+      await w.get('[data-testid=post-cancel-fee]').trigger('click')
+      expect(w.get('form[data-testid=fee-form] button[type=submit]').attributes('disabled')).toBeDefined()
+      await w.get('input[name=fee_amount]').setValue('500000')
+      await w.get('input[name=fee_reason]').setValue('late cancellation')
+      await w.get('form[data-testid=fee-form]').trigger('submit')
+      await flushPromises()
+      expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations/{id}/fees', {
+        params: { path: { propertyId: 7, id: 1 } }, body: { type: 'CANCEL_FEE', reservation_room_id: null, amount: '500000', reason: 'late cancellation' },
+      })
+      expect(w.get('[data-testid=notice]').text()).toContain('FOL000009')
+      expect(w.find('form[data-testid=fee-form]').exists()).toBe(false)
+    })
+
+    it('offers the no-show fee on a room marked no-show only, one room at a time, and never posts one by itself', async () => {
+      const w = mountView(reservation({ rooms: [line({ id: 4, status: 'NO_SHOW' }), line({ id: 5, status: 'CONFIRMED' })] }), WITH_FEES)
+      await flushPromises()
+      expect(w.find('[data-testid=no-show-fee-4]').exists()).toBe(true)
+      expect(w.find('[data-testid=no-show-fee-5]').exists()).toBe(false)
+      expect(POST).not.toHaveBeenCalled()
+      POST.mockResolvedValue({ data: { item: { debit: '300000' }, folio_id: 8, folio_number: 'FOL000009', folio_created: false, folio_balance: '300000' } })
+      await w.get('[data-testid=no-show-fee-4]').trigger('click')
+      await w.get('input[name=fee_amount]').setValue('300000')
+      await w.get('input[name=fee_reason]').setValue('did not arrive')
+      await w.get('form[data-testid=fee-form]').trigger('submit')
+      await flushPromises()
+      expect(POST.mock.calls[0]?.[1].body).toEqual({ type: 'NO_SHOW_FEE', reservation_room_id: 4, amount: '300000', reason: 'did not arrive' })
+    })
+
+    it('shows the refusal when the fee was posted already', async () => {
+      const w = mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED' }), WITH_FEES)
+      await flushPromises()
+      POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'FEE_ALREADY_POSTED', detail: 'this fee was already posted' }))
+      await w.get('[data-testid=post-cancel-fee]').trigger('click')
+      await w.get('input[name=fee_amount]').setValue('500000')
+      await w.get('input[name=fee_reason]').setValue('again')
+      await w.get('form[data-testid=fee-form]').trigger('submit')
+      await flushPromises()
+      expect(w.get('[data-testid=form-error]').text()).toContain('FEE_ALREADY_POSTED')
+    })
+  })
 })
