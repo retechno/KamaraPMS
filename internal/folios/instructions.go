@@ -155,6 +155,19 @@ func (s *Service) SetBillingInstructions(ctx context.Context, propertyID, reserv
 			if err := db.LockRows(ctx, db.Stays, db.ForUpdate, propertyID, []int64{stay.ID}); err != nil { // L4
 				return err
 			}
+			// The line and the stay were read before the lock, and a check-out (which does not take the reservation) may have committed while this waited: decide on what the lock
+			// guarantees, not on what was read (audit F-09; without this a company folio was opened OPEN on a stay that had checked out).
+			if line, err = q.GetInstructionLine(ctx, foliosdb.GetInstructionLineParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: reservationID, ID: lineID}); err != nil {
+				return orNotFound(err, errLineNotFound())
+			}
+			switch line.Status {
+			case "COMPLETED", "CANCELLED", "NO_SHOW":
+				return apperr.Conflict("INSTRUCTION_LINE_CLOSED", "the room is over: its billing instructions can no longer change").WithContext("status", line.Status)
+			}
+			stay, err = q.GetLineStay(ctx, foliosdb.GetLineStayParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationRoomID: lineID})
+			if hasStay = err == nil; err != nil && !errors.Is(err, pgx.ErrNoRows) { // a reversed check-in leaves the line without a live stay
+				return err
+			}
 		}
 		before, err := s.listInstructions(ctx, p.TenantID, propertyID, lineID)
 		if err != nil {

@@ -80,9 +80,9 @@ Status of each decision of `18-architecture-decisions.md`, checked against the c
 |---|---|---|
 | Duplicate posting possible? | No for the item (`folio_items_reverses_uk` unique index and the `GetReversalOf` check at `:109`; two concurrent transfers: one wins, `TestConcurrentTransfersMoveTheChargeOnce`). No for a room night (register row flipped, new POSTED row inserted at `:148`, `stay_charge_postings_once_uk` stays satisfied; `TestMovedRoomNightIsNotChargedAgain`: a second run posts nothing) | VERIFIED |
 | Tax recomputed? | No. The copy takes amounts and components of the original; the test changes the tax rate to 20% after posting and the copy still carries 12,100 (11%) | VERIFIED (`TestTransferMovesAChargeAsACopy`) |
-| Rounding drift? | No by construction (no calculation). Tested for EXCLUSIVE items only; **INCLUSIVE is not tested** | VERIFIED / PARTIAL (F-09) |
+| Rounding drift? | No by construction (no calculation). Tested for EXCLUSIVE items, and (F-09) an INCLUSIVE charge with service and VAT is transferred after the rates changed and nothing is recalculated | VERIFIED (F-09) |
 | Journal imbalance? | The day journal reads `folio_item_gl` by account; the copy carries the account of the original through `copies_item_id`, the reversal through `reverses_item_id` (`folios/queries.sql`, `InsertFolioItem`); the test proves net zero per account with SQL. Every journal is also checked by the deferred balance trigger (`00029`). **Not tested: the day-close journal after a transfer** | VERIFIED by SQL, UNVERIFIED through `PostDay` (F-09) |
-| Department mismatch? | The department is copied the same way. The test compares only whether it is set, not its value | PARTIAL (F-09) |
+| Department mismatch? | The department is copied the same way. F-09 compares the day-close journals line for line per account and department value (`transfer_gl_test.go`) | VERIFIED (F-09) |
 | To a folio of another reservation? | Refused: `transfer.go:96` `FOLIO_TRANSFER_INVALID`; same property is guaranteed by the property-scoped read of the target | VERIFIED |
 | A transaction that must not move? | Only `CHARGE` moves: payments, adjustments and reversals are refused; the target must have a stay (the deposit folio is refused) | VERIFIED |
 | Already reversed or already transferred? | `ALREADY_REVERSED`; a transferred copy can move again (tested for a plain charge, not for a room night) | VERIFIED / PARTIAL |
@@ -107,7 +107,7 @@ One consequence of the transfer was decided and built, and is not in the origina
 | Search verdict equals the booking attempt | **DONE** · VERIFIED | sub-test "the offers of a search say so, and agree with the booking" |
 | Availability calendar marks | **DONE** · VERIFIED | `availability.NightMarks`, `TestCalendarMarksTheRestrictions` (partial plans, inactive plan, stock unchanged), component test |
 | Override screens (confirm, reinstate, extension, walk-in) | **DONE** · VERIFIED | `RestrictionOverride.vue`, four component tests |
-| A fill racing a booking | **MISSING** | the document asks for it (4.12); only fill-versus-fill is tested (F-09) |
+| A fill racing a booking | **DONE** (F-09, 2026-10-08) · VERIFIED | `restriction_race_test.go`: deterministic (external transaction holding the lock either way) and 20 staggered concurrent runs |
 
 ### 3.3 Currency
 
@@ -133,12 +133,12 @@ Compared with `13-feature-map.md`, `08-backlog.md` and the architecture document
 | Guests (tenant-wide) | DONE | `guests`; `guests.tenant_id` + `origin_property_id` | none found | – |
 | Rates, grid, yield rules, free-night quotas, occupancy kinds | DONE | `rates` | none found | – |
 | Availability engine, calendar, tape chart | DONE | `availability`; calendar now marks restrictions | none found | – |
-| Sales restrictions with override | DONE | section 3.2 | a structural guard for new sale paths, a fill-versus-booking race test (F-09) | P1 |
+| Sales restrictions with override | DONE | section 3.2 | (the structural guard and the fill-versus-booking race were built in F-09, 2026-10-08) | P1 |
 | Reservations: create, amend, confirm, cancel, no-show, reinstate | DONE | `reservations`, 56 tests | the cancellation fee and no-show fee are posted by hand (F-08, built 2026-10-08); no automatic fee | P1 |
 | Front desk: check-in, walk-in, move, extend, check-out, reverse check-in | PARTIAL | `frontdesk`, 39 tests | reverse check-in and company folios (F-06) | P1 |
 | Taxes, service charges, charge codes, charge calculation | DONE | `billingconfig`, `chargecalc` (98.3% coverage) | credit notes of the city ledger compute their own tax (F-20) | P2 |
 | Folios, payments, refunds, voids, adjustments, reversals | DONE | `folios`, 40 tests, concurrency tests | idempotency does not compare the payload (F-21) | P2 |
-| Several folios per stay, billing instructions, charge transfer | DONE | section 3.1 | test gaps (F-09) | P1 |
+| Several folios per stay, billing instructions, charge transfer | DONE | section 3.1 | the test gaps were closed in F-09; open: the end-to-end invoice case (company invoice, guest invoice, one city ledger invoice) | P2 |
 | Room charge posting and night audit | DONE | `roomcharge`, `nightaudit`, `expected` | accounting-not-set-up warning (F-15, resolved by P0 #6) | P1 |
 | Cashier shifts, handover, X and Z reports | DONE | `shifts`, 19 tests | none found | – |
 | City ledger: invoices, receipts, allocations, credit notes, write-offs, overdue, reminders, late fee | DONE | `cityledger`, 42 tests | credit-note tax (F-20) | P2 |
@@ -295,13 +295,13 @@ The project has 57 tests that start goroutines against a real PostgreSQL. By are
 |---|---|---|
 | Room availability, reservation creation, confirmation | `TestLastRoomBookedConcurrentlyGoesToOne`, `TestConcurrentConfirmOfDraftsRespectsInventory` | DONE |
 | Check-in, room assignment, room move | `TestConcurrentCheckInsIntoOneRoom`, `TestSameLineCheckedInTwiceAtOnce`, `TestConcurrentAssignmentOfOneRoom`, `TestConcurrentMovesIntoOneRoom` | DONE |
-| Room charge posting, night audit | `TestConcurrentPostingChargesEachNightOnce`, `TestConcurrentRunsOneWins` | DONE; **not with a routed night** (F-09) |
+| Room charge posting, night audit | `TestConcurrentPostingChargesEachNightOnce`, `TestConcurrentRunsOneWins` | DONE, and with a routed night (F-09: `TestConcurrentRunsOfARoutedNightChargeItOnce`) |
 | Cashier shift open and close, cash payments | `TestTwoOpensOfOneCashierMakeOneShift`, `TestPaymentsAndTheCloseOfAShiftDoNotLoseCash` | DONE |
 | Payments, refunds, adjustments | replay and refund races, adjustment race | DONE |
-| Folio transfer | `TestConcurrentTransfersMoveTheChargeOnce` | DONE; transfer against a posting run: **not tested** |
-| Company folio creation | none: `SetBillingInstructions` against check-in, check-out or reverse check-in, and two sets of one line | **MISSING** (F-09) |
+| Folio transfer | `TestConcurrentTransfersMoveTheChargeOnce`, `TestTransferAndAPostingRunOfTheSameNightChargeItOnce`, `TestTransferAndTonightsPostingRunBothComplete`, `TestTwoTransfersOfOneNightHaveOneWinner` | DONE (F-09) |
+| Company folio creation | `company_folio_race_test.go`: `SetBillingInstructions` against check-in, check-out, reverse check-in, two sets of one line, and the stay lock wait | DONE (F-09); found and fixed a stale read |
 | Currency lock | both orders, through the service and through a plain UPDATE | DONE |
-| Restriction override | the override is verified inside the request; the race that matters is a **fill racing a booking** | **MISSING** (F-09) |
+| Restriction override | the override is verified inside the request; the race that matters is a fill racing a booking | DONE (F-09) |
 | City ledger, payables, bank, tax, budget, accounting, rates, housekeeping, rooms, guests, groups | one or more race tests each | DONE |
 
 The race detector result is in F-02.
@@ -342,7 +342,7 @@ Coverage by the topics the owner asked about:
 
 | Topic | Assessment |
 |---|---|
-| Folio transfer | strong (7 backend tests, API, component) with the gaps of F-09: net zero through the day journal, department value, INCLUSIVE, a chain of room nights |
+| Folio transfer | strong (backend, API, component, and since F-09 the net zero through the day journal per department, INCLUSIVE and a chain of room nights) |
 | Restriction override | strong; a structural guard for new sale paths and a fill-versus-booking race are missing |
 | Company routing | strong for rules, precedence, blocker, check-in, in-house, night audit, invoice, tax invoice; reverse check-in missing (F-06) |
 | Currency lock | strong: schema classification of every money table, a text check that the function names every root and no configuration table, both race orders, 6 of 15 roots proved by inserting a row (the other 9 by the text check) |
@@ -540,11 +540,12 @@ The DB-down and TLS checks were manual in the first verification and are now par
 
 | | |
 |---|---|
-| Status | **PARTIAL** · VERIFIED |
+| Status | **DONE (implemented 2026-10-08, locally verified); CI result in the next row** |
+| **Update (2026-10-08, F-09)** | **Built; no migration; lock order unchanged.** (1) **Fill versus booking** (`internal/reservations/restriction_race_test.go`): a restriction mid-commit makes the booking wait and then be refused `STAY_RESTRICTED` with no reservation, line or night price left; a booking in flight makes the fill wait; a reservation made before a restriction is untouched; 20 staggered runs over four kinds of restriction end in one of the two valid outcomes. (2) **Company folio** (`internal/frontdesk/company_folio_race_test.go`): `SetBillingInstructions` against check-in, check-out, reverse check-in, two sets of one line, and two deterministic cases where the instructions wait for the stay lock while the stay leaves by check-out or by a reversal. **It found a real bug:** `SetBillingInstructions` read the line and the stay before taking the stay lock, so a check-out that committed while it waited left it acting on a stay that was already `CHECKED_OUT` and it opened an OPEN company folio on it (migration 00064 forbids that only for CANCELLED stays); for a reversal the commit failed on 00064. **Fixed** in `folios/instructions.go`: the line and the stay are read again after the stay lock (same lock order). Both deterministic tests fail without the fix (mutation-checked). (3) **Transfer versus posting run** (`internal/roomcharge/transfer_race_test.go`): a transfer of a posted room night against a run of the same night, against tonight's run, two transfers of one night, a transfer waiting for folios held by a run: the night is charged once, the register has one POSTED row for it and it points at the live copy, the folios add up, no deadlock. (4) **Books** (`internal/accounting/transfer_gl_test.go`): a counterfactual inside one property, day 1 with a charge that stays and day 2 with the same charge transferred, and the two day-close journals are line for line the same per account, department and source (service, VAT and the department of the charge code included); an INCLUSIVE charge with service and VAT transferred after the rates changed: the original row is byte for byte unchanged, the copy has every number and component of the original, the reversal mirrors them with the sign turned, nothing is calculated again; a room night moved twice (A to B to C): one live charge, the register always on it, a posting run adds nothing, the reversals are not nights, the journal holds the night once; the company-pays path from the instruction on the booking through check-in, two night audits, a transfer of night 1 and the check-out (one company folio, both folios closed). (5) **API** (`internal/app/architecture18_authz_api_test.go`): the 16 routes of the finding (folio charge and payment, transfer, reverse, group, void, refund, fee, instructions, restrictions, stay read, reverse check-in, check-out) as a user of another tenant (404 `PROPERTY_NOT_FOUND`, or 404 `*_NOT_FOUND` with their object ids under my property, nothing leaked, neither side changed), as a user without the permission (403 `PERMISSION_DENIED`, nothing changed), without a grant on the property (404) and with the right permission on one property and a read-only role on another (success on one, 403 on the other). (6) **Currency lock** (`internal/tenancy/currency_lock_roots_test.go`): the list of tables read by `property_has_financial_data` is pinned (15 tables, a test fails when the function and the list differ); a row of each one locks the currency through the service and through a plain UPDATE (the trigger), the decimals alone are locked, another property of the tenant stays free; configuration (accounts, bank account, company, supplier, tax, charge code) never locks. For the tables that cannot exist without a journal (supplier bill, supplier payment, credit note, tax payment, opening credit, city ledger adjustment) the journal locks too, so the definition test is what proves the table itself is on the list. (7) **Structural guard** (`internal/reservations/salepath_guard_test.go`, see `18` section 4.7 "Adding a sale path"): no list of sale paths; an exported use case that writes lines or confirms and does not reach `requireSellable` / `RequireSellableStay` fails the build of the tests; a meta-test removes the gate from the real source of each known path and requires the guard to name it. (8) The posting runs of one routed night at once charge it once, on the company folio. **Not built (outside the request of this step):** the end-to-end case "company pays the room, guest pays the minibar, two invoices, one city ledger invoice". A loser of a race may be told `RESOURCE_BUSY` (the lock timeout of `db/tx.go`, a retriable application code); the tests accept it and never a raw database error. |
 | Evidence | Compared with `18` sections 3.12, 4.12 and 5.9: **missing** are the net zero of a transfer through the day-close journal (`PostDay`) per account and department (the test checks per account in SQL, and the department only for "set or not"); a transfer of an INCLUSIVE item; a chain of transfers of a room night (a transferred copy that moves again: the register lookup is by the copy's POSTED row, untested); the extended `TestConcurrentPostingChargesEachNightOnce` with routing; the end-to-end case "company pays the room, guest pays the minibar, two invoices, one city ledger invoice"; a fill racing a booking; a race of `SetBillingInstructions` against check-in, check-out or reverse check-in; a transfer racing a posting run; cross-tenant and permission tests of the transfer and instruction routes at API level; a structural guard that a new sale path must call the evaluator (the guard test is an explicit list); a row in each of the 9 root tables of the currency lock that no test inserts (payments, supplier bills, supplier payments, supplier credit notes, city ledger invoices, city ledger adjustments, tax returns, tax payments, tax opening credits: the definition is checked by text only) |
 | Risk | The properties the design relies on are argued, not proved, in exactly the places where money moves between folios |
 | Recommendation | Write them; the first three are small and use fixtures that exist |
-| Suggested next step | One "Architecture 18, remaining tests" commit |
+| Suggested next step | Done in F-09 (see the update row above) |
 
 #### F-10 · Medium · Authorization is not proved structurally; cross-property tests are missing for the financial modules
 

@@ -253,6 +253,8 @@ rate_restrictions
 
 **No overbooking** is unchanged and not a restriction: the inventory still refuses `available < 0` and cannot be overridden.
 
+**Adding a sale path** (the structural guard, audit F-09): `internal/reservations/salepath_guard_test.go` reads the source of `internal/reservations` and `internal/frontdesk` with `go/parser` and fails when an exported use case writes room lines or confirms a reservation (`InsertLine`, `UpdateLine`, `ConfirmReservation`, `InsertReservation`) or lengthens a stay (`ExtendNights`) without reaching `requireSellable` / `RequireSellableStay`. There is no list of sale paths to update: a new path is found by what it writes. To add one, call `s.requireSellable(...)` with what is new in the operation (or `RequireSellableStay` from another package) and add a case to `TestEverySalePathAsksTheSalesRestrictions`; to add a path that writes lines but sells nothing, name it in `notASale` of the guard with the reason. A second test removes the gate from the real source of each known path and requires the guard to name it, so the guard cannot go blind.
+
 **Locks and transactions**: no new lock level. Restrictions are read inside the booking transaction under the locks it already holds, like the rate grid; an edit of the grid takes the same locks as `FillRates` (room types shared, then the plan). A sale and a stop sell that race in the same millisecond may resolve either way; both are correct outcomes (the sale happened before the closing, or was refused after it), and the existing reservation is never touched.
 
 ### 4.8 API impact
