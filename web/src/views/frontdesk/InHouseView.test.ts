@@ -128,6 +128,19 @@ describe('InHouseView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/folios/80?tab=payment')
   })
 
+  it('opens Edit rate from the menu with the nights of the stay', async () => {
+    const w = await mountView([...ALL, 'frontdesk.rate_change'])
+    GET = vi.fn(async (path: string) => (path.endsWith('/stays/{id}')
+      ? { data: { stay: { id: 5, version: 1 }, nightly_rates: [{ date: '2026-10-01', amount: '1200000', price_mode: 'EXCLUSIVE', is_override: false, posted: false, posted_on: null, status: 'OPEN' }] } }
+      : { data: { data: [row()] } }))
+    await w.get('[data-testid=more-STY000001]').trigger('click')
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=editRate-STY000001]') as HTMLElement).click()
+    await flushPromises()
+    expect(GET.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId: 7, id: 5 } } }])
+    expect(document.body.querySelector('[data-testid=edit-rate-dialog]')).not.toBeNull()
+  })
+
   it('opens the detail drawer from the guest without leaving the list', async () => {
     const w = await mountView()
     await w.get('[data-testid=open-STY000001]').trigger('click')

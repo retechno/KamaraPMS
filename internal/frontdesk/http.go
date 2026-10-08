@@ -29,6 +29,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/stays/{id}/reverse-check-in", httpx.HandlerFunc(h.reverse))
 	mux.Handle("POST "+p+"/stays/{id}/move", httpx.HandlerFunc(h.move))
 	mux.Handle("POST "+p+"/stays/{id}/change-departure", httpx.HandlerFunc(h.changeDeparture))
+	mux.Handle("POST "+p+"/stays/{id}/rates", httpx.HandlerFunc(h.changeRates))
 	mux.Handle("POST "+p+"/stays/{id}/guests", httpx.HandlerFunc(h.addGuest))
 	mux.Handle("POST "+p+"/stays/{id}/check-out", httpx.HandlerFunc(h.checkOut))
 }
@@ -319,6 +320,26 @@ func (h *Handler) checkOut(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.CheckOut(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) changeRates(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var in ChangeRatesInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.ChangeRates(r.Context(), pid, id, in)
 	if err != nil {
 		return err
 	}

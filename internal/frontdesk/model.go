@@ -255,6 +255,10 @@ type NightView struct {
 	PriceMode  string     `json:"price_mode"`
 	IsOverride bool       `json:"is_override"`
 	Posted     bool       `json:"posted"`
+	// PostedOn is the business date the night was charged on (nil: not charged). Status is OPEN (not charged), POSTED (charged on the open business day) or CLOSED (charged on a day that has closed):
+	// a charged night is corrected with an adjustment, never by changing the charge.
+	PostedOn *civil.Date `json:"posted_on"`
+	Status   string      `json:"status"`
 }
 
 // GuestRef is a guest of the stay.
@@ -293,6 +297,34 @@ type MoveInput struct {
 	NewNightlyRates      []reservations.NightOverride `json:"new_nightly_rates"`
 	OverrideRoomNotReady bool                         `json:"override_room_not_ready"`
 	OverrideReason       string                       `json:"override_reason"`
+}
+
+// ChangeRatesInput changes the rate of the nights of an in-house stay. ApplyTo is NIGHT (the night of Date) or REMAINING (Date and every later night that is not charged yet: a charged night is
+// never changed in bulk). A night that is already charged is corrected by an adjustment, which needs the approval of a correction.
+type ChangeRatesInput struct {
+	Version  int32              `json:"version"`
+	ApplyTo  string             `json:"apply_to"`
+	Date     civil.Date         `json:"date"`
+	Amount   string             `json:"amount"`
+	Reason   string             `json:"reason"`
+	Approval *iam.ApprovalInput `json:"approval"`
+}
+
+// RateChange is one night whose rate changed. Charged says the night was already charged: then the ledger got an adjustment (AdjustmentItemID, on FolioID) for the difference.
+type RateChange struct {
+	Date             civil.Date `json:"date"`
+	OldAmount        string     `json:"old_amount"`
+	NewAmount        string     `json:"new_amount"`
+	PriceMode        string     `json:"price_mode"`
+	Charged          bool       `json:"charged"`
+	FolioID          *int64     `json:"folio_id"`
+	AdjustmentItemID *int64     `json:"adjustment_item_id"`
+}
+
+// ChangeRatesResult is the stay after a rate change and the nights that changed.
+type ChangeRatesResult struct {
+	Stay    Stay         `json:"stay"`
+	Changes []RateChange `json:"changes"`
 }
 
 // MoveResult is a room move: the stay, the segment that was closed and the one that opened.

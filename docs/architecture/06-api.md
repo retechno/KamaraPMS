@@ -448,6 +448,11 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Rules:** §14.3 "Room move". New rates need `frontdesk.rate_change`, and only for unposted nights.
 - **TX:** see Step 15 #4
 
+**POST `{P}/stays/{id}/rates`** (`frontdesk.rate_change`): the rate edit of an in-house stay.
+- **Request:** `{ version, apply_to: NIGHT|REMAINING, date, amount, reason, approval? }`. **Response:** `{ stay, changes: [{date, old_amount, new_amount, price_mode, charged, folio_id, adjustment_item_id}] }`.
+- **Rules:** the rate plan never changes; only the price snapshot of the booking (`reservation_room_rates`, the rows a move or an extension override). A night that is not charged changes in the snapshot and is charged at the new rate by the posting run. A charged night keeps its charge: the snapshot changes and an ADJUSTMENT for the difference is posted on the folio it was charged to, dated the open business day (so a night of a closed day is corrected without writing to that day), calculated by the engine, with `folio.adjust` and the approval of a correction (`APPROVAL_REQUIRED`). `REMAINING` never touches a charged night. A reason is required; a stay that is not in house is `STAY_NOT_OPEN`.
+- **TX:** business day (shared), stay (L4; the posting run, the check-out and another rate change take it too; charged nights are read after it is held), then the folios of the charged nights in ascending id. One `stay.rate_changed` audit entry per night (old and new rate, reason, rate plan, room, adjustment item and approver) and one `folio.adjustment_posted` per adjustment.
+
 **POST `{P}/stays/{id}/change-departure`** (`reservation.update`)
 - **Purpose:** extend, shorten, or correct the departure date.
 - **Request:** `{ version, departure_date, nightly_overrides? }`

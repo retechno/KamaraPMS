@@ -287,6 +287,27 @@ func (q *Queries) GetOpenSegment(ctx context.Context, arg GetOpenSegmentParams) 
 	return i, err
 }
 
+const getRatePlanCode = `-- name: GetRatePlanCode :one
+SELECT code, name FROM rate_plans WHERE property_id = $1 AND id = $2
+`
+
+type GetRatePlanCodeParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+type GetRatePlanCodeRow struct {
+	Code string
+	Name string
+}
+
+func (q *Queries) GetRatePlanCode(ctx context.Context, arg GetRatePlanCodeParams) (GetRatePlanCodeRow, error) {
+	row := q.db.QueryRow(ctx, getRatePlanCode, arg.PropertyID, arg.ID)
+	var i GetRatePlanCodeRow
+	err := row.Scan(&i.Code, &i.Name)
+	return i, err
+}
+
 const getRoomForCheckIn = `-- name: GetRoomForCheckIn :one
 SELECT r.id, r.room_number, r.room_type_id, r.bed_type_id, r.is_active, h.status AS housekeeping_status
 FROM rooms r JOIN room_housekeeping h ON h.property_id = r.property_id AND h.room_id = r.id
@@ -1129,10 +1150,56 @@ func (q *Queries) ListStayGuests(ctx context.Context, arg ListStayGuestsParams) 
 	return items, nil
 }
 
+const listStayNightPostings = `-- name: ListStayNightPostings :many
+SELECT p.service_date, p.business_date, p.folio_item_id, p.charge_code_id
+FROM stay_charge_postings p
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.stay_id = $3 AND p.status = 'POSTED'
+ORDER BY p.service_date
+`
+
+type ListStayNightPostingsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     int64
+}
+
+type ListStayNightPostingsRow struct {
+	ServiceDate  civil.Date
+	BusinessDate civil.Date
+	FolioItemID  int64
+	ChargeCodeID int64
+}
+
+// The charged nights of a stay with the ledger item each one posted (the room charge), for a rate correction.
+func (q *Queries) ListStayNightPostings(ctx context.Context, arg ListStayNightPostingsParams) ([]ListStayNightPostingsRow, error) {
+	rows, err := q.db.Query(ctx, listStayNightPostings, arg.TenantID, arg.PropertyID, arg.StayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStayNightPostingsRow{}
+	for rows.Next() {
+		var i ListStayNightPostingsRow
+		if err := rows.Scan(
+			&i.ServiceDate,
+			&i.BusinessDate,
+			&i.FolioItemID,
+			&i.ChargeCodeID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStayNights = `-- name: ListStayNights :many
 SELECT r.stay_date, r.amount, r.price_mode, r.is_override,
-       EXISTS (SELECT 1 FROM stay_charge_postings p
-                WHERE p.property_id = r.property_id AND p.stay_id = $1 AND p.service_date = r.stay_date AND p.status = 'POSTED') AS posted
+       COALESCE((SELECT min(p.business_date) FROM stay_charge_postings p
+         WHERE p.property_id = r.property_id AND p.stay_id = $1 AND p.service_date = r.stay_date AND p.status = 'POSTED'), '0001-01-01'::date)::date AS posted_on
 FROM reservation_room_rates r
 WHERE r.tenant_id = $2 AND r.property_id = $3 AND r.reservation_room_id = $4
 ORDER BY r.stay_date
@@ -1150,10 +1217,10 @@ type ListStayNightsRow struct {
 	Amount     decimal.Decimal
 	PriceMode  string
 	IsOverride bool
-	Posted     bool
+	PostedOn   civil.Date
 }
 
-// Nightly snapshot of the stay's line, with whether the night is posted.
+// Nightly snapshot of the stay's line, with the business date it was charged on (0001-01-01: not charged).
 func (q *Queries) ListStayNights(ctx context.Context, arg ListStayNightsParams) ([]ListStayNightsRow, error) {
 	rows, err := q.db.Query(ctx, listStayNights,
 		arg.StayID,
@@ -1173,7 +1240,7 @@ func (q *Queries) ListStayNights(ctx context.Context, arg ListStayNightsParams) 
 			&i.Amount,
 			&i.PriceMode,
 			&i.IsOverride,
-			&i.Posted,
+			&i.PostedOn,
 		); err != nil {
 			return nil, err
 		}

@@ -167,3 +167,8 @@ func (s *Service) OverrideNights(ctx context.Context, p auth.Principal, perm aut
 	}
 	return s.storeRates(ctx, p, propertyID, lineID, priced)
 }
+
+// NightRates returns the price snapshot of a line, night by night (read only: the caller was authorized and holds the locks it needs).
+func (s *Service) NightRates(ctx context.Context, tenantID, propertyID, lineID int64) ([]reservationsdb.ReservationRoomRate, error) {
+	return s.q(ctx).ListNightRates(ctx, reservationsdb.ListNightRatesParams{TenantID: tenantID, PropertyID: propertyID, LineIds: []int64{lineID}})
+}

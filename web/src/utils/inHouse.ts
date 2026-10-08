@@ -1,11 +1,11 @@
 import type { InHouseRow } from '@/api/types'
 
 /** What the front desk can do from a row of the in-house list. */
-export type InHouseAction = 'view' | 'editGuest' | 'folio' | 'checkOut' | 'editStay' | 'moveRoom' | 'extend' | 'payment'
+export type InHouseAction = 'view' | 'editGuest' | 'folio' | 'checkOut' | 'editStay' | 'editRate' | 'moveRoom' | 'extend' | 'payment'
 
 /** The actions shown on the row itself; the others are in its menu. */
 export const PRIMARY_ACTIONS: InHouseAction[] = ['view', 'editGuest', 'folio', 'checkOut']
-export const MORE_ACTIONS: InHouseAction[] = ['editStay', 'moveRoom', 'extend', 'payment']
+export const MORE_ACTIONS: InHouseAction[] = ['editStay', 'editRate', 'moveRoom', 'extend', 'payment']
 
 type Folio = InHouseRow['balance']['folios'][number]
 
@@ -27,6 +27,7 @@ export function actionsFor(row: InHouseRow, can: (permission: string) => boolean
     folio: can('folio.read') && !!folio,
     checkOut: can('frontdesk.checkout'),
     editStay: can('reservation.update'),
+    editRate: can('frontdesk.rate_change'),
     moveRoom: can('frontdesk.room_move'),
     extend: can('reservation.update'),
     payment: can('payment.post') && can('folio.read') && folio?.status === 'OPEN',

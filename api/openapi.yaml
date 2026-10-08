@@ -2570,6 +2570,35 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/rates:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: changeStayRates
+      summary: Change the rate of nights of an in-house stay (frontdesk.rate_change)
+      description: |
+        A reason is required. The rate plan is never changed: only the price snapshot of the booking. A night that is **not charged** changes in the snapshot and is charged at the new rate by
+        the posting run. A night that is **charged** keeps its charge: the snapshot changes and an ADJUSTMENT for the difference is posted on the folio it was charged to, dated the open
+        business day (also for a night charged on a day that has closed). That needs `folio.adjust` and the `approval` of a correction (422 `APPROVAL_REQUIRED`). `REMAINING` changes the
+        given night and every later night that is not charged, and never a charged one. 409 `STAY_NOT_OPEN` for a stay that is not in house, `VERSION_CONFLICT` for a stale screen.
+      tags: [frontdesk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeRatesRequest" }
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeRatesResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/stays/{id}/change-departure:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9890,15 +9919,46 @@ components:
         departure_date: { $ref: "#/components/schemas/Date" }
         adult_count: { type: integer }
         child_count: { type: integer }
+    ChangeRatesRequest:
+      type: object
+      required: [version, apply_to, date, amount, reason]
+      properties:
+        version: { type: integer, format: int32 }
+        apply_to: { type: string, enum: [NIGHT, REMAINING] }
+        date: { $ref: "#/components/schemas/Date" }
+        amount: { type: string, description: The new rate of each night, in the price mode of the night. }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    RateChange:
+      type: object
+      required: [date, old_amount, new_amount, price_mode, charged, folio_id, adjustment_item_id]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        old_amount: { type: string }
+        new_amount: { type: string }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        charged: { type: boolean, description: "The night was already charged, so the ledger got an adjustment." }
+        folio_id: { type: [integer, "null"], format: int64 }
+        adjustment_item_id: { type: [integer, "null"], format: int64 }
+    ChangeRatesResult:
+      type: object
+      required: [stay, changes]
+      properties:
+        stay: { $ref: "#/components/schemas/Stay" }
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/RateChange" }
     StayNight:
       type: object
-      required: [date, amount, price_mode, is_override, posted]
+      required: [date, amount, price_mode, is_override, posted, posted_on, status]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         amount: { type: string }
         price_mode: { $ref: "#/components/schemas/PriceMode" }
         is_override: { type: boolean }
         posted: { type: boolean }
+        posted_on: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/Date" }], description: The business date the night was charged on; null when it is not charged. }
+        status: { type: string, enum: [OPEN, POSTED, CLOSED], description: "OPEN: not charged. POSTED: charged on the open business day. CLOSED: charged on a day that has closed. A charged night is corrected with an adjustment." }
     StayLine:
       type: object
       required: [id, reservation_id, confirmation_number, room_type_code, status]

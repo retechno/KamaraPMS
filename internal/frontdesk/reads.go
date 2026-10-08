@@ -158,6 +158,17 @@ func balanceStatus(d decimal.Decimal) string {
 	return "SETTLED"
 }
 
+// nightStatus says where a night stands: not charged, charged on the open business day, or charged on a day that has closed.
+func nightStatus(postedOn *civil.Date, bd civil.Date) string {
+	switch {
+	case postedOn == nil:
+		return "OPEN"
+	case postedOn.Equal(bd):
+		return "POSTED"
+	}
+	return "CLOSED"
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""
@@ -265,8 +276,19 @@ func (s *Service) stayDetail(ctx context.Context, p auth.Principal, propertyID, 
 		return StayDetail{}, err
 	}
 	out.NightlyRates = make([]NightView, len(nights))
+	var bd civil.Date
+	if day, err := s.days.CurrentBusinessDay(ctx, propertyID); err == nil {
+		bd = day.BusinessDate
+	} else if !apperr.IsCode(err, "BUSINESS_DAY_NOT_FOUND") {
+		return StayDetail{}, err
+	}
 	for i, n := range nights {
-		out.NightlyRates[i] = NightView{Date: n.StayDate, Amount: n.Amount.StringFixed(decimals.CurrencyDecimals), PriceMode: n.PriceMode, IsOverride: n.IsOverride, Posted: n.Posted}
+		var postedOn *civil.Date // the query answers a zero date for a night that is not charged
+		if !n.PostedOn.IsZero() {
+			on := n.PostedOn
+			postedOn = &on
+		}
+		out.NightlyRates[i] = NightView{Date: n.StayDate, Amount: n.Amount.StringFixed(decimals.CurrencyDecimals), PriceMode: n.PriceMode, IsOverride: n.IsOverride, Posted: postedOn != nil, PostedOn: postedOn, Status: nightStatus(postedOn, bd)}
 	}
 	if out.Folios, err = s.folios.StayFolios(ctx, p.TenantID, propertyID, id); err != nil {
 		return StayDetail{}, err

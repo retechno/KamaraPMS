@@ -14,6 +14,8 @@ describe('in-house actions', () => {
     expect(actionsFor(row(), grant('folio.read'))).toEqual(['folio'])
     expect(actionsFor(row(), grant('reservation.update'))).toEqual(['editStay', 'extend'])
     expect(actionsFor(row(), grant('frontdesk.room_move'))).toEqual(['moveRoom'])
+    expect(actionsFor(row(), grant('frontdesk.rate_change'))).toEqual(['editRate']) // the permission of the server
+    expect(actionTarget(row(), 'editRate')).toBeUndefined() // done in place
   })
 
   it('needs an open folio and both permissions for a payment', () => {

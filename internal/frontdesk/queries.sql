@@ -55,14 +55,24 @@ JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservat
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.id = @id;
 
--- Nightly snapshot of the stay's line, with whether the night is posted.
+-- Nightly snapshot of the stay's line, with the business date it was charged on (0001-01-01: not charged).
 -- name: ListStayNights :many
 SELECT r.stay_date, r.amount, r.price_mode, r.is_override,
-       EXISTS (SELECT 1 FROM stay_charge_postings p
-                WHERE p.property_id = r.property_id AND p.stay_id = @stay_id AND p.service_date = r.stay_date AND p.status = 'POSTED') AS posted
+       COALESCE((SELECT min(p.business_date) FROM stay_charge_postings p
+         WHERE p.property_id = r.property_id AND p.stay_id = @stay_id AND p.service_date = r.stay_date AND p.status = 'POSTED'), '0001-01-01'::date)::date AS posted_on
 FROM reservation_room_rates r
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.reservation_room_id = @line_id
 ORDER BY r.stay_date;
+
+-- The charged nights of a stay with the ledger item each one posted (the room charge), for a rate correction.
+-- name: ListStayNightPostings :many
+SELECT p.service_date, p.business_date, p.folio_item_id, p.charge_code_id
+FROM stay_charge_postings p
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.stay_id = @stay_id AND p.status = 'POSTED'
+ORDER BY p.service_date;
+
+-- name: GetRatePlanCode :one
+SELECT code, name FROM rate_plans WHERE property_id = @property_id AND id = @id;
 
 -- name: GetGuestBrief :one
 SELECT id, code, first_name, last_name FROM guests WHERE tenant_id = @tenant_id AND id = @id;

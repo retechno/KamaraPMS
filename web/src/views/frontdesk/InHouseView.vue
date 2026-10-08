@@ -7,6 +7,7 @@ import { ApiError } from '@/api/problem'
 import type { GuestView, InHouseRow } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
+import EditRateDialog from '@/components/EditRateDialog.vue'
 import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import InHouseBalance from '@/components/InHouseBalance.vue'
 import InHouseDrawer from '@/components/InHouseDrawer.vue'
@@ -37,6 +38,9 @@ const selectedId = ref<number | null>(null)
 const selected = computed(() => rows.value.find((r) => r.id === selectedId.value) ?? null)
 const editGuestId = ref<number | null>(null)
 const guestOpen = ref(false)
+const rateOpen = ref(false)
+const rateRowId = ref<number | null>(null)
+const rateRow = computed(() => rows.value.find((r) => r.id === rateRowId.value) ?? null)
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const can = (permission: string) => auth.can(permission, property.currentId)
@@ -86,6 +90,11 @@ function act(action: InHouseAction, row: InHouseRow): void {
     guestOpen.value = true
     return
   }
+  if (action === 'editRate') {
+    rateRowId.value = row.id
+    rateOpen.value = true
+    return
+  }
   const target = actionTarget(row, action)
   if (target) void router.push(target)
 }
@@ -95,6 +104,31 @@ function guestSaved(g: GuestView): void {
   const name = fullName(g)
   rows.value = rows.value.map((r) => (r.guest.id === g.id ? { ...r, guest: { ...r.guest, name } } : r))
   toast.success(t('frontDesk.inHouse.guestSaved', { name }))
+}
+
+/** A rate was changed: the rate and the balance of the rows come from the server again, for as many rows as are loaded, so the filters, the sorting and the page stay. */
+async function reloadLoaded(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null) return
+  const wanted = rows.value.length
+  try {
+    let all: InHouseRow[] = []
+    let cursor: string | undefined
+    do {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/in-house', { params: { path: { propertyId }, query: { limit: 50, cursor } } })
+      all = [...all, ...(data?.data ?? [])]
+      cursor = data?.next_cursor
+      nextCursor.value = cursor
+    } while (cursor && all.length < wanted)
+    rows.value = all
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
+function rateSaved(): void {
+  toast.success(t('frontDesk.rateEdit.saved'))
+  void reloadLoaded()
 }
 
 watch(() => property.currentId, () => {
@@ -186,5 +220,6 @@ watch(() => property.currentId, () => {
 
     <InHouseDrawer v-model:open="drawerOpen" :row="selected" @act="act" />
     <GuestEditDialog v-model:open="guestOpen" :guest-id="editGuestId" @saved="guestSaved" />
+    <EditRateDialog v-model:open="rateOpen" :row="rateRow" @saved="rateSaved" />
   </template>
 </template>

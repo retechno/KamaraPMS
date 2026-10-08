@@ -2075,6 +2075,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/stays/{id}/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the rate of nights of an in-house stay (frontdesk.rate_change)
+         * @description A reason is required. The rate plan is never changed: only the price snapshot of the booking. A night that is **not charged** changes in the snapshot and is charged at the new rate by
+         *     the posting run. A night that is **charged** keeps its charge: the snapshot changes and an ADJUSTMENT for the difference is posted on the folio it was charged to, dated the open
+         *     business day (also for a night charged on a day that has closed). That needs `folio.adjust` and the `approval` of a correction (422 `APPROVAL_REQUIRED`). `REMAINING` changes the
+         *     given night and every later night that is not charged, and never a charged one. 409 `STAY_NOT_OPEN` for a stay that is not in house, `VERSION_CONFLICT` for a stale screen.
+         */
+        post: operations["changeStayRates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/stays/{id}/change-departure": {
         parameters: {
             query?: never;
@@ -8921,12 +8947,46 @@ export interface components {
             adult_count: number;
             child_count: number;
         };
+        ChangeRatesRequest: {
+            /** Format: int32 */
+            version: number;
+            /** @enum {string} */
+            apply_to: "NIGHT" | "REMAINING";
+            date: components["schemas"]["Date"];
+            /** @description The new rate of each night */
+            amount: string;
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        RateChange: {
+            date: components["schemas"]["Date"];
+            old_amount: string;
+            new_amount: string;
+            price_mode: components["schemas"]["PriceMode"];
+            /** @description The night was already charged, so the ledger got an adjustment. */
+            charged: boolean;
+            /** Format: int64 */
+            folio_id: number | null;
+            /** Format: int64 */
+            adjustment_item_id: number | null;
+        };
+        ChangeRatesResult: {
+            stay: components["schemas"]["Stay"];
+            changes: components["schemas"]["RateChange"][];
+        };
         StayNight: {
             date: components["schemas"]["Date"];
             amount: string;
             price_mode: components["schemas"]["PriceMode"];
             is_override: boolean;
             posted: boolean;
+            /** @description The business date the night was charged on; null when it is not charged. */
+            posted_on: null | components["schemas"]["Date"];
+            /**
+             * @description OPEN: not charged. POSTED: charged on the open business day. CLOSED: charged on a day that has closed. A charged night is corrected with an adjustment.
+             * @enum {string}
+             */
+            status: "OPEN" | "POSTED" | "CLOSED";
         };
         StayLine: {
             /** Format: int64 */
@@ -16044,6 +16104,38 @@ export interface operations {
                     "application/json": components["schemas"]["MoveResult"];
                 };
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    changeStayRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeRatesResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
