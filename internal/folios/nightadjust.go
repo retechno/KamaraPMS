@@ -36,6 +36,11 @@ func (s *Service) VerifyApproval(ctx context.Context, propertyID int64, in *iam.
 	return s.iam.VerifyApproval(ctx, propertyID, in)
 }
 
+// VerifyApprovalFor checks the credentials of an approver who must hold perm (a lower rate needs reservation.override_rate_approve).
+func (s *Service) VerifyApprovalFor(ctx context.Context, propertyID int64, in *iam.ApprovalInput, perm auth.Permission) (iam.Approval, error) {
+	return s.iam.VerifyApprovalFor(ctx, propertyID, in, perm)
+}
+
 // AdjustChargedNights posts the adjustments of room nights in the caller's transaction (it needs no permission of its own: the front desk use case was authorized, and the approval
 // is the one of a correction). The folios of the items are locked first, FOR UPDATE in ascending id (L4), then each adjustment is posted; a folio that is closed refuses
 // (FOLIO_CLOSED) and nothing is written for it. The business day must already be share-locked; bd is that day.

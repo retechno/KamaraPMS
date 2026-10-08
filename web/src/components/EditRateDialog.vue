@@ -51,7 +51,11 @@ const targets = computed(() => {
 })
 const validAmount = computed(() => /^\d+(\.\d+)?$/.test(amount.value.trim()))
 const changing = computed(() => validAmount.value && targets.value.some((n) => Number(n.amount) !== Number(amount.value)))
-const needsApproval = computed(() => targets.value.some((n) => !isOpen(n)))
+const charged = computed(() => targets.value.some((n) => !isOpen(n)))
+// A rate that goes down needs a rate approver: the person's own right when they have it, else the credentials of one.
+const lowering = computed(() => validAmount.value && targets.value.some((n) => Number(amount.value) < Number(n.amount)))
+const canApproveRate = computed(() => auth.can('reservation.override_rate_approve', property.currentId))
+const needsApproval = computed(() => charged.value || (lowering.value && !canApproveRate.value))
 const isTarget = (n: Night) => targets.value.some((x) => x.date === n.date)
 const canSubmit = computed(() => !!detail.value && !busy.value && changing.value && reason.value.trim() !== '')
 
@@ -166,7 +170,8 @@ watch(() => [open.value, props.row?.id], () => { if (open.value) void load() }, 
           </FormField>
         </div>
 
-        <p v-if="needsApproval" class="alert warning mt-3" data-testid="charged-note">{{ t('frontDesk.rateEdit.chargedNote') }}</p>
+        <p v-if="charged" class="alert warning mt-3" data-testid="charged-note">{{ t('frontDesk.rateEdit.chargedNote') }}</p>
+        <p v-if="lowering && !canApproveRate" class="alert warning mt-3" data-testid="lowered-note">{{ t('frontDesk.rateEdit.loweredNote') }}</p>
         <p v-if="!canAdjust && nights.some((n) => !isOpen(n))" class="mb-0 mt-2 text-xs text-muted-foreground">{{ t('frontDesk.rateEdit.noAdjustRight') }}</p>
         <p v-if="validAmount && !changing && targets.length" class="mb-0 mt-2 text-xs text-muted-foreground" data-testid="nothing">{{ t('frontDesk.rateEdit.nothingToChange') }}</p>
 

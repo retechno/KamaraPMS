@@ -59,10 +59,33 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 	if len(fields) > 0 {
 		return ChangeRatesResult{}, apperr.Invalid("the rate change is invalid", fields...)
 	}
-	var approval iam.Approval
-	if in.Approval != nil { // before the transaction: no lock is held while the password is hashed
-		if approval, err = s.folios.VerifyApproval(ctx, propertyID, in.Approval); err != nil {
+	// The approvals are checked before the transaction (no lock is held while a password is hashed) from a read of the nights that takes no lock; the transaction asks again with the locks held
+	// and refuses (APPROVAL_REQUIRED) if a charge or a rate moved in between so that more is needed than was approved.
+	var approval, rateApproval iam.Approval
+	callerApproves := s.authz.Require(ctx, propertyID, auth.PermReservationOverrideApprove) == nil
+	if in.Approval != nil {
+		peek, err := s.readStay(ctx, p, propertyID, stayID)
+		if err != nil {
 			return ChangeRatesResult{}, err
+		}
+		nights, err := s.res.NightRates(ctx, p.TenantID, propertyID, peek.line.ID)
+		if err != nil {
+			return ChangeRatesResult{}, err
+		}
+		postings, err := s.q(ctx).ListStayNightPostings(ctx, frontdeskdb.ListStayNightPostingsParams{TenantID: p.TenantID, PropertyID: propertyID, StayID: stayID})
+		if err != nil {
+			return ChangeRatesResult{}, err
+		}
+		corrected, lowered := approvalNeeds(rateTargetsOrNil(in, amount, nights, postings), amount)
+		if corrected {
+			if approval, err = s.folios.VerifyApproval(ctx, propertyID, in.Approval); err != nil {
+				return ChangeRatesResult{}, err
+			}
+		}
+		if lowered && !callerApproves {
+			if rateApproval, err = s.folios.VerifyApprovalFor(ctx, propertyID, in.Approval, auth.PermReservationOverrideApprove); err != nil {
+				return ChangeRatesResult{}, err
+			}
 		}
 	}
 	var out ChangeRatesResult
@@ -95,43 +118,15 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 		if err != nil {
 			return err
 		}
-		charged := map[civil.Date]frontdeskdb.ListStayNightPostingsRow{}
-		for _, po := range postings {
-			charged[po.ServiceDate] = po
-		}
-		type target struct {
-			night reservationsdb.ReservationRoomRate
-			po    *frontdeskdb.ListStayNightPostingsRow
-		}
-		var targets []target
-		found := false
-		for _, n := range nights {
-			if n.StayDate.Before(in.Date) || (in.ApplyTo == ApplyNight && !n.StayDate.Equal(in.Date)) {
-				continue
-			}
-			found = found || n.StayDate.Equal(in.Date)
-			po, isCharged := charged[n.StayDate]
-			switch {
-			case isCharged && in.ApplyTo == ApplyRemaining:
-				continue // a charged night is never changed in bulk
-			case n.Amount.Equal(amount):
-				continue
-			case isCharged:
-				targets = append(targets, target{night: n, po: &po})
-			default:
-				targets = append(targets, target{night: n})
-			}
-		}
+		targets, found := rateTargets(in, amount, nights, postings)
 		if in.ApplyTo == ApplyNight && !found {
 			return apperr.Invalid("the rate change is invalid", fieldErr("date", "OUT_OF_RANGE", "a night of the stay"))
 		}
 		if len(targets) == 0 {
 			return apperr.Invalid("the rate change is invalid", fieldErr("amount", "UNCHANGED", "no night would change"))
 		}
-		needsCorrection := false
-		for _, t := range targets {
-			needsCorrection = needsCorrection || t.po != nil
-		}
+		needsCorrection, lowered := approvalNeeds(targets, amount)
+		var rateApprover *int64 // who approved a lower rate: the caller when they are a rate approver, else the person whose credentials came with the request
 		if needsCorrection {
 			if err := s.authz.Require(ctx, propertyID, auth.PermFolioAdjust); err != nil {
 				return err
@@ -140,6 +135,18 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 				if _, err := s.folios.VerifyApproval(ctx, propertyID, nil); err != nil { // APPROVAL_REQUIRED
 					return err
 				}
+			}
+		}
+		if lowered {
+			switch {
+			case callerApproves:
+				rateApprover = p.ActorID()
+			case !rateApproval.IsZero():
+				id := rateApproval.UserID()
+				rateApprover = &id
+			default:
+				_, err := s.folios.VerifyApprovalFor(ctx, propertyID, nil, auth.PermReservationOverrideApprove) // APPROVAL_REQUIRED
+				return err
 			}
 		}
 		overrides := make([]reservations.NightOverride, len(targets))
@@ -188,7 +195,10 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 			c := RateChange{Date: t.night.StayDate, OldAmount: t.night.Amount.StringFixed(places), NewAmount: nr.Amount.StringFixed(places), PriceMode: nr.PriceMode, Charged: t.po != nil}
 			meta := map[string]any{
 				"date": c.Date, "amount": c.NewAmount, "reason": reason, "rate_plan": plan.Code, "room_number": pre.seg.RoomNumber, "reservation_id": pre.line.ReservationID,
-				"price_mode": nr.PriceMode, "financial_adjustment": c.Charged, "apply_to": in.ApplyTo,
+				"price_mode": nr.PriceMode, "financial_adjustment": c.Charged, "apply_to": in.ApplyTo, "lowered": nr.Amount.LessThan(t.night.Amount),
+			}
+			if rateApprover != nil && nr.Amount.LessThan(t.night.Amount) {
+				meta["rate_approved_by"] = *rateApprover
 			}
 			if t.po != nil {
 				a := adjusted[t.po.FolioItemID]
@@ -204,4 +214,50 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 		return nil
 	})
 	return out, err
+}
+
+type rateTarget struct {
+	night reservationsdb.ReservationRoomRate
+	po    *frontdeskdb.ListStayNightPostingsRow
+}
+
+// rateTargets are the nights a change would touch: the night of the date, or it and every later night that is not charged (a charged night is never changed in bulk). A night that already
+// has the rate is left out. found says whether the date is a night of the stay.
+func rateTargetsOrNil(in ChangeRatesInput, amount decimal.Decimal, nights []reservationsdb.ReservationRoomRate, postings []frontdeskdb.ListStayNightPostingsRow) []rateTarget {
+	t, _ := rateTargets(in, amount, nights, postings)
+	return t
+}
+
+func rateTargets(in ChangeRatesInput, amount decimal.Decimal, nights []reservationsdb.ReservationRoomRate, postings []frontdeskdb.ListStayNightPostingsRow) (targets []rateTarget, found bool) {
+	charged := map[civil.Date]frontdeskdb.ListStayNightPostingsRow{}
+	for _, po := range postings {
+		charged[po.ServiceDate] = po
+	}
+	for _, n := range nights {
+		if n.StayDate.Before(in.Date) || (in.ApplyTo == ApplyNight && !n.StayDate.Equal(in.Date)) {
+			continue
+		}
+		found = found || n.StayDate.Equal(in.Date)
+		po, isCharged := charged[n.StayDate]
+		switch {
+		case isCharged && in.ApplyTo == ApplyRemaining:
+			continue
+		case n.Amount.Equal(amount):
+			continue
+		case isCharged:
+			targets = append(targets, rateTarget{night: n, po: &po})
+		default:
+			targets = append(targets, rateTarget{night: n})
+		}
+	}
+	return targets, found
+}
+
+// approvalNeeds says which approvals a change needs: the correction of a charged night, and a rate that goes down (the rate approver, unless the caller is one).
+func approvalNeeds(targets []rateTarget, amount decimal.Decimal) (corrected, lowered bool) {
+	for _, t := range targets {
+		corrected = corrected || t.po != nil
+		lowered = lowered || amount.LessThan(t.night.Amount)
+	}
+	return
 }

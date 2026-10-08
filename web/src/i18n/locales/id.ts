@@ -288,6 +288,7 @@ export const id: Messages = {
       newRate: 'Tarif baru per malam',
       reason: 'Alasan',
       chargedNote: 'Malam ini sudah ditagih. Tagihan tetap; selisihnya diposting sebagai adjustment di folio hari ini dan perlu persetujuan.',
+      loweredNote: 'Tarif baru lebih rendah dari tarif saat ini. Perlu persetujuan penyetuju tarif.',
       noAdjustRight: 'Mengoreksi malam yang sudah ditagih memerlukan hak untuk menyesuaikan folio.',
       nothingToChange: 'Tidak ada malam yang berubah.',
       approvalTitle: 'Setujui koreksi',

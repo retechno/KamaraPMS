@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/frontdesk"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/rooms/roomstest"
@@ -343,7 +344,7 @@ func TestRateChangeAndNightAuditAtOnce(t *testing.T) {
 			func() { _, changeErr = f.Front.ChangeRates(f.admin, f.propID, st.Stay.ID, in) },
 			func() { _, auditErr = f.Audit.Run(f.admin, f.propID, day.BusinessDate) })
 		cc, ac := appErrorOrNil(t, "change", changeErr), appErrorOrNil(t, "audit", auditErr)
-		if (cc != "" && cc != "RESOURCE_BUSY" && cc != "BUSINESS_DAY_NOT_FOUND") || (ac != "" && ac != "RESOURCE_BUSY") {
+		if (cc != "" && cc != "RESOURCE_BUSY" && cc != "BUSINESS_DAY_NOT_FOUND" && cc != "APPROVAL_REQUIRED") || (ac != "" && ac != "RESOURCE_BUSY") {
 			t.Fatalf("run %d: change %q audit %q", i, cc, ac)
 		}
 		if cc != "" || ac != "" {
@@ -354,5 +355,47 @@ func TestRateChangeAndNightAuditAtOnce(t *testing.T) {
 		if got := f.ledgerRate(t, charge); got.String() != "1150000" {
 			t.Fatalf("run %d: ledger %s after the audit and the change", i, got)
 		}
+	}
+}
+
+// A rate that goes down needs the approval of a rate approver (reservation.override_rate_approve): the caller's own when they hold it, else the credentials of someone who does.
+func TestLoweringARateNeedsAnApproval(t *testing.T) {
+	f := setup(t)
+	st := f.stay(t, f.r101.ID, "2026-10-04")
+	clerk := f.User(t, f.tenantID, f.propID, auth.PermFrontdeskRateChange, auth.PermReservationRead)
+	lower := f.rateIn(st.Stay.Version, frontdesk.ApplyNight, "2026-10-01", "800000")
+	_, err := f.Front.ChangeRates(clerk, f.propID, st.Stay.ID, lower)
+	wantCode(t, err, "APPROVAL_REQUIRED")
+	if f.nightAmount(t, st.Stay.ID, "2026-10-01") != "1000000" {
+		t.Fatal("a refused change moves nothing")
+	}
+	// the credentials of someone who is not a rate approver do not do
+	other := f.User(t, f.tenantID, f.propID, auth.PermReservationRead)
+	_ = other
+	lower.Approval = &iam.ApprovalInput{Email: "nobody@example.com", Password: "wrong"}
+	_, err = f.Front.ChangeRates(clerk, f.propID, st.Stay.ID, lower)
+	wantCode(t, err, "APPROVAL_INVALID_CREDENTIALS")
+	// the approver (the tenant administrator) approves
+	lower.Approval = f.approval(t)
+	res, err := f.Front.ChangeRates(clerk, f.propID, st.Stay.ID, lower)
+	must(t, err)
+	var by int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT (new_data->>'rate_approved_by')::bigint FROM audit_logs WHERE action = 'stay.rate_changed'`).Scan(&by))
+	if by == 0 || f.nightAmount(t, st.Stay.ID, "2026-10-01") != "800000" {
+		t.Fatalf("approved by %d", by)
+	}
+	// a higher rate, or one that stays, needs none
+	up := f.rateIn(res.Stay.Version, frontdesk.ApplyNight, "2026-10-01", "900000")
+	res, err = f.Front.ChangeRates(clerk, f.propID, st.Stay.ID, up)
+	must(t, err)
+	// a rate approver lowers it with no credentials: the caller is the approver, and it is recorded
+	approver := f.User(t, f.tenantID, f.propID, auth.PermFrontdeskRateChange, auth.PermReservationRead, auth.PermReservationOverrideApprove)
+	_, err = f.Front.ChangeRates(approver, f.propID, st.Stay.ID, f.rateIn(res.Stay.Version, frontdesk.ApplyRemaining, "2026-10-02", "600000"))
+	must(t, err)
+	if f.nightAmount(t, st.Stay.ID, "2026-10-02") != "600000" || f.nightAmount(t, st.Stay.ID, "2026-10-03") != "600000" {
+		t.Fatalf("nights: %+v", f.detail(t, st.Stay.ID).NightlyRates)
+	}
+	if f.Count(t, `SELECT count(*) FROM audit_logs WHERE action = 'stay.rate_changed' AND new_data->>'rate_approved_by' IS NOT NULL`) != 3 {
+		t.Fatal("every lowered night records who approved it")
 	}
 }

@@ -78,27 +78,53 @@ describe('EditRateDialog', () => {
 
   it('changes the selected open night without an approval', async () => {
     const w = await mountDialog()
-    await type('input[name=amount]', '800000')
+    await type('input[name=amount]', '1100000')
     await type('input[name=reason]', 'negotiated')
     await submit()
     expect(POST.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/stays/{id}/rates', {
       params: { path: { propertyId: 7, id: 5 } },
-      body: { version: 3, apply_to: 'NIGHT', date: '2026-10-01', amount: '800000', reason: 'negotiated', approval: undefined },
+      body: { version: 3, apply_to: 'NIGHT', date: '2026-10-01', amount: '1100000', reason: 'negotiated', approval: undefined },
     }])
     expect(w.emitted('saved')).toHaveLength(1)
     expect(w.emitted('update:open')?.[0]).toEqual([false])
   })
 
+  it('asks for the approval of a rate approver when the rate goes down, and not when it goes up', async () => {
+    await mountDialog()
+    await type('input[name=amount]', '1100000')
+    expect(body().querySelector('[data-testid=lowered-note]')).toBeNull()
+    await type('input[name=amount]', '800000')
+    await type('input[name=reason]', 'competitor')
+    expect(body().querySelector('[data-testid=lowered-note]')).not.toBeNull()
+    await submit()
+    expect(POST).not.toHaveBeenCalled()
+    await type('input[name=approval_email]', 'boss@example.com')
+    await type('input[name=approval_password]', 'secret')
+    body().querySelector('[data-testid=approval-dialog]')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '800000', approval: { email: 'boss@example.com', password: 'secret' } } })
+  })
+
+  it('lets a rate approver lower the rate without credentials', async () => {
+    await mountDialog(['reservation.read', 'frontdesk.rate_change', 'reservation.override_rate_approve'])
+    await type('input[name=amount]', '800000')
+    await type('input[name=reason]', 'competitor')
+    expect(body().querySelector('[data-testid=lowered-note]')).toBeNull()
+    await submit()
+    expect(body().querySelector('[data-testid=approval-dialog]')).toBeNull()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '800000', approval: undefined } })
+  })
+
   it('applies to the remaining nights that are not charged, from the selected night', async () => {
     await mountDialog()
     await click('input[name=apply_to][value=REMAINING]')
-    await type('input[name=amount]', '700000')
-    expect(body().querySelector('[data-testid="next-2026-10-01"]')?.textContent).toBe('700,000')
-    expect(body().querySelector('[data-testid="next-2026-10-02"]')?.textContent).toBe('700,000')
+    await type('input[name=amount]', '1300000')
+    expect(body().querySelector('[data-testid="next-2026-10-01"]')?.textContent).toBe('1,300,000')
+    expect(body().querySelector('[data-testid="next-2026-10-02"]')?.textContent).toBe('1,300,000')
     expect(body().querySelector('[data-testid="next-2026-09-30"]')?.textContent).toBe('—') // a charged night is not part of it
     await type('input[name=reason]', 'long stay')
     await submit()
-    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { apply_to: 'REMAINING', date: '2026-10-01', amount: '700000' } })
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { apply_to: 'REMAINING', date: '2026-10-01', amount: '1300000' } })
   })
 
   it('asks for an approval to correct a charged night and sends it with the change', async () => {
@@ -127,7 +153,7 @@ describe('EditRateDialog', () => {
   it('shows the server refusal and reloads the nights when the stay changed', async () => {
     await mountDialog()
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'VERSION_CONFLICT', detail: 'changed' }))
-    await type('input[name=amount]', '800000')
+    await type('input[name=amount]', '1100000')
     await type('input[name=reason]', 'x')
     await submit()
     expect(body().querySelector('[data-testid=rate-error]')?.textContent).toContain('VERSION_CONFLICT')

@@ -289,6 +289,7 @@ export const en = {
       newRate: 'New rate per night',
       reason: 'Reason',
       chargedNote: 'This night is already charged. The charge stays; an adjustment for the difference is posted to the folio today and needs an approval.',
+      loweredNote: 'The new rate is lower than the current one. A rate approver has to approve it.',
       noAdjustRight: 'Correcting a charged night needs the right to adjust folios.',
       nothingToChange: 'No night would change.',
       approvalTitle: 'Approve the correction',
