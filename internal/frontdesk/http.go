@@ -24,6 +24,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/walk-ins", httpx.HandlerFunc(h.walkIn))
 	mux.Handle("GET "+p+"/arrivals", httpx.HandlerFunc(h.arrivals))
 	mux.Handle("GET "+p+"/stays", httpx.HandlerFunc(h.list))
+	mux.Handle("GET "+p+"/stays/in-house", httpx.HandlerFunc(h.inHouse))
 	mux.Handle("GET "+p+"/stays/{id}", httpx.HandlerFunc(h.get))
 	mux.Handle("POST "+p+"/stays/{id}/reverse-check-in", httpx.HandlerFunc(h.reverse))
 	mux.Handle("POST "+p+"/stays/{id}/move", httpx.HandlerFunc(h.move))
@@ -171,6 +172,38 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	out := httpx.Page[StaySummary]{Data: items}
 	if out.Data == nil {
 		out.Data = []StaySummary{}
+	}
+	if len(items) > page.Limit {
+		out.Data = items[:page.Limit]
+		if out.NextCursor, err = httpx.EncodeCursor(listCursor{Before: out.Data[page.Limit-1].ID}); err != nil {
+			return err
+		}
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) inHouse(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		return err
+	}
+	var cur listCursor
+	if page.Cursor != "" {
+		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
+			return err
+		}
+	}
+	items, err := h.svc.ListInHouse(r.Context(), pid, cur.Before, page.Limit+1)
+	if err != nil {
+		return err
+	}
+	out := httpx.Page[InHouseRow]{Data: items}
+	if out.Data == nil {
+		out.Data = []InHouseRow{}
 	}
 	if len(items) > page.Limit {
 		out.Data = items[:page.Limit]

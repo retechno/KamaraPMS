@@ -137,4 +137,36 @@ describe('StayDetailView', () => {
     expect(held.text()).toContain('FOL000002')
     expect(held.get('a').attributes('href')).toBe('/folios/9')
   })
+
+  it('offers Edit guest in the summary only with guest.write, and opens the guest dialog', async () => {
+    const plain = mountView()
+    await flushPromises()
+    expect(plain.find('[data-testid=edit-guest]').exists()).toBe(false)
+    const w = mountView(detail(), ['reservation.read', 'guest.write'])
+    await flushPromises()
+    expect(w.get('[data-testid=guest-name]').text()).toBe('Siti Nurhaliza')
+    GET.mockResolvedValue({ data: { id: 3, code: 'G1', first_name: 'Siti', last_name: 'Nurhaliza', can_edit: true } })
+    await w.get('[data-testid=edit-guest]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/guests/{id}', { params: { path: { id: 3 } } }])
+    expect(document.body.querySelector('[data-testid=guest-edit-dialog]')).not.toBeNull()
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('opens the check-out wizard when it is reached from the in-house list (?action=checkout) and the person may check out', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['reservation.read', 'frontdesk.checkout'] }] } as never
+    usePropertyStore().currentId = 7
+    GET = vi.fn().mockResolvedValue({ data: detail() })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    await router.push('/stays/5?action=checkout')
+    const w = mount(StayDetailView, { props: { id: '5' }, global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect(w.find('[data-testid=checkout-wizard]').exists()).toBe(true)
+    const denied = mountView()
+    await flushPromises()
+    expect(denied.find('[data-testid=checkout-wizard]').exists()).toBe(false)
+  })
 })

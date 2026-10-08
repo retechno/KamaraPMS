@@ -17,6 +17,13 @@ const arrival = (id: number, guest: string, over: object = {}) => ({
 const stay = (id: number, number: string, guest: string, departure: string) => ({
   id, stay_number: number, guest_name: guest, room_number: `10${id}`, arrival_date: '2026-09-28', departure_date: departure, adult_count: 2, child_count: 1,
 })
+const inHouse = (id: number, number: string, guest: string, departure: string) => ({
+  id, stay_number: number, version: 1, reservation_id: id, confirmation_number: `RES00000${id}`,
+  guest: { id: 30 + id, name: guest }, room: { id: id, number: `10${id}`, room_type_code: 'DLX', room_type_name: 'Deluxe' }, company: null, billing: [],
+  rate: { rate_plan_code: 'BAR', rate_plan_name: 'Best', amount: '1000000', price_mode: 'EXCLUSIVE', is_override: false },
+  stay: { arrival_date: '2026-09-28', departure_date: departure, nights: 5, adults: 2, children: 1 },
+  balance: { amount: '0', status: 'SETTLED', folios: [{ id: 80 + id, folio_number: `FOL00000${id}`, folio_type: 'GUEST', bill_to_company_id: null, status: 'OPEN', balance: '0' }] },
+})
 
 let mounted: VueWrapper | null = null
 
@@ -28,13 +35,12 @@ async function mountDesk(tab: 'arrivals' | 'in-house' | 'departures' = 'arrivals
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
   property.current = { require_room_inspection_for_checkin: false } as never
-  GET = vi.fn(async (path: string, init?: { params?: { query?: { departure_until?: string } } }) => {
+  GET = vi.fn(async (path: string) => {
     if (path.endsWith('/arrivals')) return { data: { data: [arrival(1, 'Siti'), arrival(2, 'Budi', { room_id: 30, room_number: '301', housekeeping_status: 'DIRTY' })] } }
-    if (path.endsWith('/stays')) {
-      return init?.params?.query?.departure_until
-        ? { data: { data: [stay(5, 'STY000005', 'Wayan', '2026-09-29')] } } // departures: overdue
-        : { data: { data: [stay(5, 'STY000005', 'Wayan', '2026-09-29'), stay(6, 'STY000006', 'Dewi', '2026-10-03'), stay(7, 'STY000007', 'Agus', '2026-10-04')], next_cursor: 'c2' } }
+    if (path.endsWith('/stays/in-house')) {
+      return { data: { data: [inHouse(5, 'STY000005', 'Wayan', '2026-09-29'), inHouse(6, 'STY000006', 'Dewi', '2026-10-03'), inHouse(7, 'STY000007', 'Agus', '2026-10-04')], next_cursor: 'c2' } }
     }
+    if (path.endsWith('/stays')) return { data: { data: [stay(5, 'STY000005', 'Wayan', '2026-09-29')] } } // departures: overdue
     return { data: { data: [] } }
   })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -113,7 +119,7 @@ describe('FrontDeskView', () => {
 
   it('sorts a list by a column', async () => {
     await mountDesk('in-house')
-    const guests = () => mounted!.findAll('[data-testid=panel-in-house] tbody tr').map((r) => r.findAll('td')[1]!.text())
+    const guests = () => mounted!.findAll('[data-testid=panel-in-house] tbody tr').map((r) => r.findAll('td')[1]!.get('button').text())
     expect(guests()).toEqual(['Wayan', 'Dewi', 'Agus'])
     await mounted!.get('[data-testid=panel-in-house] [data-testid=sort-guest_name]').trigger('click')
     expect(guests()).toEqual(['Agus', 'Dewi', 'Wayan'])

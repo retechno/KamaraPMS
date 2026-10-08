@@ -1982,6 +1982,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/stays/in-house": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The in-house list: open stays with room, company, price of the night and folio balances, newest first (reservation.read)
+         * @description Every figure is read, none is computed from a rate: `rate.amount` is the night the stay is in, from the price snapshot of the booking (not the rate master), and `balance` is the
+         *     balance of the folios of the stay from the ledger.
+         */
+        get: operations["listInHouse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/stays/{id}": {
         parameters: {
             query?: never;
@@ -8794,6 +8817,73 @@ export interface components {
             child_count: number;
             /** Format: int32 */
             version: number;
+        };
+        InHousePage: {
+            data: components["schemas"]["InHouseRow"][];
+            next_cursor?: string;
+        };
+        InHouseRow: {
+            /** Format: int64 */
+            id: number;
+            stay_number: string;
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            guest: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+            };
+            room: {
+                /** Format: int64 */
+                id: number;
+                number: string;
+                room_type_code: string;
+                room_type_name: string;
+            };
+            /** @description The company that pays for the stay: the one of its billing instructions, else the one of a company folio; null when the guest pays. */
+            company: null | {
+                /** Format: int64 */
+                id: number;
+                name: string;
+            };
+            /** @description The billing instructions of the stay (what each company pays). */
+            billing: {
+                /** @enum {string} */
+                scope: "ALL" | "ROOM" | "CHARGE_CODE";
+                /** @description The charge code of a CHARGE_CODE instruction. */
+                charge_code?: string;
+                /** Format: int64 */
+                company_id: number;
+                company_name: string;
+            }[];
+            rate: {
+                rate_plan_code: string;
+                rate_plan_name: string;
+                /** @description The price of the night the stay is in */
+                amount: string;
+                price_mode: string;
+                is_override: boolean;
+            };
+            stay: {
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                nights: number;
+                adults: number;
+                children: number;
+            };
+            balance: {
+                /** @description The sum of the balances of the folios of the stay; each is also in `folios`. */
+                amount: string;
+                /**
+                 * @description Zero, above zero or below zero for `amount`.
+                 * @enum {string}
+                 */
+                status: "SETTLED" | "OUTSTANDING" | "CREDIT";
+                folios: components["schemas"]["StayFolio"][];
+            };
         };
         StayPage: {
             data: components["schemas"]["StaySummary"][];
@@ -15843,6 +15933,34 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listInHouse: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from a previous page's next_cursor. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of in-house rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InHousePage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getStay: {

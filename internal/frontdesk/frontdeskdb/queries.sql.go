@@ -752,6 +752,242 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 	return items, nil
 }
 
+const listCompanyNames = `-- name: ListCompanyNames :many
+SELECT id, name FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+`
+
+type ListCompanyNamesParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+type ListCompanyNamesRow struct {
+	ID   int64
+	Name string
+}
+
+func (q *Queries) ListCompanyNames(ctx context.Context, arg ListCompanyNamesParams) ([]ListCompanyNamesRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyNames, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyNamesRow{}
+	for rows.Next() {
+		var i ListCompanyNamesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInHouse = `-- name: ListInHouse :many
+SELECT s.id, s.stay_number, s.guest_id, res.id AS reservation_id, s.arrival_date, s.departure_date, s.adult_count, s.child_count, s.version,
+       g.first_name AS guest_first_name, g.last_name AS guest_last_name, res.confirmation_number,
+       rp.code AS rate_plan_code, rp.name AS rate_plan_name,
+       cur.room_id, cur.room_number, cur.room_type_code, cur.room_type_name
+FROM stays s
+JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+JOIN LATERAL (
+    SELECT sr.room_id, r.room_number, t.code AS room_type_code, t.name AS room_type_name
+    FROM stay_rooms sr
+    JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+    JOIN room_types t ON t.property_id = r.property_id AND t.id = r.room_type_id
+    WHERE sr.stay_id = s.id
+    ORDER BY sr.check_out_at IS NULL DESC, sr.id DESC LIMIT 1
+) cur ON true
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status = 'OPEN' AND ($3::bigint = 0 OR s.id < $3::bigint)
+ORDER BY s.id DESC
+LIMIT $4
+`
+
+type ListInHouseParams struct {
+	TenantID   int64
+	PropertyID int64
+	BeforeID   int64
+	RowLimit   int32
+}
+
+type ListInHouseRow struct {
+	ID                 int64
+	StayNumber         string
+	GuestID            int64
+	ReservationID      int64
+	ArrivalDate        civil.Date
+	DepartureDate      civil.Date
+	AdultCount         int16
+	ChildCount         int16
+	Version            int32
+	GuestFirstName     *string
+	GuestLastName      string
+	ConfirmationNumber string
+	RatePlanCode       string
+	RatePlanName       string
+	RoomID             int64
+	RoomNumber         string
+	RoomTypeCode       string
+	RoomTypeName       string
+}
+
+// The in-house list: the OPEN stays with the guest, the room of the open segment and its type, the rate plan of the booking and the reservation number.
+func (q *Queries) ListInHouse(ctx context.Context, arg ListInHouseParams) ([]ListInHouseRow, error) {
+	rows, err := q.db.Query(ctx, listInHouse,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInHouseRow{}
+	for rows.Next() {
+		var i ListInHouseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StayNumber,
+			&i.GuestID,
+			&i.ReservationID,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.AdultCount,
+			&i.ChildCount,
+			&i.Version,
+			&i.GuestFirstName,
+			&i.GuestLastName,
+			&i.ConfirmationNumber,
+			&i.RatePlanCode,
+			&i.RatePlanName,
+			&i.RoomID,
+			&i.RoomNumber,
+			&i.RoomTypeCode,
+			&i.RoomTypeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInHouseInstructions = `-- name: ListInHouseInstructions :many
+SELECT s.id AS stay_id, i.scope, i.company_id, c.name AS company_name, cc.code AS charge_code
+FROM stays s
+JOIN folio_billing_instructions i ON i.property_id = s.property_id AND i.reservation_room_id = s.reservation_room_id
+JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+LEFT JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = ANY($3::bigint[])
+ORDER BY s.id, (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id
+`
+
+type ListInHouseInstructionsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+}
+
+type ListInHouseInstructionsRow struct {
+	StayID      int64
+	Scope       string
+	CompanyID   int64
+	CompanyName string
+	ChargeCode  *string
+}
+
+// The billing instructions of the lines of many stays, with the company and the charge code they name.
+func (q *Queries) ListInHouseInstructions(ctx context.Context, arg ListInHouseInstructionsParams) ([]ListInHouseInstructionsRow, error) {
+	rows, err := q.db.Query(ctx, listInHouseInstructions, arg.TenantID, arg.PropertyID, arg.StayIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInHouseInstructionsRow{}
+	for rows.Next() {
+		var i ListInHouseInstructionsRow
+		if err := rows.Scan(
+			&i.StayID,
+			&i.Scope,
+			&i.CompanyID,
+			&i.CompanyName,
+			&i.ChargeCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInHouseRates = `-- name: ListInHouseRates :many
+SELECT DISTINCT ON (s.id) s.id AS stay_id, x.amount, x.price_mode, x.is_override
+FROM stays s
+JOIN reservation_room_rates x ON x.property_id = s.property_id AND x.reservation_room_id = s.reservation_room_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = ANY($3::bigint[])
+  AND x.stay_date <= COALESCE($4::date, s.arrival_date)
+ORDER BY s.id, x.stay_date DESC
+`
+
+type ListInHouseRatesParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+	OnDate     *civil.Date
+}
+
+type ListInHouseRatesRow struct {
+	StayID     int64
+	Amount     decimal.Decimal
+	PriceMode  string
+	IsOverride bool
+}
+
+// The price of the night the stay is in (the last night of its snapshot that is not after the date; the arrival date when no date is given): the snapshot of the booking, never the rate master.
+func (q *Queries) ListInHouseRates(ctx context.Context, arg ListInHouseRatesParams) ([]ListInHouseRatesRow, error) {
+	rows, err := q.db.Query(ctx, listInHouseRates,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StayIds,
+		arg.OnDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInHouseRatesRow{}
+	for rows.Next() {
+		var i ListInHouseRatesRow
+		if err := rows.Scan(
+			&i.StayID,
+			&i.Amount,
+			&i.PriceMode,
+			&i.IsOverride,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostedNights = `-- name: ListPostedNights :many
 SELECT service_date FROM stay_charge_postings
 WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'POSTED'

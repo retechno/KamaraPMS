@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
@@ -20,7 +20,8 @@ import { addDays } from '@/utils/dates'
 import { guestLabel } from '@/utils/reservations'
 import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
 
-const props = defineProps<{ detail: StayDetail }>()
+/** `initial` opens a dialog as the panel appears: the in-house list links to a stay with the action the clerk chose. */
+const props = defineProps<{ detail: StayDetail; initial?: 'move' | 'extend' }>()
 const emit = defineEmits<{ changed: [message: string] }>()
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -223,6 +224,11 @@ async function submitDeparture(approval?: Approval, restrictionOverride?: Restri
     busy.value = false
   }
 }
+
+onMounted(() => {
+  if (props.initial === 'move' && canMove.value) show('move')
+  else if (props.initial === 'extend' && canChange.value) showDeparture()
+})
 
 // Accompanying guest.
 const guestQuery = ref('')

@@ -2482,6 +2482,27 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/in-house:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInHouse
+      summary: "The in-house list: open stays with room, company, price of the night and folio balances, newest first (reservation.read)"
+      description: |
+        Every figure is read, none is computed from a rate: `rate.amount` is the night the stay is in, from the price snapshot of the booking (not the rate master), and `balance` is the
+        balance of the folios of the stay from the ledger.
+      tags: [frontdesk]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of in-house rows.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InHousePage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/stays/{id}:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9760,6 +9781,84 @@ components:
         adult_count: { type: integer }
         child_count: { type: integer }
         version: { type: integer, format: int32 }
+    InHousePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/InHouseRow" }
+        next_cursor: { type: string }
+    InHouseRow:
+      type: object
+      required: [id, stay_number, version, reservation_id, confirmation_number, guest, room, company, billing, rate, stay, balance]
+      properties:
+        id: { type: integer, format: int64 }
+        stay_number: { type: string }
+        version: { type: integer, format: int32 }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        guest:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: integer, format: int64 }
+            name: { type: string }
+        room:
+          type: object
+          required: [id, number, room_type_code, room_type_name]
+          properties:
+            id: { type: integer, format: int64 }
+            number: { type: string }
+            room_type_code: { type: string }
+            room_type_name: { type: string }
+        company:
+          description: "The company that pays for the stay: the one of its billing instructions, else the one of a company folio; null when the guest pays."
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: integer, format: int64 }
+                name: { type: string }
+        billing:
+          type: array
+          description: The billing instructions of the stay (what each company pays).
+          items:
+            type: object
+            required: [scope, company_id, company_name]
+            properties:
+              scope: { type: string, enum: [ALL, ROOM, CHARGE_CODE] }
+              charge_code: { type: string, description: The charge code of a CHARGE_CODE instruction. }
+              company_id: { type: integer, format: int64 }
+              company_name: { type: string }
+        rate:
+          type: object
+          required: [rate_plan_code, rate_plan_name, amount, price_mode, is_override]
+          properties:
+            rate_plan_code: { type: string }
+            rate_plan_name: { type: string }
+            amount: { type: string, description: The price of the night the stay is in, from the snapshot of the booking. }
+            price_mode: { type: string }
+            is_override: { type: boolean }
+        stay:
+          type: object
+          required: [arrival_date, departure_date, nights, adults, children]
+          properties:
+            arrival_date: { $ref: "#/components/schemas/Date" }
+            departure_date: { $ref: "#/components/schemas/Date" }
+            nights: { type: integer }
+            adults: { type: integer }
+            children: { type: integer }
+        balance:
+          type: object
+          required: [amount, status, folios]
+          properties:
+            amount: { type: string, description: The sum of the balances of the folios of the stay; each is also in `folios`. }
+            status: { type: string, enum: [SETTLED, OUTSTANDING, CREDIT], description: "Zero, above zero or below zero for `amount`." }
+            folios:
+              type: array
+              items: { $ref: "#/components/schemas/StayFolio" }
     StayPage:
       type: object
       required: [data]

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
@@ -297,7 +297,8 @@ const itemColumns = computed<Column<FolioItem>[]>(() => [
 ])
 
 // The posting forms, one tab each, only for what the role may do. All forms stay in the page (hidden when not chosen).
-const postTab = ref('')
+const route = useRoute()
+const postTab = ref(typeof route.query.tab === 'string' ? route.query.tab : '') // ?tab=payment opens that posting tab (the in-house list links to it)
 const postTabs = computed(() => [
   ...(can('folio.post_charge') ? [{ value: 'charge', label: t('folio.tabCharge') }] : []),
   ...(can('payment.post') ? [{ value: 'payment', label: t('folio.tabPayment') }] : []),

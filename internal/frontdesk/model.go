@@ -151,6 +151,77 @@ type StaySummary struct {
 	Version            int32      `json:"version"`
 }
 
+// InHouseRow is a row of the in-house list: an OPEN stay with what the front desk needs to see without opening it. Every figure is read, none is derived from a rate: the price is the night
+// of the booking's snapshot, the balances are those of the folios.
+type InHouseRow struct {
+	ID                 int64            `json:"id"`
+	StayNumber         string           `json:"stay_number"`
+	Version            int32            `json:"version"`
+	ReservationID      int64            `json:"reservation_id"`
+	ConfirmationNumber string           `json:"confirmation_number"`
+	Guest              InHouseGuest     `json:"guest"`
+	Room               InHouseRoom      `json:"room"`
+	Company            *InHouseCompany  `json:"company"`
+	Billing            []InHouseBilling `json:"billing"`
+	Rate               InHouseRate      `json:"rate"`
+	Stay               InHouseStay      `json:"stay"`
+	Balance            InHouseBalance   `json:"balance"`
+}
+
+// InHouseGuest is the guest of the stay.
+type InHouseGuest struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// InHouseRoom is the room the guest is in now, with its type.
+type InHouseRoom struct {
+	ID           int64  `json:"id"`
+	Number       string `json:"number"`
+	RoomTypeCode string `json:"room_type_code"`
+	RoomTypeName string `json:"room_type_name"`
+}
+
+// InHouseCompany is the company that pays for the stay (the one its billing instructions name, else the one of a company folio).
+type InHouseCompany struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// InHouseBilling is one billing instruction of the stay: what the company pays (ALL, ROOM, or one charge code).
+type InHouseBilling struct {
+	Scope       string `json:"scope"`
+	ChargeCode  string `json:"charge_code,omitempty"`
+	CompanyID   int64  `json:"company_id"`
+	CompanyName string `json:"company_name"`
+}
+
+// InHouseRate is the price of the night the stay is in, from the snapshot of the booking.
+type InHouseRate struct {
+	RatePlanCode string `json:"rate_plan_code"`
+	RatePlanName string `json:"rate_plan_name"`
+	Amount       string `json:"amount"`
+	PriceMode    string `json:"price_mode"`
+	IsOverride   bool   `json:"is_override"`
+}
+
+// InHouseStay is the dates and the party.
+type InHouseStay struct {
+	Arrival   civil.Date `json:"arrival_date"`
+	Departure civil.Date `json:"departure_date"`
+	Nights    int        `json:"nights"`
+	Adults    int        `json:"adults"`
+	Children  int        `json:"children"`
+}
+
+// InHouseBalance is what the stay owes. Amount is the sum of the balances of its folios (the guest folio and the company folios), each of which is given in Folios with its own balance;
+// Status is SETTLED (zero), OUTSTANDING (above zero) or CREDIT (below zero) for that sum.
+type InHouseBalance struct {
+	Amount string             `json:"amount"`
+	Status string             `json:"status"`
+	Folios []folios.StayFolio `json:"folios"`
+}
+
 // Arrival is a CONFIRMED room due on a date.
 type Arrival struct {
 	ReservationID      int64  `json:"reservation_id"`

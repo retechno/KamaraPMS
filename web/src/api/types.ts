@@ -92,6 +92,7 @@ export type Approval = Schemas['Approval']
 
 export type Stay = Schemas['Stay']
 export type StaySummary = Schemas['StaySummary']
+export type InHouseRow = Schemas['InHouseRow']
 export type StayDetail = Schemas['StayDetail']
 export type Arrival = Schemas['Arrival']
 export type CheckInResult = Schemas['CheckInResult']

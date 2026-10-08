@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import StayActions from '@/components/StayActions.vue'
 import type { CheckOutResult, StayDetail } from '@/api/types'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -18,6 +20,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
 const props = defineProps<{ id: string }>()
+const route = useRoute()
 const auth = useAuthStore()
 const property = usePropertyStore()
 
@@ -28,6 +31,9 @@ const reversing = ref(false)
 const reason = ref('')
 const busy = ref(false)
 const checkingOut = ref(false)
+const editingGuest = ref(false)
+// The in-house list links here with the action the clerk chose (?action=checkout|move|extend); it is done once, when the stay has loaded.
+const initialAction = ref<string>(typeof route.query.action === 'string' ? route.query.action : '')
 
 type Night = StayDetail['nightly_rates'][number]
 const nightColumns = computed<Column<Night>[]>(() => [
@@ -41,6 +47,7 @@ const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const canReverse = computed(() => can('frontdesk.reverse_checkin') && detail.value?.stay.status === 'OPEN' && detail.value.stay.arrival_date === businessDate.value && detail.value.segments.length === 1)
 const canCheckOut = computed(() => can('frontdesk.checkout') && detail.value?.stay.status === 'OPEN')
+const canEditGuest = computed(() => can('guest.write'))
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 // A reversal that is refused because a company folio holds money names the folios (the server's context), so the clerk knows which payment to void or refund.
 const heldFolios = computed(() => {
@@ -56,6 +63,8 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: Number(props.id) } } })
     detail.value = data ?? null
+    if (initialAction.value === 'checkout' && canCheckOut.value) checkingOut.value = true
+    if (initialAction.value !== 'move' && initialAction.value !== 'extend') initialAction.value = ''
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -129,7 +138,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 flex flex-wrap items-center gap-2">
           <Badge variant="secondary" data-testid="stay-status">{{ detail.stay.status }}</Badge>
           <span>
-            {{ detail.guest.first_name }} {{ detail.guest.last_name }} · {{ $date(detail.stay.arrival_date) }} &rarr; {{ $date(detail.stay.departure_date) }} ·
+            <span data-testid="guest-name">{{ detail.guest.first_name }} {{ detail.guest.last_name }}</span><Button v-if="canEditGuest && detail.guest" type="button" variant="outline" size="sm" class="mx-1.5" data-testid="edit-guest" @click="editingGuest = true">{{ t('stay.editGuest') }}</Button> · {{ $date(detail.stay.arrival_date) }} &rarr; {{ $date(detail.stay.departure_date) }} ·
             {{ t('stay.adults', { n: detail.stay.adult_count, c: detail.stay.child_count }) }} · {{ detail.line.room_type_code }}
           </span>
         </p>
@@ -154,7 +163,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </Card>
 
     <CheckOutWizard v-if="checkingOut && detail.stay.status === 'OPEN'" :detail="detail" @cancel="checkingOut = false" @done="checkedOut" />
-    <StayActions v-if="!checkingOut" :detail="detail" @changed="changed" />
+    <StayActions v-if="!checkingOut" :detail="detail" :initial="initialAction === 'move' || initialAction === 'extend' ? initialAction : undefined" @changed="changed" />
+    <GuestEditDialog v-if="detail.guest" v-model:open="editingGuest" :guest-id="detail.guest.id" @saved="load" />
 
     <Card class="mb-4">
       <CardHeader><CardTitle>{{ t('stay.rooms') }}</CardTitle></CardHeader>
