@@ -1734,6 +1734,30 @@ SELECT expect_error('the ledger line itself is still append-only', '23001',
     $q$UPDATE folio_items SET description = 'x' WHERE idempotency_key = 'RC-S1-1001'$q$);
 
 ------------------------------------------------------------------------------------------
+-- A cancelled stay has no open folio (00064, audit F-06)
+------------------------------------------------------------------------------------------
+SELECT expect_error('a stay cannot be cancelled while a folio of it is open', '23514',
+    $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$);
+SELECT expect_ok('a stay is cancelled once its folio is unlinked (the guest folio goes back to being the deposit folio of the reservation) or closed',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$, -- the reservation has one open folio without a stay
+    $q$UPDATE folios SET stay_id = NULL WHERE folio_number = 'F1'$q$,
+    $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$);
+SELECT expect_ok('or closed, and stays linked to the cancelled stay as history',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
+    $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$);
+SELECT expect_error('a folio of a cancelled stay cannot be opened again',
+    '23514',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
+    $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$,
+    $q$UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE folio_number = 'F1'$q$);
+SELECT expect_error('nor can a new open folio be linked to a cancelled stay', '23514',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
+    $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'F9', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_ok('an open folio of an open stay is as before',
+    $q$UPDATE folios SET stay_id = st('S1') WHERE folio_number = 'F1'$q$);
+
+------------------------------------------------------------------------------------------
 -- Sales restrictions (00059)
 ------------------------------------------------------------------------------------------
 SELECT expect_ok('the four scopes of one date live side by side: the property, a plan, a room type, a room type and a plan',

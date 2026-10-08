@@ -42,6 +42,12 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 const canReverse = computed(() => can('frontdesk.reverse_checkin') && detail.value?.stay.status === 'OPEN' && detail.value.stay.arrival_date === businessDate.value && detail.value.segments.length === 1)
 const canCheckOut = computed(() => can('frontdesk.checkout') && detail.value?.stay.status === 'OPEN')
 const fieldError = (field: string) => error.value?.fieldMessage(field)
+// A reversal that is refused because a company folio holds money names the folios (the server's context), so the clerk knows which payment to void or refund.
+const heldFolios = computed(() => {
+  if (error.value?.code !== 'CHECK_IN_HAS_PAYMENTS') return []
+  const rows = error.value.context.folios
+  return Array.isArray(rows) ? (rows as { folio_id: number; folio_number: string; balance: string }[]) : []
+})
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -61,10 +67,11 @@ async function reverse(): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    await api.POST('/api/v1/properties/{propertyId}/stays/{id}/reverse-check-in', {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/stays/{id}/reverse-check-in', {
       params: { path: { propertyId, id: Number(props.id) } }, body: { version: detail.value.stay.version, reason: reason.value },
     })
-    notice.value = t('stay.reversed')
+    const closed = (data?.closed_folios ?? []).map((f) => f.folio_number)
+    notice.value = closed.length ? t('stay.reversedClosed', { folios: closed.join(', ') }) : t('stay.reversed')
     reversing.value = false
     reason.value = ''
     await load()
@@ -106,6 +113,12 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </PageHeader>
 
   <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <div v-if="heldFolios.length" class="alert" data-testid="held-folios">
+    {{ t('stay.heldFolios') }}
+    <ul class="m-0 mt-1 pl-5">
+      <li v-for="f in heldFolios" :key="f.folio_id"><RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink>: {{ $money(f.balance) }}</li>
+    </ul>
+  </div>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">{{ t('stay.noAccess') }}</p>

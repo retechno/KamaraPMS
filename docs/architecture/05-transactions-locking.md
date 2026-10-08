@@ -23,6 +23,8 @@
 
 A transaction may skip levels, but it may **never take a lower-numbered lock after a higher-numbered one**.
 
+**Strength of the stay lock (F-06).** A posting to a folio of a stay holds the folio and then key-shares the stay row through the foreign key `folio_items.stay_id`. A use case that holds the stay `FOR UPDATE` and then waits for that folio waits for a transaction that waits for it (a deadlock, `40P01`). The reversal of a check-in therefore locks the stay `FOR NO KEY UPDATE` (`db.ForNoKeyUpdate`), which excludes other writers of the row but not the key share, and then locks all folios of the stay in ascending id. Check-out and the room-night posting still take the stay `FOR UPDATE`: the same cycle with a payment on the same stay is possible there and ends in a deadlock error, never in a wrong ledger (a known follow-up).
+
 ## 2. Operations
 
 | # | Operation | Locks | Steps inside the transaction | Backstops |

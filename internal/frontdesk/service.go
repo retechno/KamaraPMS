@@ -544,8 +544,8 @@ func (s *Service) walkInGuest(ctx context.Context, propertyID int64, in WalkInIn
 }
 
 // ReverseCheckIn undoes a check-in of the same business date (frontdesk.reverse_checkin): the stay is
-// cancelled, its segment closed, the room line back to CONFIRMED, the folio unlinked and the room DIRTY. It is
-// refused once a charge is posted to the stay's folio.
+// cancelled, its segment closed, the room line back to CONFIRMED, the guest folio unlinked, the company folios closed and the room DIRTY. It is refused once a
+// charge is posted to a folio of the stay (CHECK_IN_HAS_CHARGES) or while a company folio holds a payment (CHECK_IN_HAS_PAYMENTS): a cancelled stay has no open folio.
 func (s *Service) ReverseCheckIn(ctx context.Context, propertyID, stayID int64, in ReverseInput) (ReverseResult, error) {
 	p, err := s.actor(ctx, propertyID, auth.PermFrontdeskReverseCheckin)
 	if err != nil {
@@ -601,7 +601,9 @@ func (s *Service) ReverseCheckIn(ctx context.Context, propertyID, stayID int64, 
 		if err := db.LockRows(ctx, db.ReservationRooms, db.ForUpdate, propertyID, []int64{line.ID}); err != nil {
 			return err
 		}
-		if err := db.LockRows(ctx, db.Stays, db.ForUpdate, propertyID, []int64{stayID}); err != nil {
+		// NO KEY UPDATE and not UPDATE: a payment or a charge that is being posted to a folio of this stay holds the folio and key-shares this row; the reversal waits for that folio next,
+		// and under FOR UPDATE the two would wait for each other (a deadlock, found by the race test of audit F-06). The status and the version are not key columns.
+		if err := db.LockRows(ctx, db.Stays, db.ForNoKeyUpdate, propertyID, []int64{stayID}); err != nil {
 			return mapNotFound(err, errStayNotFound())
 		}
 		st, err := q.GetStay(ctx, frontdeskdb.GetStayParams{TenantID: p.TenantID, PropertyID: propertyID, ID: stayID})
@@ -618,7 +620,7 @@ func (s *Service) ReverseCheckIn(ctx context.Context, propertyID, stayID int64, 
 			return apperr.Conflict("CHECK_IN_NOT_REVERSIBLE", "a check-in can only be reversed on the day it happened, before any room move").
 				WithContext("arrival_date", st.ArrivalDate).WithContext("business_date", day.BusinessDate)
 		}
-		folio, err := s.folios.DetachStayFolio(ctx, p, propertyID, stayID) // L4 folio; refuses when a charge is posted
+		folio, closedFolios, err := s.folios.DetachStayFolio(ctx, p, propertyID, stayID, day.BusinessDate) // L4 folios, all of the stay, ascending; refuses a charge, or a payment on a company folio
 		if err != nil {
 			return err
 		}
@@ -636,10 +638,10 @@ func (s *Service) ReverseCheckIn(ctx context.Context, propertyID, stayID int64, 
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "stay.check_in_reversed", stayID,
-			map[string]any{"status": st.Status}, map[string]any{"status": cancelled.Status, "reason": reason, "room_id": segs[0].RoomID})); err != nil {
+			map[string]any{"status": st.Status}, map[string]any{"status": cancelled.Status, "reason": reason, "room_id": segs[0].RoomID, "closed_folios": closedFolios})); err != nil {
 			return err
 		}
-		out = ReverseResult{Stay: toStay(cancelled, line.ReservationID), Folio: folio}
+		out = ReverseResult{Stay: toStay(cancelled, line.ReservationID), Folio: folio, ClosedFolios: closedFolios}
 		return nil
 	})
 	return out, err

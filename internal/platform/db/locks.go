@@ -46,6 +46,10 @@ type LockMode string
 const (
 	ForUpdate LockMode = "FOR UPDATE"
 	ForShare  LockMode = "FOR SHARE"
+	// ForNoKeyUpdate excludes other writers of the row like ForUpdate but, unlike it, lets other transactions take the key-share lock that a foreign key takes on the row it points at.
+	// A posting to a folio of a stay holds the folio and then key-shares the stay (folio_items.stay_id); a use case that holds the stay row and waits for that folio would deadlock
+	// with it under ForUpdate. Use it for a stay row that is only changed in non-key columns (the status, the version).
+	ForNoKeyUpdate LockMode = "FOR NO KEY UPDATE"
 )
 
 // LockTable is a property-scoped table that may be row-locked. The set is
@@ -99,7 +103,7 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 // Pass every id needed at this level in ONE call. If any id does not exist in
 // the property, it returns a NOT_FOUND *apperr.Error.
 func LockRows(ctx context.Context, table LockTable, mode LockMode, propertyID int64, ids []int64) error {
-	if mode != ForUpdate && mode != ForShare {
+	if mode != ForUpdate && mode != ForShare && mode != ForNoKeyUpdate {
 		return fmt.Errorf("db: invalid lock mode %q", mode)
 	}
 	if err := EnterLockLevel(ctx, table.level); err != nil {

@@ -2473,7 +2473,9 @@ paths:
     post:
       operationId: reverseCheckIn
       summary: Undo a check-in of the same business date (frontdesk.reverse_checkin)
-      description: The stay is cancelled, its segment closed, the room line goes back to CONFIRMED, the folio is unlinked and the room becomes DIRTY. Refused once a charge is posted to the folio (409 `CHECK_IN_HAS_CHARGES`) or on a later business day (409 `CHECK_IN_NOT_REVERSIBLE`).
+      description: |
+        The stay is cancelled, its segment closed, the room line goes back to CONFIRMED, the guest folio is unlinked (it is the deposit folio of the reservation again, with any payment on it) and the room becomes DIRTY. The OPEN company folios of the stay with a zero balance are CLOSED in the same transaction (`closed_folios`, audited as `folio.closed`) and stay linked to the cancelled stay as history; a company folio that is closed already is left alone. A cancelled stay never has an open folio.
+        Refused once a charge is posted to any folio of the stay (409 `CHECK_IN_HAS_CHARGES`), while a company folio holds a payment (409 `CHECK_IN_HAS_PAYMENTS`, `context.folios` lists `folio_id`, `folio_number`, `folio_type` and `balance`; void the payment on the day, or refund it, and try again; nothing is voided, refunded or moved for the caller) or on a later business day (409 `CHECK_IN_NOT_REVERSIBLE`). A payment or a charge posted at the same moment either wins, and this refuses, or loses, and the folio is closed (409 `FOLIO_CLOSED`).
       tags: [frontdesk]
       requestBody:
         required: true
@@ -9614,10 +9616,14 @@ components:
         folio: { $ref: "#/components/schemas/StayFolio" }
     ReverseResult:
       type: object
-      required: [stay, folio]
+      required: [stay, folio, closed_folios]
       properties:
         stay: { $ref: "#/components/schemas/Stay" }
         folio: { $ref: "#/components/schemas/StayFolio" }
+        closed_folios:
+          type: array
+          description: The company folios of the stay that were open and empty and were closed with it.
+          items: { $ref: "#/components/schemas/ClosedFolio" }
     MoveRequest:
       type: object
       required: [version, room_id, reason]

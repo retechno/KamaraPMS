@@ -8,6 +8,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/migrate"
+	"kamarapms/internal/rooms/roomstest"
 )
 
 // stayWithFolios: a checked-in stay with its guest folio (attached the way the check-in does it) and a company.
@@ -122,7 +123,7 @@ func TestDetachRefusedWhenACompanyFolioHoldsACharge(t *testing.T) {
 	_, err := p.Folios.PostCharge(p.admin, p.propID, cf, "k1", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("100000")})
 	must(t, err)
 	err = p.TxM.WithinTx(p.admin, func(ctx context.Context) error {
-		_, err := p.Folios.DetachStayFolio(ctx, p.principal, p.propID, p.stay)
+		_, _, err := p.Folios.DetachStayFolio(ctx, p.principal, p.propID, p.stay, roomstest.BD)
 		return err
 	})
 	wantCode(t, err, "CHECK_IN_HAS_CHARGES")

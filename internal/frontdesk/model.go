@@ -129,6 +129,8 @@ type CheckInResult struct {
 type ReverseResult struct {
 	Stay  Stay             `json:"stay"`
 	Folio folios.StayFolio `json:"folio"`
+	// ClosedFolios are the company folios of the stay that were closed with it (open and empty); they stay linked to the cancelled stay as history.
+	ClosedFolios []folios.ClosedFolio `json:"closed_folios"`
 }
 
 // StaySummary is a row of the stay list.
