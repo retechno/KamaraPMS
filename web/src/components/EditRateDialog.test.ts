@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { toastText } from '@/test/toasts'
 import { usePropertyStore } from '@/stores/property'
 import EditRateDialog from './EditRateDialog.vue'
 
@@ -156,7 +157,7 @@ describe('EditRateDialog', () => {
     await type('input[name=amount]', '1100000')
     await type('input[name=reason]', 'x')
     await submit()
-    expect(body().querySelector('[data-testid=rate-error]')?.textContent).toContain('VERSION_CONFLICT')
+    expect(toastText()).toContain('changed')
     expect(GET).toHaveBeenCalledTimes(2)
   })
 })

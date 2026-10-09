@@ -4,9 +4,11 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { GuestView, PatchGuestRequest } from '@/api/types'
 import GuestFields from '@/components/GuestFields.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { blankGuestForm } from '@/components/guestForm'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 
 /**
@@ -70,8 +72,8 @@ watch(() => [open.value, props.guestId], () => { if (open.value) void load() }, 
     <DialogContent class="top-[6vh] max-h-[88vh] max-w-3xl overflow-y-auto p-5" data-testid="guest-edit-dialog">
       <DialogTitle>{{ t('frontDesk.inHouse.action.editGuest') }}</DialogTitle>
       <DialogDescription class="mt-1">{{ guest?.code ?? '' }}</DialogDescription>
-      <p v-if="error" class="alert mt-3" role="alert" data-testid="guest-edit-error">{{ error.message }} <code>{{ error.code }}</code></p>
-      <form v-if="guest" class="mt-4" novalidate @submit.prevent="save">
+      <ErrorNotice :error="error" class="mt-3" data-testid="guest-edit-error" />
+      <form v-if="guest" v-autofocus class="mt-4" novalidate @submit.prevent="save">
         <GuestFields v-model="form" :error="error" :disabled="!guest.can_edit" />
         <p v-if="!guest.can_edit" class="mb-0 mt-3 text-sm text-muted-foreground" data-testid="guest-edit-readonly">{{ t('guest.readOnly') }}</p>
         <div class="mt-4 flex justify-end gap-2">

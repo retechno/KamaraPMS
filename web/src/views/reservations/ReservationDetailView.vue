@@ -11,6 +11,7 @@ import BillingInstructions from '@/components/BillingInstructions.vue'
 import EditRateDialog from '@/components/EditRateDialog.vue'
 import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import ReservationEditDialog from '@/components/ReservationEditDialog.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -24,6 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useReservationLookups } from '@/composables/useReservationLookups'
+import { vAutofocus } from '@/directives/autofocus'
 import { t, te } from '@/i18n'
 import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
@@ -414,7 +416,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('reservations.selectProperty') }}</p>
   <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
@@ -453,7 +455,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="fee-form" @submit.prevent="postFee">
           <p class="m-0 w-full text-sm font-medium">{{ feeFor.type === 'CANCEL_FEE' ? t('reservation.postCancelFee') : t('reservation.postNoShowFee') }}</p>
           <FormField class="w-44" :label="t('reservation.feeAmount')" :error="fieldError('amount')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.amount" name="fee_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.amount" v-autofocus name="fee_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField class="min-w-56 flex-1" :label="t('reservation.reason')" :error="fieldError('reason')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="fee.reason" name="fee_reason" maxlength="500" :aria-invalid="invalid" /></template>
@@ -467,7 +469,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <Card v-if="asking" class="mb-4 border-primary/50">
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="reason-form" @submit.prevent="submitReason">
           <FormField class="min-w-56 flex-1" :label="asking.kind === 'no-show' ? t('reservation.reasonOptional') : t('reservation.reason')" :error="fieldError('reason')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" v-autofocus name="reason" maxlength="500" :aria-invalid="invalid" /></template>
           </FormField>
           <Button type="submit" :variant="asking.kind === 'no-show' ? 'default' : 'destructive'" :disabled="busy">{{ asking.kind === 'no-show' ? t('reservation.markNoShow') : t('common.cancel') }}</Button>
           <Button type="button" variant="outline" @click="asking = null">{{ t('reservation.keep') }}</Button>

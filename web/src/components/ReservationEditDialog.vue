@@ -2,6 +2,7 @@
 import { reactive, watch } from 'vue'
 import type { ApiError } from '@/api/problem'
 import type { Reservation, RoomType } from '@/api/types'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -72,13 +73,13 @@ watch(() => [open.value, props.reservation.version], () => { if (open.value) fil
     <DialogContent class="top-[5vh] max-h-[90vh] max-w-3xl overflow-y-auto p-5" data-testid="reservation-edit-dialog">
       <DialogTitle>{{ t('reservation.editReservation') }}</DialogTitle>
       <DialogDescription class="mt-1">{{ t('reservation.editHint') }}</DialogDescription>
-      <p v-if="error" class="alert mt-3" role="alert" data-testid="edit-error">{{ error.message }} <code>{{ error.code }}</code></p>
+      <ErrorNotice :error="error" class="mt-3" data-testid="edit-error" />
 
-      <section v-for="l in reservation.rooms.filter((x) => editable(x.status))" :key="l.id" class="mt-4 rounded-lg border border-border p-3" :data-testid="`edit-line-${l.id}`">
+      <section v-for="(l, index) in reservation.rooms.filter((x) => editable(x.status))" :key="l.id" class="mt-4 rounded-lg border border-border p-3" :data-testid="`edit-line-${l.id}`">
         <h3 class="m-0 mb-2 text-sm font-semibold">{{ l.room_type_code }} · {{ l.room_number || t('reservation.noRoom') }}</h3>
         <form v-if="lines[l.id]" class="grid gap-3 sm:grid-cols-3" novalidate @submit.prevent="emit('saveLine', l.id, changes(l.id))">
           <FormField :label="t('reservation.arrival')" :error="fieldError('arrival_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="lines[l.id]!.arrival_date" :name="`arrival_${l.id}`" type="date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="lines[l.id]!.arrival_date" :data-autofocus="index === 0 ? '' : undefined" :name="`arrival_${l.id}`" type="date" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('reservation.departure')" :error="fieldError('departure_date')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="lines[l.id]!.departure_date" :name="`departure_${l.id}`" type="date" :aria-invalid="invalid" /></template>

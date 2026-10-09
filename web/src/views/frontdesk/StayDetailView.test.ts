@@ -1,3 +1,4 @@
+import { toastText } from '@/test/toasts'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,7 +85,7 @@ describe('StayDetailView', () => {
     await w.get('input[name=reason]').setValue('x')
     await w.get('form[data-testid=reverse-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=form-error]').text()).toContain('CHECK_IN_HAS_CHARGES')
+    expect(toastText()).toContain('charges are posted')
   })
 
   it('opens the check-out wizard for an open stay and hides it once checked out or without permission', async () => {
@@ -110,7 +111,7 @@ describe('StayDetailView', () => {
     openPdf.mockRejectedValue(new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'no' }))
     await w.get('[data-testid=print-card]').trigger('click')
     await flushPromises()
-    expect(w.get('[data-testid=form-error]').text()).toContain('PERMISSION_DENIED')
+    expect(toastText()).toContain('no')
   })
 
   it('says which company folios were closed with the stay', async () => {
@@ -132,7 +133,7 @@ describe('StayDetailView', () => {
     await w.get('input[name=reason]').setValue('wrong guest')
     await w.get('form[data-testid=reverse-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=form-error]').text()).toContain('CHECK_IN_HAS_PAYMENTS')
+    expect(toastText()).toContain('x')
     const held = w.get('[data-testid=held-folios]')
     expect(held.text()).toContain('FOL000002')
     expect(held.get('a').attributes('href')).toBe('/folios/9')

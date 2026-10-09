@@ -8,6 +8,7 @@ import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import StayActions from '@/components/StayActions.vue'
 import type { CheckOutResult, StayDetail } from '@/api/types'
 import { documentPath, openPdf } from '@/utils/documents'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -121,7 +122,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <template #actions><RouterLink to="/in-house" class="text-sm text-primary hover:underline">{{ t('stay.back') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" />
   <div v-if="heldFolios.length" class="alert" data-testid="held-folios">
     {{ t('stay.heldFolios') }}
     <ul class="m-0 mt-1 pl-5">

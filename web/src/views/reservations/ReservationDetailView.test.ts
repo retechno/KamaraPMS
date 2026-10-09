@@ -1,3 +1,4 @@
+import { toastText } from '@/test/toasts'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -181,7 +182,7 @@ describe('ReservationDetailView', () => {
     await w.get('form[data-testid=header-form]').trigger('submit')
     await flushPromises()
     expect(PATCH.mock.calls[0]?.[1]).toMatchObject({ body: { version: 2, remarks: 'late arrival' } })
-    expect(w.get('[data-testid=form-error]').text()).toContain('VERSION_CONFLICT')
+    expect(toastText()).toContain('changed by someone else')
     expect(w.text()).toContain('version 5')
   })
 
@@ -417,7 +418,7 @@ describe('ReservationDetailView', () => {
       await w.get('input[name=fee_reason]').setValue('again')
       await w.get('form[data-testid=fee-form]').trigger('submit')
       await flushPromises()
-      expect(w.get('[data-testid=form-error]').text()).toContain('FEE_ALREADY_POSTED')
+      expect(toastText()).toContain('this fee was already posted')
     })
   })
 })

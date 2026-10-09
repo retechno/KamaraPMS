@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { t } from '@/i18n'
 
 /**
@@ -12,12 +12,25 @@ const props = defineProps<{ label: string; hint?: string; error?: string; requir
 const id = useId()
 const hintId = `${id}-hint`
 const errorId = `${id}-error`
+const root = ref<HTMLElement | null>(null)
 const invalid = computed(() => !!props.error)
+
+// When a field is refused, the cursor goes to the first refused field of the form: the person starts correcting there. The first FormField of the form to be refused does it; the others find the focus
+// already on an invalid field and leave it. A field that is invalid from the start (an error that was there before) does not take the focus.
+watch(() => props.error, (now, before) => {
+  if (!now || now === before) return
+  void nextTick(() => {
+    const form = root.value?.closest('form, [role=dialog]') ?? root.value?.parentElement
+    const active = document.activeElement
+    if (active instanceof HTMLElement && form?.contains(active) && active.getAttribute('aria-invalid') === 'true') return
+    form?.querySelector<HTMLElement>('[aria-invalid=true]')?.focus()
+  })
+})
 const describedBy = computed(() => [props.hint ? hintId : '', props.error ? errorId : ''].filter(Boolean).join(' ') || undefined)
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-col gap-1.5" data-slot="form-field">
+  <div ref="root" class="flex min-w-0 flex-col gap-1.5" data-slot="form-field">
     <label :for="id" class="text-sm font-medium">
       {{ label }}
       <span v-if="required" class="text-destructive" :title="t('common.required')" aria-hidden="true">*</span>

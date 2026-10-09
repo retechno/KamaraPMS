@@ -1,3 +1,4 @@
+import { toastText } from '@/test/toasts'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -260,7 +261,8 @@ describe('Reservation workspace', () => {
     await flushPromises()
     ;(dialog.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
-    expect(document.body.querySelector('[data-testid=edit-error]')?.textContent).toContain('ROOM_TYPE_NOT_AVAILABLE')
+    expect(document.body.querySelector('[data-testid=edit-error]')).toBeNull()
+    expect(toastText()).toContain('the room type has no availability')
   })
 
   it('confirms a draft with the loaded version and cancels with a reason, as before', async () => {

@@ -4,11 +4,13 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Approval, StayDetail } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import type { RateEditTarget } from '@/utils/inHouse'
@@ -130,7 +132,7 @@ watch(() => [open.value, props.row?.id], () => { if (open.value) void load() }, 
         <div><dt class="text-xs uppercase text-muted-foreground">{{ t('frontDesk.rateEdit.ratePlan') }}</dt><dd class="m-0" data-testid="rate-plan">{{ row.rate.rate_plan_code }}</dd></div>
       </dl>
 
-      <p v-if="error" class="alert mt-3" role="alert" data-testid="rate-error">{{ error.message }} <code>{{ error.code }}</code></p>
+      <ErrorNotice :error="error" class="mt-3" data-testid="rate-error" />
       <p v-if="!detail && !error" class="muted mt-3">{{ t('frontDesk.rateEdit.loading') }}</p>
 
       <form v-if="detail" class="mt-4" novalidate data-testid="rate-form" @submit.prevent="submit">
@@ -164,7 +166,7 @@ watch(() => [open.value, props.row?.id], () => { if (open.value) void load() }, 
             </template>
           </FormField>
           <FormField :label="t('frontDesk.rateEdit.newRate')" :error="fieldError('amount')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="amount" v-autofocus name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField class="sm:col-span-2" :label="t('frontDesk.rateEdit.reason')" :error="fieldError('reason')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>

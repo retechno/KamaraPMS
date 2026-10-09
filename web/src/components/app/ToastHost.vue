@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-vue-next'
-import { useToasts, type ToastKind } from '@/composables/useToast'
+import { toast, useToasts, type ToastKind } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-/** Shows the toasts raised with `toast.success(...)`, stacked at the bottom right. The shell mounts one. */
+/**
+ * Shows the toasts raised with `toast.success(...)`, stacked at the bottom right. The shell mounts one. It sits above the dialogs and the sheets (z-60 against z-50) and a click on it does not close
+ * them (DialogContent leaves it out of "outside").
+ */
 const { items, dismiss } = useToasts()
 
 const icons = { success: CheckCircle2, error: AlertTriangle, info: Info } as const
@@ -16,13 +19,17 @@ const tone: Record<ToastKind, string> = {
 </script>
 
 <template>
-  <div class="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2" data-testid="toasts">
+  <div data-slot="toast-host" class="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2" data-testid="toasts">
     <div
       v-for="item in items"
       :key="item.id"
       :role="item.kind === 'error' ? 'alert' : 'status'"
       :data-testid="`toast-${item.kind}`"
       :class="cn('pointer-events-auto flex items-start gap-2 rounded-lg border bg-card p-3 text-sm shadow-lg', tone[item.kind])"
+      @mouseenter="toast.hold(item.id)"
+      @mouseleave="toast.release(item.id)"
+      @focusin="toast.hold(item.id)"
+      @focusout="toast.release(item.id)"
     >
       <component :is="icons[item.kind]" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <p class="m-0 flex-1 break-words">{{ item.message }}</p>

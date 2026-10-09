@@ -6,6 +6,7 @@ import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, LOCALES, setLocale, t, type Locale } from '@/i18n'
 import { rememberedTenantCode, useAuthStore } from '@/stores/auth'
@@ -49,7 +50,7 @@ async function submit(): Promise<void> {
 <template>
   <main class="grid min-h-screen place-items-center p-4">
     <Card class="w-full max-w-sm">
-      <form class="grid gap-4" novalidate @submit.prevent="submit">
+      <form v-autofocus class="grid gap-4" novalidate @submit.prevent="submit">
         <CardContent class="grid gap-4 pt-6">
           <div class="flex items-center gap-2.5">
             <span class="grid size-8 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
@@ -57,10 +58,10 @@ async function submit(): Promise<void> {
           </div>
           <p v-if="message" class="alert m-0" role="alert" data-testid="login-error">{{ message }}</p>
           <FormField :label="t('login.tenantCode')">
-            <template #default="{ id }"><Input :id="id" v-model="form.tenant_code" name="tenant_code" autocomplete="organization" autocapitalize="characters" required /></template>
+            <template #default="{ id }"><Input :id="id" v-model="form.tenant_code" :data-autofocus="form.tenant_code ? undefined : ''" name="tenant_code" autocomplete="organization" autocapitalize="characters" required /></template>
           </FormField>
           <FormField :label="t('login.email')">
-            <template #default="{ id }"><Input :id="id" v-model="form.email" name="email" type="email" autocomplete="username" required /></template>
+            <template #default="{ id }"><Input :id="id" v-model="form.email" :data-autofocus="form.tenant_code ? '' : undefined" name="email" type="email" autocomplete="username" required /></template>
           </FormField>
           <FormField :label="t('login.password')">
             <template #default="{ id }"><Input :id="id" v-model="form.password" name="password" type="password" autocomplete="current-password" required /></template>

@@ -1,3 +1,4 @@
+import { toastText } from '@/test/toasts'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -162,7 +163,7 @@ describe('ArrivalsView and the check-in panel', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ROOM_OCCUPIED', detail: 'the room is occupied' }))
     await panel('form[data-testid=checkin-4]').trigger('submit')
     await flushPromises()
-    expect(panel('[data-testid=checkin-error]').text()).toContain('ROOM_OCCUPIED')
+    expect(toastText()).toContain('the room is occupied')
     expect(push).not.toHaveBeenCalled()
   })
 

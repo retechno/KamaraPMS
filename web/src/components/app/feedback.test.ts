@@ -1,3 +1,4 @@
+import { ApiError } from '@/api/problem'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { confirm } from '@/composables/useConfirm'
@@ -155,8 +156,40 @@ describe('toasts', () => {
     await vi.advanceTimersByTimeAsync(4100)
     expect(wrapper.find('[data-testid=toast-success]').exists()).toBe(false)
     expect(wrapper.find('[data-testid=toast-error]').exists()).toBe(true)
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(wrapper.find('[data-testid=toast-error]').exists()).toBe(false)
+  })
+
+  it('does not stack the same message twice, and keeps the one on screen', async () => {
+    wrapper = mount(ToastHost)
+    toast.error('Same failure')
+    toast.error('Same failure')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid=toast-error]')).toHaveLength(1)
+  })
+
+  it('holds a toast while the pointer is on it', async () => {
+    vi.useFakeTimers()
+    wrapper = mount(ToastHost)
+    toast.error('Read me slowly')
+    await flushPromises()
+    await wrapper.get('[data-testid=toast-error]').trigger('mouseenter')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(wrapper.find('[data-testid=toast-error]').exists()).toBe(true)
+    await wrapper.get('[data-testid=toast-error]').trigger('mouseleave')
     await vi.advanceTimersByTimeAsync(4100)
     expect(wrapper.find('[data-testid=toast-error]').exists()).toBe(false)
+  })
+
+  it('turns an ApiError into its sentence, and anything else into a plain fallback', async () => {
+    wrapper = mount(ToastHost)
+    const api = toast.fromError(new ApiError({ status: 409, code: 'ROOM_TAKEN', title: 'Room taken' } as never))
+    expect(api).toBeInstanceOf(ApiError)
+    expect(toast.fromError(new Error('stack details'), 'Plain fallback')).toBeNull()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('Plain fallback')
+    expect(text).not.toContain('stack details')
   })
 
   it('stays until closed when given no time, and closes with the button', async () => {

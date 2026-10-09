@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -112,8 +114,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="flex flex-col gap-4" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
-    <p v-if="error" class="alert" role="alert" data-testid="checkin-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <form v-autofocus class="flex flex-col gap-4" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
+    <ErrorNotice :error="error" data-testid="checkin-error" />
     <p v-if="arrival.guest_id === null" class="alert" data-testid="no-guest">{{ t('frontDesk.checkIn.noGuest') }}</p>
 
     <div class="grid gap-4 sm:grid-cols-2">
@@ -126,7 +128,7 @@ async function submit(): Promise<void> {
       </FormField>
       <FormField :label="t('frontDesk.checkIn.room')" :error="fieldError('room_id')">
         <template #default="{ id, invalid }">
-          <Combobox :id="id" v-model="roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="rooms.map((r) => ({ value: r.room_id, label: roomLabel(r) }))" />
+          <Combobox :id="id" v-model="roomId" data-autofocus name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="rooms.map((r) => ({ value: r.room_id, label: roomLabel(r) }))" />
           <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('frontDesk.checkIn.noFreeRoom') }}</small>
         </template>
       </FormField>
