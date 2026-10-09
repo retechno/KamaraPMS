@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Search } from 'lucide-vue-next'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -195,8 +195,12 @@ async function loadBeds(): Promise<void> {
   }
 }
 
+const bookForm = ref<HTMLFormElement | null>(null)
+
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
+  // Every time a room is booked, not only the first (the form stays on the page when another room is picked): the cursor goes to the booker, or to the override reason that has to be answered first.
+  void nextTick(() => bookForm.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')?.focus())
   form.occupancyReason = ''
   rate.value = { overrides: [], reason: '' }
   approving.value = false
@@ -337,7 +341,7 @@ async function book(approval?: Approval): Promise<void> {
     </Card>
 
     <Card v-if="picked" class="mb-4 border-primary/50">
-      <form v-autofocus novalidate data-testid="book-form" @submit.prevent="submit">
+      <form ref="bookForm" novalidate data-testid="book-form" @submit.prevent="submit">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
           <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>

@@ -87,6 +87,15 @@ describe('NewReservationView', () => {
     await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
     await flushPromises()
     expect((document.activeElement as HTMLInputElement | null)?.name).toBe('guest_q')
+    // booking again (the form stays on the page) brings the cursor back, and keeps what was typed
+    await w.get('input[name=guest_q]').setValue('siti')
+    const pickButton = w.get('[data-testid=pick-DLX-BAR]').element as HTMLButtonElement
+    pickButton.focus()
+    expect(document.activeElement).toBe(pickButton)
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    expect((document.activeElement as HTMLInputElement | null)?.name).toBe('guest_q')
+    expect((w.get('input[name=guest_q]').element as HTMLInputElement).value).toBe('siti')
     w.unmount()
   })
 
