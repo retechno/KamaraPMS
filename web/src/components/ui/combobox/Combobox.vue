@@ -22,14 +22,16 @@ export interface ComboboxOption {
 }
 
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   options: ComboboxOption[]
   id?: string
   name?: string
   disabled?: boolean
   placeholder?: string
+  /** The list opens when the field gets the focus (the default). A field that is focused by the page when it appears turns it off, so the list does not cover the form at that moment; a click, a key or the arrow still open it. */
+  openOnFocus?: boolean
   class?: HTMLAttributes['class']
-}>()
+}>(), { openOnFocus: true })
 const model = defineModel<string | number | null>({ default: null })
 
 const term = ref('')
@@ -50,7 +52,7 @@ function onOpen(value: boolean): void {
 
 <template>
   <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox">
-    <ComboboxRoot v-model="model" v-model:open="open" ignore-filter open-on-focus open-on-click :disabled="disabled" @update:open="onOpen">
+    <ComboboxRoot v-model="model" v-model:open="open" ignore-filter :open-on-focus="openOnFocus" open-on-click :disabled="disabled" @update:open="onOpen">
       <ComboboxAnchor class="relative block">
         <ComboboxInput
           :id="id"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
@@ -28,6 +28,7 @@ const typeId = ref(props.arrival.room_type_id)
 const rooms = ref<FreeRoom[]>([])
 const roomId = ref<number | null>(props.arrival.room_id ?? null)
 const form = reactive({ adults: props.arrival.adult_count, children: props.arrival.child_count, override: false, reason: '' })
+const root = ref<HTMLFormElement | null>(null)
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 let key = newIdempotencyKey() // kept while a request may have been lost, renewed once the server has answered
@@ -88,6 +89,12 @@ onMounted(async () => {
     }
   }
   await loadRooms()
+  await nextTick()
+  // The cursor starts on the room, which is the choice of a check-in, but only once the rooms are there (a picker with nothing to pick is disabled). If the person has already gone to another field
+  // while the rooms loaded, it stays where they put it.
+  const active = document.activeElement
+  const untouched = !active || active === document.body || (root.value?.contains(active) && active.matches('select[name=room_type]')) || active.matches('[role=dialog]')
+  if (rooms.value.length && untouched) root.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')?.focus()
 })
 
 async function submit(): Promise<void> {
@@ -114,7 +121,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form v-autofocus class="flex flex-col gap-4" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
+  <form ref="root" v-autofocus class="flex flex-col gap-4" novalidate :data-testid="`checkin-${arrival.reservation_room_id}`" @submit.prevent="submit">
     <ErrorNotice :error="error" data-testid="checkin-error" />
     <p v-if="arrival.guest_id === null" class="alert" data-testid="no-guest">{{ t('frontDesk.checkIn.noGuest') }}</p>
 
@@ -128,7 +135,7 @@ async function submit(): Promise<void> {
       </FormField>
       <FormField :label="t('frontDesk.checkIn.room')" :error="fieldError('room_id')">
         <template #default="{ id, invalid }">
-          <Combobox :id="id" v-model="roomId" data-autofocus name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="rooms.map((r) => ({ value: r.room_id, label: roomLabel(r) }))" />
+          <Combobox :id="id" v-model="roomId" data-autofocus :open-on-focus="false" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="rooms.map((r) => ({ value: r.room_id, label: roomLabel(r) }))" />
           <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('frontDesk.checkIn.noFreeRoom') }}</small>
         </template>
       </FormField>
