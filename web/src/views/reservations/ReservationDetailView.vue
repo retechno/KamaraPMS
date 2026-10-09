@@ -229,10 +229,15 @@ const bedChanged = (line: ReservationRoom) => (bedPick[line.id] ?? line.bed_type
 const unassign = (lineId: number) => run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/unassign-room', { params: lineParams(lineId), body: { version: version() } }))
 
 // A manual fee (audit F-08): the person gives the amount and the reason; nothing is calculated and nothing is posted by the cancellation or the no-show itself.
+// Counters that the buttons which open a form increase, so that a form which is already open starts again where it starts (v-autofocus).
+const feeTick = ref(0)
+const askTick = ref(0)
+const assignTick = ref(0)
 const feeFor = ref<{ type: 'CANCEL_FEE' | 'NO_SHOW_FEE'; lineId?: number } | null>(null)
 const fee = reactive({ amount: '', reason: '' })
 function askFee(type: 'CANCEL_FEE' | 'NO_SHOW_FEE', lineId?: number): void {
   feeFor.value = { type, lineId }
+  feeTick.value++
   fee.amount = ''
   fee.reason = ''
   asking.value = null
@@ -261,6 +266,7 @@ async function postFee(): Promise<void> {
 
 function ask(kind: 'cancel' | 'cancel-room' | 'no-show', lineId?: number): void {
   asking.value = { kind, lineId }
+  askTick.value++
   reason.value = ''
   error.value = null
 }
@@ -283,6 +289,7 @@ function roomLabel(r: FreeRoom, line: ReservationRoom): string {
 
 async function startAssign(line: ReservationRoom): Promise<void> {
   assigning.value = { lineId: line.id, typeId: line.room_type_id, rooms: [], roomId: null }
+  assignTick.value++
   await loadFree()
 }
 
@@ -455,7 +462,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="fee-form" @submit.prevent="postFee">
           <p class="m-0 w-full text-sm font-medium">{{ feeFor.type === 'CANCEL_FEE' ? t('reservation.postCancelFee') : t('reservation.postNoShowFee') }}</p>
           <FormField class="w-44" :label="t('reservation.feeAmount')" :error="fieldError('amount')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.amount" v-autofocus name="fee_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="fee.amount" v-autofocus="feeTick" name="fee_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField class="min-w-56 flex-1" :label="t('reservation.reason')" :error="fieldError('reason')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="fee.reason" name="fee_reason" maxlength="500" :aria-invalid="invalid" /></template>
@@ -469,7 +476,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <Card v-if="asking" class="mb-4 border-primary/50">
         <form class="flex flex-wrap items-end gap-3 p-4" novalidate data-testid="reason-form" @submit.prevent="submitReason">
           <FormField class="min-w-56 flex-1" :label="asking.kind === 'no-show' ? t('reservation.reasonOptional') : t('reservation.reason')" :error="fieldError('reason')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" v-autofocus name="reason" maxlength="500" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><Input :id="id" v-model="reason" v-autofocus="askTick" name="reason" maxlength="500" :aria-invalid="invalid" /></template>
           </FormField>
           <Button type="submit" :variant="asking.kind === 'no-show' ? 'default' : 'destructive'" :disabled="busy">{{ asking.kind === 'no-show' ? t('reservation.markNoShow') : t('common.cancel') }}</Button>
           <Button type="button" variant="outline" @click="asking = null">{{ t('reservation.keep') }}</Button>
@@ -563,7 +570,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
           <BillingInstructions v-if="['DRAFT', 'CONFIRMED', 'CHECKED_IN'].includes(line.status)" :reservation-id="res.id" :line-id="line.id" :editable="can('reservation.update')" />
 
-          <form v-if="assigning && assigning.lineId === line.id" v-autofocus class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
+          <form v-if="assigning && assigning.lineId === line.id" v-autofocus="assignTick" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
                 <NativeSelect :id="id" v-model.number="assigning.typeId" name="assign_type" @change="loadFree">

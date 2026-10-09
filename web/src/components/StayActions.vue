@@ -46,7 +46,10 @@ const fieldError = (field: string) => error.value?.fieldMessage(field)
 const from = computed(() => businessDate.value)
 const until = computed(() => (props.detail.stay.departure_date > from.value ? props.detail.stay.departure_date : addDays(from.value, 1)))
 
+const formTick = ref(0)
+
 function show(d: Dialog): void {
+  formTick.value++
   error.value = null
   open.value = d
   if (d === 'move') void loadTypes()
@@ -280,7 +283,7 @@ async function addGuest(g: Guest): Promise<void> {
         <template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> {{ t('stayActions.extensionHint') }}</template>
       </p>
 
-      <form v-if="open === 'move'" v-autofocus novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="submitMove">
+      <form v-if="open === 'move'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="submitMove">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.moveTitle') }}</h2>
         <div class="grid gap-4 sm:grid-cols-3">
           <FormField :label="t('stayActions.roomType')">
@@ -315,7 +318,7 @@ async function addGuest(g: Guest): Promise<void> {
         </div>
       </form>
 
-      <form v-if="open === 'departure'" v-autofocus novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="onSubmitDeparture">
+      <form v-if="open === 'departure'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="onSubmitDeparture">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.departureTitle') }}</h2>
         <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
           <template #default="{ id, invalid }"><Input :id="id" v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>

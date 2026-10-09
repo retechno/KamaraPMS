@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
-import { defineComponent, h, withDirectives } from 'vue'
+import { defineComponent, h, ref, withDirectives } from 'vue'
 import { vAutofocus } from './autofocus'
 
 let wrapper: VueWrapper | undefined
@@ -61,5 +61,25 @@ describe('v-autofocus', () => {
     // the form is not the person's place yet: a field outside of it had the focus, so the form claims it as it appears
     expect(focused()).toBe('a')
     outer.remove()
+  })
+  it('focuses again each time its tick changes, and not when something else re-renders', async () => {
+    const tick = ref(0)
+    const Form = defineComponent({
+      setup: () => () => withDirectives(
+        h('form', [h('input', { name: 'a' }), h('input', { name: 'b' }), h('span', tick.value > 99 ? 'x' : '')]),
+        [[vAutofocus, tick.value]],
+      ),
+    })
+    wrapper = mount(Form, { attachTo: document.body })
+    await flushPromises()
+    expect(focused()).toBe('a')
+    ;(wrapper.get('input[name=b]').element as HTMLInputElement).focus()
+    await wrapper.vm.$forceUpdate()
+    await flushPromises()
+    expect(focused()).toBe('b') // a re-render with the same tick leaves the person where they are
+    ;(document.activeElement as HTMLElement).blur()
+    tick.value++ // the opening button was pressed again
+    await flushPromises()
+    expect(focused()).toBe('a')
   })
 })
