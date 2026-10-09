@@ -337,7 +337,7 @@ async function book(approval?: Approval): Promise<void> {
     </Card>
 
     <Card v-if="picked" class="mb-4 border-primary/50">
-      <form novalidate data-testid="book-form" @submit.prevent="submit">
+      <form v-autofocus novalidate data-testid="book-form" @submit.prevent="submit">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
           <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>
@@ -347,14 +347,14 @@ async function book(approval?: Approval): Promise<void> {
             <p class="m-0 font-medium">{{ t('restrictions.overrideTitle') }}</p>
             <ul class="m-0 mt-1 list-disc pl-5"><li v-for="(v, i) in restrictions(picked?.plan)" :key="i">{{ violationText(v) }}</li></ul>
             <FormField class="mt-3 max-w-md" :label="t('restrictions.overrideReason')" :hint="t('restrictions.overrideHint')" :error="fieldError('restriction_override.reason')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="restrictionReason" name="restriction_reason" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><Input :id="id" v-model="restrictionReason" data-autofocus name="restriction_reason" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
           <div>
             <div class="flex items-end gap-3">
               <FormField class="flex-1" :label="t('newReservation.booker')" :error="fieldError('guest_id')">
                 <template #default="{ id }">
-                  <Input :id="id" v-model="guestQuery" name="guest_q" type="search" :placeholder="t('newReservation.bookerPlaceholder')" @keydown.enter.prevent="findGuests" />
+                  <Input :id="id" v-model="guestQuery" :data-autofocus="isRestricted ? undefined : ''" name="guest_q" type="search" :placeholder="t('newReservation.bookerPlaceholder')" @keydown.enter.prevent="findGuests" />
                 </template>
               </FormField>
               <Button type="button" variant="outline" data-testid="find-guest" @click="findGuests">{{ t('newReservation.find') }}</Button>

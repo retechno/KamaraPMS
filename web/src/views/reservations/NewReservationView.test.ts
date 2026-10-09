@@ -33,7 +33,7 @@ const siti = { id: 3, code: 'GST000001', first_name: 'Siti', last_name: 'Nurhali
 
 const beds = [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }]
 
-function mountView(permissions = ['reservation.read', 'reservation.create']) {
+function mountView(permissions = ['reservation.read', 'reservation.create'], attach = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -44,7 +44,7 @@ function mountView(permissions = ['reservation.read', 'reservation.create']) {
   POST = vi.fn().mockResolvedValue({ data: { id: 42 } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   const push = vi.spyOn(router, 'push')
-  return { w: mount(NewReservationView, { global: { plugins: [pinia, router] } }), push }
+  return { w: mount(NewReservationView, { global: { plugins: [pinia, router] }, attachTo: attach ? document.body : undefined }), push }
 }
 
 describe('NewReservationView', () => {
@@ -77,6 +77,17 @@ describe('NewReservationView', () => {
     expect(w.get('[data-testid=pick-DLX-HALF]').attributes('disabled')).toBeDefined() // incomplete grid
     expect(w.get('[data-testid=offer-DLX-HALF]').get('[data-testid=missing]').text()).toContain('1 night(s) without a rate')
     expect(w.get('[data-testid=pick-STD-BAR]').attributes('disabled')).toBeDefined() // sold out
+  })
+
+  it('starts the book form on the booker search once a room is picked', async () => {
+    const { w } = mountView(undefined, true)
+    await flushPromises()
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
+    await flushPromises()
+    expect((document.activeElement as HTMLInputElement | null)?.name).toBe('guest_q')
+    w.unmount()
   })
 
   it('sends the bed that was asked for with the room', async () => {
