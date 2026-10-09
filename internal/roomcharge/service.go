@@ -163,7 +163,9 @@ func (s *Service) post(ctx context.Context, p auth.Principal, propertyID int64, 
 		if err != nil {
 			return err
 		}
-		if err := db.LockRows(ctx, db.Stays, db.ForUpdate, propertyID, ids); err != nil { // L4 stays, ascending
+		// FOR NO KEY UPDATE, not FOR UPDATE: the run only needs the stays to itself (another run, a check-out, a room move), and it then waits for folios. A transfer or a payment holds a folio and key-shares
+		// the stay through the item it inserts (folio_items.stay_id); FOR UPDATE would make that key share wait for this run while the run waits for the folio: a deadlock (see db.ForNoKeyUpdate).
+		if err := db.LockRows(ctx, db.Stays, db.ForNoKeyUpdate, propertyID, ids); err != nil { // L4 stays, ascending
 			if apperr.IsCode(err, "NOT_FOUND") {
 				return apperr.NotFound("STAY_NOT_FOUND", "a stay does not exist in this property")
 			}

@@ -162,7 +162,13 @@ func TestTransferAndTonightsPostingRunBothComplete(t *testing.T) {
 			if postErr != nil {
 				r, err := s.Charges.PostManual(s.admin, s.propID, today, nil)
 				must(t, err)
-				posted = r.Results[0].Total
+				// the run lists every night up to today, the first one as ALREADY_POSTED with no total: tonight is the night it posted
+				posted = ""
+				for _, it := range r.Results {
+					if it.Status == "POSTED" {
+						posted = it.Total
+					}
+				}
 			}
 		}
 		s.nightsAreChargedOnce(t)
@@ -295,4 +301,40 @@ func TestConcurrentRunsOfARoutedNightChargeItOnce(t *testing.T) {
 	if got := f.Count(t, `SELECT count(*) FROM stay_charge_postings WHERE stay_id = $1 AND status = 'POSTED'`, st.Stay.ID); got != 1 {
 		t.Fatalf("%d register rows", got)
 	}
+}
+
+// The deadlock that the sweeps above found now and then (SQLSTATE 40P01, shown as RESOURCE_BUSY): a transfer, like a payment or any posting to a folio of a stay, holds the FOLIO and then key-shares the
+// STAY, because the item it inserts points at it (folio_items.stay_id). A posting run holds the STAY and then waits for the folio. Under FOR UPDATE on the stay the key share waits for the run and
+// the run waits for the folio: a cycle. The run takes the stay with FOR NO KEY UPDATE (db.ForNoKeyUpdate), which still keeps another run, a check-out and a room move away but lets the key share through.
+// This holds the cycle open on purpose, so it fails every time with the old lock and never by luck.
+func TestThePostingRunLetsAFolioWriterKeyShareTheStay(t *testing.T) {
+	s := aNightOnTheGuestFolio(t)
+	s.nextDay(t)
+	today := s.currentBD(t)
+	ctx := context.Background()
+	tx, err := s.Pool.Begin(ctx)
+	must(t, err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	// what a transfer or a payment has done by now: it holds the folio that tonight's night is charged to (the company folio)
+	if _, err := tx.Exec(ctx, `SELECT id FROM folios WHERE id = $1 FOR UPDATE`, s.companyFolio); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Charges.PostManual(s.admin, s.propID, today, nil)
+		done <- err
+	}()
+	if !stillWaiting(done) { // the run has the stay and waits for the folio
+		t.Fatal("the posting run must wait for the folio that is held")
+	}
+	// and now the foreign key of the item it inserts: it must not wait for the run, which waits for this transaction
+	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '5s'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM stays WHERE id = $1 FOR KEY SHARE`, s.stayID); err != nil {
+		t.Fatalf("the key share of the stay waited for the posting run (a lock cycle): %v", err)
+	}
+	must(t, tx.Commit(ctx))
+	must(t, <-done)
+	s.nightsAreChargedOnce(t)
 }
