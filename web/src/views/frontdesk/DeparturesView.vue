@@ -28,6 +28,13 @@ const exact = ref(false)
 const q = ref('')
 const typeId = ref('')
 const date = computed(() => chosen.value || businessDate.value)
+// The input shows the date that is asked for (the business date until another is chosen); choosing the business date again is the default again.
+const shownDate = computed({
+  get: () => date.value,
+  set: (v: string) => {
+    chosen.value = v === businessDate.value ? '' : v
+  },
+})
 const isDefault = computed(() => !chosen.value && !exact.value && !q.value.trim() && !typeId.value)
 
 const list = useStayList(
@@ -64,7 +71,7 @@ watch(() => props.refresh, () => list.restart())
   <template v-else-if="businessDate">
     <form class="mb-3 flex flex-wrap items-end gap-3" novalidate data-testid="departure-filters" @submit.prevent>
       <FormField class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
-        <template #default="{ id }"><Input :id="id" v-model="chosen" name="departure_date" type="date" :placeholder="businessDate" /></template>
+        <template #default="{ id }"><Input :id="id" v-model="shownDate" name="departure_date" type="date" /></template>
       </FormField>
       <label class="mb-2 flex items-center gap-2 text-sm"><input v-model="exact" type="checkbox" name="exact" class="size-4 accent-primary" />{{ t('frontDesk.departures.onlyThatDate') }}</label>
       <FormField class="w-64" :label="t('frontDesk.page.search')">

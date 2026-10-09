@@ -61,7 +61,7 @@ const folioLabel = (type: string) => (type === 'COMPANY' ? t('frontDesk.inHouse.
           <dt class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('frontDesk.inHouse.sectionBalance') }}</dt>
           <dd class="m-0 mt-1">
             <InHouseBalance :balance="row.balance" />
-            <CheckoutStatus v-if="mode === 'departures'" class="ml-2" :checkout="row.checkout" data-testid="drawer-checkout" />
+            <CheckoutStatus v-if="mode === 'departures'" class="ml-2" :checkout="row.checkout" :folios="row.balance.folios" data-testid="drawer-checkout" />
             <ul class="m-0 mt-2 list-none p-0" data-testid="drawer-folios">
               <li v-for="f in row.balance.folios" :key="f.id" class="flex justify-between gap-3">
                 <span>{{ folioLabel(f.folio_type) }} <span class="text-muted-foreground">{{ f.folio_number }}</span></span>

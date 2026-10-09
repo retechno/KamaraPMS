@@ -10,7 +10,6 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -56,13 +55,11 @@ const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true },
   { key: 'guest_name', label: t('reservations.guest'), sortable: true },
   { key: 'room', label: t('reservations.roomCol'), sortable: true, sortValue: (r) => r.rooms[0]?.room_number || r.rooms[0]?.room_type_code },
-  { key: 'arrival_date', label: t('reservations.arrival'), sortable: true, format: 'date' as const },
-  { key: 'departure_date', label: t('reservations.departure'), sortable: true, format: 'date' as const },
-  { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, sortValue: (r) => (r.rooms.find((l) => l.rate_amount) ? Number(r.rooms.find((l) => l.rate_amount)?.rate_amount) : null), class: 'tabular-nums' },
+  { key: 'arrival_date', label: t('reservations.stay'), sortable: true, class: 'whitespace-nowrap' },
+  { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, sortValue: (r) => (r.rooms.find((l) => l.rate_amount) ? Number(r.rooms.find((l) => l.rate_amount)?.rate_amount) : null), class: 'tabular-nums whitespace-nowrap px-2' },
   { key: 'company', label: t('reservations.company'), sortable: true, sortValue: (r) => companyOf(r) },
-  { key: 'deposit', label: t('reservations.deposit'), align: 'right', sortable: true, sortValue: (r) => (r.deposit ? Number(r.deposit.paid) : null), class: 'tabular-nums' },
-  { key: 'status', label: t('reservations.status'), sortable: true, sortValue: (r) => String(uiStatus(r.display_status)) },
-  { key: 'actions', label: t('reservations.actions'), align: 'right' },
+  { key: 'status', label: t('reservations.status'), sortable: true, sortValue: (r) => String(uiStatus(r.display_status)), class: 'whitespace-nowrap' },
+  { key: 'actions', label: t('reservations.actions'), align: 'right', class: 'min-w-[8rem]' },
 ])
 
 /** The company of a reservation: its own, else the company a room is billed to. */
@@ -124,20 +121,26 @@ function query() {
   }
 }
 
+// Only the latest request counts: a slow answer to an older search must not replace the answer to a newer one.
+let latest = 0
+
 async function load(more = false): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null || !canRead.value) return
+  const mine = ++latest
   loading.value = true
   error.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { ...query(), cursor: more ? nextCursor.value : undefined } } })
+    if (mine !== latest) return
     rows.value = more ? [...rows.value, ...(data?.data ?? [])] : (data?.data ?? [])
     nextCursor.value = data?.next_cursor
     searched.value = true
   } catch (e) {
+    if (mine !== latest) return
     error.value = e instanceof ApiError ? e : new ApiError({ type: 'about:blank', title: 'Error', status: 0, code: 'NETWORK_ERROR', detail: String(e) })
   } finally {
-    loading.value = false
+    if (mine === latest) loading.value = false
   }
 }
 
@@ -236,7 +239,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       <Button v-if="filtered" type="button" variant="outline" data-testid="clear-filters" @click="clear">{{ t('dataTable.clearFilters') }}</Button>
     </form>
 
-    <DataTable v-if="!error || searched" :columns="columns" :rows="rows" row-key="id" :loading="!searched" :row-test-id="(r) => `res-${r.confirmation_number}`" :caption="t('reservations.title')">
+    <DataTable v-if="!error || searched" class="hidden md:block" :columns="columns" :rows="rows" row-key="id" :loading="!searched" :row-test-id="(r) => `res-${r.confirmation_number}`" :caption="t('reservations.title')">
       <template #cell-confirmation_number="{ row }">
         <RouterLink :to="`/reservations/${row.id}`">{{ row.confirmation_number }}</RouterLink>
         <div v-if="row.group_code" class="text-xs text-muted-foreground">{{ row.group_code }}</div>
@@ -255,7 +258,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <span v-else>—</span>
       </template>
       <template #cell-arrival_date="{ row }">
-        {{ $date(row.arrival_date) }}
+        {{ $date(row.arrival_date) }} → {{ $date(row.departure_date) }}
         <div class="text-xs text-muted-foreground">{{ t('reservations.nightsCount', { n: row.nights }) }}</div>
       </template>
       <template #cell-rate="{ row }">
@@ -266,13 +269,13 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <div :data-testid="`company-${row.confirmation_number}`">{{ companyOf(row) || '—' }}</div>
         <div v-if="billingCompanies(row).length" class="text-xs text-muted-foreground" :data-testid="`billing-${row.confirmation_number}`">{{ t('reservations.billedTo', { names: billingCompanies(row).join(', ') }) }}</div>
       </template>
-      <template #cell-deposit="{ row }">
-        <span v-if="row.deposit" :data-testid="`deposit-${row.confirmation_number}`">{{ $money(row.deposit.paid) }}</span>
-        <span v-else class="text-muted-foreground" :data-testid="`deposit-${row.confirmation_number}`">—</span>
-      </template>
       <template #cell-status="{ row }">
-        <StatusBadge domain="reservation" :status="String(uiStatus(row.display_status))" />
-        <Badge v-if="row.status === 'DRAFT'" variant="outline" class="ml-1">{{ t('reservations.noInventory') }}</Badge>
+        <StatusBadge domain="reservation" :status="String(uiStatus(row.display_status))" :title="row.status === 'DRAFT' ? t('reservations.noInventory') : undefined" />
+        <div class="mt-0.5 text-xs text-muted-foreground tabular-nums">
+          {{ t('reservations.deposit') }}
+          <span v-if="row.deposit" :data-testid="`deposit-${row.confirmation_number}`">{{ $money(row.deposit.paid) }}</span>
+          <span v-else :data-testid="`deposit-${row.confirmation_number}`">—</span>
+        </div>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1.5">
@@ -301,5 +304,31 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       </template>
     </DataTable>
     <EmptyState v-else :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
+
+    <!-- A narrow screen gets a card for each reservation instead of the table. -->
+    <ul v-if="!error || searched" class="m-0 grid list-none gap-3 p-0 md:hidden" data-testid="reservation-cards">
+      <li v-for="r in rows" :key="r.id" class="rounded-lg border border-border p-3" :data-testid="`card-${r.confirmation_number}`">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <RouterLink :to="`/reservations/${r.id}`" class="font-medium">{{ r.confirmation_number }}</RouterLink>
+            <div class="text-sm">{{ r.guest_name || '—' }} <span class="text-muted-foreground">{{ paxOf(r) }}</span></div>
+          </div>
+          <StatusBadge domain="reservation" :status="String(uiStatus(r.display_status))" />
+        </div>
+        <div class="mt-1 text-sm">{{ $date(r.arrival_date) }} → {{ $date(r.departure_date) }} <span class="text-muted-foreground">· {{ t('reservations.nightsCount', { n: r.nights }) }}</span></div>
+        <div class="text-sm text-muted-foreground">
+          {{ r.rooms.length ? [...new Set(r.rooms.map((l) => l.room_type_code))].join(' · ') : '—' }} · {{ rateText(r) }}<template v-if="companyOf(r)"> · {{ companyOf(r) }}</template>
+          <template v-if="r.deposit"> · {{ t('reservations.deposit') }} {{ $money(r.deposit.paid) }}</template>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <Button v-for="a in actionsOf(r)" :key="a" as-child size="sm" variant="outline">
+            <RouterLink :to="target(r, a) ?? `/reservations/${r.id}`">{{ t(`reservations.action.${a}`) }}</RouterLink>
+          </Button>
+        </div>
+      </li>
+    </ul>
+    <div v-if="nextCursor" class="flex justify-center p-3 md:hidden">
+      <Button variant="outline" size="sm" :disabled="loading" data-testid="more-mobile" @click="load(true)">{{ t('reservations.loadMore') }}</Button>
+    </div>
   </template>
 </template>

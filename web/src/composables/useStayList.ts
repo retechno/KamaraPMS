@@ -21,6 +21,8 @@ export function useStayList(query: () => StayQuery | null, onLoaded?: (rows: InH
   const loading = ref(false)
   const loaded = ref(false)
   const canRead = computed(() => auth.can('reservation.read', property.currentId))
+  // A slow answer to an older request must not replace the answer to a newer one (a search typed over another, a filter changed while the first was on its way): only the latest request counts.
+  let latest = 0
 
   const clean = (): StayQuery => Object.fromEntries(Object.entries(query() ?? {}).filter(([, v]) => v !== undefined && v !== '')) as StayQuery
 
@@ -33,35 +35,38 @@ export function useStayList(query: () => StayQuery | null, onLoaded?: (rows: InH
 
   async function load(more = false): Promise<void> {
     if (property.currentId === null || !canRead.value || query() === null) return
+    const mine = ++latest
     loading.value = true
     error.value = null
     try {
       const page = await fetchPage(more ? nextCursor.value : undefined)
-      if (!page) return
+      if (!page || mine !== latest) return
       rows.value = more ? [...rows.value, ...page.data] : page.data
       nextCursor.value = page.next
       loaded.value = true
       onLoaded?.(rows.value, !!page.next)
     } catch (e) {
+      if (mine !== latest) return
       error.value = e instanceof ApiError ? e : new ApiError({ type: 'about:blank', title: 'Error', status: 0, code: 'NETWORK_ERROR', detail: String(e) })
     } finally {
-      loading.value = false
+      if (mine === latest) loading.value = false
     }
   }
 
   /** Fetch again as many rows as are shown (after an edit that changes rates or balances), so the filters, the sorting and the page stay. */
   async function reloadLoaded(): Promise<void> {
     const wanted = rows.value.length
+    const mine = ++latest
     try {
       let all: InHouseRow[] = []
       let cursor: string | undefined
       do {
         const page = await fetchPage(cursor)
-        if (!page) return
+        if (!page || mine !== latest) return
         all = [...all, ...page.data]
         cursor = page.next
-        nextCursor.value = cursor
       } while (cursor && all.length < wanted)
+      nextCursor.value = cursor
       rows.value = all
       onLoaded?.(rows.value, !!cursor)
     } catch (e) {

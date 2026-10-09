@@ -230,7 +230,7 @@ describe('ReservationDetailView', () => {
   it('shows each room with its status as a badge and the nights in the right number', async () => {
     const w = mountView(reservation({ rooms: [line({ nights: 1 }), line({ id: 5, status: 'CHECKED_IN', nights: 3, room_number: '301' })] }))
     await flushPromises()
-    expect(w.get('[data-testid=line-status-4]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=line-status-4]').text()).toBe('Reserved')
     expect(w.get('[data-testid=line-status-5]').text()).toBe('Checked in')
     expect(w.get('[data-testid=room-4]').text()).toContain('(1 night)')
     expect(w.get('[data-testid=room-5]').text()).toContain('(3 nights)')

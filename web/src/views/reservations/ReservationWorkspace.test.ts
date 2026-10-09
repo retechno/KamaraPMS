@@ -77,7 +77,7 @@ describe('Reservation workspace', () => {
     expect(head.get('[data-testid=header-guest]').text()).toBe('Siti Nurhaliza')
     expect(head.text()).toContain('RES000001')
     expect(head.text()).toContain('1 Oct 2026')
-    expect(head.get('[data-testid=header-rooms]').text()).toBe('101 · DLX, no room assigned · STD')
+    expect(head.get('[data-testid=header-rooms]').text()).toBe('101 · DLX, STD · no room assigned')
     expect(w.get('[data-testid=status]').text()).toBe('Reserved')
     expect(w.find('[data-testid=draft-note]').exists()).toBe(false)
   })
@@ -188,7 +188,8 @@ describe('Reservation workspace', () => {
   it('shows the history from the audit trail, and says so when the person may not read it or it cannot be loaded', async () => {
     const w = await mountView(reservation(), FULL, { '/audit-logs': { data: [entry(2, 'reservation.confirmed'), entry(1, 'reservation.created')] } })
     const list = w.get('[data-testid=history-list]').text()
-    expect(list).toContain('reservation.confirmed')
+    expect(list).toContain('Confirmed')
+    expect(list).not.toContain('reservation.confirmed') // the action in words, not its key
     expect(list).toContain('Dewi')
     expect(GET.mock.calls.find((c) => String(c[0]).endsWith('/audit-logs'))?.[1]).toMatchObject({ params: { query: { entity_type: 'reservation', entity_id: 1 } } })
     w.unmount()
@@ -269,5 +270,58 @@ describe('Reservation workspace', () => {
     await flushPromises()
     expect(POST.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: { path: { propertyId: 7, id: 1 } }, body: { version: 2, restriction_override: undefined } }])
     expect(w.get('[data-testid=status]').text()).toBe('Reserved')
+  })
+
+  it('takes a deposit only before check-in: not on a reservation that is in house, checked out, cancelled or no-show', async () => {
+    const reserved = await mountView()
+    expect(reserved.find('[data-testid=deposit-card]').exists()).toBe(true)
+    reserved.unmount()
+    const draft = await mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT', rooms: [line({ status: 'DRAFT' })] }))
+    expect(draft.find('[data-testid=deposit-card]').exists()).toBe(true)
+    draft.unmount()
+    for (const [display, status] of [['IN_HOUSE', 'CHECKED_IN'], ['CHECKED_OUT', 'COMPLETED'], ['NO_SHOW', 'NO_SHOW']] as const) {
+      const w = await mountView(reservation({ display_status: display, rooms: [line({ status, stay_id: status === 'NO_SHOW' ? null : 55 })] }))
+      expect(w.find('[data-testid=deposit-card]').exists(), display).toBe(false)
+      w.unmount()
+    }
+    const cancelled = await mountView(reservation({ status: 'CANCELLED', display_status: 'CANCELLED', rooms: [line({ status: 'CANCELLED' })] }))
+    expect(cancelled.find('[data-testid=deposit-card]').exists()).toBe(false)
+  })
+
+  it('names the status of a room like the reservation and shows the rooms of the header in a short line', async () => {
+    const w = await mountView(reservation({ rooms: [line({ id: 4, status: 'CONFIRMED' }), line({ id: 5, status: 'CONFIRMED' }), line({ id: 6, status: 'COMPLETED', room_number: '201', room_type_code: 'SUP' })] }))
+    expect(w.get('[data-testid=line-status-4]').text()).toBe('Reserved')
+    expect(w.get('[data-testid=line-status-6]').text()).toBe('Checked out')
+    expect(w.get('[data-testid=header-rooms]').text()).toBe('201 · SUP, DLX ×2 · no room assigned')
+  })
+
+  it('says that the company of a reservation is not its payer, and shows the company of a folio on a line of its own', async () => {
+    const w = await mountView(reservation({
+      company_id: 5, company_name: 'Acme Corp',
+      folios: [{ id: 81, folio_number: 'FOL000002', stay_id: 55, status: 'OPEN', balance: '700000', folio_type: 'COMPANY', bill_to_company_id: 5, bill_to_company_name: 'PT Nusantara Teknologi Informasi dan Komunikasi Indonesia Raya Tbk' }],
+    }))
+    expect(w.get('[data-testid=payer-note]').text()).toContain('Who pays')
+    expect(w.get('[data-testid=folio-company-81]').text()).toContain('PT Nusantara Teknologi')
+    expect(w.get('[data-testid=folios]').text()).toContain('700,000')
+  })
+
+  it('keeps the close button of the editor in view', async () => {
+    const w = await mountView()
+    await w.get('[data-testid=edit-reservation]').trigger('click')
+    await flushPromises()
+    const close = document.body.querySelector('[data-testid=edit-close]') as HTMLElement
+    expect(close.parentElement?.className).toContain('sticky')
+  })
+
+  it('reads the history again after an action, so that it shows what was just done', async () => {
+    let entries = [entry(1, 'reservation.created')]
+    const w = await mountView(reservation({ status: 'DRAFT', display_status: 'DRAFT', rooms: [line({ status: 'DRAFT' })] }), FULL, { '/audit-logs': () => ({ data: entries }) })
+    expect(w.get('[data-testid=history-list]').text()).toContain('Created')
+    entries = [entry(2, 'reservation.confirmed'), entry(1, 'reservation.created')]
+    POST.mockResolvedValue({ data: reservation() })
+    await w.get('[data-testid=confirm]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=history-list]').text()).toContain('Confirmed')
+    expect(GET.mock.calls.filter((c) => String(c[0]).endsWith('/audit-logs'))).toHaveLength(2)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { reservationActions, type ActionSubject } from './reservationActions'
-import { apiStatusOf, STATUS_FILTER, uiStatus } from './reservationStatus'
+import { apiStatusOf, lineUiStatus, STATUS_FILTER, uiStatus } from './reservationStatus'
 
 const subject = (over: Partial<ActionSubject> = {}): ActionSubject => ({
   displayStatus: 'CONFIRMED', rooms: [{ status: 'CONFIRMED', arrivalDate: '2026-10-02' }], hasStay: false, hasFolio: false, hasGuest: true, ...over,
@@ -20,6 +20,12 @@ describe('reservation status names', () => {
     expect(apiStatusOf('')).toBe('')
     expect(apiStatusOf('VOID')).toBe('')
     expect(STATUS_FILTER.some((s) => s.ui === ('VOID' as never))).toBe(false)
+  })
+})
+
+describe('room status names', () => {
+  it('names the status of a room in the words of the reservation', () => {
+    expect(['CONFIRMED', 'COMPLETED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'DRAFT'].map(lineUiStatus)).toEqual(['RESERVED', 'CHECKED_OUT', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'DRAFT'])
   })
 })
 

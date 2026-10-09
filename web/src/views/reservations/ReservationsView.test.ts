@@ -81,7 +81,7 @@ describe('ReservationsView', () => {
     expect(r.get('[data-testid=rate-RES000001]').text()).toContain('—')
     expect(r.get('[data-testid=company-RES000001]').text()).toBe('—')
     expect(r.get('[data-testid=deposit-RES000001]').text()).toBe('—')
-    expect(r.get('[data-testid=room-RES000001]').text()).toBe('Not assigned')
+    expect(r.get('[data-testid=room-RES000001]').text()).toBe('No room')
   })
 
   it('names the status staff see: draft, reserved, checked in, checked out, cancelled, no-show', async () => {
@@ -95,8 +95,8 @@ describe('ReservationsView', () => {
     ] })
     const badge = (n: string) => w.get(`[data-testid=res-${n}] [data-slot=status-badge]`)
     expect(['RES1', 'RES2', 'RES3', 'RES4', 'RES5', 'RES6'].map((n) => badge(n).text())).toEqual(['Draft', 'Reserved', 'Checked in', 'Checked out', 'Cancelled', 'No-show'])
-    expect(w.get('[data-testid=res-RES1]').text()).toContain('holds no room') // a draft holds no inventory
-    expect(w.get('[data-testid=res-RES2]').text()).not.toContain('holds no room')
+    expect(w.get('[data-testid=res-RES1] [data-slot=status-badge]').attributes('title')).toContain('holds no room') // a draft holds no inventory
+    expect(w.get('[data-testid=res-RES2] [data-slot=status-badge]').attributes('title')).toBeUndefined()
   })
 
   it('asks the server for every filter, and keeps them in the address', async () => {
@@ -233,5 +233,45 @@ describe('ReservationsView', () => {
     expect(w.get('[data-testid=new]').text()).toBe('Reservasi baru')
     expect(w.get('select[name=status]').findAll('option')[0]?.text()).toBe('Semua')
     expect(w.get('[data-testid=res-RES000001]').text()).toContain('Dipesan')
+  })
+
+  it('a slow answer to an older search does not replace the answer to the newer one', async () => {
+    const w = await mountView(['reservation.read'])
+    let release: (v: unknown) => void = () => {}
+    const slow = new Promise((r) => { release = r })
+    GET.mockImplementation(async (path: string, init?: { params?: { query?: Record<string, unknown> } }) => {
+      if (!path.endsWith('/reservations')) return { data: { data: [] } }
+      const q = init?.params?.query
+      if (q?.q === 'Siti') return slow
+      return { data: { data: [row({ id: 2, confirmation_number: 'RES000002', guest_name: 'Budi Santoso' })] } }
+    })
+    await w.get('input[name=q]').setValue('Siti')
+    await w.get('form[role=search]').trigger('submit')
+    await w.get('input[name=q]').setValue('Budi')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    release({ data: { data: [row({ id: 1, confirmation_number: 'RES000001', guest_name: 'Siti Nurhaliza' })] } }) // the older answer comes last
+    await flushPromises()
+    expect(w.findAll('tbody tr[data-testid^=res-]').map((r) => r.text())).toEqual([expect.stringContaining('Budi Santoso')])
+  })
+
+  it('shows arrival and departure in one column, so that the actions stay in view', async () => {
+    const w = await mountView(['reservation.read', 'reservation.update'])
+    const r = w.get('[data-testid=res-RES000001]')
+    expect(r.text()).toContain('2 Oct 2026 → 4 Oct 2026')
+    expect(w.findAll('thead th').map((h) => h.text())).not.toContain('Departure')
+    expect(w.get('[data-testid=sort-arrival_date]').text()).toBe('Stay')
+  })
+
+  it('has a card for each reservation for a narrow screen, with the same facts and links', async () => {
+    const w = await mountView(['reservation.read', 'reservation.update'], { data: [row({ company_name: 'Acme Corp', deposit: { folio_id: 80, paid: '300000' } })] })
+    const card = w.get('[data-testid=card-RES000001]')
+    expect(card.text()).toContain('Siti Nurhaliza')
+    expect(card.text()).toContain('Reserved')
+    expect(card.text()).toContain('Acme Corp')
+    expect(card.text()).toContain('300,000')
+    expect(card.text()).toContain('1,200,000')
+    expect(card.get('a').attributes('href')).toBe('/reservations/1')
+    expect(card.findAll('a').map((a) => a.attributes('href'))).toContain('/reservations/1')
   })
 })

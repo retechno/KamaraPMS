@@ -132,8 +132,8 @@ watch(() => [open.value, props.reservation.version], () => { if (open.value) fil
         </div>
       </form>
 
-      <div class="mt-4 flex justify-end">
-        <Button type="button" variant="outline" @click="open = false">{{ t('common.close') }}</Button>
+      <div class="sticky -bottom-5 -mx-5 mt-4 flex justify-end border-t border-border bg-card px-5 py-3">
+        <Button type="button" variant="outline" data-testid="edit-close" @click="open = false">{{ t('common.close') }}</Button>
       </div>
     </DialogContent>
   </Dialog>

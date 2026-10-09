@@ -33,3 +33,10 @@ export const STATUS_FILTER: { ui: ReservationUiStatus; api: 'DRAFT' | 'CONFIRMED
 export function apiStatusOf(ui: string): string {
   return STATUS_FILTER.find((s) => s.ui === ui)?.api ?? ''
 }
+
+/** The name of the status of a room of a reservation (a line), the same words as the reservation: CONFIRMED is "reserved", COMPLETED is "checked out". */
+export function lineUiStatus(lineStatus: string): string {
+  if (lineStatus === 'CONFIRMED') return 'RESERVED'
+  if (lineStatus === 'COMPLETED') return 'CHECKED_OUT'
+  return lineStatus
+}

@@ -44,12 +44,17 @@ const can = (permission: string) => auth.can(permission, property.currentId)
 const actionsOf = (row: InHouseRow) => actionsFor(row, can)
 const primary = (row: InHouseRow) => actionsOf(row).filter((a) => PRIMARY_ACTIONS.includes(a))
 const more = (row: InHouseRow) => actionsOf(row).filter((a) => MORE_ACTIONS.includes(a))
+// The menu of the row that is open: it closes when an action is chosen, so it is not left open behind the dialog the action opens.
+const menuFor = ref<string | null>(null)
 const overdue = (row: InHouseRow) => props.mode === 'departures' && !!props.businessDate && row.stay.departure_date < props.businessDate
 const scopeLabel = (b: InHouseRow['billing'][number]) => `${t(`frontDesk.inHouse.scope.${b.scope}`)}${b.charge_code ? ` ${b.charge_code}` : ''} → ${b.company_name}`
 
+// The departures tab has its own search, asked of the server for the whole list; a filter on the rows that are loaded would show less than that without saying so.
+const filterOf = (kind: 'text'): 'text' | undefined => (props.mode === 'in-house' ? kind : undefined)
+
 const columns = computed<Column<InHouseRow>[]>(() => [
-  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true, filter: 'text' as const, sortValue: (r) => r.room.number, filterValue: (r) => r.room.number },
-  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true, filter: 'text' as const, sortValue: (r) => r.guest.name, filterValue: (r) => `${r.guest.name} ${r.stay_number}` },
+  { key: 'room_number', label: t('frontDesk.page.room'), sortable: true, filter: filterOf('text'), sortValue: (r) => r.room.number, filterValue: (r) => r.room.number },
+  { key: 'guest_name', label: t('frontDesk.page.guest'), sortable: true, filter: filterOf('text'), sortValue: (r) => r.guest.name, filterValue: (r) => `${r.guest.name} ${r.stay_number}` },
   { key: 'company', label: t('frontDesk.inHouse.company'), sortable: true, sortValue: (r) => r.company?.name },
   { key: 'rate', label: t('frontDesk.inHouse.rate'), align: 'right', sortable: true, sortValue: (r) => (r.rate.amount ? Number(r.rate.amount) : null), class: 'tabular-nums' },
   { key: 'stay', label: t('frontDesk.page.stay'), sortable: true, sortValue: (r) => (props.mode === 'departures' ? r.stay.departure_date : r.stay.arrival_date) },
@@ -64,6 +69,7 @@ function openDetail(row: InHouseRow): void {
 
 /** One handler for the row, its menu, the drawer and the cards: an action done in place opens its dialog, the others go to the page that does them. */
 function act(action: InHouseAction, row: InHouseRow): void {
+  menuFor.value = null
   if (action === 'editGuest') {
     editGuestId.value = row.guest.id
     guestOpen.value = true
@@ -129,12 +135,12 @@ function rateSaved(): void {
         <div v-if="row.balance.folios.length > 1" class="mt-0.5 text-xs text-muted-foreground tabular-nums">
           <div v-for="f in row.balance.folios" :key="f.id">{{ f.folio_type === 'COMPANY' ? t('frontDesk.inHouse.companyFolio') : t('frontDesk.inHouse.guestFolio') }} {{ $money(f.balance) }}</div>
         </div>
-        <div v-if="mode === 'departures'" class="mt-0.5"><CheckoutStatus :checkout="row.checkout" :data-testid="`checkout-status-${row.stay_number}`" /></div>
+        <div v-if="mode === 'departures'" class="mt-0.5"><CheckoutStatus :checkout="row.checkout" :folios="row.balance.folios" :data-testid="`checkout-status-${row.stay_number}`" /></div>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap items-center justify-end gap-1.5">
           <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkOut' ? 'default' : 'outline'" :data-testid="`${a}-${row.stay_number}`" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
-          <Popover v-if="more(row).length">
+          <Popover v-if="more(row).length" :open="menuFor === row.stay_number" @update:open="(v: boolean) => (menuFor = v ? row.stay_number : null)">
             <PopoverTrigger as-child>
               <Button type="button" size="sm" variant="ghost" :aria-label="t('frontDesk.inHouse.moreActions')" :data-testid="`more-${row.stay_number}`"><MoreVertical /></Button>
             </PopoverTrigger>
@@ -161,10 +167,16 @@ function rateSaved(): void {
         </div>
         <div class="mt-1 text-sm">{{ $date(row.stay.arrival_date) }} → {{ $date(row.stay.departure_date) }}</div>
         <div v-if="row.company" class="text-sm text-muted-foreground">{{ row.company.name }}</div>
-        <div v-if="mode === 'departures'" class="mt-1"><CheckoutStatus :checkout="row.checkout" /></div>
+        <div v-if="mode === 'departures'" class="mt-1"><CheckoutStatus :checkout="row.checkout" :folios="row.balance.folios" /></div>
         <div class="mt-2 flex flex-wrap gap-1.5">
-          <Button v-for="a in actionsOf(row)" :key="a" type="button" size="sm" variant="outline" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
+          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkOut' ? 'default' : 'outline'" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
         </div>
+        <details v-if="more(row).length" class="mt-2">
+          <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            <Button v-for="a in more(row)" :key="a" type="button" size="sm" variant="outline" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
+          </div>
+        </details>
       </li>
     </ul>
 

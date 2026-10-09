@@ -8,6 +8,7 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { type ArrivalAction, arrivalActions } from '@/utils/arrivals'
+import { lineUiStatus } from '@/utils/reservationStatus'
 
 /** The detail of an arrival beside the list: guest, reservation, room, dates, rate, company, deposit and readiness. It only reads and offers the actions of the row. */
 const open = defineModel<boolean>('open', { required: true })
@@ -23,7 +24,7 @@ const actions = computed(() => (props.row ? arrivalActions(props.row, (p) => aut
   <Sheet v-model:open="open">
     <SheetContent v-if="row" class="p-6" data-testid="arrival-drawer">
       <SheetTitle class="text-lg" data-testid="drawer-guest">{{ row.guest_name || '—' }}</SheetTitle>
-      <SheetDescription class="mt-1">{{ row.confirmation_number }} · {{ row.status }}</SheetDescription>
+      <SheetDescription class="mt-1">{{ row.confirmation_number }} · {{ t(`status.${lineUiStatus(row.status)}`) }}</SheetDescription>
 
       <dl class="mt-5 grid gap-4 text-sm">
         <div>
