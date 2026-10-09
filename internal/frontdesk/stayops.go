@@ -50,8 +50,13 @@ func errStayNotOpen(status string) *apperr.Error {
 }
 
 // lockStay locks the stay (L4) and re-reads it: the version must be the one the caller loaded.
+//
+// The lock is FOR NO KEY UPDATE, not FOR UPDATE: it keeps another use case that takes the stay away (a check-out, a move, a rate change, a posting run), and these use cases only change the status, the
+// dates and the version of the stay, which are not key columns. A check-out and the rate change of a charged night then wait for folios; a payment, a transfer or an adjustment holds a folio and
+// key-shares the stay through the item it inserts (folio_items.stay_id), and FOR UPDATE would make that key share wait for the use case while the use case waits for the folio: a deadlock
+// (see db.ForNoKeyUpdate; lockorder_test.go holds the cycle open for both).
 func (s *Service) lockStay(ctx context.Context, p auth.Principal, propertyID, stayID int64, version int32) (frontdeskdb.Stay, error) {
-	if err := db.LockRows(ctx, db.Stays, db.ForUpdate, propertyID, []int64{stayID}); err != nil {
+	if err := db.LockRows(ctx, db.Stays, db.ForNoKeyUpdate, propertyID, []int64{stayID}); err != nil {
 		return frontdeskdb.Stay{}, mapNotFound(err, errStayNotFound())
 	}
 	st, err := s.q(ctx).GetStay(ctx, frontdeskdb.GetStayParams{TenantID: p.TenantID, PropertyID: propertyID, ID: stayID})
