@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { MoreVertical } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, GuestView } from '@/api/types'
@@ -37,6 +37,7 @@ const emit = defineEmits<{ loaded: [count: number]; changed: [] }>()
 const auth = useAuthStore()
 const property = usePropertyStore()
 const router = useRouter()
+const route = useRoute()
 const { types } = useRoomTypes()
 
 const rows = ref<Arrival[]>([])
@@ -51,7 +52,8 @@ const guestId = ref<number | null>(null)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const chosenDate = ref('')
 const status = ref('CONFIRMED')
-const q = ref('')
+// The search can come in the address (?q=): the reservation screens link here to check a guest in.
+const q = ref(typeof route?.query.q === 'string' ? route.query.q : '')
 const typeId = ref('')
 const date = computed(() => chosenDate.value || businessDate.value)
 const isDefault = computed(() => !chosenDate.value && status.value === 'CONFIRMED' && !q.value.trim() && !typeId.value)

@@ -1572,13 +1572,22 @@ paths:
     get:
       operationId: listReservations
       summary: Search reservations, newest first (reservation.read)
-      description: "`arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number and the booker's name."
+      description: |
+        `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number, the booker's
+        name and the room numbers (a text, not a pattern). `status` is the status of the header; `display_status` is the status staff see (derived from the header and the rooms, as in the
+        detail): CONFIRMED is "reserved", IN_HOUSE is "checked in". Every filter is applied by the database, so a page is never cut after filtering. Each row carries its rooms with the booked
+        price of the arrival night (the snapshot, never the rate master) and the deposit (the credit on the deposit folio, from the ledger).
       tags: [reservations]
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - { name: arrival_from, in: query, schema: { $ref: "#/components/schemas/Date" } }
         - { name: arrival_to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: departure_from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: departure_to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: display_status, in: query, schema: { type: string, enum: [DRAFT, CONFIRMED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED] } }
+        - { name: room_type_id, in: query, schema: { type: integer, format: int64 }, description: A reservation with a room of this type. }
+        - { name: rate_plan_id, in: query, schema: { type: integer, format: int64 }, description: A reservation with a room on this plan. }
         - { name: company_id, in: query, schema: { type: integer, format: int64 } }
         - { name: booking_group_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] } }
@@ -9178,12 +9187,43 @@ components:
         created_at: { type: string, format: date-time }
     ReservationSummary:
       type: object
-      required: [id, confirmation_number, guest_id, source, status, arrival_date, departure_date, room_count, version, created_at]
+      required: [id, confirmation_number, guest_id, source, status, display_status, arrival_date, departure_date, nights, room_count, rooms, deposit, version, created_at]
       properties:
         id: { type: integer, format: int64 }
         confirmation_number: { type: string }
         guest_id: { type: [integer, "null"], format: int64 }
         guest_name: { type: string }
+        display_status: { type: string, enum: [DRAFT, CONFIRMED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED], description: The status staff see, derived from the header and the rooms. }
+        nights: { type: integer }
+        rooms:
+          type: array
+          description: The rooms that are not cancelled (all of them for a reservation that is cancelled whole).
+          items:
+            type: object
+            required: [id, status, room_type_code, rate_plan_code, nights, adult_count, child_count, rate_amount, arrival_date, stay_id]
+            properties:
+              id: { type: integer, format: int64 }
+              status: { type: string }
+              room_type_code: { type: string }
+              room_number: { type: string }
+              rate_plan_code: { type: string }
+              nights: { type: integer }
+              adult_count: { type: integer }
+              child_count: { type: integer }
+              rate_amount: { type: string, description: The booked price of the arrival night (empty when the night has no snapshot). }
+              price_mode: { type: string }
+              billing_company: { type: string, description: The company of the first billing instruction of the room (absent when the guest pays). }
+              arrival_date: { $ref: "#/components/schemas/Date" }
+              stay_id: { type: [integer, "null"], format: int64, description: The stay of a room that has checked in. }
+        deposit:
+          description: What the reservation holds before check-in; null when it has no deposit folio.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [folio_id, paid]
+              properties:
+                folio_id: { type: integer, format: int64 }
+                paid: { type: string }
         company_id: { type: [integer, "null"], format: int64 }
         company_name: { type: string }
         booking_group_id: { type: [integer, "null"], format: int64 }

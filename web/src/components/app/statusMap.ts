@@ -24,6 +24,7 @@ const MAP: Record<StatusDomain, Record<string, Variant>> = {
   reservation: {
     DRAFT: 'outline',
     CONFIRMED: 'secondary',
+    RESERVED: 'secondary',
     IN_HOUSE: 'default',
     CHECKED_IN: 'default',
     CHECKED_OUT: 'outline',

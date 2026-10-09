@@ -854,6 +854,47 @@ func (q *Queries) ListBedTypeBriefs(ctx context.Context, arg ListBedTypeBriefsPa
 	return items, nil
 }
 
+const listDepositsPaid = `-- name: ListDepositsPaid :many
+SELECT f.reservation_id, f.id AS folio_id, COALESCE(sum(i.credit - i.debit), 0)::numeric AS paid
+FROM folios f
+LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.reservation_id = ANY($3::bigint[]) AND f.stay_id IS NULL AND f.status = 'OPEN'
+GROUP BY f.reservation_id, f.id
+`
+
+type ListDepositsPaidParams struct {
+	TenantID       int64
+	PropertyID     int64
+	ReservationIds []int64
+}
+
+type ListDepositsPaidRow struct {
+	ReservationID int64
+	FolioID       int64
+	Paid          decimal.Decimal
+}
+
+// What the reservations hold before check-in: the open folio that has no stay yet (the deposit folio) and the credit on it, from the ledger like every balance.
+func (q *Queries) ListDepositsPaid(ctx context.Context, arg ListDepositsPaidParams) ([]ListDepositsPaidRow, error) {
+	rows, err := q.db.Query(ctx, listDepositsPaid, arg.TenantID, arg.PropertyID, arg.ReservationIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDepositsPaidRow{}
+	for rows.Next() {
+		var i ListDepositsPaidRow
+		if err := rows.Scan(&i.ReservationID, &i.FolioID, &i.Paid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFreeNightQuotas = `-- name: ListFreeNightQuotas :many
 SELECT occupancy_kind, monthly_nights FROM free_night_quotas
 WHERE tenant_id = $1 AND property_id = $2 ORDER BY occupancy_kind
@@ -1368,6 +1409,83 @@ func (q *Queries) ListStaysOfLines(ctx context.Context, arg ListStaysOfLinesPara
 	return items, nil
 }
 
+const listSummaryLines = `-- name: ListSummaryLines :many
+SELECT l.id, l.reservation_id, l.status, t.code AS room_type_code, r.room_number, rp.code AS rate_plan_code, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
+       night.amount AS night_amount, night.price_mode AS night_price_mode, COALESCE(co.name, '')::text AS billing_company, st.id AS stay_id
+FROM reservation_rooms l
+JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
+LEFT JOIN stays st ON st.property_id = l.property_id AND st.reservation_room_id = l.id
+LEFT JOIN reservation_room_rates night ON night.property_id = l.property_id AND night.reservation_room_id = l.id AND night.stay_date = l.arrival_date
+LEFT JOIN LATERAL (
+    SELECT c.name FROM folio_billing_instructions i JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+    WHERE i.property_id = l.property_id AND i.reservation_room_id = l.id
+    ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id LIMIT 1
+) co ON true
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.reservation_id = ANY($3::bigint[])
+ORDER BY l.reservation_id, l.id
+`
+
+type ListSummaryLinesParams struct {
+	TenantID       int64
+	PropertyID     int64
+	ReservationIds []int64
+}
+
+type ListSummaryLinesRow struct {
+	ID             int64
+	ReservationID  int64
+	Status         string
+	RoomTypeCode   string
+	RoomNumber     *string
+	RatePlanCode   string
+	ArrivalDate    civil.Date
+	DepartureDate  civil.Date
+	AdultCount     int16
+	ChildCount     int16
+	NightAmount    *decimal.Decimal
+	NightPriceMode *string
+	BillingCompany string
+	StayID         *int64
+}
+
+// The rooms of many reservations for the list: type, assigned room, plan, the booked price of the arrival night (the snapshot) and the company of the first billing instruction.
+func (q *Queries) ListSummaryLines(ctx context.Context, arg ListSummaryLinesParams) ([]ListSummaryLinesRow, error) {
+	rows, err := q.db.Query(ctx, listSummaryLines, arg.TenantID, arg.PropertyID, arg.ReservationIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSummaryLinesRow{}
+	for rows.Next() {
+		var i ListSummaryLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReservationID,
+			&i.Status,
+			&i.RoomTypeCode,
+			&i.RoomNumber,
+			&i.RatePlanCode,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.AdultCount,
+			&i.ChildCount,
+			&i.NightAmount,
+			&i.NightPriceMode,
+			&i.BillingCompany,
+			&i.StayID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTapeBlocks = `-- name: ListTapeBlocks :many
 SELECT id, room_id, block_type, start_date, end_date FROM room_blocks
 WHERE tenant_id = $1 AND property_id = $2 AND status = 'ACTIVE'
@@ -1607,13 +1725,20 @@ func (q *Queries) ListTapeSegments(ctx context.Context, arg ListTapeSegmentsPara
 
 const searchReservations = `-- name: SearchReservations :many
 SELECT r.id, r.tenant_id, r.property_id, r.confirmation_number, r.guest_id, r.reservation_date, r.source, r.market, r.status, r.special_request, r.remarks, r.confirmed_at, r.confirmed_by, r.cancelled_at, r.cancelled_by, r.cancellation_reason, r.version, r.created_at, r.created_by, r.updated_at, r.updated_by, r.idempotency_key, r.idempotency_hash, r.company_id, r.booking_group_id,
-       agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
+       agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count, agg.display_status::text AS display_status,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code
 FROM reservations r
 CROSS JOIN LATERAL (
     SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
            COALESCE(max(l.departure_date) FILTER (WHERE l.status <> 'CANCELLED'), max(l.departure_date)) AS departure_date,
-           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count
+           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count,
+           CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
+                WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
+                WHEN count(*) FILTER (WHERE l.status = 'CHECKED_IN') > 0 THEN 'IN_HOUSE'
+                WHEN count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) > 0 THEN 'CONFIRMED'
+                WHEN count(*) FILTER (WHERE l.status = 'COMPLETED') > 0 THEN 'CHECKED_OUT'
+                WHEN count(*) FILTER (WHERE l.status = 'NO_SHOW') > 0 THEN 'NO_SHOW'
+                ELSE 'CANCELLED' END AS display_status
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
 LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
@@ -1624,12 +1749,20 @@ WHERE r.tenant_id = $1 AND r.property_id = $2
   AND ($4::bigint IS NULL OR r.booking_group_id = $4::bigint)
   AND ($5::bigint = 0 OR r.id < $5::bigint)
   AND ($6::text IS NULL OR r.status = $6::text)
-  AND ($7::date IS NULL OR agg.arrival_date >= $7::date)
-  AND ($8::date IS NULL OR agg.arrival_date <= $8::date)
-  AND ($9::text IS NULL OR r.confirmation_number ILIKE '%' || $9::text || '%'
-       OR g.last_name ILIKE '%' || $9::text || '%' OR g.first_name ILIKE '%' || $9::text || '%')
+  AND ($7::text IS NULL OR agg.display_status = $7::text)
+  AND ($8::date IS NULL OR agg.arrival_date >= $8::date)
+  AND ($9::date IS NULL OR agg.arrival_date <= $9::date)
+  AND ($10::date IS NULL OR agg.departure_date >= $10::date)
+  AND ($11::date IS NULL OR agg.departure_date <= $11::date)
+  AND ($12::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.room_type_id = $12::bigint))
+  AND ($13::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.rate_plan_id = $13::bigint))
+  AND ($14::text IS NULL OR r.confirmation_number ILIKE '%' || $14::text || '%'
+       OR g.last_name ILIKE '%' || $14::text || '%' OR g.first_name ILIKE '%' || $14::text || '%'
+       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $14::text || '%'
+       OR EXISTS (SELECT 1 FROM reservation_rooms x JOIN rooms rm ON rm.property_id = x.property_id AND rm.id = x.room_id
+                  WHERE x.reservation_id = r.id AND rm.room_number ILIKE '%' || $14::text || '%'))
 ORDER BY r.id DESC
-LIMIT $10
+LIMIT $15
 `
 
 type SearchReservationsParams struct {
@@ -1639,8 +1772,13 @@ type SearchReservationsParams struct {
 	BookingGroupID *int64
 	BeforeID       int64
 	Status         *string
+	DisplayStatus  *string
 	ArrivalFrom    *civil.Date
 	ArrivalTo      *civil.Date
+	DepartureFrom  *civil.Date
+	DepartureTo    *civil.Date
+	RoomTypeID     *int64
+	RatePlanID     *int64
 	Q              *string
 	RowLimit       int32
 }
@@ -1674,6 +1812,7 @@ type SearchReservationsRow struct {
 	ArrivalDate        civil.Date
 	DepartureDate      civil.Date
 	RoomCount          int32
+	DisplayStatus      string
 	GuestFirstName     *string
 	GuestLastName      *string
 	CompanyName        *string
@@ -1681,7 +1820,7 @@ type SearchReservationsRow struct {
 }
 
 // Search: the header with dates and lines derived from the active (non-cancelled) lines, falling back to
-// all lines for a fully cancelled reservation.
+// all lines for a fully cancelled reservation. display_status is DisplayStatus (model.go) in SQL: a test holds the two together.
 func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservationsParams) ([]SearchReservationsRow, error) {
 	rows, err := q.db.Query(ctx, searchReservations,
 		arg.TenantID,
@@ -1690,8 +1829,13 @@ func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservations
 		arg.BookingGroupID,
 		arg.BeforeID,
 		arg.Status,
+		arg.DisplayStatus,
 		arg.ArrivalFrom,
 		arg.ArrivalTo,
+		arg.DepartureFrom,
+		arg.DepartureTo,
+		arg.RoomTypeID,
+		arg.RatePlanID,
 		arg.Q,
 		arg.RowLimit,
 	)
@@ -1731,6 +1875,7 @@ func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservations
 			&i.ArrivalDate,
 			&i.DepartureDate,
 			&i.RoomCount,
+			&i.DisplayStatus,
 			&i.GuestFirstName,
 			&i.GuestLastName,
 			&i.CompanyName,

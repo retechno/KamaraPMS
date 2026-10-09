@@ -68,7 +68,7 @@ describe('ReservationDetailView', () => {
   it('shows the header, the nightly rates with overrides, and the estimate', async () => {
     const w = mountView()
     await flushPromises()
-    expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=status]').text()).toBe('Reserved')
     expect(w.get('[data-testid=booker]').text()).toBe('Siti Nurhaliza')
     const nights = w.get('[data-testid=nights-4]').text()
     expect(nights).toContain('900,000')
@@ -99,7 +99,7 @@ describe('ReservationDetailView', () => {
     await w.get('[data-testid=confirm]').trigger('click')
     await flushPromises()
     expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: { path: { propertyId: 7, id: 1 } }, body: { version: 1 } })
-    expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=status]').text()).toBe('Reserved')
     expect(w.find('[data-testid=confirm]').exists()).toBe(false)
   })
 
@@ -117,7 +117,7 @@ describe('ReservationDetailView', () => {
     await flushPromises()
     expect(POST.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/reservations/{id}/confirm', { params: { path: { propertyId: 7, id: 1 } }, body: { version: 1, restriction_override: { reason: 'the owner asked' } } }])
     expect(w.find('[data-testid=restriction-refusal]').exists()).toBe(false)
-    expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=status]').text()).toBe('Reserved')
   })
 
   it('cancels only with a reason and reports what is left on the folios', async () => {
@@ -208,7 +208,7 @@ describe('ReservationDetailView', () => {
     expect(w.find('[data-testid=assign-4]').exists()).toBe(false)
     expect(w.find('form[data-testid=header-form]').exists()).toBe(false)
     expect(w.find('form[data-testid=deposit-form]').exists()).toBe(false)
-    expect(w.get('[data-testid=status]').text()).toBe('Confirmed')
+    expect(w.get('[data-testid=status]').text()).toBe('Reserved')
   })
 
   it('puts the main actions in the page header, by status and permission', async () => {
@@ -241,7 +241,7 @@ describe('ReservationDetailView', () => {
     setLocale('id')
     const w = mountView()
     await flushPromises()
-    expect(w.get('[data-testid=status]').text()).toBe('Terkonfirmasi')
+    expect(w.get('[data-testid=status]').text()).toBe('Dipesan')
     expect(w.get('[data-testid=room-4]').text()).toContain('belum ada kamar')
     expect(w.get('[data-testid=summary]').text()).toContain('Perkiraan total (kamar aktif)')
     expect(w.get('header [data-testid=cancel]').text()).toBe('Batalkan reservasi')

@@ -107,16 +107,23 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_room
 ORDER BY reservation_room_id, stay_date;
 
 -- Search: the header with dates and lines derived from the active (non-cancelled) lines, falling back to
--- all lines for a fully cancelled reservation.
+-- all lines for a fully cancelled reservation. display_status is DisplayStatus (model.go) in SQL: a test holds the two together.
 -- name: SearchReservations :many
 SELECT r.*,
-       agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
+       agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count, agg.display_status::text AS display_status,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code
 FROM reservations r
 CROSS JOIN LATERAL (
     SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
            COALESCE(max(l.departure_date) FILTER (WHERE l.status <> 'CANCELLED'), max(l.departure_date)) AS departure_date,
-           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count
+           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count,
+           CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
+                WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
+                WHEN count(*) FILTER (WHERE l.status = 'CHECKED_IN') > 0 THEN 'IN_HOUSE'
+                WHEN count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) > 0 THEN 'CONFIRMED'
+                WHEN count(*) FILTER (WHERE l.status = 'COMPLETED') > 0 THEN 'CHECKED_OUT'
+                WHEN count(*) FILTER (WHERE l.status = 'NO_SHOW') > 0 THEN 'NO_SHOW'
+                ELSE 'CANCELLED' END AS display_status
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
 LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
@@ -127,12 +134,46 @@ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id
   AND (sqlc.narg(booking_group_id)::bigint IS NULL OR r.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (@before_id::bigint = 0 OR r.id < @before_id::bigint)
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(display_status)::text IS NULL OR agg.display_status = sqlc.narg(display_status)::text)
   AND (sqlc.narg(arrival_from)::date IS NULL OR agg.arrival_date >= sqlc.narg(arrival_from)::date)
   AND (sqlc.narg(arrival_to)::date IS NULL OR agg.arrival_date <= sqlc.narg(arrival_to)::date)
+  AND (sqlc.narg(departure_from)::date IS NULL OR agg.departure_date >= sqlc.narg(departure_from)::date)
+  AND (sqlc.narg(departure_to)::date IS NULL OR agg.departure_date <= sqlc.narg(departure_to)::date)
+  AND (sqlc.narg(room_type_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.room_type_id = sqlc.narg(room_type_id)::bigint))
+  AND (sqlc.narg(rate_plan_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.rate_plan_id = sqlc.narg(rate_plan_id)::bigint))
   AND (sqlc.narg(q)::text IS NULL OR r.confirmation_number ILIKE '%' || sqlc.narg(q)::text || '%'
-       OR g.last_name ILIKE '%' || sqlc.narg(q)::text || '%' OR g.first_name ILIKE '%' || sqlc.narg(q)::text || '%')
+       OR g.last_name ILIKE '%' || sqlc.narg(q)::text || '%' OR g.first_name ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR EXISTS (SELECT 1 FROM reservation_rooms x JOIN rooms rm ON rm.property_id = x.property_id AND rm.id = x.room_id
+                  WHERE x.reservation_id = r.id AND rm.room_number ILIKE '%' || sqlc.narg(q)::text || '%'))
 ORDER BY r.id DESC
 LIMIT @row_limit;
+
+-- The rooms of many reservations for the list: type, assigned room, plan, the booked price of the arrival night (the snapshot) and the company of the first billing instruction.
+-- name: ListSummaryLines :many
+SELECT l.id, l.reservation_id, l.status, t.code AS room_type_code, r.room_number, rp.code AS rate_plan_code, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
+       night.amount AS night_amount, night.price_mode AS night_price_mode, COALESCE(co.name, '')::text AS billing_company, st.id AS stay_id
+FROM reservation_rooms l
+JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+LEFT JOIN rooms r ON r.property_id = l.property_id AND r.id = l.room_id
+LEFT JOIN stays st ON st.property_id = l.property_id AND st.reservation_room_id = l.id
+LEFT JOIN reservation_room_rates night ON night.property_id = l.property_id AND night.reservation_room_id = l.id AND night.stay_date = l.arrival_date
+LEFT JOIN LATERAL (
+    SELECT c.name FROM folio_billing_instructions i JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id
+    WHERE i.property_id = l.property_id AND i.reservation_room_id = l.id
+    ORDER BY (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id LIMIT 1
+) co ON true
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.reservation_id = ANY(@reservation_ids::bigint[])
+ORDER BY l.reservation_id, l.id;
+
+-- What the reservations hold before check-in: the open folio that has no stay yet (the deposit folio) and the credit on it, from the ledger like every balance.
+-- name: ListDepositsPaid :many
+SELECT f.reservation_id, f.id AS folio_id, COALESCE(sum(i.credit - i.debit), 0)::numeric AS paid
+FROM folios f
+LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.reservation_id = ANY(@reservation_ids::bigint[]) AND f.stay_id IS NULL AND f.status = 'OPEN'
+GROUP BY f.reservation_id, f.id;
 
 -- name: CompanyRef :one
 SELECT id, code, name, is_active FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

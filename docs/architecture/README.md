@@ -319,3 +319,4 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
   - **Rules for the migration:** keep every `data-testid`, input `name` and heading text that a test reads; change a template and its styles, not the script logic; new text goes through `t()` keys in both languages.
 
 Earlier revisions are in [archive/](archive/).
+- **Reservation statuses on the screen** (`22-reservation-ui-status.md`): how `display_status` is named (Reserved, Checked in), why there is no Void, and that a draft holds no inventory. The list answers every filter (status, dates, type, plan, company, room) from the database and carries the rooms, the booked price and the deposit of each row.

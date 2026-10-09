@@ -2,6 +2,7 @@ package reservations
 
 import (
 	"context"
+	"strings"
 
 	"github.com/shopspring/decimal"
 
@@ -216,9 +217,18 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 		return nil, err
 	}
 	rows, err := s.q(ctx).SearchReservations(ctx, reservationsdb.SearchReservationsParams{
-		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), ArrivalFrom: f.ArrivalFrom,
-		ArrivalTo: f.ArrivalTo, Q: nullable(f.Query), CompanyID: f.CompanyID, BookingGroupID: f.GroupID, RowLimit: rowLimit(limit),
+		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), DisplayStatus: nullable(f.DisplayStatus), ArrivalFrom: f.ArrivalFrom,
+		ArrivalTo: f.ArrivalTo, DepartureFrom: f.DepartureFrom, DepartureTo: f.DepartureTo, Q: likeText(f.Query), CompanyID: f.CompanyID, BookingGroupID: f.GroupID,
+		RoomTypeID: f.RoomTypeID, RatePlanID: f.RatePlanID, RowLimit: rowLimit(limit),
 	})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	lines, deposits, err := s.summaryExtras(ctx, p.TenantID, propertyID, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -232,9 +242,67 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 			ID: r.ID, ConfirmationNumber: r.ConfirmationNumber, GuestID: r.GuestID, GuestName: name, Source: r.Source, Status: r.Status,
 			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, RoomCount: int(r.RoomCount), Version: r.Version, CreatedAt: r.CreatedAt,
 			CompanyID: r.CompanyID, CompanyName: deref(r.CompanyName), BookingGroupID: r.BookingGroupID, GroupCode: deref(r.GroupCode),
+			DisplayStatus: r.DisplayStatus, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate), Rooms: lines[r.ID], Deposit: deposits[r.ID],
+		}
+		if out[i].Rooms == nil {
+			out[i].Rooms = []SummaryLine{}
 		}
 	}
 	return out, nil
+}
+
+// likeText escapes a search text for ILIKE (it is a text to find, not a pattern); nil when there is none.
+func likeText(q string) *string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil
+	}
+	q = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(q)
+	return &q
+}
+
+// summaryExtras reads what the list shows beside the header: the rooms (the cancelled ones only for a reservation that is cancelled whole) and the deposit.
+func (s *Service) summaryExtras(ctx context.Context, tenantID, propertyID int64, ids []int64) (map[int64][]SummaryLine, map[int64]*SummaryDeposit, error) {
+	lines, deposits := map[int64][]SummaryLine{}, map[int64]*SummaryDeposit{}
+	if len(ids) == 0 {
+		return lines, deposits, nil
+	}
+	q := s.q(ctx)
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := q.ListSummaryLines(ctx, reservationsdb.ListSummaryLinesParams{TenantID: tenantID, PropertyID: propertyID, ReservationIds: ids})
+	if err != nil {
+		return nil, nil, err
+	}
+	active := map[int64]bool{}
+	for _, r := range rows {
+		if r.Status != LineCancelled {
+			active[r.ReservationID] = true
+		}
+	}
+	for _, r := range rows {
+		if r.Status == LineCancelled && active[r.ReservationID] {
+			continue
+		}
+		l := SummaryLine{
+			ID: r.ID, Status: r.Status, RoomTypeCode: r.RoomTypeCode, RoomNumber: deref(r.RoomNumber), RatePlanCode: r.RatePlanCode, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate),
+			AdultCount: int(r.AdultCount), ChildCount: int(r.ChildCount), BillingCompany: r.BillingCompany, ArrivalDate: r.ArrivalDate, StayID: r.StayID,
+		}
+		if r.NightAmount != nil {
+			l.RateAmount, l.PriceMode = r.NightAmount.StringFixed(decimals), deref(r.NightPriceMode)
+		}
+		lines[r.ReservationID] = append(lines[r.ReservationID], l)
+	}
+	paid, err := q.ListDepositsPaid(ctx, reservationsdb.ListDepositsPaidParams{TenantID: tenantID, PropertyID: propertyID, ReservationIds: ids})
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, d := range paid {
+		deposits[d.ReservationID] = &SummaryDeposit{FolioID: d.FolioID, Paid: decimal.Max(d.Paid, decimal.Zero).StringFixed(decimals)}
+	}
+	return lines, deposits, nil
 }
 
 // folioTotals is the balance still on the reservation's folios and whether a cancelled reservation still

@@ -5,9 +5,12 @@ import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, BedType, CancelResult, FreeRoom, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import type { Approval, AuditLog, BedType, CancelResult, FreeRoom, GuestView, Reservation, ReservationRoom, RoomType } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import BillingInstructions from '@/components/BillingInstructions.vue'
+import EditRateDialog from '@/components/EditRateDialog.vue'
+import GuestEditDialog from '@/components/GuestEditDialog.vue'
+import ReservationEditDialog from '@/components/ReservationEditDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -20,11 +23,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { useReservationLookups } from '@/composables/useReservationLookups'
 import { t } from '@/i18n'
 import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
+import { type ReservationAction, reservationActions } from '@/utils/reservationActions'
+import { uiStatus } from '@/utils/reservationStatus'
 import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
 
 const props = defineProps<{ id: string }>()
@@ -50,6 +56,17 @@ const assigning = ref<{ lineId: number; typeId: number; rooms: FreeRoom[]; roomI
 const header = reactive({ source: 'PHONE', remarks: '' })
 const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
 let depositKey = newIdempotencyKey() // kept while a request may have been lost, renewed once the server has answered
+
+const { ratePlans, companies } = useReservationLookups()
+// The editors this page opens: the guest and the reservation (dialogs), and the rate of a stay that is in house.
+const guestOpen = ref(false)
+const editOpen = ref(false)
+const rateOpen = ref(false)
+const rateLineId = ref<number | null>(null)
+// The guest's contact data and the history of the reservation are read apart: a person who may not read them sees why, not an empty list.
+const guestView = ref<GuestView | null>(null)
+const history = ref<AuditLog[]>([])
+const historyState = ref<'idle' | 'loading' | 'failed'>('idle')
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -81,11 +98,38 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}', { params: { path: { propertyId, id: Number(props.id) } } })
-    if (data) adopt(data)
+    if (data) {
+      adopt(data)
+      void loadSide(data)
+    }
     types.value = await fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/room-types', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))
     if (can('reservation.update')) beds.value = (await api.GET('/api/v1/properties/{propertyId}/bed-types', { params: { path: { propertyId }, query: { active: true } } })).data?.data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+/** The guest's contact data and the audit entries of the reservation, each only for a person who may read them. */
+async function loadSide(r: Reservation): Promise<void> {
+  const propertyId = pid.value
+  guestView.value = null
+  if (r.guest && can('guest.read')) {
+    try {
+      guestView.value = (await api.GET('/api/v1/guests/{id}', { params: { path: { id: r.guest.id } } })).data ?? null
+    } catch {
+      guestView.value = null // the contact data is optional
+    }
+  }
+  history.value = []
+  historyState.value = 'idle'
+  if (propertyId !== null && can('audit.read')) {
+    historyState.value = 'loading'
+    try {
+      history.value = (await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: { entity_type: 'reservation', entity_id: r.id, limit: 50 } } })).data?.data ?? []
+      historyState.value = 'idle'
+    } catch {
+      historyState.value = 'failed'
+    }
   }
 }
 
@@ -110,7 +154,10 @@ async function run(action: () => Promise<{ data?: Reservation | CancelResult }>,
     const failure = e instanceof ApiError ? e : null
     error.value = failure
     const refusal = refusalOf(failure)
-    if (refusal && again) restriction.value = { refusal, again }
+    if (refusal && again) {
+      restriction.value = { refusal, again }
+      editOpen.value = false
+    }
     if (failure?.code === 'VERSION_CONFLICT') {
       await load() // show the current state, and keep the message that explains why the action did not happen
       error.value = failure
@@ -287,6 +334,37 @@ async function takeDeposit(): Promise<void> {
   }
 }
 
+const stayLine = computed(() => res.value?.rooms.find((l) => l.status === 'CHECKED_IN' && l.stay_id != null))
+const activeRooms = computed(() => (res.value?.rooms ?? []).filter((l) => l.status !== 'CANCELLED'))
+const actions = computed<ReservationAction[]>(() => {
+  const r = res.value
+  if (!r) return []
+  return reservationActions(
+    {
+      displayStatus: r.display_status, rooms: r.rooms.map((l) => ({ status: l.status, arrivalDate: l.arrival_date })), hasStay: r.rooms.some((l) => l.stay_id != null),
+      hasFolio: r.folios.length > 0, hasGuest: !!r.guest,
+    },
+    { can, businessDate: businessDate.value },
+  )
+})
+const has = (a: ReservationAction) => actions.value.includes(a)
+const firstFolio = computed(() => res.value?.folios.find((f) => f.folio_type === 'GUEST') ?? res.value?.folios[0])
+const rateTarget = computed(() => {
+  const l = res.value?.rooms.find((x) => x.id === rateLineId.value)
+  if (!l || l.stay_id == null || !res.value) return null
+  return { id: l.stay_id, guest: { name: res.value.guest ? guestLabel(res.value.guest) : '—' }, room: { number: l.room_number ?? '', room_type_code: l.room_type_code }, rate: { rate_plan_code: l.rate_plan_code } }
+})
+function askRateEdit(line: ReservationRoom): void {
+  rateLineId.value = line.id
+  rateOpen.value = true
+}
+const guestSaved = (): Promise<void> => load()
+const saveLineFields = (lineId: number, body: Record<string, unknown>) =>
+  run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}', { params: lineParams(lineId), body: { version: version(), ...body } as never }))
+const saveHeaderFields = (body: Record<string, unknown>) =>
+  run(() => api.PATCH('/api/v1/properties/{propertyId}/reservations/{id}', { params: base(), body: { version: version(), ...body } as never }))
+/** Money and ledger totals come from the folios as the server states them; a reservation without a folio says so. */
+const hasFolios = computed(() => (res.value?.folios.length ?? 0) > 0)
 const typeCode = (id: number) => types.value.find((t) => t.id === id)?.code ?? String(id)
 const activeTypes = computed(() => types.value.filter((t) => t.is_active))
 const canNoShow = (l: ReservationRoom) => can('nightaudit.no_show') && l.status === 'CONFIRMED' && l.arrival_date <= businessDate.value
@@ -297,15 +375,23 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 <template>
   <PageHeader :title="`${t('reservation.title')}${res ? ` ${res.confirmation_number}` : ''}`">
     <template v-if="res" #marks>
-      <StatusBadge domain="reservation" :status="res.display_status" data-testid="status" />
+      <StatusBadge domain="reservation" :status="String(uiStatus(res.display_status))" data-testid="status" />
     </template>
     <template #actions>
       <template v-if="res">
-        <Button v-if="status === 'DRAFT' && can('reservation.create')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm()">{{ t('reservation.confirm') }}</Button>
+        <Button v-if="has('edit')" variant="outline" size="sm" :disabled="busy" data-testid="edit-reservation" @click="editOpen = true">{{ t('reservation.editReservation') }}</Button>
+        <Button v-if="has('editGuest')" variant="outline" size="sm" data-testid="edit-guest" @click="guestOpen = true">{{ t('reservation.editGuest') }}</Button>
+        <Button v-if="has('editRate') && stayLine" variant="outline" size="sm" data-testid="edit-rate" @click="askRateEdit(stayLine)">{{ t('reservation.editRate') }}</Button>
+        <Button v-if="has('confirm')" size="sm" :disabled="busy" data-testid="confirm" @click="confirm()">{{ t('reservation.confirm') }}</Button>
+        <Button v-if="has('checkIn')" as-child size="sm" data-testid="check-in"><RouterLink :to="`/arrivals?q=${encodeURIComponent(res.confirmation_number)}`">{{ t('reservation.checkIn') }}</RouterLink></Button>
+        <Button v-if="has('viewStay') && stayLine" as-child variant="outline" size="sm" data-testid="view-stay"><RouterLink :to="`/stays/${stayLine.stay_id}`">{{ t('reservation.viewStay') }}</RouterLink></Button>
+        <Button v-if="has('checkOut') && stayLine" as-child size="sm" data-testid="check-out"><RouterLink :to="`/stays/${stayLine.stay_id}?action=checkout`">{{ t('reservation.checkOut') }}</RouterLink></Button>
+        <Button v-if="has('folio') && firstFolio" as-child variant="outline" size="sm" data-testid="open-folio"><RouterLink :to="`/folios/${firstFolio.id}`">{{ t('reservation.openFolio') }}</RouterLink></Button>
+        <Button v-if="has('payment') && firstFolio" as-child variant="outline" size="sm" data-testid="open-payment"><RouterLink :to="`/folios/${firstFolio.id}?tab=payment`">{{ t('reservation.payment') }}</RouterLink></Button>
         <Button v-if="status === 'CANCELLED' && can('reservation.reinstate')" size="sm" :disabled="busy" data-testid="reinstate" @click="reinstate()">{{ t('reservation.reinstate') }}</Button>
         <Button v-if="status === 'CANCELLED' && can('folio.post_charge')" variant="outline" size="sm" :disabled="busy" data-testid="post-cancel-fee" @click="askFee('CANCEL_FEE')">{{ t('reservation.postCancelFee') }}</Button>
         <Button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" variant="outline" size="sm" data-testid="print-confirmation" @click="printConfirmation"><Printer />{{ t('reservation.confirmationPdf') }}</Button>
-        <Button v-if="status !== 'CANCELLED' && can('reservation.cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
+        <Button v-if="has('cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
       </template>
       <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('reservation.list') }}</RouterLink></Button>
     </template>
@@ -318,6 +404,31 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
   <div v-else-if="res" class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <div class="min-w-0">
+      <Card class="mb-4" data-testid="header-card">
+        <CardContent class="grid gap-x-6 gap-y-2 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div><div class="text-xs uppercase text-muted-foreground">{{ t('reservation.guest') }}</div><div class="font-medium" data-testid="header-guest">{{ res.guest ? guestLabel(res.guest) : '—' }}</div></div>
+          <div><div class="text-xs uppercase text-muted-foreground">{{ t('reservations.confirmation') }}</div><div class="font-medium">{{ res.confirmation_number }}</div></div>
+          <div><div class="text-xs uppercase text-muted-foreground">{{ t('reservation.stayDates') }}</div><div>{{ $date(res.arrival_date) }} &rarr; {{ $date(res.departure_date) }}</div></div>
+          <div>
+            <div class="text-xs uppercase text-muted-foreground">{{ t('reservations.roomCol') }}</div>
+            <div data-testid="header-rooms">{{ activeRooms.length ? activeRooms.map((l) => `${l.room_number || t('reservation.noRoom')} · ${l.room_type_code}`).join(', ') : '—' }}</div>
+          </div>
+          <p v-if="res.display_status === 'DRAFT'" class="m-0 text-xs text-muted-foreground sm:col-span-2 lg:col-span-4" data-testid="draft-note">{{ t('reservation.draftNote') }}</p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="res.guest" class="mb-4" data-testid="guest-card">
+        <CardHeader class="flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle>{{ t('reservation.guest') }}</CardTitle>
+          <Button v-if="can('guest.write')" variant="outline" size="sm" data-testid="edit-guest-card" @click="guestOpen = true">{{ t('reservation.editGuest') }}</Button>
+        </CardHeader>
+        <CardContent class="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+          <div><RouterLink :to="`/guests/${res.guest.id}`" data-testid="guest-link">{{ guestLabel(res.guest) }}</RouterLink> <span class="text-muted-foreground">{{ res.guest.code }}</span></div>
+          <div data-testid="guest-email">{{ can('guest.read') ? (guestView?.email || '—') : t('reservation.contactHidden') }}</div>
+          <div data-testid="guest-phone">{{ can('guest.read') ? (guestView?.phone || '—') : '' }}</div>
+        </CardContent>
+      </Card>
+
       <RestrictionOverride v-if="restriction" :violations="restriction.refusal.violations" :overridable="restriction.refusal.overridable" :busy="busy" :error="error"
         @override="(o) => restriction?.again(o)" @cancel="restriction = null" />
 
@@ -391,6 +502,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <div class="mt-3 flex flex-wrap gap-2">
             <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && !line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`assign-${line.id}`" @click="startAssign(line)">{{ t('reservation.assignRoom') }}</Button>
             <Button v-if="line.status === 'CONFIRMED' && can('reservation.update') && line.room_number" variant="outline" size="sm" :disabled="busy" :data-testid="`unassign-${line.id}`" @click="unassign(line.id)">{{ t('reservation.unassignRoom') }}</Button>
+            <Button v-if="line.status === 'CHECKED_IN' && line.stay_id != null && can('frontdesk.rate_change')" variant="outline" size="sm" :disabled="busy" :data-testid="`edit-rate-${line.id}`" @click="askRateEdit(line)">{{ t('reservation.editRate') }}</Button>
             <Button v-if="canNoShow(line)" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-${line.id}`" @click="ask('no-show', line.id)">{{ t('reservation.noShow') }}</Button>
             <Button v-if="line.status === 'NO_SHOW' && can('folio.post_charge')" variant="outline" size="sm" :disabled="busy" :data-testid="`no-show-fee-${line.id}`" @click="askFee('NO_SHOW_FEE', line.id)">{{ t('reservation.postNoShowFee') }}</Button>
             <Button v-if="(line.status === 'DRAFT' || line.status === 'CONFIRMED') && can('reservation.cancel') && status !== 'CANCELLED'" variant="outline" size="sm" class="text-destructive" :disabled="busy" :data-testid="`cancel-room-${line.id}`" @click="ask('cancel-room', line.id)">{{ t('reservation.cancelRoom') }}</Button>
@@ -482,12 +594,30 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         </CardContent>
       </Card>
 
+      <Card data-testid="history">
+        <CardHeader><CardTitle>{{ t('reservation.history') }}</CardTitle></CardHeader>
+        <CardContent class="text-sm">
+          <p v-if="res.special_request" class="m-0 mb-2" data-testid="special-request"><span class="text-muted-foreground">{{ t('reservation.specialRequest') }}:</span> {{ res.special_request }}</p>
+          <p v-if="!can('audit.read')" class="m-0 text-muted-foreground" data-testid="history-denied">{{ t('reservation.historyDenied') }}</p>
+          <p v-else-if="historyState === 'loading'" class="m-0 text-muted-foreground">{{ t('reservation.historyLoading') }}</p>
+          <p v-else-if="historyState === 'failed'" class="m-0 text-destructive" data-testid="history-failed">{{ t('reservation.historyFailed') }}</p>
+          <p v-else-if="!history.length" class="m-0 text-muted-foreground" data-testid="history-empty">{{ t('reservation.historyEmpty') }}</p>
+          <ul v-else class="m-0 list-none p-0" data-testid="history-list">
+            <li v-for="h in history" :key="h.id" class="flex flex-wrap justify-between gap-2 border-t border-border py-1 first:border-t-0">
+              <span>{{ h.action }}</span>
+              <span class="text-xs text-muted-foreground">{{ $dateTime(h.created_at) }} · {{ h.user?.name ?? '—' }}</span>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+
       <ReservationEmails v-if="status !== 'DRAFT'" :reservation-id="res.id" :confirmed="status === 'CONFIRMED'" />
 
-      <Card v-if="res.folios.length" data-testid="folios">
-        <CardHeader><CardTitle>{{ t('reservation.folios') }}</CardTitle></CardHeader>
+      <Card data-testid="folios">
+        <CardHeader><CardTitle>{{ t('reservation.paymentFolio') }}</CardTitle></CardHeader>
         <CardContent>
-          <ul class="m-0 list-none p-0 text-sm">
+          <p v-if="!hasFolios" class="m-0 text-sm text-muted-foreground" data-testid="no-folio">{{ t('reservation.noFolio') }}</p>
+          <ul v-else class="m-0 list-none p-0 text-sm">
             <li v-for="f in res.folios" :key="f.id" class="flex items-center gap-2 py-1">
               <RouterLink :to="`/folios/${f.id}`" :data-testid="`folio-link-${f.id}`">{{ f.folio_number }}</RouterLink>
               <span v-if="f.bill_to_company_name" class="text-muted-foreground" :data-testid="`folio-company-${f.id}`">· {{ t('billingInstructions.folioFor', { company: f.bill_to_company_name }) }}</span>
@@ -539,6 +669,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </Card>
     </aside>
   </div>
+  <GuestEditDialog v-if="res?.guest" v-model:open="guestOpen" :guest-id="res.guest.id" @saved="guestSaved" />
+  <ReservationEditDialog v-if="res" v-model:open="editOpen" :reservation="res" :types="types" :rate-plans="ratePlans" :companies="companies" :busy="busy" :error="error"
+    @save-line="saveLineFields" @save-header="saveHeaderFields" />
+  <EditRateDialog v-model:open="rateOpen" :row="rateTarget" @saved="load" />
   <ApprovalDialog
     v-for="line in (res?.rooms ?? []).filter((l) => l.id === approvingRate)"
     :key="line.id"

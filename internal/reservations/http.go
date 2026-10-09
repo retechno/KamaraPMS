@@ -153,9 +153,16 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	var errs []apperr.FieldError
 	f := ListFilter{ArrivalFrom: queryDate(r, "arrival_from", &errs, false), ArrivalTo: queryDate(r, "arrival_to", &errs, false),
 		Status: r.URL.Query().Get("status"), Query: strings.TrimSpace(r.URL.Query().Get("q")),
-		CompanyID: queryID(r, "company_id", &errs), GroupID: queryID(r, "booking_group_id", &errs)}
+		CompanyID: queryID(r, "company_id", &errs), GroupID: queryID(r, "booking_group_id", &errs),
+		DepartureFrom: queryDate(r, "departure_from", &errs, false), DepartureTo: queryDate(r, "departure_to", &errs, false),
+		DisplayStatus: r.URL.Query().Get("display_status"), RoomTypeID: queryID(r, "room_type_id", &errs), RatePlanID: queryID(r, "rate_plan_id", &errs)}
 	if f.Status != "" && f.Status != StatusDraft && f.Status != StatusConfirmed && f.Status != StatusCancelled {
 		errs = append(errs, fieldErr("status", "INVALID_VALUE", "DRAFT, CONFIRMED or CANCELLED"))
+	}
+	switch f.DisplayStatus {
+	case "", DisplayDraft, DisplayConfirmed, DisplayInHouse, DisplayCheckedOut, DisplayNoShow, DisplayCancelled:
+	default:
+		errs = append(errs, fieldErr("display_status", "INVALID_VALUE", "DRAFT, CONFIRMED, IN_HOUSE, CHECKED_OUT, NO_SHOW or CANCELLED"))
 	}
 	if len(errs) > 0 {
 		return apperr.Invalid("the filter is invalid", errs...)

@@ -1207,7 +1207,10 @@ export interface paths {
         };
         /**
          * Search reservations, newest first (reservation.read)
-         * @description `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number and the booker's name.
+         * @description `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number, the booker's
+         *     name and the room numbers (a text, not a pattern). `status` is the status of the header; `display_status` is the status staff see (derived from the header and the rooms, as in the
+         *     detail): CONFIRMED is "reserved", IN_HOUSE is "checked in". Every filter is applied by the database, so a page is never cut after filtering. Each row carries its rooms with the booked
+         *     price of the arrival night (the snapshot, never the rate master) and the deposit (the credit on the deposit folio, from the ledger).
          */
         get: operations["listReservations"];
         put?: never;
@@ -8189,6 +8192,41 @@ export interface components {
             /** Format: int64 */
             guest_id: number | null;
             guest_name?: string;
+            /**
+             * @description The status staff see
+             * @enum {string}
+             */
+            display_status: "DRAFT" | "CONFIRMED" | "IN_HOUSE" | "CHECKED_OUT" | "NO_SHOW" | "CANCELLED";
+            nights: number;
+            /** @description The rooms that are not cancelled (all of them for a reservation that is cancelled whole). */
+            rooms: {
+                /** Format: int64 */
+                id: number;
+                status: string;
+                room_type_code: string;
+                room_number?: string;
+                rate_plan_code: string;
+                nights: number;
+                adult_count: number;
+                child_count: number;
+                /** @description The booked price of the arrival night (empty when the night has no snapshot). */
+                rate_amount: string;
+                price_mode?: string;
+                /** @description The company of the first billing instruction of the room (absent when the guest pays). */
+                billing_company?: string;
+                arrival_date: components["schemas"]["Date"];
+                /**
+                 * Format: int64
+                 * @description The stay of a room that has checked in.
+                 */
+                stay_id: number | null;
+            }[];
+            /** @description What the reservation holds before check-in; null when it has no deposit folio. */
+            deposit: null | {
+                /** Format: int64 */
+                folio_id: number;
+                paid: string;
+            };
             /** Format: int64 */
             company_id?: number | null;
             company_name?: string;
@@ -14900,6 +14938,13 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 arrival_from?: components["schemas"]["Date"];
                 arrival_to?: components["schemas"]["Date"];
+                departure_from?: components["schemas"]["Date"];
+                departure_to?: components["schemas"]["Date"];
+                display_status?: "DRAFT" | "CONFIRMED" | "IN_HOUSE" | "CHECKED_OUT" | "NO_SHOW" | "CANCELLED";
+                /** @description A reservation with a room of this type. */
+                room_type_id?: number;
+                /** @description A reservation with a room on this plan. */
+                rate_plan_id?: number;
                 company_id?: number;
                 booking_group_id?: number;
                 status?: "DRAFT" | "CONFIRMED" | "CANCELLED";

@@ -170,12 +170,18 @@ type LinePatch struct {
 
 // ListFilter narrows the reservation list.
 type ListFilter struct {
-	ArrivalFrom *civil.Date
-	ArrivalTo   *civil.Date
-	Status      string
-	Query       string
-	CompanyID   *int64
-	GroupID     *int64
+	ArrivalFrom   *civil.Date
+	ArrivalTo     *civil.Date
+	DepartureFrom *civil.Date
+	DepartureTo   *civil.Date
+	Status        string
+	// DisplayStatus is the status staff see (DisplayStatus): DRAFT, CONFIRMED (reserved), IN_HOUSE, CHECKED_OUT, NO_SHOW or CANCELLED.
+	DisplayStatus string
+	Query         string
+	CompanyID     *int64
+	GroupID       *int64
+	RoomTypeID    *int64
+	RatePlanID    *int64
 }
 
 func (in CreateInput) validateHeader() []apperr.FieldError {
@@ -344,23 +350,56 @@ type Reservation struct {
 	CreatedAt          time.Time    `json:"created_at"`
 }
 
+// SummaryLine is a room of a reservation as the list shows it.
+type SummaryLine struct {
+	ID           int64  `json:"id"`
+	Status       string `json:"status"`
+	RoomTypeCode string `json:"room_type_code"`
+	RoomNumber   string `json:"room_number,omitempty"`
+	RatePlanCode string `json:"rate_plan_code"`
+	Nights       int    `json:"nights"`
+	AdultCount   int    `json:"adult_count"`
+	ChildCount   int    `json:"child_count"`
+	// RateAmount is the booked price of the arrival night (the snapshot of the booking, never the rate master); empty when the night has no snapshot.
+	RateAmount string `json:"rate_amount"`
+	PriceMode  string `json:"price_mode,omitempty"`
+	// BillingCompany is the company of the first billing instruction of the room (empty: the guest pays).
+	BillingCompany string     `json:"billing_company,omitempty"`
+	ArrivalDate    civil.Date `json:"arrival_date"`
+	// StayID is the stay of a room that has checked in (nil before).
+	StayID *int64 `json:"stay_id"`
+}
+
+// SummaryDeposit is what a reservation holds before check-in: the deposit folio and the credit on it.
+type SummaryDeposit struct {
+	FolioID int64  `json:"folio_id"`
+	Paid    string `json:"paid"`
+}
+
 // Summary is a row of the reservation list.
 type Summary struct {
-	ID                 int64      `json:"id"`
-	ConfirmationNumber string     `json:"confirmation_number"`
-	GuestID            *int64     `json:"guest_id"`
-	GuestName          string     `json:"guest_name,omitempty"`
-	CompanyID          *int64     `json:"company_id"`
-	CompanyName        string     `json:"company_name,omitempty"`
-	BookingGroupID     *int64     `json:"booking_group_id"`
-	GroupCode          string     `json:"group_code,omitempty"`
-	Source             string     `json:"source"`
-	Status             string     `json:"status"`
-	ArrivalDate        civil.Date `json:"arrival_date"`
-	DepartureDate      civil.Date `json:"departure_date"`
-	RoomCount          int        `json:"room_count"`
-	Version            int32      `json:"version"`
-	CreatedAt          time.Time  `json:"created_at"`
+	ID                 int64  `json:"id"`
+	ConfirmationNumber string `json:"confirmation_number"`
+	GuestID            *int64 `json:"guest_id"`
+	GuestName          string `json:"guest_name,omitempty"`
+	CompanyID          *int64 `json:"company_id"`
+	CompanyName        string `json:"company_name,omitempty"`
+	BookingGroupID     *int64 `json:"booking_group_id"`
+	GroupCode          string `json:"group_code,omitempty"`
+	Source             string `json:"source"`
+	Status             string `json:"status"`
+	// DisplayStatus is the status staff see, derived from the header and the rooms (DisplayStatus); Status is the header's own.
+	DisplayStatus string     `json:"display_status"`
+	ArrivalDate   civil.Date `json:"arrival_date"`
+	DepartureDate civil.Date `json:"departure_date"`
+	Nights        int        `json:"nights"`
+	RoomCount     int        `json:"room_count"`
+	// Rooms are the rooms that are not cancelled (all of them for a cancelled reservation).
+	Rooms []SummaryLine `json:"rooms"`
+	// Deposit is what the reservation holds before check-in (nil: no deposit folio).
+	Deposit   *SummaryDeposit `json:"deposit"`
+	Version   int32           `json:"version"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 // CancelResult is the reservation after a cancellation, with what is left on its folios.

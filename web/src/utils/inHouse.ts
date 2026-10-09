@@ -4,6 +4,14 @@ import type { InHouseRow } from '@/api/types'
 export type InHouseAction = 'view' | 'editGuest' | 'folio' | 'checkOut' | 'editStay' | 'editRate' | 'moveRoom' | 'extend' | 'payment'
 
 /** The actions shown on the row itself; the others are in its menu. */
+/** What the rate editor needs to know about the stay it edits; an in-house row is one, and so is a checked-in room of a reservation. */
+export interface RateEditTarget {
+  id: number
+  guest: { name: string }
+  room: { number: string; room_type_code: string }
+  rate: { rate_plan_code: string }
+}
+
 export const PRIMARY_ACTIONS: InHouseAction[] = ['view', 'editGuest', 'folio', 'checkOut']
 export const MORE_ACTIONS: InHouseAction[] = ['editStay', 'editRate', 'moveRoom', 'extend', 'payment']
 

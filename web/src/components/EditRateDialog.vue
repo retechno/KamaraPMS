@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, InHouseRow, StayDetail } from '@/api/types'
+import type { Approval, StayDetail } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import type { RateEditTarget } from '@/utils/inHouse'
 import { usePropertyStore } from '@/stores/property'
 
 /**
@@ -19,7 +20,7 @@ import { usePropertyStore } from '@/stores/property'
  * approval. The rate plan is never changed from here.
  */
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ row: InHouseRow | null }>()
+const props = defineProps<{ row: RateEditTarget | null }>()
 const emit = defineEmits<{ saved: [] }>()
 
 type Night = StayDetail['nightly_rates'][number]
