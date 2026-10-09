@@ -59,9 +59,15 @@ async function loadRooms(): Promise<void> {
     if (props.arrival.room_id && typeId.value === props.arrival.room_type_id && !free.some((r) => r.room_id === props.arrival.room_id)) {
       free.unshift({ room_id: props.arrival.room_id, room_number: props.arrival.room_number ?? String(props.arrival.room_id), housekeeping_status: props.arrival.housekeeping_status ?? 'DIRTY' })
     }
-    // The room already on the line first, then the rooms that have the bed the guest asked for, then the others.
+    // The room already on the line first (it was chosen on purpose). Then the rooms that are ready, because a room that is not ready cannot be checked into without an override, and the one that
+    // is proposed is the first of them; among those the rooms that have the bed the guest asked for come first. The rooms that are not ready follow, in the same order. The sort is stable, so the
+    // rooms keep the order the server gave them (by number) otherwise.
     const wanted = props.arrival.requested_bed_type_id ?? null
-    const rank = (r: { room_id: number; bed_type_id?: number | null }) => (r.room_id === props.arrival.room_id ? 0 : wanted !== null && r.bed_type_id === wanted ? 1 : 2)
+    const rank = (r: { room_id: number; housekeeping_status: string; bed_type_id?: number | null }) => {
+      if (r.room_id === props.arrival.room_id) return 0
+      const bedFirst = wanted !== null && r.bed_type_id === wanted ? 0 : 1
+      return (isReady(r.housekeeping_status) ? 1 : 3) + bedFirst
+    }
     free.sort((a, b) => rank(a) - rank(b))
     rooms.value = free
     if (!free.some((r) => r.room_id === roomId.value)) roomId.value = free[0]?.room_id ?? null

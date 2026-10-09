@@ -101,8 +101,13 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/availability/rooms', { params: { path: { propertyId: 7 }, query: { room_type_id: 10, arrival: '2026-09-30', departure: '2026-10-02' } } }])
     const options = panel('select[name=room]').findAll('option').map((o) => o.text())
-    expect(options).toEqual(['101 · DIRTY (not ready)', '102 · CLEAN'])
-    // the first room is dirty: the button is off until a ready room is chosen
+    // the ready room is proposed first: the room that is not ready cannot be checked into without an override
+    expect(options).toEqual(['102 · CLEAN', '101 · DIRTY (not ready)'])
+    expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('22')
+    expect(inSheet('[data-testid=not-ready]')).toBe(false)
+    expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeUndefined()
+    // choosing the room that is not ready says so and turns the button off until a ready room is chosen
+    await panel('select[name=room]').setValue(21)
     expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
     expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
     await panel('select[name=room]').setValue(22)
@@ -131,6 +136,7 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await sup.w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
+    await panel('select[name=room]').setValue(21) // the room that is not ready, chosen on purpose
     await panel('input[name=override]').setValue(true)
     await panel('input[name=override_reason]').setValue('guest waiting')
     await panel('form[data-testid=checkin-4]').trigger('submit')
@@ -310,5 +316,49 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=retry]').trigger('click')
     await flushPromises()
     expect(w.find('[data-testid=form-error]').exists()).toBe(false)
+  })
+
+  it('proposes a ready room before a room that is not ready, even when the room that is not ready has the bed that was asked for', async () => {
+    const { w } = mountView(undefined, [arrival({ requested_bed_type_id: 5, requested_bed_type_code: 'KING' })])
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => {
+      if (path.endsWith('/availability/rooms')) {
+        return { data: { data: [
+          { room_id: 21, room_number: '101', housekeeping_status: 'DIRTY', bed_type_id: 5, bed_type_name: 'King' },
+          { room_id: 22, room_number: '102', housekeeping_status: 'CLEAN', bed_type_id: 6, bed_type_name: 'Twin' },
+          { room_id: 23, room_number: '103', housekeeping_status: 'CLEAN', bed_type_id: 5, bed_type_name: 'King' },
+        ] } }
+      }
+      if (path.endsWith('/room-types')) return { data: { data: types } }
+      return { data: {} }
+    })
+    await w.get('[data-testid=open-4]').trigger('click')
+    await flushPromises()
+    const options = Array.from(document.body.querySelectorAll('select[name=room] option')).map((o) => o.textContent)
+    expect(options).toEqual(['103 · CLEAN · King ✓ matches the request', '102 · CLEAN · Twin', '101 · DIRTY · King ✓ matches the request (not ready)'])
+    expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('23')
+  })
+
+  it('proposes a room that is not ready only when there is no ready room, and says so', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => (path.endsWith('/availability/rooms') ? { data: { data: [
+      { room_id: 21, room_number: '101', housekeeping_status: 'DIRTY' }, { room_id: 22, room_number: '102', housekeeping_status: 'CLEANING' },
+    ] } } : path.endsWith('/room-types') ? { data: { data: types } } : { data: {} }))
+    await w.get('[data-testid=open-4]').trigger('click')
+    await flushPromises()
+    expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('21')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
+    expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps the room that is already on the line first, even when it is not ready: it was chosen on purpose', async () => {
+    const { w } = mountView(undefined, [arrival({ room_id: 21, room_number: '101', housekeeping_status: 'DIRTY' })])
+    await flushPromises()
+    GET.mockImplementation(async (path: string) => (path.endsWith('/availability/rooms') ? { data: { data: [{ room_id: 22, room_number: '102', housekeeping_status: 'CLEAN' }] } } : path.endsWith('/room-types') ? { data: { data: types } } : { data: {} }))
+    await w.get('[data-testid=open-4]').trigger('click')
+    await flushPromises()
+    expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('21')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
   })
 })
