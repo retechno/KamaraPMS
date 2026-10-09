@@ -13,6 +13,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -131,7 +132,7 @@ watch(() => property.currentId, () => {
     </div>
 
     <Card v-if="creating" class="mb-4">
-      <form novalidate data-testid="create-form" @submit.prevent="create">
+      <form v-autofocus novalidate data-testid="create-form" @submit.prevent="create">
         <CardHeader><CardTitle>{{ t('guests.new') }}</CardTitle></CardHeader>
         <CardContent>
           <GuestFields v-model="form" :error="error" />
@@ -144,7 +145,7 @@ watch(() => property.currentId, () => {
     </Card>
 
     <Card class="mb-4">
-      <form class="flex items-end gap-3 p-4" role="search" @submit.prevent="search()">
+      <form v-autofocus class="flex items-end gap-3 p-4" role="search" @submit.prevent="search()">
         <FormField class="flex-1" :label="t('guests.search')">
           <template #default="{ id }"><Input :id="id" v-model="query" name="q" type="search" :placeholder="t('guests.searchPlaceholder')" /></template>
         </FormField>

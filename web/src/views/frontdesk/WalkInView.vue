@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -218,7 +219,7 @@ watch(businessDate, (bd) => {
 
   <Card v-else>
     <RestrictionOverride v-if="refusal" :violations="refusal.violations" :overridable="refusal.overridable" :busy="busy" :error="error" @override="retryWithOverride" @cancel="refusal = null" />
-    <form novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
+    <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -563,7 +563,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
           <BillingInstructions v-if="['DRAFT', 'CONFIRMED', 'CHECKED_IN'].includes(line.status)" :reservation-id="res.id" :line-id="line.id" :editable="can('reservation.update')" />
 
-          <form v-if="assigning && assigning.lineId === line.id" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
+          <form v-if="assigning && assigning.lineId === line.id" v-autofocus class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
                 <NativeSelect :id="id" v-model.number="assigning.typeId" name="assign_type" @change="loadFree">

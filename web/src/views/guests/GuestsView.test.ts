@@ -21,7 +21,7 @@ function mountView(permissions: string[], firstPage: object = { data: [siti] }) 
   GET = vi.fn().mockResolvedValue({ data: firstPage })
   POST = vi.fn()
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
-  return mount(GuestsView, { global: { plugins: [pinia, router] } })
+  return mount(GuestsView, { global: { plugins: [pinia, router] }, attachTo: document.body })
 }
 
 describe('GuestsView', () => {
@@ -110,5 +110,14 @@ describe('GuestsView', () => {
     const w = mountView(['guest.read'])
     await flushPromises()
     expect(w.find('[data-testid=new-guest]').exists()).toBe(false)
+  })
+  it('starts on the search field, and on the first name when the new guest form opens', async () => {
+    const w = mountView(['guest.read', 'guest.write'])
+    await flushPromises()
+    expect((document.activeElement as HTMLInputElement | null)?.name).toBe('q')
+    await w.get('[data-testid=new-guest]').trigger('click')
+    await flushPromises()
+    expect((document.activeElement as HTMLInputElement | null)?.name).toBe('first_name')
+    w.unmount()
   })
 })
