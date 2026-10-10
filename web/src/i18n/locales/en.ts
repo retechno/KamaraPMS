@@ -190,6 +190,7 @@ export const en = {
     findRoom: 'Find a room',
     allTypes: 'All room types',
     all: 'All',
+    legendOccupied: 'Occupied: a white tile; the bar and the chip show the cleaning',
     blocked: 'Blocked',
     filterOccupancy: 'Occupancy',
     filterHousekeeping: 'Housekeeping',
@@ -3540,6 +3541,12 @@ export const en = {
     purchase_and_sale_of_property_and_equipment: 'Purchase and sale of property and equipment',
     loans_received_and_repaid: 'Loans received and repaid',
     capital_contributed_and_drawings: 'Capital contributed and drawings',
+  },
+  periods: {
+    quick: 'Quick periods',
+    thisMonth: 'This month',
+    lastMonth: 'Last month',
+    fiscalYear: 'Fiscal year to date',
   },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Accounting is not set up for this property.',

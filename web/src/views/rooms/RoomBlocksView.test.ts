@@ -116,7 +116,8 @@ describe('RoomBlocksView', () => {
     const w = mountCalendar(['room_block.manage'])
     await flushPromises()
     expect(w.get('[data-testid=block-9]').text()).toContain('Out of order')
-    expect(w.get('[data-testid=cal-202] [data-testid=bar]').classes()).toContain('border-destructive')
+    expect(w.get('[data-testid=cal-202] [data-testid=bar]').classes()).toEqual(expect.arrayContaining(['status-hatch', 'border-status-ooo'])) // the same stripe as an out of order room on the other pages
+    expect(w.get('[data-testid=block-9] [data-slot=status-badge]').classes()).toContain('status-hatch')
   })
 
   it('speaks Indonesian', async () => {

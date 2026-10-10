@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useReportPeriod } from '@/composables/useReportPeriod'
+import PeriodPicks from '@/components/app/PeriodPicks.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -35,6 +37,7 @@ const form = reactive({ from: '', to: '', department_id: null as number | null }
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const query = () => ({ from: form.from || undefined, to: form.to || undefined, department_id: form.department_id ?? undefined })
+const period = useReportPeriod(form, () => load())
 const key = (n: DepartmentNode): string => String(n.id)
 const toggle = (n: DepartmentNode): void => {
   const next = new Set(open.value)
@@ -59,6 +62,7 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/department-report', { params: { path: { propertyId }, query: query() } })
     report.value = (data as DepartmentReport | undefined) ?? null
+    period.adopt(report.value)
   } catch (e) {
     report.value = null
     error.value = e instanceof ApiError ? e : null
@@ -118,6 +122,7 @@ watch(() => pid.value, () => {
         <FormField :label="t('departments.title')">
           <template #default="{ id }"><DepartmentSelect :id="id" v-model="form.department_id" name="department_id" :none-label="t('departments.all')" /></template>
         </FormField>
+        <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
     </Card>

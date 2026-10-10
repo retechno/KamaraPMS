@@ -189,6 +189,7 @@ export const id: Messages = {
     findRoom: 'Cari kamar',
     allTypes: 'Semua tipe kamar',
     all: 'Semua',
+    legendOccupied: 'Terisi: tile putih; garis dan chip menunjukkan kebersihan',
     blocked: 'Diblokir',
     filterOccupancy: 'Okupansi',
     filterHousekeeping: 'Housekeeping',
@@ -3539,6 +3540,12 @@ export const id: Messages = {
     purchase_and_sale_of_property_and_equipment: 'Pembelian dan penjualan properti dan peralatan',
     loans_received_and_repaid: 'Pinjaman diterima dan dilunasi',
     capital_contributed_and_drawings: 'Modal disetor dan prive',
+  },
+  periods: {
+    quick: 'Periode cepat',
+    thisMonth: 'Bulan ini',
+    lastMonth: 'Bulan lalu',
+    fiscalYear: 'Tahun buku berjalan',
   },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Akuntansi belum disiapkan untuk properti ini.',

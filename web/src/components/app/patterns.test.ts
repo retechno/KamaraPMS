@@ -36,7 +36,7 @@ describe('StatusBadge', () => {
     const w = mount(StatusBadge, { props: { domain: 'housekeeping', status: 'DIRTY' } })
     expect(w.text()).toBe('Dirty')
     expect(w.attributes('data-status')).toBe('DIRTY')
-    expect(w.classes().join(' ')).toContain('bg-warning')
+    expect(w.classes().join(' ')).toContain('bg-status-dirty-bg')
   })
 
   it('follows the language', () => {
@@ -48,7 +48,7 @@ describe('StatusBadge', () => {
     expect(statusVariant('work', 'OPEN')).toBe('warning')
     expect(statusVariant('record', 'OPEN')).toBe('success')
     expect(statusVariant('payment', 'VOIDED')).toBe('destructive')
-    expect(statusVariant('reservation', 'NO_SHOW')).toBe('warning')
+    expect(statusVariant('reservation', 'NO_SHOW')).toBe('noshow')
   })
 
   it('shows a status it does not know as plain text', () => {

@@ -38,6 +38,38 @@
     /* Text colours: --ok and --warning are fills (badges, icons) and are too light to read as text on white. */
     --ok-text: #1b7a4b;
     --warn-text: #8a5300;
+    /* The status of a thing, apart from the colour of an action (teal is only for buttons, links and the active menu). A status that is under way or ready is a solid fill, one that waits a light fill. */
+    --status-dirty: #a8460a;
+    --status-dirty-bg: #fdebdc;
+    --status-dirty-line: #f3c9a6;
+    --status-cleaning: #5b3bb0;
+    --status-cleaning-bg: #efe9fb;
+    --status-cleaning-line: #d6caf3;
+    --status-clean: #1b7a4b;
+    --status-clean-bg: #e3f3ea;
+    --status-clean-line: #b9e0c9;
+    --status-booked: #2348a8;
+    --status-booked-bg: #e4ebfb;
+    --status-booked-line: #b7c8f2;
+    --status-closed: #4a5361;
+    --status-closed-bg: #eef0f2;
+    --status-closed-line: #dde1e5;
+    --status-draft: #4a5361;
+    --status-draft-bg: #ffffff;
+    --status-draft-line: #8b96a3;
+    --status-noshow: #8a5300;
+    --status-noshow-bg: #fdf1dc;
+    --status-noshow-line: #f0d49e;
+    --status-cancelled: #b4332c;
+    --status-cancelled-bg: #ffffff;
+    --status-cancelled-line: #f0c4c0;
+    --status-inspected: #1b7a4b;
+    --status-inspected-fg: #ffffff;
+    --status-inhouse: #2552c4;
+    --status-inhouse-fg: #ffffff;
+    --status-ooo: #4a5361;
+    --status-ooo-fg: #ffffff;
+    --status-ooo-stripe: #59636f;
     color-scheme: light;
   }
 
@@ -57,6 +89,38 @@
     --warning: #e0a93a;
     --ok-text: #5fd0a0;
     --warn-text: #f0a35e;
+    /* The status of a thing, apart from the colour of an action (teal is only for buttons, links and the active menu). A status that is under way or ready is a solid fill, one that waits a light fill. */
+    --status-dirty: #f0a35e;
+    --status-dirty-bg: #3a2416;
+    --status-dirty-line: #6b4527;
+    --status-cleaning: #b9a3f5;
+    --status-cleaning-bg: #2a2340;
+    --status-cleaning-line: #4a3d78;
+    --status-clean: #5fd0a0;
+    --status-clean-bg: #16301f;
+    --status-clean-line: #2a5a3f;
+    --status-booked: #8fb0ff;
+    --status-booked-bg: #1b2747;
+    --status-booked-line: #3a4f8a;
+    --status-closed: #aeb7c2;
+    --status-closed-bg: #262b33;
+    --status-closed-line: #3a414b;
+    --status-draft: #aeb7c2;
+    --status-draft-bg: #171a1f;
+    --status-draft-line: #6b7480;
+    --status-noshow: #f0c36a;
+    --status-noshow-bg: #3a2e14;
+    --status-noshow-line: #6b5424;
+    --status-cancelled: #ff8f87;
+    --status-cancelled-bg: #171a1f;
+    --status-cancelled-line: #6a2f2b;
+    --status-inspected: #5fd0a0;
+    --status-inspected-fg: #0b1a12;
+    --status-inhouse: #8fb0ff;
+    --status-inhouse-fg: #0d1730;
+    --status-ooo: #aeb7c2;
+    --status-ooo-fg: #0f1216;
+    --status-ooo-stripe: #99a3af;
     color-scheme: dark;
   }
 
@@ -116,6 +180,36 @@
   --color-warning: var(--warning);
   --color-success-text: var(--ok-text);
   --color-warning-text: var(--warn-text);
+  --color-status-dirty: var(--status-dirty);
+  --color-status-dirty-bg: var(--status-dirty-bg);
+  --color-status-dirty-line: var(--status-dirty-line);
+  --color-status-cleaning: var(--status-cleaning);
+  --color-status-cleaning-bg: var(--status-cleaning-bg);
+  --color-status-cleaning-line: var(--status-cleaning-line);
+  --color-status-clean: var(--status-clean);
+  --color-status-clean-bg: var(--status-clean-bg);
+  --color-status-clean-line: var(--status-clean-line);
+  --color-status-booked: var(--status-booked);
+  --color-status-booked-bg: var(--status-booked-bg);
+  --color-status-booked-line: var(--status-booked-line);
+  --color-status-closed: var(--status-closed);
+  --color-status-closed-bg: var(--status-closed-bg);
+  --color-status-closed-line: var(--status-closed-line);
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-draft-line: var(--status-draft-line);
+  --color-status-noshow: var(--status-noshow);
+  --color-status-noshow-bg: var(--status-noshow-bg);
+  --color-status-noshow-line: var(--status-noshow-line);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-cancelled-bg: var(--status-cancelled-bg);
+  --color-status-cancelled-line: var(--status-cancelled-line);
+  --color-status-inspected: var(--status-inspected);
+  --color-status-inspected-fg: var(--status-inspected-fg);
+  --color-status-inhouse: var(--status-inhouse);
+  --color-status-inhouse-fg: var(--status-inhouse-fg);
+  --color-status-ooo: var(--status-ooo);
+  --color-status-ooo-fg: var(--status-ooo-fg);
   --color-border: var(--border);
   --color-input: var(--border);
   --color-ring: var(--accent);
@@ -130,6 +224,10 @@
 
 /* Shared classes of texts: a failure, a confirmation, a quiet line. They sit below utilities, so a utility can still adjust one. */
 @layer components {
+  /* An out of order room or block: a solid grey with a stripe, so it reads as "not available" without colour. */
+  .status-hatch {
+    background-image: repeating-linear-gradient(135deg, var(--status-ooo) 0 8px, var(--status-ooo-stripe) 8px 16px);
+  }
   .alert {
     margin-bottom: 1rem;
     padding: 0.625rem 0.875rem;

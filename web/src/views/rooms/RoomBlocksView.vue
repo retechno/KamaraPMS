@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import StatusBadge from '@/components/app/StatusBadge.vue'
+import { statusSwatch } from '@/components/app/statusMap'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { ChevronLeft } from 'lucide-vue-next'
@@ -11,7 +13,6 @@ import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -231,7 +232,7 @@ watch(businessDate, (bd) => {
           <div
             v-for="bar in row.bars"
             :key="bar.block.id"
-            :class="cn('pointer-events-none z-[1] mx-px my-[3px] flex items-center rounded-md border px-1.5 font-bold text-foreground', bar.block.block_type === 'OOO' ? 'border-destructive bg-destructive/30' : 'border-warning bg-warning/30')"
+            :class="cn('pointer-events-none z-[1] mx-px my-[3px] flex items-center rounded-md border px-1.5 font-bold', statusSwatch('block', bar.block.block_type).fill)"
             :style="{ gridColumn: `${bar.start} / ${bar.end}`, gridRow: 1 }"
             :title="`${labelOf('blockType', bar.block.block_type)}: ${bar.block.reason} (${$date(bar.block.start_date)} - ${$date(bar.block.end_date)})`"
             data-testid="bar"
@@ -281,7 +282,7 @@ watch(businessDate, (bd) => {
         <p v-if="loaded && !blocks.length" class="m-0 text-sm text-muted-foreground">{{ t('roomBlocks.noBlocks') }}</p>
         <DataTable v-else-if="blocks.length" :columns="blockColumnsDef" :rows="blocks" row-key="id" :row-test-id="(b) => `block-${b.id}`" :caption="t('roomBlocks.activeInView')">
           <template #cell-room_id="{ row: b }"><b>{{ roomNumber(b.room_id) }}</b></template>
-          <template #cell-block_type="{ row: b }"><Badge :variant="b.block_type === 'OOO' ? 'destructive' : 'warning'">{{ labelOf('blockType', b.block_type) }}</Badge></template>
+          <template #cell-block_type="{ row: b }"><StatusBadge domain="block" :status="b.block_type" :label="labelOf('blockType', b.block_type)" /></template>
           <template #cell-start_date="{ row: b }">{{ formatBusinessDate(b.start_date) }}</template>
           <template #cell-end_date="{ row: b }">{{ formatBusinessDate(b.end_date) }}</template>
           <template #cell-actions="{ row: b }"><Button variant="outline" size="sm" @click="cancelling = b; cancelReason = ''">{{ t('roomBlocks.release') }}</Button></template>

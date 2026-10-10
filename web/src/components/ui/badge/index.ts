@@ -1,5 +1,6 @@
 import type { VariantProps } from 'class-variance-authority'
 import { cva } from 'class-variance-authority'
+import { statusFill } from './statusFill'
 
 export { default as Badge } from './Badge.vue'
 
@@ -14,6 +15,18 @@ export const badgeVariants = cva(
         success: 'border-transparent bg-success/15 text-success-text',
         warning: 'border-transparent bg-warning/20 text-foreground',
         destructive: 'border-transparent bg-destructive/15 text-destructive',
+        // the status of a thing (see statusFill.ts)
+        dirty: statusFill.dirty.fill,
+        cleaning: statusFill.cleaning.fill,
+        clean: statusFill.clean.fill,
+        inspected: statusFill.inspected.fill,
+        booked: statusFill.booked.fill,
+        inhouse: statusFill.inhouse.fill,
+        closed: statusFill.closed.fill,
+        ooo: statusFill.ooo.fill,
+        draft: statusFill.draft.fill,
+        noshow: statusFill.noshow.fill,
+        cancelled: statusFill.cancelled.fill,
       },
     },
     defaultVariants: { variant: 'default' },
