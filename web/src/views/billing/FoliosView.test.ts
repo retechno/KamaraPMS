@@ -20,6 +20,17 @@ function mountView(permissions = ['folio.read'], page: object = { data: [{ id: 3
   return mount(FoliosView, { global: { plugins: [pinia, router] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('FoliosView', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -89,5 +100,39 @@ describe('FoliosView', () => {
     await w.get('select[name=filter_status]').setValue('')
     await w.get('input[name=filter_folio_number]').setValue('3')
     expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000003'])
+  })
+
+  it('does not sort a page of a longer list, counts what is loaded, and sorts again when the last page is in', async () => {
+    const f = (id: number, n: string, balance: string) => ({ id, folio_number: n, status: 'OPEN', reservation_id: id, stay_id: null, version: 1, balance })
+    const w = mountView(['folio.read'], { data: [f(1, 'FOL000001', '300'), f(2, 'FOL000002', '100')], next_cursor: 'c2' })
+    await flushPromises()
+    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0)
+    expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
+    GET.mockResolvedValue({ data: { data: [f(3, 'FOL000003', '200')] } })
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { cursor: 'c2', limit: 50 } } })
+    expect(w.get('[data-testid=table-count]').text()).toBe('3 loaded')
+    await w.get('[data-testid=sort-balance]').trigger('click')
+    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000002', 'folio-FOL000003', 'folio-FOL000001'])
+  })
+
+  it('opens the folio when its row is clicked, and is a card on a phone with the balance at the right', async () => {
+    const w = mountView()
+    await flushPromises()
+    const router = (w.vm as unknown as { $router: { currentRoute: { value: { path: string } } } }).$router
+    await w.get('[data-testid=folio-FOL000001] td:nth-child(4)').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/folios/3')
+    w.unmount()
+    await onAPhone(async () => {
+      const card = mountView()
+      await flushPromises()
+      const c = card.get('[data-testid=folio-FOL000001]')
+      expect(c.attributes('data-slot')).toBe('data-card')
+      expect(c.get('p.font-semibold').text()).toBe('-500,000')
+      expect(c.findAll('a').map((a) => a.attributes('href'))).toEqual(['/folios/3', '/reservations/9'])
+      card.unmount()
+    })
   })
 })

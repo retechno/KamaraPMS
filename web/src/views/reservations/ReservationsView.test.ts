@@ -138,6 +138,35 @@ describe('ReservationsView', () => {
     expect(asked).toEqual({ DRAFT: 'DRAFT', RESERVED: 'CONFIRMED', CHECKED_IN: 'IN_HOUSE', CHECKED_OUT: 'CHECKED_OUT', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW' })
   })
 
+  it('does not sort a page of a longer list: no sort control while there are more rows on the server, and it is back once the last page is in', async () => {
+    const w = await mountView(['reservation.read'], { data: [
+      row({ id: 1, confirmation_number: 'RES000001', arrival_date: '2026-10-09' }),
+      row({ id: 2, confirmation_number: 'RES000002', arrival_date: '2026-10-02' }),
+    ], next_cursor: 'abc' })
+    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0) // 2 rows of many: a sort of them would look like a sort of everything
+    expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
+    GET.mockImplementation(async (path: string) => (path.endsWith('/reservations') ? { data: { data: [row({ id: 3, confirmation_number: 'RES000003', arrival_date: '2026-10-05' })] } } : { data: { data: [] } }))
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=table-count]').text()).toBe('3 loaded')
+    expect(w.find('[data-testid=more]').exists()).toBe(false)
+    expect(w.findAll('[data-testid^=sort-]').length).toBeGreaterThan(0) // every row is here: a sort is of everything
+    await w.get('[data-testid=sort-arrival_date]').trigger('click')
+    expect(w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())).toEqual(['RES000002', 'RES000003', 'RES000001'])
+  })
+
+  it('starts again from the first page, and from no sort, when a filter changes', async () => {
+    const w = await mountView(['reservation.read'], { data: [row()], next_cursor: 'abc' })
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    await w.get('input[name=q]').setValue('Siti')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(lastQuery()).toMatchObject({ q: 'Siti' })
+    expect(lastQuery().cursor).toBeUndefined()
+    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0) // more pages again
+  })
+
   it('loads more with the cursor and keeps the filters', async () => {
     const w = await mountView(['reservation.read'], { data: [row()], next_cursor: 'abc' })
     await w.get('input[name=q]').setValue('Siti')
@@ -183,7 +212,7 @@ describe('ReservationsView', () => {
     expect(listCalls()).toHaveLength(0)
   })
 
-  it('offers the actions that fit the status and the permissions', async () => {
+  it('opens the reservation when its row is clicked, and offers the other actions that fit the status and the permissions in the menu of the row', async () => {
     const can = ['reservation.read', 'reservation.update', 'frontdesk.checkin', 'payment.post']
     const w = await mountView(can, { data: [
       row({ id: 1, confirmation_number: 'RESERVED1', deposit: { folio_id: 80, paid: '1' } }),
@@ -191,27 +220,42 @@ describe('ReservationsView', () => {
       row({ id: 3, confirmation_number: 'INHOUSE1', display_status: 'IN_HOUSE', rooms: [room({ status: 'CHECKED_IN', stay_id: 55 })] }),
       row({ id: 4, confirmation_number: 'DONE1', display_status: 'CANCELLED', status: 'CANCELLED' }),
     ] })
-    const has = (n: string, a: string) => w.find(`[data-testid=${a}-${n}]`).exists()
-    expect(has('RESERVED1', 'view')).toBe(true)
-    expect(has('RESERVED1', 'edit')).toBe(true)
-    expect(has('RESERVED1', 'checkIn')).toBe(false) // in the menu, not on the row
-    await w.get('[data-testid=more-RESERVED1]').trigger('click')
+    const inMenu = async (n: string): Promise<string[]> => {
+      document.body.querySelectorAll('[data-slot=row-menu]').forEach((m) => m.remove())
+      await w.get(`[data-testid=res-${n}] [data-slot=row-menu-trigger]`).trigger('click')
+      await flushPromises()
+      return Array.from(document.body.querySelectorAll('[data-slot=row-menu] [data-testid]')).map((e) => e.getAttribute('data-testid')!.replace(`-${n}`, ''))
+    }
+    // no button "view" or "edit" in the row: the row is the way in
+    expect(w.find('[data-testid=view-RESERVED1]').exists()).toBe(false)
+    expect(w.find('[data-testid=res-RESERVED1] button').exists()).toBe(true) // the "..." only
+    expect(w.findAll('[data-testid=res-RESERVED1] button')).toHaveLength(1)
+    expect(await inMenu('RESERVED1')).toEqual(['edit', 'checkIn', 'payment'])
+    expect(document.body.querySelector('[data-slot=row-menu] a[href="/arrivals?q=RESERVED1"]')).not.toBeNull() // check-in is the existing check-in
+    expect(document.body.querySelector('[data-slot=row-menu] a[href="/folios/80?tab=payment"]')).not.toBeNull()
+    expect(await inMenu('DRAFT1')).not.toContain('checkIn') // a draft is confirmed before it checks in
+    expect(await inMenu('INHOUSE1')).toContain('viewStay')
+    expect(document.body.querySelector('[data-slot=row-menu] a[href="/stays/55"]')).not.toBeNull()
+    // read only: nothing to do but look, which is the row itself, so no menu at all
+    expect(w.find('[data-testid=res-DONE1] [data-slot=row-menu-trigger]').exists()).toBe(false)
+  })
+
+  it('goes to the reservation when its row is clicked, but not when a link or the menu in it is', async () => {
+    const w = await mountView(['reservation.read', 'reservation.update'], { data: [row({ id: 7, confirmation_number: 'RESERVED7' })] })
+    const router = (w.vm as unknown as { $router: { currentRoute: { value: { path: string } } } }).$router
+    await w.get('[data-testid=res-RESERVED7] td:nth-child(2)').trigger('click') // the guest, plain text
     await flushPromises()
-    const menu = document.body.querySelector('[data-testid=menu-RESERVED1]')
-    expect(menu?.querySelector('a[href="/arrivals?q=RESERVED1"]')).not.toBeNull() // check-in is the existing check-in
-    expect(menu?.querySelector('a[href="/folios/80?tab=payment"]')).not.toBeNull()
-    expect(has('DRAFT1', 'checkIn')).toBe(false) // a draft is confirmed before it checks in
-    expect(has('INHOUSE1', 'viewStay')).toBe(true)
-    expect(w.find('[data-testid=viewStay-INHOUSE1]').exists() && document.body.querySelector('a[href="/stays/55"]')).toBeTruthy()
-    expect(has('DONE1', 'view')).toBe(true) // read only: only a way to look
-    expect(has('DONE1', 'edit')).toBe(false)
-    expect(has('DONE1', 'checkIn')).toBe(false)
+    expect(router.currentRoute.value.path).toBe('/reservations/7')
+    expect(w.get('[data-testid=res-RESERVED7]').classes()).toContain('cursor-pointer')
+    // the link of the number is a link a keyboard can reach: the row has no tab stop of its own
+    expect(w.get('[data-testid=res-RESERVED7]').attributes('tabindex')).toBeUndefined()
+    expect(w.get('[data-testid=res-RESERVED7] a').attributes('href')).toBe('/reservations/7')
   })
 
   it('does not offer check-in for a reservation that arrives on another date, or without the permission', async () => {
     const later = await mountView(['reservation.read', 'frontdesk.checkin'], { data: [row({ arrival_date: '2026-10-09', rooms: [room({ arrival_date: '2026-10-09' })] })] })
     expect(document.body.querySelector('a[href^="/arrivals"]')).toBeNull()
-    expect(later.find('[data-testid=more-RES000001]').exists()).toBe(false)
+    expect(later.find('[data-testid=res-RES000001] [data-slot=row-menu-trigger]').exists()).toBe(false) // nothing but "view": no menu
   })
 
   it('sorts the page it has by arrival, and links to the tape chart', async () => {
@@ -263,15 +307,24 @@ describe('ReservationsView', () => {
     expect(w.get('[data-testid=sort-arrival_date]').text()).toBe('Stay')
   })
 
-  it('has a card for each reservation for a narrow screen, with the same facts and links', async () => {
-    const w = await mountView(['reservation.read', 'reservation.update'], { data: [row({ company_name: 'Acme Corp', deposit: { folio_id: 80, paid: '300000' } })] })
-    const card = w.get('[data-testid=card-RES000001]')
-    expect(card.text()).toContain('Siti Nurhaliza')
-    expect(card.text()).toContain('Reserved')
-    expect(card.text()).toContain('Acme Corp')
-    expect(card.text()).toContain('300,000')
-    expect(card.text()).toContain('1,200,000')
-    expect(card.get('a').attributes('href')).toBe('/reservations/1')
-    expect(card.findAll('a').map((a) => a.attributes('href'))).toContain('/reservations/1')
+  it('has a card for each reservation for a narrow screen, with the same facts and links, and the actions in a menu', async () => {
+    const wide = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 })
+    try {
+      const w = await mountView(['reservation.read', 'reservation.update'], { data: [row({ company_name: 'Acme Corp', deposit: { folio_id: 80, paid: '300000' } })] })
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=res-RES000001]')
+      expect(card.attributes('data-slot')).toBe('data-card')
+      expect(card.text()).toContain('RES000001')
+      expect(card.text()).toContain('Siti Nurhaliza')
+      expect(card.text()).toContain('Reserved')
+      expect(card.text()).toContain('Acme Corp')
+      expect(card.text()).toContain('300,000')
+      expect(card.text()).toContain('1,200,000')
+      expect(card.findAll('a').map((a) => a.attributes('href'))).toContain('/reservations/1')
+      expect(card.find('[data-slot=row-menu-trigger]').exists()).toBe(true)
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+    }
   })
 })

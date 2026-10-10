@@ -59,11 +59,11 @@ const typeLabel = (k: string): string => t(`journals.t_${k}` as 'journals.t_MANU
 const TYPES = ['DAY_CLOSE', 'MANUAL', 'REVERSAL', 'CLOSING', 'PAYABLES', 'BANK', 'TAX'] as const
 const columns = computed<Column<Journal>[]>(() => [
   { key: 'journal_date', label: t('journals.date'), format: 'date' as const },
-  { key: 'journal_number', label: t('journals.number') },
-  { key: 'journal_type', label: t('journals.type') },
-  { key: 'description', label: t('journals.description') },
-  { key: 'total', label: t('journals.total'), align: 'right', format: 'money' as const },
-  { key: 'reversed', label: '' },
+  { key: 'journal_number', label: t('journals.number'), card: 'primary' as const },
+  { key: 'journal_type', label: t('journals.type'), card: 'badge' as const },
+  { key: 'description', label: t('journals.description'), card: 'secondary' as const },
+  { key: 'total', label: t('journals.total'), align: 'right', format: 'money' as const, card: 'money' as const },
+  { key: 'reversed', label: '', hideOnMobile: true },
 ])
 
 async function load(): Promise<void> {
@@ -285,6 +285,7 @@ watch(() => pid.value, () => {
           :columns="columns"
           :rows="journals"
           row-key="id"
+          cards
           clickable
           :row-test-id="(j) => `journal-${j.journal_number}`"
           :row-class="(j) => (opened?.id === j.id ? 'bg-accent' : undefined)"

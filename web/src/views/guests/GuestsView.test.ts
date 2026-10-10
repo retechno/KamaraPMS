@@ -24,6 +24,17 @@ function mountView(permissions: string[], firstPage: object = { data: [siti] }) 
   return mount(GuestsView, { global: { plugins: [pinia, router] }, attachTo: document.body })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('GuestsView', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -119,5 +130,27 @@ describe('GuestsView', () => {
     await flushPromises()
     expect((document.activeElement as HTMLInputElement | null)?.name).toBe('first_name')
     w.unmount()
+  })
+
+  it('opens the guest when the row is clicked, and counts what is loaded', async () => {
+    const w = mountView(['guest.read'])
+    await flushPromises()
+    const router = (w.vm as unknown as { $router: { currentRoute: { value: { path: string } } } }).$router
+    expect(w.get('[data-testid=table-count]').text()).toBe('1 loaded')
+    await w.get(`[data-testid=guest-${siti.code}] td:nth-child(3)`).trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(`/guests/${siti.id}`)
+  })
+
+  it('is a card on a phone: the code as the title, the name under it', async () => {
+    await onAPhone(async () => {
+      const w = mountView(['guest.read'])
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get(`[data-testid=guest-${siti.code}]`)
+      expect(card.attributes('data-slot')).toBe('data-card')
+      expect(card.text()).toContain(siti.code)
+      w.unmount()
+    })
   })
 })

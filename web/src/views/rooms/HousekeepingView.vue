@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { BellOff, ChevronsUp, RefreshCw, Sparkles, Wrench } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
@@ -60,14 +61,25 @@ const visible = computed(() =>
 )
 
 const columns = computed<Column<HousekeepingBoardRoom>[]>(() => [
-  { key: 'room_number', label: t('housekeeping.room'), sortable: true },
-  { key: 'room_type_code', label: t('housekeeping.type'), sortable: true },
-  { key: 'status', label: t('housekeeping.housekeepingCol'), sortable: true },
+  { key: 'room_number', label: t('housekeeping.room'), sortable: true, card: 'primary' as const },
+  { key: 'room_type_code', label: t('housekeeping.type'), sortable: true, card: 'secondary' as const },
+  { key: 'status', label: t('housekeeping.housekeepingCol'), sortable: true, card: 'badge' as const },
   { key: 'occupancy', label: t('housekeeping.occupancyCol'), sortable: true },
   { key: 'block', label: t('housekeeping.block') },
   { key: 'flags', label: t('housekeeping.flags') },
   ...(canUpdate.value || canReport.value ? [{ key: 'actions', label: t('housekeeping.actions'), align: 'right' as const }] : []),
 ])
+
+/** The actions of a room as a card of a phone shows them: the next cleaning step is the main button, the others are in the "..." menu. */
+function cardActions(r: HousekeepingBoardRoom): RowAction[] {
+  const acts: RowAction[] = []
+  if (canUpdate.value) {
+    actionsFor(r).forEach((s, i) => acts.push({ key: `status-${s}`, label: verb(s), primary: i === 0, disabled: busyRoom.value === r.room_id, testId: `act-${s}`, onSelect: () => void change(r, s) }))
+    acts.push({ key: 'flags', label: t('housekeeping.flagsButton'), testId: `flags-${r.room_number}`, onSelect: () => startFlags(r) })
+  }
+  if (canReport.value) acts.push({ key: 'report', label: t('housekeeping.report'), to: `/maintenance?room=${r.room_id}`, testId: `report-${r.room_number}` })
+  return acts
+}
 
 function actionsFor(room: HousekeepingBoardRoom): HousekeepingStatus[] {
   return room.allowed_next.filter((s) => s !== 'INSPECTED' || canInspect.value)
@@ -217,7 +229,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </form>
     </Card>
 
-    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
+    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" cards :row-actions="cardActions" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
       <template #cell-room_number="{ row: r }">
         <b>{{ r.room_number }}</b>
         <Badge v-if="r.bed_type_code" variant="outline" class="ml-1.5" data-testid="bed">{{ r.bed_type_code }}</Badge>

@@ -3143,6 +3143,9 @@ export const en = {
     backlog: 'Open now: {open} ({high} high priority); the oldest has waited {hours} hour(s).',
   },
   dataTable: {
+    loadMore: 'Load more',
+    loaded: '{n} loaded',
+    loadedOf: '{n} of about {total}',
     filter: 'Filter…',
     filterBy: 'Filter {column}',
     all: 'All',

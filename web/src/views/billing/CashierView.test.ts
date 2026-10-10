@@ -32,6 +32,17 @@ function mountView(permissions = ['folio.read']) {
   return mount(CashierView, { global: { plugins: [pinia, router] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('CashierView', () => {
   beforeEach(() => {
     openPdf = vi.fn().mockResolvedValue(undefined)
@@ -118,5 +129,25 @@ describe('CashierView', () => {
     expect(w.get('[data-testid=total-CASH]').text()).toContain('Tunai')
     expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('Terposting')
     setLocale('en')
+  })
+
+  it('is a card on a phone, with the receipt as its main action', async () => {
+    await onAPhone(async () => {
+      const w = mountView(['folio.read', 'reservation.read'])
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=payment-PAY000001]')
+      expect(card.text()).toContain('PAY000001')
+      expect(card.text()).toContain('Posted')
+      await card.get('[data-testid=receipt-PAY000001]').trigger('click')
+      expect(openPdf).toHaveBeenCalled()
+      w.unmount()
+    })
+  })
+
+  it('keeps the receipt as a button in the row of the table', async () => {
+    const w = mountView(['folio.read', 'reservation.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=payment-PAY000001] [data-testid=receipt-PAY000001]').text()).toBe('Receipt')
   })
 })

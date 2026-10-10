@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { CalendarPlus, GanttChart, MoreVertical } from 'lucide-vue-next'
-import { computed, reactive, ref, watch } from 'vue'
+import { CalendarPlus, GanttChart } from 'lucide-vue-next'
+import { computed, reactive, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
-import { ApiError } from '@/api/problem'
 import type { ReservationSummary } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -14,7 +13,8 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import type { RowAction } from '@/components/app/rowActions'
+import { usePagedList } from '@/composables/usePagedList'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
@@ -40,11 +40,6 @@ type Field = (typeof FIELDS)[number]
 const fromAddress = (k: Field): string => (typeof route?.query[k] === 'string' ? (route.query[k] as string) : '')
 const filter = reactive<Record<Field, string>>(Object.fromEntries(FIELDS.map((k) => [k, fromAddress(k)])) as Record<Field, string>)
 
-const rows = ref<ReservationSummary[]>([])
-const nextCursor = ref<string | undefined>()
-const loading = ref(false)
-const searched = ref(false)
-const error = ref<ApiError | null>(null)
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
@@ -53,14 +48,14 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 const filtered = computed(() => FIELDS.some((k) => filter[k] !== ''))
 
 const columns = computed<Column<ReservationSummary>[]>(() => [
-  { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true },
-  { key: 'guest_name', label: t('reservations.guest'), sortable: true },
+  { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, card: 'primary' as const },
+  { key: 'guest_name', label: t('reservations.guest'), sortable: true, card: 'secondary' as const },
   { key: 'room', label: t('reservations.roomCol'), sortable: true, sortValue: (r) => r.rooms[0]?.room_number || r.rooms[0]?.room_type_code },
   { key: 'arrival_date', label: t('reservations.stay'), sortable: true, class: 'whitespace-nowrap' },
   { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, sortValue: (r) => (r.rooms.find((l) => l.rate_amount) ? Number(r.rooms.find((l) => l.rate_amount)?.rate_amount) : null), class: 'tabular-nums whitespace-nowrap px-2' },
   { key: 'company', label: t('reservations.company'), sortable: true, sortValue: (r) => companyOf(r) },
-  { key: 'status', label: t('reservations.status'), sortable: true, sortValue: (r) => String(uiStatus(r.display_status)), class: 'whitespace-nowrap' },
-  { key: 'actions', label: t('reservations.actions'), align: 'right', class: 'min-w-[8rem]' },
+  { key: 'status', label: t('reservations.status'), sortable: true, sortValue: (r) => String(uiStatus(r.display_status)), class: 'whitespace-nowrap', card: 'badge' as const },
+  { key: 'actions', label: t('reservations.actions'), align: 'right', class: 'w-16' },
 ])
 
 /** The company of a reservation: its own, else the company a room is billed to. */
@@ -104,8 +99,11 @@ function target(r: ReservationSummary, a: ReservationAction): string | undefined
       return undefined
   }
 }
-const primary = (r: ReservationSummary) => actionsOf(r).slice(0, 2)
-const more = (r: ReservationSummary) => actionsOf(r).slice(2)
+/** The row opens the reservation, so "view" is not an action of its own; the others are in the "..." menu (and the card of a phone). */
+const menuOf = (r: ReservationSummary): RowAction[] =>
+  actionsOf(r)
+    .filter((a) => a !== 'view')
+    .map((a) => ({ key: a, label: t(`reservations.action.${a}`), to: target(r, a) ?? `/reservations/${r.id}`, testId: `${a}-${r.confirmation_number}` }))
 
 function query() {
   return {
@@ -122,35 +120,23 @@ function query() {
   }
 }
 
-// Only the latest request counts: a slow answer to an older search must not replace the answer to a newer one.
-let latest = 0
+// One page of 50 at a time. Only the latest request counts: a slow answer to an older search must not replace the answer to a newer one (usePagedList keeps to that).
+const list = usePagedList<ReservationSummary>(async (cursor) => {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId: property.currentId! }, query: { ...query(), cursor } } })
+  return { data: data?.data ?? [], next_cursor: data?.next_cursor }
+})
+const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 
-async function load(more = false): Promise<void> {
-  const propertyId = property.currentId
-  if (propertyId === null || !canRead.value) return
-  const mine = ++latest
-  loading.value = true
-  error.value = null
-  try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { ...query(), cursor: more ? nextCursor.value : undefined } } })
-    if (mine !== latest) return
-    rows.value = more ? [...rows.value, ...(data?.data ?? [])] : (data?.data ?? [])
-    nextCursor.value = data?.next_cursor
-    searched.value = true
-  } catch (e) {
-    if (mine !== latest) return
-    error.value = e instanceof ApiError ? e : new ApiError({ type: 'about:blank', title: 'Error', status: 0, code: 'NETWORK_ERROR', detail: String(e) })
-  } finally {
-    if (mine === latest) loading.value = false
-  }
+async function load(): Promise<void> {
+  if (property.currentId === null || !canRead.value) return
+  await list.reload()
 }
 
 /** Searches again from the first page; the filters go to the address. */
 function search(): void {
   const next = Object.fromEntries(FIELDS.filter((k) => filter[k] !== '').map((k) => [k, filter[k]]))
   void router.replace({ query: next })
-  rows.value = []
-  searched.value = false
+  list.reset() // a new search shows nothing of the old one, and a failed one shows no list
   void load()
 }
 
@@ -160,8 +146,7 @@ function clear(): void {
 }
 
 watch(() => property.currentId, () => {
-  rows.value = []
-  searched.value = false
+  list.reset()
   void load()
 }, { immediate: true })
 // Choosing a filter searches at once; the text waits for the search button (or Enter).
@@ -239,7 +224,21 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       <Button v-if="filtered" type="button" variant="outline" data-testid="clear-filters" @click="clear">{{ t('dataTable.clearFilters') }}</Button>
     </form>
 
-    <DataTable v-if="!error || searched" class="hidden md:block" :columns="columns" :rows="rows" row-key="id" :loading="!searched" :row-test-id="(r) => `res-${r.confirmation_number}`" :caption="t('reservations.title')">
+    <DataTable
+      v-if="!error || searched"
+      :columns="columns"
+      :rows="rows"
+      row-key="id"
+      :loading="!searched"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      cards
+      :row-to="(r) => `/reservations/${r.id}`"
+      :row-actions="menuOf"
+      :row-test-id="(r) => `res-${r.confirmation_number}`"
+      :caption="t('reservations.title')"
+      @load-more="list.loadMore()"
+    >
       <template #cell-confirmation_number="{ row }">
         <RouterLink :to="`/reservations/${row.id}`">{{ row.confirmation_number }}</RouterLink>
         <div v-if="row.group_code" class="text-xs text-muted-foreground">{{ row.group_code }}</div>
@@ -277,58 +276,9 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           <span v-else :data-testid="`deposit-${row.confirmation_number}`">—</span>
         </div>
       </template>
-      <template #cell-actions="{ row }">
-        <div class="flex items-center justify-end gap-1.5">
-          <Button v-for="a in primary(row)" :key="a" as-child size="sm" variant="outline" :data-testid="`${a}-${row.confirmation_number}`">
-            <RouterLink :to="target(row, a) ?? `/reservations/${row.id}`">{{ t(`reservations.action.${a}`) }}</RouterLink>
-          </Button>
-          <Popover v-if="more(row).length">
-            <PopoverTrigger as-child>
-              <Button type="button" size="sm" variant="ghost" :aria-label="t('frontDesk.inHouse.moreActions')" :data-testid="`more-${row.confirmation_number}`"><MoreVertical /></Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-44 p-1">
-              <div :data-testid="`menu-${row.confirmation_number}`">
-                <Button v-for="a in more(row)" :key="a" as-child variant="ghost" size="sm" class="w-full justify-start" :data-testid="`${a}-${row.confirmation_number}`">
-                  <RouterLink :to="target(row, a) ?? `/reservations/${row.id}`">{{ t(`reservations.action.${a}`) }}</RouterLink>
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </template>
       <template #empty><EmptyState :title="filtered ? t('reservations.noMatch') : t('reservations.empty')" data-testid="empty" /></template>
-      <template #footer>
-        <div v-if="nextCursor" class="flex justify-center p-3">
-          <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="load(true)">{{ t('reservations.loadMore') }}</Button>
-        </div>
-      </template>
     </DataTable>
     <EmptyState v-else :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
 
-    <!-- A narrow screen gets a card for each reservation instead of the table. -->
-    <ul v-if="!error || searched" class="m-0 grid list-none gap-3 p-0 md:hidden" data-testid="reservation-cards">
-      <li v-for="r in rows" :key="r.id" class="rounded-lg border border-border p-3" :data-testid="`card-${r.confirmation_number}`">
-        <div class="flex items-start justify-between gap-2">
-          <div>
-            <RouterLink :to="`/reservations/${r.id}`" class="font-medium">{{ r.confirmation_number }}</RouterLink>
-            <div class="text-sm">{{ r.guest_name || '—' }} <span class="text-muted-foreground">{{ paxOf(r) }}</span></div>
-          </div>
-          <StatusBadge domain="reservation" :status="String(uiStatus(r.display_status))" />
-        </div>
-        <div class="mt-1 text-sm">{{ $date(r.arrival_date) }} → {{ $date(r.departure_date) }} <span class="text-muted-foreground">· {{ t('reservations.nightsCount', { n: r.nights }) }}</span></div>
-        <div class="text-sm text-muted-foreground">
-          {{ r.rooms.length ? [...new Set(r.rooms.map((l) => l.room_type_code))].join(' · ') : '—' }} · {{ rateText(r) }}<template v-if="companyOf(r)"> · {{ companyOf(r) }}</template>
-          <template v-if="r.deposit"> · {{ t('reservations.deposit') }} {{ $money(r.deposit.paid) }}</template>
-        </div>
-        <div class="mt-2 flex flex-wrap gap-1.5">
-          <Button v-for="a in actionsOf(r)" :key="a" as-child size="sm" variant="outline">
-            <RouterLink :to="target(r, a) ?? `/reservations/${r.id}`">{{ t(`reservations.action.${a}`) }}</RouterLink>
-          </Button>
-        </div>
-      </li>
-    </ul>
-    <div v-if="nextCursor" class="flex justify-center p-3 md:hidden">
-      <Button variant="outline" size="sm" :disabled="loading" data-testid="more-mobile" @click="load(true)">{{ t('reservations.loadMore') }}</Button>
-    </div>
   </template>
 </template>

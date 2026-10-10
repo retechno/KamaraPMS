@@ -34,6 +34,17 @@ function mountBoard(permissions: string[], board: object[]) {
   return mount(HousekeepingView, { global: { plugins: [pinia, router] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('HousekeepingView', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -177,5 +188,27 @@ describe('HousekeepingView', () => {
     expect(w.get('[data-testid=block]').text()).toBe('OOS sampai 4 Okt 2026')
     expect(w.get('[data-testid=flags]').text()).toContain('Tinggi')
     setLocale('en')
+  })
+
+  it('is a card on a phone: the next step is the main button, the flags and the maintenance report are in the menu', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update', 'maintenance.report'], [room({}), room({ room_id: 2, room_number: '202', status: 'CLEAN', allowed_next: [] })])
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=room-201]')
+      expect(card.text()).toContain('201')
+      expect(card.text()).toContain('Dirty')
+      expect(card.find('[data-testid=act-CLEANING]').exists()).toBe(true) // the next cleaning step
+      expect(card.find('[data-testid=act-CLEAN]').exists()).toBe(false) // the second step is in the menu
+      await card.get('[data-testid=act-CLEANING]').trigger('click')
+      await flushPromises()
+      expect(PUT.mock.calls.length + POST.mock.calls.length).toBeGreaterThan(0)
+      await card.get('[data-slot=row-menu-trigger]').trigger('click')
+      await flushPromises()
+      const items = Array.from(document.body.querySelectorAll('[data-slot=row-menu] [data-testid]')).map((e) => e.getAttribute('data-testid'))
+      expect(items).toEqual(['act-CLEAN', 'flags-201', 'report-201'])
+      w.unmount()
+      document.body.innerHTML = ''
+    })
   })
 })

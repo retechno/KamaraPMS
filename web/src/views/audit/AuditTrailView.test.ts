@@ -34,6 +34,17 @@ function mountView(permissions = ['audit.read'], page: object = { data: [entry(2
   return mount(AuditTrailView, { global: { plugins: [pinia] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('AuditTrailView', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -156,5 +167,28 @@ describe('AuditTrailView', () => {
     expect(w.get('[data-testid=entry-4]').text()).toContain('Thing did something new')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('auditAction.thing_did_something_new'))
     warn.mockRestore()
+  })
+
+  it('is a card on a phone: the action as the title, the time under it, and "Details" opens the entry under the card', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=entry-2]')
+      expect(card.text()).toContain('Checked in')
+      expect(card.text()).toContain('30 Sep 2026 20:00')
+      expect(w.find('[data-testid=detail-2]').exists()).toBe(false)
+      await card.get('[data-testid=toggle-2]').trigger('click')
+      expect(w.get('[data-testid=detail-2]').text()).toContain('"status": "OPEN"')
+      expect(card.get('[data-testid=toggle-2]').text()).toBe('Hide')
+      w.unmount()
+    })
+  })
+
+  it('counts what is loaded and loads the next page', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
+    expect(w.get('[data-testid=more]').text()).toBe('Load more')
   })
 })

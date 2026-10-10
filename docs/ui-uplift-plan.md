@@ -86,6 +86,12 @@ Teal `primary` hanya untuk tombol, link, dan menu aktif. Tambahkan:
 - Tombol nonaktif: teks lebih gelap (juga di mode gelap).
 - Halaman peran: grup izin bisa dilipat, status centang "sebagian", label izin dalam bahasa Indonesia, bar Simpan menempel di bawah.
 
+Status 2.2b, bagian tabel (Tahap 2c1): `DataTable` kini punya paginasi kursor (`usePagedList`: 50 baris per halaman, "Muat lebih banyak", hitungan "50 dimuat" atau "50 dari ±N" bila API memberi total), mode kartu di bawah `md` (`cards`, meta kolom `card`/`hideOnMobile`, aksi baris `rowActions` = satu tombol utama + menu ⋯), dan baris yang bisa diklik (`rowTo`).
+- **Sudah memakai bentuk baru:** Reservasi, Folio, Kasir, Jejak audit, Tamu (paginasi + kartu); Housekeeping, Bagan akun, Jurnal (kartu saja).
+- **Tanpa paginasi karena API tidak punya kursor:** Jurnal (`limit` saja), Bagan akun (semua akun), Housekeeping (papan semua kamar). Paginasi di klien tidak dibuat: memotong pohon akun atau papan kamar tidak masuk akal. Bila perlu, tambahkan `cursor` di API lebih dulu.
+- **Belum disentuh (tetap tabel yang menggulir di kartunya):** sekitar 50 file pemakai `DataTable` lain, antara lain Tamu detail, Grup, Perusahaan, Piutang perusahaan, Rekening bank, Pemasok, Tagihan pemasok, Pajak, Anggaran, dan semua halaman Pengaturan. Mode kartu opt-in (`cards`), jadi tidak ada yang berubah sampai halaman itu memasangnya.
+- **Pengurutan dan filter kolom:** bekerja di klien atas baris yang sudah dimuat. Selama masih ada halaman berikutnya (`hasMore`) kolom tidak bisa diurutkan dan filter kolom disembunyikan (yang tersisa: bar filter halaman, yang dikirim ke server); setelah halaman terakhir termuat keduanya kembali. Tabel `manual` (urut di server) tidak terpengaruh.
+
 ### 2.3 Navigasi
 - Bagian "Disematkan" di atas (pin dari judul halaman, disimpan di localStorage) dan "Terakhir dibuka" (5 item).
 - Bagian `finance` dipecah per grup (accounting, payables, tax, bank, budget) dan defaultnya tertutup.
@@ -98,6 +104,15 @@ Jejak audit sekarang menamai entitas dari nomor yang kebetulan ada di datanya ("
 - API audit mengembalikan `entity_label` dan menyaring pencarian nomor dokumen lewat parameter `q` (cocok dengan `entity_label`), sehingga pencarian "Nomor dokumen" di layar tidak lagi membaca halaman demi halaman (sementara ini: RES... dicari lewat reservasi, nomor lain dicari di isi entri, maksimal 10 halaman).
 - Layar: kolom entitas memakai `entity_label`, dan pencarian nomor dokumen memanggil `q`.
 Ditunda dari Tahap 1 atas permintaan: backend tidak diubah sekarang.
+
+### 2.4b Pengurutan di server untuk daftar berpaginasi (PR D)
+Karena urutan di klien dimatikan selama ada halaman berikutnya, urutan yang berguna harus datang dari server. Tambahkan parameter `sort` (kolom + arah, daftar kolom yang diizinkan) dan urutan bawaan yang jelas di API daftar:
+- **Reservasi:** bawaan tanggal datang terdekat dulu, lalu nomor konfirmasi; kolom: tanggal datang, nomor, tamu, status, tarif.
+- **Folio:** bawaan yang masih terbuka dan saldo terbesar dulu; kolom: nomor, saldo, status.
+- **Pembayaran (Kasir):** bawaan terbaru dulu (waktu posting); kolom: nomor, jumlah, metode, status.
+- **Tamu:** bawaan nama A-Z; kolom: nama, kode, kebangsaan.
+- **Jejak audit:** bawaan terbaru dulu (tetap, tanpa pilihan lain selain waktu naik/turun).
+Kursor harus memuat kolom urut agar halaman berikutnya konsisten saat urutan diganti; `DataTable` lalu memakai `manual` + `sortChange` untuk daftar ini.
 
 ### 2.5 Data bawaan berbahasa Indonesia
 Nama departemen dan bagan akun yang dibuat otomatis untuk properti baru masih berbahasa Inggris ("Front Office", "Room revenue - transient", "Cash on hand - front desk"), sehingga laporan keuangan di layar Indonesia bercampur bahasa.

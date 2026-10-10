@@ -40,6 +40,17 @@ function mountView(permissions = ['accounting.view', 'accounting.manage']) {
   return mount(ChartOfAccountsView, { global: { plugins: [pinia] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('toTree', () => {
   it('puts children under their parent, each level by code, with the depth', () => {
     const rows = toTree(accounts as never)
@@ -206,5 +217,36 @@ describe('ChartOfAccountsView', () => {
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('is a card on a phone: the code and the name, the status in the corner, "Edit" as the main action and the rest in the menu', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=account-4100]') // a header account
+      expect(card.text()).toContain('4100')
+      expect(card.text()).toContain('Rooms revenue')
+      expect(card.find('[data-testid=edit-4100]').exists()).toBe(true)
+      await card.get('[data-slot=row-menu-trigger]').trigger('click')
+      await flushPromises()
+      expect(document.body.querySelector('[data-slot=row-menu] [data-testid=add-under-4100]')).not.toBeNull() // a header takes accounts under it
+      expect(document.body.querySelector('[data-slot=row-menu] [data-testid=delete-4100]')).toBeNull() // it is in use
+      const free = w.get('[data-testid=account-4110]')
+      await free.get('[data-slot=row-menu-trigger]').trigger('click')
+      await flushPromises()
+      expect(document.body.querySelector('[data-slot=row-menu] [data-testid=delete-4110]')).not.toBeNull()
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
+
+  it('has no actions on a card without the permission to manage the chart', async () => {
+    await onAPhone(async () => {
+      const w = mountView(['accounting.view'])
+      await flushPromises()
+      expect(w.get('[data-testid=account-4100]').find('[data-slot=row-actions]').exists()).toBe(false)
+      w.unmount()
+    })
   })
 })

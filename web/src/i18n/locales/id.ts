@@ -3142,6 +3142,9 @@ export const id: Messages = {
     backlog: 'Terbuka sekarang: {open} ({high} prioritas tinggi); yang terlama sudah menunggu {hours} jam.',
   },
   dataTable: {
+    loadMore: 'Muat lebih banyak',
+    loaded: '{n} dimuat',
+    loadedOf: '{n} dari ±{total}',
     filter: 'Saring…',
     filterBy: 'Saring {column}',
     all: 'Semua',
