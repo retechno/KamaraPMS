@@ -32,3 +32,4 @@ Thumbs.db
 *.dump.sha256
 *.dump.partial
 web/screenshots/
+web/screenshots.zip

@@ -6,9 +6,9 @@ Satu istilah untuk satu konsep, dipakai di menu, judul halaman, tombol, dan pesa
 
 | English | Indonesia | Catatan |
 |---|---|---|
-| Front desk | Resepsi | Nama bagian menu dan judul halaman yang berisi tiga tab. Tab dan item menunya: Kedatangan, Menginap, Keberangkatan. |
+| Front desk | Front Desk | Nama bagian menu dan judul halaman yang berisi tiga tab. Tab dan item menunya: Kedatangan, Menginap, Keberangkatan. |
 | Arrivals / In-house / Departures | Kedatangan / Menginap / Keberangkatan | "In-house" tidak dipakai lagi. |
-| Walk-in | Tamu langsung | Tamu tanpa reservasi. |
+| Walk-in | Walk-in | Tamu tanpa reservasi. |
 | Tape chart | Bagan kamar | |
 | Night audit | Audit malam | |
 | City ledger | Piutang perusahaan | Akun piutang perusahaan yang tagihannya dipindahkan dari folio tamu. |
