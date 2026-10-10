@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { MoreVertical } from 'lucide-vue-next'
 import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { t } from '@/i18n'
@@ -16,6 +17,9 @@ export interface RowMenuItem {
   label: string
   destructive?: boolean
   disabled?: boolean
+  /** A page the item goes to (a link); without it the item is a button and `select` is emitted. */
+  to?: string
+  testId?: string
 }
 
 defineProps<{ items: RowMenuItem[]; label?: string }>()
@@ -35,17 +39,21 @@ function choose(key: string): void {
     </PopoverTrigger>
     <PopoverContent class="w-48 p-1">
       <div data-slot="row-menu">
-        <Button
-          v-for="i in items"
-          :key="i.key"
-          type="button"
-          variant="ghost"
-          size="sm"
-          :disabled="i.disabled"
-          :class="cn('w-full justify-start', i.destructive && 'text-destructive')"
-          :data-testid="`menu-${i.key}`"
-          @click="choose(i.key)"
-        >{{ i.label }}</Button>
+        <template v-for="i in items" :key="i.key">
+          <Button v-if="i.to" as-child variant="ghost" size="sm" :class="cn('w-full justify-start', i.destructive && 'text-destructive')" :data-testid="i.testId ?? `menu-${i.key}`">
+            <RouterLink :to="i.to" @click="open = false">{{ i.label }}</RouterLink>
+          </Button>
+          <Button
+            v-else
+            type="button"
+            variant="ghost"
+            size="sm"
+            :disabled="i.disabled"
+            :class="cn('w-full justify-start', i.destructive && 'text-destructive')"
+            :data-testid="i.testId ?? `menu-${i.key}`"
+            @click="choose(i.key)"
+          >{{ i.label }}</Button>
+        </template>
       </div>
     </PopoverContent>
   </Popover>

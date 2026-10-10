@@ -32,6 +32,17 @@ function mountView(permissions = ['folio.read']) {
   return mount(CashierView, { global: { plugins: [pinia, router] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('CashierView', () => {
   beforeEach(() => {
     openPdf = vi.fn().mockResolvedValue(undefined)
@@ -118,5 +129,44 @@ describe('CashierView', () => {
     expect(w.get('[data-testid=total-CASH]').text()).toContain('Tunai')
     expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('Terposting')
     setLocale('en')
+  })
+
+  it('is a card on a phone, with the receipt as its main action', async () => {
+    await onAPhone(async () => {
+      const w = mountView(['folio.read', 'reservation.read'])
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=payment-PAY000001]')
+      expect(card.text()).toContain('PAY000001')
+      expect(card.text()).toContain('Posted')
+      await card.get('[data-testid=receipt-PAY000001]').trigger('click')
+      expect(openPdf).toHaveBeenCalled()
+      w.unmount()
+    })
+  })
+
+  it('keeps the receipt as a button in the row of the table', async () => {
+    const w = mountView(['folio.read', 'reservation.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=payment-PAY000001] [data-testid=receipt-PAY000001]').text()).toBe('Receipt')
+  })
+
+  it('has a short bar on a phone: "Filter" with the number of filters that are on (another day, a method), and them in a sheet', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter') // the day shown to begin with is not a filter
+      expect(w.find('input[name=business_date]').exists()).toBe(false)
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const method = sheet.querySelector('select[name=method]') as HTMLSelectElement
+      method.value = 'CASH'
+      method.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      w.unmount()
+      document.body.innerHTML = ''
+    })
   })
 })

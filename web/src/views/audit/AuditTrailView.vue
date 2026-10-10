@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
-import { ApiError } from '@/api/problem'
 import type { AuditLog } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -12,6 +12,8 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import type { RowAction } from '@/components/app/rowActions'
+import { usePagedList } from '@/composables/usePagedList'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -21,11 +23,6 @@ import { AUDIT_ACTIONS, AUDIT_ENTITIES } from '@/utils/audit'
 const auth = useAuthStore()
 const property = usePropertyStore()
 
-const rows = ref<AuditLog[]>([])
-const nextCursor = ref<string | undefined>()
-const error = ref<ApiError | null>(null)
-const loading = ref(false)
-const loaded = ref(false)
 const open = ref<number | null>(null)
 const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
 const users = ref<{ id: number; full_name: string }[]>([])
@@ -47,13 +44,16 @@ async function loadUsers(): Promise<void> {
   }
 }
 
+// The document number is the search (it is in the bar of a phone); the others are filters.
+const activeFilters = computed(() => (['entity_type', 'user_id', 'action', 'from', 'to'] as const).filter((k) => filter[k] !== '').length)
+
 const columns = computed<Column<AuditLog>[]>(() => [
-  { key: 'created_at', label: t('audit.when'), format: 'datetime' as const },
-  { key: 'business_date', label: t('audit.businessDate'), format: 'date' as const },
+  { key: 'created_at', label: t('audit.when'), format: 'datetime' as const, card: 'secondary' as const },
+  { key: 'business_date', label: t('audit.businessDate'), format: 'date' as const, hideOnMobile: true },
   { key: 'user', label: t('audit.user') },
-  { key: 'action', label: t('audit.action') },
+  { key: 'action', label: t('audit.action'), card: 'primary' as const },
   { key: 'entity', label: t('audit.entity') },
-  { key: 'toggle', label: '' },
+  { key: 'toggle', label: '', hideOnMobile: true },
 ])
 
 const pid = computed(() => property.currentId)
@@ -87,53 +87,51 @@ async function findReservation(propertyId: number, number: string): Promise<numb
   return data?.data?.find((r) => r.confirmation_number === number)?.id ?? null
 }
 
-async function load(more = false): Promise<void> {
-  const propertyId = pid.value
-  if (propertyId === null || !allowed.value) return
-  loading.value = true
-  error.value = null
-  try {
-    const number = filter.document.trim().toUpperCase()
-    if (!more) {
-      notFound.value = false
-      reservation = null
-      if (RESERVATION_NUMBER.test(number)) {
-        reservation = await findReservation(propertyId, number)
-        if (reservation === null) {
-          rows.value = []
-          nextCursor.value = undefined
-          notFound.value = true
-          loaded.value = true
-          return
-        }
+// One page of 50 at a time. A reservation number is the reservation it names (asked of the server); another document number is looked for in the entries, page after
+// page, and what carries it is the page that is given back (see above).
+const list = usePagedList<AuditLog>(async (cursor) => {
+  const propertyId = pid.value!
+  const number = filter.document.trim().toUpperCase()
+  if (!cursor) {
+    notFound.value = false
+    reservation = null
+    if (RESERVATION_NUMBER.test(number)) {
+      reservation = await findReservation(propertyId, number)
+      if (reservation === null) {
+        notFound.value = true
+        return { data: [] }
       }
     }
-    if (number && reservation === null) {
-      let cursor = more ? nextCursor.value : undefined
-      const found: AuditLog[] = []
-      let pages = 0
-      do {
-        const page = await fetchPage(propertyId, cursor)
-        found.push(...page.entries.filter((e) => carries(e, number)))
-        cursor = page.next
-        pages++
-      } while (cursor && found.length < SCAN_ENOUGH && pages < SCAN_PAGES)
-      rows.value = more ? [...rows.value, ...found] : found
-      nextCursor.value = cursor
-      scanCapped.value = !!cursor && found.length < SCAN_ENOUGH
-    } else {
-      const page = await fetchPage(propertyId, more ? nextCursor.value : undefined)
-      rows.value = more ? [...rows.value, ...page.entries] : page.entries
-      nextCursor.value = page.next
-      scanCapped.value = false
-    }
-    loaded.value = true
-  } catch (e) {
-    error.value = e instanceof ApiError ? e : null
-  } finally {
-    loading.value = false
   }
+  if (number && reservation === null) {
+    let next = cursor
+    const found: AuditLog[] = []
+    let pages = 0
+    do {
+      const page = await fetchPage(propertyId, next)
+      found.push(...page.entries.filter((e) => carries(e, number)))
+      next = page.next
+      pages++
+    } while (next && found.length < SCAN_ENOUGH && pages < SCAN_PAGES)
+    scanCapped.value = !!next && found.length < SCAN_ENOUGH
+    return { data: found, next_cursor: next }
+  }
+  scanCapped.value = false
+  const page = await fetchPage(propertyId, cursor)
+  return { data: page.entries, next_cursor: page.next }
+})
+const { rows, error, loading, loadingMore, loaded, hasMore } = list
+
+async function load(): Promise<void> {
+  if (pid.value === null || !allowed.value) return
+  await list.reload()
 }
+
+/** The details of an entry are opened and closed from its row (a button in the table, the main action of a card). */
+const toggleDetails = (id: number): void => {
+  open.value = open.value === id ? null : id
+}
+const actionsOf = (row: AuditLog): RowAction[] => [{ key: 'details', label: open.value === row.id ? t('audit.hide') : t('audit.details'), primary: true, testId: `toggle-${row.id}`, onSelect: () => toggleDetails(row.id) }]
 
 function reset(): void {
   Object.assign(filter, { entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
@@ -154,8 +152,7 @@ function entityName(row: { entity_type: string; entity_id: number; old_data?: un
 }
 
 watch(pid, () => {
-  rows.value = []
-  loaded.value = false
+  list.reset()
   open.value = null
   void load()
   if (allowed.value) void loadUsers()
@@ -171,7 +168,13 @@ watch(pid, () => {
 
   <template v-else>
     <Card class="mb-4">
-      <form class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
+      <FilterBar class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="filters" :active="activeFilters" @submit="load">
+      <template #search>
+        <FormField :label="t('audit.document')">
+          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
+        </FormField>
+      </template>
+
         <FormField :label="t('audit.entity')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="filter.entity_type" name="entity_type">
@@ -196,16 +199,16 @@ watch(pid, () => {
             </NativeSelect>
           </template>
         </FormField>
-        <FormField :label="t('audit.document')">
-          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
-        </FormField>
+        
         <FormField float-hint :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+      <template #actions>
         <div class="flex items-end gap-2">
           <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
           <Button type="button" variant="outline" :disabled="loading" data-testid="reset" @click="reset">{{ t('audit.clear') }}</Button>
         </div>
-      </form>
+      </template>
+    </FilterBar>
     </Card>
 
     <Card>
@@ -215,10 +218,15 @@ watch(pid, () => {
         :columns="columns"
         :rows="rows"
         row-key="id"
+        :has-more="hasMore"
+        :loading-more="loadingMore"
+        cards
+        :row-actions="actionsOf"
         :row-test-id="(r) => `entry-${r.id}`"
         :is-expanded="(r) => open === r.id"
         :detail-test-id="(r) => `detail-${r.id}`"
         :caption="t('audit.title')"
+        @load-more="list.loadMore()"
       >
         <template #cell-created_at="{ row }">{{ $dateTime(row.created_at) }}</template>
         <template #cell-business_date="{ row }">{{ $date(row.business_date) || '—' }}</template>
@@ -237,9 +245,6 @@ watch(pid, () => {
         </template>
       </DataTable>
       <p v-if="scanCapped" class="m-0 px-4 pt-3 text-sm text-muted-foreground" data-testid="scan-capped">{{ t('audit.scanCapped') }}</p>
-      <div v-if="nextCursor" class="flex justify-center p-3">
-        <Button type="button" variant="outline" :disabled="loading" data-testid="more" @click="load(true)">{{ t('audit.more') }}</Button>
-      </div>
     </Card>
   </template>
 </template>

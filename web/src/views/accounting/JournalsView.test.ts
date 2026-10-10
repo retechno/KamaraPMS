@@ -46,6 +46,17 @@ function mountView(permissions = ['accounting.view', 'accounting.post', 'account
   return mount(JournalsView, { global: { plugins: [pinia, router], stubs: { ApprovalDialog: { name: 'ApprovalDialog', emits: ['approve', 'cancel'], template: '<div data-testid="approval" />' } } } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('decimal helpers', () => {
   it('count in thousandths without floats', () => {
     expect(toMilli('100000.5')).toBe(100000500n)
@@ -185,5 +196,43 @@ describe('JournalsView', () => {
     await flushPromises()
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('is a card on a phone: the number as the title, the description under it, the type in the corner and the total at the right; a tap opens it', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=journal-JV000001]')
+      expect(card.text()).toContain('JV000001')
+      expect(card.text()).toContain('Cash sale')
+      expect(card.text()).toContain('Manual')
+      expect(card.get('p.font-semibold').text()).toBe('100,000')
+      await card.trigger('click')
+      await flushPromises()
+      expect(w.get('[data-testid=journal-detail]').text()).toContain('1110')
+      w.unmount()
+    })
+  })
+
+  it('has a short bar on a phone: the search, and "Filter (n)" for the dates and the type', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('input[name=q]').exists()).toBe(true)
+      expect(w.find('input[name=from]').exists()).toBe(false)
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const type = sheet.querySelector('select[name=type]') as HTMLSelectElement
+      type.value = 'MANUAL'
+      type.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      expect(sheet.querySelector('[data-testid=apply]')).not.toBeNull() // the button of the page is in the sheet
+      w.unmount()
+      document.body.innerHTML = ''
+    })
   })
 })

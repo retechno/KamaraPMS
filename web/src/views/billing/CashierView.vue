@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
+import type { RowAction } from '@/components/app/rowActions'
+import { usePagedList } from '@/composables/usePagedList'
 import { FileText, Receipt, Search } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -26,12 +29,7 @@ const property = usePropertyStore()
 
 const date = ref('')
 const method = ref('')
-const rows = ref<Payment[]>([])
 const totals = ref<MethodTotal[]>([])
-const nextCursor = ref<string | undefined>()
-const error = ref<ApiError | null>(null)
-const loading = ref(false)
-const searched = ref(false)
 
 const METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER'] as const
 
@@ -41,15 +39,21 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
+// The business date of the day is what the page shows to begin with: another day, or a method, is a filter that is on.
+const activeFilters = computed(() => (date.value && date.value !== businessDate.value ? 1 : 0) + (method.value ? 1 : 0))
+
 const columns = computed<Column<Payment>[]>(() => [
-  { key: 'payment_number', label: t('cashier.number'), sortable: true },
+  { key: 'payment_number', label: t('cashier.number'), sortable: true, card: 'primary' as const },
   { key: 'payment_type', label: t('cashier.type'), sortable: true },
-  { key: 'payment_method', label: t('cashier.method'), sortable: true },
-  { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const },
-  { key: 'status', label: t('cashier.status'), sortable: true },
+  { key: 'payment_method', label: t('cashier.method'), sortable: true, card: 'secondary' as const },
+  { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const, card: 'money' as const },
+  { key: 'status', label: t('cashier.status'), sortable: true, card: 'badge' as const },
   { key: 'folio_id', label: t('cashier.folio') },
-  ...(canPrint.value ? [{ key: 'receipt', label: '', align: 'right' as const }] : []),
+  ...(canPrint.value ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
+
+/** The receipt is the main action of a payment: a button in the table and in the card. */
+const actionsOf = (p: Payment): RowAction[] => [{ key: 'receipt', label: t('cashier.receipt'), primary: true, testId: `receipt-${p.payment_number}`, onSelect: () => void print(p.id) }]
 
 async function print(paymentId: number): Promise<void> {
   const propertyId = property.currentId
@@ -62,34 +66,28 @@ async function print(paymentId: number): Promise<void> {
   }
 }
 
-async function load(more = false): Promise<void> {
-  const propertyId = property.currentId
-  if (propertyId === null || !canRead.value) return
+// One page of 50 at a time; the day and the method are asked of the server, and a new search starts from the first page (the totals of the day come with it).
+const list = usePagedList<Payment>(async (cursor) => {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', {
+    params: {
+      path: { propertyId: property.currentId! },
+      query: { limit: 50, cursor, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined },
+    },
+  })
+  if (!cursor) totals.value = data?.totals ?? []
+  return { data: data?.data ?? [], next_cursor: data?.next_cursor }
+})
+const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
+
+async function load(): Promise<void> {
+  if (property.currentId === null || !canRead.value) return
   if (!date.value) date.value = businessDate.value
-  loading.value = true
-  error.value = null
-  try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', {
-      params: {
-        path: { propertyId },
-        query: { limit: 50, cursor: more ? nextCursor.value : undefined, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined },
-      },
-    })
-    rows.value = more ? [...rows.value, ...(data?.data ?? [])] : (data?.data ?? [])
-    if (!more) totals.value = data?.totals ?? []
-    nextCursor.value = data?.next_cursor
-    searched.value = true
-  } catch (e) {
-    error.value = e instanceof ApiError ? e : null
-  } finally {
-    loading.value = false
-  }
+  await list.reload()
 }
 
 watch(() => property.currentId, () => {
   date.value = ''
-  rows.value = []
-  searched.value = false
+  list.reset()
   void load()
 }, { immediate: true })
 watch(businessDate, () => {
@@ -111,7 +109,8 @@ watch(businessDate, () => {
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('cashier.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" role="search" @submit.prevent="load()">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" role="search" :active="activeFilters" @submit="load">
+
       <FormField float-hint :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
         <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
       </FormField>
@@ -123,8 +122,10 @@ watch(businessDate, () => {
           </NativeSelect>
         </template>
       </FormField>
-      <Button type="submit" :disabled="loading"><Search />{{ t('cashier.show') }}</Button>
-    </form>
+      <template #actions>
+        <Button type="submit" :disabled="loading"><Search />{{ t('cashier.show') }}</Button>
+      </template>
+    </FilterBar>
 
     <div v-if="totals.length" class="mb-5 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="totals">
       <KpiCard
@@ -143,9 +144,14 @@ watch(businessDate, () => {
       :rows="rows"
       row-key="id"
       :loading="!searched"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      cards
+      :row-actions="actionsOf"
       :row-test-id="(p) => `payment-${p.payment_number}`"
       :row-class="(p) => (p.status === 'VOIDED' ? 'struck text-muted-foreground line-through' : undefined)"
       :caption="t('cashier.title')"
+      @load-more="list.loadMore()"
     >
       <template #cell-payment_type="{ row }">
         <Badge :variant="row.payment_type === 'REFUND' ? 'warning' : 'outline'">{{ t(`cashier.${row.payment_type}` as never) }}</Badge>
@@ -153,15 +159,7 @@ watch(businessDate, () => {
       <template #cell-payment_method="{ row }">{{ methodLabel(row.payment_method) }}</template>
       <template #cell-status="{ row }"><StatusBadge domain="payment" :status="row.status" /></template>
       <template #cell-folio_id="{ row }"><RouterLink :to="`/folios/${row.folio_id}`">#{{ row.folio_id }}</RouterLink></template>
-      <template #cell-receipt="{ row }">
-        <Button variant="outline" size="sm" :data-testid="`receipt-${row.payment_number}`" @click="print(row.id)">{{ t('cashier.receipt') }}</Button>
-      </template>
       <template #empty><EmptyState :title="t('cashier.empty')" data-testid="empty" /></template>
-      <template #footer>
-        <div v-if="nextCursor" class="flex justify-center p-3">
-          <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="load(true)">{{ t('cashier.loadMore') }}</Button>
-        </div>
-      </template>
     </DataTable>
   </template>
 </template>

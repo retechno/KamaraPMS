@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
+import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { BellOff, ChevronsUp, RefreshCw, Sparkles, Wrench } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
@@ -59,15 +61,28 @@ const visible = computed(() =>
   ),
 )
 
+const activeFilters = computed(() => (statusFilter.value ? 1 : 0) + (flaggedOnly.value ? 1 : 0) + (occupancyFilter.value ? 1 : 0) + (floorFilter.value ? 1 : 0))
+
 const columns = computed<Column<HousekeepingBoardRoom>[]>(() => [
-  { key: 'room_number', label: t('housekeeping.room'), sortable: true },
-  { key: 'room_type_code', label: t('housekeeping.type'), sortable: true },
-  { key: 'status', label: t('housekeeping.housekeepingCol'), sortable: true },
+  { key: 'room_number', label: t('housekeeping.room'), sortable: true, card: 'primary' as const },
+  { key: 'room_type_code', label: t('housekeeping.type'), sortable: true, card: 'secondary' as const },
+  { key: 'status', label: t('housekeeping.housekeepingCol'), sortable: true, card: 'badge' as const },
   { key: 'occupancy', label: t('housekeeping.occupancyCol'), sortable: true },
   { key: 'block', label: t('housekeeping.block') },
   { key: 'flags', label: t('housekeeping.flags') },
   ...(canUpdate.value || canReport.value ? [{ key: 'actions', label: t('housekeeping.actions'), align: 'right' as const }] : []),
 ])
+
+/** The actions of a room as a card of a phone shows them: the next cleaning step is the main button, the others are in the "..." menu. */
+function cardActions(r: HousekeepingBoardRoom): RowAction[] {
+  const acts: RowAction[] = []
+  if (canUpdate.value) {
+    actionsFor(r).forEach((s, i) => acts.push({ key: `status-${s}`, label: verb(s), primary: i === 0, disabled: busyRoom.value === r.room_id, testId: `act-${s}`, onSelect: () => void change(r, s) }))
+    acts.push({ key: 'flags', label: t('housekeeping.flagsButton'), testId: `flags-${r.room_number}`, onSelect: () => startFlags(r) })
+  }
+  if (canReport.value) acts.push({ key: 'report', label: t('housekeeping.report'), to: `/maintenance?room=${r.room_id}`, testId: `report-${r.room_number}` })
+  return acts
+}
 
 function actionsFor(room: HousekeepingBoardRoom): HousekeepingStatus[] {
   return room.allowed_next.filter((s) => s !== 'INSPECTED' || canInspect.value)
@@ -148,7 +163,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
   <p v-if="property.currentId === null" class="muted">{{ t('housekeeping.selectProperty') }}</p>
 
   <template v-else>
-    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <FilterBar plain class="mb-4 flex flex-wrap items-end justify-between gap-3" :active="activeFilters">
       <div class="flex flex-wrap gap-2" role="group" :aria-label="t('housekeeping.filterStatus')">
         <Button size="sm" :variant="statusFilter === '' ? 'default' : 'outline'" :aria-pressed="statusFilter === ''" @click="statusFilter = ''">
           {{ t('housekeeping.all') }} <b>{{ rooms.length }}</b>
@@ -188,7 +203,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
           </template>
         </FormField>
       </div>
-    </div>
+    </FilterBar>
 
     <Card v-if="flagging" class="mb-4 border-primary/50">
       <form novalidate data-testid="flag-form" @submit.prevent="saveFlags">
@@ -217,7 +232,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </form>
     </Card>
 
-    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
+    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" cards :row-actions="cardActions" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
       <template #cell-room_number="{ row: r }">
         <b>{{ r.room_number }}</b>
         <Badge v-if="r.bed_type_code" variant="outline" class="ml-1.5" data-testid="bed">{{ r.bed_type_code }}</Badge>

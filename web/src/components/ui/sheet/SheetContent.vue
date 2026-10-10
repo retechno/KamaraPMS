@@ -7,7 +7,7 @@ import { DialogContent } from '@/components/ui/dialog'
 
 interface Props extends DialogContentProps {
   class?: HTMLAttributes['class']
-  side?: 'left' | 'right'
+  side?: 'left' | 'right' | 'bottom'
 }
 
 const props = withDefaults(defineProps<Props>(), { side: 'right' })

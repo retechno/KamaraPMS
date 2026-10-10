@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { localizeDates } from '@/utils/format'
 import { computed, reactive, ref, watch } from 'vue'
@@ -55,15 +56,16 @@ function ledgerLink(accountId: number, date: string): { path: string; query: Rec
   const mm = String(m).padStart(2, '0')
   return { path: '/accounting/ledger', query: { account: String(accountId), from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, '0')}` } }
 }
+const activeFilters = computed(() => (filter.from ? 1 : 0) + (filter.to ? 1 : 0) + (filter.type ? 1 : 0))
 const typeLabel = (k: string): string => t(`journals.t_${k}` as 'journals.t_MANUAL')
 const TYPES = ['DAY_CLOSE', 'MANUAL', 'REVERSAL', 'CLOSING', 'PAYABLES', 'BANK', 'TAX'] as const
 const columns = computed<Column<Journal>[]>(() => [
   { key: 'journal_date', label: t('journals.date'), format: 'date' as const },
-  { key: 'journal_number', label: t('journals.number') },
-  { key: 'journal_type', label: t('journals.type') },
-  { key: 'description', label: t('journals.description') },
-  { key: 'total', label: t('journals.total'), align: 'right', format: 'money' as const },
-  { key: 'reversed', label: '' },
+  { key: 'journal_number', label: t('journals.number'), card: 'primary' as const },
+  { key: 'journal_type', label: t('journals.type'), card: 'badge' as const },
+  { key: 'description', label: t('journals.description'), card: 'secondary' as const },
+  { key: 'total', label: t('journals.total'), align: 'right', format: 'money' as const, card: 'money' as const },
+  { key: 'reversed', label: '', hideOnMobile: true },
 ])
 
 async function load(): Promise<void> {
@@ -265,7 +267,11 @@ watch(() => pid.value, () => {
 
     <Card>
       <CardContent class="pt-4">
-        <form class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" novalidate @submit.prevent="load">
+        <FilterBar class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" :active="activeFilters" @submit="load">
+      <template #search>
+        <FormField :label="t('journals.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('journals.searchPlaceholder')" /></template></FormField>
+      </template>
+
           <FormField :label="t('journals.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
           <FormField :label="t('journals.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
           <FormField :label="t('journals.type')">
@@ -276,15 +282,17 @@ watch(() => pid.value, () => {
               </NativeSelect>
             </template>
           </FormField>
-          <FormField :label="t('journals.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('journals.searchPlaceholder')" /></template></FormField>
-          <div class="flex items-end"><Button type="submit" variant="outline" data-testid="apply">{{ t('journals.apply') }}</Button></div>
-        </form>
+      <template #actions>
+        <div class="flex items-end"><Button type="submit" variant="outline" data-testid="apply">{{ t('journals.apply') }}</Button></div>
+      </template>
+    </FilterBar>
         <EmptyState v-if="loaded && !journals.length" :title="t('journals.empty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"
           :rows="journals"
           row-key="id"
+          cards
           clickable
           :row-test-id="(j) => `journal-${j.journal_number}`"
           :row-class="(j) => (opened?.id === j.id ? 'bg-accent' : undefined)"

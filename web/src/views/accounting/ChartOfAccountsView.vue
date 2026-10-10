@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
+import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
@@ -40,14 +42,27 @@ const importResult = ref<{ dry_run: boolean; created: number; updated: number } 
 
 const typeLabel = (k: string): string => t(`accountingBooks.type_${k}` as 'accountingBooks.type_ASSET')
 const groupLabel = (k: string): string => t(`accountingBooks.g_${k}` as 'accountingBooks.g_CASH')
+/** The actions of an account as a card of a phone shows them: edit is the main button, the others are in the "..." menu. */
+const cardActions = (r: TreeRow): RowAction[] =>
+  can('accounting.manage')
+    ? [
+        { key: 'edit', label: t('common.edit'), primary: true, testId: `edit-${r.account.code}`, onSelect: () => startEdit(r.account) },
+        ...(!r.account.is_postable ? [{ key: 'addUnder', label: t('accountingBooks.addUnder'), testId: `add-under-${r.account.code}`, onSelect: () => startNew(r.account) }] : []),
+        ...(!r.account.in_use ? [{ key: 'delete', label: t('common.delete'), destructive: true, testId: `delete-${r.account.code}`, onSelect: () => void remove(r.account) }] : []),
+      ]
+    : []
+
+// Account headers are shown to begin with: hiding them is the filter that is on.
+const activeFilters = computed(() => (filter.type ? 1 : 0) + (filter.headers ? 0 : 1) + (filter.inactive ? 1 : 0))
+
 const columns = computed<Column<TreeRow>[]>(() => [
-  { key: 'code', label: t('accountingBooks.code') },
-  { key: 'name', label: t('accountingBooks.name') },
+  { key: 'code', label: t('accountingBooks.code'), card: 'primary' as const },
+  { key: 'name', label: t('accountingBooks.name'), card: 'secondary' as const },
   { key: 'type', label: t('accountingBooks.type') },
-  { key: 'normal', label: t('accountingBooks.normal') },
-  { key: 'group', label: t('accountingBooks.group') },
-  { key: 'department', label: t('accountingBooks.departmentRule') },
-  { key: 'status', label: t('setup.status') },
+  { key: 'normal', label: t('accountingBooks.normal'), hideOnMobile: true },
+  { key: 'group', label: t('accountingBooks.group'), hideOnMobile: true },
+  { key: 'department', label: t('accountingBooks.departmentRule'), hideOnMobile: true },
+  { key: 'status', label: t('setup.status'), card: 'badge' as const },
   ...(can('accounting.manage') ? [{ key: 'actions', label: '', align: 'right' as const }] : []),
 ])
 
@@ -323,10 +338,14 @@ watch(() => pid.value, () => {
 
     <Card>
       <CardContent class="pt-4">
-        <form class="mb-4 flex flex-wrap items-end gap-4" novalidate @submit.prevent>
-          <FormField class="w-64" :label="t('accountingBooks.search')">
+        <FilterBar class="mb-4 flex flex-wrap items-end gap-4" :active="activeFilters">
+      <template #search>
+        <FormField class="w-64" :label="t('accountingBooks.search')">
             <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('accountingBooks.codeOrName')" /></template>
           </FormField>
+      </template>
+
+          
           <FormField class="w-48" :label="t('accountingBooks.type')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="filter.type" name="filter_type">
@@ -337,13 +356,15 @@ watch(() => pid.value, () => {
           </FormField>
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.headers" name="headers" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showHeaders') }}</span></label>
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showInactive') }}</span></label>
-        </form>
+    </FilterBar>
         <EmptyState v-if="loaded && !visible.length" :title="t('accountingBooks.coaEmpty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"
           :rows="visible"
           :row-key="(r) => r.account.id"
+          cards
+          :row-actions="cardActions"
           :row-test-id="(r) => `account-${r.account.code}`"
           :row-class="(r) => [!r.account.is_postable && 'header bg-accent/60', !r.account.is_active && 'text-muted-foreground'].filter(Boolean).join(' ') || undefined"
           :caption="t('accountingBooks.coaTitle')"

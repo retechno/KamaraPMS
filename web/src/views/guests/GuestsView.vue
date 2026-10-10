@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePagedList } from '@/composables/usePagedList'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -23,8 +24,6 @@ const auth = useAuthStore()
 const property = usePropertyStore()
 
 const query = ref('')
-const results = ref<Guest[]>([])
-const nextCursor = ref<string | undefined>()
 const searched = ref(false)
 const loading = ref(false)
 const error = ref<ApiError | null>(null)
@@ -35,32 +34,35 @@ const saving = ref(false)
 const created = ref<CreatedGuest | null>(null)
 
 const columns = computed<Column<Guest>[]>(() => [
-  { key: 'code', label: t('guests.code') },
-  { key: 'name', label: t('guests.name') },
+  { key: 'code', label: t('guests.code'), card: 'primary' as const },
+  { key: 'name', label: t('guests.name'), card: 'secondary' as const },
   { key: 'email', label: t('guests.email') },
   { key: 'phone', label: t('guests.phone') },
-  { key: 'nationality', label: t('guests.nationality') },
+  { key: 'nationality', label: t('guests.nationality'), hideOnMobile: true },
 ])
 
 const canRead = computed(() => auth.can('guest.read', property.currentId))
 const canWrite = computed(() => auth.can('guest.write', property.currentId))
 
-async function search(more = false): Promise<void> {
+// One page of 50 at a time; a new search starts from the first page.
+const list = usePagedList<Guest>(async (cursor) => {
+  const { data } = await api.GET('/api/v1/guests', { params: { query: { q: query.value, property_id: property.currentId ?? undefined, limit: 50, cursor } } })
+  return { data: data?.data ?? [], next_cursor: data?.next_cursor }
+})
+const { rows: results, loadingMore, hasMore } = list
+
+async function search(): Promise<void> {
   if (property.currentId === null) return
   loading.value = true
   error.value = null
-  try {
-    const { data } = await api.GET('/api/v1/guests', {
-      params: { query: { q: query.value, property_id: property.currentId, limit: 50, cursor: more ? nextCursor.value : undefined } },
-    })
-    results.value = more ? [...results.value, ...(data?.data ?? [])] : (data?.data ?? [])
-    nextCursor.value = data?.next_cursor
-    searched.value = true
-  } catch (e) {
-    error.value = e instanceof ApiError ? e : null
-  } finally {
-    loading.value = false
-  }
+  await list.reload()
+  error.value = list.error.value
+  searched.value = true
+  loading.value = false
+}
+async function more(): Promise<void> {
+  await list.loadMore()
+  if (list.error.value) error.value = list.error.value
 }
 
 function startCreate(): void {
@@ -156,13 +158,22 @@ watch(() => property.currentId, () => {
 
     <Card>
       <EmptyState v-if="searched && !results.length" :title="t('guests.empty')" data-testid="empty" />
-      <DataTable v-else-if="results.length" :columns="columns" :rows="results" row-key="id" :row-test-id="(g) => `guest-${g.code}`" :caption="t('guests.title')">
+      <DataTable
+        v-else-if="results.length"
+        :columns="columns"
+        :rows="results"
+        row-key="id"
+        :has-more="hasMore"
+        :loading-more="loadingMore"
+        cards
+        :row-to="(g) => `/guests/${g.id}`"
+        :row-test-id="(g) => `guest-${g.code}`"
+        :caption="t('guests.title')"
+        @load-more="more"
+      >
         <template #cell-code="{ row }"><RouterLink :to="`/guests/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink></template>
         <template #cell-name="{ row }">{{ fullName(row) }}</template>
       </DataTable>
-      <div v-if="nextCursor" class="flex justify-center p-3">
-        <Button type="button" variant="outline" :disabled="loading" data-testid="more" @click="search(true)">{{ t('guests.more') }}</Button>
-      </div>
     </Card>
   </template>
 </template>

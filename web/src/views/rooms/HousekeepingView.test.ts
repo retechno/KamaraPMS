@@ -34,6 +34,17 @@ function mountBoard(permissions: string[], board: object[]) {
   return mount(HousekeepingView, { global: { plugins: [pinia, router] } })
 }
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('HousekeepingView', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -177,5 +188,61 @@ describe('HousekeepingView', () => {
     expect(w.get('[data-testid=block]').text()).toBe('OOS sampai 4 Okt 2026')
     expect(w.get('[data-testid=flags]').text()).toContain('Tinggi')
     setLocale('en')
+  })
+
+  it('is a card on a phone: the next step is the main button, the flags and the maintenance report are in the menu', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update', 'maintenance.report'], [room({}), room({ room_id: 2, room_number: '202', status: 'CLEAN', allowed_next: [] })])
+      await flushPromises()
+      expect(w.find('table').exists()).toBe(false)
+      const card = w.get('[data-testid=room-201]')
+      expect(card.text()).toContain('201')
+      expect(card.text()).toContain('Dirty')
+      expect(card.find('[data-testid=act-CLEANING]').exists()).toBe(true) // the next cleaning step
+      expect(card.find('[data-testid=act-CLEAN]').exists()).toBe(false) // the second step is in the menu
+      await card.get('[data-testid=act-CLEANING]').trigger('click')
+      await flushPromises()
+      expect(PUT.mock.calls.length + POST.mock.calls.length).toBeGreaterThan(0)
+      await card.get('[data-slot=row-menu-trigger]').trigger('click')
+      await flushPromises()
+      const items = Array.from(document.body.querySelectorAll('[data-slot=row-menu] [data-testid]')).map((e) => e.getAttribute('data-testid'))
+      expect(items).toEqual(['act-CLEAN', 'flags-201', 'report-201'])
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
+
+  it('has a short bar on a phone: one "Filter (n)" button, the chips and the selects in a sheet', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update'], [room({}), room({ room_id: 2, room_number: '202', status: 'CLEAN', allowed_next: [] })])
+      await flushPromises()
+      expect(w.find('[data-testid=filter-CLEAN]').exists()).toBe(false)
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      ;(sheet.querySelector('[data-testid=filter-CLEAN]') as HTMLElement).click()
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      expect(w.find('[data-testid=room-201]').exists()).toBe(false) // filtered to the clean ones
+      expect(w.find('[data-testid=room-202]').exists()).toBe(true)
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
+
+  it('has a card that is as short as its row: no "Block" and no "Flags" line when there is neither', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update'], [room({})])
+      await flushPromises()
+      const card = w.get('[data-testid=room-201]')
+      expect(card.findAll('dt').map((e) => e.text())).toEqual(['Occupancy'])
+      expect(card.text()).not.toContain('Block')
+      expect(card.text()).not.toContain('Flags')
+      w.unmount()
+      const flagged = mountBoard(['housekeeping.update'], [room({ priority: 'HIGH', dnd: true })])
+      await flushPromises()
+      expect(flagged.get('[data-testid=room-201]').findAll('dt').map((e) => e.text())).toEqual(['Occupancy', 'Flags'])
+    })
   })
 })
