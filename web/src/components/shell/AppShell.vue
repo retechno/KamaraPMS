@@ -4,10 +4,12 @@ import { useRoute } from 'vue-router'
 import ConfirmHost from '@/components/app/ConfirmHost.vue'
 import ToastHost from '@/components/app/ToastHost.vue'
 import CommandPalette from '@/components/shell/CommandPalette.vue'
+import PropertySwitcher from '@/components/shell/PropertySwitcher.vue'
 import SidebarNav from '@/components/shell/SidebarNav.vue'
 import TopBar from '@/components/shell/TopBar.vue'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useLayoutMode } from '@/composables/useLayoutMode'
+import { useNavPins } from '@/composables/useNavPins'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatBusinessDate } from '@/utils/dates'
@@ -21,9 +23,13 @@ const emit = defineEmits<{ signOut: [] }>()
 const property = usePropertyStore()
 const route = useRoute()
 const { mode, collapsed, canCollapse, toggleCollapsed } = useLayoutMode()
+const pins = useNavPins()
 
 const drawer = ref(false)
 const palette = ref(false)
+
+// The page the person is on is the first of the pages opened last.
+watch(() => route.path, (path) => pins.track(path), { immediate: true })
 
 // Going to another page closes the drawer; leaving the drawer layout (a rotated tablet) closes it too.
 watch(() => route.fullPath, () => (drawer.value = false))
@@ -57,7 +63,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
         <span v-if="mode === 'full'" class="font-semibold tracking-tight">KamaraPMS</span>
       </div>
-      <SidebarNav :rail="mode === 'rail'" />
+      <SidebarNav :rail="mode === 'rail'" @open-menu="drawer = true" />
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
@@ -79,6 +85,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <span class="grid size-7 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
           <span class="font-semibold tracking-tight">KamaraPMS</span>
         </div>
+        <!-- on a phone the top bar has no room for the property: it is chosen here -->
+        <PropertySwitcher v-if="mode === 'drawer'" class="mb-3" />
         <SidebarNav @navigate="drawer = false" />
       </DialogContent>
     </Dialog>

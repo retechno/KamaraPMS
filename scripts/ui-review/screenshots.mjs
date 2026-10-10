@@ -73,6 +73,20 @@ const sizes = [
   { name: 'ponsel', width: 390, height: 844, mobile: true },
 ]
 
+// Memilih properti review. Di ponsel pemilihnya ada di dalam drawer menu, bukan di top bar: buka drawer, pilih, tutup.
+async function pickProperty(page, mobile) {
+  const sel = '[data-testid="property-switcher"]'
+  if (mobile) {
+    await page.click('[data-testid="open-menu"]')
+    await page.waitForSelector(`[data-testid="drawer"] ${sel}`, { timeout: 10000 }).catch(() => {})
+  }
+  await page.waitForSelector(`${sel} option:text-matches("${CODE}")`, { state: 'attached', timeout: 10000 }).catch(() => {})
+  const opt = await page.$(`${sel} option:text-matches("${CODE}")`)
+  if (opt) await page.selectOption(sel, await opt.getAttribute('value'))
+  else console.log(`properti ${CODE} tidak ditemukan: halaman diambil untuk properti yang terpilih`)
+  if (mobile) await page.keyboard.press('Escape')
+  await page.waitForTimeout(800)
+}
 const browser = await chromium.launch()
 const index = [`# Screenshot KamaraPMS (${LABEL})`, '', `Properti ${CODE}, ${new Date().toISOString()}`, '', '| No | Halaman | URL | Ukuran | File |', '|---|---|---|---|---|']
 let no = 0
@@ -83,6 +97,8 @@ const settle = async (page) => {
 }
 for (const size of sizes) for (const scheme of size.dark ? ['light', 'dark'] : ['light']) {
   const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, isMobile: !!size.mobile, hasTouch: !!size.mobile, colorScheme: scheme, locale: 'id-ID' })
+  // bahasa Indonesia lewat penyimpanan peramban: pemilih bahasa ada di menu avatar
+  await ctx.addInitScript(() => { try { localStorage.setItem('pms.locale', 'id') } catch { /* tidak apa-apa */ } })
   const page = await ctx.newPage()
   await page.goto(WEB + '/login')
   await page.fill('input[name="tenant_code"]', TENANT)
@@ -91,10 +107,7 @@ for (const size of sizes) for (const scheme of size.dark ? ['light', 'dark'] : [
   await page.click('button[type="submit"]')
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 15000 })
   await settle(page)
-  // pilih bahasa Indonesia dan properti review
-  await page.selectOption('[data-testid="language-switcher"]', 'id').catch(() => {})
-  const opt = await page.$(`[data-testid="property-switcher"] option:text-matches("${CODE}")`).catch(() => null)
-  if (opt) await page.selectOption('[data-testid="property-switcher"]', await opt.getAttribute('value')).catch(() => {})
+  await pickProperty(page, !!size.mobile)
   await settle(page)
   const pages = scheme === 'dark' ? list.filter(([r]) => ['/', '/room-status', '/reservations/tape', '/folios', '/night-audit'].includes(r) || r.startsWith('/folios/')) : list
   for (const [route, name] of pages) {

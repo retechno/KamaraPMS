@@ -208,7 +208,7 @@ watch(businessDate, (bd) => {
             :class="cn('flex flex-col items-center justify-center leading-tight', isWeekend(d) && 'bg-muted/60', d === businessDate && 'bg-primary/10 text-primary')"
             role="columnheader"
           >
-            <small class="text-[10px] uppercase">{{ weekday(d) }}</small>{{ d.slice(8) }}<small>{{ d.slice(5, 7) }}</small>
+            <small class="text-[10px] uppercase">{{ weekday(d) }}</small>{{ d.slice(8) }}/{{ d.slice(5, 7) }}
           </div>
         </div>
         <div
