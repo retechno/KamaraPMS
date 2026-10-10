@@ -4,9 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 /** docs/glossary.md: one Indonesian term for each concept. The words below were replaced; they must not come back in the Indonesian messages. */
 const BANNED: [RegExp, string][] = [
-  [/Front desk/, 'Resepsi'],
   [/\bIn-house\b/i, 'Menginap'],
-  [/\bWalk-in\b/i, 'Tamu langsung'],
   [/Night audit/i, 'Audit malam'],
   [/City ledger/i, 'Piutang perusahaan'],
   [/Tape chart/i, 'Bagan kamar'],

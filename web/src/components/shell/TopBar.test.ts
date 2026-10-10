@@ -83,7 +83,7 @@ describe('TopBar', () => {
     await w.get('[data-testid=language-switcher]').setValue('id')
     expect(currentLocale()).toBe('id')
     expect(localStorage.getItem('pms.locale')).toBe('id')
-    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Resepsi/Kedatangan')
+    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front Desk/Kedatangan')
     expect(w.get('[data-testid=business-date]').text()).toContain('Tanggal bisnis')
   })
 

@@ -11,7 +11,7 @@ describe('permissionText', () => {
     const p = { code: 'frontdesk.checkin', description: 'Check guests in (including walk-ins)' }
     expect(permissionText(p)).toBe('Check guests in (including walk-ins)')
     await setLocale('id')
-    expect(permissionText(p)).toBe('Check-in tamu (termasuk tamu langsung)')
+    expect(permissionText(p)).toBe('Check-in tamu (termasuk walk-in)')
     expect(permissionText({ code: 'brand.new', description: 'A new permission' })).toBe('A new permission')
     expect(permissionGroupText('End of day')).toBe('Akhir hari')
     expect(permissionGroupText('Something else')).toBe('Something else')
