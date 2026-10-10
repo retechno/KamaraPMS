@@ -16,7 +16,10 @@ import ManagerDashboard from '@/views/dashboard/ManagerDashboard.vue'
 const system = useSystemStore()
 const property = usePropertyStore()
 const auth = useAuthStore()
-onMounted(() => system.check())
+// The status of the API and the database is for the administrator: the card and the check are not made for other staff.
+onMounted(() => {
+  if (auth.isAdmin) void system.check()
+})
 
 const pid = computed(() => property.currentId)
 const can = (permission: string) => pid.value !== null && auth.can(permission, pid.value)
@@ -78,7 +81,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
       </CardContent>
     </Card>
 
-    <Card aria-labelledby="status-title">
+    <Card v-if="auth.isAdmin" aria-labelledby="status-title" data-testid="system-status-card">
       <CardHeader class="flex-row items-center justify-between">
         <CardTitle id="status-title">{{ t('dashboard.page.systemStatus') }}</CardTitle>
         <Button variant="outline" size="sm" :disabled="system.checking" @click="system.check()">

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Status kamar dan tape chart</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#17695a}a:hover{color:#0f4d42}
+</style>
+</helmet>
+<div style="min-height: 1180px; background: #f4f6f5; color: #15201d; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 28px 24px 120px; box-sizing: border-box; position: relative">
+  <div style="max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+    <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px">
+      <div>
+        <h1 style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em">Status kamar</h1>
+        <p style="margin: 6px 0 0; font-size: 15px; color: #4f5e59">Klik kamar untuk memilih beberapa sekaligus, lalu ubah statusnya dari bar di bawah.</p>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px">
+        <label style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 10px; background: #fff; font-size: 14.5px; color: #4f5e59"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input type="search" placeholder="No. kamar" aria-label="Cari nomor kamar" style="width: 110px; border: 0; outline: none; font: inherit; color: #15201d; background: transparent"></label>
+        <label style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 10px; background: #fff; font-size: 14.5px"><span style="color: #4f5e59">Tipe</span><select aria-label="Tipe kamar" style="border: 0; font: inherit; background: transparent; color: #15201d"><option>Semua</option><option>STD</option><option>DLX</option><option>SUP</option><option>FAM</option></select></label>
+      </div>
+    </header>
+
+    <div role="group" aria-label="Saring menurut kebersihan" style="display: flex; flex-wrap: wrap; gap: 10px">
+      <sc-for list="{{filters}}" as="f" hint-placeholder-count="6">
+        <button type="button" onClick="{{f.pick}}" aria-pressed="{{f.pressed}}" style="min-height: 44px; display: inline-flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; {{f.style}}">{{f.label}}<span style="font-size: 18px; font-weight: 800">{{f.count}}</span></button>
+      </sc-for>
+    </div>
+
+    <sc-for list="{{floors}}" as="fl" hint-placeholder-count="2">
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #33413c">{{fl.name}}</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px">
+          <sc-for list="{{fl.rooms}}" as="r" hint-placeholder-count="8">
+            <button type="button" onClick="{{r.toggle}}" aria-pressed="{{r.selected}}" aria-label="{{r.aria}}" style="position: relative; min-height: 112px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px; border-radius: 12px; text-align: left; font: inherit; cursor: pointer; {{r.style}}">
+              <span style="display: flex; width: 100%; align-items: flex-start; justify-content: space-between">
+                <span style="display: flex; flex-direction: column; gap: 2px"><strong style="font-size: 22px; font-weight: 800; line-height: 1">{{r.no}}</strong><span style="font-size: 12.5px; font-weight: 600; opacity: 0.85">{{r.type}}</span></span>
+                <sc-if value="{{r.selected}}" hint-placeholder-val="{{ false }}"><span style="width: 22px; height: 22px; border-radius: 6px; background: #17695a; color: #fff; display: grid; place-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span></sc-if>
+                <sc-if value="{{r.unselected}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.75); color: #15201d">{{r.occ}}</span></sc-if>
+              </span>
+              <span style="display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 6px"><span style="font-size: 13px; font-weight: 700">{{r.hk}}</span><span style="font-size: 12px; font-weight: 600; opacity: 0.85">{{r.note}}</span></span>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+
+    <section style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; margin-top: 12px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 700">Tape chart — satu batang per reservasi</h2>
+        <span style="font-size: 13.5px; color: #4f5e59">Seret batang untuk pindah kamar · tarik ujungnya untuk ubah malam</span>
+      </div>
+      <div style="overflow-x: auto">
+        <div style="min-width: 860px; display: grid; grid-template-columns: 110px repeat(7, minmax(0, 1fr)); row-gap: 6px">
+          <span></span>
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <span style="padding: 6px 8px; font-size: 13px; text-align: center; border-left: 1px solid #eef1f0; {{d.style}}"><span style="display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em">{{d.wd}}</span>{{d.date}}</span>
+          </sc-for>
+        </div>
+        <sc-for list="{{tape}}" as="row" hint-placeholder-count="5">
+          <div style="min-width: 860px; display: grid; grid-template-columns: 110px repeat(7, minmax(0, 1fr)); grid-template-rows: 44px; border-top: 1px solid #eef1f0; position: relative">
+            <span style="grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; font-size: 14px"><strong>{{row.no}}</strong><span style="font-size: 12px; color: #4f5e59">{{row.type}}</span></span>
+            <span style="grid-column: 2; grid-row: 1; background: rgba(23,105,90,.07)"></span>
+            <sc-for list="{{row.bars}}" as="b" hint-placeholder-count="1">
+              <span title="{{b.title}}" style="grid-row: 1; margin: 5px 3px; border-radius: 8px; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; {{b.style}}">{{b.label}}</span>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #33413c">
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 22px; height: 12px; border-radius: 3px; background: #e4ebfb; border: 1px solid #2552c4"></span>Dikonfirmasi</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 22px; height: 12px; border-radius: 3px; background: #2552c4"></span>Menginap</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 22px; height: 12px; border-radius: 3px; background: #fff; border: 1.5px dashed #8b96a3"></span>Draf / tentatif</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 22px; height: 12px; border-radius: 3px; background: repeating-linear-gradient(135deg, #4a5361 0 4px, #6b7480 4px 8px)"></span>Out of order</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 22px; height: 12px; border-radius: 3px; background: rgba(23,105,90,.14)"></span>Hari bisnis</span>
+      </div>
+    </section>
+  </div>
+
+  <sc-if value="{{hasSelection}}" hint-placeholder-val="{{ true }}">
+    <div role="region" aria-label="Aksi untuk kamar terpilih" style="position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: min(920px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: #15201d; color: #fff; box-shadow: 0 12px 32px rgba(21,32,29,.25)">
+      <strong style="font-size: 15px; padding: 0 6px; flex: 1 1 auto">{{selCount}} kamar dipilih</strong>
+      <button type="button" style="min-height: 44px; padding: 0 14px; border-radius: 9px; border: 0; background: #e3f3ea; color: #1b7a4b; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Tandai bersih</button>
+      <button type="button" style="min-height: 44px; padding: 0 14px; border-radius: 9px; border: 0; background: #1b7a4b; color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Tandai diperiksa</button>
+      <button type="button" style="min-height: 44px; padding: 0 14px; border-radius: 9px; border: 1px solid #4f5e59; background: transparent; color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Tugaskan ke…</button>
+      <button type="button" onClick="{{clear}}" style="min-height: 44px; padding: 0 12px; border-radius: 9px; border: 0; background: transparent; color: #c9d3cf; font: inherit; font-size: 14px; cursor: pointer">Batal</button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: { '201': true, '204': true, '305': true }, filter: 'ALL' };
+  }
+  renderVals() {
+    var self = this;
+    var S = {
+      DIRTY: { label: 'Kotor', style: 'background: #fdebdc; color: #a8460a; border: 1px solid #f3c9a6;' },
+      CLEANING: { label: 'Dibersihkan', style: 'background: #efe9fb; color: #5b3bb0; border: 1px solid #d6caf3;' },
+      CLEAN: { label: 'Bersih', style: 'background: #e3f3ea; color: #1b7a4b; border: 1px solid #b9e0c9;' },
+      INSPECTED: { label: 'Diperiksa ✓', style: 'background: #1b7a4b; color: #fff; border: 1px solid #1b7a4b;' },
+      OOO: { label: 'Out of order', style: 'background: repeating-linear-gradient(135deg, #4a5361 0 8px, #59636f 8px 16px); color: #fff; border: 1px solid #4a5361;' }
+    };
+    var data = [
+      ['Lantai 2', [['201', 'STD', 'DIRTY', 'Kosong', 'Tiba 13.00'], ['202', 'STD', 'INSPECTED', 'Kosong', ''], ['203', 'STD', 'CLEAN', 'Terisi', ''], ['204', 'DLX', 'DIRTY', 'Berangkat', '11.30'], ['205', 'DLX', 'CLEANING', 'Kosong', 'Wayan'], ['206', 'DLX', 'INSPECTED', 'Terisi', 'DND'], ['207', 'SUP', 'CLEAN', 'Kosong', ''], ['208', 'SUP', 'OOO', 'Blokir', 's/d 12 Okt']]],
+      ['Lantai 3', [['301', 'STD', 'CLEAN', 'Terisi', ''], ['302', 'STD', 'INSPECTED', 'Kosong', ''], ['303', 'STD', 'DIRTY', 'Terisi', 'Make-up'], ['304', 'DLX', 'CLEANING', 'Kosong', 'Komang'], ['305', 'DLX', 'DIRTY', 'Kosong', 'Tiba 13.00'], ['306', 'FAM', 'INSPECTED', 'Tiba', '14.00'], ['307', 'FAM', 'CLEAN', 'Terisi', ''], ['308', 'DLX', 'DIRTY', 'Berangkat', '12.00']]]
+    ];
+    var counts = { ALL: 0, DIRTY: 0, CLEANING: 0, CLEAN: 0, INSPECTED: 0, OOO: 0 };
+    data.forEach(function (f) { f[1].forEach(function (r) { counts[r[2]]++; counts.ALL++; }); });
+    var filters = ['ALL', 'DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED', 'OOO'].map(function (k) {
+      var on = self.state.filter === k;
+      var base = k === 'ALL' ? 'background: #fff; color: #15201d; border: 1px solid #c9d2ce;' : S[k].style;
+      return {
+        label: k === 'ALL' ? 'Semua' : S[k].label,
+        count: counts[k],
+        pressed: on ? 'true' : 'false',
+        style: base + (on ? ' box-shadow: 0 0 0 2px #f4f6f5, 0 0 0 4px #17695a;' : ''),
+        pick: function () { self.setState({ filter: k }); }
+      };
+    });
+    var sel = this.state.sel;
+    var floors = data.map(function (f) {
+      return {
+        name: f[0],
+        rooms: f[1].filter(function (r) { return self.state.filter === 'ALL' || r[2] === self.state.filter; }).map(function (r) {
+          var on = !!sel[r[0]];
+          return {
+            no: r[0], type: r[1], hk: S[r[2]].label, occ: r[3], note: r[4],
+            selected: on, unselected: !on,
+            aria: 'Kamar ' + r[0] + ', ' + S[r[2]].label + ', ' + r[3],
+            style: S[r[2]].style + (on ? ' box-shadow: 0 0 0 2px #f4f6f5, 0 0 0 4px #17695a;' : ''),
+            toggle: function () { var n = Object.assign({}, self.state.sel); if (n[r[0]]) { delete n[r[0]]; } else { n[r[0]] = true; } self.setState({ sel: n }); }
+          };
+        })
+      };
+    }).filter(function (f) { return f.rooms.length; });
+    var selCount = Object.keys(sel).length;
+    var days = [['SAB', '10 Okt'], ['MIN', '11'], ['SEN', '12'], ['SEL', '13'], ['RAB', '14'], ['KAM', '15'], ['JUM', '16']].map(function (d, i) {
+      return { wd: d[0], date: d[1], style: i === 0 ? 'background: rgba(23,105,90,.14); color: #0f4d42; font-weight: 700; border-radius: 8px 8px 0 0;' : (i === 0 || i === 1 ? 'color: #33413c;' : 'color: #4f5e59;') };
+    });
+    var B = {
+      booked: 'background: #e4ebfb; color: #2348a8; border: 1px solid #2552c4;',
+      inhouse: 'background: #2552c4; color: #fff;',
+      draft: 'background: #fff; color: #4a5361; border: 1.5px dashed #8b96a3;',
+      ooo: 'background: repeating-linear-gradient(135deg, #4a5361 0 6px, #6b7480 6px 12px); color: #fff;'
+    };
+    function bar(start, span, kind, label, title) { return { label: label, title: title, style: 'grid-column: ' + (start + 2) + ' / span ' + span + '; ' + B[kind] }; }
+    var tape = [
+      { no: '201', type: 'STD', bars: [bar(0, 3, 'booked', 'Ayu Pratiwi · 3 mlm', 'KMR-24018 Ayu Pratiwi'), bar(4, 2, 'draft', 'Tentatif · Grup Nusa', 'Tentatif')] },
+      { no: '203', type: 'STD', bars: [bar(0, 2, 'inhouse', 'Hendra Gunawan', 'Menginap'), bar(3, 4, 'booked', 'Lisa Morgan · 4 mlm', 'KMR-24022')] },
+      { no: '204', type: 'DLX', bars: [bar(1, 5, 'booked', 'Daniel Hartono · 5 mlm', 'KMR-24019')] },
+      { no: '206', type: 'DLX', bars: [bar(0, 4, 'inhouse', 'Keluarga Tan', 'Menginap'), bar(5, 2, 'booked', 'Made Wirawan', 'KMR-24031')] },
+      { no: '208', type: 'SUP', bars: [bar(0, 3, 'ooo', 'Out of order · AC', 'Perbaikan AC')] }
+    ];
+    return {
+      filters: filters, floors: floors, days: days, tape: tape,
+      selCount: selCount, hasSelection: selCount > 0,
+      clear: function () { self.setState({ sel: {} }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

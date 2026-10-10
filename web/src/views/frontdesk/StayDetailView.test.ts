@@ -46,7 +46,7 @@ describe('StayDetailView', () => {
   it('shows the stay, companions, segments, nights and the folio link', async () => {
     const w = mountView()
     await flushPromises()
-    expect(w.get('[data-testid=stay-status]').text()).toBe('OPEN')
+    expect(w.get('[data-testid=stay-status]').text()).toBe('In house')
     expect(w.get('[data-testid=companions]').text()).toContain('Budi Santoso')
     expect(w.get('[data-testid=segments]').text()).toContain('Room 101 from 30 Sep 2026')
     expect(w.get('[data-testid=nights]').text()).toContain('not yet')

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
@@ -33,14 +34,14 @@ onMounted(() => {
     </template>
   </PageHeader>
 
-  <p v-if="store.error" class="alert" role="alert">{{ store.error.message }} <code>{{ store.error.code }}</code></p>
+  <ErrorNotice v-if="store.error" :error="store.error" inline />
 
   <Card>
     <EmptyState v-if="store.loaded && !store.hasProperties" :title="t('properties.empty')" :description="t('properties.emptyHint')" data-testid="empty" />
     <DataTable v-else :columns="columns" :rows="store.properties" row-key="id" :caption="t('properties.title')">
       <template #cell-code="{ row }"><RouterLink :to="`/setup/properties/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.code }}</RouterLink></template>
       <template #cell-currency="{ row }">{{ row.currency_code }} ({{ t('properties.decimals', { n: row.currency_decimals }) }})</template>
-      <template #cell-status="{ row }"><StatusBadge domain="record" :status="String(row.status).toUpperCase()" :label="String(row.status)" /></template>
+      <template #cell-status="{ row }"><StatusBadge domain="record" :status="String(row.status).toUpperCase()" /></template>
     </DataTable>
   </Card>
 </template>

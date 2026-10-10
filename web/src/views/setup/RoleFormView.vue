@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { permissionGroupText, permissionText } from '@/utils/permissions'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -6,7 +8,6 @@ import { ApiError } from '@/api/problem'
 import type { components } from '@/api/schema'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -80,7 +81,7 @@ async function save(): Promise<void> {
 
 <template>
   <PageHeader :title="isNew ? t('roles.new') : t('roles.role', { name: form.name })" />
-  <p v-if="error" class="alert" role="alert">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline />
 
   <Card>
     <form v-autofocus novalidate @submit.prevent="save">
@@ -100,12 +101,12 @@ async function save(): Promise<void> {
           <legend class="px-1">
             <label class="flex items-center gap-2 text-sm">
               <input type="checkbox" class="size-4 accent-primary" :checked="items.every((p) => selected.has(p.code))" @change="toggleGroup(items, ($event.target as HTMLInputElement).checked)" />
-              <strong>{{ group }}</strong>
+              <strong>{{ permissionGroupText(group) }}</strong>
             </label>
           </legend>
           <label v-for="p in items" :key="p.code" class="flex items-start gap-2 text-sm">
             <input type="checkbox" class="mt-0.5 size-4 accent-primary" :checked="selected.has(p.code)" :data-permission="p.code" @change="toggle(p.code, ($event.target as HTMLInputElement).checked)" />
-            <span>{{ p.description }} <code class="text-[11px] text-muted-foreground">{{ p.code }}</code> <Badge variant="outline">{{ p.milestone }}</Badge></span>
+            <span>{{ permissionText(p) }}</span>
           </label>
         </fieldset>
 

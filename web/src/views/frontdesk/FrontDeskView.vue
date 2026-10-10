@@ -43,6 +43,9 @@ const tabs = computed(() => [
   { value: 'departures' as const, label: t('frontDesk.page.departures') },
 ])
 
+// The page is titled like the menu item of the tab that is open (Arrivals, In-house, Departures).
+const title = computed(() => tabs.value.find((x) => x.value === props.tab)?.label ?? t('frontDesk.page.title'))
+
 function select(value: string | number): void {
   const path = PATHS[value as Tab]
   if (path && value !== props.tab) void router.push(path)
@@ -54,7 +57,7 @@ function setCount(tab: Tab, count: number, more = false): void {
 </script>
 
 <template>
-  <PageHeader :title="t('frontDesk.page.title')" :description="t('frontDesk.page.description')">
+  <PageHeader :title="title" :description="t('frontDesk.page.description')">
     <template v-if="businessDate" #marks>
       <Badge variant="secondary" data-testid="front-desk-date">{{ businessDate }}</Badge>
     </template>

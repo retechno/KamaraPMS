@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KamaraPMS</title>
+    <script>
+      // Sets html[data-theme] before anything is painted (no flash). Same rule as src/composables/useTheme.ts.
+      ;(function () {
+        var t = 'light'
+        try {
+          var v = localStorage.getItem('pms.theme')
+          t = v === 'light' || v === 'dark' ? v : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', t)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

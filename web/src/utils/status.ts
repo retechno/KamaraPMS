@@ -1,8 +1,6 @@
-import { t, te } from '@/i18n'
+import { labelOf } from '@/i18n/labels'
 
-/** The words for a status value (`CONFIRMED`) in the language of the page; a value without a translation is shown as it is. */
+/** The words for a status value (`CONFIRMED`) in the language of the page; a value without a label is shown as readable text (see `labelOf`). */
 export function statusText(status: string | null | undefined): string {
-  if (!status) return ''
-  const key = `status.${status}`
-  return te(key) ? t(key as never) : status
+  return labelOf('status', status)
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { drawerName } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -285,7 +286,7 @@ watch(() => move.kind, (k) => {
     </Card>
     <Card v-for="h in handovers" :key="h.shift_id" class="mb-4 border-primary/40" :data-testid="`handover-${h.drawer}`">
       <CardHeader>
-        <CardTitle>{{ t('shifts.handoverTitle', { drawer: h.drawer }) }}</CardTitle>
+        <CardTitle>{{ t('shifts.handoverTitle', { drawer: drawerName(h.drawer) }) }}</CardTitle>
         <p class="m-0 text-sm text-muted-foreground">{{ t('shifts.handoverHint', { from: h.from_user_name, number: h.shift_number, when: $date(h.closed_at.slice(0, 10)), amount: $money(h.left_cash) }) }}</p>
       </CardHeader>
       <CardContent><Button type="button" :disabled="busy" data-testid="open-handover" @click="openHandover(h)">{{ t('shifts.openHandover', { amount: $money(h.left_cash) }) }}</Button></CardContent>
@@ -311,7 +312,7 @@ watch(() => move.kind, (k) => {
     <template v-if="current">
       <Card class="mb-4" data-testid="current-shift">
         <CardHeader>
-          <CardTitle>{{ t('shifts.current', { number: current.number, drawer: current.drawer }) }}</CardTitle>
+          <CardTitle>{{ t('shifts.current', { number: current.number, drawer: drawerName(current.drawer) }) }}</CardTitle>
           <Button type="button" variant="outline" size="sm" data-testid="print-x" @click="showReport(current)">{{ t('shifts.printX') }}</Button>
         </CardHeader>
         <CardContent>

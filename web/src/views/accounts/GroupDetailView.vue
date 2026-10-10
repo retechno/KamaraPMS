@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -89,10 +90,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <template #actions><RouterLink to="/groups" class="text-sm text-primary hover:underline">{{ t('groupDetail.back') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <span v-if="error.code === 'GROUP_HAS_ROOMS_OUTSIDE_DATES'"> {{ t('groupDetail.moveRooms') }}</span>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">
+<span v-if="error.code === 'GROUP_HAS_ROOMS_OUTSIDE_DATES'"> {{ t('groupDetail.moveRooms') }}</span>
+</ErrorNotice>
 
   <Card v-if="group && !editing" class="mb-4" data-testid="group-summary">
     <CardContent class="pt-4">

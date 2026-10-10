@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import { statusText } from '@/utils/status'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -213,7 +215,7 @@ watch(businessDate, (bd) => {
     <template #actions><RouterLink to="/arrivals" class="text-sm text-primary hover:underline">{{ t('walkIn.back') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('walkIn.noAccess') }}</p>
 
@@ -235,7 +237,7 @@ watch(businessDate, (bd) => {
           </FormField>
           <FormField :label="t('walkIn.room')" :error="fieldError('room_id')">
             <template #default="{ id, invalid }">
-              <Combobox :id="id" v-model="form.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${r.bed_type_name ? ` · ${r.bed_type_name}` : ''}${isReady(r.housekeeping_status) ? '' : t('walkIn.notReadyTag')}` }))]" />
+              <Combobox :id="id" v-model="form.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${statusText(r.housekeeping_status)}${r.bed_type_name ? ` · ${r.bed_type_name}` : ''}${isReady(r.housekeeping_status) ? '' : t('walkIn.notReadyTag')}` }))]" />
               <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('walkIn.noRooms') }}</small>
             </template>
           </FormField>
@@ -258,7 +260,7 @@ watch(businessDate, (bd) => {
         </div>
 
         <div v-if="notReady" class="alert warning mt-4" data-testid="not-ready">
-          {{ t('walkIn.roomIs', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '' }) }}
+          {{ t('walkIn.roomIs', { room: selected?.room_number ?? '', status: statusText(selected?.housekeeping_status) }) }}
           <template v-if="canOverride">
             <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="form.override" type="checkbox" name="override" class="size-4 accent-primary" /><span>{{ t('walkIn.useAnyway') }}</span></label>
             <FormField v-if="form.override" class="mt-2 max-w-md" :label="t('walkIn.reason')">

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Check-in dalam satu panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#17695a}a:hover{color:#0f4d42}
+</style>
+</helmet>
+<div style="width: 1440px; height: 920px; position: relative; overflow: hidden; background: #f4f6f5; color: #15201d; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums">
+
+  <div style="position: absolute; left: 0; top: 0; bottom: 0; right: 600px; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 800">Kedatangan hari ini <span style="font-weight: 500; color: #4f5e59; font-size: 18px">· 9 tersisa</span></h1>
+    <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; overflow: hidden">
+      <sc-for list="{{arrivals}}" as="a" hint-placeholder-count="7">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1f0; {{a.rowStyle}}">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 3px"><strong style="font-size: 15px">{{a.name}}</strong><span style="font-size: 13px; color: #4f5e59">{{a.meta}}</span></div>
+          <span style="font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 7px; {{a.chipStyle}}">{{a.ready}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <aside role="dialog" aria-label="Check-in Daniel Hartono" style="position: absolute; right: 0; top: 0; bottom: 0; width: 600px; box-sizing: border-box; background: #fff; box-shadow: -18px 0 50px rgba(21,32,29,.18); display: flex; flex-direction: column">
+    <header style="padding: 22px 26px 18px; border-bottom: 1px solid #dfe5e2; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px">
+        <div><div style="font-size: 13px; color: #4f5e59">Check-in · RES000210</div><h2 style="margin: 2px 0 0; font-size: 24px; font-weight: 800">Daniel Hartono</h2><div style="font-size: 14px; color: #33413c; margin-top: 2px">Superior · 10 → 13 Okt · 3 malam · 2 dewasa</div></div>
+        <span style="font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: #e5f2ee; color: #0f4d42; white-space: nowrap">± 45 detik</span>
+      </div>
+      <ol aria-label="Langkah" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+          <li style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 4px; border-radius: 2px; {{s.barStyle}}"></span>
+            <button type="button" onClick="{{s.go}}" aria-current="{{s.current}}" style="padding: 0; border: 0; background: transparent; text-align: left; font: inherit; font-size: 13px; cursor: pointer; {{s.labelStyle}}">{{s.label}}</button>
+          </li>
+        </sc-for>
+      </ol>
+    </header>
+
+    <div style="flex: 1; overflow: hidden; padding: 22px 26px; display: flex; flex-direction: column; gap: 16px">
+      <sc-if value="{{isGuest}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 700">Data tamu & identitas</h3>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Nama depan<input value="Daniel" style="height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Nama belakang<input value="Hartono" style="height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Jenis identitas<select style="height: 44px; padding: 0 10px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400; background: #fff"><option>KTP</option><option>Paspor</option><option>SIM</option></select></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Nomor identitas<input value="3171 0123 4567 0001" style="height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Ponsel<input value="+62 812 3456 7890" style="height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">E-mail<input value="daniel.hartono@mail.test" style="height: 44px; padding: 0 12px; border: 1px solid #c9d2ce; border-radius: 9px; font: inherit; font-size: 15px; font-weight: 400"></label>
+          </div>
+          <p style="margin: 0; padding: 10px 12px; border-radius: 10px; background: #e5f2ee; font-size: 14px; color: #0f4d42">Tamu pernah menginap 2 kali. Data diisi dari kunjungan terakhir — cukup periksa.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isRoom}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 700">Pilih kamar Superior</h3>
+          <p style="margin: 0; font-size: 14px; color: #4f5e59">Hanya kamar yang siap dan cocok dengan permintaan ditampilkan di atas.</p>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+            <sc-for list="{{rooms}}" as="r" hint-placeholder-count="6">
+              <button type="button" onClick="{{r.pick}}" aria-pressed="{{r.pressed}}" style="min-height: 84px; padding: 12px; border-radius: 12px; text-align: left; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 4px; {{r.style}}"><strong style="font-size: 20px; font-weight: 800">{{r.no}}</strong><span style="font-size: 12.5px; font-weight: 600">{{r.note}}</span></button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isDeposit}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 700">Deposit</h3>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <div style="padding: 14px; border-radius: 12px; border: 1px solid #dfe5e2"><div style="font-size: 13px; color: #4f5e59">3 malam × Rp 780.000</div><strong style="font-size: 20px">Rp 2.340.000</strong></div>
+            <div style="padding: 14px; border-radius: 12px; border: 1px solid #dfe5e2"><div style="font-size: 13px; color: #4f5e59">Deposit insidental</div><strong style="font-size: 20px">Rp 500.000</strong></div>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600">Jumlah diterima<input value="Rp 2.840.000" style="height: 52px; padding: 0 14px; border: 2px solid #17695a; border-radius: 10px; font: inherit; font-size: 22px; font-weight: 800"></label>
+          <div role="group" aria-label="Metode" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+            <sc-for list="{{methods}}" as="m" hint-placeholder-count="4">
+              <button type="button" onClick="{{m.pick}}" aria-pressed="{{m.pressed}}" style="min-height: 48px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; {{m.style}}">{{m.label}}</button>
+            </sc-for>
+          </div>
+          <label style="display: flex; align-items: center; gap: 10px; font-size: 14px"><input type="checkbox" style="width: 20px; height: 20px"> Tagihan ke perusahaan (city ledger) — deposit tidak wajib</label>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 16px; align-items: flex-start">
+          <span style="width: 56px; height: 56px; border-radius: 50%; background: #1b7a4b; color: #fff; display: grid; place-items: center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span>
+          <h3 style="margin: 0; font-size: 22px; font-weight: 800">Daniel Hartono masuk ke kamar 210</h3>
+          <p style="margin: 0; font-size: 15px; color: #33413c; line-height: 1.5">Folio FOL000412 dibuka · deposit Rp 2.840.000 (kartu) tercatat · status kamar jadi Terisi.</p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 10px; border: 1px solid #c9d2ce; background: #fff; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer">Cetak kartu registrasi</button>
+            <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 10px; border: 1px solid #c9d2ce; background: #fff; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer">Kirim e-mail selamat datang</button>
+          </div>
+          <p style="margin: 0; padding: 10px 12px; border-radius: 10px; background: #f4f6f5; font-size: 14px">Berikutnya: <strong>Grup PT Nusa Wisata</strong> · 6 kamar, ETA 15.30</p>
+        </div>
+      </sc-if>
+    </div>
+
+    <footer style="padding: 16px 26px; border-top: 1px solid #dfe5e2; display: flex; align-items: center; gap: 10px">
+      <sc-if value="{{canBack}}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{back}}" style="min-height: 48px; padding: 0 18px; border-radius: 10px; border: 1px solid #c9d2ce; background: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Kembali</button>
+      </sc-if>
+      <span style="margin-left: auto; font-size: 13px; color: #4f5e59">Enter = lanjut</span>
+      <button type="button" onClick="{{next}}" style="min-height: 48px; padding: 0 22px; border-radius: 10px; border: 0; background: #17695a; color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">{{nextLabel}}</button>
+    </footer>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":920}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 0, room: '210', method: 'CARD' };
+  }
+  renderVals() {
+    var self = this, st = this.state.step;
+    var labels = ['Tamu', 'Kamar', 'Deposit', 'Selesai'];
+    var steps = labels.map(function (l, i) {
+      return {
+        label: (i + 1) + '. ' + l,
+        current: i === st ? 'step' : 'false',
+        barStyle: 'background: ' + (i <= st ? '#17695a' : '#dfe5e2') + ';',
+        labelStyle: i === st ? 'font-weight: 700; color: #15201d;' : (i < st ? 'font-weight: 600; color: #17695a;' : 'color: #4f5e59;'),
+        go: function () { if (i <= st) self.setState({ step: i }); }
+      };
+    });
+    var rooms = [['210', 'Diperiksa · lantai 2'], ['214', 'Diperiksa · dekat lift'], ['311', 'Bersih · lantai atas'], ['207', 'Bersih'], ['318', 'Dibersihkan · ±15 m'], ['205', 'Kotor']].map(function (r, i) {
+      var on = self.state.room === r[0];
+      var base = i < 2 ? 'background: #1b7a4b; color: #fff; border: 1px solid #1b7a4b;' : i < 4 ? 'background: #e3f3ea; color: #1b7a4b; border: 1px solid #b9e0c9;' : i === 4 ? 'background: #efe9fb; color: #5b3bb0; border: 1px solid #d6caf3;' : 'background: #fdebdc; color: #a8460a; border: 1px solid #f3c9a6;';
+      return { no: r[0], note: r[1], pressed: on ? 'true' : 'false', style: base + (on ? ' box-shadow: 0 0 0 2px #fff, 0 0 0 4px #17695a;' : ''), pick: function () { self.setState({ room: r[0] }); } };
+    });
+    var methods = [['CARD', 'Kartu'], ['QRIS', 'QRIS'], ['BANK_TRANSFER', 'Transfer'], ['CASH', 'Tunai']].map(function (m) {
+      var on = self.state.method === m[0];
+      return { label: m[1], pressed: on ? 'true' : 'false', style: on ? 'background: #15201d; color: #fff; border: 1px solid #15201d;' : 'background: #fff; color: #15201d; border: 1px solid #c9d2ce;', pick: function () { self.setState({ method: m[0] }); } };
+    });
+    var arrivals = [
+      ['Daniel Hartono', 'Superior · 3 malam · ETA 14.00', 'Sedang check-in', 'sel'],
+      ['Ayu Pratiwi', '305 · DLX · ETA 13.00', 'Kotor', 'dirty'],
+      ['Grup PT Nusa Wisata', '6 kamar · STD · ETA 15.30', '4 / 6 siap', 'clean'],
+      ['Made Wirawan', 'Belum ada kamar · FAM', 'Tetapkan', 'none'],
+      ['Sarah Lim', '118 · STD · ETA 18.00', 'Siap', 'ready'],
+      ['Thomas Becker', '402 · SUP · ETA 19.30', 'Siap', 'ready'],
+      ['Yuki Tanaka', '215 · STD · tiba larut', 'Bersih', 'clean']
+    ].map(function (a) {
+      var chip = { sel: 'background: #17695a; color: #fff;', dirty: 'background: #fdebdc; color: #a8460a;', clean: 'background: #e3f3ea; color: #1b7a4b;', none: 'background: #e4ebfb; color: #2348a8;', ready: 'background: #1b7a4b; color: #fff;' }[a[3]];
+      return { name: a[0], meta: a[1], ready: a[2], chipStyle: chip, rowStyle: a[3] === 'sel' ? 'background: #e5f2ee; box-shadow: inset 4px 0 0 #17695a;' : '' };
+    });
+    return {
+      steps: steps, rooms: rooms, methods: methods, arrivals: arrivals,
+      isGuest: st === 0, isRoom: st === 1, isDeposit: st === 2, isDone: st === 3,
+      canBack: st > 0 && st < 3,
+      nextLabel: st === 2 ? 'Check-in sekarang' : st === 3 ? 'Check-in berikutnya' : 'Lanjut',
+      next: function () { self.setState({ step: st === 3 ? 0 : st + 1 }); },
+      back: function () { self.setState({ step: Math.max(0, st - 1) }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

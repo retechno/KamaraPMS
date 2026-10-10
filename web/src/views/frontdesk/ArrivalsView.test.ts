@@ -82,7 +82,7 @@ describe('ArrivalsView and the check-in panel', () => {
     await flushPromises()
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
-    expect(panel('select[name=room]').findAll('option')[0]?.text()).toBe('301 · INSPECTED')
+    expect(panel('select[name=room]').findAll('option')[0]?.text()).toBe('301 · Inspected')
     expect(inSheet('[data-testid=not-ready]')).toBe(false)
   })
 
@@ -103,13 +103,13 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/availability/rooms', { params: { path: { propertyId: 7 }, query: { room_type_id: 10, arrival: '2026-09-30', departure: '2026-10-02' } } }])
     const options = panel('select[name=room]').findAll('option').map((o) => o.text())
     // the ready room is proposed first: the room that is not ready cannot be checked into without an override
-    expect(options).toEqual(['102 · CLEAN', '101 · DIRTY (not ready)'])
+    expect(options).toEqual(['102 · Clean', '101 · Dirty (not ready)'])
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('22')
     expect(inSheet('[data-testid=not-ready]')).toBe(false)
     expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeUndefined()
     // choosing the room that is not ready says so and turns the button off until a ready room is chosen
     await panel('select[name=room]').setValue(21)
-    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is Dirty')
     expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
     await panel('select[name=room]').setValue(22)
     expect(inSheet('[data-testid=not-ready]')).toBe(false)
@@ -217,7 +217,7 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
     const options = Array.from(document.body.querySelectorAll('select[name=room] option')).map((o) => o.textContent)
-    expect(options).toEqual(['102 · CLEAN · King ✓ matches the request', '101 · CLEAN · Twin'])
+    expect(options).toEqual(['102 · Clean · King ✓ matches the request', '101 · Clean · Twin'])
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('22')
   })
 
@@ -336,7 +336,7 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
     const options = Array.from(document.body.querySelectorAll('select[name=room] option')).map((o) => o.textContent)
-    expect(options).toEqual(['103 · CLEAN · King ✓ matches the request', '102 · CLEAN · Twin', '101 · DIRTY · King ✓ matches the request (not ready)'])
+    expect(options).toEqual(['103 · Clean · King ✓ matches the request', '102 · Clean · Twin', '101 · Dirty · King ✓ matches the request (not ready)'])
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('23')
   })
 
@@ -349,7 +349,7 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('21')
-    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is Dirty')
     expect(panel('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
   })
 
@@ -360,6 +360,6 @@ describe('ArrivalsView and the check-in panel', () => {
     await w.get('[data-testid=open-4]').trigger('click')
     await flushPromises()
     expect((document.body.querySelector('select[name=room]') as HTMLSelectElement).value).toBe('21')
-    expect(panel('[data-testid=not-ready]').text()).toContain('101 is DIRTY')
+    expect(panel('[data-testid=not-ready]').text()).toContain('101 is Dirty')
   })
 })

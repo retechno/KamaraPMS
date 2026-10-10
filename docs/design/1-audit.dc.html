@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Ringkasan audit UI/UX KamaraPMS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#17695a}a:hover{color:#0f4d42}
+code{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#eef1f0;padding:1px 5px;border-radius:4px;color:#26332f}
+</style>
+</helmet>
+<div style="width: 1440px; height: 2080px; box-sizing: border-box; padding: 72px 80px; background: #f4f6f5; color: #15201d; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 48px">
+
+  <header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; border-bottom: 2px solid #15201d; padding-bottom: 28px">
+    <div style="display: flex; flex-direction: column; gap: 12px; max-width: 860px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="width: 36px; height: 36px; border-radius: 10px; background: #17695a; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 18px">K</span>
+        <span style="font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #4f5e59">Audit UI/UX · web/src · commit 2f3222e</span>
+      </div>
+      <h1 style="margin: 0; font-size: 56px; line-height: 1.05; font-weight: 800; letter-spacing: -0.02em">Fondasinya rapi. Yang kurang: warna yang bermakna dan beranda yang bekerja untuk resepsionis.</h1>
+    </div>
+    <div style="display: flex; gap: 12px">
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 16px 20px; min-width: 120px">
+        <div style="font-size: 40px; font-weight: 800; color: #b4332c; line-height: 1">3</div>
+        <div style="font-size: 14px; color: #4f5e59; margin-top: 6px">Prioritas tinggi</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 16px 20px; min-width: 120px">
+        <div style="font-size: 40px; font-weight: 800; color: #8a5300; line-height: 1">6</div>
+        <div style="font-size: 14px; color: #4f5e59; margin-top: 6px">Sedang</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 16px 20px; min-width: 120px">
+        <div style="font-size: 40px; font-weight: 800; color: #4a5361; line-height: 1">5</div>
+        <div style="font-size: 14px; color: #4f5e59; margin-top: 6px">Rendah</div>
+      </div>
+    </div>
+  </header>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Yang sudah baik — pertahankan</h2>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Token terpusat</strong>Satu file <code>tailwind.css</code>, terang + gelap.</div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Satu peta status</strong><code>statusMap.ts</code> menjaga status sama di semua halaman.</div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Shell responsif</strong>Sidebar penuh, rail ikon di tablet, drawer di ponsel.</div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Pencarian Ctrl K</strong>Command palette sudah ada — tinggal diperkaya.</div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Aksesibilitas dasar</strong>Skip link, focus ring, aria-label di tombol ikon.</div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.45"><strong style="display: block; margin-bottom: 4px">Dua bahasa</strong>Semua teks lewat i18n (ID/EN).</div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Temuan & perbaikan</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fbe9e7; color: #9a2a24">TINGGI</span><span style="font-size: 13px; color: #4f5e59">Warna</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Warna tombol = warna status</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Teal <code>bg-primary</code> dipakai untuk tombol utama sekaligus badge OCCUPIED, IN_HOUSE, INSPECTED dan stay OPEN (<code>statusMap.ts</code>). Label terlihat seperti tombol yang bisa diklik.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> teal hanya untuk aksi & navigasi; status memakai token <code>--status-*</code> tersendiri (artboard 2).</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fbe9e7; color: #9a2a24">TINGGI</span><span style="font-size: 13px; color: #4f5e59">Aksesibilitas</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Teks hijau & kuning gagal kontras</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c"><code>text-success</code> #2e9d6a = 3,42:1 dan <code>text-warning</code> #c98a10 = 2,95:1 di atas putih (minimum 4,5:1). Dipakai di jumlah kamar kotor, delta “▲ bulan lalu”, KPI bertone.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> pisahkan warna isi (fill) dan warna teks: <code>--ok-text #1b7a4b</code> 5,34:1, <code>--warn-text #8a5300</code> 6,33:1.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fbe9e7; color: #9a2a24">TINGGI</span><span style="font-size: 13px; color: #4f5e59">Warna</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Teal vs hijau nyaris kembar</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Di tape chart “Confirmed” (<code>primary/25</code>) dan “Checked-in” (<code>success/30</code>) hanya beda rona, terang-gelapnya sama. Di dashboard titik Clean (hijau) vs Inspected (teal) juga. Sulit dibaca di layar resepsionis yang silau, mustahil bagi buta warna.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> bedakan juga lewat kepekatan (isi penuh vs muda) + ikon + label.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Konsistensi</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Satu status, beda warna antar halaman</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">RESERVED = kuning di Status Kamar (<code>tileClass</code>), tapi abu-abu di badge reservasi. BLOCKED = merah di Status Kamar, abu-abu di tape chart. Legend tiap halaman ditulis manual.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> semua legend & tile membaca dari <code>statusMap</code> yang sama.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Tipografi</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Font Inter tidak pernah dimuat</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c"><code>font-family: 'Inter'</code> dideklarasikan, tetapi <code>index.html</code> tidak memuat font apa pun. Di PC hotel tampil Segoe UI, di Android Roboto — tampilan berbeda tiap perangkat. Angka KPI tanpa <code>tabular-nums</code> sehingga kolom bergoyang.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> self-host Plus Jakarta Sans (<code>@fontsource</code>, karya studio Jakarta) + <code>font-variant-numeric: tabular-nums</code> global untuk angka.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Shell</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Top bar terlalu padat</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Tujuh kontrol berjajar (properti, tanggal bisnis, status audit, cari, bahasa, nama, keluar) — di laptop 1366 px membungkus jadi dua baris dan breadcrumb terpotong.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> satu chip “Hari bisnis” (tanggal + status audit), pencarian lebar di tengah, bahasa/tema/keluar masuk menu avatar.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Navigasi</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Menu Keuangan berisi 28 item</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Satu bagian “Finance” memuat akuntansi, hutang, pajak, bank dan anggaran sekaligus; Front Desk 10 item. Resepsionis melihat menu yang tidak pernah ia pakai.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> bagian “Disematkan” + “Terakhir dibuka”, Keuangan dipecah per grup, dan urutan menu mengikuti peran.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Alur kerja</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Beranda untuk manajer, bukan resepsionis</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">8 kartu KPI berbobot sama; tidak ada daftar “siapa yang harus saya check-in sekarang & kamarnya sudah siap?”. Front office harus pindah ke 3 halaman (Arrivals, Room Status, Departures).</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> beranda “Hari Ini” berbasis tugas untuk semua staf (artboard 3); KPI manajer pindah ke halaman Kinerja yang hanya tampil dengan izin <code>report.view</code> (artboard 6).</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fdf1dc; color: #7a4a00">SEDANG</span><span style="font-size: 13px; color: #4f5e59">Data</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Format uang tidak konsisten</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Di <code>ManagerDashboard.vue</code> KPI ADR, RevPAR, Pendapatan dan kolom “Bulan ini” menampilkan string mentah (<code>1250000.000</code>), sedangkan “Bulan lalu” memakai <code>$money</code>.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> semua nilai uang lewat <code>$money</code>; singkat di KPI (Rp 1,25 jt), lengkap di tabel.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f2; color: #3c4450">RENDAH</span><span style="font-size: 13px; color: #4f5e59">Grafik</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Grafik tren tanpa sumbu & nilai</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Batang okupansi hanya punya <code>title</code> tooltip — tidak terbaca di tablet sentuh atau keyboard, tidak ada garis 50/100%.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> garis acuan, label nilai di batang tertinggi/terendah, dan tooltip yang muncul saat fokus.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f2; color: #3c4450">RENDAH</span><span style="font-size: 13px; color: #4f5e59">Pesan</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Kode error teknis tampil ke staf</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Pola <code>error.message</code> + <code>&lt;code&gt;error.code&lt;/code&gt;</code> berulang di hampir semua view, misalnya “… BUSINESS_DAY_CLOSED”.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> pesan manusiawi + langkah selanjutnya (“Jalankan night audit”), kode disembunyikan di “Detail”.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f2; color: #3c4450">RENDAH</span><span style="font-size: 13px; color: #4f5e59">Status kamar</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Tile kamar ramai, tanpa aksi massal</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Tile 120 px memuat 2 badge + tipe + ikon; hunian hanya ditandai garis 4 px. Mengubah 20 kamar jadi “Bersih” = 20 kali buka sheet.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> tile berwarna menurut kebersihan, hunian sebagai ikon; pilih banyak + bar aksi (artboard 4).</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f2; color: #3c4450">RENDAH</span><span style="font-size: 13px; color: #4f5e59">Tape chart</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Tape chart kecil & statis</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c">Teks 10–12 px, nama tamu hanya di sel hari pertama, tidak bisa drag untuk pindah kamar atau perpanjang malam.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> batang reservasi utuh (satu elemen per booking), drag-and-drop, minimal 13 px.</p>
+      </article>
+
+      <article style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f2; color: #3c4450">RENDAH</span><span style="font-size: 13px; color: #4f5e59">Tema</span></div>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700">Mode gelap hanya ikut sistem</h3>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5; color: #33413c"><code>@custom-variant dark</code> hanya membaca <code>prefers-color-scheme</code>. Petugas night audit di PC bersama tidak bisa memilih sendiri.</p>
+        <p style="margin: 0; font-size: 14.5px; line-height: 1.5"><strong style="color: #17695a">Usulan:</strong> pilihan Terang / Gelap / Ikuti sistem di menu avatar, via <code>[data-theme]</code>.</p>
+      </article>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Urutan pengerjaan</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+      <div style="background: #17695a; color: #fff; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em">TAHAP 1 · 1–2 HARI</div>
+        <div style="font-size: 20px; font-weight: 700">Perbaikan cepat</div>
+        <div style="font-size: 14.5px; line-height: 1.6">Token teks kontras · muat font + tabular-nums · semua uang lewat $money · pesan error manusiawi · toggle tema</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #17695a">TAHAP 2 · 1 MINGGU</div>
+        <div style="font-size: 20px; font-weight: 700">Sistem status & shell</div>
+        <div style="font-size: 14.5px; line-height: 1.6; color: #33413c">Token <code>--status-*</code> + statusMap baru · legend otomatis · top bar ringkas · menu disematkan & per peran</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #dfe5e2; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #17695a">TAHAP 3 · 2–3 MINGGU</div>
+        <div style="font-size: 20px; font-weight: 700">Alur kerja baru</div>
+        <div style="font-size: 14.5px; line-height: 1.6; color: #33413c">Beranda “Hari Ini” · halaman Kinerja manajer · aksi massal status kamar · tape chart drag-and-drop · tampilan ponsel housekeeping</div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

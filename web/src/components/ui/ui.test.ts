@@ -21,6 +21,11 @@ describe('ui foundation', () => {
     expect(w.attributes('data-slot')).toBe('button')
   })
 
+  it('never underlines a button, so an <a> rendered as one does not inherit the link underline', () => {
+    expect(mount(Button, { slots: { default: 'Go' } }).classes()).toContain('no-underline')
+    expect(mount(Button, { props: { variant: 'link' }, slots: { default: 'Go' } }).classes()).toContain('hover:underline')
+  })
+
   it('lets a caller override a button class and keeps it disableable', () => {
     const w = mount(Button, { props: { class: 'h-12' }, attrs: { disabled: true, 'data-testid': 'go' }, slots: { default: 'Go' } })
     expect(w.classes()).toContain('h-12')
@@ -87,6 +92,13 @@ describe('ui: card, form controls, tabs and sheet', () => {
     await w.get('[data-testid=tb]').trigger('focus')
     expect(w.text()).toContain('second')
     expect(w.get('[data-testid=tb]').attributes('data-state')).toBe('active')
+  })
+
+  it('lets a row of tabs that is wider than the screen scroll inside itself instead of widening the page', async () => {
+    const { Tabs, TabsList, TabsTrigger } = await import('./tabs')
+    const w = mount({ components: { Tabs, TabsList, TabsTrigger }, template: '<Tabs default-value="a"><TabsList><TabsTrigger value="a">A</TabsTrigger></TabsList></Tabs>' })
+    expect(w.get('[data-slot=tabs-list]').classes()).toEqual(expect.arrayContaining(['max-w-full', 'overflow-x-auto']))
+    expect(w.get('[data-slot=tabs-trigger]').classes()).toContain('shrink-0')
   })
 
   it('draws a skeleton as decoration only', async () => {

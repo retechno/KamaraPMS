@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { DayClock, Property, PropertyWithDay } from '@/api/types'
+import { setDisplayTimeZone } from '@/utils/format'
 
 const STORAGE_KEY = 'kamarapms.currentPropertyId'
 
@@ -70,6 +71,7 @@ export const usePropertyStore = defineStore('property', () => {
         params: { path: { propertyId: currentId.value } },
       })
       clock.value = data ?? null
+      setDisplayTimeZone(clock.value?.timezone)
     } catch (e) {
       error.value = e instanceof ApiError ? e : null
     }
@@ -87,6 +89,7 @@ export const usePropertyStore = defineStore('property', () => {
     currentId.value = null
     current.value = null
     clock.value = null
+    setDisplayTimeZone(null)
     storeId(null)
   }
 
@@ -96,6 +99,7 @@ export const usePropertyStore = defineStore('property', () => {
     loaded.value = false
     current.value = null
     clock.value = null
+    setDisplayTimeZone(null)
     error.value = null
   }
 

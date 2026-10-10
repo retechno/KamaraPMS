@@ -333,7 +333,7 @@ describe('ReservationDetailView', () => {
     await flushPromises()
     await w.get('[data-testid=assign-4]').trigger('click')
     await flushPromises()
-    expect(w.findAll('select[name=assign_room] option').map((o) => o.text())).toEqual(['102 · CLEAN · King ✓ matches the request', '101 · CLEAN · Twin', '103 · DIRTY'])
+    expect(w.findAll('select[name=assign_room] option').map((o) => o.text())).toEqual(['102 · Clean · King ✓ matches the request', '101 · Clean · Twin', '103 · Dirty'])
     expect((w.get('select[name=assign_room]').element as HTMLSelectElement).value).toBe('22') // the matching room is proposed
   })
 

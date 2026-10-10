@@ -55,10 +55,15 @@ describe('ManagerDashboard', () => {
     expect(w.get('[data-testid=kpi-occupancy]').text()).toContain('6 of 9 rooms')
     expect(w.get('[data-testid=kpi-arrivals]').text()).toContain('2')
     expect(w.get('[data-testid=kpi-departures]').text()).toContain('3')
-    expect(w.get('[data-testid=kpi-inhouse]').text()).toContain('owe 1200000')
-    expect(w.get('[data-testid=kpi-city-ledger]').text()).toContain('2500000')
+    expect(w.get('[data-testid=kpi-inhouse]').text()).toContain('owe 1,200,000') // in full: only the KPI figures are abbreviated
+    expect(w.get('[data-testid=kpi-city-ledger]').text()).toContain('IDR 2.5M')
+    expect(w.get('[data-testid=kpi-adr]').text()).toContain('IDR 1M')
+    expect(w.get('[data-testid=kpi-revpar]').text()).toContain('IDR 667K')
+    expect(w.get('[data-testid=kpi-revenue]').text()).toContain('IDR 6M')
     expect(w.get('[data-testid=housekeeping]').text()).toContain('Dirty')
     expect(w.get('[data-testid=payments]').text()).toContain('2,900,000')
+    expect(w.get('[data-testid=payments]').text()).toContain('Cash') // the method in words, not CASH
+    expect(w.get('[data-testid=payments]').text()).not.toContain('CASH')
   })
 
   it('compares the month with the one before and draws the days', async () => {
@@ -69,6 +74,45 @@ describe('ManagerDashboard', () => {
     expect(w.get('[data-testid=trend]').findAll('[data-testid=trend-day]')).toHaveLength(2)
     expect(w.get('[data-testid=forecast]').findAll('[data-testid=forecast-day]')).toHaveLength(2)
     expect(w.get('[data-testid=trend-bar]').attributes('style')).toContain('height: 50%')
+  })
+
+  it('writes the month with separators and the percent with the decimal separator of the language', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=month-adr]').text()).toContain('1,000,000')
+    expect(w.get('[data-testid=month-adr]').text()).toContain('800,000')
+    expect(w.get('[data-testid=month-occupancy]').text()).toContain('60.00%')
+    expect(w.get('[data-testid=month-occupancy]').text()).toContain('40.00%')
+  })
+
+  it('shows a dash for last month when it has no closed day, and titles the chart with the days it spans', async () => {
+    const d = dashboard()
+    GET.mockResolvedValue({ data: { ...d, previous_month: totals({ days: 0, adr: '0', occupancy_percent: '0.00', revpar: '0', room_revenue: '0' }) } })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=month-adr]').text()).toContain('1,000,000')
+    for (const k of ['occupancy', 'adr', 'revpar', 'revenue']) expect(w.get(`[data-testid=month-${k}] td:nth-child(3)`).text()).toBe('–')
+    expect(w.get('[data-testid=trend]').text()).toContain('Occupancy, last 7 days')
+  })
+
+  it('does not call ADR, RevPAR and the revenue zero before night audit has posted the room charges', async () => {
+    const d = dashboard()
+    GET.mockResolvedValue({ data: { ...d, today: { ...d.today, rooms: { ...d.today.rooms, occupied: 6, sold: 0 }, adr: '0', revpar: '0', room_revenue: { net: '0', service: '0', tax: '0' } } } })
+    const w = mountView()
+    await flushPromises()
+    for (const k of ['adr', 'revpar', 'revenue']) {
+      expect(w.get(`[data-testid=kpi-${k}]`).text()).toContain('Available after night audit')
+      expect(w.get(`[data-testid=kpi-${k}] [data-slot=kpi-value]`).text()).toBe('–')
+    }
+    expect(w.get('[data-testid=kpi-occupancy]').text()).toContain('66.67%') // occupancy is known all day
+  })
+
+  it('pads the trend to a week, with empty bars for the days before the first closed one', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=trend]').findAll('[data-testid=trend-day]')).toHaveLength(2)
+    expect(w.get('[data-testid=trend]').findAll('[data-testid=trend-day-empty]')).toHaveLength(5)
+    expect(w.get('[data-testid=trend]').text()).toContain('4 Oct') // the label is the day and month, not "10-04"
   })
 
   it('says so when nothing is closed yet', async () => {

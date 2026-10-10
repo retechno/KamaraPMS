@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Sistem warna dan tipografi usulan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#17695a}a:hover{color:#0f4d42}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1560px; box-sizing: border-box; padding: 72px 80px; background: #f4f6f5; color: #15201d; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 40px">
+
+  <header style="display: flex; flex-direction: column; gap: 10px; max-width: 980px">
+    <span style="font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #4f5e59">Usulan token · pengganti blok :root di tailwind.css</span>
+    <h1 style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 800; letter-spacing: -0.02em">Teal tetap jadi identitas — tapi hanya untuk aksi. Status punya bahasanya sendiri.</h1>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section style="background: #fff; border: 1px solid #dfe5e2; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 18px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Sekarang: 3 warna menanggung 9 makna</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 14px">
+          <span style="width: 56px; height: 56px; border-radius: 12px; background: #1f6f5c; flex-shrink: 0"></span>
+          <div style="flex: 1"><strong style="font-size: 15px">#1f6f5c primary</strong><div style="font-size: 14px; color: #4f5e59">Tombol, link, menu aktif, OCCUPIED, IN_HOUSE, INSPECTED, stay OPEN, bar tren</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px">
+          <span style="width: 56px; height: 56px; border-radius: 12px; background: #2e9d6a; flex-shrink: 0"></span>
+          <div style="flex: 1"><strong style="font-size: 15px">#2e9d6a success</strong><div style="font-size: 14px; color: #4f5e59">CLEAN, POSTED, checked-in · teks 3,42:1 <span style="color: #9a2a24; font-weight: 700">gagal</span></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px">
+          <span style="width: 56px; height: 56px; border-radius: 12px; background: #c98a10; flex-shrink: 0"></span>
+          <div style="flex: 1"><strong style="font-size: 15px">#c98a10 warning</strong><div style="font-size: 14px; color: #4f5e59">DIRTY, RESERVED, NO_SHOW, audit terlambat · teks 2,95:1 <span style="color: #9a2a24; font-weight: 700">gagal</span></div></div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; padding: 14px; background: #f4f6f5; border-radius: 10px; flex-wrap: wrap">
+        <span style="font-size: 13px; color: #4f5e59; width: 100%">Di layar saat ini — mana yang tombol?</span>
+        <span style="background: #1f6f5c; color: #fff; font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px">Reservasi baru</span>
+        <span style="background: #1f6f5c; color: #fff; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px">Occupied</span>
+        <span style="background: #1f6f5c; color: #fff; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px">Inspected</span>
+        <span style="background: rgba(31,111,92,.25); font-size: 12px; padding: 6px 10px; border-radius: 4px">Confirmed</span>
+        <span style="background: rgba(46,157,106,.30); font-size: 12px; padding: 6px 10px; border-radius: 4px">Checked-in</span>
+      </div>
+    </section>
+
+    <section style="background: #fff; border: 1px solid #dfe5e2; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 18px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Usulan: fondasi merek</h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #17695a"></span><strong style="font-size: 14px">Teal 700</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#17695a · 6,55:1</span><span style="font-size: 13px">Aksi & navigasi</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #e5f2ee; border: 1px solid #c9e3da"></span><strong style="font-size: 14px">Teal 50</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#e5f2ee</span><span style="font-size: 13px">Menu aktif, hover</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #15201d"></span><strong style="font-size: 14px">Tinta</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#15201d</span><span style="font-size: 13px">Teks utama</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #4f5e59"></span><strong style="font-size: 14px">Tinta lembut</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#4f5e59 · 6,29:1</span><span style="font-size: 13px">Teks sekunder</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #f4f6f5; border: 1px solid #dfe5e2"></span><strong style="font-size: 14px">Dasar</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#f4f6f5</span><span style="font-size: 13px">Latar halaman</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #ffffff; border: 1px solid #dfe5e2"></span><strong style="font-size: 14px">Permukaan</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#ffffff</span><span style="font-size: 13px">Kartu, tabel</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #dfe5e2"></span><strong style="font-size: 14px">Garis</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#dfe5e2</span><span style="font-size: 13px">Border, pemisah</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><span style="height: 72px; border-radius: 12px; background: #b4332c"></span><strong style="font-size: 14px">Bahaya</strong><span style="font-size: 12.5px; color: #4f5e59; font-family: 'JetBrains Mono', monospace">#b4332c · 6,09:1</span><span style="font-size: 13px">Hapus, void</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section style="background: #fff; border: 1px solid #dfe5e2; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 22px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 20px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Usulan: bahasa status — warna + kepekatan + ikon + label</h2>
+      <span style="font-size: 14px; color: #4f5e59">Semua teks ≥ 4,5:1 · isi pekat = “siap / sedang berlangsung”, isi muda = “menunggu”</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: center">
+      <div><strong style="font-size: 15px">Kebersihan kamar</strong><div style="font-size: 13px; color: #4f5e59">housekeeping</div></div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fdebdc; color: #a8460a; border: 1px solid #f3c9a6"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 21h18M6 21V10l6-6 6 6v11"></path><path d="M10 14h4"></path></svg>Kotor</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #efe9fb; color: #5b3bb0; border: 1px solid #d6caf3"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Sedang dibersihkan</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #e3f3ea; color: #1b7a4b; border: 1px solid #b9e0c9"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"></path></svg>Bersih</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #1b7a4b; color: #fff; border: 1px solid #1b7a4b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>Diperiksa · siap jual</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: repeating-linear-gradient(135deg, #4a5361 0 6px, #59636f 6px 12px); color: #fff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M6 6l12 12"></path></svg>Out of order</span>
+      </div>
+
+      <div><strong style="font-size: 15px">Hunian hari ini</strong><div style="font-size: 13px; color: #4f5e59">occupancy · ikon, bukan warna</div></div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #15201d; border: 1px solid #dfe5e2"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"></path></svg>Terisi</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #15201d; border: 1px solid #dfe5e2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h12M11 7l5 5-5 5M20 4v16"></path></svg>Tiba hari ini</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #15201d; border: 1px solid #dfe5e2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h12M15 7l5 5-5 5M4 4v16"></path></svg>Berangkat hari ini</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #4f5e59; border: 1px dashed #b8c3bf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"></path></svg>Kosong</span>
+      </div>
+
+      <div><strong style="font-size: 15px">Reservasi & tape chart</strong><div style="font-size: 13px; color: #4f5e59">reservation · stay</div></div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #4a5361; border: 1.5px dashed #8b96a3">Draf</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #e4ebfb; color: #2348a8; border: 1px solid #b7c8f2">Dikonfirmasi</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #2552c4; color: #fff; border: 1px solid #2552c4">Menginap</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #eef0f2; color: #4a5361; border: 1px solid #dde1e5">Check-out</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fdf1dc; color: #8a5300; border: 1px solid #f0d49e">No-show</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #fff; color: #b4332c; border: 1px solid #f0c4c0; text-decoration: line-through">Batal</span>
+      </div>
+
+      <div><strong style="font-size: 15px">Umpan balik</strong><div style="font-size: 13px; color: #4f5e59">alert · notice · toast</div></div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <span style="font-size: 14px; padding: 8px 12px; border-radius: 8px; background: #e3f3ea; color: #15201d; border: 1px solid #b9e0c9"><strong style="color: #1b7a4b">Tersimpan.</strong> Pembayaran Rp 850.000 dicatat.</span>
+        <span style="font-size: 14px; padding: 8px 12px; border-radius: 8px; background: #fdf1dc; color: #15201d; border: 1px solid #f0d49e"><strong style="color: #8a5300">Night audit terlambat.</strong> Jalankan sebelum check-in baru.</span>
+        <span style="font-size: 14px; padding: 8px 12px; border-radius: 8px; background: #fbe9e7; color: #15201d; border: 1px solid #f0c4c0"><strong style="color: #b4332c">Hari bisnis sudah ditutup.</strong> <a href="#">Detail</a></span>
+      </div>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section style="background: #fff; border: 1px solid #dfe5e2; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Tipografi: Plus Jakarta Sans</h2>
+      <p style="margin: 0; font-size: 14px; color: #4f5e59; line-height: 1.5">Dibuat oleh Tokotype (Jakarta) — cocok untuk produk hotel Indonesia, terbaca jelas di ukuran kecil, dan punya angka tabular. Self-host via <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">@fontsource/plus-jakarta-sans</span>.</p>
+      <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #dfe5e2; padding-top: 14px">
+        <div style="display: flex; align-items: baseline; gap: 16px"><span style="width: 120px; font-size: 12.5px; color: #4f5e59">Judul · 28/700</span><span style="font-size: 28px; font-weight: 700; letter-spacing: -0.01em">Kedatangan hari ini</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span style="width: 120px; font-size: 12.5px; color: #4f5e59">Seksi · 18/700</span><span style="font-size: 18px; font-weight: 700">Kamar siap jual</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span style="width: 120px; font-size: 12.5px; color: #4f5e59">Isi · 15/400</span><span style="font-size: 15px">Tamu tiba pukul 14.00, minta kamar lantai atas.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span style="width: 120px; font-size: 12.5px; color: #4f5e59">Kecil · 13/500</span><span style="font-size: 13px; font-weight: 500; color: #4f5e59">DLX · 2 dewasa · 3 malam</span></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border-top: 1px solid #dfe5e2; padding-top: 14px">
+        <div><div style="font-size: 12.5px; color: #4f5e59; margin-bottom: 6px">Tanpa tabular-nums</div><div style="font-size: 18px; font-weight: 600; text-align: right; line-height: 1.5; font-variant-numeric: proportional-nums">Rp 1.111.000<br>Rp 8.890.500<br>Rp 450.000</div></div>
+        <div><div style="font-size: 12.5px; color: #17695a; font-weight: 600; margin-bottom: 6px">Dengan tabular-nums</div><div style="font-size: 18px; font-weight: 600; text-align: right; line-height: 1.5; font-variant-numeric: tabular-nums">Rp 1.111.000<br>Rp 8.890.500<br>Rp 450.000</div></div>
+      </div>
+    </section>
+
+    <section style="background: #141a18; color: #e7ecea; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Mode gelap — untuk shift malam</h2>
+      <p style="margin: 0; font-size: 14px; color: #9aa6a2; line-height: 1.5">Tersedia lewat pilihan Terang / Gelap / Ikuti sistem. Warna status dinaikkan terangnya agar tetap ≥ 7:1 di latar gelap.</p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #3a2416; color: #f0a35e">Kotor</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #2a2340; color: #b9a3f5">Sedang dibersihkan</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #16301f; color: #5fd0a0">Bersih</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #5fd0a0; color: #0b1a12">Diperiksa</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #1b2747; color: #8fb0ff">Dikonfirmasi</span>
+        <span style="font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; background: #8fb0ff; color: #0d1730">Menginap</span>
+      </div>
+      <pre style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.65; color: #c9d3cf; background: #0d1210; border-radius: 10px; padding: 16px; white-space: pre-wrap">/* tailwind.css — token status baru */
+--status-dirty:      #a8460a;  --status-dirty-bg:    #fdebdc;
+--status-cleaning:   #5b3bb0;  --status-cleaning-bg: #efe9fb;
+--status-clean:      #1b7a4b;  --status-clean-bg:    #e3f3ea;
+--status-inspected:  #1b7a4b;  /* isi pekat */
+--status-booked:     #2348a8;  --status-booked-bg:   #e4ebfb;
+--status-inhouse:    #2552c4;  /* isi pekat */
+--ok-text: #1b7a4b;  --warn-text: #8a5300;
+@custom-variant dark (&amp;:where([data-theme=dark] *));</pre>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -128,10 +129,9 @@ watch(() => pid.value, () => {
       <Button v-if="can('payables.manage') && !editing" type="button" data-testid="new-supplier" @click="startNew">{{ t('payables.sNew') }}</Button>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="supplier-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 6)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="supplier-error">
+<template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 6)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.sNoAccess', { permission: 'payables.view' }) }}</p>

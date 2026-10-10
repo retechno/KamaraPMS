@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
@@ -138,7 +139,7 @@ watch(() => pid.value, () => {
       <Button v-if="can('bank.reconcile') && bank && !importing" type="button" data-testid="new-statement" @click="startImport">{{ t('bankStatements.import') }}</Button>
     </template>
   </PageHeader>
-  <p v-if="error && !importing" class="alert" role="alert" data-testid="statement-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error && !importing" :error="error" inline data-testid="statement-error" />
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">{{ t('bankStatements.noAccess', { permission: 'bank.view' }) }}</p>
@@ -192,10 +193,9 @@ watch(() => pid.value, () => {
             :placeholder="t('bankStatements.csvPlaceholder')"
           />
           <small v-if="fieldError('csv')" role="alert" class="text-xs text-destructive" data-testid="csv-error">{{ fieldError('csv') }}</small>
-          <p v-if="error" class="alert" role="alert" data-testid="import-error">
-            {{ error.message }} <code>{{ error.code }}</code>
-            <template v-for="(f, i) in rowErrors.slice(0, 8)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-          </p>
+          <ErrorNotice v-if="error" :error="error" inline data-testid="import-error">
+<template v-for="(f, i) in rowErrors.slice(0, 8)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
           <div class="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" @click="importing = false">{{ t('common.cancel') }}</Button>
             <Button type="submit" :disabled="busy || !form.csv.trim() || !form.period_from || !form.period_to || !form.closing_balance.trim()" data-testid="import-run">{{ t('bankStatements.run') }}</Button>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -8,7 +9,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import { t } from '@/i18n'
+import { t, te } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { listAccounts } from './accountApi'
@@ -33,6 +34,8 @@ const NEEDS: Record<string, string> = {
 }
 const options = (key: string) => accounts.value.filter((a) => a.is_postable && a.is_active && (!NEEDS[key] || a.account_type === NEEDS[key]))
 const changed = computed(() => entries.value.filter((e) => choice[e.map_key] !== e.account_id))
+// What a key of the map means, in words: the language files have it for every key the system posts to; the server's sentence is the fallback.
+const meaningOf = (e: { map_key: string; meaning: string }): string => (te(`systemAccount.${e.map_key}`) ? t(`systemAccount.${e.map_key}` as never) : e.meaning)
 const problemText = (p: string): string => t(`accounting.p_${p}` as 'accounting.p_NO_CODE')
 const KIND: Record<string, { label: 'accounting.k_CHARGE_CODE' | 'accounting.k_TAX' | 'accounting.k_SERVICE_CHARGE'; to: string }> = {
   CHARGE_CODE: { label: 'accounting.k_CHARGE_CODE', to: '/setup/charge-codes' }, TAX: { label: 'accounting.k_TAX', to: '/setup/taxes' }, SERVICE_CHARGE: { label: 'accounting.k_SERVICE_CHARGE', to: '/setup/taxes' },
@@ -95,10 +98,9 @@ watch(() => pid.value, () => void load(), { immediate: true })
     <template #actions><RouterLink to="/accounting/accounts" class="text-sm text-primary hover:underline">{{ t('accounting.amChart') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="map-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-if="error.fieldErrors?.length"><br /><span v-for="(f, i) in error.fieldErrors" :key="i" class="muted">{{ f.field }}: {{ f.message }}<br /></span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="map-error">
+<template v-if="error.fieldErrors?.length"><br /><span v-for="(f, i) in error.fieldErrors" :key="i" class="muted">{{ f.field }}: {{ f.message }}<br /></span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accounting.noAccessView', { what: t('accounting.whatAccounting'), permission: 'accounting.view' }) }}</p>
@@ -108,7 +110,7 @@ watch(() => pid.value, () => void load(), { immediate: true })
       <CardContent class="pt-4">
         <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('accounting.amIntro') }}</p>
         <DataTable :columns="mapColumns" :rows="entries" row-key="map_key" :row-test-id="(e) => `map-${e.map_key}`" :caption="t('accounting.amTitle')" data-testid="map">
-          <template #cell-meaning="{ row }"><b>{{ row.meaning }}</b> <small class="text-muted-foreground">{{ row.map_key }}</small></template>
+          <template #cell-meaning="{ row }"><b :title="row.map_key">{{ meaningOf(row) }}</b></template>
           <template #cell-account="{ row }">
             <Combobox v-if="can('accounting.manage')" v-model="choice[row.map_key]" class="max-w-sm" :name="`map_${row.map_key}`" :options="[...options(row.map_key).map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
             <template v-else>{{ row.account_code }} · {{ row.account_name }}</template>

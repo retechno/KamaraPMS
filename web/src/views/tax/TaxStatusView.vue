@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -121,10 +122,9 @@ watch(() => pid.value, () => {
       <Button v-if="can('tax.manage') && !editing" type="button" data-testid="change-status" @click="startChange">{{ t('taxStatus.change') }}</Button>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="status-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="status-error">
+<template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxStatus.noAccess', { permission: 'tax.view' }) }}</p>
@@ -180,7 +180,7 @@ watch(() => pid.value, () => {
     <Card>
       <CardHeader><CardTitle>{{ t('taxStatus.history') }}</CardTitle></CardHeader>
       <DataTable :columns="columns" :rows="history" row-key="id" :row-test-id="(h) => `status-${h.effective_from}`" :caption="t('taxStatus.history')" data-testid="history">
-        <template #cell-from="{ row }">{{ row.effective_from }}</template>
+        <template #cell-from="{ row }">{{ $date(row.effective_from) }}</template>
         <template #cell-status="{ row }"><Badge :variant="row.is_pkp ? 'success' : 'outline'">{{ row.is_pkp ? t('taxStatus.pkp') : t('taxStatus.notPkp') }}</Badge></template>
         <template #cell-npwp="{ row }">{{ row.npwp ?? '—' }}</template>
         <template #cell-treatment="{ row }">{{ t('taxStatus.treatment_' + row.input_vat_treatment) }}</template>

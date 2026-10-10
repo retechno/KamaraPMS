@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -58,7 +59,7 @@ watch(() => pid.value, () => {
 
 <template>
   <PageHeader :title="t('payables.aTitle')" />
-  <p v-if="error" class="alert" role="alert" data-testid="aging-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="aging-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.aNoAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>

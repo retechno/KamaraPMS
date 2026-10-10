@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Search, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -71,7 +72,7 @@ watch(() => property.currentId, () => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="property.currentId === null" class="muted">{{ t('folios.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('folios.noAccess') }}</p>
 

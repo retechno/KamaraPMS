@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import { localizeDates } from '@/utils/format'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -186,13 +188,12 @@ watch(() => pid.value, () => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="journal-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-if="error.fieldErrors?.length">
+  <ErrorNotice v-if="error" :error="error" inline data-testid="journal-error">
+<template v-if="error.fieldErrors?.length">
       <br />
       <span v-for="(f, i) in error.fieldErrors.slice(0, 8)" :key="i" class="muted">{{ f.field }}: {{ f.message }}<br /></span>
     </template>
-  </p>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('journals.noAccess', { permission: 'accounting.view' }) }}</p>
@@ -294,7 +295,7 @@ watch(() => pid.value, () => {
           @row-click="open"
         >
           <template #cell-journal_type="{ row }"><Badge variant="outline">{{ typeLabel(row.journal_type) }}</Badge></template>
-          <template #cell-description="{ row }">{{ row.description }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
+          <template #cell-description="{ row }">{{ localizeDates(row.description) }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
           <template #cell-reversed="{ row }"><small v-if="row.reversed_by_number" class="text-muted-foreground">{{ t('journals.reversedBy', { number: row.reversed_by_number }) }}</small></template>
           <template #detail="{ row }">
             <template v-if="opened && opened.id === row.id">

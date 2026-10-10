@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -69,7 +70,7 @@ watch(() => pid.value, () => {
 
 <template>
   <PageHeader :title="t('taxLiability.title')" />
-  <p v-if="error" class="alert" role="alert" data-testid="liability-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="liability-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxLiability.noAccess', { permission: 'tax.view' }) }}</p>
   <template v-else>

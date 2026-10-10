@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       include: ['src/**/*.test.ts'],
       setupFiles: ['src/test/setup.ts'],
+      // One jsdom per worker is heavy. With a worker per thread (16 on the owner's laptop, next to Docker and PostgreSQL) the machine
+      // runs out of memory and a test that takes 0.5 s alone took over 5 s and timed out: a different one in each run, always the heavy
+      // first mounts (ReservationDetailView, FrontDeskView, FrontDeskLists). Six workers keep the slowest test under 3 s.
+      maxWorkers: 6,
     },
   }
 })

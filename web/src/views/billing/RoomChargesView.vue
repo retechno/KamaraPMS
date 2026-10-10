@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import { formatDate } from '@/utils/format'
+import { labelOf } from '@/i18n/labels'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -88,13 +91,13 @@ watch([pid, businessDate], () => {
 </script>
 
 <template>
-  <PageHeader :title="t('roomCharges.title')" :description="businessDate">
+  <PageHeader :title="t('roomCharges.title')" :description="formatDate(businessDate)">
     <template #actions>
       <Button type="button" variant="outline" :disabled="busy" data-testid="refresh" @click="load">{{ t('roomCharges.refresh') }}</Button>
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('roomCharges.noAccess') }}</p>
 
@@ -137,7 +140,7 @@ watch([pid, businessDate], () => {
           <template #cell-service_charge="{ row }">{{ row.status === 'READY' ? $money(row.service_charge) : '' }}</template>
           <template #cell-tax="{ row }">{{ row.status === 'READY' ? $money(row.tax) : '' }}</template>
           <template #cell-total="{ row }">{{ row.status === 'READY' ? $money(row.total) : '' }}</template>
-          <template #cell-status="{ row }"><Badge :variant="row.status === 'READY' ? 'success' : row.status === 'ERROR' ? 'destructive' : 'outline'">{{ row.status }}</Badge><small v-if="row.reason" class="text-muted-foreground"> {{ row.reason }}</small></template>
+          <template #cell-status="{ row }"><Badge :variant="row.status === 'READY' ? 'success' : row.status === 'ERROR' ? 'destructive' : 'outline'">{{ labelOf('roomChargeStatus', row.status) }}</Badge><small v-if="row.reason" class="text-muted-foreground"> {{ row.reason }}</small></template>
         </DataTable>
         <p v-if="problems.length" class="alert mb-0 mt-3" data-testid="problems">{{ t('roomCharges.problems', { n: problems.length }) }}</p>
         <p v-if="ready.length === 0 && preview.items.length" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('roomCharges.nothingDue') }}</p>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RowMenu, { type RowMenuItem } from '@/components/app/RowMenu.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -88,6 +90,20 @@ async function create(): Promise<void> {
   if (ok) adding.value = false
 }
 
+// The same actions as the buttons, for a phone.
+const rowItems = (d: Department): RowMenuItem[] => [
+  ...(d.level === 1 && d.is_active ? [{ key: 'sub', label: t('departments.addSub') }] : []),
+  { key: 'edit', label: t('common.edit') },
+  { key: 'toggle', label: d.is_active ? t('departments.switchOff') : t('departments.switchOn'), disabled: busy.value },
+  ...(!d.in_use && d.child_count === 0 ? [{ key: 'delete', label: t('common.delete'), destructive: true }] : []),
+]
+function rowAction(d: Department, key: string): void {
+  if (key === 'sub') startAdding(d)
+  else if (key === 'edit') startEditing(d)
+  else if (key === 'toggle') void toggle(d)
+  else if (key === 'delete') void remove(d)
+}
+
 function startEditing(d: Department): void {
   editing.value = { id: d.id, name: d.name, sort_order: String(d.sort_order) }
   error.value = null
@@ -141,10 +157,9 @@ watch(() => pid.value, () => {
       <Button v-if="can('accounting.manage') && !adding" type="button" data-testid="add" @click="startAdding()">{{ t('departments.add') }}</Button>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="department-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="department-error">
+<template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('departments.noAccess', { permission: 'accounting.view' }) }}</p>
@@ -193,7 +208,8 @@ watch(() => pid.value, () => {
     </Card>
     <Card>
       <EmptyState v-if="loaded && !departments.length" :title="t('departments.empty')" data-testid="empty" />
-      <table v-else class="w-full border-collapse text-sm" data-testid="departments">
+      <div v-else class="overflow-x-auto">
+      <table class="w-full border-collapse text-sm" data-testid="departments">
         <caption class="sr-only">{{ t('departments.title') }}</caption>
         <thead>
           <tr class="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -224,15 +240,21 @@ watch(() => pid.value, () => {
             </td>
             <td class="whitespace-nowrap px-3 py-2 text-right">
               <template v-if="can('accounting.manage')">
-                <Button v-if="d.level === 1 && d.is_active" type="button" variant="ghost" size="sm" :data-testid="`sub-${d.code}`" @click="startAdding(d)">{{ t('departments.addSub') }}</Button>
-                <Button type="button" variant="ghost" size="sm" :data-testid="`edit-${d.code}`" @click="startEditing(d)">{{ t('common.edit') }}</Button>
-                <Button type="button" variant="ghost" size="sm" :disabled="busy" :data-testid="`toggle-${d.code}`" @click="toggle(d)">{{ d.is_active ? t('departments.switchOff') : t('departments.switchOn') }}</Button>
-                <Button v-if="!d.in_use && d.child_count === 0" type="button" variant="ghost" size="sm" class="text-destructive" :data-testid="`delete-${d.code}`" @click="remove(d)">{{ t('common.delete') }}</Button>
+                <div class="hidden md:block">
+                  <Button v-if="d.level === 1 && d.is_active" type="button" variant="ghost" size="sm" :data-testid="`sub-${d.code}`" @click="startAdding(d)">{{ t('departments.addSub') }}</Button>
+                  <Button type="button" variant="ghost" size="sm" :data-testid="`edit-${d.code}`" @click="startEditing(d)">{{ t('common.edit') }}</Button>
+                  <Button type="button" variant="ghost" size="sm" :disabled="busy" :data-testid="`toggle-${d.code}`" @click="toggle(d)">{{ d.is_active ? t('departments.switchOff') : t('departments.switchOn') }}</Button>
+                  <Button v-if="!d.in_use && d.child_count === 0" type="button" variant="ghost" size="sm" class="text-destructive" :data-testid="`delete-${d.code}`" @click="remove(d)">{{ t('common.delete') }}</Button>
+                </div>
+                <div class="md:hidden" :data-testid="`more-${d.code}`">
+                  <RowMenu :items="rowItems(d)" @select="(key) => rowAction(d, key)" />
+                </div>
               </template>
             </td>
           </tr>
         </tbody>
       </table>
+      </div>
     </Card>
   </template>
 </template>

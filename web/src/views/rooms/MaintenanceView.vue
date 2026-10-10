@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
@@ -206,7 +208,7 @@ watch(() => route.query.room, (v) => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="mt-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="mt-error" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('maintenance.selectProperty') }}</p>
   <p v-else-if="!can('maintenance.report')" class="muted" data-testid="no-access">{{ t('maintenance.noAccess') }}</p>
@@ -351,7 +353,7 @@ watch(() => route.query.room, (v) => {
               </FormField>
               <label v-if="selected.block?.status === 'ACTIVE'" class="flex items-center gap-2 text-sm">
                 <input v-model="action.releaseBlock" name="release_block" type="checkbox" />
-                <span>{{ t('maintenance.putBack', { type: selected.block.block_type, date: $date(selected.block.end_date) }) }}</span>
+                <span>{{ t('maintenance.putBack', { type: labelOf('blockType', selected.block.block_type), date: $date(selected.block.end_date) }) }}</span>
               </label>
               <div class="flex justify-end gap-2">
                 <Button type="button" variant="outline" size="sm" @click="closing = null">{{ t('maintenance.back') }}</Button>

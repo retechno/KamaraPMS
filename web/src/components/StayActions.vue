@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import { statusText } from '@/utils/status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -278,10 +280,9 @@ async function addGuest(g: Guest): Promise<void> {
         <Button v-if="canChange" type="button" variant="outline" data-testid="open-departure" @click="showDeparture">{{ t('stayActions.extend') }}</Button>
         <Button v-if="canAddGuest" type="button" variant="outline" data-testid="open-guest" @click="show('guest')">{{ t('stayActions.addGuest') }}</Button>
       </div>
-      <p v-if="error" class="alert mt-3" role="alert" data-testid="action-error">
-        {{ error.message }} <code>{{ error.code }}</code>
-        <template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> {{ t('stayActions.extensionHint') }}</template>
-      </p>
+      <ErrorNotice v-if="error" :error="error" inline class="mt-3" data-testid="action-error">
+<template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> {{ t('stayActions.extensionHint') }}</template>
+</ErrorNotice>
 
       <form v-if="open === 'move'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="submitMove">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.moveTitle') }}</h2>
@@ -295,7 +296,7 @@ async function addGuest(g: Guest): Promise<void> {
           </FormField>
           <FormField :label="t('stayActions.room')" :error="fieldError('room_id')">
             <template #default="{ id, invalid }">
-              <Combobox :id="id" v-model="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${r.housekeeping_status}${r.bed_type_name ? ` · ${r.bed_type_name}` : ''}${isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag')}` }))]" />
+              <Combobox :id="id" v-model="move.roomId" name="room" :disabled="!rooms.length" :aria-invalid="invalid" :options="[...rooms.map((r) => ({ value: r.room_id, label: `${r.room_number} · ${statusText(r.housekeeping_status)}${r.bed_type_name ? ` · ${r.bed_type_name}` : ''}${isReady(r.housekeeping_status) ? '' : t('stayActions.notReadyTag')}` }))]" />
               <small v-if="!rooms.length" class="text-xs text-muted-foreground" data-testid="no-rooms">{{ t('stayActions.noRooms', { date: until }) }}</small>
             </template>
           </FormField>
@@ -304,7 +305,7 @@ async function addGuest(g: Guest): Promise<void> {
           </FormField>
         </div>
         <div v-if="notReady" class="alert warning mt-3" data-testid="not-ready">
-          {{ t('stayActions.roomIs', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '' }) }}
+          {{ t('stayActions.roomIs', { room: selected?.room_number ?? '', status: statusText(selected?.housekeeping_status) }) }}
           <template v-if="canOverride">
             <label class="mt-2 flex items-center gap-2 text-sm"><input v-model="move.override" type="checkbox" name="override" class="size-4 accent-primary" /><span>{{ t('stayActions.useAnyway') }}</span></label>
             <FormField v-if="move.override" class="mt-2 max-w-md" :label="t('stayActions.reason')">

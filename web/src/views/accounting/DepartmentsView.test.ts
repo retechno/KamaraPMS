@@ -157,4 +157,24 @@ describe('DepartmentsView', () => {
     expect(none.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
   })
+
+  it('has the actions of a row in a "..." menu for a phone as well, with the same choices as the buttons', async () => {
+    const w = mountView()
+    await flushPromises()
+    const menu = w.get('[data-testid=more-REST]')
+    await menu.get('[data-slot=row-menu-trigger]').trigger('click')
+    await flushPromises()
+    const texts = Array.from(document.body.querySelectorAll('[data-slot=row-menu] button')).map((b) => b.textContent)
+    expect(texts).toEqual(['Edit', 'Switch off', 'Delete']) // a sub-department has no "add sub-department"; REST is not in use
+    ;(document.body.querySelector('[data-testid=menu-edit]') as HTMLElement).click()
+    await flushPromises()
+    expect(w.find('[data-testid=edit-form-REST]').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('lets the table scroll inside its card', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=departments]').element.parentElement?.className).toContain('overflow-x-auto')
+  })
 })

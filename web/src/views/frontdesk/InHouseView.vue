@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, watch } from 'vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import InHouseTable from '@/components/InHouseTable.vue'
@@ -20,10 +21,9 @@ watch(() => props.refresh, () => list.restart())
 </script>
 
 <template>
-  <div v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="list.restart()">{{ t('frontDesk.page.retry') }}</Button>
-  </div>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">
+<Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="list.restart()">{{ t('frontDesk.page.retry') }}</Button>
+</ErrorNotice>
   <p v-if="property.currentId === null" class="muted">{{ t('frontDesk.page.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessStays') }}</p>
 

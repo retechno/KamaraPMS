@@ -12,7 +12,7 @@ const { items, dismiss } = useToasts()
 
 const icons = { success: CheckCircle2, error: AlertTriangle, info: Info } as const
 const tone: Record<ToastKind, string> = {
-  success: 'border-success/40 [&_svg:first-child]:text-success',
+  success: 'border-success/40 [&_svg:first-child]:text-success-text',
   error: 'border-destructive/40 [&_svg:first-child]:text-destructive',
   info: 'border-border [&_svg:first-child]:text-muted-foreground',
 }

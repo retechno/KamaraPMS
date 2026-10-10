@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
@@ -221,10 +222,9 @@ watch([() => pid.value, taxId], () => {
 
 <template>
   <PageHeader :title="t('taxReturns.title')" />
-  <p v-if="error" class="alert" role="alert" data-testid="tax-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="tax-error">
+<template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxReturns.noAccess', { permission: 'tax.view' }) }}</p>

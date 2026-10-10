@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -61,16 +62,15 @@ watch(() => props.refresh, () => list.restart())
 </script>
 
 <template>
-  <div v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="list.restart()">{{ t('frontDesk.page.retry') }}</Button>
-  </div>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">
+<Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="list.restart()">{{ t('frontDesk.page.retry') }}</Button>
+</ErrorNotice>
   <p v-if="property.currentId === null" class="muted">{{ t('frontDesk.page.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessStays') }}</p>
 
   <template v-else-if="businessDate">
-    <form class="mb-3 flex flex-wrap items-end gap-3" novalidate data-testid="departure-filters" @submit.prevent>
-      <FormField class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
+    <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="departure-filters" @submit.prevent>
+      <FormField float-hint :hint="$weekday(shownDate)" class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
         <template #default="{ id }"><Input :id="id" v-model="shownDate" name="departure_date" type="date" /></template>
       </FormField>
       <label class="mb-2 flex items-center gap-2 text-sm"><input v-model="exact" type="checkbox" name="exact" class="size-4 accent-primary" />{{ t('frontDesk.departures.onlyThatDate') }}</label>

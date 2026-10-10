@@ -113,7 +113,7 @@ describe('AppShell', () => {
     expect(mounted!.get('[data-testid=overdue-banner]').text()).toContain('Night audit is overdue: the business date is still 30 Sep 2026')
     setLocale('id')
     await flushPromises()
-    expect(mounted!.get('[data-testid=overdue-banner]').text()).toContain('Night audit terlambat')
+    expect(mounted!.get('[data-testid=overdue-banner]').text()).toContain('Audit malam terlambat')
   })
 
   it('has a skip link to the content', async () => {

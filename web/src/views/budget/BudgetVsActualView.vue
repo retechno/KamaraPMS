@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { statementTitle } from '@/utils/statementTitle'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -117,7 +119,7 @@ async function showPdf(): Promise<void> {
 
 /** A variance with its sign, and in words whether it is good ("favourable") or bad: colour alone is not enough. */
 const verdict = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? t('budget.fav') : t('budget.unfav'))
-const tone = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? 'text-success' : 'text-destructive')
+const tone = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? 'text-success-text' : 'text-destructive')
 const amount = (v: string): string => (Number(v) === 0 ? '–' : formatMoney(v))
 const percent = (c: BudgetCell): string => (c.variance_percent === null ? '' : `${formatMoney(c.variance_percent)}%`)
 /** A statistic in its unit: room nights as they are, a percent with its sign, money with separators. */
@@ -156,10 +158,9 @@ watch(() => form.year_start, () => { form.budget_id = '' })
       </template>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="report-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="report-error">
+<template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('budget.view')" class="muted" data-testid="no-access">{{ t('budget.noAccess', { permission: 'budget.view' }) }}</p>
   <template v-else>
@@ -221,12 +222,12 @@ watch(() => form.year_start, () => { form.budget_id = '' })
               <tbody>
                 <template v-for="l in report.lines" :key="l.key">
                   <tr v-if="l.kind === 'HEADING'" :data-testid="`line-${l.key}`">
-                    <th colspan="9" class="pb-1 pt-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ l.title }}</th>
+                    <th colspan="9" class="pb-1 pt-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ statementTitle(l.title) }}</th>
                   </tr>
                   <template v-else>
                     <template v-if="l.kind === 'GROUP'">
                       <tr :data-testid="`line-${l.key}`" class="border-b border-border">
-                        <td class="py-1.5 pr-2 font-medium">{{ l.title }}</td>
+                        <td class="py-1.5 pr-2 font-medium">{{ statementTitle(l.title) }}</td>
                         <td v-if="l.accounts.length === 1" colspan="8" class="border-l border-border" />
                         <template v-else>
                           <td class="border-l border-border px-2 text-right tabular-nums">{{ bothZero(l.period) ? '' : amount(l.period.actual) }}</td>
@@ -242,7 +243,7 @@ watch(() => form.year_start, () => { form.budget_id = '' })
                     </template>
                     <template v-else>
                       <tr :class="l.kind === 'TOTAL' ? 'border-t-2 border-foreground' : 'border-t border-foreground'" :data-testid="`line-${l.key}`">
-                        <td class="py-1.5 pr-2"><b>{{ l.title }}</b></td>
+                        <td class="py-1.5 pr-2"><b>{{ statementTitle(l.title) }}</b></td>
                         <td class="border-l border-border px-2 text-right tabular-nums"><b>{{ amount(l.period.actual) }}</b></td>
                         <td class="px-2 text-right tabular-nums"><b>{{ amount(l.period.budget) }}</b></td>
                         <td class="px-2 text-right tabular-nums" :class="tone(l.period)" :data-testid="`variance-${l.key}`"><b>{{ amount(l.period.variance) }}</b> <small v-if="verdict(l.period)">{{ verdict(l.period) }}</small></td>

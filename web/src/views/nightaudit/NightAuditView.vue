@@ -156,7 +156,7 @@ watch(pid, () => {
   <template v-else>
     <Card v-if="result" class="mb-4 border-success/40" data-testid="result">
       <CardHeader class="flex-row items-center gap-3">
-        <CheckCircle2 class="size-6 text-success" aria-hidden="true" />
+        <CheckCircle2 class="size-6 text-success-text" aria-hidden="true" />
         <div>
           <CardTitle>{{ t('nightAudit.closedTitle', { date: $date(result.closed_business_date) }) }}</CardTitle>
           <p class="m-0 mt-0.5 text-sm text-muted-foreground">

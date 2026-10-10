@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -100,13 +101,13 @@ watch([key, pid], () => {
 <template>
   <PageHeader :title="t('reports.title')" />
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('reports.noAccess', { permission: 'report.view' }) }}</p>
 
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-4 p-4" novalidate data-testid="filters" @submit.prevent="run">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="run">
         <FormField class="w-72" :label="t('reports.report')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="key" name="report">
@@ -115,10 +116,10 @@ watch([key, pid], () => {
           </template>
         </FormField>
         <template v-if="def.input === 'range'">
-          <FormField :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
-          <FormField :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+          <FormField float-hint :hint="$weekday(range.from)" :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
+          <FormField float-hint :hint="$weekday(range.to)" :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
         </template>
-        <FormField v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
+        <FormField float-hint :hint="$weekday(range.date)" v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
         <FormField v-else-if="def.input === 'hours'" :label="t('reports.minHours')"><template #default="{ id }"><Input :id="id" v-model.number="range.minHours" name="min_hours" type="number" min="0" /></template></FormField>
         <Button type="submit" :disabled="busy" data-testid="run">{{ t('reports.run') }}</Button>
         <Button type="button" variant="outline" :disabled="busy || !table" data-testid="csv" @click="download">{{ t('reports.csv') }}</Button>
