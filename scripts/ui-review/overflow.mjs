@@ -33,12 +33,18 @@ await page.fill('input[name="password"]', process.env.SHOT_PASS)
 await page.click('button[type="submit"]')
 await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 15000 })
 await page.waitForLoadState('networkidle').catch(() => {})
-// Pilih properti review; daftar propertinya dimuat setelah login, jadi tunggu opsinya.
-await page.waitForSelector(`[data-testid="property-switcher"] option:text-matches("${CODE}")`, { state: 'attached', timeout: 10000 }).catch(() => {})
-const opt = await page.$(`[data-testid="property-switcher"] option:text-matches("${CODE}")`)
-if (opt) await page.selectOption('[data-testid="property-switcher"]', await opt.getAttribute('value'))
-else console.log(`properti ${CODE} tidak ditemukan: halaman diukur untuk properti yang terpilih`)
-await page.waitForTimeout(1000)
+// Pilih properti review. Di ponsel pemilihnya ada di dalam drawer menu: buka drawer, pilih, tutup.
+{
+  const sel = '[data-testid="property-switcher"]'
+  await page.click('[data-testid="open-menu"]')
+  await page.waitForSelector(`[data-testid="drawer"] ${sel}`, { timeout: 10000 }).catch(() => {})
+  await page.waitForSelector(`${sel} option:text-matches("${CODE}")`, { state: 'attached', timeout: 10000 }).catch(() => {})
+  const opt = await page.$(`${sel} option:text-matches("${CODE}")`)
+  if (opt) await page.selectOption(sel, await opt.getAttribute('value'))
+  else console.log(`properti ${CODE} tidak ditemukan: halaman diukur untuk properti yang terpilih`)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(1000)
+}
 
 // Elemen paling kanan yang keluar dari layar (untuk menunjuk penyebabnya).
 const probe = () => {

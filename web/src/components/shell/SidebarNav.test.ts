@@ -31,22 +31,21 @@ describe('SidebarNav', () => {
     expect(w.get('[data-testid=nav-tapeChart]').text()).toBe('Tape chart')
   })
 
-  it('opens the daily sections and keeps finance and setup closed until needed', async () => {
+  it('opens the daily sections and keeps the finance sections and setup closed until needed', async () => {
     const { w } = await mountNav('/')
     const shown = (id: string) => (w.get(`[data-testid=section-${id}] ul`).element as HTMLElement).style.display !== 'none'
     expect(shown('frontDesk')).toBe(true)
     expect(shown('billing')).toBe(true)
-    expect(shown('finance')).toBe(false)
-    expect(shown('setup')).toBe(false)
+    for (const id of ['accounting', 'payables', 'tax', 'bank', 'budget', 'setup']) expect(shown(id), id).toBe(false)
   })
 
-  it('opens the section of the page it arrives on, with its group headings', async () => {
+  it('opens the section of the page it arrives on, and only that one of the finance sections', async () => {
     const { w, router } = await mountNav('/')
     await router.push('/tax/returns')
     await flushPromises()
-    expect((w.get('[data-testid=section-finance] ul').element as HTMLElement).style.display).not.toBe('none')
-    expect(w.get('[data-testid=group-accounting]').text()).toBe('Accounting')
-    expect(w.get('[data-testid=group-tax]').text()).toBe('Tax')
+    expect((w.get('[data-testid=section-tax] ul').element as HTMLElement).style.display).not.toBe('none')
+    expect(w.get('[data-testid=section-tax]').text()).toContain('Tax')
+    expect((w.get('[data-testid=section-accounting] ul').element as HTMLElement).style.display).toBe('none')
     expect(w.get('[data-testid=nav-taxReturns]').attributes('aria-current')).toBe('page')
   })
 

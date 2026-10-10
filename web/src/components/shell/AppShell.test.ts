@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { confirm } from '@/composables/useConfirm'
+import { resetNavPins } from '@/composables/useNavPins'
 import { toast } from '@/composables/useToast'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -41,6 +42,7 @@ async function mountShell(width: number, clockOver: object = {}) {
 describe('AppShell', () => {
   beforeEach(() => {
     localStorage.clear()
+    resetNavPins()
     setLocale('en')
   })
   afterEach(() => {
@@ -91,6 +93,42 @@ describe('AppShell', () => {
     expect(document.body.querySelector('[data-testid=drawer]')).toBeNull()
   })
 
+  it('has the choice of the property in the drawer on a phone, and not in the top bar', async () => {
+    await mountShell(400)
+    expect(mounted!.find('[data-testid=property-switcher]').exists()).toBe(false)
+    await mounted!.get('[data-testid=open-menu]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=drawer] [data-testid=property-switcher]')).not.toBeNull()
+  })
+
+  it('has the choice of the property in the top bar, not in the drawer, on a laptop and a tablet', async () => {
+    await mountShell(1366)
+    expect(mounted!.find('[data-testid=topbar] [data-testid=property-switcher]').exists()).toBe(true)
+    mounted!.unmount()
+    await mountShell(900)
+    await mounted!.get('[data-testid=open-menu]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=drawer] [data-testid=property-switcher]')).toBeNull()
+  })
+
+  it('opens the drawer from the pin button of the rail, where the pinned pages are', async () => {
+    await mountShell(900)
+    expect(document.body.querySelector('[data-testid=drawer]')).toBeNull()
+    await mounted!.get('[data-testid=rail-pins]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=drawer] [data-testid=section-pinned]')).not.toBeNull()
+  })
+
+  it('remembers the pages that were opened, the page the person is on first', async () => {
+    const { router } = await mountShell(1280)
+    await router.push('/guests')
+    await flushPromises()
+    await router.push('/stays/3') // not a page of the menu: not remembered
+    await flushPromises()
+    expect(JSON.parse(localStorage.getItem('pms.nav.1')!).recent).toEqual(['guests', 'arrivals'])
+    expect(mounted!.get('[data-testid=section-recent]').text()).toContain('Guests')
+  })
+
   it('opens the finder with Ctrl+K and again with Cmd+K closes it', async () => {
     await mountShell(1280)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
@@ -124,7 +162,10 @@ describe('AppShell', () => {
 
   it('asks the parent to sign out', async () => {
     await mountShell(1280)
-    await mounted!.get('[data-testid=sign-out]').trigger('click')
+    await mounted!.get('[data-testid=user-menu]').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    ;(document.body.querySelector('[data-testid=sign-out]') as HTMLElement).click()
+    await flushPromises()
     expect(mounted!.emitted('signOut')).toHaveLength(1)
   })
 

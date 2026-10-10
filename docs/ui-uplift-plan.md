@@ -90,6 +90,8 @@ Teal `primary` hanya untuk tombol, link, dan menu aktif. Tambahkan:
 - Bagian "Disematkan" di atas (pin dari judul halaman, disimpan di localStorage) dan "Terakhir dibuka" (5 item).
 - Bagian `finance` dipecah per grup (accounting, payables, tax, bank, budget) dan defaultnya tertutup.
 
+Catatan 2.3 (dikerjakan di Tahap 2b): sematan dan "Terakhir dibuka" disimpan per perangkat, di `localStorage` per pengguna (`pms.nav.<userId>`). **Menyimpannya di server (ikut ke perangkat lain) ditunda**: butuh endpoint preferensi pengguna dan migrasi. Halaman yang tersimpan tetapi tidak boleh dibuka pengguna itu, atau sudah tidak ada di menu, tidak ditampilkan dan tidak menimbulkan error.
+
 ### 2.4 Jejak audit menyimpan label entitas
 Jejak audit sekarang menamai entitas dari nomor yang kebetulan ada di datanya ("Stay STY000035"); bila tidak ada, yang tampil "Kamar #154". Perbaikan yang benar ada di backend, bukan di layar:
 - Saat mencatat, `audit.Writer.Write` ikut menyimpan `entity_label` (mis. "Kamar 305", "Reservasi RES000012", "Folio FOL000026"), dibentuk oleh modul yang menulis entri itu (ia yang tahu nomornya). Migrasi menambah kolom `entity_label` (boleh null untuk entri lama).

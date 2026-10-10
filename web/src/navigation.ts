@@ -1,16 +1,16 @@
 import type { Component } from 'vue'
-import { BedDouble, ConciergeBell, Landmark, MoonStar, Receipt, Settings } from 'lucide-vue-next'
+import { BedDouble, BookOpen, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Truck } from 'lucide-vue-next'
 
 /**
- * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`, `nav.groups.<group>`),
- * so the menu follows the language. An item shows to everyone unless it is `adminOnly`; what a person may do on the
- * page is still decided by the page and the API.
+ * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`), so the menu follows the
+ * language. An item shows to everyone unless it is `adminOnly` or names a `permission` the person does not have at the
+ * property; what a person may do on the page is still decided by the page and the API.
  */
 export interface NavItem {
   id: string
   to: string
   adminOnly?: boolean // shown to tenant administrators only
-  group?: string // a sub-heading inside the section (finance)
+  permission?: string // shown only to who has this permission at the open property (no item uses it yet: for pages that are for some roles, like the manager's performance page)
 }
 
 export interface NavSection {
@@ -75,37 +75,61 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    id: 'finance',
+    id: 'accounting',
+    icon: BookOpen,
+    items: [
+      { id: 'chartOfAccounts', to: '/accounting/accounts' },
+      { id: 'systemAccounts', to: '/accounting/mapping' },
+      { id: 'journals', to: '/accounting/journals' },
+      { id: 'periods', to: '/accounting/periods' },
+      { id: 'fiscalYears', to: '/accounting/fiscal-years' },
+      { id: 'departments', to: '/accounting/departments' },
+      { id: 'trialBalance', to: '/accounting/trial-balance' },
+      { id: 'generalLedger', to: '/accounting/ledger' },
+      { id: 'incomeStatement', to: '/accounting/income-statement' },
+      { id: 'departmentReport', to: '/accounting/department-report' },
+      { id: 'balanceSheet', to: '/accounting/balance-sheet' },
+      { id: 'cashFlow', to: '/accounting/cash-flow' },
+      { id: 'controlAccounts', to: '/accounting/reconciliation' },
+    ],
+  },
+  {
+    id: 'payables',
+    icon: Truck,
+    items: [
+      { id: 'suppliers', to: '/payables/suppliers' },
+      { id: 'supplierBills', to: '/payables/bills' },
+      { id: 'supplierCredits', to: '/payables/credit-notes' },
+      { id: 'supplierPayments', to: '/payables/payments' },
+      { id: 'payablesAging', to: '/payables/aging' },
+    ],
+  },
+  {
+    id: 'tax',
+    icon: Percent,
+    items: [
+      { id: 'taxStatus', to: '/tax/status' },
+      { id: 'filingProfiles', to: '/tax/profiles' },
+      { id: 'taxReturns', to: '/tax/returns' },
+      { id: 'taxInvoices', to: '/tax/invoices' },
+      { id: 'taxOwed', to: '/tax/liability' },
+    ],
+  },
+  {
+    id: 'bank',
     icon: Landmark,
     items: [
-      { id: 'chartOfAccounts', to: '/accounting/accounts', group: 'accounting' },
-      { id: 'systemAccounts', to: '/accounting/mapping', group: 'accounting' },
-      { id: 'journals', to: '/accounting/journals', group: 'accounting' },
-      { id: 'periods', to: '/accounting/periods', group: 'accounting' },
-      { id: 'fiscalYears', to: '/accounting/fiscal-years', group: 'accounting' },
-      { id: 'departments', to: '/accounting/departments', group: 'accounting' },
-      { id: 'trialBalance', to: '/accounting/trial-balance', group: 'accounting' },
-      { id: 'generalLedger', to: '/accounting/ledger', group: 'accounting' },
-      { id: 'incomeStatement', to: '/accounting/income-statement', group: 'accounting' },
-      { id: 'departmentReport', to: '/accounting/department-report', group: 'accounting' },
-      { id: 'balanceSheet', to: '/accounting/balance-sheet', group: 'accounting' },
-      { id: 'cashFlow', to: '/accounting/cash-flow', group: 'accounting' },
-      { id: 'controlAccounts', to: '/accounting/reconciliation', group: 'accounting' },
-      { id: 'suppliers', to: '/payables/suppliers', group: 'payables' },
-      { id: 'supplierBills', to: '/payables/bills', group: 'payables' },
-      { id: 'supplierCredits', to: '/payables/credit-notes', group: 'payables' },
-      { id: 'supplierPayments', to: '/payables/payments', group: 'payables' },
-      { id: 'payablesAging', to: '/payables/aging', group: 'payables' },
-      { id: 'taxStatus', to: '/tax/status', group: 'tax' },
-      { id: 'filingProfiles', to: '/tax/profiles', group: 'tax' },
-      { id: 'taxReturns', to: '/tax/returns', group: 'tax' },
-      { id: 'taxInvoices', to: '/tax/invoices', group: 'tax' },
-      { id: 'taxOwed', to: '/tax/liability', group: 'tax' },
-      { id: 'bankAccounts', to: '/bank/accounts', group: 'bank' },
-      { id: 'bankStatements', to: '/bank/statements', group: 'bank' },
-      { id: 'bankCards', to: '/bank/cards', group: 'bank' },
-      { id: 'budgets', to: '/budget', group: 'budget' },
-      { id: 'budgetVsActual', to: '/budget/vs-actual', group: 'budget' },
+      { id: 'bankAccounts', to: '/bank/accounts' },
+      { id: 'bankStatements', to: '/bank/statements' },
+      { id: 'bankCards', to: '/bank/cards' },
+    ],
+  },
+  {
+    id: 'budget',
+    icon: PiggyBank,
+    items: [
+      { id: 'budgets', to: '/budget' },
+      { id: 'budgetVsActual', to: '/budget/vs-actual' },
     ],
   },
   {
@@ -132,11 +156,21 @@ export const navigation: NavSection[] = [
   },
 ]
 
-/** The sections a person sees: items for administrators only are left out, and a section left empty disappears. */
-export function visibleNavigation(isAdmin: boolean): NavSection[] {
-  return navigation
-    .map((s) => ({ ...s, items: s.items.filter((i) => !i.adminOnly || isAdmin) }))
-    .filter((s) => s.items.length > 0)
+/**
+ * The sections a person sees: items for administrators only are left out, an item that names a permission is left out unless `can` says the person has it, and a section left empty disappears.
+ */
+export function visibleNavigation(isAdmin: boolean, can?: (permission: string) => boolean, menu: NavSection[] = navigation): NavSection[] {
+  const allowed = (i: NavItem): boolean => (!i.adminOnly || isAdmin) && (!i.permission || (can ? can(i.permission) : false))
+  return menu.map((s) => ({ ...s, items: s.items.filter(allowed) })).filter((s) => s.items.length > 0)
+}
+
+/** An item of the navigation by its id, with its section; undefined for an id that is not (or no longer) in the menu. */
+export function findNavItem(id: string, sections: NavSection[] = navigation): ActiveNav | undefined {
+  for (const section of sections) {
+    const item = section.items.find((i) => i.id === id)
+    if (item) return { section, item }
+  }
+  return undefined
 }
 
 export interface ActiveNav {

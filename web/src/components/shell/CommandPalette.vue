@@ -6,7 +6,7 @@ import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { visibleNavigation } from '@/navigation'
+import { useVisibleNavigation } from '@/composables/useVisibleNavigation'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -19,6 +19,7 @@ const open = defineModel<boolean>('open', { required: true })
 const auth = useAuthStore()
 const property = usePropertyStore()
 const router = useRouter()
+const navigation = useVisibleNavigation()
 
 interface Entry {
   key: string
@@ -36,7 +37,7 @@ let seq = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const pages = computed<Entry[]>(() =>
-  visibleNavigation(auth.isAdmin).flatMap((s) =>
+  navigation.sections.value.flatMap((s) =>
     s.items.map((i) => ({
       key: `page-${i.id}`,
       group: 'pages' as const,
