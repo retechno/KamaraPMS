@@ -112,6 +112,15 @@ describe('RoomBlocksView', () => {
     expect(heads[2]!.classes()).toContain('bg-muted/60')
   })
 
+  it('writes each date of the calendar as day/month, as the tape chart does, not as two numbers apart', async () => {
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    const heads = w.findAll('[role=columnheader]')
+    expect(heads[0]!.text()).toContain('01/10')
+    expect(heads[1]!.text()).toContain('02/10')
+    expect(heads[0]!.text()).not.toMatch(/01\s*10/)
+  })
+
   it('shows the type of a block as a badge in the list, and a calendar bar by type', async () => {
     const w = mountCalendar(['room_block.manage'])
     await flushPromises()
