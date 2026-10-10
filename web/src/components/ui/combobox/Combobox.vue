@@ -3,7 +3,7 @@ import { Check, ChevronsUpDown } from 'lucide-vue-next'
 import {
   ComboboxAnchor, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxItemIndicator, ComboboxPortal, ComboboxRoot, ComboboxTrigger, ComboboxViewport,
 } from 'reka-ui'
-import { computed, nextTick, ref, type HTMLAttributes } from 'vue'
+import { computed, ref, type HTMLAttributes } from 'vue'
 import { t } from '@/i18n'
 import { isProgrammaticFocus } from '@/lib/focus'
 import { cn } from '@/lib/utils'
@@ -45,9 +45,10 @@ const shown = computed(() => {
 })
 const labelOf = (value: unknown): string => props.options.find((o) => o.value === value)?.label ?? ''
 
-// The page puts the focus on this field by itself (a form that appears): the list stays closed, it was not asked for.
-function onFocusIn(): void {
-  if (isProgrammaticFocus()) void nextTick(() => { open.value = false })
+// The list opens when the person focuses the field (a Tab, a click), but not when the page puts the focus there by itself (a form that appears): it was not asked for, and the list would cover the form.
+// Reka's own open-on-focus cannot tell the two apart, so it is off and done here, before the field's own handlers run (capture).
+function onFocus(e: FocusEvent): void {
+  if (props.openOnFocus && !props.disabled && e.target instanceof HTMLInputElement && !isProgrammaticFocus()) open.value = true
 }
 
 function onOpen(value: boolean): void {
@@ -57,8 +58,8 @@ function onOpen(value: boolean): void {
 </script>
 
 <template>
-  <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox" @focusin="onFocusIn">
-    <ComboboxRoot v-model="model" v-model:open="open" ignore-filter :open-on-focus="openOnFocus" open-on-click :disabled="disabled" @update:open="onOpen">
+  <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox" @focus.capture="onFocus">
+    <ComboboxRoot v-model="model" v-model:open="open" ignore-filter :open-on-focus="false" open-on-click :disabled="disabled" @update:open="onOpen">
       <ComboboxAnchor class="relative block">
         <ComboboxInput
           :id="id"
