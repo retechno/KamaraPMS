@@ -49,7 +49,7 @@ const routes = [
   ['/arrivals', 'kedatangan'], ['/in-house', 'menginap'], ['/departures', 'keberangkatan'], ['/walk-in', 'walk-in'], ['/guests', 'tamu'], ['/groups', 'grup'],
   ['/room-status', 'status-kamar'], ['/housekeeping', 'housekeeping'], ['/housekeeping/tasks', 'daftar-bersih'], ['/maintenance', 'maintenance'], ['/lost-found', 'lost-found'], ['/room-blocks', 'blokir-kamar'],
   ['/folios', 'folio'], ['/cashier', 'kasir'], ['/cashier/shifts', 'shift-kasir'], ['/room-charges', 'room-charges'], ['/city-ledger', 'city-ledger'], ['/city-ledger/overdue', 'city-ledger-jatuh-tempo'],
-  ['/night-audit', 'night-audit'], ['/reports', 'laporan'], ['/audit', 'audit-log'],
+  ['/night-audit', 'night-audit'], ['/reports', 'laporan'], ['/performance', 'kinerja'], ['/audit', 'audit-log'],
   ['/accounting/accounts', 'akun'], ['/accounting/mapping', 'akun-sistem'], ['/accounting/journals', 'jurnal'], ['/accounting/periods', 'periode'], ['/accounting/fiscal-years', 'tahun-fiskal'], ['/accounting/departments', 'departemen'],
   ['/accounting/trial-balance', 'neraca-saldo'], ['/accounting/ledger', 'buku-besar'], ['/accounting/income-statement', 'laba-rugi'], ['/accounting/department-report', 'laporan-departemen'], ['/accounting/balance-sheet', 'neraca'], ['/accounting/cash-flow', 'arus-kas'], ['/accounting/reconciliation', 'rekonsiliasi'],
   ['/payables/suppliers', 'supplier'], ['/payables/bills', 'tagihan-supplier'], ['/payables/credit-notes', 'nota-kredit'], ['/payables/payments', 'pembayaran-supplier'], ['/payables/aging', 'umur-hutang'],

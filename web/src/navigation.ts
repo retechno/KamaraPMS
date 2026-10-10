@@ -10,7 +10,7 @@ export interface NavItem {
   id: string
   to: string
   adminOnly?: boolean // shown to tenant administrators only
-  permission?: string // shown only to who has this permission at the open property (no item uses it yet: for pages that are for some roles, like the manager's performance page)
+  permission?: string // shown only to who has this permission at the open property (for pages that are for some roles: the manager's performance page)
 }
 
 export interface NavSection {
@@ -72,6 +72,7 @@ export const navigation: NavSection[] = [
     items: [
       { id: 'nightAudit', to: '/night-audit' },
       { id: 'reports', to: '/reports' },
+      { id: 'performance', to: '/performance', permission: 'report.view' },
     ],
   },
   {

@@ -293,7 +293,7 @@ async function book(approval?: Approval): Promise<void> {
 <template>
   <PageHeader :title="t('newReservation.title')">
     <template #actions>
-      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('newReservation.reservations') }}</RouterLink></Button>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/reservations">{{ t('newReservation.reservations') }}</RouterLink></Button>
     </template>
   </PageHeader>
 

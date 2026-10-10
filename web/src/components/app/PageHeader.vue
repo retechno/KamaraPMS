@@ -31,7 +31,8 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
 
 <template>
   <header :class="cn('mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-2', props.class)" data-slot="page-header">
-    <div class="min-w-0">
+    <!-- The title takes the room there is (and at least a line of it): the actions stay on the right of the same row, or, when the row is too narrow, on the right of the next one. -->
+    <div class="min-w-0 flex-1 basis-[22rem]">
       <div class="flex flex-wrap items-center gap-2">
         <h1 class="m-0 text-2xl font-semibold tracking-tight">{{ title }}</h1>
         <button
@@ -49,9 +50,9 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
         </button>
         <slot name="marks" />
       </div>
-      <p v-if="description" class="m-0 mt-1 text-sm text-muted-foreground">{{ description }}</p>
+      <p v-if="description" class="m-0 mt-1 max-w-3xl text-sm text-muted-foreground">{{ description }}</p>
     </div>
-    <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2" data-slot="page-actions">
+    <div v-if="$slots.actions" class="ml-auto flex flex-wrap items-center justify-end gap-2" data-slot="page-actions">
       <slot name="actions" />
     </div>
   </header>

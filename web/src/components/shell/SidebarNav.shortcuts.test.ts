@@ -43,7 +43,7 @@ describe('SidebarNav: pinned and recent pages', () => {
     const { w } = await mountNav()
     const section = w.get('[data-testid=section-pinned]')
     expect(section.text()).toContain('Pinned')
-    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Dashboard', 'Room status', 'Tape chart', 'Cashier'])
+    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today', 'Room status', 'Tape chart', 'Cashier'])
     expect(w.get('[data-testid=all-menu]').text()).toBe('All menu')
     // the whole menu is still below
     expect(w.find('[data-testid=section-frontDesk]').exists()).toBe(true)
@@ -51,7 +51,7 @@ describe('SidebarNav: pinned and recent pages', () => {
 
   it('shows only the pinned pages the person may open', async () => {
     const { w } = await mountNav({ permissions: [] })
-    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Dashboard'])
+    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today'])
   })
 
   it('leaves out of the pinned and recent pages those that are not in the menu or not for this person, without an error', async () => {
@@ -105,7 +105,7 @@ describe('SidebarNav: pinned and recent pages', () => {
     expect(w.get('[data-testid=section-pinned]').text()).toContain('Disematkan')
     expect(w.get('[data-testid=section-recent]').text()).toContain('Terakhir dibuka')
     expect(w.get('[data-testid=all-menu]').text()).toBe('Semua menu')
-    expect(w.get('[data-testid=unpin-dashboard]').attributes('aria-label')).toBe('Lepas sematan Dasbor')
+    expect(w.get('[data-testid=unpin-dashboard]').attributes('aria-label')).toBe('Lepas sematan Hari Ini')
   })
 
   it('tells the parent when a pinned page was chosen (the drawer closes)', async () => {

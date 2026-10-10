@@ -17,7 +17,7 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { title: 'Sign in', public: true } },
-    { path: '/', name: 'home', component: HomeView, meta: { title: 'Dashboard' } },
+    { path: '/', name: 'home', component: HomeView, meta: { title: 'Today' } },
     {
       path: '/housekeeping',
       name: 'housekeeping',
@@ -141,6 +141,7 @@ export const router = createRouter({
     },
     { path: '/night-audit', name: 'night-audit', component: () => import('@/views/nightaudit/NightAuditView.vue'), meta: { title: 'Night audit' } },
     { path: '/audit', name: 'audit', component: () => import('@/views/audit/AuditTrailView.vue'), meta: { title: 'Audit trail' } },
+    { path: '/performance', name: 'performance', component: () => import('@/views/dashboard/PerformanceView.vue'), meta: { title: 'Performance' } },
     { path: '/reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reports' } },
     { path: '/room-charges', name: 'room-charges', component: () => import('@/views/billing/RoomChargesView.vue'), meta: { title: 'Room charges' } },
     { path: '/cashier/shifts', name: 'cashier-shifts', component: () => import('@/views/billing/CashierShiftView.vue'), meta: { title: 'Cashier shifts' } },

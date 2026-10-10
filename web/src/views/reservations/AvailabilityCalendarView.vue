@@ -201,7 +201,7 @@ watch(businessDate, () => {
         <option :value="14">{{ t('availabilityCalendar.days', { n: 14 }) }}</option>
         <option :value="28">{{ t('availabilityCalendar.days', { n: 28 }) }}</option>
       </NativeSelect>
-      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations/tape">{{ t('availabilityCalendar.tapeChart') }}</RouterLink></Button>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/reservations/tape">{{ t('availabilityCalendar.tapeChart') }}</RouterLink></Button>
     </template>
   </PageHeader>
 
