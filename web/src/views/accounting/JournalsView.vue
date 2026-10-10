@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -198,7 +199,7 @@ watch(() => pid.value, () => {
 
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form novalidate data-testid="journal-form" @submit.prevent="post">
+      <form v-autofocus novalidate data-testid="journal-form" @submit.prevent="post">
         <CardHeader><CardTitle>{{ t('journals.formTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2">

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 
 type PermissionInfo = components['schemas']['PermissionInfo']
@@ -82,7 +83,7 @@ async function save(): Promise<void> {
   <p v-if="error" class="alert" role="alert">{{ error.message }} <code>{{ error.code }}</code></p>
 
   <Card>
-    <form novalidate @submit.prevent="save">
+    <form v-autofocus novalidate @submit.prevent="save">
       <CardContent class="pt-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <FormField :label="t('roles.name')" :error="error?.fieldMessage('name')">

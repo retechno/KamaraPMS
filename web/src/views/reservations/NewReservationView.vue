@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
+import { focusProgrammatically } from '@/lib/focus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -200,7 +201,10 @@ const bookForm = ref<HTMLFormElement | null>(null)
 function pick(type: TypeOffer, plan: PlanOffer): void {
   picked.value = { type, plan }
   // Every time a room is booked, not only the first (the form stays on the page when another room is picked): the cursor goes to the booker, or to the override reason that has to be answered first.
-  void nextTick(() => bookForm.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')?.focus())
+  void nextTick(() => {
+    const target = bookForm.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')
+    if (target) focusProgrammatically(target)
+  })
   form.occupancyReason = ''
   rate.value = { overrides: [], reason: '' }
   approving.value = false

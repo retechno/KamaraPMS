@@ -11,6 +11,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { vAutofocus } from '@/directives/autofocus'
+import { focusProgrammatically } from '@/lib/focus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -94,7 +95,8 @@ onMounted(async () => {
   // while the rooms loaded, it stays where they put it.
   const active = document.activeElement
   const untouched = !active || active === document.body || (root.value?.contains(active) && active.matches('select[name=room_type]')) || active.matches('[role=dialog]')
-  if (rooms.value.length && untouched) root.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')?.focus()
+  const target = root.value?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')
+  if (rooms.value.length && untouched && target) focusProgrammatically(target)
 })
 
 async function submit(): Promise<void> {

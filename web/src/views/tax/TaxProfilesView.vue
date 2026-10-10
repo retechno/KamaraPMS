@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -170,7 +171,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxProfiles.noAccess', { permission: 'tax.view' }) }}</p>
   <template v-else>
     <Card v-if="editing" class="mb-4">
-      <form novalidate data-testid="profile-form" @submit.prevent="save">
+      <form v-autofocus="editing" novalidate data-testid="profile-form" @submit.prevent="save">
         <CardHeader><CardTitle>{{ editing === 'new' ? t('taxProfiles.setUp') : t('taxProfiles.edit', { code: editing.tax_code }) }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

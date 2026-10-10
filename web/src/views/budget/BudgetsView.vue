@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -120,7 +121,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('budget.view')" class="muted" data-testid="no-access">{{ t('budget.noAccess', { permission: 'budget.view' }) }}</p>
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form novalidate data-testid="new-form" @submit.prevent="create">
+      <form v-autofocus novalidate data-testid="new-form" @submit.prevent="create">
         <CardHeader><CardTitle>{{ t('budget.newTitle') }}</CardTitle></CardHeader>
         <CardContent class="flex flex-col gap-4">
           <div class="grid gap-4 sm:grid-cols-2">

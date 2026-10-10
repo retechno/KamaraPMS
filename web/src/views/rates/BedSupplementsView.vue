@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -138,7 +139,7 @@ watch(planId, () => void loadRows())
     </FormField>
 
     <Card v-if="adding" class="mb-4">
-      <form novalidate data-testid="supplement-form" @submit.prevent="save">
+      <form v-autofocus novalidate data-testid="supplement-form" @submit.prevent="save">
         <CardHeader><CardTitle>{{ t('bedSupplements.new') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

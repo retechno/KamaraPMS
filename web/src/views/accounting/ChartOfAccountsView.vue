@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -226,7 +227,7 @@ watch(() => pid.value, () => {
 
   <template v-else>
     <Card v-if="editing" class="mb-4">
-      <form novalidate data-testid="account-form" @submit.prevent="save">
+      <form v-autofocus="editing" novalidate data-testid="account-form" @submit.prevent="save">
         <CardHeader><CardTitle>{{ editing === 'new' ? t('accountingBooks.coaNew') : t('accountingBooks.coaEdit', { code: form.code }) }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 
@@ -92,7 +93,7 @@ async function resetPassword(): Promise<void> {
   <p v-if="notice" class="alert warning" role="status">{{ notice }}</p>
 
   <Card class="mb-4">
-    <form novalidate @submit.prevent="save">
+    <form v-autofocus novalidate @submit.prevent="save">
       <CardHeader><CardTitle>{{ t('users.profile') }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

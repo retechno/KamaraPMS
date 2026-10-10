@@ -82,4 +82,17 @@ describe('v-autofocus', () => {
     await flushPromises()
     expect(focused()).toBe('a')
   })
+  it('focuses again when the subject it is open for changes (edit another row)', async () => {
+    const subject = ref<object>({ id: 1 })
+    const Form = defineComponent({
+      setup: () => () => withDirectives(h('form', [h('input', { name: 'a' }), h('input', { name: 'b' })]), [[vAutofocus, subject.value]]),
+    })
+    wrapper = mount(Form, { attachTo: document.body })
+    await flushPromises()
+    ;(wrapper.get('input[name=b]').element as HTMLInputElement).focus()
+    ;(document.activeElement as HTMLElement).blur() // the person pressed Edit on another row: the focus is on that button
+    subject.value = { id: 2 }
+    await flushPromises()
+    expect(focused()).toBe('a')
+  })
 })

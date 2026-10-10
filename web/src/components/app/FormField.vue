@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { t } from '@/i18n'
+import { focusProgrammatically } from '@/lib/focus'
 
 /**
  * A label, a control, a hint and an error, tied together for assistive technology. The control comes from the slot and
@@ -23,7 +24,8 @@ watch(() => props.error, (now, before) => {
     const form = root.value?.closest('form, [role=dialog]') ?? root.value?.parentElement
     const active = document.activeElement
     if (active instanceof HTMLElement && form?.contains(active) && active.getAttribute('aria-invalid') === 'true') return
-    form?.querySelector<HTMLElement>('[aria-invalid=true]')?.focus()
+    const target = form?.querySelector<HTMLElement>('[aria-invalid=true]')
+    if (target) focusProgrammatically(target)
   })
 })
 const describedBy = computed(() => [props.hint ? hintId : '', props.error ? errorId : ''].filter(Boolean).join(' ') || undefined)

@@ -3,8 +3,9 @@ import { Check, ChevronsUpDown } from 'lucide-vue-next'
 import {
   ComboboxAnchor, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxItemIndicator, ComboboxPortal, ComboboxRoot, ComboboxTrigger, ComboboxViewport,
 } from 'reka-ui'
-import { computed, ref, type HTMLAttributes } from 'vue'
+import { computed, nextTick, ref, type HTMLAttributes } from 'vue'
 import { t } from '@/i18n'
+import { isProgrammaticFocus } from '@/lib/focus'
 import { cn } from '@/lib/utils'
 
 /**
@@ -44,6 +45,11 @@ const shown = computed(() => {
 })
 const labelOf = (value: unknown): string => props.options.find((o) => o.value === value)?.label ?? ''
 
+// The page puts the focus on this field by itself (a form that appears): the list stays closed, it was not asked for.
+function onFocusIn(): void {
+  if (isProgrammaticFocus()) void nextTick(() => { open.value = false })
+}
+
 function onOpen(value: boolean): void {
   open.value = value
   if (!value) term.value = ''
@@ -51,7 +57,7 @@ function onOpen(value: boolean): void {
 </script>
 
 <template>
-  <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox">
+  <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox" @focusin="onFocusIn">
     <ComboboxRoot v-model="model" v-model:open="open" ignore-filter :open-on-focus="openOnFocus" open-on-click :disabled="disabled" @update:open="onOpen">
       <ComboboxAnchor class="relative block">
         <ComboboxInput

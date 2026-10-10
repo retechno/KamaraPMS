@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { confirm } from '@/composables/useConfirm'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -149,7 +150,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('departments.noAccess', { permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card v-if="adding" class="mb-4">
-      <form novalidate data-testid="add-form" @submit.prevent="create">
+      <form v-autofocus novalidate data-testid="add-form" @submit.prevent="create">
         <CardHeader><CardTitle>{{ form.parent_id ? t('departments.addSub') : t('departments.addTitle') }}</CardTitle></CardHeader>
         <CardContent class="flex flex-col gap-4">
           <div class="grid gap-4 sm:grid-cols-2">
@@ -162,7 +163,7 @@ watch(() => pid.value, () => {
               </template>
             </FormField>
             <FormField :label="t('departments.code')" :hint="t('departments.codeHint')" required>
-              <template #default="{ id }"><Input :id="id" v-model="form.code" name="code" maxlength="20" /></template>
+              <template #default="{ id }"><Input :id="id" v-model="form.code" data-autofocus name="code" maxlength="20" /></template>
             </FormField>
             <FormField :label="t('departments.name')" required>
               <template #default="{ id }"><Input :id="id" v-model="form.name" name="name" maxlength="100" /></template>

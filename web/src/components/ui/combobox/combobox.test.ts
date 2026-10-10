@@ -1,6 +1,7 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { defineComponent, ref } from 'vue'
+import { focusProgrammatically } from '@/lib/focus'
 import Combobox from './Combobox.vue'
 
 const options = [
@@ -63,5 +64,16 @@ describe('Combobox', () => {
     await $('select[name=account]').setValue('1')
     expect($('[data-testid=picked]').text()).toBe('1')
     expect((document.getElementById('acc') as HTMLInputElement).value).toBe('1110 · Cash on hand')
+  })
+  it('opens its list when the person focuses it, but not when the page does', async () => {
+    mountBox(0)
+    const input = document.body.querySelector('input[id=acc]') as HTMLInputElement
+    focusProgrammatically(input)
+    await flushPromises()
+    expect(all('[data-slot=combobox-content]')).toHaveLength(0)
+    input.blur()
+    input.focus()
+    await flushPromises()
+    expect(all('[data-slot=combobox-content]').length).toBeGreaterThan(0)
   })
 })

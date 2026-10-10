@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusProgrammatically } from '@/lib/focus'
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { DialogContent, DialogOverlay, DialogPortal, useForwardPropsEmits } from 'reka-ui'
@@ -41,7 +42,7 @@ function onOpenAutoFocus(event: Event): void {
   const wanted = content?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')
   if (wanted) {
     event.preventDefault()
-    wanted.focus()
+    focusProgrammatically(wanted)
   }
 }
 

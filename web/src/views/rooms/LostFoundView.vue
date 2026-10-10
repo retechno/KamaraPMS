@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -187,7 +188,7 @@ watch(() => [filter.status, filter.category], () => void load())
 
   <template v-else>
     <Card v-if="creating" class="mb-4 border-primary/50">
-      <form novalidate data-testid="item-form" @submit.prevent="record">
+      <form v-autofocus novalidate data-testid="item-form" @submit.prevent="record">
         <CardHeader><CardTitle>{{ t('lostFound.record') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2">

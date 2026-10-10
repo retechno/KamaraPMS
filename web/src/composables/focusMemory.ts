@@ -1,4 +1,5 @@
 import { nextTick } from 'vue'
+import { focusProgrammatically } from '@/lib/focus'
 
 /**
  * Where the focus was last, so that it can be given back after a failed save. A button that is disabled while a request runs loses the focus to the page (`body`); when the request fails the person
@@ -32,5 +33,5 @@ export async function restoreFocus(anchorOf: () => Element | null): Promise<void
   const el = last
   if (!el || !el.isConnected || (el as HTMLButtonElement).disabled || el.getAttribute('aria-hidden') === 'true') return
   if (inDialog(el) !== inDialog(anchorOf())) return
-  el.focus()
+  focusProgrammatically(el)
 }

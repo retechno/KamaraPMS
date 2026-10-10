@@ -10,6 +10,7 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -113,7 +114,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </Card>
 
   <Card v-if="group && editing" class="mb-4">
-    <form novalidate data-testid="group-form" @submit.prevent="save">
+    <form v-autofocus novalidate data-testid="group-form" @submit.prevent="save">
       <CardHeader><CardTitle>{{ t('groupDetail.edit', { code: group.code }) }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

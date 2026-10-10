@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -205,7 +206,7 @@ watch(() => [filter.view, filter.status], () => void load())
 
   <template v-else>
     <Card v-if="adding" class="mb-4 border-primary/50">
-      <form novalidate data-testid="task-form" @submit.prevent="addManual">
+      <form v-autofocus novalidate data-testid="task-form" @submit.prevent="addManual">
         <CardHeader><CardTitle>{{ t('cleaning.addTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

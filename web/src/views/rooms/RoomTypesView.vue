@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -126,7 +127,7 @@ watch(() => property.currentId, load, { immediate: true })
   <p v-if="property.currentId === null" class="muted">{{ t('setup.selectProperty') }}</p>
 
   <Card v-if="editing" class="mb-4">
-    <form novalidate @submit.prevent="save">
+    <form v-autofocus="editing" novalidate @submit.prevent="save">
       <CardHeader><CardTitle>{{ editing === 'new' ? t('roomTypes.new') : t('roomTypes.edit', { code: form.code }) }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

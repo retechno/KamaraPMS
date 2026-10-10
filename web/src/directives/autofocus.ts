@@ -1,5 +1,6 @@
 import type { Directive } from 'vue'
 import { nextTick } from 'vue'
+import { focusProgrammatically } from '@/lib/focus'
 
 /** The fields a form can start in: not hidden, not disabled, not a button. */
 const FIELD = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [data-autofocus]:not([disabled])'
@@ -9,7 +10,7 @@ function focusStart(el: HTMLElement): void {
     if (!el.isConnected) return
     if (el.contains(document.activeElement) && document.activeElement !== el && document.activeElement?.matches(FIELD)) return
     const target = el.matches(FIELD) ? el : (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled])') ?? el.querySelector<HTMLElement>(FIELD))
-    target?.focus({ preventScroll: false })
+    if (target) focusProgrammatically(target, { preventScroll: false })
   })
 }
 
@@ -20,15 +21,15 @@ function focusStart(el: HTMLElement): void {
  */
 /**
  * A form that stays on the page when it is asked for again (the person presses the button that opens it while it is open, or the one that opens it for another subject) is not mounted again, so it
- * is told with a value: `v-autofocus="tick"`, where `tick` is a number that the opening button increases. Each change of the value focuses the start of the form again.
+ * is told with a value: `v-autofocus="tick"`, a number that the opening button increases, or the subject the form is open for (`v-autofocus="editing"`). Each change of the value focuses the start of the form again.
  */
-export const vAutofocus: Directive<HTMLElement, boolean | number | undefined> = {
+export const vAutofocus: Directive<HTMLElement, unknown> = {
   mounted(el, binding) {
     if (binding.value === false) return
     focusStart(el)
   },
   updated(el, binding) {
-    if (binding.value === false || binding.value === binding.oldValue || binding.value === undefined) return
+    if (binding.value === false || binding.value === binding.oldValue || binding.value === undefined || binding.value === null) return
     focusStart(el)
   },
 }

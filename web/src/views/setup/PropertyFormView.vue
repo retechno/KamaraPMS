@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { addDays, formatBusinessDate, timeZones, todayIn } from '@/utils/dates'
@@ -180,7 +181,7 @@ function changedFields(): PatchPropertyRequest {
     {{ error.message }} <code>{{ error.code }}</code>
   </p>
 
-  <form v-if="!loading" novalidate @submit.prevent="submit">
+  <form v-autofocus v-if="!loading" novalidate @submit.prevent="submit">
     <Card class="mb-4">
       <CardHeader><CardTitle>{{ t('propertyForm.identity') }}</CardTitle></CardHeader>
       <CardContent>
