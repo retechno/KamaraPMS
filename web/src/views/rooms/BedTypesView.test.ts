@@ -84,4 +84,25 @@ describe('BedTypesView', () => {
     expect(w.find('[data-testid=new-bed]').exists()).toBe(false)
     expect(w.find('[data-testid=bed-KING] button').exists()).toBe(false)
   })
+
+  it('has an empty state that says what bed types are and offers to add the first one, to a person who may manage rooms', async () => {
+    const saved = beds.splice(0)
+    try {
+      const w = mountBeds(['room.manage'])
+      await flushPromises()
+      const empty = w.get('[data-testid=empty]')
+      expect(empty.text()).toContain('Bed types say which beds a room has.')
+      const action = empty.get('[data-testid=empty-action]')
+      expect(action.text()).toBe('New bed type')
+      await action.trigger('click')
+      expect(w.find('input[name=code]').exists()).toBe(true) // the form of the new bed type
+      w.unmount()
+      const reader = mountBeds([])
+      await flushPromises()
+      expect(reader.get('[data-testid=empty]').text()).toContain('Bed types say which beds a room has.')
+      expect(reader.find('[data-testid=empty-action]').exists()).toBe(false)
+    } finally {
+      beds.push(...saved)
+    }
+  })
 })

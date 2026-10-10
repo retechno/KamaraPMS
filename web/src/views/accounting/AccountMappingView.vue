@@ -95,7 +95,7 @@ watch(() => pid.value, () => void load(), { immediate: true })
 
 <template>
   <PageHeader :title="t('accounting.amTitle')">
-    <template #actions><RouterLink to="/accounting/accounts" class="text-sm text-primary hover:underline">{{ t('accounting.amChart') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/accounting/accounts">{{ t('accounting.amChart') }}</RouterLink></Button></template>
   </PageHeader>
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="map-error">

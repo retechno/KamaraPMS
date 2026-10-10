@@ -302,7 +302,7 @@ watch([() => pid.value, sid], () => {
 
 <template>
   <PageHeader :title="t('reconcile.title', { statement: statement ? `${statement.bank_name}: ${statement.period_from} – ${statement.period_to}` : t('reconcile.aStatement') })">
-    <template #actions><RouterLink to="/bank/statements" class="text-sm text-primary hover:underline">{{ t('reconcile.all') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/bank/statements">{{ t('reconcile.all') }}</RouterLink></Button></template>
   </PageHeader>
   <ErrorNotice v-if="error" :error="error" inline data-testid="reconcile-error">
 <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>

@@ -99,7 +99,7 @@ watch(() => pid.value, () => {
     <Card v-if="report">
       <CardContent class="pt-4">
         <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('statements.tbRange', { from: $date(report.from), to: $date(report.to) }) }}</p>
-        <EmptyState v-if="!report.rows.length" :title="t('statements.tbEmpty')" data-testid="empty" />
+        <EmptyState v-if="!report.rows.length" :description="t('emptyState.trialBalance')" :title="t('statements.tbEmpty')" data-testid="empty" />
         <div v-else class="overflow-x-auto">
           <table class="w-full border-collapse text-sm" data-testid="trial-balance">
             <thead class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

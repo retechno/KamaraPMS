@@ -275,7 +275,7 @@ watch(() => [filter.status, filter.category], () => void load())
             <Badge :variant="i.status === 'STORED' ? 'closed' : i.status === 'RETURNED' ? 'success' : 'outline'">{{ t(`lostFound.st${i.status}` as never) }}</Badge>
             <small v-if="i.claimant_name" class="ml-1 text-muted-foreground">{{ i.claimant_name }}</small>
           </template>
-          <template #empty><EmptyState :title="t('lostFound.empty')" data-testid="empty" /></template>
+          <template #empty><EmptyState :description="t('emptyState.lostFound')" :action-label="can('lostfound.report') && !creating ? t('lostFound.record') : ''" @action="startNew" :title="t('lostFound.empty')" data-testid="empty" /></template>
           <template #footer>
             <div v-if="nextCursor" class="flex justify-center p-3"><Button variant="outline" size="sm" data-testid="more" @click="load(true)">{{ t('lostFound.loadMore') }}</Button></div>
           </template>

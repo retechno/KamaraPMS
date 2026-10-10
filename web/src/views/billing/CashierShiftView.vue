@@ -428,7 +428,7 @@ watch(() => move.kind, (k) => {
     <Card data-testid="shift-list">
       <CardHeader><CardTitle>{{ canManage ? t('shifts.allShifts') : t('shifts.myShifts') }}</CardTitle></CardHeader>
       <CardContent>
-        <EmptyState v-if="loaded && !shifts.length" :title="t('shifts.empty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !shifts.length" :description="t('emptyState.shifts')" :title="t('shifts.empty')" data-testid="empty" />
         <DataTable v-else :columns="columns" :rows="shifts" row-key="id" :row-test-id="(s) => `shift-${s.number}`" :caption="t('shifts.title')">
           <template #cell-over_short="{ row }">{{ row.over_short === null ? '-' : $money(row.over_short) }}</template>
           <template #cell-status="{ row }"><Badge :variant="row.status === 'OPEN' ? 'success' : 'outline'">{{ row.status === 'OPEN' ? t('shifts.statusOpen') : t('shifts.statusClosed') }}</Badge></template>

@@ -89,7 +89,7 @@ watch(() => props.refresh, () => list.restart())
     </form>
 
     <InHouseTable v-if="!error || loaded" mode="departures" :rows="rows" :loaded="loaded" :business-date="businessDate" @guest-saved="list.renameGuest" @rate-saved="list.reloadLoaded()" />
-    <EmptyState v-else :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
+    <EmptyState v-else :description="t('emptyState.loadFailed')" :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
     <div v-if="nextCursor" class="flex justify-center p-3">
       <Button variant="outline" size="sm" :disabled="loading" data-testid="more" @click="list.load(true)">{{ t('frontDesk.page.loadMore') }}</Button>
     </div>

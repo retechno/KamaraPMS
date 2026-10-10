@@ -104,7 +104,7 @@ watch(() => pid.value, () => {
 <template>
   <PageHeader :title="t('departments.reportTitle')" :description="t('departments.reportIntro')">
     <template #actions>
-      <RouterLink to="/accounting/departments" class="text-sm text-primary hover:underline">{{ t('departments.title') }}</RouterLink>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/accounting/departments">{{ t('departments.title') }}</RouterLink></Button>
       <template v-if="report">
         <Button type="button" variant="outline" data-testid="pdf" @click="showPdf">{{ t('statements.pdf') }}</Button>
         <Button type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('statements.export') }}</Button>
@@ -128,7 +128,7 @@ watch(() => pid.value, () => {
     </Card>
     <Card v-if="loaded">
       <CardContent class="pt-4">
-        <EmptyState v-if="!report" :title="t('departments.reportEmpty')" data-testid="empty" />
+        <EmptyState v-if="!report" :description="t('emptyState.changeSelection')" :title="t('departments.reportEmpty')" data-testid="empty" />
         <template v-else>
           <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ $date(report.from) }} – {{ $date(report.to) }} · {{ t('departments.reportBasis') }}</p>
           <div class="overflow-x-auto">

@@ -303,7 +303,7 @@ watch(() => [route.query.source_type, route.query.id], () => {
           <FormField :label="t('taxInvoices.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('taxInvoices.searchHint')" /></template></FormField>
           <div class="flex items-end"><Button type="submit" variant="outline" data-testid="apply">{{ t('taxInvoices.apply') }}</Button></div>
         </form>
-        <EmptyState v-if="loaded && !invoices.length" :title="t('taxInvoices.empty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !invoices.length" :description="t('emptyState.taxInvoices')" :title="t('taxInvoices.empty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"

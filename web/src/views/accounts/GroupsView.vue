@@ -180,7 +180,7 @@ watch(activeOnly, () => void load())
         <input v-model="activeOnly" type="checkbox" name="active_only" class="size-4 accent-primary" />
         <span>{{ t('groups.activeOnly') }}</span>
       </label>
-      <EmptyState v-if="loaded && !groups.length" :title="t('groups.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !groups.length" :description="t('emptyState.groups')" :action-label="canManage && !creating ? t('groups.new') : ''" @action="startNew" :title="t('groups.empty')" data-testid="empty" />
       <DataTable v-else-if="groups.length" :columns="columns" :rows="groups" row-key="id" :row-test-id="(g) => `group-${g.code}`" :caption="t('groups.title')">
         <template #cell-code="{ row }"><RouterLink :to="`/groups/${row.id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink></template>
         <template #cell-dates="{ row }">{{ t('groups.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>

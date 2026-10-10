@@ -67,21 +67,32 @@ async function print(paymentId: number): Promise<void> {
 }
 
 // One page of 50 at a time; the day and the method are asked of the server, and a new search starts from the first page (the totals of the day come with it).
+// The totals come with the first page of the day. A search that was replaced by a later one (the day arrived while the first was on its way) must not write its totals over the new ones.
+let latestTotals = 0
+let askedWithoutDay = false
 const list = usePagedList<Payment>(async (cursor) => {
+  const mine = cursor ? latestTotals : ++latestTotals
   const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', {
     params: {
       path: { propertyId: property.currentId! },
       query: { limit: 50, cursor, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined },
     },
   })
-  if (!cursor) totals.value = data?.totals ?? []
+  if (!cursor && mine === latestTotals) totals.value = data?.totals ?? []
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
 const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 
+function clearFilters(): void {
+  date.value = businessDate.value
+  method.value = ''
+  void load()
+}
+
 async function load(): Promise<void> {
   if (property.currentId === null || !canRead.value) return
   if (!date.value) date.value = businessDate.value
+  askedWithoutDay = !date.value // the clock of the property is not in yet: ask again when it is
   await list.reload()
 }
 
@@ -91,7 +102,7 @@ watch(() => property.currentId, () => {
   void load()
 }, { immediate: true })
 watch(businessDate, () => {
-  if (!searched.value) void load()
+  if (!searched.value || askedWithoutDay) void load()
 })
 </script>
 
@@ -133,8 +144,8 @@ watch(businessDate, () => {
         :key="tot.payment_method"
         :data-testid="`total-${tot.payment_method}`"
         :label="methodLabel(tot.payment_method)"
-        :value="tot.net"
-        :hint="t('cashier.paidRefunded', { paid: tot.paid, refunded: tot.refunded })"
+        :value="$money(tot.net)"
+        :hint="t('cashier.paidRefunded', { paid: $money(tot.paid), refunded: $money(tot.refunded) })"
         :icon="Receipt"
       />
     </div>
@@ -159,7 +170,7 @@ watch(businessDate, () => {
       <template #cell-payment_method="{ row }">{{ methodLabel(row.payment_method) }}</template>
       <template #cell-status="{ row }"><StatusBadge domain="payment" :status="row.status" /></template>
       <template #cell-folio_id="{ row }"><RouterLink :to="`/folios/${row.folio_id}`">#{{ row.folio_id }}</RouterLink></template>
-      <template #empty><EmptyState :title="t('cashier.empty')" data-testid="empty" /></template>
+      <template #empty><EmptyState :description="t('emptyState.cashier')" :action-label="activeFilters ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('cashier.empty')" data-testid="empty" /></template>
     </DataTable>
   </template>
 </template>

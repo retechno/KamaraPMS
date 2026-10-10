@@ -132,7 +132,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !years.length" :title="t('accounting.fyEmpty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !years.length" :description="t('emptyState.fiscalYears')" :title="t('accounting.fyEmpty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="years" row-key="year_start" :row-test-id="(y) => `year-${y.label}`" :caption="t('accounting.fyTitle')" data-testid="years">
         <template #cell-label="{ row }"><b>{{ row.label }}</b></template>
         <template #cell-range="{ row }">{{ $date(row.year_start) }} – {{ $date(row.year_end) }}</template>

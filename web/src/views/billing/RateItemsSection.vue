@@ -176,7 +176,7 @@ watch(() => property.currentId, load, { immediate: true })
         </div>
       </form>
 
-      <EmptyState v-if="loaded && !items.length" :title="t('rateItems.none')" data-testid="empty" />
+      <EmptyState v-if="loaded && !items.length" :description="t('emptyState.rateItems')" :action-label="canManage && !editing ? (isTax ? t('rateItems.newTax') : t('rateItems.newService')) : ''" @action="startNew" :title="t('rateItems.none')" data-testid="empty" />
       <DataTable v-else-if="items.length" :columns="columns" :rows="items" row-key="id" :row-test-id="(i) => `${kind}-${i.code}`" :caption="title">
         <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
         <template #cell-rate="{ row }">{{ Number(row.rate) }}%</template>

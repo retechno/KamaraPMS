@@ -37,7 +37,7 @@ onMounted(() => {
   <ErrorNotice v-if="store.error" :error="store.error" inline />
 
   <Card>
-    <EmptyState v-if="store.loaded && !store.hasProperties" :title="t('properties.empty')" :description="t('properties.emptyHint')" data-testid="empty" />
+    <EmptyState v-if="store.loaded && !store.hasProperties" :action-label="t('properties.new')" action-to="/setup/properties/new" :title="t('properties.empty')" :description="t('properties.emptyHint')" data-testid="empty" />
     <DataTable v-else :columns="columns" :rows="store.properties" row-key="id" :caption="t('properties.title')">
       <template #cell-code="{ row }"><RouterLink :to="`/setup/properties/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.code }}</RouterLink></template>
       <template #cell-currency="{ row }">{{ row.currency_code }} ({{ t('properties.decimals', { n: row.currency_decimals }) }})</template>

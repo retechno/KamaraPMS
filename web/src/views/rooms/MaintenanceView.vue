@@ -305,7 +305,7 @@ watch(() => route.query.room, (v) => {
           <template #cell-priority="{ row: r }"><Badge :variant="priorityVariant(r.priority)">{{ priorityLabel(r.priority) }}</Badge></template>
           <template #cell-assignee_name="{ row: r }">{{ r.assignee_name || '—' }}</template>
           <template #cell-status="{ row: r }"><StatusBadge domain="work" :status="r.status" /></template>
-          <template #empty><EmptyState :title="t('maintenance.empty')" data-testid="empty" /></template>
+          <template #empty><EmptyState :description="t('emptyState.maintenance')" :action-label="can('maintenance.report') && !creating ? t('maintenance.report') : ''" @action="startNew()" :title="t('maintenance.empty')" data-testid="empty" /></template>
           <template #footer>
             <div v-if="nextCursor" class="flex justify-center p-3"><Button variant="outline" size="sm" data-testid="more" @click="load(true)">{{ t('maintenance.loadMore') }}</Button></div>
           </template>

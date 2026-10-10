@@ -151,7 +151,7 @@ watch(() => form.year_start, () => { form.budget_id = '' })
 <template>
   <PageHeader :title="t('budget.vsActualTitle')" :description="t('budget.vsActualIntro')">
     <template #actions>
-      <RouterLink to="/budget" class="text-sm text-primary hover:underline">{{ t('budget.title') }}</RouterLink>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/budget">{{ t('budget.title') }}</RouterLink></Button>
       <template v-if="report">
         <Button type="button" variant="outline" data-testid="pdf" @click="showPdf">{{ t('statements.pdf') }}</Button>
         <Button type="button" variant="outline" data-testid="export" @click="exportCsv">{{ t('statements.export') }}</Button>

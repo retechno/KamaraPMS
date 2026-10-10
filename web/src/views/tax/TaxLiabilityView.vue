@@ -81,7 +81,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <template v-if="report">
-      <EmptyState v-if="!report.taxes.length" :title="t('taxLiability.empty')" data-testid="empty" />
+      <EmptyState v-if="!report.taxes.length" :description="t('emptyState.taxLiability')" :title="t('taxLiability.empty')" data-testid="empty" />
       <template v-else>
         <Card class="mb-4">
           <CardContent class="pt-4">

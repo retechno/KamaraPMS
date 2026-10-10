@@ -158,4 +158,19 @@ describe('FoliosView', () => {
       document.body.innerHTML = ''
     })
   })
+
+  it('offers "Clear filters" when another status than open shows nothing, and clearing goes back to the open folios', async () => {
+    const w = mountView(['folio.read'], { data: [] })
+    await flushPromises()
+    expect(w.find('[data-testid=empty] [data-testid=empty-action]').exists()).toBe(false) // open folios, no filter: nothing to clear
+    await w.get('select[name=status]').setValue('CLOSED')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    const action = w.get('[data-testid=empty] [data-testid=empty-action]')
+    expect(action.text()).toBe('Clear filters')
+    await action.trigger('click')
+    await flushPromises()
+    expect((w.get('select[name=status]').element as HTMLSelectElement).value).toBe('OPEN')
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { status: 'OPEN' } } })
+  })
 })

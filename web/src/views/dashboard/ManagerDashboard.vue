@@ -225,7 +225,7 @@ const rooms = computed(() => {
         <Card data-testid="trend">
           <CardHeader><CardTitle>{{ t('dashboard.manager.occupancyTrend', { n: trendDays.empty.length + trendDays.days.length }) }}</CardTitle></CardHeader>
           <CardContent>
-            <EmptyState v-if="!data.trend.length" :title="t('dashboard.manager.nothingClosed')" data-testid="trend-empty" />
+            <EmptyState v-if="!data.trend.length" :description="t('emptyState.trend')" :title="t('dashboard.manager.nothingClosed')" data-testid="trend-empty" />
             <div v-else class="flex h-40 items-end gap-1.5">
               <div v-for="e in trendDays.empty" :key="e" class="flex h-full min-w-0 flex-1 flex-col items-center justify-end" data-testid="trend-day-empty" aria-hidden="true">
                 <span class="block h-0.5 w-full rounded-t-sm bg-muted-foreground/25" />

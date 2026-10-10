@@ -45,6 +45,10 @@ const typeLabel = (k: string): string => t(`cleaning.type${k}` as never)
 const open = (task: HousekeepingTask) => task.status === 'PENDING' || task.status === 'IN_PROGRESS'
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
+function clearFilters(): void {
+  Object.assign(filter, { view: 'all', status: '' })
+}
+
 async function load(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
@@ -342,7 +346,7 @@ watch(() => [filter.view, filter.status], () => void load())
             </span>
           </template>
         </DataTable>
-        <EmptyState v-else :title="t('cleaning.noMatch')" data-testid="no-match" />
+        <EmptyState v-else :description="t('emptyState.cleaning')" :action-label="t('dataTable.clearFilters')" action-variant="outline" @action="clearFilters" :title="t('cleaning.noMatch')" data-testid="no-match" />
       </CardContent>
     </Card>
 

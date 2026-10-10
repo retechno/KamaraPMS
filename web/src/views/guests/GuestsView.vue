@@ -157,7 +157,7 @@ watch(() => property.currentId, () => {
     </Card>
 
     <Card>
-      <EmptyState v-if="searched && !results.length" :title="t('guests.empty')" data-testid="empty" />
+      <EmptyState v-if="searched && !results.length" :description="t('emptyState.guests')" :action-label="canWrite && !creating ? t('guests.new') : ''" @action="startCreate" :title="t('guests.empty')" data-testid="empty" />
       <DataTable
         v-else-if="results.length"
         :columns="columns"

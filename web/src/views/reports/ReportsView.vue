@@ -130,7 +130,7 @@ watch([key, pid], () => {
     <Card v-if="table" data-testid="result">
       <CardContent class="pt-4">
         <p v-if="table.note" class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="note">{{ table.note }}</p>
-        <EmptyState v-if="!table.rows.length" :title="t('reports.empty')" data-testid="empty" />
+        <EmptyState v-if="!table.rows.length" :description="t('emptyState.changeSelection')" :title="t('reports.empty')" data-testid="empty" />
         <div v-else class="overflow-x-auto">
           <table class="w-full border-collapse text-sm">
             <thead>

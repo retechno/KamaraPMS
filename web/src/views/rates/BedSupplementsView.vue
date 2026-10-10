@@ -181,7 +181,7 @@ watch(planId, () => void loadRows())
       </form>
     </Card>
 
-    <EmptyState v-if="loaded && !rows.length" :title="t('bedSupplements.empty')" data-testid="empty" />
+    <EmptyState v-if="loaded && !rows.length" :description="t('emptyState.bedSupplements')" :action-label="canManage && !adding && planId ? t('bedSupplements.new') : ''" @action="startAdd" :title="t('bedSupplements.empty')" data-testid="empty" />
     <DataTable v-else :columns="columns" :rows="rows" row-key="id" :caption="t('bedSupplements.title')" :row-test-id="(r: Adjustment) => `supplement-${r.id}`">
       <template #cell-bed="{ row }">{{ row.bed_type_name || row.bed_type_code }}</template>
       <template #cell-supplement="{ row }">{{ supplement(row) }}</template>

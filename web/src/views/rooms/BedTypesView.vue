@@ -134,7 +134,7 @@ watch(() => property.currentId, load, { immediate: true })
   </Card>
 
   <Card>
-    <EmptyState v-if="loaded && !beds.length" :title="t('bedTypes.empty')" data-testid="empty" />
+    <EmptyState v-if="loaded && !beds.length" :description="t('emptyState.bedTypes')" :action-label="canManage && !editing ? t('bedTypes.new') : ''" @action="startNew" :title="t('bedTypes.empty')" data-testid="empty" />
     <DataTable v-else-if="beds.length" :columns="columns" :rows="beds" row-key="id" :row-test-id="(b) => `bed-${b.code}`" :row-class="(b) => (b.is_active ? undefined : 'text-muted-foreground')" :caption="t('bedTypes.title')">
       <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
       <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>

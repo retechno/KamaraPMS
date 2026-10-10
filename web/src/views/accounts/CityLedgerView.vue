@@ -80,7 +80,7 @@ watch(owingOnly, () => void load())
         </label>
         <Button type="submit" variant="outline">{{ t('cityLedger.search') }}</Button>
       </form>
-      <EmptyState v-if="loaded && !accounts.length" :title="owingOnly ? t('cityLedger.emptyOwing') : t('cityLedger.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !accounts.length" :description="t('emptyState.cityLedger')" :title="owingOnly ? t('cityLedger.emptyOwing') : t('cityLedger.empty')" data-testid="empty" />
       <DataTable v-else-if="accounts.length" :columns="columns" :rows="accounts" row-key="company_id" :row-test-id="(a) => `account-${a.code}`" :caption="t('cityLedger.title')">
         <template #cell-company="{ row }">
           <RouterLink :to="`/city-ledger/${row.company_id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink> {{ row.name }}

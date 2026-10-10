@@ -376,7 +376,7 @@ watch([() => pid.value, budgetId], () => {
       <Badge :variant="budget.status === 'ACTIVE' ? 'success' : budget.status === 'DRAFT' ? 'secondary' : 'outline'" :data-status="budget.status" data-testid="status">{{ t(`budget.status.${budget.status}`) }}</Badge>
     </template>
     <template #actions>
-      <RouterLink to="/budget" class="text-sm text-primary hover:underline" data-testid="back">{{ t('budget.backToList') }}</RouterLink>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/budget" data-testid="back">{{ t('budget.backToList') }}</RouterLink></Button>
       <template v-if="budget">
         <Button type="button" variant="outline" :disabled="busy" data-testid="export" @click="exportCsv">{{ t('budget.export') }}</Button>
         <Button v-if="can('budget.manage') && budget.status !== 'DRAFT'" type="button" :disabled="busy" data-testid="revise" @click="revise">{{ t('budget.revise') }}</Button>

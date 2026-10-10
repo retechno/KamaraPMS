@@ -201,7 +201,7 @@ watch(() => pid.value, () => {
             <input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('payables.showInactive') }}</span>
           </label>
         </form>
-        <EmptyState v-if="loaded && !visible.length" :title="t('payables.sEmpty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !visible.length" :description="t('emptyState.suppliers')" :action-label="can('payables.manage') && !editing ? t('payables.sNew') : ''" @action="startNew" :title="t('payables.sEmpty')" data-testid="empty" />
         <template v-else>
           <DataTable :columns="columns" :rows="visible" row-key="id" :row-test-id="(s) => `supplier-${s.code}`" :row-class="(s) => (s.is_active ? undefined : 'text-muted-foreground')" :caption="t('payables.sTitle')" data-testid="suppliers">
             <template #cell-code="{ row }"><b>{{ row.code }}</b></template>

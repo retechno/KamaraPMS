@@ -154,7 +154,7 @@ watch([() => pid.value, income, cashFlow], () => {
       <CardContent class="pt-4">
         <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ heading }}<template v-if="income"> · {{ t('statements.usali') }}</template><template v-if="cashFlow"> · {{ form.method === 'DIRECT' ? t('statements.direct') : t('statements.indirect') }}</template></p>
         <p v-if="imbalance" class="alert" data-testid="imbalance">{{ cashFlow ? t('statements.cashDifference', { amount: formatMoney(imbalance) }) : t('statements.imbalance', { amount: formatMoney(imbalance) }) }}</p>
-        <EmptyState v-if="!lines.length" :title="t('statements.empty')" data-testid="empty" />
+        <EmptyState v-if="!lines.length" :description="t('emptyState.statements')" :title="t('statements.empty')" data-testid="empty" />
         <StatementTable v-else :lines="lines" />
         <p v-if="!ranged" class="mb-0 mt-3 text-sm text-muted-foreground">{{ t('statements.equityNote') }}</p>
       </CardContent>

@@ -119,7 +119,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
 <template>
   <PageHeader :title="detail ? t('stay.title', { number: detail.stay.stay_number }) : t('stay.titlePlain')">
-    <template #actions><RouterLink to="/in-house" class="text-sm text-primary hover:underline">{{ t('stay.back') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/in-house">{{ t('stay.back') }}</RouterLink></Button></template>
   </PageHeader>
 
   <ErrorNotice :error="error" />

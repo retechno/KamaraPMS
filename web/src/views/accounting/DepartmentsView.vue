@@ -207,7 +207,7 @@ watch(() => pid.value, () => {
       </CardContent>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !departments.length" :title="t('departments.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !departments.length" :description="t('emptyState.departments')" :action-label="can('accounting.manage') && !adding ? t('departments.add') : ''" @action="startAdding()" :title="t('departments.empty')" data-testid="empty" />
       <div v-else class="overflow-x-auto">
       <table class="w-full border-collapse text-sm" data-testid="departments">
         <caption class="sr-only">{{ t('departments.title') }}</caption>

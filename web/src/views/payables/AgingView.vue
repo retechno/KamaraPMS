@@ -72,7 +72,7 @@ watch(() => pid.value, () => {
     <Card v-if="report">
       <CardContent class="pt-4">
         <p class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="range">{{ t('payables.asOfNote', { date: $date(report.as_of) }) }}</p>
-        <EmptyState v-if="!report.suppliers.length" :title="t('payables.aEmpty')" data-testid="empty" />
+        <EmptyState v-if="!report.suppliers.length" :description="t('emptyState.aging')" :title="t('payables.aEmpty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"

@@ -124,7 +124,7 @@ watch([pid, businessDate], () => {
           <span>{{ t('roomCharges.total') }} <strong data-testid="ready-total">{{ $money(preview.totals.ready_total) }}</strong></span>
           <Button v-if="preview.totals.ready_count" type="button" :disabled="busy" data-testid="post" @click="post">{{ t('roomCharges.post') }}</Button>
         </div>
-        <EmptyState v-if="!preview.items.length" :title="t('roomCharges.empty')" data-testid="empty" />
+        <EmptyState v-if="!preview.items.length" :description="t('emptyState.roomCharges')" :title="t('roomCharges.empty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"
