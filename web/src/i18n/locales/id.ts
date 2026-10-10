@@ -189,6 +189,7 @@ export const id: Messages = {
     findRoom: 'Cari kamar',
     allTypes: 'Semua tipe kamar',
     all: 'Semua',
+    legendOccupied: 'Terisi: tile putih; garis dan chip menunjukkan kebersihan',
     blocked: 'Diblokir',
     filterOccupancy: 'Okupansi',
     filterHousekeeping: 'Housekeeping',

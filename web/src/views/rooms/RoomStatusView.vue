@@ -9,7 +9,7 @@ import type { HousekeepingBoardRoom } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
-import { Badge } from '@/components/ui/badge'
+import { statusLegend, statusSwatch } from '@/components/app/statusMap'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatBusinessDate } from '@/utils/dates'
+import { statusText } from '@/utils/status'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -81,22 +82,24 @@ const housekeepingChips = computed(() => [
   { value: 'INSPECTED' as const, label: t('status.INSPECTED') },
 ])
 
-// The colour bar on the left of a tile says whose room it is today; a blocked room is greyed.
-const tileClass = (r: HousekeepingBoardRoom): string =>
-  r.block
-    ? 'border-l-destructive bg-muted/70'
-    : r.occupancy === 'OCCUPIED'
-      ? 'border-l-primary bg-primary/5'
-      : r.occupancy === 'RESERVED'
-        ? 'border-l-warning bg-warning/5'
-        : 'border-l-border'
+/**
+ * What a tile looks like. The colour of a tile is the cleaning of the room, and it is strongest where it matters: a room that is vacant or reserved is filled with the colour of
+ * its cleaning, so a dirty room that guests are about to arrive in cannot be missed; a blocked room is the striped grey of "not available". A room with a guest in it is a white
+ * tile: right after night audit nearly every occupied room is dirty, which is normal and not urgent, so it only gets the colour bar on its left and a small chip with the cleaning.
+ */
+interface TileLook {
+  neutral: boolean
+  cls: string
+}
+function tileLook(r: HousekeepingBoardRoom): TileLook {
+  if (r.block) return { neutral: false, cls: statusSwatch('block', r.block.type).fill }
+  const hk = statusSwatch('housekeeping', r.status)
+  if (r.occupancy === 'OCCUPIED') return { neutral: true, cls: cn('border-l-4 border-border bg-card text-foreground', hk.edge) }
+  return { neutral: false, cls: hk.fill }
+}
 
-const legend = [
-  { cls: 'bg-primary', key: 'OCCUPIED' },
-  { cls: 'bg-warning', key: 'RESERVED' },
-  { cls: 'bg-border', key: 'VACANT' },
-  { cls: 'bg-destructive', key: 'BLOCKED' },
-] as const
+// The legend is the map the tiles are drawn from: the five cleaning states, then what a white tile means.
+const legend = computed(() => statusLegend('housekeeping').map((e) => ({ ...e, label: e.status === 'BLOCKED' ? t('roomStatus.blocked') : statusText(e.status) })))
 
 async function load(): Promise<void> {
   const propertyId = property.currentId
@@ -149,9 +152,12 @@ watch(() => property.currentId, () => {
       <p class="m-0 text-muted-foreground" data-testid="counts">
         {{ t('roomStatus.counts', { occupied: counts.occupied, reserved: counts.reserved, vacant: counts.vacant, blocked: counts.blocked }) }}
       </p>
-      <ul class="m-0 flex list-none flex-wrap gap-3 p-0 text-xs text-muted-foreground" data-testid="legend">
-        <li v-for="l in legend" :key="l.key" class="flex items-center gap-1.5">
-          <span :class="cn('h-3 w-1 rounded-sm', l.cls)" aria-hidden="true" />{{ l.key === 'BLOCKED' ? t('roomStatus.blocked') : t(`status.${l.key}` as never) }}
+      <ul class="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs text-muted-foreground" data-testid="legend">
+        <li v-for="l in legend" :key="l.status" class="flex items-center gap-1.5" :data-legend="l.status">
+          <span :class="cn('h-3 w-5 rounded-sm border', l.swatch)" aria-hidden="true" />{{ l.label }}
+        </li>
+        <li class="flex items-center gap-1.5" data-legend="OCCUPIED">
+          <span class="h-3 w-5 rounded-sm border border-l-4 border-border border-l-muted-foreground bg-card" aria-hidden="true" />{{ t('roomStatus.legendOccupied') }}
         </li>
       </ul>
     </div>
@@ -202,21 +208,24 @@ watch(() => property.currentId, () => {
           :key="r.room_id"
           type="button"
           :data-testid="`tile-${r.room_number}`"
-          :class="cn('flex cursor-pointer flex-col items-start gap-1 rounded-lg border border-l-4 border-border bg-card p-2.5 text-left text-foreground shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring', tileClass(r))"
+          :data-tile="tileLook(r).neutral ? 'neutral' : 'filled'"
+          :class="cn('flex min-h-24 cursor-pointer flex-col items-start justify-between gap-1 rounded-lg border p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring', tileLook(r).cls)"
           @click="selected = r"
         >
           <span class="flex w-full items-start justify-between gap-1">
-            <strong class="text-lg leading-none">{{ r.room_number }}</strong>
-            <span class="flex items-center gap-0.5 text-muted-foreground">
+            <span class="flex flex-col gap-0.5">
+              <strong class="text-lg leading-none">{{ r.room_number }}</strong>
+              <small class="font-semibold">{{ r.room_type_code }}</small>
+            </span>
+            <span class="flex items-center gap-0.5">
               <BellOff v-if="r.dnd" class="size-3.5" :title="t('roomStatus.dnd')" role="img" :aria-label="t('roomStatus.dnd')" />
               <Sparkles v-if="r.make_up_requested" class="size-3.5" :title="t('roomStatus.makeUp')" role="img" :aria-label="t('roomStatus.makeUp')" />
-              <ChevronsUp v-if="r.priority === 'HIGH'" class="size-3.5 text-warning-text" :title="t('roomStatus.highPriority')" role="img" :aria-label="t('roomStatus.highPriority')" />
+              <ChevronsUp v-if="r.priority === 'HIGH'" class="size-3.5" :title="t('roomStatus.highPriority')" role="img" :aria-label="t('roomStatus.highPriority')" />
             </span>
           </span>
-          <small class="text-muted-foreground">{{ r.room_type_code }}</small>
-          <StatusBadge domain="occupancy" :status="r.occupancy" :data-testid="`occ-${r.room_number}`" />
-          <StatusBadge domain="housekeeping" :status="r.status" />
-          <Badge v-if="r.block" variant="destructive">{{ t(`roomStatus.${r.block.type}` as never) }}</Badge>
+          <StatusBadge domain="occupancy" :status="r.occupancy" class="bg-card text-foreground" :data-testid="`occ-${r.room_number}`" />
+          <StatusBadge v-if="tileLook(r).neutral" domain="housekeeping" :status="r.status" data-slot="tile-cleaning" />
+          <span v-else class="text-sm font-bold" data-slot="tile-cleaning">{{ r.block ? t(`roomStatus.${r.block.type}` as never) : statusText(r.status) }}</span>
         </button>
       </div>
     </section>
@@ -233,7 +242,7 @@ watch(() => property.currentId, () => {
       <div class="mt-4 flex flex-wrap gap-2">
         <StatusBadge domain="occupancy" :status="selected.occupancy" />
         <StatusBadge domain="housekeeping" :status="selected.status" />
-        <Badge v-if="selected.block" variant="destructive">{{ t(`roomStatus.${selected.block.type}` as never) }}</Badge>
+        <StatusBadge v-if="selected.block" domain="block" :status="selected.block.type" :label="t(`roomStatus.${selected.block.type}` as never)" />
       </div>
       <dl class="m-0 mt-4 divide-y divide-border text-sm">
         <div v-if="selected.floor" class="flex justify-between gap-3 py-2"><dt class="font-medium">{{ t('roomStatus.floorLabel') }}</dt><dd class="m-0">{{ selected.floor }}</dd></div>

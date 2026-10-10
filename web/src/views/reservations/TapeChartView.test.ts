@@ -72,9 +72,29 @@ describe('TapeChartView', () => {
     GET.mockResolvedValue({ data: { ...chart, rooms: [{ ...chart.rooms[0]!, bookings: [{ ...booking, status: 'CHECKED_IN' }] }, chart.rooms[1]] } })
     await w.findAll('button').find((b) => b.text().includes('Business date'))?.trigger('click')
     await flushPromises()
-    expect(w.get('[data-testid=bar-101-2026-10-02]').classes()).toContain('bg-success/30')
+    expect(w.get('[data-testid=bar-101-2026-10-02]').classes()).toContain('bg-status-inhouse') // a guest in the house: solid blue
     expect(w.get('[data-testid=legend]').text()).toContain('Checked in')
     expect(w.get('[data-testid=legend]').text()).toContain('Blocked (OOO / OOS)')
+  })
+
+  it('draws a booking to come lighter than a stay in the house, not only in another hue, and a block as the stripe', async () => {
+    const w = mountView()
+    await flushPromises()
+    const confirmed = w.get('[data-testid=bar-101-2026-10-02]').classes()
+    expect(confirmed).toEqual(expect.arrayContaining(['bg-status-booked-bg', 'text-status-booked', 'border-y']))
+    expect(confirmed).not.toContain('bg-status-inhouse')
+    expect(confirmed.some((c) => /(^|-)primary($|\/)|success/.test(c))).toBe(false) // no teal and no green: teal is for actions
+    const block = w.get('[data-testid=block-102-2026-10-05]') // out of service here: the plain grey; out of order is the stripe (see the legend test)
+    expect(block.classes()).toEqual(expect.arrayContaining(['bg-status-closed-bg', 'border-y']))
+  })
+
+  it('draws the legend from the same map as the bars', async () => {
+    const w = mountView()
+    await flushPromises()
+    const legend = w.get('[data-testid=legend]')
+    expect(legend.get('[data-legend=CONFIRMED] span').classes()).toEqual(expect.arrayContaining(['bg-status-booked-bg']))
+    expect(legend.get('[data-legend=CHECKED_IN] span').classes()).toEqual(expect.arrayContaining(['bg-status-inhouse']))
+    expect(legend.get('[data-legend=BLOCKED] span').classes()).toContain('status-hatch')
   })
 
   it('names the weekday over each date and shades the weekend', async () => {

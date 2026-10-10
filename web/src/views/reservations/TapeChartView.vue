@@ -7,6 +7,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { TapeBooking, TapeChart } from '@/api/types'
 import PageHeader from '@/components/app/PageHeader.vue'
+import { statusLegend, statusSwatch } from '@/components/app/statusMap'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -53,6 +54,12 @@ function shift(n: number): void {
   start.value = addDays(start.value, n)
   void load()
 }
+
+// A booking that is still to come is a light blue bar with a blue outline; a guest in the house is the same blue solid, so the two differ in weight and not only in hue. The legend is the same map.
+const legend = computed(() => [
+  ...statusLegend('reservation', ['CONFIRMED', 'CHECKED_IN']).map((e) => ({ ...e, label: t(e.status === 'CHECKED_IN' ? 'tapeChart.legendCheckedIn' : 'tapeChart.legendConfirmed') })),
+  { status: 'BLOCKED', variant: 'ooo', swatch: statusSwatch('block', 'OOO').swatch, label: t('tapeChart.legendBlocked') },
+])
 
 type Cell = { kind: 'booking'; booking: TapeBooking } | { kind: 'block'; type: string } | null
 
@@ -102,9 +109,7 @@ watch(businessDate, () => {
 
   <template v-else-if="chart">
     <ul class="m-0 mb-3 flex list-none flex-wrap gap-4 p-0 text-xs text-muted-foreground" data-testid="legend">
-      <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-primary/25" aria-hidden="true" />{{ t('tapeChart.legendConfirmed') }}</li>
-      <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-success/30" aria-hidden="true" />{{ t('tapeChart.legendCheckedIn') }}</li>
-      <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-muted-foreground/30" aria-hidden="true" />{{ t('tapeChart.legendBlocked') }}</li>
+      <li v-for="l in legend" :key="l.status" class="flex items-center gap-1.5" :data-legend="l.status"><span :class="cn('h-3 w-5 rounded-sm border', l.swatch)" aria-hidden="true" />{{ l.label }}</li>
       <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-primary/10 ring-1 ring-primary/40" aria-hidden="true" />{{ t('tapeChart.legendToday') }}</li>
     </ul>
 
@@ -133,14 +138,14 @@ watch(businessDate, () => {
                 <template v-for="c in [cellAt(room.room_id, d)]" :key="d">
                   <RouterLink
                     v-if="c && c.kind === 'booking'"
-                    :class="cn('block h-full overflow-hidden whitespace-nowrap px-1 py-2 text-foreground no-underline', c.booking.status === 'CHECKED_IN' ? 'bg-success/30' : 'bg-primary/25')"
+                    :class="cn('block h-full overflow-hidden whitespace-nowrap border-y px-1 py-2 no-underline', statusSwatch('reservation', c.booking.status).fill, c.booking.status === 'CONFIRMED' && 'border-status-inhouse')"
                     :to="`/reservations/${c.booking.reservation_id}`"
                     :title="`${c.booking.confirmation_number} ${c.booking.guest_name ?? ''}`"
                     :data-testid="`bar-${room.room_number}-${d}`"
                   >
                     {{ c.booking.arrival_date === d || d === dates[0] ? (c.booking.guest_name || c.booking.confirmation_number) : '' }}
                   </RouterLink>
-                  <span v-else-if="c" class="block bg-muted-foreground/25 px-1 py-2 text-muted-foreground" :data-testid="`block-${room.room_number}-${d}`">{{ c.type }}</span>
+                  <span v-else-if="c" :class="cn('block border-y px-1 py-2', statusSwatch('block', c.type).fill)" :data-testid="`block-${room.room_number}-${d}`">{{ c.type }}</span>
                 </template>
               </td>
             </tr>

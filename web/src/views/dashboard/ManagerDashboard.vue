@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { statusSwatch } from '@/components/app/statusMap'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { ArrowDownRight, ArrowUpRight, BedDouble, DoorClosed, DoorOpen, Landmark, Percent, RefreshCw, TrendingUp, Users, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
@@ -101,11 +102,11 @@ const rooms = computed(() => {
   const r = data.value?.rooms
   if (!r) return []
   return [
-    { key: 'clean', label: t('dashboard.manager.clean'), value: r.clean, dot: 'bg-success' },
-    { key: 'inspected', label: t('dashboard.manager.inspected'), value: r.inspected, dot: 'bg-primary' },
-    { key: 'cleaning', label: t('dashboard.manager.beingCleaned'), value: r.cleaning, dot: 'bg-muted-foreground' },
-    { key: 'dirty', label: t('dashboard.manager.dirty'), value: r.dirty, dot: 'bg-warning', warn: r.dirty > 0 },
-    { key: 'ooo', label: t('dashboard.manager.outOfOrder'), value: today.value?.rooms.out_of_order ?? 0, dot: 'bg-destructive' },
+    { key: 'clean', label: t('dashboard.manager.clean'), value: r.clean, dot: statusSwatch('housekeeping', 'CLEAN').dot },
+    { key: 'inspected', label: t('dashboard.manager.inspected'), value: r.inspected, dot: statusSwatch('housekeeping', 'INSPECTED').dot },
+    { key: 'cleaning', label: t('dashboard.manager.beingCleaned'), value: r.cleaning, dot: statusSwatch('housekeeping', 'CLEANING').dot },
+    { key: 'dirty', label: t('dashboard.manager.dirty'), value: r.dirty, dot: statusSwatch('housekeeping', 'DIRTY').dot, warn: r.dirty > 0 },
+    { key: 'ooo', label: t('dashboard.manager.outOfOrder'), value: today.value?.rooms.out_of_order ?? 0, dot: statusSwatch('housekeeping', 'BLOCKED').dot },
   ]
 })
 </script>

@@ -272,7 +272,7 @@ watch(() => [filter.status, filter.category], () => void load())
           <template #cell-where="{ row: i }">{{ where(i) }}</template>
           <template #cell-description="{ row: i }">{{ i.description }} <small class="text-muted-foreground">{{ categoryLabel(i.category) }}</small></template>
           <template #cell-status="{ row: i }">
-            <Badge :variant="i.status === 'STORED' ? 'default' : i.status === 'RETURNED' ? 'success' : 'outline'">{{ t(`lostFound.st${i.status}` as never) }}</Badge>
+            <Badge :variant="i.status === 'STORED' ? 'closed' : i.status === 'RETURNED' ? 'success' : 'outline'">{{ t(`lostFound.st${i.status}` as never) }}</Badge>
             <small v-if="i.claimant_name" class="ml-1 text-muted-foreground">{{ i.claimant_name }}</small>
           </template>
           <template #empty><EmptyState :title="t('lostFound.empty')" data-testid="empty" /></template>

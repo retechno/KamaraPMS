@@ -190,6 +190,7 @@ export const en = {
     findRoom: 'Find a room',
     allTypes: 'All room types',
     all: 'All',
+    legendOccupied: 'Occupied: a white tile; the bar and the chip show the cleaning',
     blocked: 'Blocked',
     filterOccupancy: 'Occupancy',
     filterHousekeeping: 'Housekeeping',
