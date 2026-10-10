@@ -149,7 +149,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !banks.length" :title="t('bankAccounts.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !banks.length" :description="t('emptyState.bankAccounts')" :action-label="can('bank.manage') && !editing ? t('bankAccounts.register') : ''" @action="startNew" :title="t('bankAccounts.empty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="banks" row-key="id" :row-test-id="(b) => `bank-${b.account_code}`" :row-class="(b) => (b.is_active ? undefined : 'text-muted-foreground')" :caption="t('bankAccounts.title')" data-testid="banks">
         <template #cell-name="{ row }">
           <b>{{ row.name }}</b><small v-if="row.account_number" class="text-muted-foreground"> · {{ row.account_number }}</small><small v-if="!row.is_active" class="text-muted-foreground"> · {{ t('bankAccounts.notInUse') }}</small>

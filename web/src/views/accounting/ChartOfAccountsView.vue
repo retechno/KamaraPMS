@@ -55,6 +55,10 @@ const cardActions = (r: TreeRow): RowAction[] =>
 // Account headers are shown to begin with: hiding them is the filter that is on.
 const activeFilters = computed(() => (filter.type ? 1 : 0) + (filter.headers ? 0 : 1) + (filter.inactive ? 1 : 0))
 
+function clearFilters(): void {
+  Object.assign(filter, { q: '', type: '', inactive: false, headers: true })
+}
+
 const columns = computed<Column<TreeRow>[]>(() => [
   { key: 'code', label: t('accountingBooks.code'), card: 'primary' as const },
   { key: 'name', label: t('accountingBooks.name'), card: 'secondary' as const },
@@ -357,7 +361,7 @@ watch(() => pid.value, () => {
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.headers" name="headers" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showHeaders') }}</span></label>
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showInactive') }}</span></label>
     </FilterBar>
-        <EmptyState v-if="loaded && !visible.length" :title="t('accountingBooks.coaEmpty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !visible.length" :description="t('emptyState.coa')" :action-label="activeFilters || filter.q ? t('dataTable.clearFilters') : can('accounting.manage') && !editing ? t('accountingBooks.coaNew') : ''" :action-variant="activeFilters || filter.q ? 'outline' : 'default'" @action="activeFilters || filter.q ? clearFilters() : startNew()" :title="t('accountingBooks.coaEmpty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"

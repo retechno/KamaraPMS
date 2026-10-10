@@ -38,6 +38,9 @@
     /* Text colours: --ok and --warning are fills (badges, icons) and are too light to read as text on white. */
     --ok-text: #1b7a4b;
     --warn-text: #8a5300;
+    /* A disabled button: a flat fill and a dark text (not a faded copy of the enabled one), still 3:1 or more on its fill. */
+    --disabled: #e4e7ec;
+    --disabled-text: #4a5361;
     /* The status of a thing, apart from the colour of an action (teal is only for buttons, links and the active menu). A status that is under way or ready is a solid fill, one that waits a light fill. */
     --status-dirty: #a8460a;
     --status-dirty-bg: #fdebdc;
@@ -89,6 +92,8 @@
     --warning: #e0a93a;
     --ok-text: #5fd0a0;
     --warn-text: #f0a35e;
+    --disabled: #2a2f37;
+    --disabled-text: #aeb7c2;
     /* The status of a thing, apart from the colour of an action (teal is only for buttons, links and the active menu). A status that is under way or ready is a solid fill, one that waits a light fill. */
     --status-dirty: #f0a35e;
     --status-dirty-bg: #3a2416;
@@ -175,6 +180,8 @@
   --color-accent: var(--hover);
   --color-accent-foreground: var(--text);
   --color-destructive: var(--danger);
+  --color-disabled: var(--disabled);
+  --color-disabled-foreground: var(--disabled-text);
   --color-destructive-foreground: var(--accent-contrast);
   --color-success: var(--ok);
   --color-warning: var(--warning);

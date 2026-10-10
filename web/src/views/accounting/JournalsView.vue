@@ -68,6 +68,11 @@ const columns = computed<Column<Journal>[]>(() => [
   { key: 'reversed', label: '', hideOnMobile: true },
 ])
 
+function clearFilters(): void {
+  Object.assign(filter, { from: '', to: '', type: '', q: '' })
+  void load()
+}
+
 async function load(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null || !can('accounting.view')) return
@@ -286,7 +291,7 @@ watch(() => pid.value, () => {
         <div class="flex items-end"><Button type="submit" variant="outline" data-testid="apply">{{ t('journals.apply') }}</Button></div>
       </template>
     </FilterBar>
-        <EmptyState v-if="loaded && !journals.length" :title="t('journals.empty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !journals.length" :description="t('emptyState.journals')" :action-label="activeFilters || filter.q ? t('dataTable.clearFilters') : can('accounting.post') && !creating ? t('journals.new') : ''" :action-variant="activeFilters || filter.q ? 'outline' : 'default'" @action="activeFilters || filter.q ? clearFilters() : startNew()" :title="t('journals.empty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"

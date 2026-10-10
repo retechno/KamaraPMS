@@ -63,6 +63,13 @@ const visible = computed(() =>
 
 const activeFilters = computed(() => (statusFilter.value ? 1 : 0) + (flaggedOnly.value ? 1 : 0) + (occupancyFilter.value ? 1 : 0) + (floorFilter.value ? 1 : 0))
 
+function clearFilters(): void {
+  statusFilter.value = ''
+  flaggedOnly.value = false
+  occupancyFilter.value = ''
+  floorFilter.value = ''
+}
+
 const columns = computed<Column<HousekeepingBoardRoom>[]>(() => [
   { key: 'room_number', label: t('housekeeping.room'), sortable: true, card: 'primary' as const },
   { key: 'room_type_code', label: t('housekeeping.type'), sortable: true, card: 'secondary' as const },
@@ -271,8 +278,8 @@ watch(() => property.currentId, () => load(), { immediate: true })
         </span>
       </template>
       <template #empty>
-        <EmptyState v-if="!rooms.length" :title="t('housekeeping.empty')" data-testid="empty" />
-        <EmptyState v-else :title="t('housekeeping.noMatch')" />
+        <EmptyState v-if="!rooms.length" :title="t('housekeeping.empty')" :description="t('emptyState.housekeeping')" data-testid="empty" />
+        <EmptyState v-else :title="t('housekeeping.noMatch')" :description="t('emptyState.noMatch')" :action-label="t('dataTable.clearFilters')" action-variant="outline" @action="clearFilters" />
       </template>
     </DataTable>
   </template>

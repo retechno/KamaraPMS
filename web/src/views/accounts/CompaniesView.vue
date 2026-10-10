@@ -174,7 +174,7 @@ watch(() => property.currentId, load, { immediate: true })
   </Card>
 
   <Card v-if="canRead">
-    <EmptyState v-if="loaded && !companies.length" :title="t('companies.empty')" data-testid="empty" />
+    <EmptyState v-if="loaded && !companies.length" :description="t('emptyState.companies')" :action-label="canManage && !editing ? t('companies.new') : ''" @action="startNew" :title="t('companies.empty')" data-testid="empty" />
     <DataTable v-else-if="companies.length" :columns="columns" :rows="companies" row-key="id" :row-test-id="(c) => `company-${c.code}`" :caption="t('companies.title')">
       <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
       <template #cell-contact="{ row }">{{ row.contact_name }} <small class="text-muted-foreground">{{ row.email }}</small></template>

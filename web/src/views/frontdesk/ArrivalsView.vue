@@ -276,10 +276,10 @@ watch(() => props.refresh, restart)
         </div>
       </template>
       <template #empty>
-        <EmptyState :title="isDefault ? t('frontDesk.page.noArrivals') : t('frontDesk.arrivals.noMatch')" data-testid="empty" />
+        <EmptyState :description="isDefault ? t('emptyState.arrivals') : t('emptyState.noMatch')" :action-label="isDefault ? '' : t('dataTable.clearFilters')" action-variant="outline" @action="clearFilters" :title="isDefault ? t('frontDesk.page.noArrivals') : t('frontDesk.arrivals.noMatch')" data-testid="empty" />
       </template>
     </DataTable>
-    <EmptyState v-else :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
+    <EmptyState v-else :description="t('emptyState.loadFailed')" :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
 
     <!-- A narrow screen gets a card for each arrival instead of the table. -->
     <ul v-if="!error || loaded" class="m-0 grid list-none gap-3 p-0 md:hidden" data-testid="arrival-cards">

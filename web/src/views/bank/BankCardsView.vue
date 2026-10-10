@@ -144,7 +144,7 @@ watch(key, () => void load())
           <p v-if="expected.late_count" class="mb-2 text-sm text-destructive" data-testid="late">{{ t('cards.lateHint', { count: expected.late_count, amount: $money(expected.late_gross) }) }}</p>
           <p v-if="expected.without_rate" class="mb-2 text-sm text-muted-foreground" data-testid="without-rate">{{ t('cards.withoutRate', { count: expected.without_rate }) }}</p>
           <p v-if="expected.without_vat_rate" class="mb-2 text-sm text-muted-foreground" data-testid="without-vat-rate">{{ t('cards.withoutVatRate', { count: expected.without_vat_rate }) }}</p>
-          <EmptyState v-if="!expected.lines.length" :title="t('cards.nothing')" data-testid="empty" />
+          <EmptyState v-if="!expected.lines.length" :description="t('emptyState.cardsWaiting')" :title="t('cards.nothing')" data-testid="empty" />
           <DataTable v-else :columns="lineColumns" :rows="expected.lines" row-key="journal_line_id" :row-test-id="(l) => `line-${l.reference}`" :caption="t('cards.expectedTitle')">
             <template #cell-mdr_rate="{ row }">{{ row.mdr_rate === null ? '-' : `${row.mdr_rate}%` }}</template>
             <template #cell-expected_vat="{ row }">
@@ -200,7 +200,7 @@ watch(key, () => void load())
     <Card data-testid="settlements">
       <CardHeader><CardTitle>{{ t('cards.settlementsTitle') }}</CardTitle></CardHeader>
       <CardContent>
-        <EmptyState v-if="loaded && !settlements.length" :title="t('cards.noSettlements')" data-testid="no-settlements" />
+        <EmptyState v-if="loaded && !settlements.length" :description="t('emptyState.cardSettlements')" :title="t('cards.noSettlements')" data-testid="no-settlements" />
         <DataTable v-else :columns="settlementColumns" :rows="settlements" row-key="id" :row-test-id="(s) => `settlement-${s.journal_number}`" :caption="t('cards.settlementsTitle')">
           <template #cell-expected_mdr="{ row }">{{ row.expected_mdr === null ? '-' : $money(row.expected_mdr) }}</template>
           <template #cell-mdr_variance="{ row }">{{ row.mdr_variance === null ? '-' : $money(row.mdr_variance) }}</template>

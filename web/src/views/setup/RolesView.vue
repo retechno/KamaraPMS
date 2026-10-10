@@ -40,7 +40,7 @@ onMounted(async () => {
   </PageHeader>
   <p v-if="error" class="alert" role="alert">{{ error.message }}</p>
   <Card>
-    <EmptyState v-if="!roles.length" :title="t('roles.empty')" :description="t('roles.emptyHint')" />
+    <EmptyState v-if="!roles.length" :action-label="t('roles.new')" action-to="/setup/roles/new" :title="t('roles.empty')" :description="t('roles.emptyHint')" />
     <DataTable v-else :columns="columns" :rows="roles" row-key="id" :caption="t('roles.title')">
       <template #cell-name="{ row }"><RouterLink :to="`/setup/roles/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.name }}</RouterLink></template>
       <template #cell-permissions="{ row }">{{ row.permissions.length }}</template>

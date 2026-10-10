@@ -87,7 +87,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
 <template>
   <PageHeader :title="group ? `${group.code} · ${group.name}` : t('groupDetail.fallback')">
-    <template #actions><RouterLink to="/groups" class="text-sm text-primary hover:underline">{{ t('groupDetail.back') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/groups">{{ t('groupDetail.back') }}</RouterLink></Button></template>
   </PageHeader>
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">

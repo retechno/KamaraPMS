@@ -31,7 +31,8 @@ describe('i18n', () => {
         expect(i18n.global.t(k, {}, { locale }), `${locale}: ${k}`).not.toBe('')
       }
     }
-  })
+    // one t() call for every key in two languages: it is the longest test of the suite and grows with the messages
+  }, 20_000)
 
   it('falls back to English for a key a language lacks', () => {
     // a key that exists in no language is shown as the key itself, never as an empty label

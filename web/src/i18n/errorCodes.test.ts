@@ -32,5 +32,6 @@ describe('error codes', () => {
     const missing = (messages: { errors: Record<string, string> }) => [...codes].filter((c) => !(c in messages.errors)).sort()
     // a new error code needs its sentences in locales/en.ts and locales/id.ts (namespace `errors`)
     expect({ en: missing(en), id: missing(id) }).toEqual({ en: [], id: [] })
-  })
+    // it reads every Go file of the backend: slow when the whole suite runs at once
+  }, 30_000)
 })

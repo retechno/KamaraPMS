@@ -192,7 +192,7 @@ watch(() => property.currentId, () => {
       </form>
     </Card>
 
-    <EmptyState v-if="!overdue.companies.length" :title="t('clOverdue.empty')" data-testid="empty" />
+    <EmptyState v-if="!overdue.companies.length" :description="t('emptyState.overdue')" :title="t('clOverdue.empty')" data-testid="empty" />
     <Card v-for="c in overdue.companies" :key="c.company_id" class="mb-4" :data-testid="`overdue-${c.code}`">
       <CardHeader>
         <CardTitle>

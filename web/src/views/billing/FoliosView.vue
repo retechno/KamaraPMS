@@ -45,6 +45,11 @@ const list = usePagedList<FolioSummary>(async (cursor) => {
 })
 const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 
+function clearFilters(): void {
+  status.value = 'OPEN'
+  void load()
+}
+
 async function load(): Promise<void> {
   if (property.currentId === null || !canRead.value) return
   await list.reload()
@@ -102,7 +107,7 @@ watch(() => property.currentId, () => {
       <template #cell-folio_number="{ row }"><RouterLink :to="`/folios/${row.id}`">{{ row.folio_number }}</RouterLink></template>
       <template #cell-reservation_id="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">#{{ row.reservation_id }}</RouterLink></template>
       <template #cell-status="{ row }"><StatusBadge domain="record" :status="row.status" /></template>
-      <template #empty><EmptyState :title="t('folios.empty')" data-testid="empty" /></template>
+      <template #empty><EmptyState :description="t('emptyState.folios')" :action-label="activeFilters ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('folios.empty')" data-testid="empty" /></template>
     </DataTable>
   </template>
 </template>

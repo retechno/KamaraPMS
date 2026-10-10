@@ -230,7 +230,7 @@ watch(() => property.currentId, load, { immediate: true })
           </NativeSelect>
         </template>
       </FormField>
-      <EmptyState v-if="loaded && !rooms.length && types.length" :title="t('rooms.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !rooms.length && types.length" :description="t('emptyState.rooms')" :action-label="canManage && !editing && types.length ? t('rooms.new') : ''" @action="startNew" :title="t('rooms.empty')" data-testid="empty" />
       <DataTable v-else-if="rooms.length" :columns="columns" :rows="visible" row-key="id" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('rooms.title')">
         <template #cell-room_number="{ row }"><b>{{ row.room_number }}</b></template>
         <template #cell-type="{ row }">{{ typeById.get(row.room_type_id)?.code }}</template>

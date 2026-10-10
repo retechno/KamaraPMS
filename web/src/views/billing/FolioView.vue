@@ -426,7 +426,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ t('folio.componentLine', { name: c.name, rate: c.rate, base: $money(c.base_amount), amount: $money(c.amount) }) }}</li>
           </ul>
         </template>
-        <template #empty><EmptyState :title="t('folio.nothing')" data-testid="empty" /></template>
+        <template #empty><EmptyState :description="t('emptyState.folioItems')" :title="t('folio.nothing')" data-testid="empty" /></template>
       </DataTable>
     </Card>
 

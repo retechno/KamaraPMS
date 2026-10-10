@@ -59,7 +59,7 @@ describe('GuestsView', () => {
     GET.mockResolvedValue({ data: { data: [] } })
     await w.get('form[role=search]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=empty]').text()).toBe('No guests found.')
+    expect(w.get('[data-testid=empty]').text()).toContain('No guests found.')
   })
 
   it('appends the next page', async () => {

@@ -309,7 +309,7 @@ watch(pid, load, { immediate: true })
   </Card>
 
   <Card class="mb-4">
-    <EmptyState v-if="loaded && !rules.length" :title="t('yieldRules.empty')" data-testid="empty" />
+    <EmptyState v-if="loaded && !rules.length" :description="t('emptyState.yieldRules')" :action-label="canManage && !editing ? t('yieldRules.newRule') : ''" @action="startNew" :title="t('yieldRules.empty')" data-testid="empty" />
     <DataTable
       v-else-if="rules.length"
       :columns="columns"

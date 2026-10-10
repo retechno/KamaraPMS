@@ -212,7 +212,7 @@ watch(pid, () => {
     </Card>
 
     <Card>
-      <EmptyState v-if="loaded && !rows.length" :title="notFound ? t('audit.documentNotFound', { number: filter.document.trim().toUpperCase() }) : t('audit.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !rows.length" :description="t('emptyState.auditEntries')" :action-label="activeFilters || filter.document ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="reset" :title="notFound ? t('audit.documentNotFound', { number: filter.document.trim().toUpperCase() }) : t('audit.empty')" data-testid="empty" />
       <DataTable
         v-else-if="rows.length"
         :columns="columns"

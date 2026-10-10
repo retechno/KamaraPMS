@@ -339,7 +339,7 @@ watch(() => property.currentId, load, { immediate: true })
             </NativeSelect>
           </template>
         </FormField>
-        <EmptyState v-if="loaded && !codes.length" :title="t('chargeCodes.empty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !codes.length" :description="t('emptyState.chargeCodes')" :action-label="canManage && !editing ? t('chargeCodes.new') : ''" @action="startNew" :title="t('chargeCodes.empty')" data-testid="empty" />
         <DataTable v-else-if="codes.length" :columns="columns" :rows="visible" row-key="id" :row-test-id="(c) => `code-${c.code}`" :caption="t('chargeCodes.title')">
           <template #cell-code="{ row }"><b>{{ row.code }}</b><small v-if="row.is_system" class="text-muted-foreground"> {{ t('chargeCodes.system') }}</small></template>
           <template #cell-charge_type="{ row }">{{ t(`chargeCodes.type_${row.charge_type}`) }}</template>

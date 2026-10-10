@@ -110,7 +110,7 @@ watch(() => pid.value, () => {
 <template>
   <PageHeader :title="t('budget.title')" :description="t('budget.intro')">
     <template #actions>
-      <RouterLink v-if="can('budget.view')" to="/budget/vs-actual" class="text-sm text-primary hover:underline" data-testid="to-report">{{ t('budget.vsActualTitle') }}</RouterLink>
+      <Button v-if="can('budget.view')" as-child variant="outline" size="sm"><RouterLink to="/budget/vs-actual" data-testid="to-report">{{ t('budget.vsActualTitle') }}</RouterLink></Button>
       <Button v-if="can('budget.manage') && !creating" type="button" data-testid="new-budget" @click="startCreating">{{ t('budget.new') }}</Button>
     </template>
   </PageHeader>
@@ -156,7 +156,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !budgets.length" :title="t('budget.empty')" :description="t('budget.emptyHint')" data-testid="empty" />
+      <EmptyState v-if="loaded && !budgets.length" :action-label="can('budget.manage') && !creating ? t('budget.new') : ''" @action="startCreating" :title="t('budget.empty')" :description="t('budget.emptyHint')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="budgets" row-key="id" :loading="!loaded" :row-test-id="(b) => `budget-${b.id}`" :caption="t('budget.title')" data-testid="budgets">
         <template #cell-year_label="{ row }"><b>{{ row.year_label }}</b></template>
         <template #cell-version="{ row }">v{{ row.version }}</template>

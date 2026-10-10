@@ -152,7 +152,7 @@ function rateSaved(): void {
           </Popover>
         </div>
       </template>
-      <template #empty><EmptyState :title="mode === 'departures' ? t('frontDesk.page.noDepartures') : t('frontDesk.page.nobodyInHouse')" data-testid="empty" /></template>
+      <template #empty><EmptyState :description="mode === 'departures' ? t('emptyState.departures') : t('emptyState.inHouse')" :title="mode === 'departures' ? t('frontDesk.page.noDepartures') : t('frontDesk.page.nobodyInHouse')" data-testid="empty" /></template>
     </DataTable>
 
     <!-- A narrow screen gets a card for each stay instead of the table. -->

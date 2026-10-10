@@ -411,7 +411,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
 <template>
   <PageHeader :title="account ? `${account.code} · ${account.name}` : t('clAccount.fallback')">
-    <template #actions><RouterLink to="/city-ledger" class="text-sm text-primary hover:underline">{{ t('clAccount.back') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/city-ledger">{{ t('clAccount.back') }}</RouterLink></Button></template>
   </PageHeader>
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">

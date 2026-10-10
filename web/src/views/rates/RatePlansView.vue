@@ -196,7 +196,7 @@ watch(() => property.currentId, load, { immediate: true })
   </Card>
 
   <Card>
-    <EmptyState v-if="loaded && !plans.length" :title="t('ratePlans.empty')" data-testid="empty" />
+    <EmptyState v-if="loaded && !plans.length" :description="t('emptyState.ratePlans')" :action-label="canManage && !editing && roomCodes.length ? t('ratePlans.new') : ''" @action="startNew" :title="t('ratePlans.empty')" data-testid="empty" />
     <DataTable v-else-if="plans.length" :columns="columns" :rows="plans" row-key="id" :row-test-id="(p) => `plan-${p.code}`" :caption="t('ratePlans.title')">
       <template #cell-code="{ row }"><b>{{ row.code }}</b> <Badge v-if="row.is_reference" variant="outline" :data-testid="`ref-${row.code}`">{{ t('ratePlans.refBadge') }}</Badge></template>
       <template #cell-price_mode="{ row }">{{ row.price_mode === 'INCLUSIVE' ? t('ratePlans.inclusive') : t('ratePlans.exclusive') }}</template>

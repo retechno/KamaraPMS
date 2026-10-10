@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { STATUS_VARIANTS } from '@/components/ui/badge/statusFill'
+import { buttonVariants } from '@/components/ui/button'
 
 /**
  * The colours of the statuses are tokens in tailwind.css; this reads them and keeps every text on its background at 4.5:1 or more (WCAG AA), in the light theme and in the
@@ -74,4 +75,28 @@ describe('the colours of the statuses', () => {
       expect(Math.abs(inhouse - booked), `booked ${booked.toFixed(2)} vs in house ${inhouse.toFixed(2)}`).toBeGreaterThan(2.5)
     })
   }
+})
+
+describe('a disabled button', () => {
+  for (const [theme, t] of Object.entries(THEMES)) {
+    it(`keeps its text on its fill at 3:1 or more, and is darker than the muted text, in the ${theme} theme`, () => {
+      expect(t['--disabled'], '--disabled').toBeDefined()
+      expect(t['--disabled-text'], '--disabled-text').toBeDefined()
+      expect(contrast(t['--disabled-text']!, t['--disabled']!)).toBeGreaterThanOrEqual(3)
+      // not the same colour as the page or the card it sits on: the button is still seen as a button
+      expect(t['--disabled']).not.toBe(t['--surface'])
+      expect(t['--disabled']).not.toBe(t['--surface-2'])
+      // the text is stronger than the muted text on the same fill (a disabled button is not a faded one)
+      expect(contrast(t['--disabled-text']!, t['--disabled']!)).toBeGreaterThanOrEqual(contrast(t['--text-muted']!, t['--disabled']!))
+    })
+  }
+
+  it('is styled with the tokens and not with opacity, in every variant', () => {
+    for (const variant of ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'] as const) {
+      const cls = buttonVariants({ variant })
+      expect(cls, variant).toContain('disabled:bg-disabled')
+      expect(cls, variant).toContain('disabled:text-disabled-foreground')
+      expect(cls, variant).not.toContain('opacity-50')
+    }
+  })
 })

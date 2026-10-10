@@ -291,9 +291,9 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           <span v-else :data-testid="`deposit-${row.confirmation_number}`">—</span>
         </div>
       </template>
-      <template #empty><EmptyState :title="filtered ? t('reservations.noMatch') : t('reservations.empty')" data-testid="empty" /></template>
+      <template #empty><EmptyState :title="filtered ? t('reservations.noMatch') : t('reservations.empty')" :description="filtered ? t('emptyState.noMatch') : t('emptyState.reservations')" :action-label="filtered ? t('dataTable.clearFilters') : canCreate ? t('reservations.newReservation') : ''" :action-to="filtered ? '' : '/reservations/new'" :action-variant="filtered ? 'outline' : 'default'" data-testid="empty" @action="clear" /></template>
     </DataTable>
-    <EmptyState v-else :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
+    <EmptyState v-else :description="t('emptyState.loadFailed')" :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
 
   </template>
 </template>

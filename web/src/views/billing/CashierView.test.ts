@@ -20,14 +20,14 @@ const page = {
   totals: [{ payment_method: 'CASH', paid: '100000', refunded: '0', net: '100000' }],
 }
 
-function mountView(permissions = ['folio.read']) {
+function mountView(permissions = ['folio.read'], get?: typeof GET) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
-  GET = vi.fn().mockResolvedValue({ data: page })
+  GET = get ?? vi.fn().mockResolvedValue({ data: page })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(CashierView, { global: { plugins: [pinia, router] } })
 }
@@ -53,7 +53,7 @@ describe('CashierView', () => {
     const w = mountView()
     await flushPromises()
     expect(GET.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { business_date: '2026-09-30' } } })
-    expect(w.get('[data-testid=total-CASH]').text()).toContain('100000')
+    expect(w.get('[data-testid=total-CASH]').text()).toContain('100,000')
     expect(w.get('[data-testid=payment-PAY000002]').classes()).toContain('struck') // voided
     expect(w.get('[data-testid=payment-PAY000001]').text()).toContain('Posted')
   })
@@ -94,8 +94,8 @@ describe('CashierView', () => {
     await flushPromises()
     const cash = w.get('[data-testid=total-CASH]').text()
     expect(cash).toContain('Cash')
-    expect(cash).toContain('80000')
-    expect(cash).toContain('Paid 100000 · Refunded 20000')
+    expect(cash).toContain('80,000')
+    expect(cash).toContain('Paid 100,000 · Refunded 20,000')
     expect(w.get('[data-testid=total-BANK_TRANSFER]').text()).toContain('Bank transfer')
   })
 
@@ -168,5 +168,51 @@ describe('CashierView', () => {
       w.unmount()
       document.body.innerHTML = ''
     })
+  })
+
+  it('writes every figure of the summary through the money formatter, with "Dikembalikan" for what was refunded', async () => {
+    setLocale('id')
+    const w = mountView()
+    GET.mockResolvedValue({ data: { ...page, totals: [{ payment_method: 'CASH', paid: '1500000', refunded: '250000', net: '1250000' }] } })
+    await flushPromises()
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    const cash = w.get('[data-testid=total-CASH]').text()
+    expect(cash).toContain('1.250.000')
+    expect(cash).toContain('Dibayar 1.500.000 · Dikembalikan 250.000')
+    expect(cash).not.toMatch(/\d{7}/) // no figure without its thousands separators
+    expect(cash).not.toContain('Direfund')
+    setLocale('en')
+  })
+
+  it('shows the summary cards at every width: a phone, a laptop and a desktop', async () => {
+    for (const width of [390, 1366, 1440]) {
+      const wide = window.innerWidth
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('[data-testid=totals]').exists(), `${width}px`).toBe(true)
+      expect(w.get('[data-testid=total-CASH]').text(), `${width}px`).toContain('100,000')
+      w.unmount()
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+    }
+  })
+
+  it('keeps the totals of the search that is shown when an older search answers last', async () => {
+    let answerFirst: (v: unknown) => void = () => undefined
+    const slow = new Promise((resolve) => {
+      answerFirst = resolve
+    })
+    const get = vi.fn().mockReturnValueOnce(slow).mockResolvedValue({ data: page })
+    const w = mountView(['folio.read'], get)
+    await flushPromises()
+    expect(w.find('[data-testid=totals]').exists()).toBe(false) // the first search is still on its way
+    await w.get('form[role=search]').trigger('submit') // a second search, which answers first
+    await flushPromises()
+    expect(w.get('[data-testid=total-CASH]').text()).toContain('100,000')
+    answerFirst({ data: { data: [], totals: [] } }) // the older one answers last, without totals
+    await flushPromises()
+    expect(w.get('[data-testid=total-CASH]').text()).toContain('100,000')
+    expect(w.find('[data-testid=payment-PAY000001]').exists()).toBe(true) // and its rows are not shown either
   })
 })

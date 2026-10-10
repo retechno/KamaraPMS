@@ -170,7 +170,7 @@ watch(() => property.currentId, load, { immediate: true })
   </Card>
 
   <Card>
-    <EmptyState v-if="loaded && !types.length" :title="t('roomTypes.empty')" :description="t('roomTypes.emptyHint')" data-testid="empty" />
+    <EmptyState v-if="loaded && !types.length" :action-label="canManage && !editing ? t('roomTypes.new') : ''" @action="startNew" :title="t('roomTypes.empty')" :description="t('roomTypes.emptyHint')" data-testid="empty" />
     <DataTable v-else-if="types.length" :columns="columns" :rows="sorted" row-key="id" :row-test-id="(r) => `type-${r.code}`" :caption="t('roomTypes.title')">
       <template #cell-code="{ row }"><b>{{ row.code }}</b></template>
       <template #cell-adults="{ row }">{{ row.max_adult }} / {{ row.max_child }}</template>

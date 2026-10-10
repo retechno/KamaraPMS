@@ -101,6 +101,13 @@ function tileLook(r: HousekeepingBoardRoom): TileLook {
 // The legend is the map the tiles are drawn from: the five cleaning states, then what a white tile means.
 const legend = computed(() => statusLegend('housekeeping').map((e) => ({ ...e, label: e.status === 'BLOCKED' ? t('roomStatus.blocked') : statusText(e.status) })))
 
+function clearFilters(): void {
+  occupancyFilter.value = 'ALL'
+  housekeepingFilter.value = 'ALL'
+  typeFilter.value = ''
+  search.value = ''
+}
+
 async function load(): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null || !canRead.value) return
@@ -199,7 +206,7 @@ watch(() => property.currentId, () => {
       </div>
     </div>
 
-    <EmptyState v-if="!visible.length" :title="t('roomStatus.noMatch')" data-testid="no-match" />
+    <EmptyState v-if="!visible.length" :title="t('roomStatus.noMatch')" :description="t('emptyState.noMatch')" :action-label="t('dataTable.clearFilters')" action-variant="outline" data-testid="no-match" @action="clearFilters" />
     <section v-for="[floor, list] in floors" :key="floor" class="mb-6">
       <h2 class="mb-2 text-sm font-semibold text-muted-foreground">{{ floor ? t('roomStatus.floor', { floor }) : t('roomStatus.noFloor') }}</h2>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">

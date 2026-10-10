@@ -212,7 +212,7 @@ watch(businessDate, (bd) => {
 
 <template>
   <PageHeader :title="t('walkIn.title')">
-    <template #actions><RouterLink to="/arrivals" class="text-sm text-primary hover:underline">{{ t('walkIn.back') }}</RouterLink></template>
+    <template #actions><Button as-child variant="outline" size="sm"><RouterLink to="/arrivals">{{ t('walkIn.back') }}</RouterLink></Button></template>
   </PageHeader>
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />

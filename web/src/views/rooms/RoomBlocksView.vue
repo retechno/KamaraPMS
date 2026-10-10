@@ -198,7 +198,7 @@ watch(businessDate, (bd) => {
 
   <template v-else>
     <Card class="mb-4 overflow-x-auto">
-      <EmptyState v-if="loaded && !sortedRooms.length" :title="t('roomBlocks.noRooms')" data-testid="empty" />
+      <EmptyState v-if="loaded && !sortedRooms.length" :description="t('emptyState.roomBlocks')" :title="t('roomBlocks.noRooms')" data-testid="empty" />
       <div v-else class="grid min-w-[640px] text-xs" :style="{ '--days': days }" role="grid" :aria-label="t('roomBlocks.calendar')">
         <div class="grid grid-cols-[4.5rem_repeat(var(--days),minmax(1.75rem,1fr))] auto-rows-[2.25rem] border-b border-border text-muted-foreground">
           <div class="col-start-1 row-start-1" />

@@ -336,7 +336,7 @@ watch(() => pid.value, () => {
             <Button type="submit" variant="outline" data-testid="apply-filter">{{ t('payables.apply') }}</Button>
           </div>
         </form>
-        <EmptyState v-if="loaded && !notes.length" :title="t('supplierCredits.empty')" data-testid="empty" />
+        <EmptyState v-if="loaded && !notes.length" :description="t('emptyState.creditNotes')" :action-label="can('payables.post') && !creating ? t('supplierCredits.enter') : ''" @action="startNew()" :title="t('supplierCredits.empty')" data-testid="empty" />
         <DataTable
           v-else
           :columns="columns"

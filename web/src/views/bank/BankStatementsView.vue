@@ -205,7 +205,7 @@ watch(() => pid.value, () => {
     </Card>
 
     <Card>
-      <EmptyState v-if="loaded && !statements.length" :title="t('bankStatements.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !statements.length" :description="t('emptyState.bankStatements')" :action-label="can('bank.reconcile') && bank && !importing ? t('bankStatements.import') : ''" @action="startImport" :title="t('bankStatements.empty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="statements" row-key="id" :row-test-id="(s) => `statement-${s.id}`" :caption="t('bankStatements.title')" data-testid="statements">
         <template #cell-period="{ row }">{{ row.period_from }} – {{ row.period_to }}</template>
         <template #cell-matched="{ row }">{{ t('bankStatements.matchedOf', { n: row.matched_count, total: row.line_count }) }}</template>

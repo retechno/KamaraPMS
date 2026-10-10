@@ -117,7 +117,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !periods.length" :title="t('accounting.pEmpty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !periods.length" :description="t('emptyState.periods')" :title="t('accounting.pEmpty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="periods" row-key="period_start" :row-test-id="(p) => `period-${p.period_start}`" :caption="t('accounting.pTitle')" data-testid="periods">
         <template #cell-month="{ row }">{{ monthLabel(row.period_start) }}</template>
         <template #cell-status="{ row }">

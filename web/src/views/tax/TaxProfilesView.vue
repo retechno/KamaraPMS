@@ -229,7 +229,7 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card>
-      <EmptyState v-if="loaded && !profiles.length" :title="t('taxProfiles.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !profiles.length" :description="t('emptyState.taxProfiles')" :action-label="can('tax.manage') && !editing ? t('taxProfiles.setUp') : ''" @action="startNew" :title="t('taxProfiles.empty')" data-testid="empty" />
       <DataTable v-else :columns="columns" :rows="profiles" row-key="id" :row-test-id="(p) => `profile-${p.tax_code}`" :row-class="(p) => (p.is_active ? undefined : 'text-muted-foreground')" :caption="t('taxProfiles.title')" data-testid="profiles">
         <template #cell-tax="{ row }"><b>{{ row.tax_code }}</b> · {{ row.tax_name }} <small class="text-muted-foreground">{{ Number(row.tax_rate) }}%</small></template>
         <template #cell-registration_number="{ row }">{{ row.registration_number ?? '—' }}</template>
