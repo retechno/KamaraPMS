@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { ChevronLeft } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
@@ -185,14 +186,13 @@ watch(businessDate, (bd) => {
     </template>
   </PageHeader>
 
-  <div v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">
+<ul v-if="conflicts.length" class="m-0 mt-1.5 pl-5" data-testid="conflicts">
       <li v-for="c in conflicts" :key="`${c.type}-${c.id}`">
         {{ c.type === 'STAY' ? t('roomBlocks.stayConflict', { ref: c.reference ?? c.id }) : t('roomBlocks.lineConflict', { id: c.id }) }}: {{ t('roomBlocks.conflictRange', { from: $date(c.from), to: $date(c.to) }) }}
       </li>
     </ul>
-  </div>
+</ErrorNotice>
   <p v-if="property.currentId === null" class="muted">{{ t('roomBlocks.selectProperty') }}</p>
 
   <template v-else>

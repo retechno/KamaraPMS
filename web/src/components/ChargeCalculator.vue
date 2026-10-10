@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -56,7 +57,7 @@ watch(() => props.version, () => {
   <section class="mt-6 border-t border-border pt-4" data-testid="calculator">
     <h2 class="m-0 text-base font-semibold">{{ t('calc.title') }}</h2>
     <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('calc.hint') }}</p>
-    <p v-if="error && !error.fieldErrors.length" class="alert" role="alert" data-testid="calc-error">{{ error.message }} <code>{{ error.code }}</code></p>
+    <ErrorNotice v-if="error && !error.fieldErrors.length" :error="error" inline data-testid="calc-error" />
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" @keydown.enter.prevent="calculate">
       <FormField :label="t('calc.quantity')" :error="fieldError('quantity')">
         <template #default="{ id, invalid }"><Input :id="id" v-model="quantity" name="quantity" inputmode="decimal" :aria-invalid="invalid" /></template>

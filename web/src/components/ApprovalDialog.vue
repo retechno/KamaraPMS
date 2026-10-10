@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { ref } from 'vue'
 import type { ApiError } from '@/api/problem'
 import type { Approval } from '@/api/types'
@@ -52,7 +53,7 @@ function cancel(): void {
       <form novalidate data-testid="approval-dialog" @submit.prevent="submit">
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription class="mb-3 mt-1">{{ message ?? t('approval.message') }}</DialogDescription>
-        <p v-if="error" class="alert" role="alert" data-testid="approval-error">{{ error.message }} <code>{{ error.code }}</code></p>
+        <ErrorNotice v-if="error" :error="error" inline data-testid="approval-error" />
         <div class="flex flex-col gap-3">
           <FormField :label="t('approval.email')">
             <template #default="{ id }"><Input :id="id" v-model="email" name="approval_email" type="email" autocomplete="off" /></template>

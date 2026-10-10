@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
@@ -33,7 +34,7 @@ onMounted(() => {
     </template>
   </PageHeader>
 
-  <p v-if="store.error" class="alert" role="alert">{{ store.error.message }} <code>{{ store.error.code }}</code></p>
+  <ErrorNotice v-if="store.error" :error="store.error" inline />
 
   <Card>
     <EmptyState v-if="store.loaded && !store.hasProperties" :title="t('properties.empty')" :description="t('properties.emptyHint')" data-testid="empty" />

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -125,7 +126,7 @@ watch(planId, () => void loadRows())
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('bedSupplements.readOnly', { permission: 'rate.manage' }) }}</p>
 

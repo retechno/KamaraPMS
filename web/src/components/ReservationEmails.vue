@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -63,7 +64,7 @@ watch(() => [pid.value, props.reservationId], () => void load(), { immediate: tr
       <Button type="button" variant="outline" size="sm" data-testid="emails-refresh" @click="load">{{ t('emails.refresh') }}</Button>
     </CardHeader>
     <CardContent>
-      <p v-if="error" class="alert" role="alert" data-testid="emails-error">{{ error.message }} <code>{{ error.code }}</code></p>
+      <ErrorNotice v-if="error" :error="error" inline data-testid="emails-error" />
       <p v-if="notice" class="alert warning" role="status" data-testid="emails-notice">{{ notice }}</p>
       <p v-if="!state.enabled" class="m-0 text-sm text-muted-foreground" data-testid="emails-off">{{ t('emails.off') }}</p>
       <p v-else-if="!state.data.length" class="m-0 text-sm text-muted-foreground" data-testid="emails-none">{{ t('emails.none') }}</p>

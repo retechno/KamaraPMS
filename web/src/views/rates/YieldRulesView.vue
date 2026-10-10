@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -206,7 +207,7 @@ watch(pid, load, { immediate: true })
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('yieldRules.readOnly', { permission: 'rate.manage' }) }}</p>
 
@@ -364,7 +365,7 @@ watch(pid, load, { immediate: true })
         <div class="mt-4 flex justify-end">
           <Button type="submit" :disabled="quoting || check.plan === '' || check.type === ''" data-testid="quote-run">{{ t('yieldRules.checkRun') }}</Button>
         </div>
-        <p v-if="quoteError" class="alert mt-3" role="alert" data-testid="quote-error">{{ quoteError.message }} <code>{{ quoteError.code }}</code></p>
+        <ErrorNotice v-if="quoteError" :error="quoteError" inline class="mt-3" data-testid="quote-error" />
         <template v-if="quote">
           <table class="mt-4 w-full border-collapse text-sm" data-testid="quote">
             <thead>

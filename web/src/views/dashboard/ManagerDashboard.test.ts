@@ -85,6 +85,16 @@ describe('ManagerDashboard', () => {
     expect(w.get('[data-testid=month-occupancy]').text()).toContain('40.00%')
   })
 
+  it('shows a dash for last month when it has no closed day, and titles the chart with the days it spans', async () => {
+    const d = dashboard()
+    GET.mockResolvedValue({ data: { ...d, previous_month: totals({ days: 0, adr: '0', occupancy_percent: '0.00', revpar: '0', room_revenue: '0' }) } })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=month-adr]').text()).toContain('1,000,000')
+    for (const k of ['occupancy', 'adr', 'revpar', 'revenue']) expect(w.get(`[data-testid=month-${k}] td:nth-child(3)`).text()).toBe('–')
+    expect(w.get('[data-testid=trend]').text()).toContain('Occupancy, last 7 days')
+  })
+
   it('does not call ADR, RevPAR and the revenue zero before night audit has posted the room charges', async () => {
     const d = dashboard()
     GET.mockResolvedValue({ data: { ...d, today: { ...d.today, rooms: { ...d.today.rooms, occupied: 6, sold: 0 }, adr: '0', revpar: '0', room_revenue: { net: '0', service: '0', tax: '0' } } } })

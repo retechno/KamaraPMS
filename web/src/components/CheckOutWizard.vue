@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -55,10 +56,9 @@ async function submit(): Promise<void> {
   <Card class="mb-4" data-testid="checkout-wizard">
     <CardHeader><CardTitle>{{ t('checkout.title') }}</CardTitle></CardHeader>
     <CardContent>
-      <p v-if="error" class="alert" role="alert" data-testid="checkout-error">
-        {{ error.message }} <code>{{ error.code }}</code>
-        <template v-if="error.code === 'FOLIO_NOT_BALANCED'"> {{ t('checkout.notBalanced') }}</template>
-      </p>
+      <ErrorNotice v-if="error" :error="error" inline data-testid="checkout-error">
+<template v-if="error.code === 'FOLIO_NOT_BALANCED'"> {{ t('checkout.notBalanced') }}</template>
+</ErrorNotice>
 
       <template v-if="step === 'review'">
         <ol class="m-0 grid gap-2 pl-5">

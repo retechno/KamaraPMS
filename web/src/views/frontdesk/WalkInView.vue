@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { statusText } from '@/utils/status'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -214,7 +215,7 @@ watch(businessDate, (bd) => {
     <template #actions><RouterLink to="/arrivals" class="text-sm text-primary hover:underline">{{ t('walkIn.back') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('walkIn.noAccess') }}</p>
 

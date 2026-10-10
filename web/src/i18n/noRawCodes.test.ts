@@ -44,6 +44,20 @@ describe('no raw codes in what is written for people', () => {
     expect(hits).toEqual([])
   })
 
+  it('has no API code in a placeholder, title, label or aria-label that a template writes itself', () => {
+    // BANK_TRANSFER, or an audit action such as stay.checked_in
+    const dotted = /\b[a-z]+(?:_[a-z]+)*\.[a-z]+(?:_[a-z]+)+\b/
+    const hits: string[] = []
+    for (const file of vueFiles(SRC)) {
+      const m = /<template>([\s\S]*)<\/template>\s*(?:<style|$)/.exec(fs.readFileSync(file, 'utf8'))
+      if (!m?.[1]) continue
+      for (const [, attr, value] of m[1].matchAll(/(?<![:@\w.-])(placeholder|title|aria-label|alt|label)="([^"]*)"/g)) {
+        if (CODE.test(value ?? '') || dotted.test(value ?? '')) hits.push(`${path.relative(SRC, file)}: ${attr}="${value}"`)
+      }
+    }
+    expect(hits).toEqual([])
+  })
+
   it('has no API code in a message of the language files, except the ones that name a configuration setting', () => {
     const hits: string[] = []
     for (const lang of ['en', 'id']) {

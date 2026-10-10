@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { formatDate, formatMoney } from '@/utils/format'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -118,18 +119,17 @@ watch([() => pid.value, income, cashFlow], () => {
       </template>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="report-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="report-error">
+<template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('statements.noAccess', { what: t('statements.whatStatements'), permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
+      <form class="flex flex-wrap items-end gap-4 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
         <template v-if="ranged">
-          <FormField :hint="$weekday(form.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
-          <FormField :hint="$weekday(form.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+          <FormField float-hint :hint="$weekday(form.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
+          <FormField float-hint :hint="$weekday(form.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
           <FormField v-if="cashFlow" :label="t('statements.method')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="form.method" name="method">
@@ -139,7 +139,7 @@ watch([() => pid.value, income, cashFlow], () => {
             </template>
           </FormField>
         </template>
-        <FormField :hint="$weekday(form.as_of)" v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
+        <FormField float-hint :hint="$weekday(form.as_of)" v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
     </Card>

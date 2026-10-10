@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Search } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
@@ -181,7 +182,7 @@ watch(() => [filter.status, filter.category], () => void load())
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="lf-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="lf-error" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('lostFound.selectProperty') }}</p>
   <p v-else-if="!can('lostfound.report')" class="muted" data-testid="no-access">{{ t('lostFound.noAccess') }}</p>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -80,7 +81,7 @@ async function save(): Promise<void> {
 
 <template>
   <PageHeader :title="isNew ? t('roles.new') : t('roles.role', { name: form.name })" />
-  <p v-if="error" class="alert" role="alert">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline />
 
   <Card>
     <form v-autofocus novalidate @submit.prevent="save">

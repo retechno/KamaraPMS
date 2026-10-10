@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { ArrowDownRight, ArrowUpRight, BedDouble, DoorClosed, DoorOpen, Landmark, Percent, RefreshCw, TrendingUp, Users, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -80,7 +81,9 @@ const comparison = computed(() => {
     { key: 'revenue', label: t('dashboard.manager.roomRevenue'), now: d.month_to_date.room_revenue, before: d.previous_month.room_revenue },
   ]
   const show = (key: string, v: string): string => (key === 'occupancy' ? formatPercent(v) : formatMoney(v))
-  return rows.map((r) => ({ ...r, delta: delta(r.now, r.before), nowText: show(r.key, r.now), beforeText: show(r.key, r.before) }))
+  // A month with no closed day has no figures: a dash, not a 0 that looks like a result.
+  const lastMonthKnown = d.previous_month.days > 0
+  return rows.map((r) => ({ ...r, delta: lastMonthKnown ? delta(r.now, r.before) : null, nowText: show(r.key, r.now), beforeText: lastMonthKnown ? show(r.key, r.before) : '–' }))
 })
 
 // The day and month of a date ("9 Okt"): the label under a bar, which has no room for the year.
@@ -117,7 +120,7 @@ const rooms = computed(() => {
         {{ busy ? t('common.loading') : t('common.refresh') }}
       </Button>
     </div>
-    <p v-if="error" class="alert" role="alert" data-testid="dash-error">{{ error.message }} <code>{{ error.code }}</code></p>
+    <ErrorNotice v-if="error" :error="error" inline data-testid="dash-error" />
 
     <template v-if="data">
       <div class="mb-4 grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-3">
@@ -219,7 +222,7 @@ const rooms = computed(() => {
 
       <div class="grid gap-4 lg:grid-cols-2">
         <Card data-testid="trend">
-          <CardHeader><CardTitle>{{ t('dashboard.manager.occupancyTrend', { n: data.trend.length }) }}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{{ t('dashboard.manager.occupancyTrend', { n: trendDays.empty.length + trendDays.days.length }) }}</CardTitle></CardHeader>
           <CardContent>
             <EmptyState v-if="!data.trend.length" :title="t('dashboard.manager.nothingClosed')" data-testid="trend-empty" />
             <div v-else class="flex h-40 items-end gap-1.5">

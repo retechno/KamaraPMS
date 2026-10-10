@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -207,7 +208,7 @@ watch(() => route.query.room, (v) => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="mt-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="mt-error" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('maintenance.selectProperty') }}</p>
   <p v-else-if="!can('maintenance.report')" class="muted" data-testid="no-access">{{ t('maintenance.noAccess') }}</p>

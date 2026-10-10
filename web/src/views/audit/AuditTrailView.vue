@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
@@ -11,9 +12,11 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { AUDIT_ACTIONS, AUDIT_ENTITIES } from '@/utils/audit'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -24,7 +27,25 @@ const error = ref<ApiError | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
 const open = ref<number | null>(null)
-const filter = reactive({ entity_type: '', entity_id: '', user_id: '', action: '', from: '', to: '' })
+const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
+const users = ref<{ id: number; full_name: string }[]>([])
+const notFound = ref(false)
+const scanCapped = ref(false)
+
+// The choices of the entity and action filters, in the words of the language of the page.
+const byLabel = (a: { label: string }, b: { label: string }): number => a.label.localeCompare(b.label)
+const entityOptions = computed(() => AUDIT_ENTITIES.map((value) => ({ value, label: labelOf('auditEntity', value) })).sort(byLabel))
+const actionOptions = computed(() => AUDIT_ACTIONS.map((value) => ({ value, label: labelOf('auditAction', value) })).sort(byLabel))
+
+// The people to choose from. Whoever may read the audit trail may not be allowed to list the users: then the filter is left out.
+async function loadUsers(): Promise<void> {
+  try {
+    const { data } = await api.GET('/api/v1/users', { params: { query: { limit: 200 } } })
+    users.value = (data?.data ?? []).map((u) => ({ id: u.id, full_name: u.full_name })).sort((a, b) => a.full_name.localeCompare(b.full_name))
+  } catch {
+    users.value = []
+  }
+}
 
 const columns = computed<Column<AuditLog>[]>(() => [
   { key: 'created_at', label: t('audit.when'), format: 'datetime' as const },
@@ -38,12 +59,32 @@ const columns = computed<Column<AuditLog>[]>(() => [
 const pid = computed(() => property.currentId)
 const allowed = computed(() => auth.can('audit.read', pid.value))
 
+// A document number is looked for in two ways. A reservation number (RES…) is turned into the reservation it names, and the server filters on that. For the
+// other documents the entries are read page by page and the ones that carry the number are kept: the server cannot search for it yet.
+const RESERVATION_NUMBER = /^RES\d+$/
+const SCAN_PAGES = 10
+const SCAN_ENOUGH = 20
+let reservation: number | null = null
+
 function query(cursor?: string): Record<string, string | number | undefined> {
   const q: Record<string, string | number | undefined> = { limit: 50, cursor }
   for (const [k, v] of Object.entries(filter)) {
-    if (v.trim()) q[k] = k === 'entity_id' || k === 'user_id' ? Number(v) : v.trim()
+    if (k !== 'document' && v.trim()) q[k] = k === 'user_id' ? Number(v) : v.trim()
   }
+  if (reservation !== null) Object.assign(q, { entity_type: 'reservation', entity_id: reservation })
   return q
+}
+
+const carries = (row: AuditLog, number: string): boolean => JSON.stringify([row.old_data, row.new_data]).toUpperCase().includes(number)
+
+async function fetchPage(propertyId: number, cursor?: string) {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: query(cursor) } })
+  return { entries: data?.data ?? [], next: data?.next_cursor }
+}
+
+async function findReservation(propertyId: number, number: string): Promise<number | null> {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { q: number, limit: 5 } } })
+  return data?.data?.find((r) => r.confirmation_number === number)?.id ?? null
 }
 
 async function load(more = false): Promise<void> {
@@ -52,11 +93,40 @@ async function load(more = false): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', {
-      params: { path: { propertyId }, query: query(more ? nextCursor.value : undefined) },
-    })
-    rows.value = more ? [...rows.value, ...(data?.data ?? [])] : (data?.data ?? [])
-    nextCursor.value = data?.next_cursor
+    const number = filter.document.trim().toUpperCase()
+    if (!more) {
+      notFound.value = false
+      reservation = null
+      if (RESERVATION_NUMBER.test(number)) {
+        reservation = await findReservation(propertyId, number)
+        if (reservation === null) {
+          rows.value = []
+          nextCursor.value = undefined
+          notFound.value = true
+          loaded.value = true
+          return
+        }
+      }
+    }
+    if (number && reservation === null) {
+      let cursor = more ? nextCursor.value : undefined
+      const found: AuditLog[] = []
+      let pages = 0
+      do {
+        const page = await fetchPage(propertyId, cursor)
+        found.push(...page.entries.filter((e) => carries(e, number)))
+        cursor = page.next
+        pages++
+      } while (cursor && found.length < SCAN_ENOUGH && pages < SCAN_PAGES)
+      rows.value = more ? [...rows.value, ...found] : found
+      nextCursor.value = cursor
+      scanCapped.value = !!cursor && found.length < SCAN_ENOUGH
+    } else {
+      const page = await fetchPage(propertyId, more ? nextCursor.value : undefined)
+      rows.value = more ? [...rows.value, ...page.entries] : page.entries
+      nextCursor.value = page.next
+      scanCapped.value = false
+    }
     loaded.value = true
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -66,7 +136,7 @@ async function load(more = false): Promise<void> {
 }
 
 function reset(): void {
-  Object.assign(filter, { entity_type: '', entity_id: '', user_id: '', action: '', from: '', to: '' })
+  Object.assign(filter, { entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
   void load()
 }
 
@@ -88,25 +158,49 @@ watch(pid, () => {
   loaded.value = false
   open.value = null
   void load()
+  if (allowed.value) void loadUsers()
 }, { immediate: true })
 </script>
 
 <template>
   <PageHeader :title="t('audit.title')" />
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('audit.noAccess', { permission: 'audit.read' }) }}</p>
 
   <template v-else>
     <Card class="mb-4">
       <form class="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
-        <FormField :label="t('audit.entity')"><template #default="{ id }"><Input :id="id" v-model="filter.entity_type" name="entity_type" :placeholder="t('audit.entityPlaceholder')" /></template></FormField>
-        <FormField :label="t('audit.entityId')"><template #default="{ id }"><Input :id="id" v-model="filter.entity_id" name="entity_id" inputmode="numeric" /></template></FormField>
-        <FormField :label="t('audit.action')"><template #default="{ id }"><Input :id="id" v-model="filter.action" name="action" placeholder="stay.checked_in" /></template></FormField>
-        <FormField :label="t('audit.userId')"><template #default="{ id }"><Input :id="id" v-model="filter.user_id" name="user_id" inputmode="numeric" /></template></FormField>
-        <FormField :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-        <FormField :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+        <FormField :label="t('audit.entity')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="filter.entity_type" name="entity_type">
+              <option value="">{{ t('audit.allEntities') }}</option>
+              <option v-for="o in entityOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <FormField :label="t('audit.action')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="filter.action" name="action">
+              <option value="">{{ t('audit.allActions') }}</option>
+              <option v-for="o in actionOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <FormField v-if="users.length" :label="t('audit.user')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="filter.user_id" name="user_id">
+              <option value="">{{ t('audit.allUsers') }}</option>
+              <option v-for="u in users" :key="u.id" :value="String(u.id)">{{ u.full_name }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <FormField :label="t('audit.document')">
+          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
+        </FormField>
+        <FormField float-hint :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
+        <FormField float-hint :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
         <div class="flex items-end gap-2">
           <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
           <Button type="button" variant="outline" :disabled="loading" data-testid="reset" @click="reset">{{ t('audit.clear') }}</Button>
@@ -115,7 +209,7 @@ watch(pid, () => {
     </Card>
 
     <Card>
-      <EmptyState v-if="loaded && !rows.length" :title="t('audit.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !rows.length" :title="notFound ? t('audit.documentNotFound', { number: filter.document.trim().toUpperCase() }) : t('audit.empty')" data-testid="empty" />
       <DataTable
         v-else-if="rows.length"
         :columns="columns"
@@ -142,6 +236,7 @@ watch(pid, () => {
           <small class="mt-2 block text-muted-foreground">{{ t('audit.request', { id: row.request_id ?? '—' }) }}<template v-if="row.ip_address"> · {{ row.ip_address }}</template></small>
         </template>
       </DataTable>
+      <p v-if="scanCapped" class="m-0 px-4 pt-3 text-sm text-muted-foreground" data-testid="scan-capped">{{ t('audit.scanCapped') }}</p>
       <div v-if="nextCursor" class="flex justify-center p-3">
         <Button type="button" variant="outline" :disabled="loading" data-testid="more" @click="load(true)">{{ t('audit.more') }}</Button>
       </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { formatDate } from '@/utils/format'
 import { Search } from 'lucide-vue-next'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -296,7 +297,7 @@ async function book(approval?: Approval): Promise<void> {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="property.currentId === null" class="muted">{{ t('newReservation.selectProperty') }}</p>
   <p v-else-if="!canRead || !canCreate" class="muted" data-testid="no-access">{{ t('newReservation.noAccess') }}</p>
 

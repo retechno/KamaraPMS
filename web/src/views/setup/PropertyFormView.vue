@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -177,9 +178,7 @@ function changedFields(): PatchPropertyRequest {
 <template>
   <PageHeader :title="isNew ? t('propertyForm.new') : t('propertyForm.property', { code: form.code })" />
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
 
   <form v-autofocus v-if="!loading" novalidate @submit.prevent="submit">
     <Card class="mb-4">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -236,10 +237,9 @@ watch(() => [route.query.source_type, route.query.id], () => {
 
 <template>
   <PageHeader :title="t('taxInvoices.title')" :description="pid !== null && can('tax.view') ? t('taxInvoices.intro') : undefined" />
-  <p v-if="error" class="alert" role="alert" data-testid="invoice-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="invoice-error">
+<template v-for="(f, i) in (error.fieldErrors ?? []).slice(0, 4)" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxInvoices.noAccess', { permission: 'tax.view' }) }}</p>

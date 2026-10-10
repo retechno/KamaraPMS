@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -113,10 +114,9 @@ watch(() => pid.value, () => {
       <Button v-if="can('budget.manage') && !creating" type="button" data-testid="new-budget" @click="startCreating">{{ t('budget.new') }}</Button>
     </template>
   </PageHeader>
-  <p v-if="error" class="alert" role="alert" data-testid="budget-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="budget-error">
+<template v-for="(f, i) in error.fieldErrors ?? []" :key="i"><br /><span class="muted">{{ f.field }}: {{ f.message }}</span></template>
+</ErrorNotice>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('budget.view')" class="muted" data-testid="no-access">{{ t('budget.noAccess', { permission: 'budget.view' }) }}</p>
   <template v-else>

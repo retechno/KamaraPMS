@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { CalendarPlus, GanttChart, MoreVertical } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -179,10 +180,9 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
     </template>
   </PageHeader>
 
-  <div v-if="error" class="alert" role="alert" data-testid="form-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="search">{{ t('frontDesk.page.retry') }}</Button>
-  </div>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error">
+<Button type="button" variant="outline" size="sm" class="ml-2" data-testid="retry" @click="search">{{ t('frontDesk.page.retry') }}</Button>
+</ErrorNotice>
   <p v-if="property.currentId === null" class="muted">{{ t('reservations.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -138,7 +139,7 @@ watch(() => property.currentId, load, { immediate: true })
       <Button v-if="canManage && !editing" type="button" variant="outline" size="sm" data-testid="new-item" @click="startNew">{{ isTax ? t('rateItems.newTax') : t('rateItems.newService') }}</Button>
     </CardHeader>
     <CardContent>
-      <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+      <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
       <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
 
       <form v-if="editing" novalidate class="mb-4" @submit.prevent="save">

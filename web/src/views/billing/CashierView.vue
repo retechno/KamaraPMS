@@ -111,8 +111,8 @@ watch(businessDate, () => {
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('cashier.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="load()">
-      <FormField :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
+    <form class="mb-4 flex flex-wrap items-end gap-3 pb-5" role="search" @submit.prevent="load()">
+      <FormField float-hint :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
         <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('cashier.method')">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
@@ -89,7 +90,7 @@ async function resetPassword(): Promise<void> {
 
 <template>
   <PageHeader :title="isNew ? t('users.new') : form.full_name || t('users.userFallback')" />
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
   <p v-if="notice" class="alert warning" role="status">{{ notice }}</p>
 
   <Card class="mb-4">

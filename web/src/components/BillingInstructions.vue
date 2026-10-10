@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -90,7 +91,7 @@ watch(() => [pid.value, props.reservationId, props.lineId], () => void load(), {
     <ul v-if="rules.length && !editing" class="m-0 mt-1 list-none p-0">
       <li v-for="(r, i) in rules" :key="i" :data-testid="`instruction-${lineId}-${i}`">{{ t('billingInstructions.pays', { scope: scopeText(r), company: r.company_name }) }}</li>
     </ul>
-    <p v-if="error" class="alert mt-2" role="alert" :data-testid="`instructions-error-${lineId}`">{{ error.message }} <code>{{ error.code }}</code></p>
+    <ErrorNotice v-if="error" :error="error" inline class="mt-2" :data-testid="`instructions-error-${lineId}`" />
 
     <form v-if="editing" class="mt-2 flex flex-col gap-2" novalidate :data-testid="`instructions-form-${lineId}`" @submit.prevent="save">
       <div v-for="(row, i) in rows" :key="i" class="flex flex-wrap items-end gap-2">

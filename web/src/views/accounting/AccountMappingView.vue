@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -95,10 +96,9 @@ watch(() => pid.value, () => void load(), { immediate: true })
     <template #actions><RouterLink to="/accounting/accounts" class="text-sm text-primary hover:underline">{{ t('accounting.amChart') }}</RouterLink></template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="map-error">
-    {{ error.message }} <code>{{ error.code }}</code>
-    <template v-if="error.fieldErrors?.length"><br /><span v-for="(f, i) in error.fieldErrors" :key="i" class="muted">{{ f.field }}: {{ f.message }}<br /></span></template>
-  </p>
+  <ErrorNotice v-if="error" :error="error" inline data-testid="map-error">
+<template v-if="error.fieldErrors?.length"><br /><span v-for="(f, i) in error.fieldErrors" :key="i" class="muted">{{ f.field }}: {{ f.message }}<br /></span></template>
+</ErrorNotice>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accounting.noAccessView', { what: t('accounting.whatAccounting'), permission: 'accounting.view' }) }}</p>
