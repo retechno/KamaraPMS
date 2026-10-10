@@ -2862,6 +2862,11 @@ export const id: Messages = {
     repeat: 'Ulangi kata sandi baru',
     mismatch: 'Kata sandi tidak sama.',
     saving: 'Menyimpan…',
+    theme: 'Tampilan',
+    themeHint: 'Pilih tampilan layar di perangkat ini.',
+    themeLight: 'Terang',
+    themeDark: 'Gelap',
+    themeSystem: 'Ikuti sistem',
   },
   notFound: {
     title: 'Halaman tidak ditemukan',

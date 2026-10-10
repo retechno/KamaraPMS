@@ -117,7 +117,7 @@ async function showPdf(): Promise<void> {
 
 /** A variance with its sign, and in words whether it is good ("favourable") or bad: colour alone is not enough. */
 const verdict = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? t('budget.fav') : t('budget.unfav'))
-const tone = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? 'text-success' : 'text-destructive')
+const tone = (c: BudgetCell): string => (c.favourable === null ? '' : c.favourable ? 'text-success-text' : 'text-destructive')
 const amount = (v: string): string => (Number(v) === 0 ? '–' : formatMoney(v))
 const percent = (c: BudgetCell): string => (c.variance_percent === null ? '' : `${formatMoney(c.variance_percent)}%`)
 /** A statistic in its unit: room nights as they are, a percent with its sign, money with separators. */

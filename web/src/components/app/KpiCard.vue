@@ -9,7 +9,7 @@ withDefaults(
   { hint: '', tone: 'default', icon: undefined },
 )
 
-const toneClass = { default: '', success: 'text-success', warning: 'text-warning', danger: 'text-destructive' } as const
+const toneClass = { default: '', success: 'text-success-text', warning: 'text-warning-text', danger: 'text-destructive' } as const
 </script>
 
 <template>

@@ -115,7 +115,7 @@ describe('BudgetVsActualView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.get('[data-testid=variance-TOTAL_REVENUE]').text()).toContain('fav.')
-    expect(w.get('[data-testid=variance-TOTAL_REVENUE]').classes()).toContain('text-success')
+    expect(w.get('[data-testid=variance-TOTAL_REVENUE]').classes()).toContain('text-success-text')
     expect(w.get('[data-testid=account-5110]').text()).toContain('fav.') // an expense below the budget
     expect(w.get('[data-testid=account-6110]').text()).toContain('unfav.') // an expense above it
     expect(w.get('[data-testid=account-6110]').html()).toContain('text-destructive')

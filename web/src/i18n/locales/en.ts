@@ -2863,6 +2863,11 @@ export const en = {
     repeat: 'Repeat new password',
     mismatch: 'The passwords do not match.',
     saving: 'Saving…',
+    theme: 'Appearance',
+    themeHint: 'Choose how the screens look on this device.',
+    themeLight: 'Light',
+    themeDark: 'Dark',
+    themeSystem: 'Same as the system',
   },
   notFound: {
     title: 'Page not found',

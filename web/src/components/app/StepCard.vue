@@ -14,7 +14,7 @@ withDefaults(defineProps<{ step: number; title: string; state: 'ok' | 'blocked' 
   <Card :data-state="state" class="mb-4">
     <CardHeader class="flex-row items-center gap-3 pb-2">
       <span
-        :class="cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', state === 'ok' ? 'bg-success/15 text-success' : state === 'blocked' ? 'bg-warning/20 text-warning' : 'bg-muted text-muted-foreground')"
+        :class="cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', state === 'ok' ? 'bg-success/15 text-success-text' : state === 'blocked' ? 'bg-warning/20 text-warning-text' : 'bg-muted text-muted-foreground')"
         aria-hidden="true"
       >
         <CheckCircle2 v-if="state === 'ok'" class="size-5" />

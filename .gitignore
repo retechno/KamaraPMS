@@ -31,3 +31,4 @@ Thumbs.db
 *.dump
 *.dump.sha256
 *.dump.partial
+web/screenshots/

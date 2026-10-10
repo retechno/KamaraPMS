@@ -143,7 +143,7 @@ const rooms = computed(() => {
             <dl class="m-0 divide-y divide-border text-sm">
               <div v-for="r in rooms" :key="r.key" class="flex items-center justify-between py-1.5">
                 <dt class="flex items-center gap-2"><span :class="cn('size-2.5 rounded-full', r.dot)" aria-hidden="true" />{{ r.label }}</dt>
-                <dd :class="cn('m-0 font-semibold', r.warn && 'text-warning')">{{ r.value }}</dd>
+                <dd :class="cn('m-0 font-semibold', r.warn && 'text-warning-text')">{{ r.value }}</dd>
               </div>
             </dl>
           </CardContent>
@@ -170,7 +170,7 @@ const rooms = computed(() => {
                   <td class="py-1.5 text-right font-medium">{{ r.now }}</td>
                   <td class="py-1.5 text-right text-muted-foreground">{{ $money(r.before) }}</td>
                   <td class="py-1.5 text-right">
-                    <span v-if="r.delta" :class="cn('inline-flex items-center gap-0.5', r.delta.up ? 'text-success' : 'text-destructive')">
+                    <span v-if="r.delta" :class="cn('inline-flex items-center gap-0.5', r.delta.up ? 'text-success-text' : 'text-destructive')">
                       <ArrowUpRight v-if="r.delta.up" class="size-3.5" aria-hidden="true" />
                       <ArrowDownRight v-else class="size-3.5" aria-hidden="true" />
                       {{ r.delta.text }}

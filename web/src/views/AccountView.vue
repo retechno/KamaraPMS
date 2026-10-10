@@ -7,10 +7,17 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { THEME_PREFERENCES, useTheme, type ThemePreference } from '@/composables/useTheme'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const theme = useTheme()
+const themeLabel: Record<ThemePreference, string> = {
+  light: 'account.themeLight',
+  dark: 'account.themeDark',
+  system: 'account.themeSystem',
+}
 const form = reactive({ current_password: '', new_password: '', confirm: '' })
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
@@ -42,6 +49,30 @@ async function submit(): Promise<void> {
       <CardTitle>{{ auth.me.user.full_name }}</CardTitle>
       <p class="m-0 text-sm text-muted-foreground">{{ auth.me.user.email }} · {{ auth.me.tenant.name }} ({{ auth.me.tenant.code }})</p>
     </CardHeader>
+  </Card>
+
+  <Card class="mb-4">
+    <CardHeader>
+      <CardTitle>{{ t('account.theme') }}</CardTitle>
+      <p class="m-0 text-sm text-muted-foreground">{{ t('account.themeHint') }}</p>
+    </CardHeader>
+    <CardContent>
+      <div role="radiogroup" :aria-label="t('account.theme')" class="flex flex-wrap gap-2" data-testid="theme-switcher">
+        <Button
+          v-for="p in THEME_PREFERENCES"
+          :key="p"
+          type="button"
+          role="radio"
+          size="sm"
+          :variant="theme.preference.value === p ? 'default' : 'outline'"
+          :aria-checked="theme.preference.value === p"
+          :data-testid="`theme-${p}`"
+          @click="theme.setPreference(p)"
+        >
+          {{ t(themeLabel[p] as never) }}
+        </Button>
+      </div>
+    </CardContent>
   </Card>
 
   <Card>

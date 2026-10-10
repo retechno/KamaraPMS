@@ -21,6 +21,11 @@ describe('ui foundation', () => {
     expect(w.attributes('data-slot')).toBe('button')
   })
 
+  it('never underlines a button, so an <a> rendered as one does not inherit the link underline', () => {
+    expect(mount(Button, { slots: { default: 'Go' } }).classes()).toContain('no-underline')
+    expect(mount(Button, { props: { variant: 'link' }, slots: { default: 'Go' } }).classes()).toContain('hover:underline')
+  })
+
   it('lets a caller override a button class and keeps it disableable', () => {
     const w = mount(Button, { props: { class: 'h-12' }, attrs: { disabled: true, 'data-testid': 'go' }, slots: { default: 'Go' } })
     expect(w.classes()).toContain('h-12')

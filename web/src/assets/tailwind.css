@@ -13,11 +13,11 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'tw-animate-css';
 
-/* Dark follows the system setting. */
-@custom-variant dark (@media (prefers-color-scheme: dark));
+/* Dark is the `data-theme="dark"` that useTheme (and the script in index.html) sets on <html>; "system" is resolved there from the OS setting. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /*
- * The palette: light by default, dark when the system says so. Tokens below name these variables the way shadcn-vue
+ * The palette: light by default, dark under `html[data-theme=dark]`. Tokens below name these variables the way shadcn-vue
  * components expect; `inline` makes the utilities read the variable at use, so dark mode needs no second definition.
  */
 @layer base {
@@ -33,28 +33,31 @@
     --accent-soft: #e3f2ee;
     --accent-contrast: #ffffff;
     --ok: #2e9d6a;
-    --danger: #c2413a;
+    --danger: #b4332c;
     --warning: #c98a10;
+    /* Text colours: --ok and --warning are fills (badges, icons) and are too light to read as text on white. */
+    --ok-text: #1b7a4b;
+    --warn-text: #8a5300;
     color-scheme: light;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --surface: #171a1f;
-      --surface-2: #111317;
-      --border: #2a2f37;
-      --hover: #22262d;
-      --text: #e6e9ee;
-      --text-muted: #98a1ad;
-      --accent: #3fa98d;
-      --accent-strong: #7fd0b9;
-      --accent-soft: #1b3830;
-      --accent-contrast: #0c1512;
-      --ok: #4cc38a;
-      --danger: #ef6b62;
-      --warning: #e0a93a;
-      color-scheme: dark;
-    }
+  :root[data-theme='dark'] {
+    --surface: #171a1f;
+    --surface-2: #111317;
+    --border: #2a2f37;
+    --hover: #22262d;
+    --text: #e6e9ee;
+    --text-muted: #98a1ad;
+    --accent: #3fa98d;
+    --accent-strong: #7fd0b9;
+    --accent-soft: #1b3830;
+    --accent-contrast: #0c1512;
+    --ok: #4cc38a;
+    --danger: #ef6b62;
+    --warning: #e0a93a;
+    --ok-text: #5fd0a0;
+    --warn-text: #f0a35e;
+    color-scheme: dark;
   }
 
   *,
@@ -68,10 +71,11 @@
     margin: 0;
     background: var(--surface-2);
     color: var(--text);
-    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
   }
 
   a {
@@ -110,6 +114,8 @@
   --color-destructive-foreground: var(--accent-contrast);
   --color-success: var(--ok);
   --color-warning: var(--warning);
+  --color-success-text: var(--ok-text);
+  --color-warning-text: var(--warn-text);
   --color-border: var(--border);
   --color-input: var(--border);
   --color-ring: var(--accent);
@@ -119,7 +125,7 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* Shared classes of texts: a failure, a confirmation, a quiet line. They sit below utilities, so a utility can still adjust one. */

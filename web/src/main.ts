@@ -1,7 +1,9 @@
+import '@fontsource-variable/plus-jakarta-sans'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { i18n, initLocale } from './i18n'
+import { initTheme } from './composables/useTheme'
 import { router } from './router'
 import { formatPlugin } from './utils/format'
 import './assets/tailwind.css'
@@ -9,6 +11,7 @@ import './assets/tailwind.css'
 import { onSessionLost } from './api/session'
 import { useAuthStore } from './stores/auth'
 
+initTheme()
 const pinia = createPinia()
 // The language chosen last time is downloaded first, so the first page is drawn in it.
 void initLocale().then(() => createApp(App).use(pinia).use(router).use(i18n).use(formatPlugin).mount('#app'))

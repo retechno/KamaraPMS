@@ -222,7 +222,7 @@ describe('EmptyState and KpiCard', () => {
     const w = mount(KpiCard, { props: { label: 'Occupancy', value: '66.67%', hint: '6 of 9 rooms', tone: 'warning' } })
     expect(w.text()).toContain('Occupancy')
     expect(w.get('[data-slot=kpi-value]').text()).toBe('66.67%')
-    expect(w.get('[data-slot=kpi-value]').classes()).toContain('text-warning')
+    expect(w.get('[data-slot=kpi-value]').classes()).toContain('text-warning-text')
     expect(w.text()).toContain('6 of 9 rooms')
   })
 })

@@ -209,7 +209,7 @@ watch(() => property.currentId, () => {
             <span class="flex items-center gap-0.5 text-muted-foreground">
               <BellOff v-if="r.dnd" class="size-3.5" :title="t('roomStatus.dnd')" role="img" :aria-label="t('roomStatus.dnd')" />
               <Sparkles v-if="r.make_up_requested" class="size-3.5" :title="t('roomStatus.makeUp')" role="img" :aria-label="t('roomStatus.makeUp')" />
-              <ChevronsUp v-if="r.priority === 'HIGH'" class="size-3.5 text-warning" :title="t('roomStatus.highPriority')" role="img" :aria-label="t('roomStatus.highPriority')" />
+              <ChevronsUp v-if="r.priority === 'HIGH'" class="size-3.5 text-warning-text" :title="t('roomStatus.highPriority')" role="img" :aria-label="t('roomStatus.highPriority')" />
             </span>
           </span>
           <small class="text-muted-foreground">{{ r.room_type_code }}</small>
