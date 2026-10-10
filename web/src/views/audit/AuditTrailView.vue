@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
@@ -42,6 +43,9 @@ async function loadUsers(): Promise<void> {
     users.value = []
   }
 }
+
+// The document number is the search (it is in the bar of a phone); the others are filters.
+const activeFilters = computed(() => (['entity_type', 'user_id', 'action', 'from', 'to'] as const).filter((k) => filter[k] !== '').length)
 
 const columns = computed<Column<AuditLog>[]>(() => [
   { key: 'created_at', label: t('audit.when'), format: 'datetime' as const, card: 'secondary' as const },
@@ -164,7 +168,13 @@ watch(pid, () => {
 
   <template v-else>
     <Card class="mb-4">
-      <form class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
+      <FilterBar class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="filters" :active="activeFilters" @submit="load">
+      <template #search>
+        <FormField :label="t('audit.document')">
+          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
+        </FormField>
+      </template>
+
         <FormField :label="t('audit.entity')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="filter.entity_type" name="entity_type">
@@ -189,16 +199,16 @@ watch(pid, () => {
             </NativeSelect>
           </template>
         </FormField>
-        <FormField :label="t('audit.document')">
-          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
-        </FormField>
+        
         <FormField float-hint :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+      <template #actions>
         <div class="flex items-end gap-2">
           <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
           <Button type="button" variant="outline" :disabled="loading" data-testid="reset" @click="reset">{{ t('audit.clear') }}</Button>
         </div>
-      </form>
+      </template>
+    </FilterBar>
     </Card>
 
     <Card>

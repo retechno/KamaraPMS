@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import { usePagedList } from '@/composables/usePagedList'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Search, Wallet } from 'lucide-vue-next'
@@ -23,13 +24,16 @@ const property = usePropertyStore()
 
 const status = ref('OPEN')
 
+// Open folios are what the page shows to begin with: another choice is a filter that is on.
+const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1))
+
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 
 const columns = computed<Column<FolioSummary>[]>(() => [
   { key: 'folio_number', label: t('folios.folio'), sortable: true, filter: 'text' as const, card: 'primary' as const },
   { key: 'reservation_id', label: t('folios.reservation'), sortable: true, filter: 'text' as const, card: 'secondary' as const },
   { key: 'status', label: t('folios.status'), sortable: true, filter: 'select' as const, filterValue: (r: FolioSummary) => statusText(r.status), card: 'badge' as const },
-  { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const, card: 'money' as const },
+  { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'balance' as const, card: 'money' as const },
 ])
 
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
@@ -66,7 +70,8 @@ watch(() => property.currentId, () => {
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('folios.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="load()">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" :active="activeFilters" @submit="load">
+
       <FormField class="w-44" :label="t('folios.status')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="status" name="status">
@@ -76,8 +81,10 @@ watch(() => property.currentId, () => {
           </NativeSelect>
         </template>
       </FormField>
-      <Button type="submit" :disabled="loading"><Search />{{ t('folios.search') }}</Button>
-    </form>
+      <template #actions>
+        <Button type="submit" :disabled="loading"><Search />{{ t('folios.search') }}</Button>
+      </template>
+    </FilterBar>
 
     <DataTable
       :columns="columns"

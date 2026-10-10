@@ -41,7 +41,7 @@ describe('FoliosView', () => {
     await flushPromises()
     expect(GET.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { limit: 50, status: 'OPEN' } } })
     const row = w.get('[data-testid=folio-FOL000001]')
-    expect(row.text()).toContain('-500,000')
+    expect(row.text()).toContain('500,000 credit') // a negative balance is a credit, in words
     expect(row.findAll('a').map((a) => a.attributes('href'))).toEqual(['/folios/3', '/reservations/9'])
   })
 
@@ -130,9 +130,32 @@ describe('FoliosView', () => {
       await flushPromises()
       const c = card.get('[data-testid=folio-FOL000001]')
       expect(c.attributes('data-slot')).toBe('data-card')
-      expect(c.get('p.font-semibold').text()).toBe('-500,000')
+      expect(c.get('p.font-semibold').text()).toBe('500,000 credit')
       expect(c.findAll('a').map((a) => a.attributes('href'))).toEqual(['/folios/3', '/reservations/9'])
       card.unmount()
+    })
+  })
+
+  it('has a short bar on a phone: a "Filter" button (nothing is on while the page shows open folios), and the status in a sheet', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      const button = w.get('[data-testid=open-filters]')
+      expect(button.text()).toBe('Filter')
+      expect(w.find('select[name=status]').exists()).toBe(false)
+      await button.trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const status = sheet.querySelector('select[name=status]') as HTMLSelectElement
+      status.value = 'CLOSED'
+      status.dispatchEvent(new Event('change'))
+      await flushPromises()
+      ;(sheet.querySelector('button[type=submit]') as HTMLButtonElement).click() // "Search"
+      await flushPromises()
+      expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { status: 'CLOSED' } } })
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)') // another choice than open
+      w.unmount()
+      document.body.innerHTML = ''
     })
   })
 })

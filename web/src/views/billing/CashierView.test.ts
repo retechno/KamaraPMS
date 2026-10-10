@@ -150,4 +150,23 @@ describe('CashierView', () => {
     await flushPromises()
     expect(w.get('[data-testid=payment-PAY000001] [data-testid=receipt-PAY000001]').text()).toBe('Receipt')
   })
+
+  it('has a short bar on a phone: "Filter" with the number of filters that are on (another day, a method), and them in a sheet', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter') // the day shown to begin with is not a filter
+      expect(w.find('input[name=business_date]').exists()).toBe(false)
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const method = sheet.querySelector('select[name=method]') as HTMLSelectElement
+      method.value = 'CASH'
+      method.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
 })

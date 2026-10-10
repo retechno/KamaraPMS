@@ -3,7 +3,7 @@ import {
   type ColumnDef, type ColumnFiltersState, type SortingState, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useVueTable,
 } from '@tanstack/vue-table'
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-vue-next'
-import { computed, inject, ref, useAttrs, watch } from 'vue'
+import { Comment, Fragment, Text, type VNode, computed, inject, ref, useAttrs, useSlots, watch } from 'vue'
 import { routerKey } from 'vue-router'
 import EmptyState from '@/components/app/EmptyState.vue'
 import type { RowAction } from '@/components/app/rowActions'
@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLayoutMode } from '@/composables/useLayoutMode'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
+import { formatBalance, formatDate, formatDateTime, formatMoney } from '@/utils/format'
 
 /**
  * The one table of the application: a header that can sort and filter, rows with a cell slot per column (`#cell-<key>="{ row,
@@ -32,7 +32,8 @@ import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
  *
  * With `cards`, a narrow screen (a phone) gets a card for each row instead of the table: the columns tell their part in the card with `card` (`primary` is the title,
  * `secondary` the line under it, `badge` the mark in the corner, `money` the amount at the right) and the actions of the row (`rowActions`) are one main button and a "..." menu.
- * `rowTo` makes a row, and its card, open a page when it is clicked; the link in the main cell is what the keyboard uses.
+ * `rowTo` makes a row, and its card, open a page when it is clicked; the link in the main cell is what the keyboard uses. A cell slot gets `card` (true in a card, false in the table), for a cell that
+ * says less in a card.
  */
 export interface Column<R> {
   key: string
@@ -42,8 +43,8 @@ export interface Column<R> {
   /** What to sort by, when it is not the value of `key` (a number inside text, a date). */
   sortValue?: (row: R) => string | number | null | undefined
   class?: string
-  /** How the default cell shows the value: an amount, a business date or an instant, in the language of the page. */
-  format?: 'money' | 'date' | 'datetime'
+  /** How the default cell shows the value: an amount, a balance (a negative one is a credit), a business date or an instant, in the language of the page. */
+  format?: 'money' | 'balance' | 'date' | 'datetime'
   /** A filter box under the header: a text that the shown value must contain, or a choice among the values. */
   filter?: 'text' | 'select'
   /** What the filter reads, when it is not the text the cell shows (a column with a custom cell). */
@@ -123,7 +124,7 @@ function shownText(row: T, col: Column<T>): string {
   const v = rowOf(row, col)
   if (v === null || v === undefined) return ''
   const text = String(v)
-  return col.format === 'money' ? formatMoney(text) : col.format === 'date' ? formatDate(text) : col.format === 'datetime' ? formatDateTime(text) : text
+  return col.format === 'money' ? formatMoney(text) : col.format === 'balance' ? formatBalance(text) : col.format === 'date' ? formatDate(text) : col.format === 'datetime' ? formatDateTime(text) : text
 }
 const shown = (row: T, col: Column<T>): string => {
   const v = rowOf(row, col)
@@ -256,6 +257,34 @@ function onRowClick(row: T, event: MouseEvent): void {
 }
 const rowCursor = computed(() => props.clickable || !!props.rowTo)
 
+// A card does not show a part that has nothing to say: a "label: value" line with no value, a "—" and the like are left out, so a card is as short as its row. What a cell says
+// is what its slot draws (the cell may draw from several fields), so the slot is drawn once to see whether it has any text or any component in it.
+const slots = useSlots()
+const BLANK = new Set(['', '—', '-'])
+function vnodesSay(nodes: VNode[] | undefined): boolean {
+  for (const n of nodes ?? []) {
+    if (n.type === Comment) continue
+    if (n.type === Text) {
+      if (!BLANK.has(String(n.children ?? '').trim())) return true
+      continue
+    }
+    if (n.type === Fragment || typeof n.type === 'string') {
+      const c = n.children
+      if (typeof c === 'string' ? !BLANK.has(c.trim()) : Array.isArray(c) && vnodesSay(c as VNode[])) return true
+      continue
+    }
+    return true // a component draws something
+  }
+  return false
+}
+function says(col: Column<T>, row: T): boolean {
+  const slot = slots[`cell-${col.key}`]
+  if (slot) return vnodesSay(slot({ row, value: rowOf(row, col), card: true }))
+  const v = rowOf(row, col)
+  return !(v === null || v === undefined || BLANK.has(shownText(row, col).trim()))
+}
+const live = (cols: Column<T>[], row: T): Column<T>[] => cols.filter((c) => says(c, row))
+
 // The card of a phone: which column plays which part.
 const cardParts = computed(() => {
   const shown = props.columns.filter((c) => !c.hideOnMobile && c.key !== 'actions')
@@ -339,7 +368,7 @@ const countText = computed(() => (props.total ? t('dataTable.loadedOf', { n: pro
             @keydown.enter="clickable && emit('rowClick', row)"
           >
             <td v-for="col in columns" :key="col.key" :class="cn('px-3 py-2.5 align-middle', alignClass(col.align), col.class)">
-              <slot :name="`cell-${col.key}`" :row="row" :value="(row as Record<string, unknown>)[col.key]">
+              <slot :name="`cell-${col.key}`" :row="row" :value="(row as Record<string, unknown>)[col.key]" :card="false">
                 <TableRowActions v-if="col.key === 'actions' && rowActions" :actions="rowActions(row)" />
                 <template v-else>{{ shown(row, col) }}</template>
               </slot>
@@ -367,29 +396,29 @@ const countText = computed(() => (props.total ? t('dataTable.loadedOf', { n: pro
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <div v-for="col in cardParts.primary" :key="col.key" class="font-medium">
-                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)">{{ shown(row, col) }}</slot>
+              <div v-for="col in live(cardParts.primary, row)" :key="col.key" class="font-medium">
+                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)" :card="true">{{ shown(row, col) }}</slot>
               </div>
-              <div v-for="col in cardParts.secondary" :key="col.key" class="text-sm text-muted-foreground">
-                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)">{{ shown(row, col) }}</slot>
+              <div v-for="col in live(cardParts.secondary, row)" :key="col.key" class="text-sm text-muted-foreground">
+                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)" :card="true">{{ shown(row, col) }}</slot>
               </div>
             </div>
-            <div v-if="cardParts.badge.length" class="flex shrink-0 flex-col items-end gap-1">
-              <div v-for="col in cardParts.badge" :key="col.key">
-                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)">{{ shown(row, col) }}</slot>
+            <div v-if="live(cardParts.badge, row).length" class="flex shrink-0 flex-col items-end gap-1">
+              <div v-for="col in live(cardParts.badge, row)" :key="col.key">
+                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)" :card="true">{{ shown(row, col) }}</slot>
               </div>
             </div>
           </div>
-          <dl v-if="cardParts.lines.length" class="m-0 mt-2 grid gap-1 text-sm">
-            <div v-for="col in cardParts.lines" :key="col.key" class="flex items-baseline justify-between gap-3">
+          <dl v-if="live(cardParts.lines, row).length" class="m-0 mt-2 grid gap-1 text-sm">
+            <div v-for="col in live(cardParts.lines, row)" :key="col.key" class="flex items-baseline justify-between gap-3">
               <dt class="shrink-0 text-muted-foreground">{{ col.label }}</dt>
               <dd class="m-0 min-w-0 text-right">
-                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)">{{ shown(row, col) }}</slot>
+                <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)" :card="true">{{ shown(row, col) }}</slot>
               </dd>
             </div>
           </dl>
-          <p v-for="col in cardParts.money" :key="col.key" class="m-0 mt-2 text-right text-base font-semibold tabular-nums">
-            <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)">{{ shown(row, col) }}</slot>
+          <p v-for="col in live(cardParts.money, row)" :key="col.key" class="m-0 mt-2 text-right text-base font-semibold tabular-nums">
+            <slot :name="`cell-${col.key}`" :row="row" :value="rowOf(row, col)" :card="true">{{ shown(row, col) }}</slot>
           </p>
           <TableRowActions v-if="rowActions && rowActions(row).length" class="mt-2" :actions="rowActions(row)" :max-primary="1" />
           <div v-if="isExpanded?.(row)" class="mt-2 overflow-x-auto border-t border-border pt-2" :data-testid="detailTestId?.(row)"><slot name="detail" :row="row" /></div>

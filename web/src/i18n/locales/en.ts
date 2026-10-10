@@ -561,6 +561,8 @@ export const en = {
     approve: 'Approve',
   },
   reservations: {
+    paxAdults: '{n} adult | {n} adults',
+    paxChildren: '{n} child | {n} children',
     stay: 'Stay',
     guest: 'Guest',
     roomCol: 'Room',
@@ -3557,6 +3559,11 @@ export const en = {
     thisMonth: 'This month',
     lastMonth: 'Last month',
     fiscalYear: 'Fiscal year to date',
+  },
+  filters: {
+    button: 'Filter',
+    title: 'Filters',
+    done: 'Done',
   },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Accounting is not set up for this property.',

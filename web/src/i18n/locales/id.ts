@@ -560,6 +560,8 @@ export const id: Messages = {
     approve: 'Setujui',
   },
   reservations: {
+    paxAdults: '{n} dewasa',
+    paxChildren: '{n} anak',
     stay: 'Menginap',
     guest: 'Tamu',
     roomCol: 'Kamar',
@@ -3556,6 +3558,11 @@ export const id: Messages = {
     thisMonth: 'Bulan ini',
     lastMonth: 'Bulan lalu',
     fiscalYear: 'Tahun buku berjalan',
+  },
+  filters: {
+    button: 'Filter',
+    title: 'Filter',
+    done: 'Selesai',
   },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Akuntansi belum disiapkan untuk properti ini.',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
 import { FileText, Receipt, Search } from 'lucide-vue-next'
@@ -37,6 +38,9 @@ const canPrint = computed(() => auth.can('reservation.read', property.currentId)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
+
+// The business date of the day is what the page shows to begin with: another day, or a method, is a filter that is on.
+const activeFilters = computed(() => (date.value && date.value !== businessDate.value ? 1 : 0) + (method.value ? 1 : 0))
 
 const columns = computed<Column<Payment>[]>(() => [
   { key: 'payment_number', label: t('cashier.number'), sortable: true, card: 'primary' as const },
@@ -105,7 +109,8 @@ watch(businessDate, () => {
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('cashier.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" role="search" @submit.prevent="load()">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" role="search" :active="activeFilters" @submit="load">
+
       <FormField float-hint :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
         <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
       </FormField>
@@ -117,8 +122,10 @@ watch(businessDate, () => {
           </NativeSelect>
         </template>
       </FormField>
-      <Button type="submit" :disabled="loading"><Search />{{ t('cashier.show') }}</Button>
-    </form>
+      <template #actions>
+        <Button type="submit" :disabled="loading"><Search />{{ t('cashier.show') }}</Button>
+      </template>
+    </FilterBar>
 
     <div v-if="totals.length" class="mb-5 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" data-testid="totals">
       <KpiCard

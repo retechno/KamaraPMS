@@ -45,6 +45,17 @@ async function mountView(permissions: string[], page: object = { data: [row()] }
 const listCalls = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/reservations'))
 const lastQuery = () => (listCalls().at(-1)?.[1] as { params: { query: Record<string, unknown> } }).params.query
 
+/** Runs `fn` with the window of a phone (390 px), then puts the width back. */
+async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
+  const wide = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
+  }
+}
+
 describe('ReservationsView', () => {
   beforeEach(() => {
     setLocale('en')
@@ -61,7 +72,7 @@ describe('ReservationsView', () => {
     expect(listCalls()[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { limit: 50 } } })
     const r = w.get('[data-testid=res-RES000001]')
     expect(r.text()).toContain('Siti Nurhaliza')
-    expect(r.text()).toContain('2+1')
+    expect(r.text()).toContain('2 adults · 1 child')
     expect(r.get('[data-testid=room-RES000001]').text()).toBe('101')
     expect(r.text()).toContain('DLX')
     expect(r.text()).toContain('2 night(s)')
@@ -326,5 +337,77 @@ describe('ReservationsView', () => {
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: wide })
     }
+  })
+
+  it('says the party in words: "1 adult", "2 adults", "2 adults · 1 child", and in Indonesian "2 dewasa · 1 anak"', async () => {
+    const party = (adult_count: number, child_count: number, id = 1) => row({ id, confirmation_number: `RES00000${id}`, rooms: [room({ adult_count, child_count })] })
+    const w = await mountView(['reservation.read'], { data: [party(1, 0, 1), party(2, 0, 2), party(2, 1, 3), party(2, 2, 4)] })
+    const text = (id: number) => w.get(`[data-testid=res-RES00000${id}] td:nth-child(2)`).text()
+    expect(text(1)).toContain('1 adult')
+    expect(text(1)).not.toContain('1 adults')
+    expect(text(2)).toContain('2 adults')
+    expect(text(2)).not.toContain('·') // no children: nothing about them
+    expect(text(3)).toContain('2 adults · 1 child')
+    expect(text(4)).toContain('2 adults · 2 children')
+    expect(w.text()).not.toMatch(/\d\+\d/) // no "2+1" anywhere
+    mounted?.unmount()
+    setLocale('id')
+    const id = await mountView(['reservation.read'], { data: [party(2, 1, 3), party(1, 0, 1)] })
+    expect(id.get('[data-testid=res-RES000003] td:nth-child(2)').text()).toContain('2 dewasa · 1 anak')
+    expect(id.get('[data-testid=res-RES000001] td:nth-child(2)').text()).toContain('1 dewasa')
+  })
+
+  it('says the party in words in the card of a phone too', async () => {
+    await onAPhone(async () => {
+      const w = await mountView(['reservation.read'], { data: [row({ rooms: [room({ adult_count: 2, child_count: 1 })] })] })
+      expect(w.get('[data-testid=res-RES000001]').text()).toContain('2 adults · 1 child')
+    })
+  })
+
+  it('has a short bar on a phone: the search field and "Filter (n)" with the filters that are on, and every filter in a sheet from the bottom', async () => {
+    await onAPhone(async () => {
+      const w = await mountView(['reservation.read'], { data: [row()] }, '/reservations?status=CONFIRMED&arrivalFrom=2026-10-01')
+      const bar = w.get('[data-testid=filters]')
+      expect(bar.find('input[name=q]').exists()).toBe(true)
+      expect(bar.find('select[name=room_type_id]').exists()).toBe(false) // the other filters are not in the bar
+      expect(bar.get('[data-testid=open-filters]').text()).toBe('Filter(2)') // the status and the arrival date
+      await bar.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      expect(sheet.querySelector('select[name=status]')).not.toBeNull()
+      expect(sheet.querySelector('input[name=arrival_from]')).not.toBeNull()
+      expect(sheet.querySelector('select[name=room_type_id]')).not.toBeNull()
+      expect(sheet.querySelector('input[name=q]')).toBeNull() // the search is in the bar
+      // choosing a filter in the sheet searches at once and counts
+      const type = sheet.querySelector('select[name=room_type_id]') as HTMLSelectElement
+      type.value = '10'
+      type.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ room_type_id: 10 })
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(3)')
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
+
+  it('keeps the filters of a desktop as they were: all in the row, no "Filter" button', async () => {
+    const w = await mountView(['reservation.read'], { data: [row()] })
+    expect(w.find('[data-testid=open-filters]').exists()).toBe(false)
+    expect(w.get('[data-testid=filters]').find('select[name=status]').exists()).toBe(true)
+  })
+
+  it('has a card that is as short as its row: no "Company" line when there is no company, and no "Deposit" line when there is no deposit', async () => {
+    await onAPhone(async () => {
+      const w = await mountView(['reservation.read'], { data: [row()] })
+      const card = w.get('[data-testid=res-RES000001]')
+      expect(card.text()).not.toContain('Company')
+      expect(card.text()).not.toContain('Deposit')
+      expect(card.findAll('dt').map((e) => e.text())).not.toContain('Deposit')
+      w.unmount()
+      const withBoth = await mountView(['reservation.read'], { data: [row({ company_name: 'Acme Corp', deposit: { folio_id: 80, paid: '300000' } })] })
+      const full = withBoth.get('[data-testid=res-RES000001]')
+      expect(full.text()).toContain('Acme Corp')
+      expect(full.text()).toContain('300,000')
+    })
   })
 })

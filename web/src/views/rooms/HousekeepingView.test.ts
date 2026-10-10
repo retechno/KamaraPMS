@@ -211,4 +211,38 @@ describe('HousekeepingView', () => {
       document.body.innerHTML = ''
     })
   })
+
+  it('has a short bar on a phone: one "Filter (n)" button, the chips and the selects in a sheet', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update'], [room({}), room({ room_id: 2, room_number: '202', status: 'CLEAN', allowed_next: [] })])
+      await flushPromises()
+      expect(w.find('[data-testid=filter-CLEAN]').exists()).toBe(false)
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      ;(sheet.querySelector('[data-testid=filter-CLEAN]') as HTMLElement).click()
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      expect(w.find('[data-testid=room-201]').exists()).toBe(false) // filtered to the clean ones
+      expect(w.find('[data-testid=room-202]').exists()).toBe(true)
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
+
+  it('has a card that is as short as its row: no "Block" and no "Flags" line when there is neither', async () => {
+    await onAPhone(async () => {
+      const w = mountBoard(['housekeeping.update'], [room({})])
+      await flushPromises()
+      const card = w.get('[data-testid=room-201]')
+      expect(card.findAll('dt').map((e) => e.text())).toEqual(['Occupancy'])
+      expect(card.text()).not.toContain('Block')
+      expect(card.text()).not.toContain('Flags')
+      w.unmount()
+      const flagged = mountBoard(['housekeeping.update'], [room({ priority: 'HIGH', dnd: true })])
+      await flushPromises()
+      expect(flagged.get('[data-testid=room-201]').findAll('dt').map((e) => e.text())).toEqual(['Occupancy', 'Flags'])
+    })
+  })
 })

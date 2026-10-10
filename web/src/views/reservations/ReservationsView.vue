@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { CalendarPlus, GanttChart } from 'lucide-vue-next'
 import { computed, reactive, watch } from 'vue'
@@ -47,6 +48,9 @@ const can = (permission: string) => auth.can(permission, property.currentId)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const filtered = computed(() => FIELDS.some((k) => filter[k] !== ''))
 
+// How many filters are on, for the "Filter (n)" button of a phone (the search text is in the bar and is not counted).
+const activeFilters = computed(() => FIELDS.filter((k) => k !== 'q' && filter[k] !== '').length)
+
 const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, card: 'primary' as const },
   { key: 'guest_name', label: t('reservations.guest'), sortable: true, card: 'secondary' as const },
@@ -70,7 +74,12 @@ const rateText = (r: ReservationSummary): string => {
   const hi = amounts[amounts.length - 1] as string
   return Number(lo) === Number(hi) ? formatMoney(lo) : `${formatMoney(lo)} – ${formatMoney(hi)}`
 }
-const paxOf = (r: ReservationSummary) => `${r.rooms.reduce((s, l) => s + l.adult_count, 0)}+${r.rooms.reduce((s, l) => s + l.child_count, 0)}`
+/** The party in words: "2 adults", "2 adults · 1 child" (in Indonesian "2 dewasa · 1 anak"), not "2+1". */
+const paxOf = (r: ReservationSummary): string => {
+  const adults = r.rooms.reduce((s, l) => s + l.adult_count, 0)
+  const children = r.rooms.reduce((s, l) => s + l.child_count, 0)
+  return [t('reservations.paxAdults', { n: adults }, adults), ...(children > 0 ? [t('reservations.paxChildren', { n: children }, children)] : [])].join(' · ')
+}
 
 const actionsOf = (r: ReservationSummary): ReservationAction[] =>
   reservationActions(
@@ -172,10 +181,14 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" role="search" novalidate data-testid="filters" @submit.prevent="search">
-      <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" data-testid="filters" :active="activeFilters" @submit="search">
+      <template #search>
+        <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
         <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('reservations.searchPlaceholder')" /></template>
       </FormField>
+      </template>
+
+      
       <FormField class="w-40" :label="t('reservations.status')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="filter.status" name="status">
@@ -220,9 +233,11 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           </NativeSelect>
         </template>
       </FormField>
-      <Button type="submit" :disabled="loading">{{ t('reservations.search') }}</Button>
+      <template #actions>
+        <Button type="submit" :disabled="loading">{{ t('reservations.search') }}</Button>
       <Button v-if="filtered" type="button" variant="outline" data-testid="clear-filters" @click="clear">{{ t('dataTable.clearFilters') }}</Button>
-    </form>
+      </template>
+    </FilterBar>
 
     <DataTable
       v-if="!error || searched"
@@ -268,9 +283,9 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <div :data-testid="`company-${row.confirmation_number}`">{{ companyOf(row) || '—' }}</div>
         <div v-if="billingCompanies(row).length" class="text-xs text-muted-foreground" :data-testid="`billing-${row.confirmation_number}`">{{ t('reservations.billedTo', { names: billingCompanies(row).join(', ') }) }}</div>
       </template>
-      <template #cell-status="{ row }">
+      <template #cell-status="{ row, card }">
         <StatusBadge domain="reservation" :status="String(uiStatus(row.display_status))" :title="row.status === 'DRAFT' ? t('reservations.noInventory') : undefined" />
-        <div class="mt-0.5 text-xs text-muted-foreground tabular-nums">
+        <div v-if="row.deposit || !card" class="mt-0.5 text-xs text-muted-foreground tabular-nums">
           {{ t('reservations.deposit') }}
           <span v-if="row.deposit" :data-testid="`deposit-${row.confirmation_number}`">{{ $money(row.deposit.paid) }}</span>
           <span v-else :data-testid="`deposit-${row.confirmation_number}`">—</span>

@@ -178,6 +178,55 @@ describe('DataTable: a table read a page at a time', () => {
       expect(card.find('[data-testid=extra]').exists()).toBe(true) // from the same slot as the table
     })
 
+    it('leaves out a line whose value is empty, null or a dash, so a card is as short as its row', async () => {
+      setWidth(400)
+      const plain: Column<Row & { note?: string | null; tag?: string }>[] = [
+        { key: 'number', label: 'Number', card: 'primary' },
+        { key: 'note', label: 'Note' },
+        { key: 'tag', label: 'Tag' },
+        { key: 'empty', label: 'Nothing' },
+        { key: 'drawn', label: 'Drawn' },
+        { key: 'dash', label: 'Dash' },
+        { key: 'component', label: 'Component' },
+      ]
+      const data = [
+        { id: 1, number: 'R1', guest: '', rate: '0', status: '', note: 'Late arrival', tag: undefined },
+        { id: 2, number: 'R2', guest: '', rate: '0', status: '', note: null, tag: '—' },
+        { id: 3, number: 'R3', guest: '', rate: '0', status: '', note: '', tag: 'VIP' },
+      ]
+      const { w } = await mountTable({ cards: true, columns: plain, rows: data }, {
+        'cell-drawn': '<small v-if="false">never</small>', // draws nothing
+        'cell-dash': '<span>—</span>',
+        'cell-component': '<b data-testid="comp">x</b>',
+      })
+      const labels = (n: string) => w.findAll(`[data-testid=row-${n}] dt`).map((e) => e.text())
+      expect(labels('R1')).toEqual(['Note', 'Component']) // a value, and a cell that draws something
+      expect(labels('R2')).toEqual(['Component']) // null, a dash, nothing drawn: none of them
+      expect(labels('R3')).toEqual(['Tag', 'Component']) // an empty string is left out
+      expect(w.get('[data-testid=row-R2]').text()).not.toContain('Note')
+      expect(w.get('[data-testid=row-R2]').text()).not.toContain('Dash')
+    })
+
+    it('leaves out an empty title, line, mark or amount as well, and shows the full table with its dashes', async () => {
+      setWidth(400)
+      const withEmpty = [{ id: 1, number: 'R1', guest: '', rate: '', status: '' }]
+      const { w } = await mountTable({ cards: true, rows: withEmpty })
+      const card = w.get('[data-testid=row-R1]')
+      expect(card.find('p.font-semibold').exists()).toBe(false) // no amount, no bold line
+      expect(card.text()).toBe('R1')
+      w.unmount()
+      setWidth(1280)
+      const table = await mountTable({ cards: true, rows: withEmpty })
+      expect(table.w.get('[data-testid=row-R1]').text()).toContain('—') // the table keeps its dashes: a column is a column
+    })
+
+    it('shows a balance as "credit" when it is negative (format "balance")', async () => {
+      const bal: Column<{ id: number; balance: string }>[] = [{ key: 'balance', label: 'Balance', format: 'balance' }]
+      const { w } = await mountTable({ columns: bal, rows: [{ id: 1, balance: '-500000' }, { id: 2, balance: '120000' }], rowTestId: (r: { id: number }) => `b-${r.id}` })
+      expect(w.get('[data-testid=b-1]').text()).toBe('500,000 credit')
+      expect(w.get('[data-testid=b-2]').text()).toBe('120,000')
+    })
+
     it('leaves out the columns that are hidden on a phone, and the column of actions', async () => {
       setWidth(400)
       const { w } = await mountTable({ cards: true, columns: columns.map((c) => (c.key === 'extra' ? { ...c, hideOnMobile: true } : c)) })
@@ -245,7 +294,7 @@ describe('DataTable: a table read a page at a time', () => {
     it('opens the page from a card too', async () => {
       setWidth(400)
       const { w, router } = await mountTable({ cards: true, rowTo: (r: Row) => `/rows/${r.id}` })
-      await w.get('[data-testid=row-R3] dl').trigger('click')
+      await w.get('[data-testid=row-R3]').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.path).toBe('/rows/3')
     })

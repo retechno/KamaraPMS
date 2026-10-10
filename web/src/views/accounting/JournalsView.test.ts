@@ -214,4 +214,25 @@ describe('JournalsView', () => {
       w.unmount()
     })
   })
+
+  it('has a short bar on a phone: the search, and "Filter (n)" for the dates and the type', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('input[name=q]').exists()).toBe(true)
+      expect(w.find('input[name=from]').exists()).toBe(false)
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const type = sheet.querySelector('select[name=type]') as HTMLSelectElement
+      type.value = 'MANUAL'
+      type.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      expect(sheet.querySelector('[data-testid=apply]')).not.toBeNull() // the button of the page is in the sheet
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
 })

@@ -191,4 +191,26 @@ describe('AuditTrailView', () => {
     expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
     expect(w.get('[data-testid=more]').text()).toBe('Load more')
   })
+
+  it('has a short bar on a phone: the document number, and "Filter (n)" for the entity, action, user and dates', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      const bar = w.get('[data-testid=filters]')
+      expect(bar.find('input[name=document]').exists()).toBe(true)
+      expect(bar.find('select[name=entity_type]').exists()).toBe(false)
+      expect(bar.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await bar.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      for (const name of ['entity_type', 'action', 'user_id', 'from', 'to']) expect(sheet.querySelector(`[name=${name}]`), name).not.toBeNull()
+      const entity = sheet.querySelector('select[name=entity_type]') as HTMLSelectElement
+      entity.value = 'stay'
+      entity.dispatchEvent(new Event('change'))
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
 })

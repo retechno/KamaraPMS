@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
@@ -50,6 +51,9 @@ const cardActions = (r: TreeRow): RowAction[] =>
         ...(!r.account.in_use ? [{ key: 'delete', label: t('common.delete'), destructive: true, testId: `delete-${r.account.code}`, onSelect: () => void remove(r.account) }] : []),
       ]
     : []
+
+// Account headers are shown to begin with: hiding them is the filter that is on.
+const activeFilters = computed(() => (filter.type ? 1 : 0) + (filter.headers ? 0 : 1) + (filter.inactive ? 1 : 0))
 
 const columns = computed<Column<TreeRow>[]>(() => [
   { key: 'code', label: t('accountingBooks.code'), card: 'primary' as const },
@@ -334,10 +338,14 @@ watch(() => pid.value, () => {
 
     <Card>
       <CardContent class="pt-4">
-        <form class="mb-4 flex flex-wrap items-end gap-4" novalidate @submit.prevent>
-          <FormField class="w-64" :label="t('accountingBooks.search')">
+        <FilterBar class="mb-4 flex flex-wrap items-end gap-4" :active="activeFilters">
+      <template #search>
+        <FormField class="w-64" :label="t('accountingBooks.search')">
             <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('accountingBooks.codeOrName')" /></template>
           </FormField>
+      </template>
+
+          
           <FormField class="w-48" :label="t('accountingBooks.type')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="filter.type" name="filter_type">
@@ -348,7 +356,7 @@ watch(() => pid.value, () => {
           </FormField>
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.headers" name="headers" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showHeaders') }}</span></label>
           <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="filter.inactive" name="inactive" type="checkbox" class="size-4 accent-primary" /><span>{{ t('accountingBooks.showInactive') }}</span></label>
-        </form>
+    </FilterBar>
         <EmptyState v-if="loaded && !visible.length" :title="t('accountingBooks.coaEmpty')" data-testid="empty" />
         <DataTable
           v-else

@@ -249,4 +249,26 @@ describe('ChartOfAccountsView', () => {
       w.unmount()
     })
   })
+
+  it('has a short bar on a phone: the search and "Filter (n)"; the type and the two boxes are in the sheet, which has a "Done" button', async () => {
+    await onAPhone(async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('input[name=q]').exists()).toBe(true)
+      expect(w.find('select[name=filter_type]').exists()).toBe(false)
+      expect(w.get('[data-testid=open-filters]').text()).toBe('Filter')
+      await w.get('[data-testid=open-filters]').trigger('click')
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid=filter-sheet]')!
+      const inactive = sheet.querySelector('input[name=inactive]') as HTMLInputElement
+      inactive.click()
+      await flushPromises()
+      expect(w.get('[data-testid=filter-count]').text()).toBe('(1)')
+      ;(sheet.querySelector('[data-testid=filters-done]') as HTMLButtonElement).click()
+      await flushPromises()
+      expect(document.body.querySelector('[data-testid=filter-sheet]')).toBeNull()
+      w.unmount()
+      document.body.innerHTML = ''
+    })
+  })
 })
