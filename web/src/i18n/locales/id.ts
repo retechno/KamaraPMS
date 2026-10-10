@@ -3540,6 +3540,12 @@ export const id: Messages = {
     loans_received_and_repaid: 'Pinjaman diterima dan dilunasi',
     capital_contributed_and_drawings: 'Modal disetor dan prive',
   },
+  periods: {
+    quick: 'Periode cepat',
+    thisMonth: 'Bulan ini',
+    lastMonth: 'Bulan lalu',
+    fiscalYear: 'Tahun buku berjalan',
+  },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Akuntansi belum disiapkan untuk properti ini.',
     ACCOUNT_HAS_CHILDREN: 'Akun yang punya akun di bawahnya tidak bisa menerima posting.',

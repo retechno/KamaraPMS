@@ -3541,6 +3541,12 @@ export const en = {
     loans_received_and_repaid: 'Loans received and repaid',
     capital_contributed_and_drawings: 'Capital contributed and drawings',
   },
+  periods: {
+    quick: 'Quick periods',
+    thisMonth: 'This month',
+    lastMonth: 'Last month',
+    fiscalYear: 'Fiscal year to date',
+  },
   errors: {
     ACCOUNTING_NOT_SET_UP: 'Accounting is not set up for this property.',
     ACCOUNT_HAS_CHILDREN: 'An account with accounts under it cannot take postings.',

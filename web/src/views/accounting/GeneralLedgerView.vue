@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useReportPeriod } from '@/composables/useReportPeriod'
+import PeriodPicks from '@/components/app/PeriodPicks.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -45,6 +47,7 @@ const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const postable = computed(() => accounts.value.filter((a) => a.is_postable))
 const query = () => ({ from: form.from || undefined, to: form.to || undefined })
+const period = useReportPeriod(form, () => load())
 
 async function loadAccounts(): Promise<void> {
   const propertyId = pid.value
@@ -64,6 +67,7 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/accounts/{id}/ledger', { params: { path: { propertyId, id: form.account }, query: query() } })
     report.value = data ?? null
+    period.adopt(data)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -120,6 +124,7 @@ watch(() => pid.value, () => {
         </FormField>
         <FormField float-hint :hint="$weekday(form.from)" :label="t('accountingBooks.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(form.to)" :label="t('accountingBooks.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+        <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         <Button type="submit" variant="outline" :disabled="busy || !form.account" data-testid="apply">{{ t('accountingBooks.show') }}</Button>
       </form>
     </Card>

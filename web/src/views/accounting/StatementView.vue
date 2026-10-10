@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useReportPeriod } from '@/composables/useReportPeriod'
+import PeriodPicks from '@/components/app/PeriodPicks.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { formatDate, formatMoney } from '@/utils/format'
 import { computed, reactive, ref, watch } from 'vue'
@@ -36,6 +38,7 @@ const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
 const form = reactive({ from: '', to: '', as_of: '', method: 'INDIRECT' })
+const period = useReportPeriod(form, () => load())
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
@@ -51,6 +54,7 @@ async function load(): Promise<void> {
         params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined, method: form.method === 'DIRECT' ? 'DIRECT' : undefined } },
       })
       const cf = data as CashFlow | undefined
+      period.adopt(cf)
       lines.value = cf?.lines ?? []
       heading.value = cf ? t('statements.rangeIncome', { from: formatDate(cf.from), to: formatDate(cf.to) }) : ''
       imbalance.value = cf && !cf.reconciled ? cf.difference : ''
@@ -58,11 +62,13 @@ async function load(): Promise<void> {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/income-statement', {
         params: { path: { propertyId }, query: { from: form.from || undefined, to: form.to || undefined } },
       })
+      period.adopt(data)
       lines.value = data?.lines ?? []
       heading.value = data ? t('statements.rangeIncome', { from: formatDate(data.from), to: formatDate(data.to) }) : ''
       imbalance.value = ''
     } else {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/balance-sheet', { params: { path: { propertyId }, query: { as_of: form.as_of || undefined } } })
+      if (data) form.as_of ||= data.as_of
       lines.value = data?.lines ?? []
       heading.value = data ? t('statements.rangeBalance', { date: formatDate(data.as_of) }) : ''
       imbalance.value = data && Number(data.difference) !== 0 ? data.difference : ''
@@ -138,6 +144,7 @@ watch([() => pid.value, income, cashFlow], () => {
               </NativeSelect>
             </template>
           </FormField>
+          <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         </template>
         <FormField float-hint :hint="$weekday(form.as_of)" v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>

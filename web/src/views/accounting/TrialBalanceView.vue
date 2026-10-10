@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useReportPeriod } from '@/composables/useReportPeriod'
+import PeriodPicks from '@/components/app/PeriodPicks.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
@@ -27,6 +29,7 @@ const range = reactive({ from: '', to: '' })
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const query = () => ({ from: range.from || undefined, to: range.to || undefined })
+const period = useReportPeriod(range, () => load())
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -36,6 +39,7 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/accounting/trial-balance', { params: { path: { propertyId }, query: query() } })
     report.value = data ?? null
+    period.adopt(data)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -88,6 +92,7 @@ watch(() => pid.value, () => {
       <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
         <FormField float-hint :hint="$weekday(range.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(range.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+        <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
     </Card>
