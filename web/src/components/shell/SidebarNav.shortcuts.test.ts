@@ -92,6 +92,12 @@ describe('SidebarNav: pinned and recent pages', () => {
     expect(list()).not.toBe('none')
   })
 
+  it('does not list the page the person is on, nor a pinned page, among the last opened', async () => {
+    localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard', 'guests'], recent: ['groups', 'guests', 'reservations', 'dashboard'] }))
+    const { w } = await mountNav({ path: '/groups' })
+    expect(texts(w, '[data-testid=section-recent] a')).toEqual(['Reservations'])
+  })
+
   it('speaks Indonesian', async () => {
     localStorage.setItem('pms.nav.1', JSON.stringify({ recent: ['guests'] }))
     setLocale('id')

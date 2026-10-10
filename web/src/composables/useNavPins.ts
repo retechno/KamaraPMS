@@ -71,7 +71,15 @@ export function useNavPins() {
   )
   const visible = (id: string): ActiveNav | undefined => nav.byId(id)
   const pinned = computed<ActiveNav[]>(() => pinIds.value.map(visible).filter((x): x is ActiveNav => !!x))
-  const recent = computed<ActiveNav[]>(() => (stored.value.recent ?? []).map(visible).filter((x): x is ActiveNav => !!x).slice(0, RECENT_LIMIT))
+  // The pages opened last, without the page the person is on and without the pinned ones: those are in the menu already, and the list is for getting back to the others.
+  const here = computed(() => (route ? activeNav(route.path, nav.sections.value)?.item.id : undefined))
+  const recent = computed<ActiveNav[]>(() =>
+    (stored.value.recent ?? [])
+      .filter((id) => id !== here.value && !pinIds.value.includes(id))
+      .map(visible)
+      .filter((x): x is ActiveNav => !!x)
+      .slice(0, RECENT_LIMIT),
+  )
   const showRecent = computed(() => stored.value.showRecent ?? true)
 
   const isPinned = (id: string): boolean => pinIds.value.includes(id)

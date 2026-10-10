@@ -47,6 +47,16 @@ describe('PageHeader: the pin', () => {
     expect(JSON.parse(localStorage.getItem('pms.nav.1')!).pins).not.toContain('guests')
   })
 
+  it('draws the pin filled when the page is pinned, and as an outline when it is not', async () => {
+    const w = await mountHeader('/guests')
+    expect(w.get('[data-testid=pin-icon]').attributes('data-filled')).toBe('false')
+    expect(w.get('[data-testid=pin-icon]').attributes('fill')).toBe('none')
+    await w.get('[data-testid=pin-page]').trigger('click')
+    expect(w.get('[data-testid=pin-icon]').attributes('data-filled')).toBe('true')
+    expect(w.get('[data-testid=pin-icon]').attributes('fill')).toBe('currentColor')
+    expect(w.get('[data-testid=pin-page]').attributes('aria-pressed')).toBe('true')
+  })
+
   it('shows a page that is pinned already (a default one) as pinned', async () => {
     const w = await mountHeader('/room-status')
     expect(w.get('[data-testid=pin-page]').attributes('aria-pressed')).toBe('true')

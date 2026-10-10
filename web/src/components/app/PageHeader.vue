@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pin, PinOff } from 'lucide-vue-next'
+import { Pin } from 'lucide-vue-next'
 import { computed, inject, type HTMLAttributes } from 'vue'
 import { routeLocationKey } from 'vue-router'
 import { useNavPins } from '@/composables/useNavPins'
@@ -44,8 +44,8 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
           data-testid="pin-page"
           @click="pins.togglePin(item.id)"
         >
-          <PinOff v-if="pinned" class="size-4" aria-hidden="true" />
-          <Pin v-else class="size-4" aria-hidden="true" />
+          <!-- a pinned page has the pin filled; the pin of a page that is not is an outline -->
+          <Pin class="size-4" :fill="pinned ? 'currentColor' : 'none'" aria-hidden="true" data-testid="pin-icon" :data-filled="pinned" />
         </button>
         <slot name="marks" />
       </div>

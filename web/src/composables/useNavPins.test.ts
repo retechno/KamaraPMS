@@ -123,15 +123,23 @@ describe('useNavPins', () => {
     })
 
     it('leaves out a page whose permission the person does not have, and brings it back when they have it', async () => {
-      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['performance', 'dashboard'], recent: ['performance'] }))
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['performance', 'dashboard'] }))
       const without = await setup({ permissions: [] })
       expect(ids(without.pinned.value)).toEqual(['dashboard'])
-      expect(ids(without.recent.value)).toEqual([])
       wrapper!.unmount()
       resetNavPins()
       const manager = await setup({ permissions: ['report.view'] })
       expect(ids(manager.pinned.value)).toEqual(['performance', 'dashboard'])
-      expect(ids(manager.recent.value)).toEqual(['performance'])
+
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard'], recent: ['performance'] }))
+      wrapper!.unmount()
+      resetNavPins()
+      const noRecent = await setup({ permissions: [] })
+      expect(ids(noRecent.recent.value)).toEqual([])
+      wrapper!.unmount()
+      resetNavPins()
+      const managerRecent = await setup({ permissions: ['report.view'] })
+      expect(ids(managerRecent.recent.value)).toEqual(['performance'])
     })
 
     it('does not track a page that is not in the menu', async () => {
@@ -154,6 +162,17 @@ describe('useNavPins', () => {
       pins.track('/groups')
       expect(ids(pins.recent.value)[0]).toBe('groups')
       expect(ids(pins.recent.value).filter((x) => x === 'groups')).toHaveLength(1)
+    })
+
+    it('does not list the page the person is on, nor a page that is pinned', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard', 'guests'], recent: ['dashboard', 'guests', 'groups', 'reservations'] }))
+      const pins = await setup() // the page is "/", the dashboard
+      expect(ids(pins.recent.value)).toEqual(['groups', 'reservations'])
+      // pinning a page takes it off the list, unpinning brings it back
+      pins.togglePin('groups')
+      expect(ids(pins.recent.value)).toEqual(['reservations'])
+      pins.togglePin('groups')
+      expect(ids(pins.recent.value)).toEqual(['groups', 'reservations'])
     })
 
     it('counts a page below a page of the menu as that page', async () => {
