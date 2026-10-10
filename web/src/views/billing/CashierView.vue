@@ -7,6 +7,7 @@ import { ApiError } from '@/api/problem'
 import type { MethodTotal, Payment } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -105,7 +106,7 @@ watch(businessDate, () => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" :inline="!searched" />
   <p v-if="property.currentId === null" class="muted">{{ t('cashier.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('cashier.noAccess') }}</p>
 

@@ -6,6 +6,7 @@ import type { Approval, Cashier, CashierHandover, CashierSettings, CashierShift,
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -270,7 +271,7 @@ watch(() => move.kind, (k) => {
 <template>
   <PageHeader :title="t('shifts.title')" :description="canSee ? t('shifts.intro') : undefined" />
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" :inline="!loaded" />
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!canSee" class="muted" data-testid="no-access">{{ t('shifts.noAccess', { permission: 'cashier.shift' }) }}</p>

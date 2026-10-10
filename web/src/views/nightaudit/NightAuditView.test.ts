@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { toastText } from '@/test/toasts'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -113,7 +114,8 @@ describe('NightAuditView', () => {
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'NO_SHOW_SET_CHANGED', detail: 'changed' }))
     await w.get('[data-testid=noshow-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=form-error]').text()).toContain('NO_SHOW_SET_CHANGED')
+    expect(w.find('[data-testid=form-error]').exists()).toBe(false) // a toast, the list is refreshed
+    expect(toastText()).toContain('changed')
     expect(GET.mock.calls.length).toBe(2)
   })
 

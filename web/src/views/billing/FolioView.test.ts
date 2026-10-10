@@ -2,6 +2,7 @@ import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { toastText } from '@/test/toasts'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -276,7 +277,8 @@ describe('FolioView', () => {
     openPdf.mockRejectedValue(new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'no' }))
     await p.get('[data-testid=print-invoice]').trigger('click')
     await flushPromises()
-    expect(p.get('[data-testid=form-error]').text()).toContain('PERMISSION_DENIED')
+    expect(p.find('[data-testid=form-error]').exists()).toBe(false)
+    expect(toastText()).toContain('no')
   })
 
   it('transfers part of the balance to a company with an Idempotency-Key', async () => {
@@ -309,7 +311,8 @@ describe('FolioView', () => {
     await w.get('input[name=transfer_amount]').setValue('15000')
     await w.get('[data-testid=transfer-form]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=form-error]').text()).toContain('CREDIT_LIMIT_EXCEEDED')
+    expect(w.find('[data-testid=form-error]').exists()).toBe(false)
+    expect(toastText()).toContain('above its credit limit')
     expect(mountView().find('[data-testid=transfer-form]').exists()).toBe(false)
     const closed = mountView(folio({ status: 'CLOSED' }), [...ALL, 'cityledger.transfer'])
     await flushPromises()

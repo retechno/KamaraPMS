@@ -6,6 +6,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { NightAuditPreview, NightAuditResult } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -24,6 +25,8 @@ const property = usePropertyStore()
 const preview = ref<NightAuditPreview | null>(null)
 const result = ref<NightAuditResult | null>(null)
 const error = ref<ApiError | null>(null)
+/** The failure of the run itself stays on the page: closing the day is the one refusal that has to be read and acted on, where the steps below show what blocks it. The other failures are toasts. */
+const failedRun = ref(false)
 const notice = ref('')
 const busy = ref(false)
 const confirmRun = ref(false)
@@ -80,6 +83,7 @@ async function markNoShows(): Promise<void> {
   if (propertyId === null || !preview.value) return
   busy.value = true
   error.value = null
+  failedRun.value = false
   notice.value = ''
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/night-audit/no-shows', {
@@ -103,6 +107,7 @@ async function run(): Promise<void> {
   if (propertyId === null || !preview.value) return
   busy.value = true
   error.value = null
+  failedRun.value = true
   notice.value = ''
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/night-audit/run', {
@@ -143,7 +148,7 @@ watch(pid, () => {
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" :inline="failedRun" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('nightAudit.selectProperty') }}</p>
   <p v-else-if="!can('nightaudit.run')" class="muted" data-testid="no-access">{{ t('nightAudit.noAccess') }}</p>

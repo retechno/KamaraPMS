@@ -9,6 +9,7 @@ import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, Pay
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
+import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -345,7 +346,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </template>
   </PageHeader>
 
-  <p v-if="error" class="alert" role="alert" data-testid="form-error">{{ error.message }} <code>{{ error.code }}</code></p>
+  <ErrorNotice :error="error" :inline="!folio" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
   <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">{{ t('folio.noAccess') }}</p>
