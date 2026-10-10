@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { watch } from 'vue'
+import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { routeTitle } from '@/utils/routeTitle'
 import HomeView from '@/views/HomeView.vue'
 
 declare module 'vue-router' {
@@ -226,6 +229,12 @@ router.beforeEach(async (to) => {
   return true
 })
 
+// The title of the tab follows the page and the language.
+const setTitle = (to: Parameters<typeof routeTitle>[0]): void => {
+  const title = routeTitle(to)
+  document.title = title ? `${title} · KamaraPMS` : 'KamaraPMS'
+}
+watch(() => i18n.global.locale.value, () => setTitle(router.currentRoute.value))
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${to.meta.title} · KamaraPMS` : 'KamaraPMS'
+  setTitle(to)
 })

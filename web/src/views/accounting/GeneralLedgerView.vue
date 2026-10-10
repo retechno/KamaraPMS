@@ -112,7 +112,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('accountingBooks.glNoAccess', { permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-4 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
         <FormField class="w-80" :label="t('accountingBooks.account')">
           <template #default="{ id }">
             <Combobox :id="id" v-model="form.account" name="account" :options="[{ value: 0, label: `${t('accountingBooks.chooseAccount')}` }, ...postable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />

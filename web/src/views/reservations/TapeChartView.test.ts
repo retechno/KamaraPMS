@@ -93,7 +93,7 @@ describe('TapeChartView', () => {
     setLocale('id')
     const w = mountView()
     await flushPromises()
-    expect(w.get('h1').text()).toBe('Tape chart')
+    expect(w.get('h1').text()).toBe('Bagan kamar')
     expect(w.get('[data-testid=unassigned-DLX]').text()).toContain('1 pemesanan')
     expect(w.get('table').text()).toContain('Belum ditetapkan')
     expect(w.get('select').findAll('option').map((o) => o.text())).toEqual(['14 hari', '28 hari'])

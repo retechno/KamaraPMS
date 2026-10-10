@@ -171,7 +171,7 @@ watch(pid, () => {
 
   <template v-else>
     <Card class="mb-4">
-      <form class="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
+      <form class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="filters" @submit.prevent="load()">
         <FormField :label="t('audit.entity')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="filter.entity_type" name="entity_type">

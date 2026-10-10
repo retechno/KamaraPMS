@@ -112,7 +112,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('departments.noAccess', { permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-4 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="load">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="load">
         <FormField float-hint :hint="$weekday(form.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(form.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
         <FormField :label="t('departments.title')">

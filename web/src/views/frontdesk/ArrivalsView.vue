@@ -183,7 +183,7 @@ watch(() => props.refresh, restart)
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessArrivals') }}</p>
 
   <template v-else>
-    <form class="mb-3 flex flex-wrap items-end gap-3 pb-5" novalidate data-testid="arrival-filters" @submit.prevent>
+    <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="arrival-filters" @submit.prevent>
       <FormField float-hint :hint="$weekday(shownDate)" class="w-44" :label="t('frontDesk.page.arrival')">
         <template #default="{ id }"><Input :id="id" v-model="shownDate" name="date" type="date" /></template>
       </FormField>

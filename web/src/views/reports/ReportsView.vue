@@ -107,7 +107,7 @@ watch([key, pid], () => {
 
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-4 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="run">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="run">
         <FormField class="w-72" :label="t('reports.report')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="key" name="report">

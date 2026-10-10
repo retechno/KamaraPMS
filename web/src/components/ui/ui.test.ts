@@ -94,6 +94,13 @@ describe('ui: card, form controls, tabs and sheet', () => {
     expect(w.get('[data-testid=tb]').attributes('data-state')).toBe('active')
   })
 
+  it('lets a row of tabs that is wider than the screen scroll inside itself instead of widening the page', async () => {
+    const { Tabs, TabsList, TabsTrigger } = await import('./tabs')
+    const w = mount({ components: { Tabs, TabsList, TabsTrigger }, template: '<Tabs default-value="a"><TabsList><TabsTrigger value="a">A</TabsTrigger></TabsList></Tabs>' })
+    expect(w.get('[data-slot=tabs-list]').classes()).toEqual(expect.arrayContaining(['max-w-full', 'overflow-x-auto']))
+    expect(w.get('[data-slot=tabs-trigger]').classes()).toContain('shrink-0')
+  })
+
   it('draws a skeleton as decoration only', async () => {
     const { Skeleton } = await import('./skeleton')
     expect(mount(Skeleton).attributes('aria-hidden')).toBe('true')

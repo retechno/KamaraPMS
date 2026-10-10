@@ -9,6 +9,7 @@ import type { LayoutMode } from '@/composables/useLayoutMode'
 import { activeNav, visibleNavigation } from '@/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { routeTitle } from '@/utils/routeTitle'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
 
 const props = defineProps<{ mode: LayoutMode; collapsed: boolean; canCollapse: boolean }>()
@@ -23,7 +24,7 @@ const locale = computed(() => i18n.global.locale.value)
 // "Section / Page" of the current route; a page outside the menu (a detail page) shows the title of its route.
 const crumbs = computed(() => {
   const hit = activeNav(route.path, visibleNavigation(auth.isAdmin))
-  if (!hit) return [String(route.meta.title ?? '')].filter(Boolean)
+  if (!hit) return [routeTitle(route)].filter(Boolean)
   return [t(`nav.sections.${hit.section.id}` as never), t(`nav.items.${hit.item.id}` as never)]
 })
 

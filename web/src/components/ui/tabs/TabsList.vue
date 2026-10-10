@@ -8,7 +8,7 @@ const props = defineProps<TabsListProps & { class?: HTMLAttributes['class'] }>()
 </script>
 
 <template>
-  <TabsList data-slot="tabs-list" :loop="loop" :as="as" :as-child="asChild" :class="cn('inline-flex w-fit items-center gap-1 rounded-lg bg-muted p-1', props.class)">
+  <TabsList data-slot="tabs-list" :loop="loop" :as="as" :as-child="asChild" :class="cn('inline-flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1', props.class)">
     <slot />
   </TabsList>
 </template>

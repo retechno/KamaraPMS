@@ -61,12 +61,17 @@ describe('FrontDeskView', () => {
 
   it('has the page title, the business date and the three tabs with their counts', async () => {
     await mountDesk()
-    expect(mounted!.get('h1').text()).toBe('Front desk')
+    expect(mounted!.get('h1').text()).toBe('Arrivals') // titled like the menu item of the open tab
     expect(mounted!.get('[data-testid=front-desk-date]').text()).toBe('30 Sep 2026')
     expect(mounted!.get('[data-testid=tab-arrivals]').text()).toContain('Arrivals')
     expect(mounted!.get('[data-testid=count-arrivals]').text()).toBe('2')
     expect(mounted!.get('[data-testid=count-in-house]').text()).toBe('3+') // more than the first page
     expect(mounted!.get('[data-testid=count-departures]').text()).toBe('1')
+  })
+
+  it('is titled like the menu item of the tab that is open', async () => {
+    await mountDesk('in-house')
+    expect(mounted!.get('h1').text()).toBe('In-house')
   })
 
   it('shows the tab of its route and only that one', async () => {

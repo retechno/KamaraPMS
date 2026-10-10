@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { statementTitle } from '@/utils/statementTitle'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -221,12 +222,12 @@ watch(() => form.year_start, () => { form.budget_id = '' })
               <tbody>
                 <template v-for="l in report.lines" :key="l.key">
                   <tr v-if="l.kind === 'HEADING'" :data-testid="`line-${l.key}`">
-                    <th colspan="9" class="pb-1 pt-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ l.title }}</th>
+                    <th colspan="9" class="pb-1 pt-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ statementTitle(l.title) }}</th>
                   </tr>
                   <template v-else>
                     <template v-if="l.kind === 'GROUP'">
                       <tr :data-testid="`line-${l.key}`" class="border-b border-border">
-                        <td class="py-1.5 pr-2 font-medium">{{ l.title }}</td>
+                        <td class="py-1.5 pr-2 font-medium">{{ statementTitle(l.title) }}</td>
                         <td v-if="l.accounts.length === 1" colspan="8" class="border-l border-border" />
                         <template v-else>
                           <td class="border-l border-border px-2 text-right tabular-nums">{{ bothZero(l.period) ? '' : amount(l.period.actual) }}</td>
@@ -242,7 +243,7 @@ watch(() => form.year_start, () => { form.budget_id = '' })
                     </template>
                     <template v-else>
                       <tr :class="l.kind === 'TOTAL' ? 'border-t-2 border-foreground' : 'border-t border-foreground'" :data-testid="`line-${l.key}`">
-                        <td class="py-1.5 pr-2"><b>{{ l.title }}</b></td>
+                        <td class="py-1.5 pr-2"><b>{{ statementTitle(l.title) }}</b></td>
                         <td class="border-l border-border px-2 text-right tabular-nums"><b>{{ amount(l.period.actual) }}</b></td>
                         <td class="px-2 text-right tabular-nums"><b>{{ amount(l.period.budget) }}</b></td>
                         <td class="px-2 text-right tabular-nums" :class="tone(l.period)" :data-testid="`variance-${l.key}`"><b>{{ amount(l.period.variance) }}</b> <small v-if="verdict(l.period)">{{ verdict(l.period) }}</small></td>
