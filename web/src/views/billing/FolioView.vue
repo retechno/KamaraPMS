@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { statusText } from '@/utils/status'
 import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -398,7 +399,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       >
         <template #cell-description="{ row: i }">
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
-          <small class="ml-1 text-muted-foreground">{{ i.transaction_type }}</small>
+          <small class="ml-1 text-muted-foreground">{{ statusText(i.transaction_type) }}</small>
         </template>
         <template #cell-group_code="{ row: i }">
           <NativeSelect v-if="groupable(i)" class="w-auto" :model-value="i.group_code" :name="`group_${i.id}`" :data-testid="`item-group-${i.id}`" :aria-label="t('folio.group')" :disabled="busy" @update:model-value="moveToGroup(i, String($event))">

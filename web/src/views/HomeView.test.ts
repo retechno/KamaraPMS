@@ -12,9 +12,14 @@ import HomeView from './HomeView.vue'
 let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...args: unknown[]) => GET(...args) } }))
 
-function mountView() {
+// The health endpoints answer ok; the manager dashboard (which an administrator also loads) has nothing to show here.
+const okExceptDashboard = async (path: string) => ({ data: path.endsWith('/dashboard') ? null : { status: 'ok' } })
+
+function mountView(admin = true) {
   const pinia = createPinia()
   setActivePinia(pinia)
+  // The status of the system is for the administrator.
+  useAuthStore().me = { user: { id: 5, email: 'a@hotel.com', is_tenant_admin: admin }, properties: [] } as never
   return mount(HomeView, { global: { plugins: [pinia] } })
 }
 
@@ -23,8 +28,16 @@ describe('HomeView system status', () => {
     GET = vi.fn()
   })
 
+  it('shows no system status, and makes no health check, to staff who are not administrators', async () => {
+    GET.mockImplementation(okExceptDashboard)
+    const wrapper = mountView(false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid=system-status-card]').exists()).toBe(false)
+    expect(GET).not.toHaveBeenCalledWith('/healthz')
+  })
+
   it('shows API and database as operational', async () => {
-    GET.mockResolvedValue({ data: { status: 'ok' } })
+    GET.mockImplementation(okExceptDashboard)
     const wrapper = mountView()
     await flushPromises()
     expect(GET).toHaveBeenCalledWith('/healthz')
@@ -63,11 +76,11 @@ describe('HomeView system status', () => {
     expect(wrapper.get('[role=alert]').text()).toContain('NETWORK_ERROR')
   })
 
-  async function mountWith(permissions: string[], clock: object | null = { business_date: '2026-09-30', property_local_time: '2026-09-30T20:00:00+07:00', timezone: 'Asia/Jakarta', night_audit_allowed: false, night_audit_overdue: false }) {
-    GET.mockResolvedValue({ data: { status: 'ok' } })
+  async function mountWith(permissions: string[], clock: object | null = { business_date: '2026-09-30', property_local_time: '2026-09-30T20:00:00+07:00', timezone: 'Asia/Jakarta', night_audit_allowed: false, night_audit_overdue: false }, admin = false) {
+    GET.mockImplementation(okExceptDashboard)
     const pinia = createPinia()
     setActivePinia(pinia)
-    useAuthStore().me = { user: { id: 1, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
+    useAuthStore().me = { user: { id: 1, email: 'a@b.c', is_tenant_admin: admin }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
     const property = usePropertyStore()
     property.loaded = true
     property.properties = [{ id: 7, code: 'BALI', name: 'Bali' }] as never
@@ -103,7 +116,7 @@ describe('HomeView system status', () => {
 
   it('shows the system status in Indonesian', async () => {
     setLocale('id')
-    const w = await mountWith([])
+    const w = await mountWith([], undefined, true)
     expect(w.get('[data-testid=api-status]').text()).toBe('Berjalan')
     expect(w.text()).toContain('Status sistem')
     setLocale('en')

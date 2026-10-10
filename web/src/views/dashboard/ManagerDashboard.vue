@@ -10,9 +10,12 @@ import KpiCard from '@/components/app/KpiCard.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { t } from '@/i18n'
+import { labelOf } from '@/i18n/labels'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { addDays } from '@/utils/dates'
+import { formatDate, formatDateTime, formatMoney, formatMoneyCompact, formatPercent } from '@/utils/format'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -47,6 +50,13 @@ watch(() => pid.value, () => {
 }, { immediate: true })
 
 const today = computed(() => data.value?.today ?? null)
+const currency = computed(() => property.current?.currency_code ?? 'IDR')
+const short = (amount: string | undefined): string => formatMoneyCompact(amount ?? '0', currency.value)
+
+// Room charges are posted by night audit, so until it has run nothing is "sold" and ADR, RevPAR and the revenue would read 0 where they are simply unknown.
+const awaitingAudit = computed(() => today.value?.rooms.sold === 0)
+const afterAudit = (amount: string | undefined): { value: string; hint: string } =>
+  awaitingAudit.value ? { value: '–', hint: t('dashboard.manager.availableAfterAudit') } : { value: short(amount), hint: '' }
 
 // A bar is as tall as the occupancy it shows (0 to 100%).
 const bar = (percent: string): string => `${Math.min(100, Math.max(0, Number(percent)))}%`
@@ -57,7 +67,7 @@ function delta(now: string, before: string): { text: string; up: boolean } | nul
   const b = Number(before)
   if (!b) return null
   const pct = ((a - b) / b) * 100
-  return { text: `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%`, up: pct >= 0 }
+  return { text: `${pct >= 0 ? '▲' : '▼'} ${formatPercent(Math.abs(pct).toFixed(1))}`, up: pct >= 0 }
 }
 
 const comparison = computed(() => {
@@ -69,10 +79,21 @@ const comparison = computed(() => {
     { key: 'revpar', label: t('dashboard.manager.revpar'), now: d.month_to_date.revpar, before: d.previous_month.revpar },
     { key: 'revenue', label: t('dashboard.manager.roomRevenue'), now: d.month_to_date.room_revenue, before: d.previous_month.room_revenue },
   ]
-  return rows.map((r) => ({ ...r, delta: delta(r.now, r.before) }))
+  const show = (key: string, v: string): string => (key === 'occupancy' ? formatPercent(v) : formatMoney(v))
+  return rows.map((r) => ({ ...r, delta: delta(r.now, r.before), nowText: show(r.key, r.now), beforeText: show(r.key, r.before) }))
 })
 
-const shortDate = (iso: string): string => iso.slice(5)
+// The day and month of a date ("9 Okt"): the label under a bar, which has no room for the year.
+const shortDate = (iso: string): string => formatDate(iso).replace(/ \d{4}$/, '')
+
+// The trend is always at least a week wide: the days before the first closed day are empty bars, so one closed day is not one bar as wide as the card.
+const MIN_TREND_DAYS = 7
+const trendDays = computed(() => {
+  const days = data.value?.trend ?? []
+  const first = days[0]?.business_date
+  if (!first || days.length >= MIN_TREND_DAYS) return { empty: [] as string[], days }
+  return { empty: Array.from({ length: MIN_TREND_DAYS - days.length }, (_, i) => addDays(first, i - (MIN_TREND_DAYS - days.length))), days }
+})
 const rooms = computed(() => {
   const r = data.value?.rooms
   if (!r) return []
@@ -90,7 +111,7 @@ const rooms = computed(() => {
   <section v-if="allowed" class="mb-6" data-testid="manager-dashboard">
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <h2 class="m-0 flex-1 text-lg font-semibold">{{ t('dashboard.manager.title') }}</h2>
-      <span v-if="loadedAt" class="text-sm text-muted-foreground">{{ t('dashboard.manager.updated', { time: loadedAt.toLocaleTimeString() }) }}</span>
+      <span v-if="loadedAt" class="text-sm text-muted-foreground">{{ t('dashboard.manager.updated', { time: formatDateTime(loadedAt.toISOString()) }) }}</span>
       <Button variant="outline" size="sm" :disabled="busy" data-testid="dash-refresh" @click="load">
         <RefreshCw :class="busy && 'animate-spin'" />
         {{ busy ? t('common.loading') : t('common.refresh') }}
@@ -103,13 +124,13 @@ const rooms = computed(() => {
         <KpiCard
           data-testid="kpi-occupancy"
           :label="t('dashboard.manager.occupancyToday')"
-          :value="`${today?.occupancy_percent ?? '0.00'}%`"
+          :value="formatPercent(today?.occupancy_percent ?? '0.00')"
           :hint="t('dashboard.manager.roomsOf', { occupied: today?.rooms.occupied ?? 0, sellable: today?.rooms.sellable ?? 0 })"
           :icon="Percent"
         />
-        <KpiCard data-testid="kpi-adr" :label="t('dashboard.manager.adr')" :value="today?.adr ?? '0'" :icon="TrendingUp" />
-        <KpiCard data-testid="kpi-revpar" :label="t('dashboard.manager.revpar')" :value="today?.revpar ?? '0'" :icon="BedDouble" />
-        <KpiCard data-testid="kpi-revenue" :label="t('dashboard.manager.revenueToday')" :value="today?.room_revenue.net ?? '0'" :icon="Wallet" />
+        <KpiCard data-testid="kpi-adr" :label="t('dashboard.manager.adr')" v-bind="afterAudit(today?.adr)" :icon="TrendingUp" />
+        <KpiCard data-testid="kpi-revpar" :label="t('dashboard.manager.revpar')" v-bind="afterAudit(today?.revpar)" :icon="BedDouble" />
+        <KpiCard data-testid="kpi-revenue" :label="t('dashboard.manager.revenueToday')" v-bind="afterAudit(today?.room_revenue.net)" :icon="Wallet" />
         <KpiCard
           data-testid="kpi-arrivals"
           :label="t('dashboard.manager.arrivalsLeft')"
@@ -128,10 +149,10 @@ const rooms = computed(() => {
           data-testid="kpi-inhouse"
           :label="t('dashboard.manager.inHouse')"
           :value="data.movements.in_house"
-          :hint="t('dashboard.manager.owe', { amount: data.movements.in_house_balance })"
+          :hint="t('dashboard.manager.owe', { amount: formatMoney(data.movements.in_house_balance) })"
           :icon="Users"
         />
-        <KpiCard data-testid="kpi-city-ledger" :label="t('dashboard.manager.owedByCompanies')" :value="today?.city_ledger.outstanding ?? '0'" :icon="Landmark">
+        <KpiCard data-testid="kpi-city-ledger" :label="t('dashboard.manager.owedByCompanies')" :value="short(today?.city_ledger.outstanding)" :icon="Landmark">
           <RouterLink to="/city-ledger">{{ t('dashboard.manager.cityLedger') }}</RouterLink>
         </KpiCard>
       </div>
@@ -167,8 +188,8 @@ const rooms = computed(() => {
               <tbody>
                 <tr v-for="r in comparison" :key="r.key" :data-testid="`month-${r.key}`" class="border-t border-border">
                   <td class="py-1.5">{{ r.label }}</td>
-                  <td class="py-1.5 text-right font-medium">{{ r.now }}</td>
-                  <td class="py-1.5 text-right text-muted-foreground">{{ $money(r.before) }}</td>
+                  <td class="py-1.5 text-right font-medium">{{ r.nowText }}</td>
+                  <td class="py-1.5 text-right text-muted-foreground">{{ r.beforeText }}</td>
                   <td class="py-1.5 text-right">
                     <span v-if="r.delta" :class="cn('inline-flex items-center gap-0.5', r.delta.up ? 'text-success-text' : 'text-destructive')">
                       <ArrowUpRight v-if="r.delta.up" class="size-3.5" aria-hidden="true" />
@@ -188,7 +209,7 @@ const rooms = computed(() => {
           <CardContent>
             <dl class="m-0 divide-y divide-border text-sm">
               <div v-for="m in today.payments_by_method" :key="m.method" class="flex justify-between py-1.5">
-                <dt>{{ m.method }}</dt>
+                <dt>{{ labelOf('payMethod', m.method) }}</dt>
                 <dd class="m-0 font-semibold">{{ $money(m.net) }}</dd>
               </div>
             </dl>
@@ -202,12 +223,16 @@ const rooms = computed(() => {
           <CardContent>
             <EmptyState v-if="!data.trend.length" :title="t('dashboard.manager.nothingClosed')" data-testid="trend-empty" />
             <div v-else class="flex h-40 items-end gap-1.5">
+              <div v-for="e in trendDays.empty" :key="e" class="flex h-full min-w-0 flex-1 flex-col items-center justify-end" data-testid="trend-day-empty" aria-hidden="true">
+                <span class="block h-0.5 w-full rounded-t-sm bg-muted-foreground/25" />
+                <small class="mt-1 text-[10px] text-muted-foreground">{{ shortDate(e) }}</small>
+              </div>
               <div
-                v-for="d in data.trend"
+                v-for="d in trendDays.days"
                 :key="d.business_date"
                 class="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                 data-testid="trend-day"
-                :title="`${d.business_date}: ${d.occupancy_percent}% · ${t('dashboard.manager.adr')} ${d.adr} · ${t('dashboard.manager.revpar')} ${d.revpar}`"
+                :title="`${formatDate(d.business_date)}: ${formatPercent(d.occupancy_percent)} · ${t('dashboard.manager.adr')} ${formatMoney(d.adr)} · ${t('dashboard.manager.revpar')} ${formatMoney(d.revpar)}`"
               >
                 <span class="block min-h-0.5 w-full rounded-t-sm bg-primary" data-testid="trend-bar" :style="{ height: bar(d.occupancy_percent) }" />
                 <small class="mt-1 text-[10px] text-muted-foreground">{{ shortDate(d.business_date) }}</small>
@@ -227,7 +252,7 @@ const rooms = computed(() => {
                 :key="d.date"
                 class="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                 data-testid="forecast-day"
-                :title="`${d.date}: ${d.rooms_booked}/${d.rooms_sellable}`"
+                :title="`${formatDate(d.date)}: ${d.rooms_booked}/${d.rooms_sellable}`"
               >
                 <span class="block min-h-0.5 w-full rounded-t-sm bg-primary/50" data-testid="forecast-bar" :style="{ height: bar(d.occupancy_percent) }" />
                 <small class="mt-1 text-[10px] text-muted-foreground">{{ shortDate(d.date) }}</small>

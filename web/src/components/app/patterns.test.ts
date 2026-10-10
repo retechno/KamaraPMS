@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { BedDouble } from 'lucide-vue-next'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import { setLocale } from '@/i18n'
 import DataTable, { type Column } from './DataTable.vue'
@@ -53,8 +53,13 @@ describe('StatusBadge', () => {
 
   it('shows a status it does not know as plain text', () => {
     expect(knownStatus('stay', 'WEIRD')).toBe(false)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const w = mount(StatusBadge, { props: { domain: 'stay', status: 'WEIRD' } })
-    expect(w.text()).toBe('WEIRD')
+    expect(w.text()).toBe('Weird') // readable, never the raw code
+    expect(warn).toHaveBeenCalledTimes(1) // and a code with no label is reported, once
+    mount(StatusBadge, { props: { domain: 'stay', status: 'WEIRD' } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
     expect(w.classes().join(' ')).toContain('text-foreground')
   })
 

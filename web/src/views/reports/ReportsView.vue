@@ -115,10 +115,10 @@ watch([key, pid], () => {
           </template>
         </FormField>
         <template v-if="def.input === 'range'">
-          <FormField :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
-          <FormField :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+          <FormField :hint="$weekday(range.from)" :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
+          <FormField :hint="$weekday(range.to)" :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
         </template>
-        <FormField v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
+        <FormField :hint="$weekday(range.date)" v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
         <FormField v-else-if="def.input === 'hours'" :label="t('reports.minHours')"><template #default="{ id }"><Input :id="id" v-model.number="range.minHours" name="min_hours" type="number" min="0" /></template></FormField>
         <Button type="submit" :disabled="busy" data-testid="run">{{ t('reports.run') }}</Button>
         <Button type="button" variant="outline" :disabled="busy || !table" data-testid="csv" @click="download">{{ t('reports.csv') }}</Button>

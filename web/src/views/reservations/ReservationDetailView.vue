@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { statusText } from '@/utils/status'
 import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -284,7 +285,7 @@ function submitReason(): Promise<void> {
 function roomLabel(r: FreeRoom, line: ReservationRoom): string {
   const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
   const mark = line.bed_type_id && r.bed_type_id === line.bed_type_id ? ` ✓ ${t('bedTypes.matches')}` : ''
-  return `${r.room_number} · ${r.housekeeping_status}${bed}${mark}`
+  return `${r.room_number} · ${statusText(r.housekeeping_status)}${bed}${mark}`
 }
 
 async function startAssign(line: ReservationRoom): Promise<void> {

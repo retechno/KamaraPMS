@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { setDisplayTimeZone } from '@/utils/format'
 import AuditTrailView from './AuditTrailView.vue'
 
 let GET = vi.fn()
@@ -26,6 +27,7 @@ function mountView(permissions = ['audit.read'], page: object = { data: [entry(2
 describe('AuditTrailView', () => {
   beforeEach(() => {
     GET = vi.fn()
+    setDisplayTimeZone('Asia/Jakarta')
   })
 
   it('lists the newest entries, names the user (system when none) and shows before and after on demand', async () => {
@@ -33,7 +35,10 @@ describe('AuditTrailView', () => {
     await flushPromises()
     expect(GET.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId: 7 }, query: { limit: 50, cursor: undefined } } }])
     expect(w.get('[data-testid=entry-2]').text()).toContain('Siti')
-    expect(w.get('[data-testid=entry-2]').text()).toContain('2026-09-30 13:00:00Z')
+    expect(w.get('[data-testid=entry-2]').text()).toContain('30 Sep 2026 20:00') // 13:00 UTC on the clock of the property (Jakarta), without seconds
+    expect(w.get('[data-testid=entry-2]').text()).toContain('Checked in') // the action in words; the code stays in the tooltip
+    expect(w.get('[data-testid=entry-2]').text()).not.toContain('stay.checked_in')
+    expect(w.get('[data-testid=entry-2]').text()).toContain('Stay #5') // no number in the entry: the id
     expect(w.get('[data-testid=entry-1]').text()).toContain('system')
     expect(w.find('[data-testid=detail-2]').exists()).toBe(false)
     await w.get('[data-testid=toggle-2]').trigger('click')
@@ -75,5 +80,16 @@ describe('AuditTrailView', () => {
     await flushPromises()
     expect(denied.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('names what an entry is about by its own number when it carries one, and spells a code it has no words for', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const w = mountView(['audit.read'], { data: [entry(3, { new_data: { stay_number: 'STY000035' }, action: 'payment.posted', entity_type: 'stay' }), entry(4, { action: 'thing.did_something_new' })], next_cursor: null })
+    await flushPromises()
+    expect(w.get('[data-testid=entry-3]').text()).toContain('Stay STY000035') // its own number, not the id
+    expect(w.get('[data-testid=entry-3]').text()).toContain('Payment posted')
+    expect(w.get('[data-testid=entry-4]').text()).toContain('Thing did something new')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('auditAction.thing_did_something_new'))
+    warn.mockRestore()
   })
 })

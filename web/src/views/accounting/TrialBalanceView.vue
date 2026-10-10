@@ -86,8 +86,8 @@ watch(() => pid.value, () => {
   <template v-else>
     <Card class="mb-4">
       <form class="flex flex-wrap items-end gap-4 p-4" novalidate @submit.prevent="load">
-        <FormField :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
-        <FormField :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+        <FormField :hint="$weekday(range.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
+        <FormField :hint="$weekday(range.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
     </Card>

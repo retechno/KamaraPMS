@@ -112,7 +112,7 @@ watch(businessDate, () => {
 
   <template v-else>
     <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="load()">
-      <FormField class="w-44" :label="t('cashier.businessDate')">
+      <FormField :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
         <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('cashier.method')">

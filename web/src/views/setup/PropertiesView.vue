@@ -40,7 +40,7 @@ onMounted(() => {
     <DataTable v-else :columns="columns" :rows="store.properties" row-key="id" :caption="t('properties.title')">
       <template #cell-code="{ row }"><RouterLink :to="`/setup/properties/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.code }}</RouterLink></template>
       <template #cell-currency="{ row }">{{ row.currency_code }} ({{ t('properties.decimals', { n: row.currency_decimals }) }})</template>
-      <template #cell-status="{ row }"><StatusBadge domain="record" :status="String(row.status).toUpperCase()" :label="String(row.status)" /></template>
+      <template #cell-status="{ row }"><StatusBadge domain="record" :status="String(row.status).toUpperCase()" /></template>
     </DataTable>
   </Card>
 </template>

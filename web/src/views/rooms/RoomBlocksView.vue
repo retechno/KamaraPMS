@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { labelOf } from '@/i18n/labels'
 import { ChevronLeft } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
@@ -232,7 +233,7 @@ watch(businessDate, (bd) => {
             :key="bar.block.id"
             :class="cn('pointer-events-none z-[1] mx-px my-[3px] flex items-center rounded-md border px-1.5 font-bold text-foreground', bar.block.block_type === 'OOO' ? 'border-destructive bg-destructive/30' : 'border-warning bg-warning/30')"
             :style="{ gridColumn: `${bar.start} / ${bar.end}`, gridRow: 1 }"
-            :title="`${bar.block.block_type}: ${bar.block.reason} (${bar.block.start_date} to ${bar.block.end_date})`"
+            :title="`${labelOf('blockType', bar.block.block_type)}: ${bar.block.reason} (${$date(bar.block.start_date)} - ${$date(bar.block.end_date)})`"
             data-testid="bar"
           >
             {{ bar.block.block_type }}
@@ -280,7 +281,7 @@ watch(businessDate, (bd) => {
         <p v-if="loaded && !blocks.length" class="m-0 text-sm text-muted-foreground">{{ t('roomBlocks.noBlocks') }}</p>
         <DataTable v-else-if="blocks.length" :columns="blockColumnsDef" :rows="blocks" row-key="id" :row-test-id="(b) => `block-${b.id}`" :caption="t('roomBlocks.activeInView')">
           <template #cell-room_id="{ row: b }"><b>{{ roomNumber(b.room_id) }}</b></template>
-          <template #cell-block_type="{ row: b }"><Badge :variant="b.block_type === 'OOO' ? 'destructive' : 'warning'">{{ b.block_type }}</Badge></template>
+          <template #cell-block_type="{ row: b }"><Badge :variant="b.block_type === 'OOO' ? 'destructive' : 'warning'">{{ labelOf('blockType', b.block_type) }}</Badge></template>
           <template #cell-start_date="{ row: b }">{{ formatBusinessDate(b.start_date) }}</template>
           <template #cell-end_date="{ row: b }">{{ formatBusinessDate(b.end_date) }}</template>
           <template #cell-actions="{ row: b }"><Button variant="outline" size="sm" @click="cancelling = b; cancelReason = ''">{{ t('roomBlocks.release') }}</Button></template>

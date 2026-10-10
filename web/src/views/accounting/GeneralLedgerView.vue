@@ -117,8 +117,8 @@ watch(() => pid.value, () => {
             <Combobox :id="id" v-model="form.account" name="account" :options="[{ value: 0, label: `${t('accountingBooks.chooseAccount')}` }, ...postable.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))]" />
           </template>
         </FormField>
-        <FormField :label="t('accountingBooks.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
-        <FormField :label="t('accountingBooks.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+        <FormField :hint="$weekday(form.from)" :label="t('accountingBooks.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
+        <FormField :hint="$weekday(form.to)" :label="t('accountingBooks.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy || !form.account" data-testid="apply">{{ t('accountingBooks.show') }}</Button>
       </form>
     </Card>

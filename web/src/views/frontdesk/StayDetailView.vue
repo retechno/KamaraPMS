@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/components/app/StatusBadge.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
@@ -11,7 +12,6 @@ import { documentPath, openPdf } from '@/utils/documents'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -137,7 +137,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <Card class="mb-4" data-testid="summary">
       <CardContent class="pt-4">
         <p class="m-0 flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" data-testid="stay-status">{{ detail.stay.status }}</Badge>
+          <StatusBadge domain="stay" :status="detail.stay.status" data-testid="stay-status" />
           <span>
             <span data-testid="guest-name">{{ detail.guest.first_name }} {{ detail.guest.last_name }}</span><Button v-if="canEditGuest && detail.guest" type="button" variant="outline" size="sm" class="mx-1.5" data-testid="edit-guest" @click="editingGuest = true">{{ t('stay.editGuest') }}</Button> · {{ $date(detail.stay.arrival_date) }} &rarr; {{ $date(detail.stay.departure_date) }} ·
             {{ t('stay.adults', { n: detail.stay.adult_count, c: detail.stay.child_count }) }} · {{ detail.line.room_type_code }}

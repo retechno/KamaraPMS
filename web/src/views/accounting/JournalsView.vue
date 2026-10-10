@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizeDates } from '@/utils/format'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -294,7 +295,7 @@ watch(() => pid.value, () => {
           @row-click="open"
         >
           <template #cell-journal_type="{ row }"><Badge variant="outline">{{ typeLabel(row.journal_type) }}</Badge></template>
-          <template #cell-description="{ row }">{{ row.description }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
+          <template #cell-description="{ row }">{{ localizeDates(row.description) }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
           <template #cell-reversed="{ row }"><small v-if="row.reversed_by_number" class="text-muted-foreground">{{ t('journals.reversedBy', { number: row.reversed_by_number }) }}</small></template>
           <template #detail="{ row }">
             <template v-if="opened && opened.id === row.id">

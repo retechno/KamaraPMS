@@ -115,7 +115,7 @@ describe('RoomBlocksView', () => {
   it('shows the type of a block as a badge in the list, and a calendar bar by type', async () => {
     const w = mountCalendar(['room_block.manage'])
     await flushPromises()
-    expect(w.get('[data-testid=block-9]').text()).toContain('OOO')
+    expect(w.get('[data-testid=block-9]').text()).toContain('Out of order')
     expect(w.get('[data-testid=cal-202] [data-testid=bar]').classes()).toContain('border-destructive')
   })
 

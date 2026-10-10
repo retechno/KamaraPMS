@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/utils/format'
 import { Search } from 'lucide-vue-next'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -348,7 +349,7 @@ async function book(approval?: Approval): Promise<void> {
       <form ref="bookForm" novalidate data-testid="book-form" @submit.prevent="submit">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
-          <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: search.arrival, departure: search.departure, adults: search.adults, children: search.children }) }}</p>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: formatDate(search.arrival), departure: formatDate(search.departure), adults: search.adults, children: search.children }) }}</p>
         </CardHeader>
         <CardContent class="flex flex-col gap-4">
           <div v-if="isRestricted" class="rounded-md border border-warning/60 bg-warning/10 p-3 text-sm" role="alert" data-testid="restriction-notice">

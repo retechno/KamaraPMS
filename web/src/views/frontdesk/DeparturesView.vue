@@ -70,7 +70,7 @@ watch(() => props.refresh, () => list.restart())
 
   <template v-else-if="businessDate">
     <form class="mb-3 flex flex-wrap items-end gap-3" novalidate data-testid="departure-filters" @submit.prevent>
-      <FormField class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
+      <FormField :hint="$weekday(shownDate)" class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
         <template #default="{ id }"><Input :id="id" v-model="shownDate" name="departure_date" type="date" /></template>
       </FormField>
       <label class="mb-2 flex items-center gap-2 text-sm"><input v-model="exact" type="checkbox" name="exact" class="size-4 accent-primary" />{{ t('frontDesk.departures.onlyThatDate') }}</label>

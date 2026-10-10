@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { statusText } from '@/utils/status'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
@@ -43,7 +44,7 @@ function roomLabel(r: { room_number: string; housekeeping_status: string; bed_ty
   const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
   const wanted = props.arrival.requested_bed_type_id
   const mark = wanted && r.bed_type_id === wanted ? ` ✓ ${t('bedTypes.matches')}` : ''
-  return `${r.room_number} · ${r.housekeeping_status}${bed}${mark}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}`
+  return `${r.room_number} · ${statusText(r.housekeeping_status)}${bed}${mark}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}`
 }
 const isReady = (status: string) => (requiresInspection.value ? status === 'INSPECTED' : status === 'CLEAN' || status === 'INSPECTED')
 const notReady = computed(() => !!selected.value && !isReady(selected.value.housekeeping_status))
@@ -155,7 +156,7 @@ async function submit(): Promise<void> {
     <p v-if="isUpgrade" class="m-0 text-sm text-muted-foreground" data-testid="upgrade-note">{{ t('frontDesk.checkIn.upgradeNote') }}</p>
 
     <div v-if="notReady" class="alert warning m-0" data-testid="not-ready">
-      {{ t('frontDesk.checkIn.notReady', { room: selected?.room_number ?? '', status: selected?.housekeeping_status ?? '', need: requiresInspection ? t('frontDesk.checkIn.needInspected') : t('frontDesk.checkIn.needClean') }) }}
+      {{ t('frontDesk.checkIn.notReady', { room: selected?.room_number ?? '', status: statusText(selected?.housekeeping_status), need: requiresInspection ? t('frontDesk.checkIn.needInspected') : t('frontDesk.checkIn.needClean') }) }}
       <template v-if="canOverride">
         <label class="mt-2 flex items-center gap-2 text-sm">
           <input v-model="form.override" type="checkbox" name="override" />

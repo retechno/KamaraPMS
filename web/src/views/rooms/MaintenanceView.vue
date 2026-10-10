@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
@@ -351,7 +352,7 @@ watch(() => route.query.room, (v) => {
               </FormField>
               <label v-if="selected.block?.status === 'ACTIVE'" class="flex items-center gap-2 text-sm">
                 <input v-model="action.releaseBlock" name="release_block" type="checkbox" />
-                <span>{{ t('maintenance.putBack', { type: selected.block.block_type, date: $date(selected.block.end_date) }) }}</span>
+                <span>{{ t('maintenance.putBack', { type: labelOf('blockType', selected.block.block_type), date: $date(selected.block.end_date) }) }}</span>
               </label>
               <div class="flex justify-end gap-2">
                 <Button type="button" variant="outline" size="sm" @click="closing = null">{{ t('maintenance.back') }}</Button>

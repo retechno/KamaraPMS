@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -70,7 +71,17 @@ function reset(): void {
 }
 
 const pretty = (v: unknown): string => (v === null || v === undefined ? '—' : JSON.stringify(v, null, 2))
-const time = (iso: string): string => iso.replace('T', ' ').replace(/\.\d+Z$/, 'Z')
+// What names the thing an entry is about: its own number or code when the entry carries one ("Stay STY000035"), otherwise its id.
+const NAMING = ['room_number', 'stay_number', 'payment_number', 'shift_number', 'journal_number', 'item_number', 'request_number', 'confirmation_number', 'folio_number', 'code', 'name']
+function entityName(row: { entity_type: string; entity_id: number; old_data?: unknown; new_data?: unknown }): string {
+  const label = labelOf('auditEntity', row.entity_type)
+  for (const data of [row.new_data, row.old_data]) {
+    if (!data || typeof data !== 'object') continue
+    const named = NAMING.map((k) => (data as Record<string, unknown>)[k]).find((v) => typeof v === 'string' && v !== '')
+    if (named) return `${label} ${named}`
+  }
+  return `${label} #${row.entity_id}`
+}
 
 watch(pid, () => {
   rows.value = []
@@ -94,8 +105,8 @@ watch(pid, () => {
         <FormField :label="t('audit.entityId')"><template #default="{ id }"><Input :id="id" v-model="filter.entity_id" name="entity_id" inputmode="numeric" /></template></FormField>
         <FormField :label="t('audit.action')"><template #default="{ id }"><Input :id="id" v-model="filter.action" name="action" placeholder="stay.checked_in" /></template></FormField>
         <FormField :label="t('audit.userId')"><template #default="{ id }"><Input :id="id" v-model="filter.user_id" name="user_id" inputmode="numeric" /></template></FormField>
-        <FormField :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-        <FormField :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+        <FormField :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
+        <FormField :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
         <div class="flex items-end gap-2">
           <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
           <Button type="button" variant="outline" :disabled="loading" data-testid="reset" @click="reset">{{ t('audit.clear') }}</Button>
@@ -115,11 +126,11 @@ watch(pid, () => {
         :detail-test-id="(r) => `detail-${r.id}`"
         :caption="t('audit.title')"
       >
-        <template #cell-created_at="{ row }">{{ time(row.created_at) }}</template>
+        <template #cell-created_at="{ row }">{{ $dateTime(row.created_at) }}</template>
         <template #cell-business_date="{ row }">{{ $date(row.business_date) || '—' }}</template>
         <template #cell-user="{ row }">{{ row.user?.name ?? t('audit.system') }}</template>
-        <template #cell-action="{ row }"><code>{{ row.action }}</code></template>
-        <template #cell-entity="{ row }">{{ row.entity_type }} #{{ row.entity_id }}</template>
+        <template #cell-action="{ row }"><span :title="row.action">{{ labelOf('auditAction', row.action) }}</span></template>
+        <template #cell-entity="{ row }">{{ entityName(row) }}</template>
         <template #cell-toggle="{ row }">
           <Button type="button" variant="outline" size="sm" :data-testid="`toggle-${row.id}`" :aria-expanded="open === row.id" @click="open = open === row.id ? null : row.id">{{ open === row.id ? t('audit.hide') : t('audit.details') }}</Button>
         </template>

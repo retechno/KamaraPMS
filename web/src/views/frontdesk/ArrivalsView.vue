@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/utils/format'
 import { MoreVertical } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -183,7 +184,7 @@ watch(() => props.refresh, restart)
 
   <template v-else>
     <form class="mb-3 flex flex-wrap items-end gap-3" novalidate data-testid="arrival-filters" @submit.prevent>
-      <FormField class="w-44" :label="t('frontDesk.page.arrival')">
+      <FormField :hint="$weekday(shownDate)" class="w-44" :label="t('frontDesk.page.arrival')">
         <template #default="{ id }"><Input :id="id" v-model="shownDate" name="date" type="date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('frontDesk.arrivals.status')">
@@ -312,7 +313,7 @@ watch(() => props.refresh, restart)
           {{ t('frontDesk.checkIn.title', { guest: current.guest_name || current.confirmation_number, type: current.room_type_code }) }}
         </SheetTitle>
         <SheetDescription class="mt-1">
-          {{ t('frontDesk.checkIn.subtitle', { confirmation: current.confirmation_number, arrival: current.arrival_date, departure: current.departure_date }) }}
+          {{ t('frontDesk.checkIn.subtitle', { confirmation: current.confirmation_number, arrival: formatDate(current.arrival_date), departure: formatDate(current.departure_date) }) }}
         </SheetDescription>
         <CheckInPanel :key="current.reservation_room_id" :arrival="current" class="mt-4" @done="checkedIn" @cancel="open = null" />
       </SheetContent>
