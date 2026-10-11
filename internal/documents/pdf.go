@@ -95,7 +95,11 @@ func newPage(h Hotel, lang Lang, title, printed string) *page {
 	p.SetAutoPageBreak(false, 0)
 	p.SetCatalogSort(true)
 	p.SetCompression(compressPDF)
-	p.SetCreationDate(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) // the bytes depend on the content only
+	// The bytes depend on the content only. Both dates are set: the library takes the clock for the one that is not (the modification date), so two documents of the same data that are
+	// rendered in different seconds would differ.
+	fixed := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.SetCreationDate(fixed)
+	p.SetModificationDate(fixed)
 	p.SetTitle(lang.T(title), true)
 	p.SetCreator("KamaraPMS", true)
 	p.AliasNbPages("")

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"kamarapms/internal/platform/civil"
 )
@@ -85,6 +86,22 @@ func TestRenderingIsDeterministic(t *testing.T) {
 	b, _ := RenderInvoice(invoice(true, 5))
 	if !bytes.Equal(a, b) {
 		t.Fatal("the same data must give the same bytes")
+	}
+}
+
+// The library takes the clock for any date that is not set (the modification date was one): two renderings of the same data in different seconds must still give the same bytes.
+func TestRenderingDoesNotDependOnTheClock(t *testing.T) {
+	a, err := RenderInvoice(invoice(true, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	b, err := RenderInvoice(invoice(true, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Fatal("the same data must give the same bytes, whatever the time of the rendering")
 	}
 }
 

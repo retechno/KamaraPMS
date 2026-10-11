@@ -193,10 +193,16 @@ func TestManualChargeValidation(t *testing.T) {
 	wantCode(t, err, "PERMISSION_DENIED")
 
 	// a closed folio takes nothing
-	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, f.folio))
+	closing, err := f.Folios.GetFolio(f.admin, f.propID, f.folio)
+	must(t, err)
+	if closing.Balance != "0" { // the folio is closed as the application closes it: paid, then closed
+		f.payment(t, "settle-closed", closing.Balance)
+		closing, err = f.Folios.GetFolio(f.admin, f.propID, f.folio)
+		must(t, err)
+	}
+	_, err = f.Folios.CloseFolio(f.admin, f.propID, f.folio, closing.Version)
+	must(t, err)
 	wantCode(t, try(func(in *folios.ChargeInput) {}), "FOLIO_CLOSED")
-	// the folio was closed by hand, with a balance (no way of the application does that): open it again, so the check that ends every test (no closed folio has a balance) holds
-	must(t, f.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, f.folio))
 }
 
 func TestApprovalVerification(t *testing.T) {
