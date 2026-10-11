@@ -16,6 +16,7 @@ const BANNED: [RegExp, string][] = [
   [/ranjang/i, 'tempat tidur'],
   [/dibatalkan \(void\)/, 'di-void'],
   [/Kredit pajak awal/, 'Saldo awal kredit pajak'],
+  [/[Ff]aktur (?:baru|\{number\})|Buat faktur|faktur \{number\}/, 'Invoice (invoice piutang perusahaan: "Invoice baru", "Invoice {number}")'],
   [/Faktur (?:piutang|diterbitkan$)/, 'Invoice (piutang perusahaan): "Faktur" hanya untuk faktur pajak'],
 ]
 
