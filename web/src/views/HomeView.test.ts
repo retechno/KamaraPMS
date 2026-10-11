@@ -731,6 +731,24 @@ describe('HomeView, Today', () => {
       expect(without.get('[data-testid=arrival-chip-3]').attributes('data-chip')).toBe('noRoom') // who cannot assign still reads the chip
     })
 
+    it('puts a row on one line in a wide column and on two in a narrow one: by a container query on the list, not by the width of the screen', async () => {
+      const w = await mountToday(ALLOWED)
+      for (const list of ['arrival-list', 'departure-list']) expect(w.get(`[data-testid=${list}]`).classes(), list).toContain('@container')
+      const rows = [w.get('[data-testid=arrival-3]'), ...w.findAll('[data-testid^=departure-]').filter((e) => /^departure-\d+$/.test(e.attributes('data-testid') ?? ''))]
+      expect(rows.length).toBeGreaterThan(1)
+      for (const li of rows) {
+        expect(li.classes()).toEqual(expect.arrayContaining(['flex-col', '@[22rem]:flex-row', '@[22rem]:items-center'])) // two lines by default, one in a wide column
+        expect(li.classes().some((c) => /^(sm|md|lg|xl):/.test(c))).toBe(false) // no breakpoint of the screen
+      }
+      const actions = w.get('[data-testid=arrival-actions-3]').classes()
+      expect(actions).toEqual(expect.arrayContaining(['justify-end', 'items-center', '@[22rem]:flex-nowrap', '@[22rem]:ml-auto']))
+      // the name block takes the width that is left (the long name is cut, the buttons stay at the right edge, level in every row), in both columns
+      for (const li of rows) {
+        expect((li.element.firstElementChild?.className ?? '').split(' '), li.attributes('data-testid')).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']))
+        expect(li.element.lastElementChild?.className).toContain('@[22rem]:ml-auto')
+      }
+    })
+
     it('reads the day again when the room was taken meanwhile', async () => {
       const w = await mountToday(ALLOWED)
       await w.get('[data-testid=pick-room-3]').trigger('click')
