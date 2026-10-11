@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig/billingconfigdb"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/platform/apperr"
@@ -79,7 +80,7 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "charge_codes.seeded", EntityType: "property", EntityID: in.PropertyID, New: map[string]any{"created": created},
+		Action: "charge_codes.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"created": created},
 	})
 }
 

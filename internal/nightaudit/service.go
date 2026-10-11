@@ -331,7 +331,7 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 		out = RunResult{ClosedBusinessDate: closed.BusinessDate, NewBusinessDate: opened.BusinessDate, RoomChargesPosted: rep.Posted, Summary: summary}
 		return s.audit.Write(ctx, audit.Entry{
 			TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-			Action: "night_audit.completed", EntityType: "business_day", EntityID: closed.ID,
+			Action: "night_audit.completed", EntityType: "business_day", EntityID: closed.ID, EntityLabel: closed.BusinessDate.String(),
 			New: map[string]any{"closed": closed.BusinessDate, "opened": opened.BusinessDate, "room_charges_posted": rep.Posted},
 		})
 	})

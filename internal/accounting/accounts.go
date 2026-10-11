@@ -102,7 +102,7 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, New: map[string]any{"accounts": n},
+		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"accounts": n},
 	})
 }
 

@@ -256,7 +256,7 @@ func (s *Service) Create(ctx context.Context, originPropertyID int64, in Profile
 		bd := day.BusinessDate
 		return s.audit.Write(ctx, audit.Entry{
 			TenantID: p.TenantID, PropertyID: &originPropertyID, BusinessDate: &bd, UserID: p.ActorID(),
-			Action: "guest.created", EntityType: "guest", EntityID: out.Guest.ID, New: auditView(out.Guest),
+			Action: "guest.created", EntityType: "guest", EntityID: out.Guest.ID, EntityLabel: out.Guest.Code, New: auditView(out.Guest),
 		})
 	})
 	return out, err
@@ -346,7 +346,7 @@ func (s *Service) Update(ctx context.Context, id int64, patch Patch) (View, erro
 		out = View{Guest: toGuest(updated), CanEdit: true}
 
 		entry := audit.Entry{
-			TenantID: p.TenantID, UserID: p.ActorID(), Action: "guest.updated", EntityType: "guest", EntityID: id,
+			TenantID: p.TenantID, UserID: p.ActorID(), Action: "guest.updated", EntityType: "guest", EntityID: id, EntityLabel: updated.Code,
 			Old: auditView(before), New: auditView(out.Guest),
 		}
 		if origin := before.OriginPropertyID; origin != nil {

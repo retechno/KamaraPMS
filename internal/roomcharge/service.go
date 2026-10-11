@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/chargecalc"
 	"kamarapms/internal/expected"
@@ -217,7 +218,7 @@ func (s *Service) post(ctx context.Context, p auth.Principal, propertyID int64, 
 		}
 		return s.audit.Write(ctx, audit.Entry{
 			TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(),
-			Action: "room_charges.posted", EntityType: "property", EntityID: propertyID,
+			Action: "room_charges.posted", EntityType: "property", EntityID: propertyID, EntityLabel: auditlabel.Property(ctx, propertyID),
 			New: map[string]any{"trigger": cmd.Trigger, "stays": len(ids), "posted": counts[StatusPosted], "already_posted": counts[expected.StatusAlreadyPosted], "errors": counts[expected.StatusError]},
 		})
 	})

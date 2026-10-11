@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/departments/departmentsdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -305,6 +306,6 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "department.seeded", EntityType: "property", EntityID: in.PropertyID, New: map[string]any{"departments": n},
+		Action: "department.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"departments": n},
 	})
 }
