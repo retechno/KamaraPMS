@@ -54,7 +54,7 @@ const checkOut = ref<{ row: InHouseRow; detail: StayDetail | null; loading: bool
 // The list of free rooms of an arrival that has none is open (reservation.update): the page does not read again by itself under it either.
 // The rows of the arrivals and departures columns: one line in a wide column, two in a narrow one (a container query on the list, not the width of the screen).
 const ROW = 'flex flex-col gap-1.5 py-2.5 @[22rem]:flex-row @[22rem]:items-center @[22rem]:gap-3'
-const ACTIONS = 'flex flex-wrap items-center justify-end gap-2 @[22rem]:flex-nowrap @[22rem]:shrink-0'
+const ACTIONS = 'flex flex-wrap items-center justify-end gap-2 @[22rem]:ml-auto @[22rem]:flex-nowrap @[22rem]:shrink-0'
 const picking = ref<number | null>(null)
 const today = useToday(() => checkIn.value !== null || checkOut.value !== null || picking.value !== null)
 const canAssign = (a: Arrival): boolean => can('reservation.update') && a.status === 'CONFIRMED' && !a.room_id
@@ -244,7 +244,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
         <!-- One line when the column is wide enough (the name and the room at the left, the actions at the right, level with the name), two when the COLUMN is narrow (a phone): the container, not the screen, decides. -->
         <ul v-else class="@container m-0 list-none divide-y divide-border p-0" data-testid="arrival-list">
           <li v-for="a in arrivalRows" :key="a.reservation_room_id" :class="ROW" :data-testid="`arrival-${a.reservation_room_id}`">
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{{ a.guest_name || a.confirmation_number }}</div>
               <div class="text-xs text-muted-foreground">{{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
             </div>

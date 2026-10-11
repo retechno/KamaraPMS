@@ -741,7 +741,12 @@ describe('HomeView, Today', () => {
         expect(li.classes().some((c) => /^(sm|md|lg|xl):/.test(c))).toBe(false) // no breakpoint of the screen
       }
       const actions = w.get('[data-testid=arrival-actions-3]').classes()
-      expect(actions).toEqual(expect.arrayContaining(['justify-end', 'items-center', '@[22rem]:flex-nowrap']))
+      expect(actions).toEqual(expect.arrayContaining(['justify-end', 'items-center', '@[22rem]:flex-nowrap', '@[22rem]:ml-auto']))
+      // the name block takes the width that is left (the long name is cut, the buttons stay at the right edge, level in every row), in both columns
+      for (const li of rows) {
+        expect((li.element.firstElementChild?.className ?? '').split(' '), li.attributes('data-testid')).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']))
+        expect(li.element.lastElementChild?.className).toContain('@[22rem]:ml-auto')
+      }
     })
 
     it('reads the day again when the room was taken meanwhile', async () => {
