@@ -9,7 +9,7 @@ import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { assignFailure, assignRoom } from '@/utils/assignRoom'
 import { formatDate } from '@/utils/format'
-import { hasRequestedBed, isRoomReady } from '@/utils/freeRooms'
+import { hasRequestedBed, isAfterBusinessDate, isRoomReady } from '@/utils/freeRooms'
 import { type AssignLine, freeRoomsKey, proposeAssignments } from '@/utils/roomAssign'
 
 /**
@@ -36,7 +36,7 @@ const outcomes = reactive<Record<string, Outcome>>({})
 let assignedCount = 0
 
 const requiresInspection = computed(() => property.current?.require_room_inspection_for_checkin ?? false)
-const proposals = computed(() => proposeAssignments(snapshot.value, free.value, { includeNotReady: includeNotReady.value, requiresInspection: requiresInspection.value }))
+const proposals = computed(() => proposeAssignments(snapshot.value, free.value, { includeNotReady: includeNotReady.value, requiresInspection: requiresInspection.value, businessDate: property.clock?.business_date ?? '' }))
 const toSave = computed(() => proposals.value.filter((p) => p.room))
 const okCount = computed(() => Object.values(outcomes).filter((o) => o.state === 'ok').length)
 const failedCount = computed(() => Object.values(outcomes).filter((o) => o.state === 'failed').length)
@@ -97,6 +97,8 @@ async function save(): Promise<void> {
 
 const stay = (l: AssignLine): string => `${formatDate(l.arrival)} → ${formatDate(l.departure)}`
 const ready = (r: FreeRoom): boolean => isRoomReady(r.housekeeping_status, requiresInspection.value)
+/** The guest comes after the business date: the status of the room today is shown dimmed, it decided nothing. */
+const later = (l: AssignLine): boolean => isAfterBusinessDate(l.arrival, property.clock?.business_date ?? '')
 </script>
 
 <template>
@@ -139,7 +141,7 @@ const ready = (r: FreeRoom): boolean => isRoomReady(r.housekeeping_status, requi
                 <template v-else-if="p.room">
                   <span class="inline-flex flex-wrap items-center gap-1.5">
                     <b data-testid="proposed-room">{{ p.room.room_number }}</b>
-                    <StatusBadge domain="housekeeping" :status="p.room.housekeeping_status" :data-testid="`proposed-status-${p.line.key}`" :data-ready="ready(p.room)" />
+                    <StatusBadge domain="housekeeping" :status="p.room.housekeeping_status" :class="later(p.line) && 'opacity-50'" :data-testid="`proposed-status-${p.line.key}`" :data-ready="ready(p.room)" :data-later="later(p.line)" />
                     <span v-if="hasRequestedBed(p.room, p.line.requestedBedTypeId)" class="text-xs text-success-text" :title="t('bedTypes.matches')" data-testid="proposed-bed">✓ {{ p.room.bed_type_name }}</span>
                   </span>
                 </template>

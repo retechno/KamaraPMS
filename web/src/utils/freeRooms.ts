@@ -14,7 +14,12 @@ export interface RoomOrder {
   currentRoomId?: number | null
   /** The property asks for an inspection before a check-in: then only INSPECTED is ready. */
   requiresInspection: boolean
+  /** The guest comes after the business date: the housekeeping status of today says nothing about that night, so it does not order the rooms. */
+  ignoreReadiness?: boolean
 }
+
+/** An arrival after the business date (the housekeeping status of today is not relevant to it). */
+export const isAfterBusinessDate = (arrival: string, businessDate: string): boolean => businessDate !== '' && arrival > businessDate
 
 type RoomLike = Pick<FreeRoom, 'room_id' | 'housekeeping_status'> & { bed_type_id?: number | null }
 
@@ -25,7 +30,7 @@ export function roomRank(r: RoomLike, order: RoomOrder): number {
   if (order.currentRoomId != null && r.room_id === order.currentRoomId) return 0
   const wanted = order.requestedBedTypeId ?? null
   const bed = wanted !== null && r.bed_type_id === wanted ? 0 : 1
-  return (isRoomReady(r.housekeeping_status, order.requiresInspection) ? 1 : 3) + bed
+  return (order.ignoreReadiness || isRoomReady(r.housekeeping_status, order.requiresInspection) ? 1 : 3) + bed
 }
 
 export function sortFreeRooms<T extends RoomLike>(rooms: readonly T[], order: RoomOrder): T[] {

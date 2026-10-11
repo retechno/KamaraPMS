@@ -1,5 +1,5 @@
 import type { Arrival, FreeRoom, ReservationSummary } from '@/api/types'
-import { isRoomReady, sortFreeRooms } from '@/utils/freeRooms'
+import { isAfterBusinessDate, isRoomReady, sortFreeRooms } from '@/utils/freeRooms'
 
 /**
  * Putting a room on each room of a reservation that has none, in one go. A room of a reservation (a "line") to be assigned, whichever list it comes from, and the proposal for a set of them:
@@ -39,6 +39,8 @@ export interface ProposeOptions {
   includeNotReady: boolean
   /** The property asks for an inspection before a check-in: then only INSPECTED is ready. */
   requiresInspection: boolean
+  /** The business date: a line that arrives after it is proposed a room without regard to the housekeeping status of today (it is not relevant to that night). */
+  businessDate?: string
 }
 
 export const lineKey = (reservationId: number, lineId: number): string => `${reservationId}:${lineId}`
@@ -102,12 +104,13 @@ export function proposeAssignments(lines: readonly AssignLine[], free: ReadonlyM
   const order = lines.map((line, index) => ({ line, index })).sort((a, b) => constraint(a.line) - constraint(b.line) || a.index - b.index)
   const chosen = new Map<string, FreeRoom | null>()
   for (const { line } of order) {
+    const later = isAfterBusinessDate(line.arrival, options.businessDate ?? '')
     const rooms = (free.get(freeRoomsKey(line)) ?? []).filter((r) => {
       if (taken.get(r.room_id)?.some((n) => overlaps(n, line))) return false // never the same room twice for nights that overlap
       if (line.bedLocked && !(line.requestedBedTypeId && r.bed_type_id === line.requestedBedTypeId)) return false // a kept bed: only a room with it
-      return options.includeNotReady || isRoomReady(r.housekeeping_status, options.requiresInspection)
+      return later || options.includeNotReady || isRoomReady(r.housekeeping_status, options.requiresInspection)
     })
-    const best = sortFreeRooms(rooms, { requestedBedTypeId: line.requestedBedTypeId, requiresInspection: options.requiresInspection })[0] ?? null
+    const best = sortFreeRooms(rooms, { requestedBedTypeId: line.requestedBedTypeId, requiresInspection: options.requiresInspection, ignoreReadiness: later })[0] ?? null
     chosen.set(line.key, best)
     if (best) taken.set(best.room_id, [...(taken.get(best.room_id) ?? []), { arrival: line.arrival, departure: line.departure }])
   }

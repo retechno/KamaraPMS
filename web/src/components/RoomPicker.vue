@@ -10,7 +10,7 @@ import { useFreeRooms } from '@/composables/useFreeRooms'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { type AssignFailure, type AssignTarget, assignFailure, assignRoom } from '@/utils/assignRoom'
-import { hasRequestedBed, isRoomReady } from '@/utils/freeRooms'
+import { hasRequestedBed, isAfterBusinessDate, isRoomReady } from '@/utils/freeRooms'
 
 /**
  * Chooses a room for one room of a reservation, from where the person is (a list of arrivals, of reservations, the page of the day), without going to the reservation. A button opens the free
@@ -48,9 +48,12 @@ const active = ref(0)
 const message = ref('')
 const search = ref<InstanceType<typeof Input> | null>(null)
 
+/** The guest comes after the business date: today's housekeeping status does not order the rooms and is shown dimmed. */
+const later = computed(() => isAfterBusinessDate(props.arrival, property.clock?.business_date ?? ''))
+
 const { rooms, loading, loaded, error, reload, requiresInspection } = useFreeRooms(
   () => (open.value ? { typeId: props.typeId, arrival: props.arrival, departure: props.departure } : null),
-  () => ({ requestedBedTypeId: props.requestedBedTypeId, currentRoomId: props.currentRoomId }),
+  () => ({ requestedBedTypeId: props.requestedBedTypeId, currentRoomId: props.currentRoomId, ignoreReadiness: later.value }),
 )
 
 const shown = computed(() => {
@@ -166,7 +169,7 @@ const ready = (r: FreeRoom): boolean => isRoomReady(r.housekeeping_status, requi
             @click="pick(r)"
           >
             <b class="w-12 shrink-0">{{ r.room_number }}</b>
-            <StatusBadge domain="housekeeping" :status="r.housekeeping_status" />
+            <StatusBadge domain="housekeeping" :status="r.housekeeping_status" :class="later && 'opacity-50'" :data-later="later" />
             <span v-if="r.bed_type_name" class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {{ r.bed_type_name }}<template v-if="hasRequestedBed(r, requestedBedTypeId)"> <span class="ml-1 text-success-text" :title="t('bedTypes.matches')" data-slot="bed-match">✓</span></template>
             </span>

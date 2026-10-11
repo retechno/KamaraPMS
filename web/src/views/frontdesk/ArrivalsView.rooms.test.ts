@@ -244,3 +244,13 @@ describe('ArrivalsView: a room from the list', () => {
     })
   })
 })
+
+describe('ArrivalsView: the check-in button follows the readiness', () => {
+  it('is the solid button only for an arrival that is ready, an outline button for the others', async () => {
+    arrivals = [arrival(1, { room_id: 21, room_number: '101', readiness: { status: 'READY', blockers: [] } }), arrival(2, { room_id: 22, room_number: '102', readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_READY'] } }), arrival(3)]
+    const w = await mountView()
+    expect(w.get('[data-testid=open-1]').classes()).toContain('bg-primary')
+    expect(w.get('[data-testid=open-2]').classes()).not.toContain('bg-primary')
+    expect(w.get('[data-testid=open-3]').classes()).not.toContain('bg-primary')
+  })
+})

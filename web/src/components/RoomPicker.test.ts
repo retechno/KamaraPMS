@@ -77,6 +77,21 @@ describe('RoomPicker', () => {
     expect(options()).toEqual(['204 Inspected King ✓', '205 Clean King ✓', '202 Clean Twin', '201 Dirty King ✓', '203 Being cleaned Twin'])
   })
 
+  it('for a guest who comes after the business date: no order by housekeeping status (the bed asked for, then the number), and the status is dimmed', async () => {
+    const w = mountPicker({ arrival: '2026-10-24', departure: '2026-10-26' })
+    await open(w)
+    // King first (201 dirty, 204 inspected, 205 clean), then the others (202, 203), each group by number as the server gave them: today's status decided nothing
+    expect(bodyAll('[data-testid^=room-option-]').map((e) => e.querySelector('b')?.textContent)).toEqual(['201', '204', '205', '202', '203'])
+    expect(bodyAll('[data-testid^=room-option-] [data-slot=status-badge]').every((e) => e.getAttribute('data-later') === 'true' && e.className.includes('opacity-50'))).toBe(true)
+  })
+
+  it('for a guest who comes today the status still orders the rooms and is not dimmed', async () => {
+    const w = mountPicker()
+    await open(w)
+    expect(bodyAll('[data-testid^=room-option-]').map((e) => e.querySelector('b')?.textContent)).toEqual(['204', '205', '202', '201', '203'])
+    expect(bodyAll('[data-testid^=room-option-] [data-slot=status-badge]').some((e) => e.className.includes('opacity-50'))).toBe(false)
+  })
+
   it('marks the bed that was asked for with a tick and leaves the others without', async () => {
     const w = mountPicker()
     await open(w)

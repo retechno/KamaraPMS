@@ -715,6 +715,22 @@ describe('HomeView, Today', () => {
       expect(bodyEl('[data-testid=room-picker]')).toBeNull()
     })
 
+    it('says "no room yet" by the button where there is one, by the chip where there is none, and keeps the name and the actions on lines of their own', async () => {
+      const w = await mountToday(ALLOWED)
+      expect(w.find('[data-testid=pick-room-3]').exists()).toBe(true)
+      expect(w.find('[data-testid=arrival-chip-3]').exists()).toBe(false) // the button already says it
+      const li = w.get('[data-testid=arrival-3]')
+      const actions = w.get('[data-testid=arrival-actions-3]')
+      expect(actions.element.parentElement).toBe(li.element) // the second line of the row
+      expect(actions.text()).toContain('Choose room')
+      expect(actions.text()).not.toContain('Guest') // the name is not among the actions
+      expect(li.element.firstElementChild?.textContent).toContain('Not assigned · FAM') // the first line: the name and the room (type)
+      expect(li.classes()).toContain('flex-col')
+      mounted?.unmount()
+      const without = await mountToday(FRONT)
+      expect(without.get('[data-testid=arrival-chip-3]').attributes('data-chip')).toBe('noRoom') // who cannot assign still reads the chip
+    })
+
     it('reads the day again when the room was taken meanwhile', async () => {
       const w = await mountToday(ALLOWED)
       await w.get('[data-testid=pick-room-3]').trigger('click')
