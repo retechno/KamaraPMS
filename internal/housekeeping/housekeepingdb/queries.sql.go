@@ -718,6 +718,48 @@ func (q *Queries) ListHousekeepingTasks(ctx context.Context, arg ListHousekeepin
 	return items, nil
 }
 
+const listRoomHousekeepingForUpdate = `-- name: ListRoomHousekeepingForUpdate :many
+SELECT h.room_id, r.room_number, h.status
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id
+WHERE h.tenant_id = $1 AND h.property_id = $2 AND h.room_id = ANY($3::bigint[])
+ORDER BY h.room_id
+FOR UPDATE OF h
+`
+
+type ListRoomHousekeepingForUpdateParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoomIds    []int64
+}
+
+type ListRoomHousekeepingForUpdateRow struct {
+	RoomID     int64
+	RoomNumber string
+	Status     string
+}
+
+// The housekeeping rows of several rooms, locked in ascending room id (the bulk change decides from the locked states). A room that is not in the property has no row here.
+func (q *Queries) ListRoomHousekeepingForUpdate(ctx context.Context, arg ListRoomHousekeepingForUpdateParams) ([]ListRoomHousekeepingForUpdateRow, error) {
+	rows, err := q.db.Query(ctx, listRoomHousekeepingForUpdate, arg.TenantID, arg.PropertyID, arg.RoomIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoomHousekeepingForUpdateRow{}
+	for rows.Next() {
+		var i ListRoomHousekeepingForUpdateRow
+		if err := rows.Scan(&i.RoomID, &i.RoomNumber, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const roomExists = `-- name: RoomExists :one
 SELECT EXISTS (SELECT 1 FROM rooms WHERE tenant_id = $1 AND property_id = $2 AND id = $3)
 `

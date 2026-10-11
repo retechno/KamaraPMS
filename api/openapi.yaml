@@ -811,6 +811,34 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/housekeeping/bulk:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: setHousekeepingBulk
+      summary: Change the housekeeping status of up to 100 rooms (housekeeping.update; INSPECTED needs housekeeping.inspect)
+      description: |
+        The manual change of `setRoomHousekeeping` for many rooms to one status, with the same rule, the same log entry and the same audit entry for each room that changes.
+        It is not all-or-nothing: a room that cannot make the change is reported in `results` with the code the single change gives (`INVALID_HK_TRANSITION`, with `context.from`, `to` and `allowed`; `ROOM_NOT_FOUND` for a room that is not in the property) and the other rooms change.
+        The request as a whole is refused for what holds for every room: 403 without `housekeeping.update` (or, for INSPECTED, without `housekeeping.inspect`), 422 for an invalid status or a list that is empty or longer than 100, 409 `BUSINESS_DAY_CLOSED`.
+        One transaction: the housekeeping rows of the rooms are locked in ascending room id before any room is decided, so a bulk change and a single change of the same room are serialised and cannot deadlock.
+        `results` follow the order of `room_ids` (each room once).
+      tags: [housekeeping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HousekeepingBulkRequest" }
+      responses:
+        "200":
+          description: One result per room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HousekeepingBulkResponse" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/rooms/{id}/housekeeping/logs:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8143,6 +8171,41 @@ components:
         room_id: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/HousekeepingStatus" }
         updated_at: { type: string, format: date-time }
+    HousekeepingBulkRequest:
+      type: object
+      required: [room_ids, status]
+      properties:
+        room_ids: { type: array, minItems: 1, maxItems: 100, items: { type: integer, format: int64 } }
+        status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        notes: { type: string, maxLength: 500, description: Written on the log entry of each room; "Bulk change" when empty. }
+    HousekeepingBulkResult:
+      type: object
+      required: [room_id, ok]
+      properties:
+        room_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        ok: { type: boolean }
+        from: { $ref: "#/components/schemas/HousekeepingStatus" }
+        status: { $ref: "#/components/schemas/HousekeepingStatus" }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: "INVALID_HK_TRANSITION or ROOM_NOT_FOUND" }
+            message: { type: string }
+            context: { type: object, additionalProperties: true }
+    HousekeepingBulkResponse:
+      type: object
+      required: [summary, results]
+      properties:
+        summary:
+          type: object
+          required: [requested, changed, failed]
+          properties:
+            requested: { type: integer }
+            changed: { type: integer }
+            failed: { type: integer }
+        results: { type: array, items: { $ref: "#/components/schemas/HousekeepingBulkResult" } }
     HousekeepingLog:
       type: object
       required: [id, room_id, from_status, to_status, source, business_date, changed_at]

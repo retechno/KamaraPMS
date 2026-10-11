@@ -628,6 +628,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/housekeeping/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the housekeeping status of up to 100 rooms (housekeeping.update; INSPECTED needs housekeeping.inspect)
+         * @description The manual change of `setRoomHousekeeping` for many rooms to one status, with the same rule, the same log entry and the same audit entry for each room that changes.
+         *     It is not all-or-nothing: a room that cannot make the change is reported in `results` with the code the single change gives (`INVALID_HK_TRANSITION`, with `context.from`, `to` and `allowed`; `ROOM_NOT_FOUND` for a room that is not in the property) and the other rooms change.
+         *     The request as a whole is refused for what holds for every room: 403 without `housekeeping.update` (or, for INSPECTED, without `housekeeping.inspect`), 422 for an invalid status or a list that is empty or longer than 100, 409 `BUSINESS_DAY_CLOSED`.
+         *     One transaction: the housekeeping rows of the rooms are locked in ascending room id before any room is decided, so a bulk change and a single change of the same room are serialised and cannot deadlock.
+         *     `results` follow the order of `room_ids` (each room once).
+         */
+        post: operations["setHousekeepingBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/logs": {
         parameters: {
             query?: never;
@@ -7106,6 +7132,36 @@ export interface components {
             status: components["schemas"]["HousekeepingStatus"];
             /** Format: date-time */
             updated_at: string;
+        };
+        HousekeepingBulkRequest: {
+            room_ids: number[];
+            status: components["schemas"]["HousekeepingStatus"];
+            /** @description Written on the log entry of each room; "Bulk change" when empty. */
+            notes?: string;
+        };
+        HousekeepingBulkResult: {
+            /** Format: int64 */
+            room_id: number;
+            room_number?: string;
+            ok: boolean;
+            from?: components["schemas"]["HousekeepingStatus"];
+            status?: components["schemas"]["HousekeepingStatus"];
+            error?: {
+                /** @description INVALID_HK_TRANSITION or ROOM_NOT_FOUND */
+                code: string;
+                message: string;
+                context?: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        HousekeepingBulkResponse: {
+            summary: {
+                requested: number;
+                changed: number;
+                failed: number;
+            };
+            results: components["schemas"]["HousekeepingBulkResult"][];
         };
         HousekeepingLog: {
             /** Format: int64 */
@@ -13925,6 +13981,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HousekeepingState"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setHousekeepingBulk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HousekeepingBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description One result per room. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HousekeepingBulkResponse"];
                 };
             };
             403: components["responses"]["Problem"];

@@ -9,6 +9,15 @@ SELECT * FROM room_housekeeping
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id
 FOR UPDATE;
 
+-- The housekeeping rows of several rooms, locked in ascending room id (the bulk change decides from the locked states). A room that is not in the property has no row here.
+-- name: ListRoomHousekeepingForUpdate :many
+SELECT h.room_id, r.room_number, h.status
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id
+WHERE h.tenant_id = @tenant_id AND h.property_id = @property_id AND h.room_id = ANY(@room_ids::bigint[])
+ORDER BY h.room_id
+FOR UPDATE OF h;
+
 -- name: SetRoomHousekeeping :one
 UPDATE room_housekeeping SET status = @status, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id

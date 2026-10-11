@@ -93,9 +93,8 @@ func (s *Service) SetStatus(ctx context.Context, propertyID, roomID int64, to St
 		if err != nil {
 			return err
 		}
-		if !CanTransition(from, to) {
-			return apperr.Conflict("INVALID_HK_TRANSITION", "the housekeeping status cannot change from "+string(from)+" to "+string(to)).
-				WithContext("from", string(from)).WithContext("to", string(to)).WithContext("allowed", NextStatuses(from))
+		if err := checkTransition(from, to); err != nil {
+			return err
 		}
 		out, err = s.apply(ctx, change{
 			TenantID: p.TenantID, PropertyID: propertyID, RoomID: roomID, From: from, To: to,
@@ -104,6 +103,15 @@ func (s *Service) SetStatus(ctx context.Context, propertyID, roomID int64, to St
 		return err
 	})
 	return out, err
+}
+
+// checkTransition is the one rule of a manual change, shared by SetStatus and the bulk change: nil when from→to is legal, else 409 INVALID_HK_TRANSITION.
+func checkTransition(from, to Status) *apperr.Error {
+	if CanTransition(from, to) {
+		return nil
+	}
+	return apperr.Conflict("INVALID_HK_TRANSITION", "the housekeeping status cannot change from "+string(from)+" to "+string(to)).
+		WithContext("from", string(from)).WithContext("to", string(to)).WithContext("allowed", NextStatuses(from))
 }
 
 // MarkDirty sets a room DIRTY on behalf of another use case (check-out, room move,
