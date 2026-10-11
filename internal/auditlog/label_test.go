@@ -140,7 +140,7 @@ func TestQTakesBackslashPercentAndUnderscoreLiterally(t *testing.T) {
 		"%OFF":    {"50%OFF"}, // a percent is not a wildcard
 		"B_C":     {"AB_CD"},  // an underscore is not a single character: ABXCD is not found
 		`a\b`:     {`a\b-1`},  // a backslash is not an escape
-		`\%`:      nil,        // nothing holds a backslash and then a percent
+		`\%x`:     nil,        // nothing holds a backslash, a percent and an x
 		"%%%":     nil,        // three percent signs are three characters of text, not "everything"
 		"___":     nil,
 		"b_c":     {"AB_CD"}, // in any case

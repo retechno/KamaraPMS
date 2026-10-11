@@ -92,6 +92,10 @@ func (r *Reader) Search(ctx context.Context, f Filter, beforeID int64, limit int
 	} else if !p.IsTenantAdmin {
 		return nil, apperr.New(apperr.KindForbidden, "PERMISSION_DENIED", "the tenant-level audit trail is for tenant administrators")
 	}
+	// The search text is checked here, after the permission: a person who may not read the trail is refused (403) whatever they ask.
+	if n := utf8.RuneCountInString(f.Q); f.Q != "" && (n < MinQuery || n > MaxQuery) {
+		return nil, apperr.Invalid("the query is invalid", apperr.FieldError{Field: "q", Code: "INVALID_LENGTH", Message: "3 to 64 characters"})
+	}
 	q := auditdb.SearchAuditLogsParams{TenantID: p.TenantID, PropertyID: f.PropertyID, EntityID: f.EntityID, UserID: f.UserID, FromDate: f.From, ToDate: f.To, RowLimit: int32(limit)} //nolint:gosec // G115: the page size is bounded by ParsePage
 	if f.EntityType != "" {
 		q.EntityType = &f.EntityType
@@ -221,9 +225,6 @@ func (h *Handler) list(w http.ResponseWriter, req *http.Request, property *int64
 	f.EntityID, f.UserID, f.From, f.To = num("entity_id"), num("user_id"), date("from"), date("to")
 	if len(f.EntityType) > 50 || len(f.Action) > 100 {
 		errs = append(errs, apperr.FieldError{Field: "entity_type", Code: "TOO_LONG", Message: "too long"})
-	}
-	if n := utf8.RuneCountInString(f.Q); f.Q != "" && (n < MinQuery || n > MaxQuery) {
-		errs = append(errs, apperr.FieldError{Field: "q", Code: "INVALID_LENGTH", Message: "3 to 64 characters"})
 	}
 	if len(errs) > 0 {
 		return apperr.Invalid("the query is invalid", errs...)
