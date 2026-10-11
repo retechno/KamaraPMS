@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -212,7 +213,7 @@ func (s *Service) ChangeSettings(ctx context.Context, propertyID int64, in Setti
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.settings_changed", "property_tax_settings", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.settings_changed", "property_tax_settings", id, auditlabel.Property(ctx, propertyID),
 			map[string]any{"is_pkp": latest.IsPKP, "input_vat_treatment": latest.InputVATTreatment, "effective_from": latest.EffectiveFrom.String()},
 			map[string]any{"is_pkp": in.IsPKP, "input_vat_treatment": in.InputVATTreatment, "effective_from": in.EffectiveFrom.String(), "backdated": approvedBy != nil, "approved_by": approvedBy}))
 	})
