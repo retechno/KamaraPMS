@@ -195,6 +195,8 @@ func TestManualChargeValidation(t *testing.T) {
 	// a closed folio takes nothing
 	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, f.folio))
 	wantCode(t, try(func(in *folios.ChargeInput) {}), "FOLIO_CLOSED")
+	// the folio was closed by hand, with a balance (no way of the application does that): open it again, so the check that ends every test (no closed folio has a balance) holds
+	must(t, f.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, f.folio))
 }
 
 func TestApprovalVerification(t *testing.T) {
