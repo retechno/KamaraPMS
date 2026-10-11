@@ -15,11 +15,11 @@ import (
 
 const insertAuditLog = `-- name: InsertAuditLog :exec
 INSERT INTO audit_logs (
-    tenant_id, property_id, business_date, user_id, action, entity_type, entity_id,
+    tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, entity_label,
     old_data, new_data, request_id, ip_address, created_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
-    $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12, $13
 )
 `
 
@@ -31,6 +31,7 @@ type InsertAuditLogParams struct {
 	Action       string
 	EntityType   string
 	EntityID     int64
+	EntityLabel  *string
 	OldData      []byte
 	NewData      []byte
 	RequestID    *string
@@ -47,6 +48,7 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 		arg.Action,
 		arg.EntityType,
 		arg.EntityID,
+		arg.EntityLabel,
 		arg.OldData,
 		arg.NewData,
 		arg.RequestID,
@@ -57,7 +59,7 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 }
 
 const listAuditLogsForEntity = `-- name: ListAuditLogsForEntity :many
-SELECT id, tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, old_data, new_data, request_id, ip_address, created_at FROM audit_logs
+SELECT id, tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, old_data, new_data, request_id, ip_address, created_at, entity_label FROM audit_logs
 WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3
 ORDER BY created_at DESC, id DESC
 LIMIT $4
@@ -98,6 +100,7 @@ func (q *Queries) ListAuditLogsForEntity(ctx context.Context, arg ListAuditLogsF
 			&i.RequestID,
 			&i.IpAddress,
 			&i.CreatedAt,
+			&i.EntityLabel,
 		); err != nil {
 			return nil, err
 		}
@@ -110,7 +113,7 @@ func (q *Queries) ListAuditLogsForEntity(ctx context.Context, arg ListAuditLogsF
 }
 
 const searchAuditLogs = `-- name: SearchAuditLogs :many
-SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id,
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
        a.old_data, a.new_data, a.request_id, a.ip_address
 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
 WHERE a.tenant_id = $1
@@ -121,9 +124,11 @@ WHERE a.tenant_id = $1
   AND ($6::text IS NULL OR a.action = $6::text)
   AND ($7::date IS NULL OR a.business_date >= $7::date)
   AND ($8::date IS NULL OR a.business_date <= $8::date)
-  AND ($9::bigint IS NULL OR a.id < $9::bigint)
+  -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
+  AND ($9::text IS NULL OR a.entity_label ILIKE $9::text ESCAPE '\')
+  AND ($10::bigint IS NULL OR a.id < $10::bigint)
 ORDER BY a.id DESC
-LIMIT $10
+LIMIT $11
 `
 
 type SearchAuditLogsParams struct {
@@ -135,6 +140,7 @@ type SearchAuditLogsParams struct {
 	Action     *string
 	FromDate   *civil.Date
 	ToDate     *civil.Date
+	LabelLike  *string
 	BeforeID   *int64
 	RowLimit   int32
 }
@@ -148,6 +154,7 @@ type SearchAuditLogsRow struct {
 	Action       string
 	EntityType   string
 	EntityID     int64
+	EntityLabel  *string
 	OldData      []byte
 	NewData      []byte
 	RequestID    *string
@@ -165,6 +172,7 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 		arg.Action,
 		arg.FromDate,
 		arg.ToDate,
+		arg.LabelLike,
 		arg.BeforeID,
 		arg.RowLimit,
 	)
@@ -184,6 +192,7 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,
+			&i.EntityLabel,
 			&i.OldData,
 			&i.NewData,
 			&i.RequestID,

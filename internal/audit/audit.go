@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"kamarapms/internal/audit/auditdb"
 	"kamarapms/internal/platform/civil"
@@ -16,6 +18,9 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/httpx"
 )
+
+// MaxLabelLength is the length of the column entity_label, in characters.
+const MaxLabelLength = 120
 
 // Entry is one audited change.
 type Entry struct {
@@ -26,8 +31,12 @@ type Entry struct {
 	Action       string // e.g. property.created, business_day.closed
 	EntityType   string // e.g. property
 	EntityID     int64
-	Old          any // state before (nil for creations)
-	New          any // state after (nil for deletions)
+	// EntityLabel is what the entry is about as a person reads it: the identifier alone ("305", "RES000012", "FOL000026", a code, a name), never the kind of thing (that is
+	// EntityType, said in the language of the screen). Empty when the thing has no readable number (the column is then NULL). It must not hold the name of a guest: an
+	// entry cannot be erased, so a guest is named by the code. A label longer than MaxLabelLength is cut at a character.
+	EntityLabel string
+	Old         any // state before (nil for creations)
+	New         any // state after (nil for deletions)
 }
 
 // Writer persists audit entries.
@@ -70,7 +79,21 @@ func (w *Writer) Write(ctx context.Context, e Entry) error {
 	if ip, ok := httpx.ClientIPFrom(ctx); ok {
 		p.IpAddress = &ip
 	}
+	p.EntityLabel = clipLabel(e.EntityLabel)
 	return auditdb.New(tx).InsertAuditLog(ctx, p)
+}
+
+// clipLabel is the label as it is stored: trimmed, at most MaxLabelLength characters (cut between two characters, never inside one), and nil when nothing is left.
+func clipLabel(label string) *string {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil
+	}
+	if utf8.RuneCountInString(label) > MaxLabelLength {
+		runes := []rune(label)
+		label = strings.TrimSpace(string(runes[:MaxLabelLength]))
+	}
+	return &label
 }
 
 func marshal(v any) ([]byte, error) {

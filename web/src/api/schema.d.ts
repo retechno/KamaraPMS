@@ -8555,6 +8555,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             folio_number: string;
+            /** @description The confirmation number of the reservation of the folio (`RES000012`) */
+            confirmation_number?: string;
             /**
              * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
              * @enum {string}
@@ -8602,6 +8604,8 @@ export interface components {
             payment_number: string;
             /** Format: int64 */
             folio_id: number;
+            /** @description The number of that folio (`FOL000026`) */
+            folio_number?: string;
             /** @enum {string} */
             payment_type: "PAYMENT" | "REFUND";
             /**
@@ -10245,6 +10249,8 @@ export interface components {
             entity_type: string;
             /** Format: int64 */
             entity_id: number;
+            /** @description What the entry is about as a person reads it: the identifier alone (`305`, `RES000012`, `FOL000026`, a code, a name, the e-mail of a user), never the kind of thing (that is `entity_type`) and never the name of a guest (the code of the guest). Null for an entry written before the label existed and for one that has no readable number. */
+            entity_label: string | null;
             /** @description The state before (null for a creation). */
             old_data: unknown;
             /** @description The state after. */
@@ -17788,6 +17794,8 @@ export interface operations {
                 action?: string;
                 /** @description First business date. */
                 from?: components["schemas"]["Date"];
+                /** @description A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it. */
+                q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
             };
@@ -17826,6 +17834,8 @@ export interface operations {
                 action?: string;
                 /** @description First business date. */
                 from?: components["schemas"]["Date"];
+                /** @description A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it. */
+                q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
             };

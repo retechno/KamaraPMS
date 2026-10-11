@@ -25,4 +25,5 @@ type AuditLog struct {
 	RequestID    *string
 	IpAddress    *netip.Addr
 	CreatedAt    time.Time
+	EntityLabel  *string
 }
