@@ -95,8 +95,8 @@ func (s *Service) decimals(ctx context.Context, propertyID int64) (int32, error)
 	return prop.CurrencyDecimals, nil
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "company", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "company", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 // List lists companies by id after afterID.
@@ -173,7 +173,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in Input) (Compa
 			return err
 		}
 		out = toCompany(row, decimals)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "company.created", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "company.created", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -269,7 +269,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 			return err
 		}
 		out = toCompany(updated, decimals)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "company.updated", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "company.updated", id, out.Code, before, out))
 	})
 	return out, err
 }
