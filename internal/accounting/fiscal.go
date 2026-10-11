@@ -252,7 +252,7 @@ func (s *Service) CloseFiscalYear(ctx context.Context, propertyID int64, start c
 		}); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.fiscal_year_closed", "gl_fiscal_year", propertyID, nil,
+		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.fiscal_year_closed", "gl_fiscal_year", propertyID, fy.Label, nil,
 			map[string]any{"year": fy.Label, "start": fy.Start.String(), "net_income": fy.NetIncome.String(), "journal_id": journalID})); err != nil {
 			return err
 		}
@@ -331,7 +331,7 @@ func (s *Service) ReopenFiscalYear(ctx context.Context, propertyID int64, start 
 		}); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.fiscal_year_reopened", "gl_fiscal_year", propertyID, nil,
+		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.fiscal_year_reopened", "gl_fiscal_year", propertyID, fy.Label, nil,
 			map[string]any{"year": fy.Label, "start": fy.Start.String(), "reason": reason, "approved_by": by})); err != nil {
 			return err
 		}

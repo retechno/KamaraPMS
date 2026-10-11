@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting/accountingdb"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -241,7 +242,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 			return 0, "", err
 		}
 	}
-	return id, number, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.module_journal_posted", "gl_journal", id, nil,
+	return id, number, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.module_journal_posted", "gl_journal", id, auditlabel.Journal(ctx, po.propertyID, id), nil,
 		map[string]any{"journal_number": number, "type": typ, "journal_date": in.Date, "lines": len(in.Lines), "total": debit.String()}))
 }
 
@@ -283,6 +284,6 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 			return 0, err
 		}
 	}
-	return id, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_reversed", "gl_journal", id, nil,
+	return id, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, po.propertyID, id), nil,
 		map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason, "approved_by": approvedBy}))
 }

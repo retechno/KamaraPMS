@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"kamarapms/internal/accounting/accountingdb"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
@@ -115,7 +116,7 @@ func (s *Service) SetAccountMap(ctx context.Context, propertyID int64, in []MapI
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.map_changed", "property", propertyID, before, after))
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.map_changed", "property", propertyID, auditlabel.Property(ctx, propertyID), before, after))
 	})
 	if err != nil {
 		return nil, err
