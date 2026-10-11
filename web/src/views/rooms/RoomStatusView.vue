@@ -322,10 +322,10 @@ watch(() => property.currentId, () => {
       </Button>
     </div>
 
-    <div v-if="outcome" class="mb-4 rounded-lg border bg-card p-3 text-sm" role="status" data-testid="bulk-result">
+    <div v-if="outcome" class="mb-4 rounded-lg border border-border bg-card p-3 text-sm" role="status" data-testid="bulk-result">
       <div class="flex items-start justify-between gap-3">
         <p class="m-0 font-semibold" data-testid="bulk-result-summary">{{ outcomeSummary }}</p>
-        <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted" :aria-label="t('roomStatus.resultClose')" data-testid="bulk-result-close" @click="outcome = null"><X class="size-4" aria-hidden="true" /></button>
+        <button type="button" class="cursor-pointer rounded border-0 bg-transparent p-1 text-muted-foreground hover:bg-muted" :aria-label="t('roomStatus.resultClose')" data-testid="bulk-result-close" @click="outcome = null"><X class="size-4" aria-hidden="true" /></button>
       </div>
       <details v-if="outcome.skipped.length" class="mt-2" open>
         <summary class="cursor-pointer text-muted-foreground">{{ t('roomStatus.resultSkipped') }}</summary>
@@ -372,7 +372,7 @@ watch(() => property.currentId, () => {
         <button
           v-if="canChange"
           type="button"
-          class="absolute right-0 top-0 grid size-9 cursor-pointer place-items-center rounded-lg focus-visible:ring-2 focus-visible:ring-ring"
+          class="absolute right-0 top-0 grid size-9 cursor-pointer place-items-center rounded-lg border-0 bg-transparent p-0 focus-visible:ring-2 focus-visible:ring-ring"
           :aria-pressed="isPicked(r)"
           :aria-label="t('roomStatus.selectRoom', { number: r.room_number })"
           :data-testid="`pick-${r.room_number}`"

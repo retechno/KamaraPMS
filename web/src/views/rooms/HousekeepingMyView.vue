@@ -219,7 +219,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
           role="tab"
           :aria-selected="scope === s"
           :data-testid="`scope-${s}`"
-          :class="cn('min-h-10 flex-1 cursor-pointer rounded-md px-3 text-sm font-semibold', scope === s ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')"
+          :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', scope === s ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')"
           @click="scope = s"
         >{{ s === 'mine' ? t('myTasks.scopeMine') : t('myTasks.scopeAll') }}</button>
       </div>
@@ -237,7 +237,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
                 type="button"
                 :aria-pressed="person === workloadKey(w)"
                 :data-testid="`person-${workloadKey(w)}`"
-                :class="cn('flex w-full cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3 text-left', person === workloadKey(w) && 'ring-2 ring-primary')"
+                :class="cn('flex w-full cursor-pointer flex-col gap-1.5 rounded-xl border border-border bg-card p-3 text-left', person === workloadKey(w) && 'ring-2 ring-primary')"
                 @click="pickPerson(workloadKey(w))"
               >
                 <span class="flex items-baseline justify-between gap-3">
@@ -271,8 +271,8 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
         </div>
 
         <div v-if="ofPerson.length" class="mb-3 flex gap-1.5 rounded-lg bg-muted p-1" role="tablist" :aria-label="t('myTasks.tabsLabel')" data-testid="tabs">
-          <button type="button" role="tab" :aria-selected="tab === 'next'" data-testid="tab-next" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md px-3 text-sm font-semibold', tab === 'next' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')" @click="tab = 'next'">{{ t('myTasks.tabNext', { n: next.length }) }}</button>
-          <button type="button" role="tab" :aria-selected="tab === 'done'" data-testid="tab-done" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md px-3 text-sm font-semibold', tab === 'done' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')" @click="tab = 'done'">{{ t('myTasks.tabDone', { n: done.length }) }}</button>
+          <button type="button" role="tab" :aria-selected="tab === 'next'" data-testid="tab-next" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', tab === 'next' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'next'">{{ t('myTasks.tabNext', { n: next.length }) }}</button>
+          <button type="button" role="tab" :aria-selected="tab === 'done'" data-testid="tab-done" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', tab === 'done' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'done'">{{ t('myTasks.tabDone', { n: done.length }) }}</button>
         </div>
 
         <EmptyState
@@ -294,7 +294,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
             :key="task.id"
             :data-testid="`card-${task.room_number}`"
             :data-status="task.status"
-            :class="cn('flex flex-col gap-3 rounded-xl border bg-card p-3.5', (task.arrival_today || task.priority === 'HIGH') && open(task) && 'border-2 border-warning', task.status === 'IN_PROGRESS' && 'border-2 border-primary', !open(task) && 'text-muted-foreground')"
+            :class="cn('flex flex-col gap-3 rounded-xl border border-border bg-card p-3.5', (task.arrival_today || task.priority === 'HIGH') && open(task) && 'border-2 border-warning', task.status === 'IN_PROGRESS' && 'border-2 border-primary', !open(task) && 'text-muted-foreground')"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
@@ -328,7 +328,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
               <Button variant="outline" class="min-h-[52px] px-4" :disabled="busy" :data-testid="`skip-${task.room_number}`" @click="askSkip(task)">{{ t('myTasks.skipAction') }}</Button>
             </div>
             <label v-if="mayPick(task)" class="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-              <input type="checkbox" class="size-5" :checked="isPicked(task)" :data-testid="`pick-${task.room_number}`" :aria-label="t('cleaning.tickRoom', { number: task.room_number })" @change="togglePick(task)" />
+              <input type="checkbox" class="size-5 accent-primary" :checked="isPicked(task)" :data-testid="`pick-${task.room_number}`" :aria-label="t('cleaning.tickRoom', { number: task.room_number })" @change="togglePick(task)" />
               {{ t('cleaning.tickRoom', { number: task.room_number }) }}
             </label>
           </li>
