@@ -2,6 +2,7 @@ package housekeeping_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -86,7 +87,9 @@ func TestBulkUsesTheRuleOfTheSingleChange(t *testing.T) {
 			single := f.set(t, f.admin, room.ID, to)
 			// bring the room back to `from` for the bulk call
 			if single == nil {
-				f.Exec(t, `UPDATE room_housekeeping SET status = $1 WHERE room_id = $2`, string(from), room.ID)
+				if err := f.Exec(t, `UPDATE room_housekeeping SET status = $1 WHERE room_id = $2`, string(from), room.ID); err != nil {
+					t.Fatal(err)
+				}
 			}
 			out, err := f.bulk(t, f.admin, to, room.ID)
 			if err != nil {
@@ -97,8 +100,9 @@ func TestBulkUsesTheRuleOfTheSingleChange(t *testing.T) {
 				t.Fatalf("%s→%s: the single change gave %v, the bulk change %+v", from, to, single, r)
 			}
 			if single != nil {
-				if c := single.(*apperr.Error); c.Message != r.Error.Message { //nolint:errcheck // the single change returns an *apperr.Error here
-					t.Fatalf("%s→%s: messages differ: %q / %q", from, to, c.Message, r.Error.Message)
+				var c *apperr.Error
+				if !errors.As(single, &c) || c.Message != r.Error.Message {
+					t.Fatalf("%s→%s: messages differ: %v / %q", from, to, single, r.Error.Message)
 				}
 			}
 		}
@@ -194,14 +198,17 @@ func TestBulkIsolation(t *testing.T) {
 func TestBulkNeedsAnOpenBusinessDay(t *testing.T) {
 	f := newFixture(t)
 	room := f.Room(t, f.admin, f.propertyID, f.typeID, "201")
-	f.Exec(t, `UPDATE business_days SET status = 'CLOSED', closed_at = now() WHERE property_id = $1 AND status = 'OPEN'`, f.propertyID)
+	if err := f.Exec(t, `UPDATE business_days SET status = 'CLOSED', closed_at = now() WHERE property_id = $1 AND status = 'OPEN'`, f.propertyID); err != nil {
+		t.Fatal(err)
+	}
 	_, single := f.HK.SetStatus(f.admin, f.propertyID, room.ID, housekeeping.Cleaning, "")
 	_, err := f.bulk(t, f.admin, housekeeping.Cleaning, room.ID)
 	if single == nil || err == nil {
 		t.Fatalf("single: %v, bulk: %v", single, err)
 	}
-	if a, b := single.(*apperr.Error), err.(*apperr.Error); a.Code != b.Code { //nolint:errcheck // both are *apperr.Error
-		t.Fatalf("the single change says %s, the bulk change %s", a.Code, b.Code)
+	var a, b *apperr.Error
+	if !errors.As(single, &a) || !errors.As(err, &b) || a.Code != b.Code {
+		t.Fatalf("the single change says %v, the bulk change %v", single, err)
 	}
 	if n := f.Count(t, `SELECT count(*) FROM housekeeping_logs`); n != 0 {
 		t.Fatalf("logs: %d", n)
