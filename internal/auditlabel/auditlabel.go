@@ -189,3 +189,198 @@ func Shift(ctx context.Context, propertyID, id int64) string {
 	}
 	return v
 }
+
+// GLAccount is the code of an account of the chart.
+func GLAccount(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.GLAccountCode(ctx, auditlabeldb.GLAccountCodeParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// Journal is the number of a journal.
+func Journal(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.JournalNumber(ctx, auditlabeldb.JournalNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// SupplierBill is the number of a supplier bill.
+func SupplierBill(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.SupplierBillNumber(ctx, auditlabeldb.SupplierBillNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// SupplierCreditNote is the number of a supplier credit note.
+func SupplierCreditNote(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.SupplierCreditNumber(ctx, auditlabeldb.SupplierCreditNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// SupplierPayment is the number of a payment to a supplier.
+func SupplierPayment(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.SupplierPaymentNumber(ctx, auditlabeldb.SupplierPaymentNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// CityLedgerInvoice is the number of a city ledger invoice.
+func CityLedgerInvoice(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.CityLedgerInvoiceNumber(ctx, auditlabeldb.CityLedgerInvoiceNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// CityLedgerReceipt is the number of a city ledger receipt.
+func CityLedgerReceipt(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.CityLedgerReceiptNumber(ctx, auditlabeldb.CityLedgerReceiptNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// CityLedgerAdjustment is the number of a city ledger credit note or write-off.
+func CityLedgerAdjustment(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.CityLedgerAdjustmentNumber(ctx, auditlabeldb.CityLedgerAdjustmentNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// TaxInvoice is the reference of a tax invoice.
+func TaxInvoice(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.TaxInvoiceRef(ctx, auditlabeldb.TaxInvoiceRefParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// TaxReturn is the number of a tax return.
+func TaxReturn(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.TaxReturnNumber(ctx, auditlabeldb.TaxReturnNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// TaxPayment is the number of a tax payment.
+func TaxPayment(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.TaxPaymentNumber(ctx, auditlabeldb.TaxPaymentNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// TaxOfProfile is the code of the tax a filing profile is for.
+func TaxOfProfile(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.TaxCodeOfProfile(ctx, auditlabeldb.TaxCodeOfProfileParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// TaxOfOpeningCredit is the code of the tax an opening credit is for.
+func TaxOfOpeningCredit(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.TaxCodeOfOpeningCredit(ctx, auditlabeldb.TaxCodeOfOpeningCreditParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// BankAccount is the name of a bank account.
+func BankAccount(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.BankAccountName(ctx, auditlabeldb.BankAccountNameParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// Supplier is the code of a supplier.
+func Supplier(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.SupplierCode(ctx, auditlabeldb.SupplierCodeParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}

@@ -11,6 +11,22 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const bankAccountName = `-- name: BankAccountName :one
+SELECT name FROM bank_accounts WHERE property_id = $1 AND id = $2
+`
+
+type BankAccountNameParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) BankAccountName(ctx context.Context, arg BankAccountNameParams) (string, error) {
+	row := q.db.QueryRow(ctx, bankAccountName, arg.PropertyID, arg.ID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const bankStatementPeriod = `-- name: BankStatementPeriod :one
 SELECT a.name AS account_name, s.period_from, s.period_to
 FROM bank_statements s JOIN bank_accounts a ON a.id = s.bank_account_id
@@ -51,6 +67,54 @@ func (q *Queries) BudgetName(ctx context.Context, arg BudgetNameParams) (string,
 	return name, err
 }
 
+const cityLedgerAdjustmentNumber = `-- name: CityLedgerAdjustmentNumber :one
+SELECT adjustment_number FROM city_ledger_adjustments WHERE property_id = $1 AND id = $2
+`
+
+type CityLedgerAdjustmentNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) CityLedgerAdjustmentNumber(ctx context.Context, arg CityLedgerAdjustmentNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, cityLedgerAdjustmentNumber, arg.PropertyID, arg.ID)
+	var adjustment_number string
+	err := row.Scan(&adjustment_number)
+	return adjustment_number, err
+}
+
+const cityLedgerInvoiceNumber = `-- name: CityLedgerInvoiceNumber :one
+SELECT invoice_number FROM city_ledger_invoices WHERE property_id = $1 AND id = $2
+`
+
+type CityLedgerInvoiceNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) CityLedgerInvoiceNumber(ctx context.Context, arg CityLedgerInvoiceNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, cityLedgerInvoiceNumber, arg.PropertyID, arg.ID)
+	var invoice_number string
+	err := row.Scan(&invoice_number)
+	return invoice_number, err
+}
+
+const cityLedgerReceiptNumber = `-- name: CityLedgerReceiptNumber :one
+SELECT receipt_number FROM city_ledger_receipts WHERE property_id = $1 AND id = $2
+`
+
+type CityLedgerReceiptNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) CityLedgerReceiptNumber(ctx context.Context, arg CityLedgerReceiptNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, cityLedgerReceiptNumber, arg.PropertyID, arg.ID)
+	var receipt_number string
+	err := row.Scan(&receipt_number)
+	return receipt_number, err
+}
+
 const folioNumber = `-- name: FolioNumber :one
 SELECT folio_number FROM folios WHERE property_id = $1 AND id = $2
 `
@@ -83,6 +147,38 @@ func (q *Queries) FolioNumberOfItem(ctx context.Context, arg FolioNumberOfItemPa
 	var folio_number string
 	err := row.Scan(&folio_number)
 	return folio_number, err
+}
+
+const gLAccountCode = `-- name: GLAccountCode :one
+SELECT code FROM gl_accounts WHERE property_id = $1 AND id = $2
+`
+
+type GLAccountCodeParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GLAccountCode(ctx context.Context, arg GLAccountCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, gLAccountCode, arg.PropertyID, arg.ID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
+const journalNumber = `-- name: JournalNumber :one
+SELECT journal_number FROM gl_journals WHERE property_id = $1 AND id = $2
+`
+
+type JournalNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) JournalNumber(ctx context.Context, arg JournalNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, journalNumber, arg.PropertyID, arg.ID)
+	var journal_number string
+	err := row.Scan(&journal_number)
+	return journal_number, err
 }
 
 const paymentNumber = `-- name: PaymentNumber :one
@@ -211,6 +307,70 @@ func (q *Queries) StayNumber(ctx context.Context, arg StayNumberParams) (string,
 	return stay_number, err
 }
 
+const supplierBillNumber = `-- name: SupplierBillNumber :one
+SELECT bill_number FROM supplier_bills WHERE property_id = $1 AND id = $2
+`
+
+type SupplierBillNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SupplierBillNumber(ctx context.Context, arg SupplierBillNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, supplierBillNumber, arg.PropertyID, arg.ID)
+	var bill_number string
+	err := row.Scan(&bill_number)
+	return bill_number, err
+}
+
+const supplierCode = `-- name: SupplierCode :one
+SELECT code FROM suppliers WHERE property_id = $1 AND id = $2
+`
+
+type SupplierCodeParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SupplierCode(ctx context.Context, arg SupplierCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, supplierCode, arg.PropertyID, arg.ID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
+const supplierCreditNumber = `-- name: SupplierCreditNumber :one
+SELECT credit_number FROM supplier_credit_notes WHERE property_id = $1 AND id = $2
+`
+
+type SupplierCreditNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SupplierCreditNumber(ctx context.Context, arg SupplierCreditNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, supplierCreditNumber, arg.PropertyID, arg.ID)
+	var credit_number string
+	err := row.Scan(&credit_number)
+	return credit_number, err
+}
+
+const supplierPaymentNumber = `-- name: SupplierPaymentNumber :one
+SELECT payment_number FROM supplier_payments WHERE property_id = $1 AND id = $2
+`
+
+type SupplierPaymentNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SupplierPaymentNumber(ctx context.Context, arg SupplierPaymentNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, supplierPaymentNumber, arg.PropertyID, arg.ID)
+	var payment_number string
+	err := row.Scan(&payment_number)
+	return payment_number, err
+}
+
 const taskRoomNumber = `-- name: TaskRoomNumber :one
 SELECT r.room_number FROM housekeeping_tasks t JOIN rooms r ON r.id = t.room_id
 WHERE t.property_id = $1 AND t.id = $2
@@ -226,4 +386,84 @@ func (q *Queries) TaskRoomNumber(ctx context.Context, arg TaskRoomNumberParams) 
 	var room_number string
 	err := row.Scan(&room_number)
 	return room_number, err
+}
+
+const taxCodeOfOpeningCredit = `-- name: TaxCodeOfOpeningCredit :one
+SELECT t.code FROM tax_opening_credits c JOIN taxes t ON t.property_id = c.property_id AND t.id = c.tax_id WHERE c.property_id = $1 AND c.id = $2
+`
+
+type TaxCodeOfOpeningCreditParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) TaxCodeOfOpeningCredit(ctx context.Context, arg TaxCodeOfOpeningCreditParams) (string, error) {
+	row := q.db.QueryRow(ctx, taxCodeOfOpeningCredit, arg.PropertyID, arg.ID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
+const taxCodeOfProfile = `-- name: TaxCodeOfProfile :one
+SELECT t.code FROM tax_filing_profiles p JOIN taxes t ON t.property_id = p.property_id AND t.id = p.tax_id WHERE p.property_id = $1 AND p.id = $2
+`
+
+type TaxCodeOfProfileParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) TaxCodeOfProfile(ctx context.Context, arg TaxCodeOfProfileParams) (string, error) {
+	row := q.db.QueryRow(ctx, taxCodeOfProfile, arg.PropertyID, arg.ID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
+const taxInvoiceRef = `-- name: TaxInvoiceRef :one
+SELECT invoice_ref FROM tax_invoices WHERE property_id = $1 AND id = $2
+`
+
+type TaxInvoiceRefParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) TaxInvoiceRef(ctx context.Context, arg TaxInvoiceRefParams) (string, error) {
+	row := q.db.QueryRow(ctx, taxInvoiceRef, arg.PropertyID, arg.ID)
+	var invoice_ref string
+	err := row.Scan(&invoice_ref)
+	return invoice_ref, err
+}
+
+const taxPaymentNumber = `-- name: TaxPaymentNumber :one
+SELECT payment_number FROM tax_payments WHERE property_id = $1 AND id = $2
+`
+
+type TaxPaymentNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) TaxPaymentNumber(ctx context.Context, arg TaxPaymentNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, taxPaymentNumber, arg.PropertyID, arg.ID)
+	var payment_number string
+	err := row.Scan(&payment_number)
+	return payment_number, err
+}
+
+const taxReturnNumber = `-- name: TaxReturnNumber :one
+SELECT return_number FROM tax_returns WHERE property_id = $1 AND id = $2
+`
+
+type TaxReturnNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) TaxReturnNumber(ctx context.Context, arg TaxReturnNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, taxReturnNumber, arg.PropertyID, arg.ID)
+	var return_number string
+	err := row.Scan(&return_number)
+	return return_number, err
 }
