@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/expected"
 	"kamarapms/internal/folios"
@@ -210,7 +211,7 @@ func (s *Service) Move(ctx context.Context, propertyID, stayID int64, in MoveInp
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.room_moved", stayID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.room_moved", stayID, auditlabel.Stay(ctx, propertyID, stayID),
 			map[string]any{"room_id": pre.seg.RoomID, "room_number": pre.seg.RoomNumber},
 			mergeAudit(map[string]any{"room_id": target.ID, "room_number": target.RoomNumber, "reason": reason, "rates_changed": len(in.NewNightlyRates), "override_room_not_ready": in.OverrideRoomNotReady}, movedOutOfKeptBed(pre.line, target.BedTypeID)))); err != nil {
 			return err
@@ -334,7 +335,7 @@ func (s *Service) ChangeDeparture(ctx context.Context, propertyID, stayID int64,
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.departure_changed", stayID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.departure_changed", stayID, auditlabel.Stay(ctx, propertyID, stayID),
 			map[string]any{"departure_date": cur}, mergeAudit(mergeAudit(map[string]any{"departure_date": in.DepartureDate}, reservations.OverrideAudit(ctx)), reservations.RestrictionAudit(ctx)))); err != nil {
 			return err
 		}
@@ -417,7 +418,7 @@ func (s *Service) AddGuest(ctx context.Context, propertyID, stayID int64, in Add
 		if err := q.InsertStayGuest(ctx, frontdeskdb.InsertStayGuestParams{TenantID: p.TenantID, PropertyID: propertyID, StayID: stayID, GuestID: in.GuestID, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "stay.guest_added", stayID, nil, map[string]any{"guest_id": in.GuestID}))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "stay.guest_added", stayID, auditlabel.Stay(ctx, propertyID, stayID), nil, map[string]any{"guest_id": in.GuestID}))
 	})
 	if err != nil {
 		return StayDetail{}, err
@@ -510,7 +511,7 @@ func (s *Service) CheckOut(ctx context.Context, propertyID, stayID int64, in Che
 		if err := s.res.MarkCompleted(ctx, p, propertyID, pre.line.ID); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.checked_out", stayID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.checked_out", stayID, auditlabel.Stay(ctx, propertyID, stayID),
 			map[string]any{"status": "OPEN", "departure_date": st.DepartureDate},
 			map[string]any{"status": done.Status, "departure_date": newDep, "room_charges_posted": len(posted), "folios_closed": len(closedFolios)})); err != nil {
 			return err

@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk/frontdeskdb"
 	"kamarapms/internal/iam"
@@ -205,7 +206,7 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 				c.FolioID, c.AdjustmentItemID = &a.FolioID, &a.AdjustmentItemID
 				meta["adjustment_item_id"], meta["folio_id"], meta["charged_item_id"], meta["approved_by"] = a.AdjustmentItemID, a.FolioID, t.po.FolioItemID, approval.UserID()
 			}
-			if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.rate_changed", stayID, map[string]any{"date": c.Date, "amount": c.OldAmount}, meta)); err != nil {
+			if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.rate_changed", stayID, auditlabel.Stay(ctx, propertyID, stayID), map[string]any{"date": c.Date, "amount": c.OldAmount}, meta)); err != nil {
 				return err
 			}
 			changes[i] = c
