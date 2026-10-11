@@ -25,17 +25,46 @@ RETURNING *;
 SELECT id FROM folios
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id = @reservation_id AND stay_id IS NULL AND status = 'OPEN';
 
--- name: ListFolios :many
-SELECT f.*, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit,
+-- The folios of a property in the order asked for: by number, balance or status, either way; the default (key '') is the open ones first, the largest balance first among them, then the closed
+-- ones. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
+-- breaking a tie in the direction of the order. NULL does not occur: every folio has a number, a status and a balance.
+--
+-- The balance is SUM(debit) - SUM(credit) of the folio's items, and it is read for the OPEN folios only: a folio can be closed only with a zero balance (FOLIO_BALANCE_NOT_ZERO, and no
+-- posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
+-- name: ListFoliosOrdered :many
+SELECT f.*, bal.balance::numeric AS balance,
        (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
 FROM folios f
-LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
-WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id > @after_id
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN f.status = 'OPEN'
+                THEN (SELECT COALESCE(sum(i.debit), 0) - COALESCE(sum(i.credit), 0) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id)
+                ELSE 0 END AS balance
+) bal
+CROSS JOIN LATERAL (
+    SELECT (CASE @sort_key::text
+                WHEN 'folio_number' THEN f.folio_number::text COLLATE "und-x-icu"
+                WHEN 'status' THEN f.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE @sort_key::text
+                WHEN 'balance' THEN bal.balance
+                WHEN '' THEN (CASE WHEN f.status = 'OPEN' THEN 0 ELSE 1000000000000000 END) - bal.balance
+            END) AS sk_num
+) k
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(reservation_id)::bigint IS NULL OR f.reservation_id = sqlc.narg(reservation_id)::bigint)
   AND (sqlc.narg(stay_id)::bigint IS NULL OR f.stay_id = sqlc.narg(stay_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
-GROUP BY f.id
-ORDER BY f.id
+  AND (sqlc.narg(after_id)::bigint IS NULL
+       OR CASE WHEN NOT @sort_desc::boolean THEN
+               (k.sk_text > sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num > sqlc.narg(after_num)::numeric
+                OR ((k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num = sqlc.narg(after_num)::numeric) AND f.id > sqlc.narg(after_id)::bigint))
+           ELSE
+               (k.sk_text < sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num < sqlc.narg(after_num)::numeric
+                OR ((k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num = sqlc.narg(after_num)::numeric) AND f.id < sqlc.narg(after_id)::bigint))
+           END)
+ORDER BY (CASE WHEN NOT @sort_desc::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT @sort_desc::boolean THEN k.sk_num END) ASC,
+         (CASE WHEN @sort_desc::boolean THEN k.sk_text END) DESC, (CASE WHEN @sort_desc::boolean THEN k.sk_num END) DESC,
+         (CASE WHEN NOT @sort_desc::boolean THEN f.id END) ASC, (CASE WHEN @sort_desc::boolean THEN f.id END) DESC
 LIMIT @row_limit;
 
 -- The number of a folio, for a list of payments that names it (a plain read, no lock).

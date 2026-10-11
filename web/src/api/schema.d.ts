@@ -1554,7 +1554,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List folios with their balances (folio.read) */
+        /**
+         * List folios with their balances (folio.read)
+         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
+         */
         get: operations["listFolios"];
         put?: never;
         post?: never;
@@ -15498,6 +15501,10 @@ export interface operations {
                 reservation_id?: number;
                 stay_id?: number;
                 status?: "OPEN" | "CLOSED";
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "folio_number" | "balance" | "status";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -15516,6 +15523,7 @@ export interface operations {
                     "application/json": components["schemas"]["FolioPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];

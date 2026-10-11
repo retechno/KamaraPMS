@@ -680,20 +680,21 @@ func TestListFoliosAndIsolation(t *testing.T) {
 	f := setup(t)
 	f.charge(t, "c1")
 	f.newFolio(t, "F2")
-	list, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{}, 0, 10)
+	page, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{}, listsort.Sort{}, nil, 10)
 	must(t, err)
+	list := page.Data
 	if len(list) != 2 || list[0].Balance != "122100" || list[1].Balance != "0" {
 		t.Fatalf("list: %+v", list)
 	}
-	byRes, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{ReservationID: &f.reservation}, 0, 10)
+	byRes, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{ReservationID: &f.reservation}, listsort.Sort{}, nil, 10)
 	must(t, err)
-	if len(byRes) != 1 || byRes[0].ID != f.folio {
-		t.Fatalf("by reservation: %+v", byRes)
+	if len(byRes.Data) != 1 || byRes.Data[0].ID != f.folio {
+		t.Fatalf("by reservation: %+v", byRes.Data)
 	}
-	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Status: "CLOSED"}, 0, 10)
+	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Status: "CLOSED"}, listsort.Sort{}, nil, 10)
 	must(t, err)
-	if len(open) != 0 {
-		t.Fatalf("closed: %+v", open)
+	if len(open.Data) != 0 {
+		t.Fatalf("closed: %+v", open.Data)
 	}
 	// another tenant sees neither the property nor the folio
 	foreign := f.Tenant(t, "XYZ")

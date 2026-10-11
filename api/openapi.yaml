@@ -1993,6 +1993,7 @@ paths:
     get:
       operationId: listFolios
       summary: List folios with their balances (folio.read)
+      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -2000,12 +2001,15 @@ paths:
         - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
+        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of folios.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FolioPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }

@@ -1497,31 +1497,58 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 	return items, nil
 }
 
-const listFolios = `-- name: ListFolios :many
-SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit,
+const listFoliosOrdered = `-- name: ListFoliosOrdered :many
+SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, bal.balance::numeric AS balance,
        (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
 FROM folios f
-LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
-WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id > $3
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN f.status = 'OPEN'
+                THEN (SELECT COALESCE(sum(i.debit), 0) - COALESCE(sum(i.credit), 0) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id)
+                ELSE 0 END AS balance
+) bal
+CROSS JOIN LATERAL (
+    SELECT (CASE $1::text
+                WHEN 'folio_number' THEN f.folio_number::text COLLATE "und-x-icu"
+                WHEN 'status' THEN f.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE $1::text
+                WHEN 'balance' THEN bal.balance
+                WHEN '' THEN (CASE WHEN f.status = 'OPEN' THEN 0 ELSE 1000000000000000 END) - bal.balance
+            END) AS sk_num
+) k
+WHERE f.tenant_id = $2 AND f.property_id = $3
   AND ($4::bigint IS NULL OR f.reservation_id = $4::bigint)
   AND ($5::bigint IS NULL OR f.stay_id = $5::bigint)
   AND ($6::text IS NULL OR f.status = $6::text)
-GROUP BY f.id
-ORDER BY f.id
-LIMIT $7
+  AND ($7::bigint IS NULL
+       OR CASE WHEN NOT $8::boolean THEN
+               (k.sk_text > $9::text COLLATE "und-x-icu" OR k.sk_num > $10::numeric
+                OR ((k.sk_text = $9::text COLLATE "und-x-icu" OR k.sk_num = $10::numeric) AND f.id > $7::bigint))
+           ELSE
+               (k.sk_text < $9::text COLLATE "und-x-icu" OR k.sk_num < $10::numeric
+                OR ((k.sk_text = $9::text COLLATE "und-x-icu" OR k.sk_num = $10::numeric) AND f.id < $7::bigint))
+           END)
+ORDER BY (CASE WHEN NOT $8::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $8::boolean THEN k.sk_num END) ASC,
+         (CASE WHEN $8::boolean THEN k.sk_text END) DESC, (CASE WHEN $8::boolean THEN k.sk_num END) DESC,
+         (CASE WHEN NOT $8::boolean THEN f.id END) ASC, (CASE WHEN $8::boolean THEN f.id END) DESC
+LIMIT $11
 `
 
-type ListFoliosParams struct {
+type ListFoliosOrderedParams struct {
+	SortKey       string
 	TenantID      int64
 	PropertyID    int64
-	AfterID       int64
 	ReservationID *int64
 	StayID        *int64
 	Status        *string
+	AfterID       *int64
+	SortDesc      bool
+	AfterText     *string
+	AfterNum      *decimal.Decimal
 	RowLimit      int32
 }
 
-type ListFoliosRow struct {
+type ListFoliosOrderedRow struct {
 	ID                 int64
 	TenantID           int64
 	PropertyID         int64
@@ -1540,28 +1567,37 @@ type ListFoliosRow struct {
 	UpdatedBy          *int64
 	ClosedOn           *civil.Date
 	BillToCompanyID    *int64
-	Debit              decimal.Decimal
-	Credit             decimal.Decimal
+	Balance            decimal.Decimal
 	ConfirmationNumber string
 }
 
-func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListFoliosRow, error) {
-	rows, err := q.db.Query(ctx, listFolios,
+// The folios of a property in the order asked for: by number, balance or status, either way; the default (key ”) is the open ones first, the largest balance first among them, then the closed
+// ones. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
+// breaking a tie in the direction of the order. NULL does not occur: every folio has a number, a status and a balance.
+//
+// The balance is SUM(debit) - SUM(credit) of the folio's items, and it is read for the OPEN folios only: a folio can be closed only with a zero balance (FOLIO_BALANCE_NOT_ZERO, and no
+// posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
+func (q *Queries) ListFoliosOrdered(ctx context.Context, arg ListFoliosOrderedParams) ([]ListFoliosOrderedRow, error) {
+	rows, err := q.db.Query(ctx, listFoliosOrdered,
+		arg.SortKey,
 		arg.TenantID,
 		arg.PropertyID,
-		arg.AfterID,
 		arg.ReservationID,
 		arg.StayID,
 		arg.Status,
+		arg.AfterID,
+		arg.SortDesc,
+		arg.AfterText,
+		arg.AfterNum,
 		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListFoliosRow{}
+	items := []ListFoliosOrderedRow{}
 	for rows.Next() {
-		var i ListFoliosRow
+		var i ListFoliosOrderedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TenantID,
@@ -1581,8 +1617,7 @@ func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListF
 			&i.UpdatedBy,
 			&i.ClosedOn,
 			&i.BillToCompanyID,
-			&i.Debit,
-			&i.Credit,
+			&i.Balance,
 			&i.ConfirmationNumber,
 		); err != nil {
 			return nil, err

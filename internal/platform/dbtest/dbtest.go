@@ -195,6 +195,24 @@ END $$`)
 	if err != nil {
 		t.Fatalf("dbtest: reset: %v", err)
 	}
+	t.Cleanup(func() { checkClosedFoliosAreZero(t, p) })
+}
+
+// checkClosedFoliosAreZero ends every test that used Reset: a folio can only be closed with a zero balance, and nothing is posted to a closed one, so no closed folio may have a balance.
+// The list of folios relies on it (it does not read the items of a closed folio), and this is what holds it true after every way a test closed a folio: CloseFolio, the check-out, the
+// reverse of a check-in, the transfer of a balance to the city ledger.
+func checkClosedFoliosAreZero(t testing.TB, p *pgxpool.Pool) {
+	var n int
+	var numbers *string
+	err := p.QueryRow(context.Background(), `
+		SELECT count(*), string_agg(fo.folio_number, ', ') FROM folios fo
+		WHERE fo.status = 'CLOSED' AND COALESCE((SELECT sum(i.debit) - sum(i.credit) FROM folio_items i WHERE i.property_id = fo.property_id AND i.folio_id = fo.id), 0) <> 0`).Scan(&n, &numbers)
+	if err != nil {
+		return // the schema is not the application's (a test of the migrations themselves)
+	}
+	if n != 0 {
+		t.Errorf("dbtest: %d closed folio(s) have a balance that is not zero: %s", n, *numbers)
+	}
 }
 
 // RunMain runs the package's tests and then removes the test database.

@@ -79,10 +79,6 @@ func queryID(r *http.Request, name string, errs *[]apperr.FieldError) *int64 {
 	return &id
 }
 
-type idCursor struct {
-	Last int64 `json:"l"`
-}
-
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	pid, err := tenancy.PropertyID(r)
 	if err != nil {
@@ -100,23 +96,24 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	if len(errs) > 0 {
 		return apperr.Invalid("the filter is invalid", errs...)
 	}
-	var cur idCursor
-	if page.Cursor != "" {
-		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
-			return err
-		}
-	}
-	items, err := h.svc.ListFolios(r.Context(), pid, f, cur.Last, page.Limit+1)
+	order, err := FolioSortSpec.Parse(r)
 	if err != nil {
 		return err
 	}
-	out := httpx.Page[FolioSummary]{Data: items}
+	pos, err := listsort.Decode(page.Cursor, order)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.ListFolios(r.Context(), pid, f, order, pos, page.Limit)
+	if err != nil {
+		return err
+	}
+	out := httpx.Page[FolioSummary]{Data: res.Data}
 	if out.Data == nil {
 		out.Data = []FolioSummary{}
 	}
-	if len(items) > page.Limit {
-		out.Data = items[:page.Limit]
-		if out.NextCursor, err = httpx.EncodeCursor(idCursor{Last: out.Data[page.Limit-1].ID}); err != nil {
+	if res.Next != nil {
+		if out.NextCursor, err = listsort.Encode(order, *res.Next); err != nil {
 			return err
 		}
 	}
