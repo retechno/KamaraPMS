@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/rooms/roomstest"
 	"kamarapms/internal/tenancy"
 )
@@ -612,7 +613,7 @@ func TestCashierList(t *testing.T) {
 	_, err = f.Folios.Void(f.admin, f.propID, gone.Payment.ID, folios.CorrectionInput{Reason: "x", Approval: f.approval()})
 	must(t, err)
 	bd := roomstest.BD
-	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{BusinessDate: &bd}, 0, 10)
+	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{BusinessDate: &bd}, listsort.Sort{}, nil, 10)
 	must(t, err)
 	if len(list.Data) != 4 || list.Data[0].ID < list.Data[1].ID {
 		t.Fatalf("list: %+v", list.Data)
@@ -624,17 +625,19 @@ func TestCashierList(t *testing.T) {
 	if totals["CASH"].Paid != "100000" || totals["CASH"].Refunded != "20000" || totals["CASH"].Net != "80000" || totals["CARD"].Paid != "50000" || totals["CARD"].Net != "50000" {
 		t.Fatalf("totals (a voided payment is not counted): %+v", list.Totals)
 	}
-	cards, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "CARD"}, 0, 10)
+	cards, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "CARD"}, listsort.Sort{}, nil, 10)
 	must(t, err)
 	if len(cards.Data) != 1 || len(cards.Totals) != 0 {
 		t.Fatalf("filter: %+v", cards)
 	}
-	_, err = f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "X"}, 0, 10)
+	_, err = f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "X"}, listsort.Sort{}, nil, 10)
 	wantCode(t, err, "VALIDATION_FAILED")
-	page, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, list.Data[1].ID, 10)
+	first, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, nil, 2)
 	must(t, err)
-	if len(page.Data) != 2 {
-		t.Fatalf("keyset: %+v", page.Data)
+	page, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, first.Next, 10)
+	must(t, err)
+	if len(first.Data) != 2 || first.Next == nil || len(page.Data) != 2 || page.Next != nil {
+		t.Fatalf("keyset: %+v / %+v", first.Data, page.Data)
 	}
 }
 

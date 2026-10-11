@@ -1840,8 +1840,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The cashier list, newest first, with net totals per method for a business date (folio.read)
-         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded.
+         * The cashier list, newest first by default, with net totals per method for a business date (folio.read)
+         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded. The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the newest first (by `paid_at`, the id breaking a tie).
          */
         get: operations["listPayments"];
         put?: never;
@@ -15888,6 +15888,10 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 business_date?: components["schemas"]["Date"];
                 method?: components["schemas"]["PaymentMethod"];
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "payment_number" | "amount" | "payment_method" | "status" | "paid_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -15906,6 +15910,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];

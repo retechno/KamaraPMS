@@ -2316,20 +2316,23 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listPayments
-      summary: The cashier list, newest first, with net totals per method for a business date (folio.read)
-      description: "`totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded."
+      summary: The cashier list, newest first by default, with net totals per method for a business date (folio.read)
+      description: "`totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded. The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the newest first (by `paid_at`, the id breaking a tie)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - { name: business_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
         - { name: method, in: query, schema: { $ref: "#/components/schemas/PaymentMethod" } }
+        - { name: sort, in: query, schema: { type: string, enum: [payment_number, amount, payment_method, status, paid_at] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of payments.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PaymentPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }

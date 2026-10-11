@@ -8,6 +8,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/tenancy"
 )
 
@@ -319,13 +320,15 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) error {
 		}
 		f.BusinessDate = &d
 	}
-	var cur idCursor
-	if page.Cursor != "" {
-		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
-			return err
-		}
+	order, err := PaymentSortSpec.Parse(r)
+	if err != nil {
+		return err
 	}
-	res, err := h.svc.ListPayments(r.Context(), pid, f, cur.Last, page.Limit+1)
+	pos, err := listsort.Decode(page.Cursor, order)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.ListPayments(r.Context(), pid, f, order, pos, page.Limit)
 	if err != nil {
 		return err
 	}
@@ -338,9 +341,8 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) error {
 	if out.Totals == nil {
 		out.Totals = []MethodTotal{}
 	}
-	if len(res.Data) > page.Limit {
-		out.Data = res.Data[:page.Limit]
-		if out.NextCursor, err = httpx.EncodeCursor(idCursor{Last: out.Data[page.Limit-1].ID}); err != nil {
+	if res.Next != nil {
+		if out.NextCursor, err = listsort.Encode(order, *res.Next); err != nil {
 			return err
 		}
 	}

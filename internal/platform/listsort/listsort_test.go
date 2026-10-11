@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -117,6 +118,16 @@ func TestAfterIsTypedAndCarriesNull(t *testing.T) {
 	wantInvalidCursor(t, err)
 	_, err = AfterOf(&Position{Value: &text, ID: 1}, Date)
 	wantInvalidCursor(t, err)
+	_, err = AfterOf(&Position{Value: &text, ID: 1}, Time)
+	wantInvalidCursor(t, err)
+	at := time.Date(2026, 10, 10, 6, 5, 4, 123456000, time.UTC)
+	tv := TimeValue(&at)
+	if a, err := AfterOf(&Position{Value: tv, ID: 3}, Time); err != nil || !a.Time.Equal(at) {
+		t.Errorf("time: %+v %v (%s)", a, err, *tv)
+	}
+	if TimeValue(nil) != nil {
+		t.Error("NULL stays NULL")
+	}
 }
 
 func TestValueHelpers(t *testing.T) {

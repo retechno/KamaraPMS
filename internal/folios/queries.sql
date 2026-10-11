@@ -194,12 +194,46 @@ RETURNING *;
 SELECT COALESCE(sum(amount), 0)::numeric AS refunded, count(*)::int AS refund_count
 FROM payments WHERE property_id = @property_id AND refund_of_payment_id = @payment_id AND status = 'POSTED';
 
+-- The cashier list, newest first: by the time the payment was posted (paid_at), the id breaking a tie. The page goes on after (paid_at, id); the index payments_paid_at_idx serves it.
 -- name: ListPayments :many
 SELECT * FROM payments
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND id < @before_id_or_max::bigint
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+  AND (sqlc.narg(after_id)::bigint IS NULL OR (paid_at, id) < (sqlc.narg(after_time)::timestamptz, sqlc.narg(after_id)::bigint))
   AND (sqlc.narg(business_date)::date IS NULL OR business_date = sqlc.narg(business_date)::date)
   AND (sqlc.narg(payment_method)::text IS NULL OR payment_method = sqlc.narg(payment_method)::text)
-ORDER BY id DESC
+ORDER BY paid_at DESC, id DESC
+LIMIT @row_limit;
+
+-- The same list in another order: by number, amount, method, status or time, either way (every one of these columns has a value). One query for every order, the key and the direction being
+-- parameters, so it cannot use an index; the default (newest first) has the query above. The page goes on after (the sort value, id), the id breaking a tie in the direction of the order.
+-- name: ListPaymentsOrdered :many
+SELECT p.*
+FROM payments p
+CROSS JOIN LATERAL (
+    SELECT (CASE @sort_key::text
+                WHEN 'payment_number' THEN p.payment_number::text COLLATE "und-x-icu"
+                WHEN 'payment_method' THEN p.payment_method::text COLLATE "und-x-icu"
+                WHEN 'status' THEN p.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE @sort_key::text WHEN 'amount' THEN p.amount END) AS sk_num,
+           (CASE @sort_key::text WHEN 'paid_at' THEN p.paid_at END) AS sk_time
+) k
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id
+  AND (sqlc.narg(business_date)::date IS NULL OR p.business_date = sqlc.narg(business_date)::date)
+  AND (sqlc.narg(payment_method)::text IS NULL OR p.payment_method = sqlc.narg(payment_method)::text)
+  AND (sqlc.narg(after_id)::bigint IS NULL
+       OR CASE WHEN NOT @sort_desc::boolean THEN
+               (k.sk_text > sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num > sqlc.narg(after_num)::numeric OR k.sk_time > sqlc.narg(after_time)::timestamptz
+                OR ((k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num = sqlc.narg(after_num)::numeric OR k.sk_time = sqlc.narg(after_time)::timestamptz)
+                    AND p.id > sqlc.narg(after_id)::bigint))
+           ELSE
+               (k.sk_text < sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num < sqlc.narg(after_num)::numeric OR k.sk_time < sqlc.narg(after_time)::timestamptz
+                OR ((k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num = sqlc.narg(after_num)::numeric OR k.sk_time = sqlc.narg(after_time)::timestamptz)
+                    AND p.id < sqlc.narg(after_id)::bigint))
+           END)
+ORDER BY (CASE WHEN NOT @sort_desc::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT @sort_desc::boolean THEN k.sk_num END) ASC, (CASE WHEN NOT @sort_desc::boolean THEN k.sk_time END) ASC,
+         (CASE WHEN @sort_desc::boolean THEN k.sk_text END) DESC, (CASE WHEN @sort_desc::boolean THEN k.sk_num END) DESC, (CASE WHEN @sort_desc::boolean THEN k.sk_time END) DESC,
+         (CASE WHEN NOT @sort_desc::boolean THEN p.id END) ASC, (CASE WHEN @sort_desc::boolean THEN p.id END) DESC
 LIMIT @row_limit;
 
 -- Net cash by method for a business date: payments minus refunds, voided payments excluded.

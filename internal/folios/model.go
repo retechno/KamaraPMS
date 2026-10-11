@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/platform/money"
 )
 
@@ -317,6 +318,7 @@ type MethodTotal struct {
 
 // PaymentList is the cashier list with totals.
 type PaymentList struct {
-	Data   []Payment     `json:"data"`
-	Totals []MethodTotal `json:"totals,omitempty"`
+	Data   []Payment          `json:"data"`
+	Totals []MethodTotal      `json:"totals,omitempty"`
+	Next   *listsort.Position `json:"-"` // where the page ends, when there are more
 }

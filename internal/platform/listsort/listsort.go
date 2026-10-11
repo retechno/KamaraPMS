@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -25,6 +26,7 @@ const (
 	Text Kind = "text"
 	Num  Kind = "num"
 	Date Kind = "date"
+	Time Kind = "time" // an instant
 )
 
 // Spec is what a list allows: its columns (name and the kind of its sort value) and the order when the client asks for none. The default order is the empty key: the list's own
@@ -147,6 +149,7 @@ type After struct {
 	Text *string
 	Num  *decimal.Decimal
 	Date *civil.Date
+	Time *time.Time
 	ID   *int64
 }
 
@@ -177,6 +180,12 @@ func AfterOf(p *Position, k Kind) (After, error) {
 			return After{}, invalidCursor()
 		}
 		a.Date = &d
+	case Time:
+		t, err := time.Parse(time.RFC3339Nano, *p.Value)
+		if err != nil {
+			return After{}, invalidCursor()
+		}
+		a.Time = &t
 	default:
 		return After{}, invalidCursor()
 	}
@@ -200,5 +209,14 @@ func DateValue(v *civil.Date) *string {
 		return nil
 	}
 	s := v.String()
+	return &s
+}
+
+// TimeValue is the cursor value of an instant (nil for NULL), exact to the nanosecond.
+func TimeValue(v *time.Time) *string {
+	if v == nil {
+		return nil
+	}
+	s := v.UTC().Format(time.RFC3339Nano)
 	return &s
 }

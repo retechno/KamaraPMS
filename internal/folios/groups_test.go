@@ -9,6 +9,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/listsort"
 )
 
 // Transaction Group (docs/architecture/20-transaction-group.md): a presentation dimension inside one folio. Every test that moves a line also proves that the money did not move.
@@ -67,7 +68,7 @@ func TestEveryLineStartsInGroupA(t *testing.T) {
 			t.Fatalf("existing line %d: %q", it.ID, it.GroupCode)
 		}
 	}
-	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, 0, 50)
+	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, nil, 50)
 	must(t, err)
 	if len(list.Data) != 1 || list.Data[0].GroupCode != "A" {
 		t.Fatalf("payment list: %+v", list.Data)

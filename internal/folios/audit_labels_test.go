@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"kamarapms/internal/folios"
+	"kamarapms/internal/platform/listsort"
 )
 
 // labelOf is the label of the newest audit entry of an action (empty when it has none).
@@ -67,7 +68,7 @@ func TestPaymentsAndFoliosNameTheirFolioAndReservation(t *testing.T) {
 	if pay.Payment.FolioNumber != "F1" {
 		t.Fatalf("the payment names its folio: %+v", pay.Payment)
 	}
-	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, 0, 10)
+	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, nil, 10)
 	must(t, err)
 	if len(list.Data) != 1 || list.Data[0].FolioNumber != "F1" {
 		t.Fatalf("the list names the folio: %+v", list)

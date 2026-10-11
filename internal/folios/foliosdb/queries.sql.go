@@ -1702,29 +1702,141 @@ func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstruct
 
 const listPayments = `-- name: ListPayments :many
 SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments
-WHERE tenant_id = $1 AND property_id = $2 AND id < $3::bigint
-  AND ($4::date IS NULL OR business_date = $4::date)
-  AND ($5::text IS NULL OR payment_method = $5::text)
-ORDER BY id DESC
-LIMIT $6
+WHERE tenant_id = $1 AND property_id = $2
+  AND ($3::bigint IS NULL OR (paid_at, id) < ($4::timestamptz, $3::bigint))
+  AND ($5::date IS NULL OR business_date = $5::date)
+  AND ($6::text IS NULL OR payment_method = $6::text)
+ORDER BY paid_at DESC, id DESC
+LIMIT $7
 `
 
 type ListPaymentsParams struct {
 	TenantID      int64
 	PropertyID    int64
-	BeforeIDOrMax int64
+	AfterID       *int64
+	AfterTime     *time.Time
 	BusinessDate  *civil.Date
 	PaymentMethod *string
 	RowLimit      int32
 }
 
+// The cashier list, newest first: by the time the payment was posted (paid_at), the id breaking a tie. The page goes on after (paid_at, id); the index payments_paid_at_idx serves it.
 func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]Payment, error) {
 	rows, err := q.db.Query(ctx, listPayments,
 		arg.TenantID,
 		arg.PropertyID,
-		arg.BeforeIDOrMax,
+		arg.AfterID,
+		arg.AfterTime,
 		arg.BusinessDate,
 		arg.PaymentMethod,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Payment{}
+	for rows.Next() {
+		var i Payment
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.PaymentNumber,
+			&i.FolioID,
+			&i.PaymentType,
+			&i.PaymentMethod,
+			&i.Amount,
+			&i.PaidAt,
+			&i.BusinessDate,
+			&i.ReferenceNumber,
+			&i.RefundOfPaymentID,
+			&i.Status,
+			&i.VoidedAt,
+			&i.VoidedBy,
+			&i.VoidReason,
+			&i.IdempotencyKey,
+			&i.Remarks,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.ApprovedBy,
+			&i.CompanyID,
+			&i.ShiftID,
+			&i.MdrRate,
+			&i.MdrFee,
+			&i.ExpectedSettlementDate,
+			&i.MdrVatRate,
+			&i.MdrVat,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPaymentsOrdered = `-- name: ListPaymentsOrdered :many
+SELECT p.id, p.tenant_id, p.property_id, p.payment_number, p.folio_id, p.payment_type, p.payment_method, p.amount, p.paid_at, p.business_date, p.reference_number, p.refund_of_payment_id, p.status, p.voided_at, p.voided_by, p.void_reason, p.idempotency_key, p.remarks, p.created_at, p.created_by, p.approved_by, p.company_id, p.shift_id, p.mdr_rate, p.mdr_fee, p.expected_settlement_date, p.mdr_vat_rate, p.mdr_vat
+FROM payments p
+CROSS JOIN LATERAL (
+    SELECT (CASE $1::text
+                WHEN 'payment_number' THEN p.payment_number::text COLLATE "und-x-icu"
+                WHEN 'payment_method' THEN p.payment_method::text COLLATE "und-x-icu"
+                WHEN 'status' THEN p.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE $1::text WHEN 'amount' THEN p.amount END) AS sk_num,
+           (CASE $1::text WHEN 'paid_at' THEN p.paid_at END) AS sk_time
+) k
+WHERE p.tenant_id = $2 AND p.property_id = $3
+  AND ($4::date IS NULL OR p.business_date = $4::date)
+  AND ($5::text IS NULL OR p.payment_method = $5::text)
+  AND ($6::bigint IS NULL
+       OR CASE WHEN NOT $7::boolean THEN
+               (k.sk_text > $8::text COLLATE "und-x-icu" OR k.sk_num > $9::numeric OR k.sk_time > $10::timestamptz
+                OR ((k.sk_text = $8::text COLLATE "und-x-icu" OR k.sk_num = $9::numeric OR k.sk_time = $10::timestamptz)
+                    AND p.id > $6::bigint))
+           ELSE
+               (k.sk_text < $8::text COLLATE "und-x-icu" OR k.sk_num < $9::numeric OR k.sk_time < $10::timestamptz
+                OR ((k.sk_text = $8::text COLLATE "und-x-icu" OR k.sk_num = $9::numeric OR k.sk_time = $10::timestamptz)
+                    AND p.id < $6::bigint))
+           END)
+ORDER BY (CASE WHEN NOT $7::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $7::boolean THEN k.sk_num END) ASC, (CASE WHEN NOT $7::boolean THEN k.sk_time END) ASC,
+         (CASE WHEN $7::boolean THEN k.sk_text END) DESC, (CASE WHEN $7::boolean THEN k.sk_num END) DESC, (CASE WHEN $7::boolean THEN k.sk_time END) DESC,
+         (CASE WHEN NOT $7::boolean THEN p.id END) ASC, (CASE WHEN $7::boolean THEN p.id END) DESC
+LIMIT $11
+`
+
+type ListPaymentsOrderedParams struct {
+	SortKey       string
+	TenantID      int64
+	PropertyID    int64
+	BusinessDate  *civil.Date
+	PaymentMethod *string
+	AfterID       *int64
+	SortDesc      bool
+	AfterText     *string
+	AfterNum      *decimal.Decimal
+	AfterTime     *time.Time
+	RowLimit      int32
+}
+
+// The same list in another order: by number, amount, method, status or time, either way (every one of these columns has a value). One query for every order, the key and the direction being
+// parameters, so it cannot use an index; the default (newest first) has the query above. The page goes on after (the sort value, id), the id breaking a tie in the direction of the order.
+func (q *Queries) ListPaymentsOrdered(ctx context.Context, arg ListPaymentsOrderedParams) ([]Payment, error) {
+	rows, err := q.db.Query(ctx, listPaymentsOrdered,
+		arg.SortKey,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.PaymentMethod,
+		arg.AfterID,
+		arg.SortDesc,
+		arg.AfterText,
+		arg.AfterNum,
+		arg.AfterTime,
 		arg.RowLimit,
 	)
 	if err != nil {

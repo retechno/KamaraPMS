@@ -3,7 +3,6 @@ package folios
 import (
 	"context"
 	"errors"
-	"math"
 	"slices"
 	"strings"
 
@@ -16,6 +15,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/platform/money"
 	"kamarapms/internal/tenancy"
 )
@@ -506,9 +506,33 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 		})
 }
 
-// ListPayments is the cashier list, newest first, with the net total per method for the business date
-// (folio.read). before is the id to continue after (0 for the first page).
-func (s *Service) ListPayments(ctx context.Context, propertyID int64, f PaymentFilter, before int64, limit int) (PaymentList, error) {
+// PaymentSortSpec is what the cashier list can be sorted by. Newest first (by the time of posting) is the default.
+var PaymentSortSpec = listsort.Spec{
+	Columns:     map[string]listsort.Kind{"payment_number": listsort.Text, "amount": listsort.Num, "payment_method": listsort.Text, "status": listsort.Text, "paid_at": listsort.Time},
+	DefaultKind: listsort.Time, DefaultDesc: true,
+}
+
+// paymentPosition is where a page that ends at the payment r ends, in the order given: the sort value of the row and its id.
+func paymentPosition(r foliosdb.Payment, order listsort.Sort) listsort.Position {
+	pos := listsort.Position{ID: r.ID}
+	switch order.Key {
+	case "payment_number":
+		pos.Value = &r.PaymentNumber
+	case "payment_method":
+		pos.Value = &r.PaymentMethod
+	case "status":
+		pos.Value = &r.Status
+	case "amount":
+		pos.Value = listsort.NumValue(&r.Amount)
+	default: // "" and paid_at: the time of posting
+		pos.Value = listsort.TimeValue(&r.PaidAt)
+	}
+	return pos
+}
+
+// ListPayments is the cashier list with the net total per method for the business date (folio.read), in the order asked for (newest first when none is). pos is where the page before ended
+// (nil for the first page); Next is where this page ends, when there are more.
+func (s *Service) ListPayments(ctx context.Context, propertyID int64, f PaymentFilter, order listsort.Sort, pos *listsort.Position, limit int) (PaymentList, error) {
 	p, err := s.actor(ctx, propertyID, auth.PermFolioRead)
 	if err != nil {
 		return PaymentList{}, err
@@ -522,17 +546,33 @@ func (s *Service) ListPayments(ctx context.Context, propertyID int64, f PaymentF
 	if err != nil {
 		return PaymentList{}, err
 	}
-	if before == 0 {
-		before = math.MaxInt64
-	}
-	q := s.q(ctx)
-	rows, err := q.ListPayments(ctx, foliosdb.ListPaymentsParams{
-		TenantID: p.TenantID, PropertyID: propertyID, BeforeIDOrMax: before, BusinessDate: f.BusinessDate, PaymentMethod: nullable(f.Method), RowLimit: rowLimit(limit),
-	})
+	after, err := listsort.AfterOf(pos, PaymentSortSpec.Kind(order))
 	if err != nil {
 		return PaymentList{}, err
 	}
-	out := PaymentList{Data: make([]Payment, len(rows))}
+	q := s.q(ctx)
+	var rows []foliosdb.Payment
+	if order.Key == "" || (order.Key == "paid_at" && order.Desc) {
+		// newest first: the index serves it
+		rows, err = q.ListPayments(ctx, foliosdb.ListPaymentsParams{
+			TenantID: p.TenantID, PropertyID: propertyID, AfterID: after.ID, AfterTime: after.Time, BusinessDate: f.BusinessDate, PaymentMethod: nullable(f.Method), RowLimit: rowLimit(limit + 1),
+		})
+	} else {
+		rows, err = q.ListPaymentsOrdered(ctx, foliosdb.ListPaymentsOrderedParams{
+			SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: f.BusinessDate, PaymentMethod: nullable(f.Method),
+			AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, AfterTime: after.Time, RowLimit: rowLimit(limit + 1),
+		})
+	}
+	if err != nil {
+		return PaymentList{}, err
+	}
+	out := PaymentList{}
+	if len(rows) > limit {
+		last := paymentPosition(rows[limit-1], order)
+		out.Next = &last
+		rows = rows[:limit]
+	}
+	out.Data = make([]Payment, len(rows))
 	for i, r := range rows {
 		if out.Data[i], err = s.paymentView(ctx, propertyID, r, decimals); err != nil {
 			return PaymentList{}, err
