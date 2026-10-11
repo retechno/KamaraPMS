@@ -4,6 +4,8 @@
  * adds later still shows in the list (in readable words, see `labelOf`) but is not offered as a filter until it is added here.
  */
 export const AUDIT_ACTIONS = [
+  'bed_type.created',
+  'bed_type.updated',
   'accounting.chart_seeded',
   'accounting.day_posted',
   'accounting.module_journal_posted',

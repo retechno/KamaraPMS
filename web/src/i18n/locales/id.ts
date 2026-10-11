@@ -4298,6 +4298,8 @@ export const id: Messages = {
     auth_login: 'Masuk',
     auth_password_changed: 'Kata sandi diubah',
     auth_refresh_token_reused: 'Token sesi dipakai ulang',
+    bed_type_created: 'Tipe ranjang dibuat',
+    bed_type_updated: 'Tipe ranjang diubah',
     bed_types_seeded: 'Tipe ranjang dibuat',
     budget_created: 'Anggaran dibuat',
     budget_updated: 'Anggaran diubah',

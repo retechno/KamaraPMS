@@ -4299,6 +4299,8 @@ export const en = {
     auth_login: 'Signed in',
     auth_password_changed: 'Password changed',
     auth_refresh_token_reused: 'Session token reused',
+    bed_type_created: 'Bed type created',
+    bed_type_updated: 'Bed type updated',
     bed_types_seeded: 'Bed types created',
     budget_created: 'Budget created',
     budget_updated: 'Budget updated',
