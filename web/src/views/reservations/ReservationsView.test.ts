@@ -149,33 +149,90 @@ describe('ReservationsView', () => {
     expect(asked).toEqual({ DRAFT: 'DRAFT', RESERVED: 'CONFIRMED', CHECKED_IN: 'IN_HOUSE', CHECKED_OUT: 'CHECKED_OUT', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW' })
   })
 
-  it('does not sort a page of a longer list: no sort control while there are more rows on the server, and it is back once the last page is in', async () => {
-    const w = await mountView(['reservation.read'], { data: [
-      row({ id: 1, confirmation_number: 'RES000001', arrival_date: '2026-10-09' }),
-      row({ id: 2, confirmation_number: 'RES000002', arrival_date: '2026-10-02' }),
-    ], next_cursor: 'abc' })
-    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0) // 2 rows of many: a sort of them would look like a sort of everything
-    expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
-    GET.mockImplementation(async (path: string) => (path.endsWith('/reservations') ? { data: { data: [row({ id: 3, confirmation_number: 'RES000003', arrival_date: '2026-10-05' })] } } : { data: { data: [] } }))
-    await w.get('[data-testid=more]').trigger('click')
-    await flushPromises()
-    expect(w.get('[data-testid=table-count]').text()).toBe('3 loaded')
-    expect(w.find('[data-testid=more]').exists()).toBe(false)
-    expect(w.findAll('[data-testid^=sort-]').length).toBeGreaterThan(0) // every row is here: a sort is of everything
-    await w.get('[data-testid=sort-arrival_date]').trigger('click')
-    expect(w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())).toEqual(['RES000002', 'RES000003', 'RES000001'])
-  })
+  describe('the order, which the server keeps', () => {
+    const many = { data: [row({ id: 1, confirmation_number: 'RES000001', arrival_date: '2026-10-09' }), row({ id: 2, confirmation_number: 'RES000002', arrival_date: '2026-10-02' })], next_cursor: 'abc' }
+    const headerOf = (w: VueWrapper, key: string) => w.get(`th:has([data-testid=sort-${key}])`)
 
-  it('starts again from the first page, and from no sort, when a filter changes', async () => {
-    const w = await mountView(['reservation.read'], { data: [row()], next_cursor: 'abc' })
-    await w.get('[data-testid=more]').trigger('click')
-    await flushPromises()
-    await w.get('input[name=q]').setValue('Siti')
-    await w.get('form[role=search]').trigger('submit')
-    await flushPromises()
-    expect(lastQuery()).toMatchObject({ q: 'Siti' })
-    expect(lastQuery().cursor).toBeUndefined()
-    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0) // more pages again
+    it('lets the server sort a list of many pages: the header is there while there are more rows, and a click asks for the order and reads the list again from the first page', async () => {
+      const w = await mountView(['reservation.read'], many)
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-confirmation_number', 'sort-guest_name', 'sort-arrival_date', 'sort-rate', 'sort-status']) // not the room, not the company
+      expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
+      expect(lastQuery().sort).toBeUndefined() // no sort: the server's own order (the nearest arrival first)
+      const before = listCalls().length
+      await w.get('[data-testid=sort-arrival_date]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query).toMatchObject({ sort: 'arrival_date', order: 'asc' })
+      expect(listCalls().length).toBe(before + 1)
+      expect(lastQuery()).toMatchObject({ sort: 'arrival_date', order: 'asc' })
+      expect(lastQuery().cursor).toBeUndefined() // from the first page: a cursor belongs to an order
+      expect(headerOf(w, 'arrival_date').attributes('aria-sort')).toBe('ascending')
+      // the rows are as the server sent them, not sorted here
+      expect(w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())).toEqual(['RES000001', 'RES000002'])
+      // more rows come with the cursor and keep the order
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ cursor: 'abc', sort: 'arrival_date', order: 'asc' })
+      // again: descending; again: back to the server's own order
+      await w.get('[data-testid=sort-arrival_date]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'arrival_date', order: 'desc' })
+      expect(headerOf(w, 'arrival_date').attributes('aria-sort')).toBe('descending')
+      await w.get('[data-testid=sort-arrival_date]').trigger('click')
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+      expect(router.currentRoute.value.query.sort).toBeUndefined()
+    })
+
+    it('reads the order from the address: a link carries it, and the header shows it', async () => {
+      const w = await mountView(['reservation.read'], many, '/reservations?sort=rate&order=desc')
+      expect(lastQuery()).toMatchObject({ sort: 'rate', order: 'desc' })
+      expect(headerOf(w, 'rate').attributes('aria-sort')).toBe('descending')
+    })
+
+    it('ignores an order that is not one of the columns', async () => {
+      await mountView(['reservation.read'], many, '/reservations?sort=password&order=desc')
+      expect(lastQuery().sort).toBeUndefined()
+      expect(lastQuery().order).toBeUndefined()
+    })
+
+    it('goes back to the order before with the Back button', async () => {
+      const w = await mountView(['reservation.read'], many)
+      await w.get('[data-testid=sort-rate]').trigger('click')
+      await flushPromises()
+      await w.get('[data-testid=sort-guest_name]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'guest_name', order: 'asc' })
+      router.back()
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'rate', order: 'asc' })
+      expect(headerOf(w, 'rate').attributes('aria-sort')).toBe('ascending')
+      router.back()
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+    })
+
+    it('keeps the order when a filter changes, and starts again from the first page', async () => {
+      const w = await mountView(['reservation.read'], many, '/reservations?sort=guest_name&order=desc')
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      await w.get('input[name=q]').setValue('Siti')
+      await w.get('form[role=search]').trigger('submit')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ q: 'Siti', sort: 'guest_name', order: 'desc' })
+      expect(lastQuery().cursor).toBeUndefined()
+      expect(router.currentRoute.value.query).toMatchObject({ q: 'Siti', sort: 'guest_name', order: 'desc' })
+    })
+
+    it('on a phone, the cards have a choice of order that does the same', async () => {
+      await onAPhone(async () => {
+        const w = await mountView(['reservation.read'], many)
+        const select = w.get('[data-testid=card-sort] select')
+        expect(select.findAll('option').map((o) => o.text())).toContain('Stay ↓')
+        await select.setValue('arrival_date:desc')
+        await flushPromises()
+        expect(lastQuery()).toMatchObject({ sort: 'arrival_date', order: 'desc' })
+      })
+    })
   })
 
   it('loads more with the cursor and keeps the filters', async () => {
@@ -269,15 +326,8 @@ describe('ReservationsView', () => {
     expect(later.find('[data-testid=res-RES000001] [data-slot=row-menu-trigger]').exists()).toBe(false) // nothing but "view": no menu
   })
 
-  it('sorts the page it has by arrival, and links to the tape chart', async () => {
-    const w = await mountView(['reservation.read', 'reservation.create'], { data: [
-      row({ id: 1, confirmation_number: 'RES000001', arrival_date: '2026-10-09' }),
-      row({ id: 2, confirmation_number: 'RES000002', arrival_date: '2026-10-02' }),
-    ] })
-    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
-    expect(numbers()).toEqual(['RES000001', 'RES000002'])
-    await w.get('[data-testid=sort-arrival_date]').trigger('click')
-    expect(numbers()).toEqual(['RES000002', 'RES000001'])
+  it('links to the tape chart', async () => {
+    const w = await mountView(['reservation.read', 'reservation.create'], { data: [row({ id: 1, confirmation_number: 'RES000001' })] })
     expect(w.find('a[href="/reservations/tape"]').exists()).toBe(true)
   })
 
