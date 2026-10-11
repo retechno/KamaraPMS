@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import PropertyFormView from './PropertyFormView.vue'
 
 let POST = vi.fn()
@@ -87,6 +88,51 @@ describe('PropertyFormView (create)', () => {
   })
 })
 
+describe('PropertyFormView: the language of the standard names', () => {
+  beforeEach(() => {
+    POST = vi.fn().mockResolvedValue({ data: { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' } })
+    GET = vi.fn().mockResolvedValue({ data: { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' } })
+  })
+  const submit = async (wrapper: Awaited<ReturnType<typeof mountForm>>['wrapper']) => {
+    await wrapper.get('input[name=code]').setValue('BALI')
+    await wrapper.get('input[name=name]').setValue('Hotel Bali')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    return (POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body
+  }
+
+  it('starts in the language of the page, and sends it with the new property', async () => {
+    await setLocale('id')
+    const { wrapper } = await mountForm()
+    expect((wrapper.get('select[name=data_language]').element as HTMLSelectElement).value).toBe('id')
+    expect((await submit(wrapper)).data_language).toBe('id')
+    await setLocale('en')
+    POST.mockClear()
+    const english = await mountForm()
+    expect((english.wrapper.get('select[name=data_language]').element as HTMLSelectElement).value).toBe('en')
+    expect((await submit(english.wrapper)).data_language).toBe('en')
+  })
+
+  it('can be changed to the other language, whatever the language of the page', async () => {
+    await setLocale('en')
+    const { wrapper } = await mountForm()
+    await wrapper.get('select[name=data_language]').setValue('id')
+    expect((await submit(wrapper)).data_language).toBe('id')
+  })
+
+  it('says what the names are and that they can be changed later, that a charge code is printed on the folio and the invoice, and that properties that exist do not change', async () => {
+    await setLocale('id')
+    const { wrapper } = await mountForm()
+    const card = wrapper.get('[data-testid=data-language-card]').text()
+    expect(card).toContain('Nama akun, departemen, dan kode biaya')
+    expect(card).toContain('Bisa diubah nanti')
+    expect(card).toContain('Nama kode biaya tercetak di folio dan invoice tamu')
+    expect(card).toContain('Properti yang sudah ada tidak berubah')
+    expect(wrapper.findAll('select[name=data_language] option').map((o) => o.text())).toEqual(['Indonesia', 'English'])
+    await setLocale('en')
+  })
+})
+
 describe('PropertyFormView (edit)', () => {
   const property = (over: object = {}) => ({
     id: 5, code: 'BALI', name: 'Hotel Bali', timezone: 'Asia/Makassar', currency_code: 'IDR', currency_decimals: 0, check_in_time: '14:00', check_out_time: '12:00',
@@ -103,6 +149,12 @@ describe('PropertyFormView (edit)', () => {
     await flushPromises()
     return wrapper
   }
+
+  it('has no choice of the language of the standard names: it is for a new property only', async () => {
+    const w = await mountEdit(property())
+    expect(w.find('[data-testid=data-language-card]').exists()).toBe(false)
+    expect(w.find('select[name=data_language]').exists()).toBe(false)
+  })
 
   it('lets the currency change while the property has no financial data, and says it will lock', async () => {
     const w = await mountEdit(property())
