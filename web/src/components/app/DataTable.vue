@@ -87,6 +87,8 @@ const props = withDefaults(
     manual?: boolean
     /** The order that is on, for a server-side list that keeps its order in the address of the page: the `sortKey` (or `key`) of a column and the direction; null is the list's own order. Undefined: the table keeps it. */
     sort?: { key: string; dir: 'asc' | 'desc' } | null
+    /** The order the list has when `sort` is null (a list that is newest first has `{ key: 'created_at', dir: 'desc' }`): the header shows it, and its column goes between it and the opposite. */
+    defaultSort?: { key: string; dir: 'asc' | 'desc' }
     /** The table is read a page at a time: there are more rows on the server. Undefined for a table that has all its rows. */
     hasMore?: boolean
     loadingMore?: boolean
@@ -103,6 +105,7 @@ const props = withDefaults(
   {
     loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined, isExpanded: undefined, detailTestId: undefined, manual: false,
     sort: undefined,
+    defaultSort: undefined,
     hasMore: undefined, loadingMore: false, total: null, loadMoreLabel: '', cards: false, rowTo: undefined, rowActions: undefined,
   },
 )
@@ -120,9 +123,10 @@ const serverKey = (col: Column<T>): string => col.sortKey ?? col.key
 /** The sorting that is on: the page's (`sort`) when it keeps it, else the table's own. */
 const currentSorting = computed<SortingState>(() => {
   if (props.sort === undefined) return sorting.value
-  if (props.sort === null) return []
-  const col = props.columns.find((c) => serverKey(c) === props.sort?.key)
-  return col ? [{ id: col.key, desc: props.sort.dir === 'desc' }] : []
+  const on = props.sort ?? props.defaultSort
+  if (!on) return []
+  const col = props.columns.find((c) => serverKey(c) === on.key)
+  return col ? [{ id: col.key, desc: on.dir === 'desc' }] : []
 })
 const filters = ref<ColumnFiltersState>([])
 
@@ -229,7 +233,11 @@ watch(partial, (now) => {
 function toggleSort(col: Column<T>): void {
   if (!sortableNow(col)) return
   const s = currentSorting.value[0]
-  const next: SortingState = !s || s.id !== col.key ? [{ id: col.key, desc: false }] : !s.desc ? [{ id: col.key, desc: true }] : []
+  const own = props.defaultSort
+  const ownHere = !!own && serverKey(col) === own.key && props.sort == null // the list's own order is on, and on this column: it goes to the opposite
+  let next: SortingState = ownHere ? [{ id: col.key, desc: own.dir !== 'desc' }] : !s || s.id !== col.key ? [{ id: col.key, desc: false }] : !s.desc ? [{ id: col.key, desc: true }] : []
+  // an order that is the list's own is no order at all: the address stays clean
+  if (own && next[0] && serverKey(col) === own.key && next[0].desc === (own.dir === 'desc')) next = []
   table.setSorting(next)
 }
 const sortDir = (col: Column<T>): 'asc' | 'desc' | null => {
@@ -240,7 +248,7 @@ const sortDir = (col: Column<T>): 'asc' | 'desc' | null => {
 /** On a phone there is no header to click: a server-side list gets a choice above its cards. */
 const cardSort = computed(() => (props.manual && cardsOn.value ? props.columns.filter((c) => c.sortable) : []))
 const cardSortValue = computed(() => {
-  const s = currentSorting.value[0]
+  const s = props.sort == null && props.defaultSort ? undefined : currentSorting.value[0] // the list's own order is the first choice
   return s ? `${s.id}:${s.desc ? 'desc' : 'asc'}` : ''
 })
 function setCardSort(value: string): void {

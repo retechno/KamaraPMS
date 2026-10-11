@@ -84,6 +84,28 @@ describe('DataTable: a list that the server sorts', () => {
     expect(emitted(w).at(-1)?.[0]).toBeNull()
   })
 
+  it('a list that has an order of its own (newest first) shows it in the header, and its column goes between it and the opposite', async () => {
+    const w = await mountTable({ sort: null, defaultSort: { key: 'number', dir: 'desc' } })
+    expect(header(w, 'number').attributes('aria-sort')).toBe('descending') // the list's own order, with no order in the address
+    await w.get('[data-testid=sort-number]').trigger('click')
+    expect(emitted(w).at(-1)?.[0]).toEqual({ key: 'number', dir: 'asc' })
+    await w.setProps({ sort: { key: 'number', dir: 'asc' } })
+    expect(header(w, 'number').attributes('aria-sort')).toBe('ascending')
+    await w.get('[data-testid=sort-number]').trigger('click') // back to the list's own order: no order at all
+    expect(emitted(w).at(-1)?.[0]).toBeNull()
+    await w.setProps({ sort: null })
+    expect(header(w, 'number').attributes('aria-sort')).toBe('descending')
+  })
+
+  it("on a phone, the list's own order is the first choice", async () => {
+    setWidth(400)
+    const w = await mountTable({ cards: true, sort: null, defaultSort: { key: 'number', dir: 'desc' } })
+    const select = w.get('[data-testid=card-sort] select')
+    expect((select.element as HTMLSelectElement).value).toBe('')
+    await select.setValue('number:asc')
+    expect(emitted(w).at(-1)?.[0]).toEqual({ key: 'number', dir: 'asc' })
+  })
+
   it('on a phone, a choice above the cards does what the header does', async () => {
     setWidth(400)
     const w = await mountTable({ cards: true, sort: { key: 'guest_name', dir: 'asc' } })

@@ -110,15 +110,61 @@ describe('CashierView', () => {
     expect(w.get('[data-testid=payment-PAY000002]').text()).toContain('Voided')
   })
 
-  it('sorts the payments by amount', async () => {
-    const w = mountView()
-    await flushPromises()
-    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
-    expect(numbers()).toEqual(['PAY000002', 'PAY000001'])
-    await w.get('[data-testid=sort-amount]').trigger('click')
-    expect(numbers()).toEqual(['PAY000002', 'PAY000001']) // 50000 then 100000
-    await w.get('[data-testid=sort-amount]').trigger('click')
-    expect(numbers()).toEqual(['PAY000001', 'PAY000002'])
+  describe('the order, which the server keeps', () => {
+    const routerOf = (w: ReturnType<typeof mountView>) => (w.vm as unknown as { $router: ReturnType<typeof createRouter> }).$router
+    const lastQuery = () => (GET.mock.calls.at(-1)?.[1] as { params: { query: Record<string, unknown> } }).params.query
+    const more = { ...page, next_cursor: 'c2' }
+
+    it('asks the server for the order of a column, from the first page, keeps the day and its totals, and shows the rows as they come', async () => {
+      const get = vi.fn().mockResolvedValue({ data: more })
+      const w = mountView(['folio.read'], get)
+      await flushPromises()
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-payment_number', 'sort-payment_method', 'sort-amount', 'sort-status']) // the type and the folio are not columns of the server
+      expect(lastQuery().sort).toBeUndefined() // the server's own order: the newest first
+      const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
+      await w.get('[data-testid=sort-amount]').trigger('click')
+      await flushPromises()
+      expect(routerOf(w).currentRoute.value.query).toMatchObject({ sort: 'amount', order: 'asc' })
+      expect(lastQuery()).toMatchObject({ sort: 'amount', order: 'asc', business_date: '2026-09-30' })
+      expect(lastQuery().cursor).toBeUndefined()
+      expect(numbers()).toEqual(['PAY000002', 'PAY000001']) // not sorted here
+      expect(w.findAll('[data-testid=totals]')).toHaveLength(1) // the totals of the day stay
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ cursor: 'c2', sort: 'amount', order: 'asc' })
+      await w.get('[data-testid=sort-amount]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'amount', order: 'desc' })
+      await w.get('[data-testid=sort-amount]').trigger('click')
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+    })
+
+    it('reads the order from the address, and Back returns to the order before', async () => {
+      const w = mountView()
+      await flushPromises()
+      const router = routerOf(w)
+      await router.push('/cashier?sort=payment_method&order=desc')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'payment_method', order: 'desc' })
+      expect(w.get('th:has([data-testid=sort-payment_method])').attributes('aria-sort')).toBe('descending')
+      await w.get('[data-testid=sort-status]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'status', order: 'asc' })
+      router.back()
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'payment_method', order: 'desc' })
+    })
+
+    it('on a phone, the cards have a choice of order', async () => {
+      await onAPhone(async () => {
+        const w = mountView()
+        await flushPromises()
+        await w.get('[data-testid=card-sort] select').setValue('amount:desc')
+        await flushPromises()
+        expect(lastQuery()).toMatchObject({ sort: 'amount', order: 'desc' })
+      })
+    })
   })
 
   it('speaks Indonesian', async () => {

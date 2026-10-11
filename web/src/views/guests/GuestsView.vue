@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { usePagedList } from '@/composables/usePagedList'
+import { useServerSort } from '@/composables/useServerSort'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -33,12 +34,15 @@ const form = reactive(blankGuestForm())
 const saving = ref(false)
 const created = ref<CreatedGuest | null>(null)
 
+// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the name that is shown, A-Z.
+const { sort, params: sortParams, setSort } = useServerSort(['name', 'code', 'nationality'])
+
 const columns = computed<Column<Guest>[]>(() => [
-  { key: 'code', label: t('guests.code'), card: 'primary' as const },
-  { key: 'name', label: t('guests.name'), card: 'secondary' as const },
+  { key: 'code', label: t('guests.code'), sortable: true, card: 'primary' as const },
+  { key: 'name', label: t('guests.name'), sortable: true, card: 'secondary' as const },
   { key: 'email', label: t('guests.email') },
   { key: 'phone', label: t('guests.phone') },
-  { key: 'nationality', label: t('guests.nationality'), hideOnMobile: true },
+  { key: 'nationality', label: t('guests.nationality'), sortable: true, hideOnMobile: true },
 ])
 
 const canRead = computed(() => auth.can('guest.read', property.currentId))
@@ -46,7 +50,7 @@ const canWrite = computed(() => auth.can('guest.write', property.currentId))
 
 // One page of 50 at a time; a new search starts from the first page.
 const list = usePagedList<Guest>(async (cursor) => {
-  const { data } = await api.GET('/api/v1/guests', { params: { query: { q: query.value, property_id: property.currentId ?? undefined, limit: 50, cursor } } })
+  const { data } = await api.GET('/api/v1/guests', { params: { query: { q: query.value, property_id: property.currentId ?? undefined, limit: 50, cursor, ...sortParams.value } } })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
 const { rows: results, loadingMore, hasMore } = list
@@ -60,6 +64,10 @@ async function search(): Promise<void> {
   searched.value = true
   loading.value = false
 }
+// Another order reads the list again from its first page (a cursor belongs to an order); the address already holds it.
+watch(sort, () => {
+  if (searched.value) void search()
+})
 async function more(): Promise<void> {
   await list.loadMore()
   if (list.error.value) error.value = list.error.value
@@ -165,11 +173,14 @@ watch(() => property.currentId, () => {
         row-key="id"
         :has-more="hasMore"
         :loading-more="loadingMore"
+        manual
+        :sort="sort"
         cards
         :row-to="(g) => `/guests/${g.id}`"
         :row-test-id="(g) => `guest-${g.code}`"
         :caption="t('guests.title')"
         @load-more="more"
+        @sort-change="setSort"
       >
         <template #cell-code="{ row }"><RouterLink :to="`/guests/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink></template>
         <template #cell-name="{ row }">{{ fullName(row) }}</template>

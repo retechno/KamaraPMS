@@ -63,19 +63,13 @@ describe('FoliosView', () => {
     expect(GET).not.toHaveBeenCalled()
   })
 
-  it('shows the status as a badge and sorts balances by value', async () => {
+  it('shows the status as a badge', async () => {
     const w = mountView(['folio.read'], { data: [
       { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, version: 1, balance: '900' },
       { id: 4, folio_number: 'FOL000004', status: 'CLOSED', reservation_id: 10, version: 1, balance: '250000' },
-      { id: 5, folio_number: 'FOL000005', status: 'OPEN', reservation_id: 11, version: 1, balance: '-10000' },
     ] })
     await flushPromises()
     expect(w.get('[data-testid=folio-FOL000004]').text()).toContain('Closed')
-    const numbers = () => w.findAll('tbody tr').map((r) => r.findAll('td')[0]!.text())
-    await w.get('[data-testid=sort-balance]').trigger('click')
-    expect(numbers()).toEqual(['FOL000005', 'FOL000003', 'FOL000004'])
-    await w.get('[data-testid=sort-balance]').trigger('click')
-    expect(numbers()).toEqual(['FOL000004', 'FOL000003', 'FOL000005'])
   })
 
   it('links to the cashier and speaks Indonesian', async () => {
@@ -88,33 +82,78 @@ describe('FoliosView', () => {
     setLocale('en')
   })
 
-  it('narrows the loaded folios by column, in the words of the language', async () => {
-    const w = mountView(['folio.read'], { data: [
-      { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, version: 1, balance: '900' },
-      { id: 4, folio_number: 'FOL000004', status: 'CLOSED', reservation_id: 10, version: 1, balance: '0' },
-    ] })
-    await flushPromises()
-    expect(w.findAll('select[name=filter_status] option').map((o) => o.text())).toEqual(['All', 'Closed', 'Open'])
-    await w.get('select[name=filter_status]').setValue('Closed')
-    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000004'])
-    await w.get('select[name=filter_status]').setValue('')
-    await w.get('input[name=filter_folio_number]').setValue('3')
-    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000003'])
-  })
-
-  it('does not sort a page of a longer list, counts what is loaded, and sorts again when the last page is in', async () => {
+  describe('the order, which the server keeps', () => {
     const f = (id: number, n: string, balance: string) => ({ id, folio_number: n, status: 'OPEN', reservation_id: id, stay_id: null, version: 1, balance })
-    const w = mountView(['folio.read'], { data: [f(1, 'FOL000001', '300'), f(2, 'FOL000002', '100')], next_cursor: 'c2' })
-    await flushPromises()
-    expect(w.findAll('[data-testid^=sort-]')).toHaveLength(0)
-    expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
-    GET.mockResolvedValue({ data: { data: [f(3, 'FOL000003', '200')] } })
-    await w.get('[data-testid=more]').trigger('click')
-    await flushPromises()
-    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { cursor: 'c2', limit: 50 } } })
-    expect(w.get('[data-testid=table-count]').text()).toBe('3 loaded')
-    await w.get('[data-testid=sort-balance]').trigger('click')
-    expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000002', 'folio-FOL000003', 'folio-FOL000001'])
+    const many = { data: [f(1, 'FOL000001', '300'), f(2, 'FOL000002', '100')], next_cursor: 'c2' }
+    const routerOf = (w: ReturnType<typeof mountView>) => (w.vm as unknown as { $router: ReturnType<typeof createRouter> }).$router
+    const lastQuery = () => (GET.mock.calls.at(-1)?.[1] as { params: { query: Record<string, unknown> } }).params.query
+
+    it('lets the server sort a list of many pages: number, balance and status can be clicked while there are more rows, the others cannot, and the rows are not sorted here', async () => {
+      const w = mountView(['folio.read'], many)
+      await flushPromises()
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-folio_number', 'sort-status', 'sort-balance'])
+      expect(w.find('input[name=filter_folio_number]').exists()).toBe(false) // a filter of the loaded rows would be of part of the list
+      expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
+      expect(lastQuery().sort).toBeUndefined() // the server's own order: the open ones first, the largest balance first
+      const before = GET.mock.calls.length
+      await w.get('[data-testid=sort-balance]').trigger('click')
+      await flushPromises()
+      expect(GET.mock.calls.length).toBe(before + 1)
+      expect(routerOf(w).currentRoute.value.query).toMatchObject({ sort: 'balance', order: 'asc' })
+      expect(lastQuery()).toMatchObject({ sort: 'balance', order: 'asc', status: 'OPEN' })
+      expect(lastQuery().cursor).toBeUndefined() // from the first page: a cursor belongs to an order
+      expect(w.findAll('tbody tr').map((r) => r.attributes('data-testid'))).toEqual(['folio-FOL000001', 'folio-FOL000002']) // as the server sent them
+      // more rows come with the cursor and keep the order
+      GET.mockResolvedValue({ data: { data: [f(3, 'FOL000003', '200')] } })
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ cursor: 'c2', sort: 'balance', order: 'asc' })
+      expect(w.get('[data-testid=table-count]').text()).toBe('3 loaded')
+      await w.get('[data-testid=sort-balance]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'balance', order: 'desc' })
+      await w.get('[data-testid=sort-balance]').trigger('click')
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+    })
+
+    it('reads the order from the address, and Back returns to the order before', async () => {
+      const w = mountView(['folio.read'], many)
+      await flushPromises()
+      const router = routerOf(w)
+      await router.push('/folios?sort=balance&order=desc')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'balance', order: 'desc' })
+      expect(w.get('th:has([data-testid=sort-balance])').attributes('aria-sort')).toBe('descending')
+      await w.get('[data-testid=sort-folio_number]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'folio_number', order: 'asc' })
+      router.back()
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'balance', order: 'desc' })
+    })
+
+    it('keeps the order when the status filter is searched again', async () => {
+      const w = mountView(['folio.read'], many)
+      await flushPromises()
+      await routerOf(w).push('/folios?sort=status&order=asc')
+      await flushPromises()
+      await w.get('select[name=status]').setValue('')
+      await w.get('form[role=search]').trigger('submit')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'status', order: 'asc' })
+      expect(lastQuery().status).toBeUndefined()
+    })
+
+    it('on a phone, the cards have a choice of order', async () => {
+      await onAPhone(async () => {
+        const w = mountView(['folio.read'], many)
+        await flushPromises()
+        await w.get('[data-testid=card-sort] select').setValue('balance:desc')
+        await flushPromises()
+        expect(lastQuery()).toMatchObject({ sort: 'balance', order: 'desc' })
+      })
+    })
   })
 
   it('opens the folio when its row is clicked, and is a card on a phone with the balance at the right', async () => {

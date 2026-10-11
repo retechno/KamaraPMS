@@ -2,6 +2,7 @@
 import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
+import { useServerSort } from '@/composables/useServerSort'
 import { FileText, Receipt, Search } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -37,6 +38,9 @@ const canRead = computed(() => auth.can('folio.read', property.currentId))
 const canPrint = computed(() => auth.can('reservation.read', property.currentId)) // a receipt names the guest and the reservation
 const businessDate = computed(() => property.clock?.business_date ?? '')
 
+// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the newest payment first.
+const { sort, params: sortParams, setSort } = useServerSort(['payment_number', 'amount', 'payment_method', 'status'])
+
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
 // The business date of the day is what the page shows to begin with: another day, or a method, is a filter that is on.
@@ -44,7 +48,7 @@ const activeFilters = computed(() => (date.value && date.value !== businessDate.
 
 const columns = computed<Column<Payment>[]>(() => [
   { key: 'payment_number', label: t('cashier.number'), sortable: true, card: 'primary' as const },
-  { key: 'payment_type', label: t('cashier.type'), sortable: true },
+  { key: 'payment_type', label: t('cashier.type') },
   { key: 'payment_method', label: t('cashier.method'), sortable: true, card: 'secondary' as const },
   { key: 'amount', label: t('cashier.amount'), align: 'right', sortable: true, class: 'tabular-nums', format: 'money' as const, card: 'money' as const },
   { key: 'status', label: t('cashier.status'), sortable: true, card: 'badge' as const },
@@ -75,7 +79,7 @@ const list = usePagedList<Payment>(async (cursor) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', {
     params: {
       path: { propertyId: property.currentId! },
-      query: { limit: 50, cursor, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined },
+      query: { limit: 50, cursor, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined, ...sortParams.value },
     },
   })
   if (!cursor && mine === latestTotals) totals.value = data?.totals ?? []
@@ -95,6 +99,12 @@ async function load(): Promise<void> {
   askedWithoutDay = !date.value // the clock of the property is not in yet: ask again when it is
   await list.reload()
 }
+
+// Another order reads the list again from its first page (a cursor belongs to an order); the address already holds it.
+watch(sort, () => {
+  list.reset()
+  void load()
+})
 
 watch(() => property.currentId, () => {
   date.value = ''
@@ -157,12 +167,15 @@ watch(businessDate, () => {
       :loading="!searched"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      manual
+      :sort="sort"
       cards
       :row-actions="actionsOf"
       :row-test-id="(p) => `payment-${p.payment_number}`"
       :row-class="(p) => (p.status === 'VOIDED' ? 'struck text-muted-foreground line-through' : undefined)"
       :caption="t('cashier.title')"
       @load-more="list.loadMore()"
+      @sort-change="setSort"
     >
       <template #cell-payment_type="{ row }">
         <Badge :variant="row.payment_type === 'REFUND' ? 'warning' : 'outline'">{{ t(`cashier.${row.payment_type}` as never) }}</Badge>
