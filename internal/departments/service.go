@@ -55,8 +55,8 @@ func deref(s *string) string {
 	return *s
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "department", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "department", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func toDepartment(r departmentsdb.ListDepartmentsRow) Department {
@@ -174,7 +174,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in Input) (Depar
 			return err
 		}
 		out = list[0]
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.created", id, nil, map[string]any{"code": code, "name": name, "parent_id": in.ParentID}))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.created", id, code, nil, map[string]any{"code": code, "name": name, "parent_id": in.ParentID}))
 	})
 	return out, err
 }
@@ -258,7 +258,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 			return err
 		}
 		out = after[0]
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.updated", id,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.updated", id, after[0].Code,
 			map[string]any{"name": old.Name, "sort_order": old.SortOrder, "is_active": old.Active}, map[string]any{"name": out.Name, "sort_order": out.SortOrder, "is_active": out.Active}))
 	})
 	return out, err
@@ -292,7 +292,7 @@ func (s *Service) Delete(ctx context.Context, propertyID, id int64) error {
 		if err := s.q(ctx).DeleteDepartment(ctx, departmentsdb.DeleteDepartmentParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.deleted", id, map[string]any{"code": d.Code, "name": d.Name}, nil))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.deleted", id, d.Code, map[string]any{"code": d.Code, "name": d.Name}, nil))
 	})
 }
 
