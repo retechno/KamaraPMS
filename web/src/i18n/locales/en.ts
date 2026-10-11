@@ -3280,6 +3280,8 @@ export const en = {
     all: 'All',
     noMatch: 'No row matches the filters.',
     clearFilters: 'Clear filters',
+    sortBy: 'Sort by',
+    sortDefault: 'Default order',
   },
   restrictions: {
     title: 'Sales restrictions',
