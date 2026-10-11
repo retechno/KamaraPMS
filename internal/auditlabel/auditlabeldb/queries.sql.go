@@ -35,6 +35,22 @@ func (q *Queries) BankStatementPeriod(ctx context.Context, arg BankStatementPeri
 	return i, err
 }
 
+const budgetName = `-- name: BudgetName :one
+SELECT name FROM budgets WHERE property_id = $1 AND id = $2
+`
+
+type BudgetNameParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) BudgetName(ctx context.Context, arg BudgetNameParams) (string, error) {
+	row := q.db.QueryRow(ctx, budgetName, arg.PropertyID, arg.ID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const folioNumber = `-- name: FolioNumber :one
 SELECT folio_number FROM folios WHERE property_id = $1 AND id = $2
 `
@@ -67,6 +83,22 @@ func (q *Queries) FolioNumberOfItem(ctx context.Context, arg FolioNumberOfItemPa
 	var folio_number string
 	err := row.Scan(&folio_number)
 	return folio_number, err
+}
+
+const paymentNumber = `-- name: PaymentNumber :one
+SELECT payment_number FROM payments WHERE property_id = $1 AND id = $2
+`
+
+type PaymentNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) PaymentNumber(ctx context.Context, arg PaymentNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, paymentNumber, arg.PropertyID, arg.ID)
+	var payment_number string
+	err := row.Scan(&payment_number)
+	return payment_number, err
 }
 
 const propertyCode = `-- name: PropertyCode :one
@@ -145,6 +177,22 @@ func (q *Queries) RoomNumber(ctx context.Context, arg RoomNumberParams) (string,
 	var room_number string
 	err := row.Scan(&room_number)
 	return room_number, err
+}
+
+const shiftNumber = `-- name: ShiftNumber :one
+SELECT shift_number FROM cashier_shifts WHERE property_id = $1 AND id = $2
+`
+
+type ShiftNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) ShiftNumber(ctx context.Context, arg ShiftNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, shiftNumber, arg.PropertyID, arg.ID)
+	var shift_number string
+	err := row.Scan(&shift_number)
+	return shift_number, err
 }
 
 const stayNumber = `-- name: StayNumber :one

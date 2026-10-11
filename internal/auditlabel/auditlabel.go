@@ -150,3 +150,42 @@ func BankStatement(ctx context.Context, propertyID, id int64) string {
 	}
 	return fmt.Sprintf("%s %s..%s", v.AccountName, v.PeriodFrom, v.PeriodTo)
 }
+
+// Budget is the name of a budget.
+func Budget(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.BudgetName(ctx, auditlabeldb.BudgetNameParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// Payment is the number of a payment ("PAY000032").
+func Payment(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.PaymentNumber(ctx, auditlabeldb.PaymentNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// Shift is the number of a cashier shift.
+func Shift(ctx context.Context, propertyID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.ShiftNumber(ctx, auditlabeldb.ShiftNumberParams{PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}

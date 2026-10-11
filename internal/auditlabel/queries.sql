@@ -35,3 +35,12 @@ SELECT code FROM rate_plans WHERE property_id = @property_id AND id = @id;
 SELECT a.name AS account_name, s.period_from, s.period_to
 FROM bank_statements s JOIN bank_accounts a ON a.id = s.bank_account_id
 WHERE s.property_id = @property_id AND s.id = @id;
+
+-- name: BudgetName :one
+SELECT name FROM budgets WHERE property_id = @property_id AND id = @id;
+
+-- name: PaymentNumber :one
+SELECT payment_number FROM payments WHERE property_id = @property_id AND id = @id;
+
+-- name: ShiftNumber :one
+SELECT shift_number FROM cashier_shifts WHERE property_id = @property_id AND id = @id;
