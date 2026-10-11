@@ -287,7 +287,7 @@ func (s *Service) summaryExtras(ctx context.Context, tenantID, propertyID int64,
 			continue
 		}
 		l := SummaryLine{
-			ID: r.ID, Status: r.Status, RoomTypeCode: r.RoomTypeCode, RoomNumber: deref(r.RoomNumber), RatePlanCode: r.RatePlanCode, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate),
+			ID: r.ID, Status: r.Status, RoomTypeID: r.RoomTypeID, RoomID: r.RoomID, RequestedBedTypeID: r.RequestedBedTypeID, BedLocked: r.BedLocked, DepartureDate: r.DepartureDate, RoomTypeCode: r.RoomTypeCode, RoomNumber: deref(r.RoomNumber), RatePlanCode: r.RatePlanCode, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate),
 			AdultCount: int(r.AdultCount), ChildCount: int(r.ChildCount), BillingCompany: r.BillingCompany, ArrivalDate: r.ArrivalDate, StayID: r.StayID,
 		}
 		if r.NightAmount != nil {

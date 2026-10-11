@@ -352,9 +352,13 @@ type Reservation struct {
 
 // SummaryLine is a room of a reservation as the list shows it.
 type SummaryLine struct {
-	ID           int64  `json:"id"`
-	Status       string `json:"status"`
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+	// RoomTypeID is the booked type of the room: the type the rooms to choose from are of (an upgrade goes through the reservation page).
+	RoomTypeID   int64  `json:"room_type_id"`
 	RoomTypeCode string `json:"room_type_code"`
+	// RoomID is the room that is assigned (nil before one is); RoomNumber is its number.
+	RoomID       *int64 `json:"room_id"`
 	RoomNumber   string `json:"room_number,omitempty"`
 	RatePlanCode string `json:"rate_plan_code"`
 	Nights       int    `json:"nights"`
@@ -366,6 +370,11 @@ type SummaryLine struct {
 	// BillingCompany is the company of the first billing instruction of the room (empty: the guest pays).
 	BillingCompany string     `json:"billing_company,omitempty"`
 	ArrivalDate    civil.Date `json:"arrival_date"`
+	// DepartureDate ends the nights of the room: with ArrivalDate it is the period a room has to be free for.
+	DepartureDate civil.Date `json:"departure_date"`
+	// RequestedBedTypeID is the bed the guest asked for (nil: none), and BedLocked says that the room must have it.
+	RequestedBedTypeID *int64 `json:"requested_bed_type_id"`
+	BedLocked          bool   `json:"bed_locked"`
 	// StayID is the stay of a room that has checked in (nil before).
 	StayID *int64 `json:"stay_id"`
 }

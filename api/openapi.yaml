@@ -9202,11 +9202,13 @@ components:
           description: The rooms that are not cancelled (all of them for a reservation that is cancelled whole).
           items:
             type: object
-            required: [id, status, room_type_code, rate_plan_code, nights, adult_count, child_count, rate_amount, arrival_date, stay_id]
+            required: [id, status, room_type_id, room_type_code, room_id, rate_plan_code, nights, adult_count, child_count, rate_amount, arrival_date, departure_date, requested_bed_type_id, bed_locked, stay_id]
             properties:
               id: { type: integer, format: int64 }
               status: { type: string }
+              room_type_id: { type: integer, format: int64, description: "The booked room type, which is the type of the rooms to choose from when a room is assigned (an upgrade goes through the reservation page)." }
               room_type_code: { type: string }
+              room_id: { type: [integer, "null"], format: int64, description: The room that is assigned (null before one is). }
               room_number: { type: string }
               rate_plan_code: { type: string }
               nights: { type: integer }
@@ -9216,6 +9218,9 @@ components:
               price_mode: { type: string }
               billing_company: { type: string, description: The company of the first billing instruction of the room (absent when the guest pays). }
               arrival_date: { $ref: "#/components/schemas/Date" }
+              departure_date: { $ref: "#/components/schemas/Date", description: "The end of the nights of the room: with `arrival_date`, the period a room has to be free for." }
+              requested_bed_type_id: { type: [integer, "null"], format: int64, description: The bed the guest asked for (null when none). }
+              bed_locked: { type: boolean, description: The room must have that bed. }
               stay_id: { type: [integer, "null"], format: int64, description: The stay of a room that has checked in. }
         deposit:
           description: What the reservation holds before check-in; null when it has no deposit folio.
