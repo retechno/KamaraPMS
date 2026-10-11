@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
@@ -116,7 +117,7 @@ func (s *Service) PostCharge(ctx context.Context, propertyID, folioID int64, key
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.charge_posted", "folio", folioID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.charge_posted", "folio", folioID, auditlabel.Folio(ctx, propertyID, folioID), nil, map[string]any{
 					"folio_item_id": item.ID, "charge_code_id": cmd.chargeCodeID, "debit": item.Debit.String(), "description": item.Description,
 				})); err != nil {
 					return err
@@ -227,7 +228,7 @@ func (s *Service) PostAdjustment(ctx context.Context, propertyID, folioID int64,
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.adjustment_posted", "folio", folioID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.adjustment_posted", "folio", folioID, auditlabel.Folio(ctx, propertyID, folioID), nil, map[string]any{
 					"folio_item_id": item.ID, "charge_code_id": in.ChargeCodeID, "debit": item.Debit.String(), "credit": item.Credit.String(),
 					"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(),
 				})); err != nil {
@@ -294,7 +295,7 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.item_reversed", "folio_item", itemID, nil, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.item_reversed", "folio_item", itemID, auditlabel.FolioOfItem(ctx, propertyID, itemID), nil, map[string]any{
 			"reversal_item_id": rev.ID, "folio_id": folio.ID, "reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(),
 		})); err != nil {
 			return err

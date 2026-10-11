@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -114,7 +115,7 @@ func (s *Service) SetItemGroup(ctx context.Context, propertyID, itemID int64, in
 			return err
 		}
 		out.Changed = true
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio_item.group_changed", "folio_item", itemID,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio_item.group_changed", "folio_item", itemID, auditlabel.FolioOfItem(ctx, propertyID, itemID),
 			map[string]any{"group_code": old}, map[string]any{"group_code": code, "folio_id": pre.FolioID, "payment_id": pre.PaymentID, "transaction_type": pre.TransactionType}))
 	})
 	return out, err

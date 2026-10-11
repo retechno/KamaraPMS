@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -91,7 +92,7 @@ func (s *Service) AdjustChargedNights(ctx context.Context, p auth.Principal, pro
 		if err != nil {
 			return nil, err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.adjustment_posted", "folio", folio.ID, nil, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.adjustment_posted", "folio", folio.ID, auditlabel.Folio(ctx, propertyID, folio.ID), nil, map[string]any{
 			"folio_item_id": adjItem.ID, "charge_code_id": *items[i].ChargeCodeID, "debit": adjItem.Debit.String(), "credit": adjItem.Credit.String(),
 			"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(), "related_item_id": a.ItemID, "source": "STAY_RATE_CHANGE",
 		})); err != nil {

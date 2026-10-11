@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -191,7 +192,7 @@ func (s *Service) PostPayment(ctx context.Context, propertyID, folioID int64, ke
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.posted", "payment", pay.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.posted", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
 					"payment_number": pay.PaymentNumber, "folio_id": folioID, "amount": pay.Amount.String(), "method": pay.PaymentMethod,
 				})); err != nil {
 					return err
@@ -254,7 +255,7 @@ func (s *Service) Deposit(ctx context.Context, propertyID, reservationID int64, 
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.deposit_posted", "payment", pay.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.deposit_posted", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
 					"payment_number": pay.PaymentNumber, "folio_id": folioID, "reservation_id": reservationID, "amount": pay.Amount.String(), "method": pay.PaymentMethod,
 				})); err != nil {
 					return err
@@ -361,7 +362,7 @@ func (s *Service) Void(ctx context.Context, propertyID, paymentID int64, in Corr
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.voided", "payment", paymentID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.voided", "payment", paymentID, auditlabel.Payment(ctx, propertyID, paymentID),
 			map[string]any{"status": pay.Status}, map[string]any{"status": voided.Status, "reason": reason, "actor": p.ActorID(), "approved_by": by})); err != nil {
 			return err
 		}
@@ -487,7 +488,7 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.refunded", "payment", pay.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.refunded", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
 					"payment_number": pay.PaymentNumber, "refund_of_payment_id": paymentID, "amount": pay.Amount.String(), "reason": reason,
 					"actor": p.ActorID(), "approved_by": by,
 				})); err != nil {
@@ -628,7 +629,7 @@ func (s *Service) Transfer(ctx context.Context, propertyID, folioID int64, key s
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.transferred", "payment", pay.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.transferred", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
 					"payment_number": pay.PaymentNumber, "folio_id": folioID, "company_id": cid, "amount": pay.Amount.String(),
 				})); err != nil {
 					return err

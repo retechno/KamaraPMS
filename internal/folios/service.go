@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/iam"
@@ -96,10 +97,10 @@ func (s *Service) actor(ctx context.Context, propertyID int64, perm auth.Permiss
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: entity, EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 
@@ -331,7 +332,7 @@ func (s *Service) CloseFolio(ctx context.Context, propertyID, id int64, version 
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.closed", "folio", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.closed", "folio", id, auditlabel.Folio(ctx, propertyID, id),
 			map[string]any{"status": f.Status}, map[string]any{"status": closed.Status})); err != nil {
 			return err
 		}
