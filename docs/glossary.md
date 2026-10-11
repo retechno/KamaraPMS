@@ -17,6 +17,8 @@ Satu istilah untuk satu konsep, dipakai di menu, judul halaman, tombol, dan pesa
 | Fiscal year | Tahun buku | "Tahun fiskal" tidak dipakai. |
 | Chart of accounts | Bagan akun | |
 | Bed type | Tipe tempat tidur | "Tipe ranjang" tidak dipakai. |
+| Invoice (piutang perusahaan) | Invoice | Tagihan piutang perusahaan. "Faktur" hanya untuk faktur pajak (`Faktur pajak`). Jejak audit: "Invoice diterbitkan", "Invoice piutang perusahaan". |
+| Tax opening credit | Saldo awal kredit pajak | Bukan "kredit pajak awal". |
 | Tax return (SPT) | SPT Masa PPN | "Pengembalian pajak" keliru: itu restitusi. Di teks, satu SPT disebut "SPT". |
 
 ## Istilah di dalam teks
@@ -24,6 +26,7 @@ Satu istilah untuk satu konsep, dipakai di menu, judul halaman, tombol, dan pesa
 | English | Indonesia |
 |---|---|
 | Credit note | Nota kredit |
+| Void | di-void | "Pembayaran di-void", "Invoice di-void". Bukan "dibatalkan (void)". |
 | Write-off | Penghapusan piutang |
 | Complimentary | Komplimen |
 | House use | Pemakaian hotel |

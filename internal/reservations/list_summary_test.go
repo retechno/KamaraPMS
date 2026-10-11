@@ -197,3 +197,49 @@ func TestListIsScopedAndAuthorized(t *testing.T) {
 	_, err := f.Res.List(f.User(t, f.tenantID, f.propID, auth.PermGuestRead), f.propID, reservations.ListFilter{}, 0, 50)
 	wantCode(t, err, "PERMISSION_DENIED")
 }
+
+// The rooms of a row of the list carry what a room has to be chosen for: the booked type, the period, the bed the guest asked for, and the room that is assigned, so the list can offer to
+// assign a room without opening the reservation.
+func TestARoomOfTheListCarriesWhatAssigningARoomNeeds(t *testing.T) {
+	f := setup(t)
+	res := f.book(t, f.dlx, "2026-10-05", "2026-10-08")
+	line := f.summaryOf(t, res.ID).Rooms[0]
+	if line.RoomTypeID != f.dlx.ID || line.RoomTypeCode != "DLX" || line.RoomID != nil || line.RoomNumber != "" {
+		t.Fatalf("a room that is not assigned: %+v", line)
+	}
+	if line.ArrivalDate.String() != "2026-10-05" || line.DepartureDate.String() != "2026-10-08" || line.Nights != 3 {
+		t.Fatalf("the period: %+v", line)
+	}
+	if line.RequestedBedTypeID != nil || line.BedLocked {
+		t.Fatalf("no bed asked for: %+v", line)
+	}
+	// the version of the row is the one the assignment asks for, and the answer of the assignment is the next one
+	row := f.summaryOf(t, res.ID)
+	if row.Version != res.Version {
+		t.Fatalf("version: row %d, reservation %d", row.Version, res.Version)
+	}
+	assigned, err := f.Res.AssignRoom(f.admin, f.propID, res.ID, res.Rooms[0].ID, row.Version, f.r102.ID, false)
+	must(t, err)
+	after := f.summaryOf(t, res.ID)
+	if after.Version != assigned.Version || after.Version == row.Version {
+		t.Fatalf("version after the assignment: row %d, answer %d, before %d", after.Version, assigned.Version, row.Version)
+	}
+	line = after.Rooms[0]
+	if line.RoomID == nil || *line.RoomID != f.r102.ID || line.RoomNumber != "102" || line.RoomTypeID != f.dlx.ID {
+		t.Fatalf("an assigned room: %+v", line)
+	}
+	// a stale version is refused: the list must be read again
+	_, err = f.Res.AssignRoom(f.admin, f.propID, res.ID, res.Rooms[0].ID, row.Version, f.r101.ID, false)
+	wantCode(t, err, "VERSION_CONFLICT")
+}
+
+func TestARoomOfTheListCarriesTheBedThatWasAskedFor(t *testing.T) {
+	f := setup(t)
+	king, _ := f.twinForRoom102(t)
+	res, err := f.Res.Create(f.admin, f.propID, "", f.input(true, f.keep(f.dlx, king.ID, "2026-10-09", "2026-10-10")))
+	must(t, err)
+	line := f.summaryOf(t, res.ID).Rooms[0]
+	if line.RequestedBedTypeID == nil || *line.RequestedBedTypeID != king.ID || !line.BedLocked {
+		t.Fatalf("the bed that was asked for, and kept: %+v", line)
+	}
+}

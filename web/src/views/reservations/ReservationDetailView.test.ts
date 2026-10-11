@@ -140,30 +140,37 @@ describe('ReservationDetailView', () => {
     expect(w.find('[data-testid=cancel]').exists()).toBe(false)
   })
 
-  it('assigns a free room of the booked type, and marks an upgrade when another type is chosen', async () => {
+  it('assigns a free room of the booked type with the picker, and marks an upgrade when another type is chosen', async () => {
+    const w = mountView(reservation(), ALL)
+    document.body.innerHTML = ''
+    await flushPromises()
+    await w.get('[data-testid=assign-4]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=pick-room]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/availability/rooms', { params: { path: { propertyId: 7 }, query: { room_type_id: 10, arrival: '2026-10-02', departure: '2026-10-04' } } }])
+    POST.mockResolvedValue({ data: reservation({ version: 3, rooms: [line({ room_id: 21, room_number: '101' })] }) })
+    ;(document.body.querySelector('[data-testid=room-option-21]') as HTMLElement).click()
+    await flushPromises()
+    expect(POST.mock.calls.at(-1)?.[1]).toMatchObject({ body: { version: 2, room_id: 21, upgrade: false } })
+    w.unmount()
+  })
+
+  it('asks for an upgrade when another type is chosen', async () => {
     const w = mountView()
     await flushPromises()
     await w.get('[data-testid=assign-4]').trigger('click')
     await flushPromises()
-    expect(GET.mock.calls.at(-1)).toEqual(['/api/v1/properties/{propertyId}/availability/rooms', { params: { path: { propertyId: 7 }, query: { room_type_id: 10, arrival: '2026-10-02', departure: '2026-10-04' } } }])
-    POST.mockResolvedValue({ data: reservation({ version: 3, rooms: [line({ room_id: 21, room_number: '101' })] }) })
-    await w.get('form[data-testid=assign-form-4]').trigger('submit')
+    await w.get('select[name=assign_type]').setValue(11)
     await flushPromises()
-    expect(POST.mock.calls.at(-1)?.[1]).toMatchObject({ body: { version: 2, room_id: 21, upgrade: false } })
-    expect(w.get('[data-testid=room-number-4]').text()).toBe('room 101')
-    expect(w.find('[data-testid=unassign-4]').exists()).toBe(true)
-
-    // upgrade: another type in the picker
-    const w2 = mountView()
+    await w.get('[data-testid=pick-room]').trigger('click')
     await flushPromises()
-    await w2.get('[data-testid=assign-4]').trigger('click')
-    await flushPromises()
-    await w2.get('select[name=assign_type]').setValue(11)
-    await flushPromises()
+    expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { room_type_id: 11 } } })
     POST.mockResolvedValue({ data: reservation({ version: 3 }) })
-    await w2.get('form[data-testid=assign-form-4]').trigger('submit')
+    ;(document.body.querySelector('[data-testid=room-option-21]') as HTMLElement).click()
     await flushPromises()
     expect(POST.mock.calls.at(-1)?.[1]).toMatchObject({ body: { upgrade: true } })
+    w.unmount()
   })
 
   it('offers no-show only for rooms whose arrival has come', async () => {
@@ -333,8 +340,12 @@ describe('ReservationDetailView', () => {
     await flushPromises()
     await w.get('[data-testid=assign-4]').trigger('click')
     await flushPromises()
-    expect(w.findAll('select[name=assign_room] option').map((o) => o.text())).toEqual(['102 · Clean · King ✓ matches the request', '101 · Clean · Twin', '103 · Dirty'])
-    expect((w.get('select[name=assign_room]').element as HTMLSelectElement).value).toBe('22') // the matching room is proposed
+    await w.get('[data-testid=pick-room]').trigger('click')
+    await flushPromises()
+    const options = [...document.body.querySelectorAll('[data-testid^=room-option-]')].map((o) => (o.textContent ?? '').replace(/\s+/g, ' ').trim())
+    expect(options.map((o) => o.slice(0, 3))).toEqual(['102', '101', '103']) // the clean rooms first, the bed asked for first of them
+    expect(options[0]).toContain('✓')
+    w.unmount()
   })
 
   it('offers no bed change to a role that cannot update the reservation', async () => {

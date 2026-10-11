@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, FreeRoom, RoomType } from '@/api/types'
+import { fetchFreeRooms } from '@/composables/useFreeRooms'
+import { isRoomReady, roomOptionLabel, sortFreeRooms } from '@/utils/freeRooms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
@@ -39,14 +41,9 @@ const pid = computed(() => property.currentId)
 const requiresInspection = computed(() => property.current?.require_room_inspection_for_checkin ?? false)
 const activeTypes = computed(() => types.value.filter((t) => t.is_active))
 const selected = computed(() => rooms.value.find((r) => r.room_id === roomId.value))
-/** A free room as the picker lists it: number, housekeeping status and bed (marked when it is the bed asked for), and a note when it is not ready. */
-function roomLabel(r: { room_number: string; housekeeping_status: string; bed_type_id?: number | null; bed_type_name?: string }): string {
-  const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
-  const wanted = props.arrival.requested_bed_type_id
-  const mark = wanted && r.bed_type_id === wanted ? ` ✓ ${t('bedTypes.matches')}` : ''
-  return `${r.room_number} · ${statusText(r.housekeeping_status)}${bed}${mark}${isReady(r.housekeeping_status) ? '' : ` ${t('frontDesk.checkIn.notReadyTag')}`}`
-}
-const isReady = (status: string) => (requiresInspection.value ? status === 'INSPECTED' : status === 'CLEAN' || status === 'INSPECTED')
+/** A free room as the picker lists it: number, housekeeping status and bed (marked when it is the bed asked for), and a note when it is not ready (see `roomOptionLabel`). */
+const roomLabel = (r: FreeRoom): string => roomOptionLabel(r, { requestedBedTypeId: props.arrival.requested_bed_type_id, requiresInspection: requiresInspection.value })
+const isReady = (status: string) => isRoomReady(status, requiresInspection.value)
 const notReady = computed(() => !!selected.value && !isReady(selected.value.housekeeping_status))
 const canOverride = computed(() => auth.can('frontdesk.checkin_unready_room', pid.value))
 const isUpgrade = computed(() => typeId.value !== props.arrival.room_type_id)
@@ -56,24 +53,13 @@ async function loadRooms(): Promise<void> {
   const propertyId = pid.value
   if (propertyId === null) return
   try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/rooms', {
-      params: { path: { propertyId }, query: { room_type_id: typeId.value, arrival: props.arrival.arrival_date, departure: props.arrival.departure_date } },
-    })
-    const free = [...(data?.data ?? [])]
+    const free = await fetchFreeRooms(propertyId, { typeId: typeId.value, arrival: props.arrival.arrival_date, departure: props.arrival.departure_date }, property.clock?.business_date ?? '')
     // A room already assigned to this line is not "free" (the line holds it), so it is offered explicitly.
     if (props.arrival.room_id && typeId.value === props.arrival.room_type_id && !free.some((r) => r.room_id === props.arrival.room_id)) {
       free.unshift({ room_id: props.arrival.room_id, room_number: props.arrival.room_number ?? String(props.arrival.room_id), housekeeping_status: props.arrival.housekeeping_status ?? 'DIRTY' })
     }
-    // The room already on the line first (it was chosen on purpose). Then the rooms that are ready, because a room that is not ready cannot be checked into without an override, and the one that
-    // is proposed is the first of them; among those the rooms that have the bed the guest asked for come first. The rooms that are not ready follow, in the same order. The sort is stable, so the
-    // rooms keep the order the server gave them (by number) otherwise.
-    const wanted = props.arrival.requested_bed_type_id ?? null
-    const rank = (r: { room_id: number; housekeeping_status: string; bed_type_id?: number | null }) => {
-      if (r.room_id === props.arrival.room_id) return 0
-      const bedFirst = wanted !== null && r.bed_type_id === wanted ? 0 : 1
-      return (isReady(r.housekeeping_status) ? 1 : 3) + bedFirst
-    }
-    free.sort((a, b) => rank(a) - rank(b))
+    // The order of every list of rooms (`sortFreeRooms`): the room on the line first, then the ready rooms with the bed that was asked for, the ready rooms, then the rooms that are not ready.
+    free.splice(0, free.length, ...sortFreeRooms(free, { requestedBedTypeId: props.arrival.requested_bed_type_id ?? null, currentRoomId: props.arrival.room_id ?? null, requiresInspection: requiresInspection.value }))
     rooms.value = free
     if (!free.some((r) => r.room_id === roomId.value)) roomId.value = free[0]?.room_id ?? null
   } catch (e) {

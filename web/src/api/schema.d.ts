@@ -8203,7 +8203,17 @@ export interface components {
                 /** Format: int64 */
                 id: number;
                 status: string;
+                /**
+                 * Format: int64
+                 * @description The booked room type, which is the type of the rooms to choose from when a room is assigned (an upgrade goes through the reservation page).
+                 */
+                room_type_id: number;
                 room_type_code: string;
+                /**
+                 * Format: int64
+                 * @description The room that is assigned (null before one is).
+                 */
+                room_id: number | null;
                 room_number?: string;
                 rate_plan_code: string;
                 nights: number;
@@ -8215,6 +8225,15 @@ export interface components {
                 /** @description The company of the first billing instruction of the room (absent when the guest pays). */
                 billing_company?: string;
                 arrival_date: components["schemas"]["Date"];
+                /** @description The end of the nights of the room: with `arrival_date`, the period a room has to be free for. */
+                departure_date: components["schemas"]["Date"];
+                /**
+                 * Format: int64
+                 * @description The bed the guest asked for (null when none).
+                 */
+                requested_bed_type_id: number | null;
+                /** @description The room must have that bed. */
+                bed_locked: boolean;
                 /**
                  * Format: int64
                  * @description The stay of a room that has checked in.

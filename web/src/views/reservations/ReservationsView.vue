@@ -2,26 +2,32 @@
 import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { CalendarPlus, GanttChart } from 'lucide-vue-next'
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
-import type { ReservationSummary } from '@/api/types'
+import type { FreeRoom, Reservation, ReservationSummary } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
+import AssignRoomsSheet from '@/components/AssignRoomsSheet.vue'
+import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
+import RoomPicker from '@/components/RoomPicker.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
+import { toast } from '@/composables/useToast'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import type { AssignFailure } from '@/utils/assignRoom'
 import { type ReservationAction, reservationActions } from '@/utils/reservationActions'
+import { type AssignLine, isUnassigned, lineOfSummary } from '@/utils/roomAssign'
 import { formatMoney } from '@/utils/format'
 import { STATUS_FILTER, apiStatusOf, uiStatus } from '@/utils/reservationStatus'
 
@@ -109,10 +115,59 @@ function target(r: ReservationSummary, a: ReservationAction): string | undefined
   }
 }
 /** The row opens the reservation, so "view" is not an action of its own; the others are in the "..." menu (and the card of a phone). */
-const menuOf = (r: ReservationSummary): RowAction[] =>
-  actionsOf(r)
+const menuOf = (r: ReservationSummary): RowAction[] => {
+  const links: RowAction[] = actionsOf(r)
     .filter((a) => a !== 'view')
     .map((a) => ({ key: a, label: t(`reservations.action.${a}`), to: target(r, a) ?? `/reservations/${r.id}`, testId: `${a}-${r.confirmation_number}` }))
+  // The rooms of the reservation, each with its own list of free rooms (a sheet): for who may update a reservation, when a room of it waits for its check-in.
+  return canAssign(r) ? [{ key: 'assignRooms', label: t('reservations.assignRooms'), onSelect: () => (sheetFor.value = r.id), testId: `assign-rooms-${r.confirmation_number}` }, ...links] : links
+}
+
+// ---- the rooms, from the list (reservation.update; the rooms that wait for check-in, of the booked type: an upgrade goes through the page of the reservation)
+const canAssign = (r: ReservationSummary): boolean => can('reservation.update') && r.display_status !== 'CANCELLED' && r.rooms.some((l) => l.status === 'CONFIRMED')
+/** A reservation of one room that waits for it: the list offers the picker right in its Kamar column. */
+const singleUnassigned = (r: ReservationSummary): ReservationSummary['rooms'][number] | null => {
+  const only = r.rooms.length === 1 ? r.rooms[0] : undefined
+  return can('reservation.update') && only && isUnassigned(only) ? only : null
+}
+const sheetFor = ref<number | null>(null)
+const sheetRow = computed(() => rows.value.find((r) => r.id === sheetFor.value) ?? null)
+const sheetOpen = computed({
+  get: () => sheetRow.value !== null,
+  set: (v: boolean) => {
+    if (!v) sheetFor.value = null
+  },
+})
+const autoLines = ref<AssignLine[]>([])
+const autoOpen = ref(false)
+
+/** The answer of an assignment on its row: the room of the line and the version the next assignment of the reservation has to ask for. */
+function patchRow(res: Reservation): void {
+  rows.value = rows.value.map((r) => {
+    if (r.id !== res.id) return r
+    return { ...r, version: res.version, rooms: r.rooms.map((l) => { const done = res.rooms.find((x) => x.id === l.id); return done ? { ...l, room_id: done.room_id ?? null, room_number: done.room_number ?? '' } : l }) }
+  })
+}
+function roomAssigned(res: Reservation, room: FreeRoom): void {
+  patchRow(res)
+  toast.success(t('roomPicker.assigned', { room: room.room_number }))
+}
+/** The row as it is now (a conflict: the reservation was changed, a room was taken): read again by its number, and replaced in place, whatever page it is on. */
+async function refreshRow(id: number): Promise<void> {
+  const row = rows.value.find((r) => r.id === id)
+  const propertyId = property.currentId
+  if (!row || propertyId === null) return
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { q: row.confirmation_number, limit: 5 } } })
+  const fresh = data?.data?.find((r) => r.id === id)
+  if (fresh) rows.value = rows.value.map((r) => (r.id === id ? fresh : r))
+}
+async function assignFailed(id: number, failure: AssignFailure): Promise<void> {
+  if (failure.reload) await refreshRow(id)
+}
+function startAuto(r: ReservationSummary): void {
+  autoLines.value = r.rooms.filter((l) => isUnassigned(l)).map((l) => lineOfSummary(r, l))
+  autoOpen.value = true
+}
 
 function query() {
   return {
@@ -268,6 +323,13 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
             {{ row.rooms[0]?.room_number || t('reservations.noRoom') }}<span v-if="row.rooms.length > 1" class="text-muted-foreground"> {{ t('reservations.moreRooms', { n: row.rooms.length - 1 }) }}</span>
           </div>
           <div class="text-xs text-muted-foreground">{{ [...new Set(row.rooms.map((l) => l.room_type_code))].join(' · ') }}</div>
+          <div v-if="singleUnassigned(row)" class="mt-1" @click.stop>
+            <RoomPicker
+              :target="{ reservationId: row.id, lineId: singleUnassigned(row)!.id, version: row.version }" :type-id="singleUnassigned(row)!.room_type_id" :type-code="singleUnassigned(row)!.room_type_code"
+              :arrival="singleUnassigned(row)!.arrival_date" :departure="singleUnassigned(row)!.departure_date" :requested-bed-type-id="singleUnassigned(row)!.requested_bed_type_id ?? null"
+              :test-id="`pick-room-${row.confirmation_number}`" @assigned="roomAssigned" @failed="(f) => assignFailed(row.id, f)"
+            />
+          </div>
         </template>
         <span v-else>—</span>
       </template>
@@ -295,5 +357,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
     </DataTable>
     <EmptyState v-else :description="t('emptyState.loadFailed')" :title="t('frontDesk.page.couldNotLoad')" data-testid="not-loaded" />
 
+    <AssignRoomsSheet v-model:open="sheetOpen" :row="sheetRow" @assigned="roomAssigned" @failed="(f) => sheetRow && assignFailed(sheetRow.id, f)" @auto="sheetRow && startAuto(sheetRow)" />
+    <AutoAssignDialog v-model:open="autoOpen" :lines="autoLines" @changed="() => sheetFor !== null && refreshRow(sheetFor)" />
   </template>
 </template>

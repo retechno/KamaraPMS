@@ -83,4 +83,28 @@ describe('the words of the audit trail', () => {
     expect(id.auditAction.bed_types_seeded).toBe('Tipe tempat tidur bawaan dibuat')
     expect(JSON.stringify(id)).not.toMatch(/ranjang/i)
   })
+
+  it('says an invoice of the city ledger "Invoice" (a tax invoice is the "Faktur")', () => {
+    expect(id.auditEntity.city_ledger_invoice).toBe('Invoice piutang perusahaan')
+    expect(id.auditAction.cityledger_invoice_issued).toBe('Invoice diterbitkan')
+    expect(id.auditAction.cityledger_invoice_voided).toBe('Invoice di-void')
+    expect(id.auditEntity.tax_invoice).toBe('Faktur pajak')
+    expect(id.auditAction.tax_invoice_issued).toBe('Faktur pajak diterbitkan')
+  })
+
+  it('says "di-void" for every action that was voided, as the rest of the application does, and never "dibatalkan (void)"', () => {
+    const voided = Object.entries(id.auditAction).filter(([k]) => k.endsWith('_voided'))
+    expect(voided.length).toBeGreaterThan(8)
+    for (const [k, text] of voided) {
+      expect(text, k).toContain('di-void')
+      expect(text, k).not.toContain('(void)')
+    }
+    expect(id.auditAction.payment_voided).toBe('Pembayaran di-void')
+  })
+
+  it('says the opening credit of a tax "Saldo awal kredit pajak"', () => {
+    expect(id.auditEntity.tax_opening_credit).toBe('Saldo awal kredit pajak')
+    expect(id.auditAction.tax_opening_credit_set).toBe('Saldo awal kredit pajak diatur')
+    expect(id.auditAction.tax_opening_credit_voided).toBe('Saldo awal kredit pajak di-void')
+  })
 })

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { statusText } from '@/utils/status'
+import type { AssignFailure } from '@/utils/assignRoom'
 import { Printer } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, AuditLog, BedType, CancelResult, FreeRoom, GuestView, Reservation, ReservationRoom, RoomType } from '@/api/types'
+import type { Approval, AuditLog, BedType, CancelResult, GuestView, Reservation, ReservationRoom, RoomType } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import BillingInstructions from '@/components/BillingInstructions.vue'
 import EditRateDialog from '@/components/EditRateDialog.vue'
@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Combobox } from '@/components/ui/combobox'
+import RoomPicker from '@/components/RoomPicker.vue'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { vAutofocus } from '@/directives/autofocus'
@@ -55,7 +55,7 @@ const restriction = ref<{ refusal: RestrictionRefusal; again: (o: RestrictionOve
 const bedPick = reactive<Record<number, number>>({})
 // Whether the bed is kept, by line (until it is saved).
 const lockPick = reactive<Record<number, boolean>>({})
-const assigning = ref<{ lineId: number; typeId: number; rooms: FreeRoom[]; roomId: number | null } | null>(null)
+const assigning = ref<{ lineId: number; typeId: number } | null>(null)
 const header = reactive({ source: 'PHONE', remarks: '' })
 const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
 let depositKey = newIdempotencyKey() // kept while a request may have been lost, renewed once the server has answered
@@ -281,48 +281,18 @@ function submitReason(): Promise<void> {
   return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/no-show', { params: lineParams(a.lineId as number), body }))
 }
 
-/** A free room as the picker lists it: its number, its housekeeping status and its bed, with a mark when it is the bed asked for. */
-function roomLabel(r: FreeRoom, line: ReservationRoom): string {
-  const bed = r.bed_type_name ? ` · ${r.bed_type_name}` : ''
-  const mark = line.bed_type_id && r.bed_type_id === line.bed_type_id ? ` ✓ ${t('bedTypes.matches')}` : ''
-  return `${r.room_number} · ${statusText(r.housekeeping_status)}${bed}${mark}`
-}
-
 async function startAssign(line: ReservationRoom): Promise<void> {
-  assigning.value = { lineId: line.id, typeId: line.room_type_id, rooms: [], roomId: null }
+  assigning.value = { lineId: line.id, typeId: line.room_type_id }
   assignTick.value++
-  await loadFree()
 }
 
-async function loadFree(): Promise<void> {
-  const a = assigning.value
-  const r = res.value
-  const propertyId = pid.value
-  if (!a || !r || propertyId === null) return
-  const line = r.rooms.find((l) => l.id === a.lineId)
-  if (!line) return
-  try {
-    const { data } = await api.GET('/api/v1/properties/{propertyId}/availability/rooms', {
-      params: { path: { propertyId }, query: { room_type_id: a.typeId, arrival: line.arrival_date < businessDate.value ? businessDate.value : line.arrival_date, departure: line.departure_date } },
-    })
-    // The rooms that have the bed the guest asked for come first, and the first of them is the one proposed.
-    const rooms = data?.data ?? []
-    const wanted = line.bed_type_id ?? null
-    a.rooms = wanted === null ? rooms : [...rooms.filter((r) => r.bed_type_id === wanted), ...rooms.filter((r) => r.bed_type_id !== wanted)]
-    a.roomId = a.rooms[0]?.room_id ?? null
-  } catch (e) {
-    error.value = e instanceof ApiError ? e : null
-  }
+/** The room was assigned by the picker (an upgrade when the type is not the booked one): the page shows the answer, as after any other action. */
+async function roomAssigned(): Promise<void> {
+  assigning.value = null
+  await load()
 }
-
-function submitAssign(): Promise<void> {
-  const a = assigning.value
-  const line = res.value?.rooms.find((l) => l.id === a?.lineId)
-  if (!a || !line || a.roomId === null) return Promise.resolve()
-  const upgrade = a.typeId !== line.room_type_id
-  return run(() => api.POST('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/assign-room', {
-    params: lineParams(a.lineId), body: { version: version(), room_id: a.roomId as number, upgrade },
-  }))
+async function assignFailed(failure: AssignFailure): Promise<void> {
+  if (failure.reload) await load()
 }
 
 async function takeDeposit(): Promise<void> {
@@ -571,23 +541,20 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
           <BillingInstructions v-if="['DRAFT', 'CONFIRMED', 'CHECKED_IN'].includes(line.status)" :reservation-id="res.id" :line-id="line.id" :editable="can('reservation.update')" />
 
-          <form v-if="assigning && assigning.lineId === line.id" v-autofocus="assignTick" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" novalidate :data-testid="`assign-form-${line.id}`" @submit.prevent="submitAssign">
+          <div v-if="assigning && assigning.lineId === line.id" v-autofocus="assignTick" class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/40 p-3" :data-testid="`assign-form-${line.id}`">
             <FormField class="w-44" :label="t('reservation.roomType')">
               <template #default="{ id }">
-                <NativeSelect :id="id" v-model.number="assigning.typeId" name="assign_type" @change="loadFree">
+                <NativeSelect :id="id" v-model.number="assigning.typeId" name="assign_type">
                   <option v-for="ty in activeTypes" :key="ty.id" :value="ty.id">{{ ty.code }} {{ ty.id === line.room_type_id ? t('reservation.booked') : t('reservation.upgrade') }}</option>
                 </NativeSelect>
               </template>
             </FormField>
-            <FormField class="w-52" :label="t('reservation.freeRoom')">
-              <template #default="{ id }">
-                <Combobox :id="id" v-model="assigning.roomId" name="assign_room" :disabled="!assigning.rooms.length" :options="[...assigning.rooms.map((r) => ({ value: r.room_id, label: roomLabel(r, line) }))]" />
-                <small v-if="!assigning.rooms.length" class="text-xs text-muted-foreground" data-testid="no-free-rooms">{{ t('reservation.noFreeRooms', { type: typeCode(assigning.typeId) }) }}</small>
-              </template>
-            </FormField>
-            <Button type="submit" size="sm" :disabled="busy || assigning.roomId === null">{{ t('reservation.assign') }}</Button>
+            <RoomPicker
+              :key="assigning.typeId" :target="{ reservationId: res.id, lineId: line.id, version: res.version }" :type-id="assigning.typeId" :type-code="typeCode(assigning.typeId)" :arrival="line.arrival_date" :departure="line.departure_date"
+              :requested-bed-type-id="line.bed_type_id ?? null" :upgrade="assigning.typeId !== line.room_type_id" :label="t('reservation.freeRoom')" test-id="pick-room" @assigned="roomAssigned" @failed="assignFailed"
+            />
             <Button type="button" variant="outline" size="sm" @click="assigning = null">{{ t('common.close') }}</Button>
-          </form>
+          </div>
         </CardContent>
       </Card>
     </div>

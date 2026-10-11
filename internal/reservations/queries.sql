@@ -151,7 +151,7 @@ LIMIT @row_limit;
 
 -- The rooms of many reservations for the list: type, assigned room, plan, the booked price of the arrival night (the snapshot) and the company of the first billing instruction.
 -- name: ListSummaryLines :many
-SELECT l.id, l.reservation_id, l.status, t.code AS room_type_code, r.room_number, rp.code AS rate_plan_code, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
+SELECT l.id, l.reservation_id, l.status, l.room_type_id, l.room_id, l.requested_bed_type_id, l.bed_locked, t.code AS room_type_code, r.room_number, rp.code AS rate_plan_code, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
        night.amount AS night_amount, night.price_mode AS night_price_mode, COALESCE(co.name, '')::text AS billing_company, st.id AS stay_id
 FROM reservation_rooms l
 JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id

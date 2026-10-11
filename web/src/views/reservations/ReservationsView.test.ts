@@ -12,8 +12,8 @@ let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
 
 const room = (over: object = {}) => ({
-  id: 4, status: 'CONFIRMED', room_type_code: 'DLX', room_number: '101', rate_plan_code: 'BAR', nights: 2, adult_count: 2, child_count: 1, rate_amount: '1200000', price_mode: 'EXCLUSIVE',
-  arrival_date: '2026-10-02', stay_id: null, ...over,
+  id: 4, status: 'CONFIRMED', room_type_id: 10, room_type_code: 'DLX', room_id: 21, room_number: '101', rate_plan_code: 'BAR', nights: 2, adult_count: 2, child_count: 1, rate_amount: '1200000', price_mode: 'EXCLUSIVE',
+  arrival_date: '2026-10-02', departure_date: '2026-10-04', requested_bed_type_id: null, bed_locked: false, stay_id: null, ...over,
 })
 const row = (over: object = {}) => ({
   id: 1, confirmation_number: 'RES000001', guest_id: 3, guest_name: 'Siti Nurhaliza', source: 'PHONE', status: 'CONFIRMED', display_status: 'CONFIRMED', arrival_date: '2026-10-02',
@@ -241,7 +241,7 @@ describe('ReservationsView', () => {
     expect(w.find('[data-testid=view-RESERVED1]').exists()).toBe(false)
     expect(w.find('[data-testid=res-RESERVED1] button').exists()).toBe(true) // the "..." only
     expect(w.findAll('[data-testid=res-RESERVED1] button')).toHaveLength(1)
-    expect(await inMenu('RESERVED1')).toEqual(['edit', 'checkIn', 'payment'])
+    expect(await inMenu('RESERVED1')).toEqual(['assign-rooms', 'edit', 'checkIn', 'payment']) // the rooms of the reservation first: a room of it waits for its check-in
     expect(document.body.querySelector('[data-slot=row-menu] a[href="/arrivals?q=RESERVED1"]')).not.toBeNull() // check-in is the existing check-in
     expect(document.body.querySelector('[data-slot=row-menu] a[href="/folios/80?tab=payment"]')).not.toBeNull()
     expect(await inMenu('DRAFT1')).not.toContain('checkIn') // a draft is confirmed before it checks in
