@@ -12,6 +12,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/cityledger/cityledgerdb"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -109,8 +110,8 @@ type WriteOffInput struct {
 	Approval     *iam.ApprovalInput `json:"approval"`
 }
 
-func adjustmentAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_adjustment", EntityID: id, Old: old, New: updated}
+func adjustmentAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_adjustment", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errAdjustmentNotFound() *apperr.Error {
@@ -480,7 +481,7 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 						return err
 					}
 				}
-				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.credit_note_made", adj.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.credit_note_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, map[string]any{
 					"number": number, "company_id": companyID, "invoice_id": in.InvoiceID, "payment_id": in.PaymentID, "amount": total.String(), "reason": reason, "approved_by": by, "journal": jnum,
 				})); err != nil {
 					return err
@@ -622,7 +623,7 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.write_off_made", adj.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.write_off_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, map[string]any{
 					"number": number, "company_id": invoice.CompanyID, "invoice": invoice.InvoiceNumber, "amount": amount.String(), "account": code, "reason": reason, "approved_by": by, "journal": jnum,
 				})); err != nil {
 					return err
@@ -706,7 +707,7 @@ func (s *Service) VoidAdjustment(ctx context.Context, propertyID, id int64, in V
 		if err := q.VoidAdjustment(ctx, cityledgerdb.VoidAdjustmentParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Now: s.clock.Now(), ActorID: p.ActorID(), Reason: &reason, VoidJournalID: &rj, ApprovedBy: &by}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.adjustment_voided", id,
+		return s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.adjustment_voided", id, auditlabel.CityLedgerAdjustment(ctx, propertyID, id),
 			map[string]any{"status": cur.Status}, map[string]any{"status": AdjustmentVoided, "reason": reason, "approved_by": by, "number": cur.AdjustmentNumber}))
 	})
 	if err != nil {

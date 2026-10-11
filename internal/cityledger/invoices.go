@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/cityledger/cityledgerdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -97,8 +98,8 @@ type InvoiceInput struct {
 	Notes      string  `json:"notes"`
 }
 
-func invoiceAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_invoice", EntityID: id, Old: old, New: updated}
+func invoiceAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_invoice", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errInvoiceNotFound() *apperr.Error {
@@ -426,7 +427,7 @@ func (s *Service) CreateInvoice(ctx context.Context, propertyID, companyID int64
 				if out, err = s.loadInvoice(ctx, p.TenantID, propertyID, inv.ID, decimals); err != nil {
 					return err
 				}
-				return s.audit.Write(ctx, invoiceAudit(p, propertyID, day.BusinessDate, "cityledger.invoice_issued", inv.ID, nil, map[string]any{
+				return s.audit.Write(ctx, invoiceAudit(p, propertyID, day.BusinessDate, "cityledger.invoice_issued", inv.ID, auditlabel.CityLedgerInvoice(ctx, propertyID, inv.ID), nil, map[string]any{
 					"invoice_number": number, "company_id": companyID, "total": total.String(), "transfers": len(rows),
 				}))
 			})
@@ -505,7 +506,7 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 		if out, err = s.loadInvoice(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, invoiceAudit(p, propertyID, day.BusinessDate, "cityledger.invoice_voided", id,
+		return s.audit.Write(ctx, invoiceAudit(p, propertyID, day.BusinessDate, "cityledger.invoice_voided", id, auditlabel.CityLedgerInvoice(ctx, propertyID, id),
 			map[string]any{"status": cur.Status}, map[string]any{"status": InvoiceVoided, "reason": reason, "actor": p.ActorID(), "approved_by": by}))
 	})
 	return out, err
