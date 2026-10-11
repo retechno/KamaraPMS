@@ -23,7 +23,7 @@ import { useSystemStore, type ComponentStatus } from '@/stores/system'
 import { arrivalActions } from '@/utils/arrivals'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
 import { formatBalance, formatDate, formatPercent } from '@/utils/format'
-import { greetingFor, listWithMore, overCreditLimit, arrivalsWithoutRoom, arrivalsWithUnreadyRoom, roomCounts } from '@/utils/today'
+import { arrivalChip, arrivalsBlockedBy, greetingFor, listWithMore, overCreditLimit, roomCounts, roomsOf } from '@/utils/today'
 import { zoneTime } from '@/utils/zoneTime'
 import CheckInPanel from '@/views/frontdesk/CheckInPanel.vue'
 import TodayCard from '@/views/home/TodayCard.vue'
@@ -97,6 +97,8 @@ const counts = computed(() => roomCounts(today.rooms.value.data))
 const arrivalsLeft = computed(() => today.arrivals.value.data)
 const departuresLeft = computed(() => today.departures.value.data)
 const arrivalsTotal = computed(() => arrivalsLeft.value.length + today.arrivedCount.value)
+// The strip is as wide as the columns under it: as many equal cards as there are (two by two on a phone).
+const stripCount = computed(() => (today.canFront.value ? 3 : 0) + (today.canBoard.value ? 1 : 0))
 
 // ---- the greeting and what the day holds
 const clockHour = computed(() => {
@@ -123,6 +125,8 @@ const arrivalRows = computed(() => arrivalsLeft.value.slice(0, ROWS))
 const departureRows = computed(() => departuresLeft.value.slice(0, ROWS))
 const canCheckIn = (a: Arrival): boolean => arrivalActions(a, can).includes('checkIn')
 const balanceText = (r: InHouseRow): string => (r.balance.status === 'NO_FOLIO' ? t('today.noFolio') : formatBalance(r.balance.amount))
+// What is still owed is told in the warning colour and as "to pay"; a credit and a settled balance are neutral.
+const owes = (r: InHouseRow): boolean => r.balance.status === 'OUTSTANDING'
 
 interface Attention {
   id: string
@@ -142,14 +146,20 @@ const auditAttention = computed<Attention | null>(() => {
 })
 const attention = computed<Attention[]>(() => {
   const items: Attention[] = []
-  const unready = arrivalsWithUnreadyRoom(arrivalsLeft.value)
-  if (unready.length) items.push({ id: 'unready', tone: 'warn', title: t('today.unreadyRooms', { n: unready.length }, unready.length), detail: t('today.unreadyHint', { rooms: listWithMore(unready.map((a) => a.room_number ?? '')) }), to: '/housekeeping' })
-  const noRoom = arrivalsWithoutRoom(arrivalsLeft.value)
+  // What holds an arrival back is what the server says (`readiness`), not the housekeeping status of its room: a clean room that a guest has not left is not ready.
+  const unready = arrivalsBlockedBy(arrivalsLeft.value, 'ROOM_NOT_READY')
+  if (unready.length) items.push({ id: 'unready', tone: 'warn', title: t('today.unreadyRooms', { n: unready.length }, unready.length), detail: t('today.unreadyHint', { rooms: listWithMore(roomsOf(unready)) }), to: '/housekeeping' })
+  const occupied = arrivalsBlockedBy(arrivalsLeft.value, 'ROOM_OCCUPIED')
+  if (occupied.length) items.push({ id: 'occupied', tone: 'warn', title: t('today.occupiedRooms', { n: occupied.length }, occupied.length), detail: t('today.occupiedHint', { rooms: listWithMore(roomsOf(occupied)) }), to: '/departures' })
+  const noRoom = arrivalsBlockedBy(arrivalsLeft.value, 'ROOM_NOT_ASSIGNED')
   if (noRoom.length) items.push({ id: 'no-room', tone: 'warn', title: t('today.noRoomNumber', { n: noRoom.length }, noRoom.length), detail: t('today.noRoomHint', { types: listWithMore(noRoom.map((a) => a.room_type_code)) }), to: '/arrivals' })
+  const blockedRooms = arrivalsBlockedBy(arrivalsLeft.value, 'ROOM_BLOCKED', 'ROOM_NOT_AVAILABLE')
+  if (blockedRooms.length) items.push({ id: 'blocked', tone: 'warn', title: t('today.blockedRooms', { n: blockedRooms.length }, blockedRooms.length), detail: listWithMore(roomsOf(blockedRooms)), to: '/room-status' })
   const over = overCreditLimit(today.accounts.value.data)
   if (over.length) items.push({ id: 'over-limit', tone: 'warn', title: t('today.overLimit', { n: over.length }, over.length), detail: listWithMore(over.map((a) => a.name), 3), to: '/city-ledger' })
-  if (auditAttention.value) items.push(auditAttention.value)
-  return items.slice(0, ROWS)
+  // five rows at most, and the state of the night audit is always one of them
+  const audit = auditAttention.value
+  return audit ? [...items.slice(0, ROWS - 1), audit] : items.slice(0, ROWS)
 })
 // The attention column has loaded when what it reads has: the arrivals always, the rest when this person may read them.
 const attentionLoaded = computed(() => today.arrivals.value.loaded || !today.canFront.value)
@@ -162,6 +172,7 @@ const bars = computed<NightBar[]>(() =>
     key: n.date,
     percent: Number(n.occupancy_percent),
     label: shortDate(n.date),
+    short: String(Number(n.date.slice(8))),
     title: `${formatDate(n.date)}: ${n.held}/${n.sellable}`,
   })),
 )
@@ -193,14 +204,14 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
   </PageHeader>
 
   <template v-if="property.current">
-    <div v-if="today.canFront.value || today.canBoard.value" class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]" data-testid="strip">
+    <div v-if="stripCount" class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-[repeat(var(--cards),minmax(0,1fr))]" :style="{ '--cards': stripCount }" data-testid="strip">
       <KpiCard v-if="today.canFront.value" data-testid="strip-occupancy" :label="t('today.occupancy')" :value="tonight ? formatPercent(tonight.occupancy_percent) : '–'" :icon="Percent">
         <template v-if="tonight">
           <span class="block">{{ t('today.occupancyHint', { held: tonight.held, sellable: tonight.sellable }) }}</span>
           <span class="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-muted" role="presentation"><span class="block h-full rounded-full bg-primary" data-testid="strip-meter" :style="{ width: `${Math.min(100, Math.max(0, Number(tonight.occupancy_percent)))}%` }" /></span>
         </template>
       </KpiCard>
-      <KpiCard v-if="today.canFront.value" data-testid="strip-arrivals" :label="t('today.arrivals')" :value="today.arrivals.value.loaded ? `${arrivalsLeft.length} / ${arrivalsTotal}` : '–'" :hint="today.arrivals.value.loaded ? t('today.arrivalsHint', { n: today.arrivedCount.value }) : ''" :icon="DoorOpen" />
+      <KpiCard v-if="today.canFront.value" data-testid="strip-arrivals" :label="t('today.arrivals')" :value="today.arrivals.value.loaded ? t('today.arrivalsValue', { n: arrivalsLeft.length }) : '–'" :hint="today.arrivals.value.loaded ? t('today.arrivalsHint', { done: today.arrivedCount.value, total: arrivalsTotal }) : ''" :icon="DoorOpen" />
       <KpiCard v-if="today.canFront.value" data-testid="strip-departures" :label="t('today.departures')" :value="today.departures.value.loaded ? t('today.departuresValue', { n: departuresLeft.length }) : '–'" :hint="t('today.departuresHint')" :icon="DoorClosed" />
       <KpiCard v-if="today.canBoard.value" data-testid="strip-ready" :label="t('today.readyRooms')" :value="today.rooms.value.loaded ? counts.ready : '–'" :hint="today.rooms.value.loaded ? t('today.readyHint', { dirty: counts.dirty, cleaning: counts.cleaning }) : ''" :icon="BedDouble" />
     </div>
@@ -214,9 +225,15 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
               <div class="truncate font-medium">{{ a.guest_name || a.confirmation_number }}</div>
               <div class="text-xs text-muted-foreground">{{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
             </div>
-            <StatusBadge v-if="a.room_id && a.housekeeping_status" domain="housekeeping" :status="a.housekeeping_status" :data-testid="`arrival-chip-${a.reservation_room_id}`" />
-            <Badge v-else variant="outline" :data-testid="`arrival-chip-${a.reservation_room_id}`">{{ t('today.noRoomYet') }}</Badge>
-            <Button v-if="canCheckIn(a)" size="sm" :data-testid="`check-in-${a.reservation_room_id}`" @click="checkIn = a">{{ t('frontDesk.arrivals.action.checkIn') }}</Button>
+            <template v-for="chip in [arrivalChip(a)]" :key="chip.kind">
+              <Badge v-if="chip.kind === 'noRoom'" variant="outline" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="noRoom">{{ t('today.noRoomYet') }}</Badge>
+              <Badge v-else-if="chip.kind === 'waitingCheckOut'" variant="warning" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="waitingCheckOut">{{ t('today.chipWaitingCheckOut') }}</Badge>
+              <Badge v-else-if="chip.kind === 'blocked'" variant="closed" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="blocked">{{ t('today.chipBlocked') }}</Badge>
+              <Badge v-else-if="chip.kind === 'guestMissing'" variant="warning" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="guestMissing">{{ t('today.chipGuestMissing') }}</Badge>
+              <StatusBadge v-else-if="chip.kind === 'housekeeping'" domain="housekeeping" :status="chip.status" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="housekeeping" />
+            </template>
+            <!-- The main button only for an arrival that is ready; the others can still open the panel (to choose a room), as an outline button. -->
+            <Button v-if="canCheckIn(a)" size="sm" :variant="a.readiness.status === 'READY' ? 'default' : 'outline'" :data-testid="`check-in-${a.reservation_room_id}`" :data-ready="a.readiness.status === 'READY'" @click="checkIn = a">{{ t('frontDesk.arrivals.action.checkIn') }}</Button>
           </li>
         </ul>
       </TodayCard>
@@ -229,9 +246,9 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
               <div class="truncate font-medium">{{ d.guest.name }}</div>
               <div class="text-xs text-muted-foreground">{{ d.room.number }} · {{ d.room.room_type_code }}</div>
             </div>
-            <div class="text-right text-sm tabular-nums" :data-testid="`departure-balance-${d.id}`">
+            <div :class="['text-right text-sm tabular-nums', owes(d) && 'font-medium text-warning-text']" :data-testid="`departure-balance-${d.id}`" :data-owes="owes(d)">
               {{ balanceText(d) }}
-              <span v-if="d.balance.status !== 'NO_FOLIO'" class="block text-xs text-muted-foreground">{{ t('today.balance') }}</span>
+              <span v-if="d.balance.status !== 'NO_FOLIO'" :class="['block text-xs', owes(d) ? 'text-warning-text' : 'text-muted-foreground']">{{ owes(d) ? t('today.balanceDue') : t('today.balance') }}</span>
             </div>
             <Button v-if="can('frontdesk.checkout')" size="sm" :disabled="checkOut?.loading" :data-testid="`check-out-${d.id}`" @click="openCheckOut(d)">{{ t('frontDesk.inHouse.action.checkOut') }}</Button>
           </li>

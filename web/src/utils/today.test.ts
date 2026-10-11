@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Arrival, CityLedgerAccount, HousekeepingBoardRoom } from '@/api/types'
-import { arrivalsWithoutRoom, arrivalsWithUnreadyRoom, greetingFor, isReadyToSell, listWithMore, overCreditLimit, roomCounts } from './today'
+import { arrivalChip, arrivalsBlockedBy, greetingFor, isReadyToSell, listWithMore, overCreditLimit, roomCounts, roomsOf } from './today'
 
 const room = (over: Partial<HousekeepingBoardRoom> = {}): HousekeepingBoardRoom => ({ room_id: 1, room_number: '101', room_type_id: 1, room_type_code: 'STD', room_type_name: 'Standard', status: 'CLEAN', status_updated_at: '', occupancy: 'VACANT', allowed_next: [], priority: 'NORMAL', dnd: false, make_up_requested: false, ...over }) as HousekeepingBoardRoom
-const arrival = (over: Partial<Arrival> = {}): Arrival => ({ reservation_room_id: 1, room_id: 5, room_number: '201', housekeeping_status: 'CLEAN', ...over }) as Arrival
+const arrival = (over: Partial<Arrival> = {}): Arrival => ({ reservation_room_id: 1, room_id: 5, room_number: '201', housekeeping_status: 'CLEAN', readiness: { status: 'READY', blockers: [] }, ...over }) as Arrival
+const blocked = (blockers: string[], over: Partial<Arrival> = {}): Arrival => arrival({ readiness: { status: 'BLOCKED', blockers } as never, ...over })
 const account = (over: Partial<CityLedgerAccount> = {}): CityLedgerAccount => ({ company_id: 1, code: 'ACME', name: 'Acme', credit_limit: '1000', available: '500', ...over }) as CityLedgerAccount
 
 describe('rooms', () => {
@@ -23,10 +24,54 @@ describe('rooms', () => {
 })
 
 describe('arrivals', () => {
-  it('need attention when their room is dirty or being cleaned, or when they have no room', () => {
-    const list = [arrival({ reservation_room_id: 1 }), arrival({ reservation_room_id: 2, housekeeping_status: 'DIRTY' }), arrival({ reservation_room_id: 3, housekeeping_status: 'CLEANING' }), arrival({ reservation_room_id: 4, room_id: null, room_number: '', housekeeping_status: undefined })]
-    expect(arrivalsWithUnreadyRoom(list).map((a) => a.reservation_room_id)).toEqual([2, 3])
-    expect(arrivalsWithoutRoom(list).map((a) => a.reservation_room_id)).toEqual([4])
+  it('are counted by what the server says blocks them, not by the housekeeping status of the room', () => {
+    const list = [
+      arrival({ reservation_room_id: 1 }),
+      blocked(['ROOM_NOT_READY'], { reservation_room_id: 2, housekeeping_status: 'DIRTY' }),
+      blocked(['ROOM_OCCUPIED'], { reservation_room_id: 3 }), // clean, and a guest is still in it
+      blocked(['ROOM_NOT_ASSIGNED'], { reservation_room_id: 4, room_id: null, room_number: '', housekeeping_status: undefined }),
+    ]
+    expect(arrivalsBlockedBy(list, 'ROOM_NOT_READY').map((a) => a.reservation_room_id)).toEqual([2])
+    expect(arrivalsBlockedBy(list, 'ROOM_OCCUPIED').map((a) => a.reservation_room_id)).toEqual([3])
+    expect(arrivalsBlockedBy(list, 'ROOM_NOT_ASSIGNED').map((a) => a.reservation_room_id)).toEqual([4])
+    expect(arrivalsBlockedBy(list, 'ROOM_NOT_READY', 'ROOM_OCCUPIED').map((a) => a.reservation_room_id)).toEqual([2, 3])
+    expect(roomsOf(arrivalsBlockedBy(list, 'ROOM_NOT_READY', 'ROOM_OCCUPIED'))).toEqual(['201', '201'])
+  })
+})
+
+describe('the chip of an arrival', () => {
+  it('is the housekeeping status of the room when nothing blocks the arrival', () => {
+    expect(arrivalChip(arrival())).toEqual({ kind: 'housekeeping', status: 'CLEAN' })
+    expect(arrivalChip(arrival({ housekeeping_status: 'INSPECTED' }))).toEqual({ kind: 'housekeeping', status: 'INSPECTED' })
+  })
+
+  it('is "no room" for a room that is not assigned', () => {
+    expect(arrivalChip(blocked(['ROOM_NOT_ASSIGNED'], { room_id: null, housekeeping_status: undefined }))).toEqual({ kind: 'noRoom' })
+  })
+
+  it('is "waiting for check-out" for a room that is still occupied, even if the room is clean', () => {
+    expect(arrivalChip(blocked(['ROOM_OCCUPIED'], { housekeeping_status: 'CLEAN' }))).toEqual({ kind: 'waitingCheckOut' })
+  })
+
+  it('is "blocked" for a room that is blocked or not available', () => {
+    expect(arrivalChip(blocked(['ROOM_BLOCKED']))).toEqual({ kind: 'blocked' })
+    expect(arrivalChip(blocked(['ROOM_NOT_AVAILABLE']))).toEqual({ kind: 'blocked' })
+  })
+
+  it('is the housekeeping status (dirty, being cleaned) for a room that is not ready', () => {
+    expect(arrivalChip(blocked(['ROOM_NOT_READY'], { housekeeping_status: 'DIRTY' }))).toEqual({ kind: 'housekeeping', status: 'DIRTY' })
+    expect(arrivalChip(blocked(['ROOM_NOT_READY'], { housekeeping_status: 'CLEANING' }))).toEqual({ kind: 'housekeeping', status: 'CLEANING' })
+  })
+
+  it('is "guest incomplete" when only the guest is missing', () => {
+    expect(arrivalChip(blocked(['GUEST_MISSING']))).toEqual({ kind: 'guestMissing' })
+  })
+
+  it('takes the first blocker that matches when there are several: no room, then occupied, then blocked, then not ready, then guest', () => {
+    expect(arrivalChip(blocked(['GUEST_MISSING', 'ROOM_NOT_READY', 'ROOM_OCCUPIED', 'ROOM_NOT_ASSIGNED']))).toEqual({ kind: 'noRoom' })
+    expect(arrivalChip(blocked(['GUEST_MISSING', 'ROOM_NOT_READY', 'ROOM_OCCUPIED']))).toEqual({ kind: 'waitingCheckOut' })
+    expect(arrivalChip(blocked(['GUEST_MISSING', 'ROOM_NOT_READY', 'ROOM_BLOCKED']))).toEqual({ kind: 'blocked' })
+    expect(arrivalChip(blocked(['GUEST_MISSING', 'ROOM_NOT_READY'], { housekeeping_status: 'DIRTY' }))).toEqual({ kind: 'housekeeping', status: 'DIRTY' })
   })
 })
 

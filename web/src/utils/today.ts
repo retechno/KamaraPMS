@@ -23,12 +23,38 @@ export function roomCounts(rooms: HousekeepingBoardRoom[]): RoomCounts {
   }
 }
 
-/** The arrivals of today whose room is assigned and is not clean yet (dirty or being cleaned), by room number. */
-export const arrivalsWithUnreadyRoom = (arrivals: Arrival[]): Arrival[] =>
-  arrivals.filter((a) => !!a.room_id && (a.housekeeping_status === 'DIRTY' || a.housekeeping_status === 'CLEANING'))
+type Blocker = Arrival['readiness']['blockers'][number]
 
-/** The arrivals of today that still have no room. */
-export const arrivalsWithoutRoom = (arrivals: Arrival[]): Arrival[] => arrivals.filter((a) => !a.room_id)
+/** What the server says holds an arrival back from check-in (`readiness.blockers`): the arrivals that have at least one of these. */
+export const arrivalsBlockedBy = (arrivals: Arrival[], ...blockers: Blocker[]): Arrival[] => arrivals.filter((a) => a.readiness.blockers.some((b) => blockers.includes(b)))
+
+/** The rooms (numbers) of arrivals, for a line of a few. */
+export const roomsOf = (arrivals: Arrival[]): string[] => arrivals.map((a) => a.room_number ?? '')
+
+/**
+ * How an arrival is shown in the column: the chip is the first blocker that matches, in this order, and when nothing blocks it is the housekeeping status of the room (clean or
+ * inspected). `status` is the housekeeping status for the chips that are one. The check-in button is the main one only for a ready arrival.
+ */
+export type ArrivalChip =
+  | { kind: 'noRoom' }
+  | { kind: 'waitingCheckOut' }
+  | { kind: 'blocked' }
+  | { kind: 'housekeeping'; status: string }
+  | { kind: 'guestMissing' }
+  | { kind: 'none' }
+
+export function arrivalChip(a: Arrival): ArrivalChip {
+  const has = (...blockers: Blocker[]): boolean => a.readiness.blockers.some((b) => blockers.includes(b))
+  if (has('ROOM_NOT_ASSIGNED')) return { kind: 'noRoom' }
+  if (has('ROOM_OCCUPIED')) return { kind: 'waitingCheckOut' }
+  if (has('ROOM_BLOCKED', 'ROOM_NOT_AVAILABLE')) return { kind: 'blocked' }
+  if (has('ROOM_NOT_READY')) return a.housekeeping_status ? { kind: 'housekeeping', status: a.housekeeping_status } : { kind: 'none' }
+  if (has('GUEST_MISSING')) return { kind: 'guestMissing' }
+  if (a.readiness.status === 'READY' && a.housekeeping_status) return { kind: 'housekeeping', status: a.housekeeping_status }
+  // a line that has no room by the numbers, though the server named no blocker (it never does): still told as without room
+  if (!a.room_id) return { kind: 'noRoom' }
+  return a.housekeeping_status ? { kind: 'housekeeping', status: a.housekeeping_status } : { kind: 'none' }
+}
 
 /** A company account over its limit: it has one and what is left of it is below zero. */
 export const overCreditLimit = (accounts: CityLedgerAccount[]): CityLedgerAccount[] => accounts.filter((a) => a.credit_limit !== null && a.available !== null && Number(a.available) < 0)

@@ -11,6 +11,8 @@ export interface NightBar {
   percent: number
   /** The short date under the bar ("12 Okt"). */
   label: string
+  /** What is under the bar on a phone, where there is no room for the month ("12"). */
+  short?: string
   title?: string
 }
 const props = withDefaults(defineProps<{ bars: NightBar[]; strongFrom?: number; testPrefix?: string; height?: string }>(), { strongFrom: 90, testPrefix: 'night', height: 'h-40' })
@@ -40,7 +42,10 @@ const clamp = (p: number): number => Math.min(100, Math.max(0, p))
               :style="{ height: `${clamp(b.percent)}%` }"
             />
           </div>
-          <small class="h-4 pt-0.5 text-center text-[10px] leading-3 text-muted-foreground">{{ b.label }}</small>
+          <small class="h-4 whitespace-nowrap pt-0.5 text-center text-[10px] leading-3 text-muted-foreground">
+            <template v-if="b.short"><span class="sm:hidden" data-slot="label-short">{{ b.short }}</span><span class="hidden sm:inline" data-slot="label-long">{{ b.label }}</span></template>
+            <template v-else>{{ b.label }}</template>
+          </small>
         </div>
       </div>
     </div>

@@ -101,7 +101,11 @@ interface World {
   failing?: string[]
 }
 const defaultWorld = (): World => ({
-  arrivals: [arrival(1), arrival(2, { housekeeping_status: 'DIRTY' }), arrival(3, { room_id: null, room_number: '', housekeeping_status: undefined, room_type_code: 'FAM' })],
+  arrivals: [
+    arrival(1),
+    arrival(2, { housekeeping_status: 'DIRTY', readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_READY'] } }),
+    arrival(3, { room_id: null, room_number: '', housekeeping_status: undefined, room_type_code: 'FAM', readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_ASSIGNED'] } }),
+  ],
   checkedIn: [arrival(8, { status: 'CHECKED_IN' })],
   departures: [stay(1), stay(2, '-500000', 'CREDIT'), stay(3, '', 'NO_FOLIO')],
   rooms: [board(1), board(2, { status: 'INSPECTED' }), board(3, { status: 'DIRTY' }), board(4, { status: 'DIRTY' }), board(5, { status: 'CLEANING' }), board(6, { occupancy: 'OCCUPIED' })],
@@ -190,13 +194,25 @@ describe('HomeView, Today', () => {
       expect(strip.get('[data-testid=strip-occupancy]').text()).toContain('78.00%')
       expect(strip.get('[data-testid=strip-occupancy]').text()).toContain('78 / 100 rooms')
       expect(strip.get('[data-testid=strip-meter]').attributes('style')).toContain('width: 78%')
-      expect(strip.get('[data-testid=strip-arrivals]').text()).toContain('3 / 4') // 3 to come, 1 came
-      expect(strip.get('[data-testid=strip-arrivals]').text()).toContain('1 checked in')
+      expect(strip.get('[data-testid=strip-arrivals]').text()).toContain('3 left') // like the departures: "n left"
+      expect(strip.get('[data-testid=strip-arrivals]').text()).toContain('1 of 4 checked in') // 3 to come, 1 came
       expect(strip.get('[data-testid=strip-departures]').text()).toContain('3 left')
       expect(strip.get('[data-testid=strip-ready]').text()).toContain('2') // two clean or inspected rooms that are empty
       expect(strip.get('[data-testid=strip-ready]').text()).toContain('2 dirty · 1 being cleaned')
       expect(strip.text()).not.toMatch(/IDR|Rp|\d[.,]\d{3}/) // no figure of money
       expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/dashboard'))).toBe(false) // the dashboard is for the managers
+    })
+
+    it('is as wide as the columns: four equal cards on a wide screen, two by two on a phone, and as many as there are for a role that reads less', async () => {
+      const w = await mountToday()
+      const strip = w.get('[data-testid=strip]')
+      expect(strip.classes()).toContain('grid-cols-2') // a phone: two by two
+      expect(strip.classes().join(' ')).toContain('lg:grid-cols-[repeat(var(--cards),minmax(0,1fr))]') // wide: the cards share the whole row
+      expect(strip.attributes('style')).toContain('--cards: 4')
+      expect(strip.findAll('[data-slot=kpi-card]')).toHaveLength(4)
+      mounted?.unmount()
+      const housekeeper = await mountToday(['housekeeping.read'])
+      expect(housekeeper.get('[data-testid=strip]').attributes('style')).toContain('--cards: 1')
     })
 
     it('shows only what a person may read: a housekeeper sees the rooms and not the movements', async () => {
@@ -261,11 +277,85 @@ describe('HomeView, Today', () => {
       expect(col.get('[data-testid=arrival-chip-1]').text()).toBe('Clean') // the colour and word of the housekeeping status
       expect(col.get('[data-testid=arrival-chip-2]').text()).toBe('Dirty')
       expect(col.get('[data-testid=arrival-chip-3]').text()).toBe('No room yet')
+      // the main button only for the arrival that is ready; the others are outline buttons that still open the panel
+      expect(col.get('[data-testid=check-in-1]').attributes('data-ready')).toBe('true')
+      expect(col.get('[data-testid=check-in-1]').classes().join(' ')).toContain('bg-primary')
+      expect(col.get('[data-testid=check-in-2]').attributes('data-ready')).toBe('false')
+      expect(col.get('[data-testid=check-in-2]').classes().join(' ')).not.toContain('bg-primary')
+      expect(col.get('[data-testid=check-in-3]').classes().join(' ')).toContain('border-border')
       expect(col.find('[data-testid=check-in-1]').exists()).toBe(true)
       mounted?.unmount()
       const reader = await mountToday(['reservation.read'])
       expect(reader.find('[data-testid=check-in-1]').exists()).toBe(false)
       expect(reader.find('[data-testid=arrival-1]').exists()).toBe(true)
+    })
+
+    describe('the chip and the button are what the server says about readiness', () => {
+      const ready = (over: Record<string, unknown> = {}) => ({ readiness: { status: 'READY', blockers: [] }, ...over })
+      const blocked = (blockers: string[], over: Record<string, unknown> = {}) => ({ readiness: { status: 'BLOCKED', blockers }, ...over })
+      const chipOf = async (a: unknown) => {
+        world.arrivals = [a]
+        const w = await mountToday()
+        const chip = w.get('[data-testid=arrival-chip-1]')
+        const button = w.get('[data-testid=check-in-1]')
+        mounted?.unmount()
+        return { text: chip.text(), kind: chip.attributes('data-chip'), classes: chip.classes().join(' '), ready: button.attributes('data-ready'), solid: button.classes().join(' ').includes('bg-primary') }
+      }
+
+      it('shows "Clean" and a green Check in for a room that is ready', async () => {
+        expect(await chipOf(arrival(1, ready()))).toMatchObject({ text: 'Clean', kind: 'housekeeping', ready: 'true', solid: true })
+        expect(await chipOf(arrival(1, ready({ housekeeping_status: 'INSPECTED' })))).toMatchObject({ text: 'Inspected', kind: 'housekeeping', solid: true })
+      })
+
+      it('shows "No room yet" in outline for ROOM_NOT_ASSIGNED, and Check in is not the main button', async () => {
+        const r = await chipOf(arrival(1, blocked(['ROOM_NOT_ASSIGNED'], { room_id: null, room_number: '', housekeeping_status: undefined })))
+        expect(r).toMatchObject({ text: 'No room yet', kind: 'noRoom', ready: 'false', solid: false })
+        expect(r.classes).toContain('border-border')
+      })
+
+      it('shows "Waiting for check-out" in the warning colour for ROOM_OCCUPIED, even when the room is clean', async () => {
+        const r = await chipOf(arrival(1, blocked(['ROOM_OCCUPIED'], { housekeeping_status: 'CLEAN' })))
+        expect(r).toMatchObject({ text: 'Waiting for check-out', kind: 'waitingCheckOut', ready: 'false', solid: false })
+        expect(r.classes).toContain('bg-warning/20')
+      })
+
+      it('shows "Blocked" in the closed status colour for ROOM_BLOCKED and for ROOM_NOT_AVAILABLE', async () => {
+        for (const blocker of ['ROOM_BLOCKED', 'ROOM_NOT_AVAILABLE']) {
+          const r = await chipOf(arrival(1, blocked([blocker])))
+          expect(r, blocker).toMatchObject({ text: 'Blocked', kind: 'blocked', solid: false })
+          expect(r.classes, blocker).toContain('status-closed')
+        }
+      })
+
+      it('shows the housekeeping status of the room for ROOM_NOT_READY: "Dirty" or "Being cleaned"', async () => {
+        expect(await chipOf(arrival(1, blocked(['ROOM_NOT_READY'], { housekeeping_status: 'DIRTY' })))).toMatchObject({ text: 'Dirty', kind: 'housekeeping', solid: false })
+        expect(await chipOf(arrival(1, blocked(['ROOM_NOT_READY'], { housekeeping_status: 'CLEANING' })))).toMatchObject({ text: 'Being cleaned', kind: 'housekeeping', solid: false })
+      })
+
+      it('shows "Guest details incomplete" for GUEST_MISSING', async () => {
+        expect(await chipOf(arrival(1, blocked(['GUEST_MISSING'])))).toMatchObject({ text: 'Guest details incomplete', kind: 'guestMissing', ready: 'false', solid: false })
+      })
+
+      it('takes the first blocker that matches when a room has several: occupied before not ready', async () => {
+        expect(await chipOf(arrival(1, blocked(['ROOM_NOT_READY', 'ROOM_OCCUPIED'], { housekeeping_status: 'DIRTY' })))).toMatchObject({ text: 'Waiting for check-out' })
+        expect(await chipOf(arrival(1, blocked(['GUEST_MISSING', 'ROOM_NOT_READY'], { housekeeping_status: 'DIRTY' })))).toMatchObject({ text: 'Dirty' })
+      })
+
+      it('still opens the check-in panel from an arrival that is not ready, to choose a room', async () => {
+        world.arrivals = [arrival(1, blocked(['ROOM_OCCUPIED']))]
+        const w = await mountToday()
+        await w.get('[data-testid=check-in-1]').trigger('click')
+        await flushPromises()
+        expect(bodyEl('[data-testid=checkin-panel]')).not.toBeNull()
+      })
+
+      it('says the words in Indonesian', async () => {
+        setLocale('id')
+        expect((await chipOf(arrival(1, blocked(['ROOM_OCCUPIED'])))).text).toBe('Menunggu check-out')
+        expect((await chipOf(arrival(1, blocked(['ROOM_BLOCKED'])))).text).toBe('Diblokir')
+        expect((await chipOf(arrival(1, blocked(['GUEST_MISSING'])))).text).toBe('Data tamu belum lengkap')
+        expect((await chipOf(arrival(1, blocked(['ROOM_NOT_ASSIGNED'], { room_id: null, housekeeping_status: undefined })))).text).toBe('Belum ada kamar')
+      })
     })
 
     it('shows five rows at most and a link to all of them', async () => {
@@ -315,6 +405,14 @@ describe('HomeView, Today', () => {
       expect(col.get('[data-testid=departure-balance-1]').text()).toContain('150,000')
       expect(col.get('[data-testid=departure-balance-2]').text()).toContain('500,000 credit')
       expect(col.get('[data-testid=departure-balance-3]').text()).toContain('No folio')
+      // what is still owed is in the warning colour and "to pay"; a credit and no folio are neutral
+      expect(col.get('[data-testid=departure-balance-1]').attributes('data-owes')).toBe('true')
+      expect(col.get('[data-testid=departure-balance-1]').classes()).toContain('text-warning-text')
+      expect(col.get('[data-testid=departure-balance-1]').text()).toContain('to pay')
+      expect(col.get('[data-testid=departure-balance-2]').attributes('data-owes')).toBe('false')
+      expect(col.get('[data-testid=departure-balance-2]').classes()).not.toContain('text-warning-text')
+      expect(col.get('[data-testid=departure-balance-2]').text()).toContain('balance')
+      expect(col.get('[data-testid=departure-balance-2]').text()).not.toContain('to pay')
       expect(col.find('[data-testid=check-out-1]').exists()).toBe(true)
       expect(col.get('[data-testid=col-departures-all]').attributes('href')).toBe('/departures')
       mounted?.unmount()
@@ -360,6 +458,40 @@ describe('HomeView, Today', () => {
       expect(w.get('[data-testid=attention-over-limit]').text()).toContain('1 company account is over its credit limit')
       expect(w.get('[data-testid=attention-over-limit]').text()).toContain('Acme Corp')
       expect(w.get('[data-testid=attention-unready] a').attributes('href')).toBe('/housekeeping')
+    })
+
+    it('counts a clean room that a guest has not left as "occupied", not as ready, in a row of its own', async () => {
+      world.arrivals = [
+        arrival(1),
+        arrival(2, { housekeeping_status: 'CLEAN', readiness: { status: 'BLOCKED', blockers: ['ROOM_OCCUPIED'] } }),
+        arrival(3, { housekeeping_status: 'CLEAN', readiness: { status: 'BLOCKED', blockers: ['ROOM_OCCUPIED'] } }),
+        arrival(4, { housekeeping_status: 'DIRTY', readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_READY'] } }),
+        arrival(5, { readiness: { status: 'BLOCKED', blockers: ['ROOM_BLOCKED'] } }),
+      ]
+      const w = await mountToday()
+      expect(w.get('[data-testid=attention-occupied]').text()).toContain('2 rooms are still occupied by guests who have not checked out')
+      expect(w.get('[data-testid=attention-occupied]').text()).toContain('202, 203 · waiting for check-out')
+      expect(w.get('[data-testid=attention-occupied] a').attributes('href')).toBe('/departures')
+      expect(w.get('[data-testid=attention-unready]').text()).toContain('1 room is not ready') // only the room that is dirty
+      expect(w.get('[data-testid=attention-unready]').text()).toContain('204')
+      expect(w.get('[data-testid=attention-blocked]').text()).toContain('1 room for an arrival is blocked')
+      // the night audit keeps its row when there are more items than rows
+      expect(w.get('[data-testid=col-attention]').findAll('li').length).toBeLessThanOrEqual(5)
+      expect(w.find('[data-testid=attention-audit]').exists()).toBe(true)
+    })
+
+    it('keeps the night audit among the five rows when every other item is there', async () => {
+      world.arrivals = [
+        arrival(1, { readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_READY'] } }),
+        arrival(2, { readiness: { status: 'BLOCKED', blockers: ['ROOM_OCCUPIED'] } }),
+        arrival(3, { room_id: null, readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_ASSIGNED'] } }),
+        arrival(4, { readiness: { status: 'BLOCKED', blockers: ['ROOM_BLOCKED'] } }),
+      ]
+      const w = await mountToday()
+      const ids = w.get('[data-testid=col-attention]').findAll('li').map((li) => li.attributes('data-testid'))
+      expect(ids).toHaveLength(5)
+      expect(ids.at(-1)).toBe('attention-audit')
+      expect(ids).toEqual(['attention-unready', 'attention-occupied', 'attention-no-room', 'attention-blocked', 'attention-audit']) // the room items first; the accounts do not fit
     })
 
     it('has no item for what is fine, and no accounts for a person who may not read them', async () => {

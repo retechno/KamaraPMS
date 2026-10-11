@@ -171,6 +171,7 @@ const forecastBars = computed<NightBar[]>(() =>
     key: d.date,
     percent: Number(d.occupancy_percent),
     label: shortDate(d.date),
+    short: String(Number(d.date.slice(8))),
     title: `${formatDate(d.date)}: ${d.rooms_booked}/${d.rooms_sellable}`,
   })),
 )
@@ -188,8 +189,8 @@ const rooms = computed(() => {
 </script>
 
 <template>
-  <PageHeader :title="t('performance.title')" :description="property.current ? t('performance.description', { property: property.current.name }) : undefined">
-    <template #marks>
+  <PageHeader :title="t('performance.title')" :description="allowed && property.current ? t('performance.description', { property: property.current.name }) : undefined">
+    <template v-if="allowed" #marks>
       <Badge variant="outline" data-testid="managers-only">{{ t('performance.managersOnly') }}</Badge>
     </template>
     <template v-if="allowed" #actions>

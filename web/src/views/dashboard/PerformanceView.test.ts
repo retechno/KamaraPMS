@@ -148,6 +148,8 @@ describe('PerformanceView', () => {
     expect(w.get('[data-testid=no-access] a[data-testid=empty-action]').text()).toBe('Back to Today')
     expect(w.get('[data-testid=no-access] a[data-testid=empty-action]').attributes('to')).toBe('/')
     expect(w.find('[data-testid=period]').exists()).toBe(false) // no controls for a page that is not there
+    expect(w.find('[data-testid=managers-only]').exists()).toBe(false) // no badge and no line about the figures: the title and the lock
+    expect(w.find('[data-slot=page-header] p').exists()).toBe(false)
   })
 
   it('says it in Indonesian too', async () => {
