@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -161,7 +162,7 @@ func (s *Service) Clear(ctx context.Context, propertyID, statementID int64, in C
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.cleared", "bank_statement", statementID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.cleared", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
 			map[string]any{"clearings": len(plans), "total": total.String()}))
 	})
 	if err != nil {
