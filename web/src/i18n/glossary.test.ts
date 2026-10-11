@@ -14,6 +14,9 @@ const BANNED: [RegExp, string][] = [
   [/Pengembalian pajak/i, 'SPT Masa PPN'],
   [/Credit note/i, 'Nota kredit'],
   [/ranjang/i, 'tempat tidur'],
+  [/dibatalkan \(void\)/, 'di-void'],
+  [/Kredit pajak awal/, 'Saldo awal kredit pajak'],
+  [/Faktur (?:piutang|diterbitkan$)/, 'Invoice (piutang perusahaan): "Faktur" hanya untuk faktur pajak'],
 ]
 
 describe('the glossary of the Indonesian messages', () => {
