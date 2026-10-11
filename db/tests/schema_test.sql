@@ -1985,6 +1985,26 @@ BEGIN
 END $$;
 
 ------------------------------------------------------------------------------------------
+-- Ordered lists: the database must have the ICU collation (the order of the guest names depends on it) and the indexes of the orders a screen opens with
+------------------------------------------------------------------------------------------
+DO $$
+DECLARE v_order text;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_collation WHERE collname = 'und-x-icu') THEN
+        RAISE EXCEPTION 'FAIL the ICU collation "und-x-icu" is missing: PostgreSQL must be built with ICU (the guest list is ordered with it)';
+    END IF;
+    -- an accent stands beside its letter, and a capital beside a small one: not the order of the code points ("Eva" < "Zed" < "adi" < "Éric")
+    SELECT string_agg(n, ' < ' ORDER BY n COLLATE "und-x-icu") INTO v_order FROM (VALUES ('Zed'), ('Éric'), ('adi'), ('Eva')) AS v (n);
+    IF v_order <> 'adi < Éric < Eva < Zed' THEN RAISE EXCEPTION 'FAIL the ICU collation orders names as "%"', v_order; END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'guests_display_name_idx' AND indexdef LIKE '%und-x-icu%')
+       OR NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'payments_paid_at_idx') THEN
+        RAISE EXCEPTION 'FAIL the indexes of the ordered lists (guests_display_name_idx, payments_paid_at_idx) are missing';
+    END IF;
+    INSERT INTO pms_test.results VALUES ('the ICU collation orders names as an alphabet does, and the indexes of the ordered lists exist', 'accepted');
+    RAISE NOTICE 'PASS  the ICU collation orders names as an alphabet does, and the indexes of the ordered lists exist';
+END $$;
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$

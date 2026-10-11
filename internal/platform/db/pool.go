@@ -23,6 +23,9 @@ func Open(ctx context.Context, databaseURL string, maxConns int32) (*pgxpool.Poo
 	cfg.MaxConns = maxConns
 	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
 	cfg.ConnConfig.RuntimeParams["application_name"] = "kamara-pms"
+	// No JIT: the queries of a hotel are short, and the planner over-estimates the cost of a list that is sorted by a computed value (a balance, an arrival), which makes PostgreSQL compile
+	// the query first: about a second on a list of 75 000 folios that then runs in 70 ms. Measured: docs/architecture/23-list-sort.md.
+	cfg.ConnConfig.RuntimeParams["jit"] = "off"
 	// Scan timestamptz as UTC instants (pgx defaults to the process's local zone), so
 	// API responses never carry the server machine's offset.
 	cfg.AfterConnect = func(_ context.Context, conn *pgx.Conn) error {

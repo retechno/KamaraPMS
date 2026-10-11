@@ -3279,6 +3279,8 @@ export const id: Messages = {
     all: 'Semua',
     noMatch: 'Tidak ada baris yang cocok dengan saringan.',
     clearFilters: 'Hapus saringan',
+    sortBy: 'Urutkan',
+    sortDefault: 'Urutan bawaan',
   },
   restrictions: {
     title: 'Pembatasan penjualan',

@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms"
@@ -640,7 +641,7 @@ func TestReadsPermissionsAndIsolation(t *testing.T) {
 	nobody := f.User(t, f.tenantID, f.propID, auth.PermGuestRead)
 	_, err := f.Res.Get(nobody, f.propID, res.ID)
 	wantCode(t, err, "PERMISSION_DENIED")
-	_, err = f.Res.List(nobody, f.propID, reservations.ListFilter{}, 0, 10)
+	_, err = f.Res.List(nobody, f.propID, reservations.ListFilter{}, 10)
 	wantCode(t, err, "PERMISSION_DENIED")
 	_, err = f.Res.SearchAvailability(nobody, f.propID, d("2026-10-02"), d("2026-10-03"), 2, 0)
 	wantCode(t, err, "PERMISSION_DENIED")
@@ -674,33 +675,35 @@ func TestListFilters(t *testing.T) {
 	must(t, err)
 	_, err = f.Res.Cancel(f.admin, f.propID, b.ID, b.Version, "x")
 	must(t, err)
-	all, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{}, 0, 10)
+	all, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{}, 10)
 	must(t, err)
-	if len(all) != 3 || all[0].ID < all[1].ID || all[0].Status != "DRAFT" || all[2].ArrivalDate != d("2026-10-02") || all[2].GuestName != "Guest" {
+	if len(all) != 3 || all[2].Status != "DRAFT" || all[0].ArrivalDate != d("2026-10-02") || all[1].ID != b.ID || all[0].GuestName != "Guest" { // the nearest arrival first
 		t.Fatalf("all: %+v", all)
 	}
 	from, to := d("2026-10-03"), d("2026-10-10")
-	mid, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{ArrivalFrom: &from, ArrivalTo: &to}, 0, 10)
+	mid, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{ArrivalFrom: &from, ArrivalTo: &to}, 10)
 	must(t, err)
 	if len(mid) != 1 || mid[0].ID != b.ID || mid[0].Status != "CANCELLED" || mid[0].ArrivalDate != d("2026-10-08") {
 		t.Fatalf("range (a cancelled reservation keeps its dates): %+v", mid)
 	}
-	conf, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Status: "CONFIRMED"}, 0, 10)
+	conf, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Status: "CONFIRMED"}, 10)
 	must(t, err)
 	if len(conf) != 1 || conf[0].ID != a.ID {
 		t.Fatalf("status: %+v", conf)
 	}
-	byNumber, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Query: a.ConfirmationNumber}, 0, 10)
+	byNumber, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Query: a.ConfirmationNumber}, 10)
 	must(t, err)
-	byName, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Query: "gues"}, 0, 10)
+	byName, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{Query: "gues"}, 10)
 	must(t, err)
 	if len(byNumber) != 1 || byNumber[0].ID != a.ID || len(byName) != 3 {
 		t.Fatalf("q: %d %d", len(byNumber), len(byName))
 	}
-	page, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{}, all[0].ID, 10)
+	first, err := f.Res.Search(f.admin, f.propID, reservations.ListFilter{}, listsort.Sort{}, nil, 1)
 	must(t, err)
-	if len(page) != 2 || page[0].ID != all[1].ID {
-		t.Fatalf("keyset: %+v", page)
+	page, err := f.Res.Search(f.admin, f.propID, reservations.ListFilter{}, listsort.Sort{}, first.Next, 10)
+	must(t, err)
+	if len(first.Data) != 1 || first.Next == nil || len(page.Data) != 2 || page.Data[0].ID != all[1].ID || page.Next != nil {
+		t.Fatalf("keyset: %+v %+v", first.Data, page.Data)
 	}
 }
 

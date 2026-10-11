@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/tenancy"
 )
 
@@ -24,6 +25,25 @@ import (
 type User struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+// searchRows reads the page in the order that was asked for: two queries, one for each direction, so that either walks the primary key (an ORDER BY that is chosen by a CASE could not).
+func (r *Reader) searchRows(ctx context.Context, f Filter, tenantID int64, entityType, action, labelLike *string, position *int64, limit int32) ([]auditdb.SearchAuditLogsRow, error) {
+	q := auditdb.New(r.txm.DB(ctx))
+	if !f.Oldest {
+		return q.SearchAuditLogs(ctx, auditdb.SearchAuditLogsParams{TenantID: tenantID, PropertyID: f.PropertyID, EntityType: entityType, EntityID: f.EntityID, UserID: f.UserID, Action: action,
+			FromDate: f.From, ToDate: f.To, LabelLike: labelLike, BeforeID: position, RowLimit: limit})
+	}
+	rows, err := q.SearchAuditLogsAsc(ctx, auditdb.SearchAuditLogsAscParams{TenantID: tenantID, PropertyID: f.PropertyID, EntityType: entityType, EntityID: f.EntityID, UserID: f.UserID, Action: action,
+		FromDate: f.From, ToDate: f.To, LabelLike: labelLike, AfterID: position, RowLimit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]auditdb.SearchAuditLogsRow, len(rows))
+	for i, a := range rows {
+		out[i] = auditdb.SearchAuditLogsRow(a)
+	}
+	return out, nil
 }
 
 // Record is an audit entry as the viewer shows it.
@@ -50,6 +70,8 @@ type Filter struct {
 	UserID     *int64
 	Action     string
 	From, To   *civil.Date
+	// Oldest lists the oldest entries first; the default is the newest first. The order is by id (ids grow with time).
+	Oldest bool
 	// Q finds the entries whose label holds it, in any case (a part of a number: "0012" finds RES000012). 3 to 64 characters; the escaping for LIKE is done here.
 	Q string
 }
@@ -77,10 +99,10 @@ func NewReader(txm *db.TxManager, authz auth.Authorizer) *Reader {
 	return &Reader{txm: txm, authz: authz}
 }
 
-// Search lists entries newest first, beforeID being the keyset position (0 = from the newest). A property search
+// Search lists entries newest first (oldest first with f.Oldest), position being the id of the last entry of the page before (0 = from the first). A property search
 // needs audit.read at the property (404 for a property the caller cannot see); a tenant-level search is for tenant
 // administrators.
-func (r *Reader) Search(ctx context.Context, f Filter, beforeID int64, limit int) ([]Record, error) {
+func (r *Reader) Search(ctx context.Context, f Filter, position int64, limit int) ([]Record, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return nil, err
@@ -96,21 +118,23 @@ func (r *Reader) Search(ctx context.Context, f Filter, beforeID int64, limit int
 	if n := utf8.RuneCountInString(f.Q); f.Q != "" && (n < MinQuery || n > MaxQuery) {
 		return nil, apperr.Invalid("the query is invalid", apperr.FieldError{Field: "q", Code: "INVALID_LENGTH", Message: "3 to 64 characters"})
 	}
-	q := auditdb.SearchAuditLogsParams{TenantID: p.TenantID, PropertyID: f.PropertyID, EntityID: f.EntityID, UserID: f.UserID, FromDate: f.From, ToDate: f.To, RowLimit: int32(limit)} //nolint:gosec // G115: the page size is bounded by ParsePage
+	var entityType, action, labelLike *string
 	if f.EntityType != "" {
-		q.EntityType = &f.EntityType
+		entityType = &f.EntityType
 	}
 	if f.Action != "" {
-		q.Action = &f.Action
+		action = &f.Action
 	}
 	if f.Q != "" {
 		pattern := likePattern(f.Q)
-		q.LabelLike = &pattern
+		labelLike = &pattern
 	}
-	if beforeID > 0 {
-		q.BeforeID = &beforeID
+	var at *int64
+	if position > 0 {
+		at = &position
 	}
-	rows, err := auditdb.New(r.txm.DB(ctx)).SearchAuditLogs(ctx, q)
+	rowLimit := int32(limit) //nolint:gosec // G115: the page size is bounded by ParsePage
+	rows, err := r.searchRows(ctx, f, p.TenantID, entityType, action, labelLike, at, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +204,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/audit-logs", httpx.HandlerFunc(h.tenant))
 }
 
-type cursor struct {
-	Before int64 `json:"b"`
-}
+// The trail is ordered by time, which is by id (ids grow with time): newest first unless the client asks for `sort=created_at&order=asc`.
+var sortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"created_at": listsort.Num}, DefaultKind: listsort.Num, DefaultDesc: true}
 
 func (h *Handler) property(w http.ResponseWriter, req *http.Request) error {
 	pid, err := tenancy.PropertyID(req)
@@ -233,13 +256,20 @@ func (h *Handler) list(w http.ResponseWriter, req *http.Request, property *int64
 	if err != nil {
 		return err
 	}
-	var cur cursor
-	if page.Cursor != "" {
-		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
-			return err
-		}
+	order, err := sortSpec.Parse(req)
+	if err != nil {
+		return err
 	}
-	items, err := h.r.Search(req.Context(), f, cur.Before, page.Limit+1)
+	pos, err := listsort.Decode(page.Cursor, order)
+	if err != nil {
+		return err
+	}
+	f.Oldest = !order.Desc
+	var after int64
+	if pos != nil {
+		after = pos.ID
+	}
+	items, err := h.r.Search(req.Context(), f, after, page.Limit+1)
 	if err != nil {
 		return err
 	}
@@ -249,7 +279,7 @@ func (h *Handler) list(w http.ResponseWriter, req *http.Request, property *int64
 	}
 	if len(items) > page.Limit {
 		out.Data = items[:page.Limit]
-		if out.NextCursor, err = httpx.EncodeCursor(cursor{Before: out.Data[page.Limit-1].ID}); err != nil {
+		if out.NextCursor, err = listsort.Encode(order, listsort.Position{ID: out.Data[page.Limit-1].ID}); err != nil {
 			return err
 		}
 	}

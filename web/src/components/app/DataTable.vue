@@ -30,6 +30,10 @@ import { formatBalance, formatDate, formatDateTime, formatMoney } from '@/utils/
  * look like one of everything. So while `hasMore` the columns do not sort and the column filters are not shown (the page's own filter bar is what the server is asked);
  * when the last page has been loaded they come back.
  *
+ * A server-side list (`manual`) is sorted by the server, and the order is the page's to keep: `sort` (the column and direction that is on, null for the list's own order) says what the
+ * header shows, `sortChange` says what was asked, and a column says by `sortKey` the name the server knows when it is not `key`. A click goes ascending, descending, then back to the list's own
+ * order (`null`). On a phone, where there is no header, a choice above the cards does the same.
+ *
  * With `cards`, a narrow screen (a phone) gets a card for each row instead of the table: the columns tell their part in the card with `card` (`primary` is the title,
  * `secondary` the line under it, `badge` the mark in the corner, `money` the amount at the right) and the actions of the row (`rowActions`) are one main button and a "..." menu.
  * `rowTo` makes a row, and its card, open a page when it is clicked; the link in the main cell is what the keyboard uses. A cell slot gets `card` (true in a card, false in the table), for a cell that
@@ -40,6 +44,8 @@ export interface Column<R> {
   label: string
   align?: 'left' | 'right' | 'center'
   sortable?: boolean
+  /** The name of the column in the server's `sort` (a server-side list), when it is not `key`. */
+  sortKey?: string
   /** What to sort by, when it is not the value of `key` (a number inside text, a date). */
   sortValue?: (row: R) => string | number | null | undefined
   class?: string
@@ -79,6 +85,10 @@ const props = withDefaults(
     detailTestId?: (row: T) => string
     /** Sorting and filtering belong to the server: the table shows the rows as they are and only tells what was asked. */
     manual?: boolean
+    /** The order that is on, for a server-side list that keeps its order in the address of the page: the `sortKey` (or `key`) of a column and the direction; null is the list's own order. Undefined: the table keeps it. */
+    sort?: { key: string; dir: 'asc' | 'desc' } | null
+    /** The order the list has when `sort` is null (a list that is newest first has `{ key: 'created_at', dir: 'desc' }`): the header shows it, and its column goes between it and the opposite. */
+    defaultSort?: { key: string; dir: 'asc' | 'desc' }
     /** The table is read a page at a time: there are more rows on the server. Undefined for a table that has all its rows. */
     hasMore?: boolean
     loadingMore?: boolean
@@ -94,6 +104,8 @@ const props = withDefaults(
   }>(),
   {
     loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined, isExpanded: undefined, detailTestId: undefined, manual: false,
+    sort: undefined,
+    defaultSort: undefined,
     hasMore: undefined, loadingMore: false, total: null, loadMoreLabel: '', cards: false, rowTo: undefined, rowActions: undefined,
   },
 )
@@ -107,6 +119,15 @@ defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
 
 const sorting = ref<SortingState>([])
+const serverKey = (col: Column<T>): string => col.sortKey ?? col.key
+/** The sorting that is on: the page's (`sort`) when it keeps it, else the table's own. */
+const currentSorting = computed<SortingState>(() => {
+  if (props.sort === undefined) return sorting.value
+  const on = props.sort ?? props.defaultSort
+  if (!on) return []
+  const col = props.columns.find((c) => serverKey(c) === on.key)
+  return col ? [{ id: col.key, desc: on.dir === 'desc' }] : []
+})
 const filters = ref<ColumnFiltersState>([])
 
 const router = inject(routerKey, null)
@@ -171,7 +192,7 @@ const table = useVueTable<T>({
   },
   state: {
     get sorting() {
-      return sorting.value
+      return currentSorting.value
     },
     get columnFilters() {
       return filters.value
@@ -186,9 +207,10 @@ const table = useVueTable<T>({
   enableMultiSort: false,
   enableSortingRemoval: true,
   onSortingChange: (updater) => {
-    sorting.value = typeof updater === 'function' ? updater(sorting.value) : updater
+    sorting.value = typeof updater === 'function' ? updater(currentSorting.value) : updater
     const s = sorting.value[0]
-    emit('sortChange', s ? { key: s.id, dir: s.desc ? 'desc' : 'asc' } : null)
+    const col = s ? props.columns.find((c) => c.key === s.id) : undefined
+    emit('sortChange', s ? { key: col ? serverKey(col) : s.id, dir: s.desc ? 'desc' : 'asc' } : null)
   },
   onColumnFiltersChange: (updater) => {
     filters.value = typeof updater === 'function' ? updater(filters.value) : updater
@@ -210,13 +232,28 @@ watch(partial, (now) => {
 
 function toggleSort(col: Column<T>): void {
   if (!sortableNow(col)) return
-  const s = sorting.value[0]
-  const next: SortingState = !s || s.id !== col.key ? [{ id: col.key, desc: false }] : !s.desc ? [{ id: col.key, desc: true }] : []
+  const s = currentSorting.value[0]
+  const own = props.defaultSort
+  const ownHere = !!own && serverKey(col) === own.key && props.sort == null // the list's own order is on, and on this column: it goes to the opposite
+  let next: SortingState = ownHere ? [{ id: col.key, desc: own.dir !== 'desc' }] : !s || s.id !== col.key ? [{ id: col.key, desc: false }] : !s.desc ? [{ id: col.key, desc: true }] : []
+  // an order that is the list's own is no order at all: the address stays clean
+  if (own && next[0] && serverKey(col) === own.key && next[0].desc === (own.dir === 'desc')) next = []
   table.setSorting(next)
 }
 const sortDir = (col: Column<T>): 'asc' | 'desc' | null => {
-  const s = sorting.value[0]
+  const s = currentSorting.value[0]
   return s && s.id === col.key ? (s.desc ? 'desc' : 'asc') : null
+}
+
+/** On a phone there is no header to click: a server-side list gets a choice above its cards. */
+const cardSort = computed(() => (props.manual && cardsOn.value ? props.columns.filter((c) => c.sortable) : []))
+const cardSortValue = computed(() => {
+  const s = props.sort == null && props.defaultSort ? undefined : currentSorting.value[0] // the list's own order is the first choice
+  return s ? `${s.id}:${s.desc ? 'desc' : 'asc'}` : ''
+})
+function setCardSort(value: string): void {
+  const [id, dir] = value.split(':')
+  table.setSorting(id ? [{ id, desc: dir === 'desc' }] : [])
 }
 
 const hasFilters = computed(() => !partial.value && props.columns.some((c) => c.filter))
@@ -381,7 +418,18 @@ const countText = computed(() => (props.total ? t('dataTable.loadedOf', { n: pro
         </template>
       </tbody>
     </table>
-    <ul v-else class="m-0 grid list-none gap-3 p-0" data-slot="data-cards">
+    <template v-else>
+    <div v-if="cardSort.length" class="mb-3 flex items-center gap-2" data-testid="card-sort">
+      <span class="text-xs text-muted-foreground">{{ t('dataTable.sortBy') }}</span>
+      <NativeSelect :model-value="cardSortValue" name="card_sort" :aria-label="t('dataTable.sortBy')" class="h-8 text-xs" @update:model-value="(v) => setCardSort(String(v ?? ''))">
+        <option value="">{{ t('dataTable.sortDefault') }}</option>
+        <template v-for="c in cardSort" :key="c.key">
+          <option :value="`${c.key}:asc`">{{ c.label }} ↑</option>
+          <option :value="`${c.key}:desc`">{{ c.label }} ↓</option>
+        </template>
+      </NativeSelect>
+    </div>
+    <ul class="m-0 grid list-none gap-3 p-0" data-slot="data-cards">
       <template v-if="loading && !rows.length">
         <li v-for="n in 3" :key="`skeleton-${n}`" class="rounded-lg border border-border p-3" data-testid="table-loading"><Skeleton class="h-4 w-2/3" /><Skeleton class="mt-2 h-4 w-full" /></li>
       </template>
@@ -425,6 +473,7 @@ const countText = computed(() => (props.total ? t('dataTable.loadedOf', { n: pro
         </li>
       </template>
     </ul>
+    </template>
     <div v-if="!loading && rows.length && !visibleRows.length && activeFilters" class="flex flex-col items-center gap-2 py-8 text-sm text-muted-foreground" data-testid="table-no-match">
       <span>{{ t('dataTable.noMatch') }}</span>
       <Button type="button" variant="outline" size="sm" data-testid="table-clear-filters" @click="clearFilters">{{ t('dataTable.clearFilters') }}</Button>

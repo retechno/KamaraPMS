@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/rooms/roomstest"
 	"kamarapms/internal/tenancy"
 )
@@ -192,7 +193,15 @@ func TestManualChargeValidation(t *testing.T) {
 	wantCode(t, err, "PERMISSION_DENIED")
 
 	// a closed folio takes nothing
-	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, f.folio))
+	closing, err := f.Folios.GetFolio(f.admin, f.propID, f.folio)
+	must(t, err)
+	if closing.Balance != "0" { // the folio is closed as the application closes it: paid, then closed
+		f.payment(t, "settle-closed", closing.Balance)
+		closing, err = f.Folios.GetFolio(f.admin, f.propID, f.folio)
+		must(t, err)
+	}
+	_, err = f.Folios.CloseFolio(f.admin, f.propID, f.folio, closing.Version)
+	must(t, err)
 	wantCode(t, try(func(in *folios.ChargeInput) {}), "FOLIO_CLOSED")
 }
 
@@ -612,7 +621,7 @@ func TestCashierList(t *testing.T) {
 	_, err = f.Folios.Void(f.admin, f.propID, gone.Payment.ID, folios.CorrectionInput{Reason: "x", Approval: f.approval()})
 	must(t, err)
 	bd := roomstest.BD
-	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{BusinessDate: &bd}, 0, 10)
+	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{BusinessDate: &bd}, listsort.Sort{}, nil, 10)
 	must(t, err)
 	if len(list.Data) != 4 || list.Data[0].ID < list.Data[1].ID {
 		t.Fatalf("list: %+v", list.Data)
@@ -624,17 +633,19 @@ func TestCashierList(t *testing.T) {
 	if totals["CASH"].Paid != "100000" || totals["CASH"].Refunded != "20000" || totals["CASH"].Net != "80000" || totals["CARD"].Paid != "50000" || totals["CARD"].Net != "50000" {
 		t.Fatalf("totals (a voided payment is not counted): %+v", list.Totals)
 	}
-	cards, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "CARD"}, 0, 10)
+	cards, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "CARD"}, listsort.Sort{}, nil, 10)
 	must(t, err)
 	if len(cards.Data) != 1 || len(cards.Totals) != 0 {
 		t.Fatalf("filter: %+v", cards)
 	}
-	_, err = f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "X"}, 0, 10)
+	_, err = f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "X"}, listsort.Sort{}, nil, 10)
 	wantCode(t, err, "VALIDATION_FAILED")
-	page, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, list.Data[1].ID, 10)
+	first, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, nil, 2)
 	must(t, err)
-	if len(page.Data) != 2 {
-		t.Fatalf("keyset: %+v", page.Data)
+	page, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{}, listsort.Sort{}, first.Next, 10)
+	must(t, err)
+	if len(first.Data) != 2 || first.Next == nil || len(page.Data) != 2 || page.Next != nil {
+		t.Fatalf("keyset: %+v / %+v", first.Data, page.Data)
 	}
 }
 
@@ -677,20 +688,21 @@ func TestListFoliosAndIsolation(t *testing.T) {
 	f := setup(t)
 	f.charge(t, "c1")
 	f.newFolio(t, "F2")
-	list, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{}, 0, 10)
+	page, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{}, listsort.Sort{}, nil, 10)
 	must(t, err)
+	list := page.Data
 	if len(list) != 2 || list[0].Balance != "122100" || list[1].Balance != "0" {
 		t.Fatalf("list: %+v", list)
 	}
-	byRes, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{ReservationID: &f.reservation}, 0, 10)
+	byRes, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{ReservationID: &f.reservation}, listsort.Sort{}, nil, 10)
 	must(t, err)
-	if len(byRes) != 1 || byRes[0].ID != f.folio {
-		t.Fatalf("by reservation: %+v", byRes)
+	if len(byRes.Data) != 1 || byRes.Data[0].ID != f.folio {
+		t.Fatalf("by reservation: %+v", byRes.Data)
 	}
-	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Status: "CLOSED"}, 0, 10)
+	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Status: "CLOSED"}, listsort.Sort{}, nil, 10)
 	must(t, err)
-	if len(open) != 0 {
-		t.Fatalf("closed: %+v", open)
+	if len(open.Data) != 0 {
+		t.Fatalf("closed: %+v", open.Data)
 	}
 	// another tenant sees neither the property nor the folio
 	foreign := f.Tenant(t, "XYZ")

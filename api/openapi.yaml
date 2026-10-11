@@ -833,8 +833,12 @@ paths:
   /api/v1/guests:
     get:
       operationId: searchGuests
-      summary: Search guest profiles (guest.read), alphabetically
+      summary: Search guest profiles (guest.read), A-Z by the name that is shown by default
       description: |
+        The order is asked of the server: `sort` and `order`; without them the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), A-Z in the ICU
+        collation, so an accent stands beside its letter and a capital beside a small one. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise); NULL (a guest without a
+        nationality) sorts last either way.
+
         Free text; every space-separated token must match the start of the first name, last name, email,
         ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
         An empty `q` lists everything the caller may see.
@@ -849,12 +853,15 @@ paths:
         - { name: property_id, in: query, schema: { type: integer, format: int64 } }
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - { name: sort, in: query, schema: { type: string, enum: [name, code, nationality] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of guests.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GuestPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -1571,8 +1578,11 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listReservations
-      summary: Search reservations, newest first (reservation.read)
+      summary: Search reservations, the nearest arrival first by default (reservation.read)
       description: |
+        The order is asked of the server (the list is read a page at a time): `sort` and `order`. Without them it is "nearest first": the arrivals of the business date and after it, soonest first, then
+        the arrivals before it, the most recent first, the confirmation number breaking a tie. The cursor of that order carries the business date it was made with, so a page goes on from the same
+        date even after the night audit. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise).
         `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number, the booker's
         name and the room numbers (a text, not a pattern). `status` is the status of the header; `display_status` is the status staff see (derived from the header and the rooms, as in the
         detail): CONFIRMED is "reserved", IN_HOUSE is "checked in". Every filter is applied by the database, so a page is never cut after filtering. Each row carries its rooms with the booked
@@ -1592,12 +1602,15 @@ paths:
         - { name: booking_group_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] } }
         - { name: q, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [arrival_date, confirmation_number, guest_name, status, rate] }, description: "The column to sort by: the arrival date, the confirmation number, the guest (the name that is shown, A-Z in the ICU collation), the status staff see, the lowest booked price of the arrival night. The id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of reservations.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReservationPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -1993,6 +2006,7 @@ paths:
     get:
       operationId: listFolios
       summary: List folios with their balances (folio.read)
+      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -2000,12 +2014,15 @@ paths:
         - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
+        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of folios.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FolioPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -2316,20 +2333,23 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listPayments
-      summary: The cashier list, newest first, with net totals per method for a business date (folio.read)
-      description: "`totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded."
+      summary: The cashier list, newest first by default, with net totals per method for a business date (folio.read)
+      description: "`totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded. The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the newest first (by `paid_at`, the id breaking a tie)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - { name: business_date, in: query, schema: { $ref: "#/components/schemas/Date" } }
         - { name: method, in: query, schema: { $ref: "#/components/schemas/PaymentMethod" } }
+        - { name: sort, in: query, schema: { type: string, enum: [payment_number, amount, payment_method, status, paid_at] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of payments.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PaymentPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -3743,12 +3763,15 @@ paths:
         - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
         - { name: q, in: query, schema: { type: string, minLength: 3, maxLength: 64 }, description: "A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it." }
         - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at] }, description: "The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of entries.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuditLogPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -3767,12 +3790,15 @@ paths:
         - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
         - { name: q, in: query, schema: { type: string, minLength: 3, maxLength: 64 }, description: "A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it." }
         - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at] }, description: "The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of entries.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuditLogPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folios/{id}/invoice.pdf:
@@ -7584,6 +7610,11 @@ components:
       in: query
       description: Opaque cursor from a previous page's next_cursor.
       schema: { type: string }
+    SortOrder:
+      name: order
+      in: query
+      description: "The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions."
+      schema: { type: string, enum: [asc, desc] }
   responses:
     Problem:
       description: An error, described as RFC 9457 problem details.

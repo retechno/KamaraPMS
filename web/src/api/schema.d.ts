@@ -656,8 +656,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search guest profiles (guest.read), alphabetically
-         * @description Free text; every space-separated token must match the start of the first name, last name, email,
+         * Search guest profiles (guest.read), A-Z by the name that is shown by default
+         * @description The order is asked of the server: `sort` and `order`; without them the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), A-Z in the ICU
+         *     collation, so an accent stands beside its letter and a capital beside a small one. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise); NULL (a guest without a
+         *     nationality) sorts last either way.
+         *
+         *     Free text; every space-separated token must match the start of the first name, last name, email,
          *     ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
          *     An empty `q` lists everything the caller may see.
          *
@@ -1206,8 +1210,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search reservations, newest first (reservation.read)
-         * @description `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number, the booker's
+         * Search reservations, the nearest arrival first by default (reservation.read)
+         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`. Without them it is "nearest first": the arrivals of the business date and after it, soonest first, then
+         *     the arrivals before it, the most recent first, the confirmation number breaking a tie. The cursor of that order carries the business date it was made with, so a page goes on from the same
+         *     date even after the night audit. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise).
+         *     `arrival` and `departure` in the results are derived from the rooms that are not cancelled (from all rooms when every room is cancelled). `q` matches the confirmation number, the booker's
          *     name and the room numbers (a text, not a pattern). `status` is the status of the header; `display_status` is the status staff see (derived from the header and the rooms, as in the
          *     detail): CONFIRMED is "reserved", IN_HOUSE is "checked in". Every filter is applied by the database, so a page is never cut after filtering. Each row carries its rooms with the booked
          *     price of the arrival night (the snapshot, never the rate master) and the deposit (the credit on the deposit folio, from the ledger).
@@ -1554,7 +1561,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List folios with their balances (folio.read) */
+        /**
+         * List folios with their balances (folio.read)
+         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
+         */
         get: operations["listFolios"];
         put?: never;
         post?: never;
@@ -1840,8 +1850,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The cashier list, newest first, with net totals per method for a business date (folio.read)
-         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded.
+         * The cashier list, newest first by default, with net totals per method for a business date (folio.read)
+         * @description `totals` is only filled when `business_date` is given: paid, refunded and net per method, voided payments excluded. The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the newest first (by `paid_at`, the id breaking a tie).
          */
         get: operations["listPayments"];
         put?: never;
@@ -12737,6 +12747,8 @@ export interface components {
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
+        /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+        SortOrder: "asc" | "desc";
     };
     requestBodies: never;
     headers: never;
@@ -13952,6 +13964,10 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Opaque cursor from a previous page's next_cursor. */
                 cursor?: components["parameters"]["Cursor"];
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "name" | "code" | "nationality";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path?: never;
@@ -13968,6 +13984,7 @@ export interface operations {
                     "application/json": components["schemas"]["GuestPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -14974,6 +14991,10 @@ export interface operations {
                 booking_group_id?: number;
                 status?: "DRAFT" | "CONFIRMED" | "CANCELLED";
                 q?: string;
+                /** @description The column to sort by: the arrival date, the confirmation number, the guest (the name that is shown, A-Z in the ICU collation), the status staff see, the lowest booked price of the arrival night. The id breaks a tie in the direction of the order. */
+                sort?: "arrival_date" | "confirmation_number" | "guest_name" | "status" | "rate";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -14992,6 +15013,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReservationPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -15496,6 +15518,10 @@ export interface operations {
                 reservation_id?: number;
                 stay_id?: number;
                 status?: "OPEN" | "CLOSED";
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "folio_number" | "balance" | "status";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -15514,6 +15540,7 @@ export interface operations {
                     "application/json": components["schemas"]["FolioPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -15886,6 +15913,10 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 business_date?: components["schemas"]["Date"];
                 method?: components["schemas"]["PaymentMethod"];
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "payment_number" | "amount" | "payment_method" | "status" | "paid_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -15904,6 +15935,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -17817,6 +17849,10 @@ export interface operations {
                 q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
+                /** @description The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first. */
+                sort?: "created_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -17835,6 +17871,7 @@ export interface operations {
                     "application/json": components["schemas"]["AuditLogPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -17857,6 +17894,10 @@ export interface operations {
                 q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
+                /** @description The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first. */
+                sort?: "created_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path?: never;
@@ -17873,6 +17914,7 @@ export interface operations {
                     "application/json": components["schemas"]["AuditLogPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };

@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -31,7 +32,8 @@ function mountView(permissions = ['audit.read'], page: object = { data: [entry(2
     }
     return { data: page }
   })
-  return mount(AuditTrailView, { global: { plugins: [pinia] } })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+  return mount(AuditTrailView, { global: { plugins: [pinia, router] } })
 }
 
 /** Runs `fn` with the window of a phone (390 px), then puts the width back. */
@@ -266,4 +268,67 @@ describe('AuditTrailView', () => {
       document.body.innerHTML = ''
     })
   })
+  describe('the order, which the server keeps', () => {
+    const routerOf = (w: ReturnType<typeof mountView>) => (w.vm as unknown as { $router: ReturnType<typeof createRouter> }).$router
+    const lastQuery = () => (auditCalls().at(-1)?.[1] as { params: { query: Record<string, unknown> } }).params.query
+    const header = (w: ReturnType<typeof mountView>) => w.get('th:has([data-testid=sort-created_at])')
+
+    it('is newest first by default, and the time is the only column that sorts', async () => {
+      const w = mountView()
+      await flushPromises()
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-created_at'])
+      expect(header(w).attributes('aria-sort')).toBe('descending')
+      expect(lastQuery().sort).toBeUndefined() // the server's own order
+    })
+
+    it('goes between newest first and oldest first, from the first page each time, and keeps the filters', async () => {
+      const w = mountView()
+      await flushPromises()
+      await w.get('select[name=entity_type]').setValue('stay')
+      await w.get('form[data-testid=filters]').trigger('submit')
+      await flushPromises()
+      const before = auditCalls().length
+      await w.get('[data-testid=sort-created_at]').trigger('click')
+      await flushPromises()
+      expect(auditCalls().length).toBe(before + 1)
+      expect(routerOf(w).currentRoute.value.query).toMatchObject({ sort: 'created_at', order: 'asc' })
+      expect(lastQuery()).toMatchObject({ sort: 'created_at', order: 'asc', entity_type: 'stay' })
+      expect(lastQuery().cursor).toBeUndefined()
+      expect(header(w).attributes('aria-sort')).toBe('ascending')
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ cursor: 'c1', sort: 'created_at', order: 'asc' })
+      await w.get('[data-testid=sort-created_at]').trigger('click') // back to the newest first
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+      expect(lastQuery().cursor).toBeUndefined()
+      expect(routerOf(w).currentRoute.value.query.sort).toBeUndefined()
+      expect(header(w).attributes('aria-sort')).toBe('descending')
+    })
+
+    it('reads the order from the address, and Back returns to the order before', async () => {
+      const w = mountView()
+      await flushPromises()
+      const router = routerOf(w)
+      await router.push('/audit?sort=created_at&order=asc')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'created_at', order: 'asc' })
+      expect(header(w).attributes('aria-sort')).toBe('ascending')
+      router.back()
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+      expect(header(w).attributes('aria-sort')).toBe('descending')
+    })
+
+    it('on a phone, the cards have a choice of order', async () => {
+      await onAPhone(async () => {
+        const w = mountView()
+        await flushPromises()
+        await w.get('[data-testid=card-sort] select').setValue('created_at:asc')
+        await flushPromises()
+        expect(lastQuery()).toMatchObject({ sort: 'created_at', order: 'asc' })
+      })
+    })
+  })
+
 })

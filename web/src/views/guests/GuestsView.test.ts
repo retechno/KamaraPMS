@@ -72,6 +72,63 @@ describe('GuestsView', () => {
     expect(w.findAll('tbody tr')).toHaveLength(2)
   })
 
+  describe('the order, which the server keeps', () => {
+    const routerOf = (w: ReturnType<typeof mountView>) => (w.vm as unknown as { $router: ReturnType<typeof createRouter> }).$router
+    const lastQuery = () => (GET.mock.calls.at(-1)?.[1] as { params: { query: Record<string, unknown> } }).params.query
+
+    it('asks the server for the order of the name, the code or the nationality, from the first page, and shows the rows as they come', async () => {
+      const w = mountView(['guest.read'], { data: [siti, { ...siti, id: 2, code: 'GST000002', last_name: 'Wu' }], next_cursor: 'abc' })
+      await flushPromises()
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-code', 'sort-name', 'sort-nationality']) // the e-mail and the phone are not columns of the server
+      expect(lastQuery().sort).toBeUndefined() // the server's own order: the name shown, A-Z
+      await w.get('[data-testid=sort-name]').trigger('click')
+      await flushPromises()
+      expect(routerOf(w).currentRoute.value.query).toMatchObject({ sort: 'name', order: 'asc' })
+      expect(lastQuery()).toMatchObject({ sort: 'name', order: 'asc', q: '' })
+      expect(lastQuery().cursor).toBeUndefined()
+      await w.get('[data-testid=more]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ cursor: 'abc', sort: 'name', order: 'asc' })
+      await w.get('[data-testid=sort-name]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'name', order: 'desc' })
+      await w.get('[data-testid=sort-name]').trigger('click')
+      await flushPromises()
+      expect(lastQuery().sort).toBeUndefined()
+    })
+
+    it('keeps the order when the search text changes, reads it from the address, and Back returns to the order before', async () => {
+      const w = mountView(['guest.read'])
+      await flushPromises()
+      const router = routerOf(w)
+      await router.push('/guests?sort=nationality&order=desc')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ sort: 'nationality', order: 'desc' })
+      expect(w.get('th:has([data-testid=sort-nationality])').attributes('aria-sort')).toBe('descending')
+      await w.get('input[name=q]').setValue('nurha')
+      await w.get('form[role=search]').trigger('submit')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ q: 'nurha', sort: 'nationality', order: 'desc' })
+      await w.get('[data-testid=sort-code]').trigger('click')
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ q: 'nurha', sort: 'code', order: 'asc' })
+      router.back()
+      await flushPromises()
+      expect(lastQuery()).toMatchObject({ q: 'nurha', sort: 'nationality', order: 'desc' })
+    })
+
+    it('on a phone, the cards have a choice of order', async () => {
+      await onAPhone(async () => {
+        const w = mountView(['guest.read'])
+        await flushPromises()
+        await w.get('[data-testid=card-sort] select').setValue('code:desc')
+        await flushPromises()
+        expect(lastQuery()).toMatchObject({ sort: 'code', order: 'desc' })
+        w.unmount()
+      })
+    })
+  })
+
   it('does not query without guest.read', async () => {
     const w = mountView([])
     await flushPromises()

@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
+import { useServerSort } from '@/composables/useServerSort'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -24,6 +25,11 @@ const auth = useAuthStore()
 const property = usePropertyStore()
 
 const open = ref<number | null>(null)
+
+// The trail is ordered by time, and the server does it (the list is read a page at a time): newest first, or oldest first with ?sort=created_at&order=asc in the address. The one column that
+// sorts goes between the two; the newest first is the server's own order, so it is the address with no order.
+const { sort, params: sortParams, setSort } = useServerSort(['created_at'])
+const NEWEST_FIRST = { key: 'created_at', dir: 'desc' } as const
 const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
 const users = ref<{ id: number; full_name: string }[]>([])
 
@@ -46,7 +52,7 @@ async function loadUsers(): Promise<void> {
 const activeFilters = computed(() => (['entity_type', 'user_id', 'action', 'from', 'to'] as const).filter((k) => filter[k] !== '').length)
 
 const columns = computed<Column<AuditLog>[]>(() => [
-  { key: 'created_at', label: t('audit.when'), format: 'datetime' as const, card: 'secondary' as const },
+  { key: 'created_at', label: t('audit.when'), sortable: true, format: 'datetime' as const, card: 'secondary' as const },
   { key: 'business_date', label: t('audit.businessDate'), format: 'date' as const, hideOnMobile: true },
   { key: 'user', label: t('audit.user') },
   { key: 'action', label: t('audit.action'), card: 'primary' as const },
@@ -64,7 +70,7 @@ const searchText = computed(() => filter.document.trim())
 const searchTooShort = computed(() => searchText.value.length > 0 && [...searchText.value].length < MIN_SEARCH)
 
 function query(cursor?: string): Record<string, string | number | undefined> {
-  const q: Record<string, string | number | undefined> = { limit: 50, cursor }
+  const q: Record<string, string | number | undefined> = { limit: 50, cursor, ...sortParams.value }
   for (const [k, v] of Object.entries(filter)) {
     if (k !== 'document' && v.trim()) q[k] = k === 'user_id' ? Number(v) : v.trim()
   }
@@ -114,6 +120,13 @@ function entityName(row: { entity_type: string; entity_id: number; entity_label?
   }
   return `${label} #${row.entity_id}`
 }
+
+// The other order reads the trail again from its first page (a cursor belongs to an order); the address already holds it.
+watch(sort, () => {
+  list.reset()
+  open.value = null
+  void load()
+})
 
 watch(pid, () => {
   list.reset()
@@ -184,6 +197,9 @@ watch(pid, () => {
         row-key="id"
         :has-more="hasMore"
         :loading-more="loadingMore"
+        manual
+        :sort="sort"
+        :default-sort="NEWEST_FIRST"
         cards
         :row-actions="actionsOf"
         :row-test-id="(r) => `entry-${r.id}`"
@@ -191,6 +207,7 @@ watch(pid, () => {
         :detail-test-id="(r) => `detail-${r.id}`"
         :caption="t('audit.title')"
         @load-more="list.loadMore()"
+        @sort-change="setSort"
       >
         <template #cell-created_at="{ row }">{{ $dateTime(row.created_at) }}</template>
         <template #cell-business_date="{ row }">{{ $date(row.business_date) || '—' }}</template>

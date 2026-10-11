@@ -1497,31 +1497,58 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 	return items, nil
 }
 
-const listFolios = `-- name: ListFolios :many
-SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit,
+const listFoliosOrdered = `-- name: ListFoliosOrdered :many
+SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, bal.balance::numeric AS balance,
        (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
 FROM folios f
-LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
-WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id > $3
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN f.status = 'OPEN'
+                THEN (SELECT COALESCE(sum(i.debit), 0) - COALESCE(sum(i.credit), 0) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id)
+                ELSE 0 END AS balance
+) bal
+CROSS JOIN LATERAL (
+    SELECT (CASE $1::text
+                WHEN 'folio_number' THEN f.folio_number::text COLLATE "und-x-icu"
+                WHEN 'status' THEN f.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE $1::text
+                WHEN 'balance' THEN bal.balance
+                WHEN '' THEN (CASE WHEN f.status = 'OPEN' THEN 0 ELSE 1000000000000000 END) - bal.balance
+            END) AS sk_num
+) k
+WHERE f.tenant_id = $2 AND f.property_id = $3
   AND ($4::bigint IS NULL OR f.reservation_id = $4::bigint)
   AND ($5::bigint IS NULL OR f.stay_id = $5::bigint)
   AND ($6::text IS NULL OR f.status = $6::text)
-GROUP BY f.id
-ORDER BY f.id
-LIMIT $7
+  AND ($7::bigint IS NULL
+       OR CASE WHEN NOT $8::boolean THEN
+               (k.sk_text > $9::text COLLATE "und-x-icu" OR k.sk_num > $10::numeric
+                OR ((k.sk_text = $9::text COLLATE "und-x-icu" OR k.sk_num = $10::numeric) AND f.id > $7::bigint))
+           ELSE
+               (k.sk_text < $9::text COLLATE "und-x-icu" OR k.sk_num < $10::numeric
+                OR ((k.sk_text = $9::text COLLATE "und-x-icu" OR k.sk_num = $10::numeric) AND f.id < $7::bigint))
+           END)
+ORDER BY (CASE WHEN NOT $8::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $8::boolean THEN k.sk_num END) ASC,
+         (CASE WHEN $8::boolean THEN k.sk_text END) DESC, (CASE WHEN $8::boolean THEN k.sk_num END) DESC,
+         (CASE WHEN NOT $8::boolean THEN f.id END) ASC, (CASE WHEN $8::boolean THEN f.id END) DESC
+LIMIT $11
 `
 
-type ListFoliosParams struct {
+type ListFoliosOrderedParams struct {
+	SortKey       string
 	TenantID      int64
 	PropertyID    int64
-	AfterID       int64
 	ReservationID *int64
 	StayID        *int64
 	Status        *string
+	AfterID       *int64
+	SortDesc      bool
+	AfterText     *string
+	AfterNum      *decimal.Decimal
 	RowLimit      int32
 }
 
-type ListFoliosRow struct {
+type ListFoliosOrderedRow struct {
 	ID                 int64
 	TenantID           int64
 	PropertyID         int64
@@ -1540,28 +1567,37 @@ type ListFoliosRow struct {
 	UpdatedBy          *int64
 	ClosedOn           *civil.Date
 	BillToCompanyID    *int64
-	Debit              decimal.Decimal
-	Credit             decimal.Decimal
+	Balance            decimal.Decimal
 	ConfirmationNumber string
 }
 
-func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListFoliosRow, error) {
-	rows, err := q.db.Query(ctx, listFolios,
+// The folios of a property in the order asked for: by number, balance or status, either way; the default (key ”) is the open ones first, the largest balance first among them, then the closed
+// ones. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
+// breaking a tie in the direction of the order. NULL does not occur: every folio has a number, a status and a balance.
+//
+// The balance is SUM(debit) - SUM(credit) of the folio's items, and it is read for the OPEN folios only: a folio can be closed only with a zero balance (FOLIO_BALANCE_NOT_ZERO, and no
+// posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
+func (q *Queries) ListFoliosOrdered(ctx context.Context, arg ListFoliosOrderedParams) ([]ListFoliosOrderedRow, error) {
+	rows, err := q.db.Query(ctx, listFoliosOrdered,
+		arg.SortKey,
 		arg.TenantID,
 		arg.PropertyID,
-		arg.AfterID,
 		arg.ReservationID,
 		arg.StayID,
 		arg.Status,
+		arg.AfterID,
+		arg.SortDesc,
+		arg.AfterText,
+		arg.AfterNum,
 		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListFoliosRow{}
+	items := []ListFoliosOrderedRow{}
 	for rows.Next() {
-		var i ListFoliosRow
+		var i ListFoliosOrderedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TenantID,
@@ -1581,8 +1617,7 @@ func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListF
 			&i.UpdatedBy,
 			&i.ClosedOn,
 			&i.BillToCompanyID,
-			&i.Debit,
-			&i.Credit,
+			&i.Balance,
 			&i.ConfirmationNumber,
 		); err != nil {
 			return nil, err
@@ -1702,29 +1737,141 @@ func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstruct
 
 const listPayments = `-- name: ListPayments :many
 SELECT id, tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, paid_at, business_date, reference_number, refund_of_payment_id, status, voided_at, voided_by, void_reason, idempotency_key, remarks, created_at, created_by, approved_by, company_id, shift_id, mdr_rate, mdr_fee, expected_settlement_date, mdr_vat_rate, mdr_vat FROM payments
-WHERE tenant_id = $1 AND property_id = $2 AND id < $3::bigint
-  AND ($4::date IS NULL OR business_date = $4::date)
-  AND ($5::text IS NULL OR payment_method = $5::text)
-ORDER BY id DESC
-LIMIT $6
+WHERE tenant_id = $1 AND property_id = $2
+  AND ($3::bigint IS NULL OR (paid_at, id) < ($4::timestamptz, $3::bigint))
+  AND ($5::date IS NULL OR business_date = $5::date)
+  AND ($6::text IS NULL OR payment_method = $6::text)
+ORDER BY paid_at DESC, id DESC
+LIMIT $7
 `
 
 type ListPaymentsParams struct {
 	TenantID      int64
 	PropertyID    int64
-	BeforeIDOrMax int64
+	AfterID       *int64
+	AfterTime     *time.Time
 	BusinessDate  *civil.Date
 	PaymentMethod *string
 	RowLimit      int32
 }
 
+// The cashier list, newest first: by the time the payment was posted (paid_at), the id breaking a tie. The page goes on after (paid_at, id); the index payments_paid_at_idx serves it.
 func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]Payment, error) {
 	rows, err := q.db.Query(ctx, listPayments,
 		arg.TenantID,
 		arg.PropertyID,
-		arg.BeforeIDOrMax,
+		arg.AfterID,
+		arg.AfterTime,
 		arg.BusinessDate,
 		arg.PaymentMethod,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Payment{}
+	for rows.Next() {
+		var i Payment
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.PaymentNumber,
+			&i.FolioID,
+			&i.PaymentType,
+			&i.PaymentMethod,
+			&i.Amount,
+			&i.PaidAt,
+			&i.BusinessDate,
+			&i.ReferenceNumber,
+			&i.RefundOfPaymentID,
+			&i.Status,
+			&i.VoidedAt,
+			&i.VoidedBy,
+			&i.VoidReason,
+			&i.IdempotencyKey,
+			&i.Remarks,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.ApprovedBy,
+			&i.CompanyID,
+			&i.ShiftID,
+			&i.MdrRate,
+			&i.MdrFee,
+			&i.ExpectedSettlementDate,
+			&i.MdrVatRate,
+			&i.MdrVat,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPaymentsOrdered = `-- name: ListPaymentsOrdered :many
+SELECT p.id, p.tenant_id, p.property_id, p.payment_number, p.folio_id, p.payment_type, p.payment_method, p.amount, p.paid_at, p.business_date, p.reference_number, p.refund_of_payment_id, p.status, p.voided_at, p.voided_by, p.void_reason, p.idempotency_key, p.remarks, p.created_at, p.created_by, p.approved_by, p.company_id, p.shift_id, p.mdr_rate, p.mdr_fee, p.expected_settlement_date, p.mdr_vat_rate, p.mdr_vat
+FROM payments p
+CROSS JOIN LATERAL (
+    SELECT (CASE $1::text
+                WHEN 'payment_number' THEN p.payment_number::text COLLATE "und-x-icu"
+                WHEN 'payment_method' THEN p.payment_method::text COLLATE "und-x-icu"
+                WHEN 'status' THEN p.status::text COLLATE "und-x-icu"
+            END) AS sk_text,
+           (CASE $1::text WHEN 'amount' THEN p.amount END) AS sk_num,
+           (CASE $1::text WHEN 'paid_at' THEN p.paid_at END) AS sk_time
+) k
+WHERE p.tenant_id = $2 AND p.property_id = $3
+  AND ($4::date IS NULL OR p.business_date = $4::date)
+  AND ($5::text IS NULL OR p.payment_method = $5::text)
+  AND ($6::bigint IS NULL
+       OR CASE WHEN NOT $7::boolean THEN
+               (k.sk_text > $8::text COLLATE "und-x-icu" OR k.sk_num > $9::numeric OR k.sk_time > $10::timestamptz
+                OR ((k.sk_text = $8::text COLLATE "und-x-icu" OR k.sk_num = $9::numeric OR k.sk_time = $10::timestamptz)
+                    AND p.id > $6::bigint))
+           ELSE
+               (k.sk_text < $8::text COLLATE "und-x-icu" OR k.sk_num < $9::numeric OR k.sk_time < $10::timestamptz
+                OR ((k.sk_text = $8::text COLLATE "und-x-icu" OR k.sk_num = $9::numeric OR k.sk_time = $10::timestamptz)
+                    AND p.id < $6::bigint))
+           END)
+ORDER BY (CASE WHEN NOT $7::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $7::boolean THEN k.sk_num END) ASC, (CASE WHEN NOT $7::boolean THEN k.sk_time END) ASC,
+         (CASE WHEN $7::boolean THEN k.sk_text END) DESC, (CASE WHEN $7::boolean THEN k.sk_num END) DESC, (CASE WHEN $7::boolean THEN k.sk_time END) DESC,
+         (CASE WHEN NOT $7::boolean THEN p.id END) ASC, (CASE WHEN $7::boolean THEN p.id END) DESC
+LIMIT $11
+`
+
+type ListPaymentsOrderedParams struct {
+	SortKey       string
+	TenantID      int64
+	PropertyID    int64
+	BusinessDate  *civil.Date
+	PaymentMethod *string
+	AfterID       *int64
+	SortDesc      bool
+	AfterText     *string
+	AfterNum      *decimal.Decimal
+	AfterTime     *time.Time
+	RowLimit      int32
+}
+
+// The same list in another order: by number, amount, method, status or time, either way (every one of these columns has a value). One query for every order, the key and the direction being
+// parameters, so it cannot use an index; the default (newest first) has the query above. The page goes on after (the sort value, id), the id breaking a tie in the direction of the order.
+func (q *Queries) ListPaymentsOrdered(ctx context.Context, arg ListPaymentsOrderedParams) ([]Payment, error) {
+	rows, err := q.db.Query(ctx, listPaymentsOrdered,
+		arg.SortKey,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.PaymentMethod,
+		arg.AfterID,
+		arg.SortDesc,
+		arg.AfterText,
+		arg.AfterNum,
+		arg.AfterTime,
 		arg.RowLimit,
 	)
 	if err != nil {

@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
+import { useServerSort } from '@/composables/useServerSort'
 import { toast } from '@/composables/useToast'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { useRoomTypes } from '@/composables/useRoomTypes'
@@ -42,6 +43,9 @@ const router = useRouter()
 const { types } = useRoomTypes()
 const { ratePlans, companies } = useReservationLookups()
 
+// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the nearest arrival first.
+const { sort, params: sortParams, query: sortQuery, setSort } = useServerSort(['confirmation_number', 'guest_name', 'arrival_date', 'status', 'rate'])
+
 const FIELDS = ['q', 'status', 'arrivalFrom', 'arrivalTo', 'departureFrom', 'departureTo', 'roomType', 'ratePlan', 'company'] as const
 type Field = (typeof FIELDS)[number]
 const fromAddress = (k: Field): string => (typeof route?.query[k] === 'string' ? (route.query[k] as string) : '')
@@ -60,11 +64,11 @@ const activeFilters = computed(() => FIELDS.filter((k) => k !== 'q' && filter[k]
 const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, card: 'primary' as const },
   { key: 'guest_name', label: t('reservations.guest'), sortable: true, card: 'secondary' as const },
-  { key: 'room', label: t('reservations.roomCol'), sortable: true, sortValue: (r) => r.rooms[0]?.room_number || r.rooms[0]?.room_type_code },
+  { key: 'room', label: t('reservations.roomCol') },
   { key: 'arrival_date', label: t('reservations.stay'), sortable: true, class: 'whitespace-nowrap' },
-  { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, sortValue: (r) => (r.rooms.find((l) => l.rate_amount) ? Number(r.rooms.find((l) => l.rate_amount)?.rate_amount) : null), class: 'tabular-nums whitespace-nowrap px-2' },
-  { key: 'company', label: t('reservations.company'), sortable: true, sortValue: (r) => companyOf(r) },
-  { key: 'status', label: t('reservations.status'), sortable: true, sortValue: (r) => String(uiStatus(r.display_status)), class: 'whitespace-nowrap', card: 'badge' as const },
+  { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, class: 'tabular-nums whitespace-nowrap px-2' },
+  { key: 'company', label: t('reservations.company') },
+  { key: 'status', label: t('reservations.status'), sortable: true, class: 'whitespace-nowrap', card: 'badge' as const },
   { key: 'actions', label: t('reservations.actions'), align: 'right', class: 'w-16' },
 ])
 
@@ -187,6 +191,7 @@ function query() {
     room_type_id: filter.roomType ? Number(filter.roomType) : undefined,
     rate_plan_id: filter.ratePlan ? Number(filter.ratePlan) : undefined,
     company_id: filter.company ? Number(filter.company) : undefined,
+    ...sortParams.value,
   }
 }
 
@@ -205,7 +210,7 @@ async function load(): Promise<void> {
 /** Searches again from the first page; the filters go to the address. */
 function search(): void {
   const next = Object.fromEntries(FIELDS.filter((k) => filter[k] !== '').map((k) => [k, filter[k]]))
-  void router.replace({ query: next })
+  void router.replace({ query: { ...next, ...sortQuery.value } })
   list.reset() // a new search shows nothing of the old one, and a failed one shows no list
   void load()
 }
@@ -219,6 +224,11 @@ watch(() => property.currentId, () => {
   list.reset()
   void load()
 }, { immediate: true })
+// Another order reads the list again from its first page (a cursor belongs to an order); the address already holds it.
+watch(sort, () => {
+  list.reset()
+  void load()
+})
 // Choosing a filter searches at once; the text waits for the search button (or Enter).
 watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departureFrom, filter.departureTo, filter.roomType, filter.ratePlan, filter.company], search)
 </script>
@@ -308,12 +318,15 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       :loading="!searched"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      manual
+      :sort="sort"
       cards
       :row-to="(r) => `/reservations/${r.id}`"
       :row-actions="menuOf"
       :row-test-id="(r) => `res-${r.confirmation_number}`"
       :caption="t('reservations.title')"
       @load-more="list.loadMore()"
+      @sort-change="setSort"
     >
       <template #cell-confirmation_number="{ row }">
         <RouterLink :to="`/reservations/${row.id}`">{{ row.confirmation_number }}</RouterLink>

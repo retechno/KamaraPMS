@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -130,9 +131,19 @@ func (f *fx) issueCL(t *testing.T, id int64, key string) (taxinvoice.Invoice, er
 	return f.TaxInvoice.Issue(f.admin, f.propID, taxinvoice.IssueInput{SourceType: taxinvoice.SourceCityLedgerInvoice, CityLedgerInvoiceID: id}, key)
 }
 
+// closeFolio closes a folio as the application does: the guest pays what the folio owes, then the folio is closed (a folio can only be closed with a zero balance).
 func (f *fx) closeFolio(t *testing.T, folio int64) {
 	t.Helper()
-	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, folio))
+	fo, err := f.Folios.GetFolio(f.admin, f.propID, folio)
+	must(t, err)
+	if fo.Balance != "0" {
+		_, err = f.Folios.PostPayment(f.admin, f.propID, folio, fmt.Sprintf("settle-%d", folio), folios.PaymentInput{Amount: fo.Balance, PaymentMethod: "CASH"})
+		must(t, err)
+		fo, err = f.Folios.GetFolio(f.admin, f.propID, folio)
+		must(t, err)
+	}
+	_, err = f.Folios.CloseFolio(f.admin, f.propID, folio, fo.Version)
+	must(t, err)
 }
 
 func blockerCodes(t *testing.T, err error) []string {

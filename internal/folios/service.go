@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/tenancy"
 )
 
@@ -257,27 +258,62 @@ func (s *Service) GetFolio(ctx context.Context, propertyID, id int64) (Folio, er
 	return s.loadFolio(ctx, p.TenantID, propertyID, f)
 }
 
-// ListFolios lists folios with their balances (folio.read).
-func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilter, afterID int64, limit int) ([]FolioSummary, error) {
+// FolioSortSpec is what the folio list can be sorted by. The default order is the open folios first, the largest balance first among them, then the closed ones.
+var FolioSortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"folio_number": listsort.Text, "balance": listsort.Num, "status": listsort.Text}, DefaultKind: listsort.Num}
+
+// FolioList is a page of folios and where it ends, when there are more.
+type FolioList struct {
+	Data []FolioSummary
+	Next *listsort.Position
+}
+
+// ListFolios lists the folios of a property (folio.read) in the order asked for, a page of limit. pos is where the page before ended (nil for the first page).
+func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilter, order listsort.Sort, pos *listsort.Position, limit int) (FolioList, error) {
 	p, err := s.actor(ctx, propertyID, auth.PermFolioRead)
 	if err != nil {
-		return nil, err
+		return FolioList{}, err
 	}
 	decimals, err := s.decimals(ctx, propertyID)
 	if err != nil {
-		return nil, err
+		return FolioList{}, err
 	}
-	rows, err := s.q(ctx).ListFolios(ctx, foliosdb.ListFoliosParams{
-		TenantID: p.TenantID, PropertyID: propertyID, AfterID: afterID, ReservationID: f.ReservationID, StayID: f.StayID,
-		Status: nullable(f.Status), RowLimit: rowLimit(limit),
+	after, err := listsort.AfterOf(pos, FolioSortSpec.Kind(order))
+	if err != nil {
+		return FolioList{}, err
+	}
+	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, Status: nullable(f.Status),
+		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {
-		return nil, err
+		return FolioList{}, err
 	}
-	out := make([]FolioSummary, len(rows))
+	out := FolioList{}
+	if len(rows) > limit {
+		last := rows[limit-1]
+		pos := listsort.Position{ID: last.ID}
+		switch order.Key {
+		case "folio_number":
+			pos.Value = &last.FolioNumber
+		case "status":
+			pos.Value = &last.Status
+		case "balance":
+			pos.Value = listsort.NumValue(&last.Balance)
+		default: // the default order: open first, then the larger balance first, as one number (see the query)
+			rank := decimal.Zero
+			if last.Status != "OPEN" {
+				rank = decimal.RequireFromString("1000000000000000")
+			}
+			v := rank.Sub(last.Balance)
+			pos.Value = listsort.NumValue(&v)
+		}
+		out.Next = &pos
+		rows = rows[:limit]
+	}
+	out.Data = make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
-			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Debit.Sub(r.Credit), decimals)}
+		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
+			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Balance, decimals)}
 	}
 	return out, nil
 }

@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/rooms/roomstest"
 )
 
 // Audit F-09 (Architecture 18 test gaps): billing instructions racing the lifecycle of the stay they route.
@@ -238,6 +239,10 @@ func TestInstructionsWaitingForTheStayLockSeeTheStayLeave(t *testing.T) {
 	s := inHouseReadyToLeave(t)
 	company := s.newCompany(t, "ACME")
 	ctx := context.Background()
+	// The fixture paid what the check-out said is owed, but that check-out was rolled back with the night it had posted: the night is posted here (as the committed check-out leaves it), so the folio
+	// is paid in full, balance zero, and what the transaction below does is what the application can do: close a folio that owes nothing.
+	_, err := s.Charges.PostManual(s.admin, s.propID, roomstest.BD, nil)
+	must(t, err)
 	tx, err := s.Pool.Begin(ctx)
 	must(t, err)
 	defer tx.Rollback(ctx) //nolint:errcheck

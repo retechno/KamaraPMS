@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FilterBar from '@/components/app/FilterBar.vue'
 import { usePagedList } from '@/composables/usePagedList'
+import { useServerSort } from '@/composables/useServerSort'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Search, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
@@ -15,7 +16,6 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
-import { statusText } from '@/utils/status'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -29,17 +29,20 @@ const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1))
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 
+// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the open folios first, the largest balance first.
+const { sort, params: sortParams, setSort } = useServerSort(['folio_number', 'balance', 'status'])
+
 const columns = computed<Column<FolioSummary>[]>(() => [
-  { key: 'folio_number', label: t('folios.folio'), sortable: true, filter: 'text' as const, card: 'primary' as const },
-  { key: 'reservation_id', label: t('folios.reservation'), sortable: true, filter: 'text' as const, card: 'secondary' as const },
-  { key: 'status', label: t('folios.status'), sortable: true, filter: 'select' as const, filterValue: (r: FolioSummary) => statusText(r.status), card: 'badge' as const },
+  { key: 'folio_number', label: t('folios.folio'), sortable: true, card: 'primary' as const },
+  { key: 'reservation_id', label: t('folios.reservation'), card: 'secondary' as const },
+  { key: 'status', label: t('folios.status'), sortable: true, card: 'badge' as const },
   { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'balance' as const, card: 'money' as const },
 ])
 
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
 const list = usePagedList<FolioSummary>(async (cursor) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', {
-    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined } },
+    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, ...sortParams.value } },
   })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
@@ -54,6 +57,12 @@ async function load(): Promise<void> {
   if (property.currentId === null || !canRead.value) return
   await list.reload()
 }
+
+// Another order reads the list again from its first page (a cursor belongs to an order); the address already holds it.
+watch(sort, () => {
+  list.reset()
+  void load()
+})
 
 watch(() => property.currentId, () => {
   list.reset()
@@ -98,11 +107,14 @@ watch(() => property.currentId, () => {
       :loading="!searched"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      manual
+      :sort="sort"
       cards
       :row-to="(f) => `/folios/${f.id}`"
       :row-test-id="(f) => `folio-${f.folio_number}`"
       :caption="t('folios.title')"
       @load-more="list.loadMore()"
+      @sort-change="setSort"
     >
       <template #cell-folio_number="{ row }"><RouterLink :to="`/folios/${row.id}`">{{ row.folio_number }}</RouterLink></template>
       <template #cell-reservation_id="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink></template>

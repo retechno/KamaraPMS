@@ -151,9 +151,9 @@ func TestReservationsJoinTheGroup(t *testing.T) {
 	}
 
 	// list filters
-	byGroup, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{GroupID: &g.ID}, 0, 10)
+	byGroup, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{GroupID: &g.ID}, 10)
 	must(t, err)
-	byCompany, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{CompanyID: &other.ID}, 0, 10)
+	byCompany, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{CompanyID: &other.ID}, 10)
 	must(t, err)
 	if len(byGroup) != 2 || byGroup[0].GroupCode != "CONF" || byGroup[0].CompanyName != "Acme" || len(byCompany) != 1 || byCompany[0].ID != solo.ID {
 		t.Fatalf("lists: %+v / %+v", byGroup, byCompany)

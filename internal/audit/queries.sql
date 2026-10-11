@@ -31,3 +31,22 @@ WHERE a.tenant_id = @tenant_id
   AND (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigint)
 ORDER BY a.id DESC
 LIMIT @row_limit;
+
+-- The same, oldest first: the order is by id (ids grow with time), so the keyset is the id and the position is the id after which the page goes on.
+-- name: SearchAuditLogsAsc :many
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+       a.old_data, a.new_data, a.request_id, a.ip_address
+FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
+WHERE a.tenant_id = @tenant_id
+  AND (CASE WHEN sqlc.narg(property_id)::bigint IS NULL THEN a.property_id IS NULL ELSE a.property_id = sqlc.narg(property_id)::bigint END)
+  AND (sqlc.narg(entity_type)::text IS NULL OR a.entity_type = sqlc.narg(entity_type)::text)
+  AND (sqlc.narg(entity_id)::bigint IS NULL OR a.entity_id = sqlc.narg(entity_id)::bigint)
+  AND (sqlc.narg(user_id)::bigint IS NULL OR a.user_id = sqlc.narg(user_id)::bigint)
+  AND (sqlc.narg(action)::text IS NULL OR a.action = sqlc.narg(action)::text)
+  AND (sqlc.narg(from_date)::date IS NULL OR a.business_date >= sqlc.narg(from_date)::date)
+  AND (sqlc.narg(to_date)::date IS NULL OR a.business_date <= sqlc.narg(to_date)::date)
+  -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
+  AND (sqlc.narg(label_like)::text IS NULL OR a.entity_label ILIKE sqlc.narg(label_like)::text ESCAPE '\')
+  AND (sqlc.narg(after_id)::bigint IS NULL OR a.id > sqlc.narg(after_id)::bigint)
+ORDER BY a.id ASC
+LIMIT @row_limit;
