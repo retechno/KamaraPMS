@@ -125,9 +125,19 @@ func (s *Service) Search(ctx context.Context, q string, propertyID *int64, order
 		value *string // the sort value of the row, nil when NULL
 	}
 	var hits []hit
-	if order.Key == "" || (order.Key == "name" && !order.Desc) {
-		// name A-Z: the index serves it
-		rows, err := s.q(ctx).SearchGuests(ctx, guestsdb.SearchGuestsParams{TenantID: p.TenantID, AllAccess: all, PropertyIds: ids, Tokens: tokens, AfterID: after.ID, AfterName: after.Text, RowLimit: rowLimit(limit + 1)})
+	if order.Key == "" || order.Key == "name" {
+		// by the name that is shown, A-Z or Z-A: the index serves both (backwards for Z-A)
+		var rows []guestsdb.SearchGuestsRow
+		var err error
+		if order.Desc {
+			var desc []guestsdb.SearchGuestsDescRow
+			desc, err = s.q(ctx).SearchGuestsDesc(ctx, guestsdb.SearchGuestsDescParams{TenantID: p.TenantID, AllAccess: all, PropertyIds: ids, Tokens: tokens, AfterID: after.ID, AfterName: after.Text, RowLimit: rowLimit(limit + 1)})
+			for _, r := range desc {
+				rows = append(rows, guestsdb.SearchGuestsRow(r))
+			}
+		} else {
+			rows, err = s.q(ctx).SearchGuests(ctx, guestsdb.SearchGuestsParams{TenantID: p.TenantID, AllAccess: all, PropertyIds: ids, Tokens: tokens, AfterID: after.ID, AfterName: after.Text, RowLimit: rowLimit(limit + 1)})
+		}
 		if err != nil {
 			return SearchResult{}, err
 		}

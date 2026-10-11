@@ -63,11 +63,11 @@ WHERE g.tenant_id = @tenant_id
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )
@@ -78,8 +78,32 @@ WHERE g.tenant_id = @tenant_id
 ORDER BY (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id
 LIMIT @row_limit;
 
+-- The same, Z-A: the index is read backwards.
+-- name: SearchGuestsDesc :many
+SELECT sqlc.embed(g), (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
+FROM guests g
+WHERE g.tenant_id = @tenant_id
+  AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
+  AND NOT EXISTS (
+      SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
+      WHERE NOT (
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
+          OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
+              AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
+      )
+  )
+  AND (sqlc.narg(after_id)::bigint IS NULL
+       OR ((lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id)
+          < (sqlc.narg(after_name)::text COLLATE "und-x-icu", sqlc.narg(after_id)::bigint))
+ORDER BY (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu") DESC, g.id DESC
+LIMIT @row_limit;
+
 -- The same guests in another order: by name (the other way), code or nationality, either way, NULL last (a guest without a nationality). One query for every order, the key and the direction
--- being parameters, so it cannot use an index; the default (name A-Z) has the query above. The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
+-- being parameters, so it cannot use an index; name A-Z and Z-A have the queries above (the index serves them). The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
 -- name: SearchGuestsOrdered :many
 SELECT sqlc.embed(g), (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
 FROM guests g
@@ -95,11 +119,11 @@ WHERE g.tenant_id = @tenant_id
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )

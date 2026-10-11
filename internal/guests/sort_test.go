@@ -233,3 +233,16 @@ func TestGuestCursorBelongsToItsOrder(t *testing.T) {
 		}
 	}
 }
+
+// A percent sign or an underscore in the search is the character itself, found as typed (the pattern of the search escapes them), and not a wildcard.
+func TestGuestSearchFindsALiteralPercentAndUnderscore(t *testing.T) {
+	f := newFixture(t)
+	f.guest(t, f.admin, f.bali, "", "50%Promo")
+	f.guest(t, f.admin, f.bali, "", "Ad_Hoc")
+	f.guest(t, f.admin, f.bali, "", "Adhoc")
+	for q, want := range map[string]string{"50%": " 50%Promo", "ad_": " Ad_Hoc", "ad_h": " Ad_Hoc", "5%": ""} {
+		if got := names(f.search(t, f.admin, q, nil)); got != want {
+			t.Errorf("search %q = %q, want %q", q, got, want)
+		}
+	}
+}

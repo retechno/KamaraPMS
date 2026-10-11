@@ -1733,84 +1733,104 @@ func (q *Queries) ListTapeSegments(ctx context.Context, arg ListTapeSegmentsPara
 
 const searchReservations = `-- name: SearchReservations :many
 SELECT r.id, r.tenant_id, r.property_id, r.confirmation_number, r.guest_id, r.reservation_date, r.source, r.market, r.status, r.special_request, r.remarks, r.confirmed_at, r.confirmed_by, r.cancelled_at, r.cancelled_by, r.cancellation_reason, r.version, r.created_at, r.created_by, r.updated_at, r.updated_by, r.idempotency_key, r.idempotency_hash, r.company_id, r.booking_group_id,
-       agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count, agg.display_status::text AS display_status,
-       g.first_name AS guest_first_name, g.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code,
-       (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_text, coalesce(k.sk_num, 0)::numeric AS sort_num,
-       coalesce(k.sk_date, '1970-01-01'::date)::date AS sort_date
-FROM reservations r
-CROSS JOIN LATERAL (
-    SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
-           COALESCE(max(l.departure_date) FILTER (WHERE l.status <> 'CANCELLED'), max(l.departure_date)) AS departure_date,
-           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count,
-           COALESCE(min(n.amount) FILTER (WHERE l.status <> 'CANCELLED'), min(n.amount)) AS rate,
-           CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
-                WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
-                WHEN count(*) FILTER (WHERE l.status = 'CHECKED_IN') > 0 THEN 'IN_HOUSE'
-                WHEN count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) > 0 THEN 'CONFIRMED'
-                WHEN count(*) FILTER (WHERE l.status = 'COMPLETED') > 0 THEN 'CHECKED_OUT'
-                WHEN count(*) FILTER (WHERE l.status = 'NO_SHOW') > 0 THEN 'NO_SHOW'
-                ELSE 'CANCELLED' END AS display_status
-    FROM reservation_rooms l
-    LEFT JOIN reservation_room_rates n ON n.property_id = l.property_id AND n.reservation_room_id = l.id AND n.stay_date = l.arrival_date
-    WHERE l.reservation_id = r.id
-) agg
-LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
+       p.arrival_date::date AS arrival_date, p.departure_date::date AS departure_date, p.room_count::int AS room_count, p.display_status::text AS display_status,
+       gu.first_name AS guest_first_name, gu.last_name AS guest_last_name, co.name AS company_name, bg.code AS group_code,
+       p.sort_null::boolean AS sort_null, p.sort_text::text AS sort_text, p.sort_num::numeric AS sort_num, p.sort_date::date AS sort_date
+FROM (
+    SELECT r.id, agg.arrival_date, agg.departure_date, coalesce(agg.room_count, 0) AS room_count, d.display_status,
+           (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL) AS sort_null, coalesce(k.sk_text, '') AS sort_text, coalesce(k.sk_num, 0) AS sort_num,
+           coalesce(k.sk_date, '1970-01-01'::date) AS sort_date, k.sk_text, k.sk_num, k.sk_date
+    FROM reservations r
+    LEFT JOIN (
+        -- the rooms of every reservation of the property in one pass (a hash join with the reservations), not a probe of the rooms for each reservation: the list is sorted by what is derived from them
+        SELECT l.reservation_id,
+               COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
+               COALESCE(max(l.departure_date) FILTER (WHERE l.status <> 'CANCELLED'), max(l.departure_date)) AS departure_date,
+               count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count,
+               COALESCE(min(n.amount) FILTER (WHERE l.status <> 'CANCELLED'), min(n.amount)) AS rate,
+               count(*) FILTER (WHERE l.status = 'CHECKED_IN') AS n_checked_in,
+               count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) AS n_waiting,
+               count(*) FILTER (WHERE l.status = 'COMPLETED') AS n_completed,
+               count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show
+        FROM reservation_rooms l
+        LEFT JOIN reservation_room_rates n ON n.property_id = l.property_id AND n.reservation_room_id = l.id AND n.stay_date = l.arrival_date
+        WHERE l.tenant_id = $1 AND l.property_id = $2
+        GROUP BY l.reservation_id
+    ) agg ON agg.reservation_id = r.id
+    CROSS JOIN LATERAL (
+        SELECT CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
+                    WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
+                    WHEN coalesce(agg.n_checked_in, 0) > 0 THEN 'IN_HOUSE'
+                    WHEN coalesce(agg.n_waiting, 0) > 0 THEN 'CONFIRMED'
+                    WHEN coalesce(agg.n_completed, 0) > 0 THEN 'CHECKED_OUT'
+                    WHEN coalesce(agg.n_no_show, 0) > 0 THEN 'NO_SHOW'
+                    ELSE 'CANCELLED' END AS display_status
+    ) d
+    LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
+    CROSS JOIN LATERAL (
+        SELECT (CASE $3::text
+                    WHEN '' THEN (CASE WHEN agg.arrival_date >= $4::date THEN '0' || lpad((agg.arrival_date - $4::date)::text, 7, '0')
+                                       ELSE '1' || lpad(($4::date - agg.arrival_date)::text, 7, '0') END || '|' || r.confirmation_number) COLLATE "und-x-icu"
+                    WHEN 'confirmation_number' THEN r.confirmation_number::text COLLATE "und-x-icu"
+                    WHEN 'guest_name' THEN (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")
+                    WHEN 'status' THEN d.display_status::text COLLATE "und-x-icu"
+                END) AS sk_text,
+               (CASE $3::text WHEN 'rate' THEN agg.rate END) AS sk_num,
+               (CASE $3::text WHEN 'arrival_date' THEN agg.arrival_date END) AS sk_date
+    ) k
+    WHERE r.tenant_id = $1 AND r.property_id = $2
+      AND ($5::bigint IS NULL OR r.company_id = $5::bigint)
+      AND ($6::bigint IS NULL OR r.booking_group_id = $6::bigint)
+      AND ($7::text IS NULL OR r.status = $7::text)
+      AND ($8::text IS NULL OR d.display_status = $8::text)
+      AND ($9::date IS NULL OR agg.arrival_date >= $9::date)
+      AND ($10::date IS NULL OR agg.arrival_date <= $10::date)
+      AND ($11::date IS NULL OR agg.departure_date >= $11::date)
+      AND ($12::date IS NULL OR agg.departure_date <= $12::date)
+      AND ($13::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.room_type_id = $13::bigint))
+      AND ($14::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.rate_plan_id = $14::bigint))
+      AND ($15::text IS NULL OR r.confirmation_number ILIKE '%' || $15::text || '%'
+           OR g.last_name ILIKE '%' || $15::text || '%' OR g.first_name ILIKE '%' || $15::text || '%'
+           OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $15::text || '%'
+           OR EXISTS (SELECT 1 FROM reservation_rooms x JOIN rooms rm ON rm.property_id = x.property_id AND rm.id = x.room_id
+                      WHERE x.reservation_id = r.id AND rm.room_number ILIKE '%' || $15::text || '%'))
+      AND ($16::bigint IS NULL
+           OR CASE WHEN NOT $17::boolean THEN
+                   CASE WHEN $18::boolean THEN (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL AND r.id > $16::bigint)
+                        ELSE ((k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL)
+                              OR k.sk_text > $19::text COLLATE "und-x-icu" OR k.sk_num > $20::numeric OR k.sk_date > $21::date
+                              OR ((k.sk_text = $19::text COLLATE "und-x-icu" OR k.sk_num = $20::numeric OR k.sk_date = $21::date)
+                                  AND r.id > $16::bigint)) END
+               ELSE
+                   CASE WHEN $18::boolean THEN (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL AND r.id < $16::bigint)
+                        ELSE ((k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL)
+                              OR k.sk_text < $19::text COLLATE "und-x-icu" OR k.sk_num < $20::numeric OR k.sk_date < $21::date
+                              OR ((k.sk_text = $19::text COLLATE "und-x-icu" OR k.sk_num = $20::numeric OR k.sk_date = $21::date)
+                                  AND r.id < $16::bigint)) END
+               END)
+    ORDER BY (CASE WHEN NOT $17::boolean THEN k.sk_text END) ASC NULLS LAST, (CASE WHEN NOT $17::boolean THEN k.sk_num END) ASC NULLS LAST,
+             (CASE WHEN NOT $17::boolean THEN k.sk_date END) ASC NULLS LAST,
+             (CASE WHEN $17::boolean THEN k.sk_text END) DESC NULLS LAST, (CASE WHEN $17::boolean THEN k.sk_num END) DESC NULLS LAST,
+             (CASE WHEN $17::boolean THEN k.sk_date END) DESC NULLS LAST,
+             (CASE WHEN NOT $17::boolean THEN r.id END) ASC, (CASE WHEN $17::boolean THEN r.id END) DESC
+    LIMIT $22
+) p
+JOIN reservations r ON r.id = p.id
+LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id
 LEFT JOIN companies co ON co.property_id = r.property_id AND co.id = r.company_id
 LEFT JOIN booking_groups bg ON bg.property_id = r.property_id AND bg.id = r.booking_group_id
-CROSS JOIN LATERAL (
-    SELECT (CASE $1::text
-                WHEN '' THEN (CASE WHEN agg.arrival_date >= $2::date THEN '0' || lpad((agg.arrival_date - $2::date)::text, 7, '0')
-                                   ELSE '1' || lpad(($2::date - agg.arrival_date)::text, 7, '0') END || '|' || r.confirmation_number) COLLATE "und-x-icu"
-                WHEN 'confirmation_number' THEN r.confirmation_number::text COLLATE "und-x-icu"
-                WHEN 'guest_name' THEN (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")
-                WHEN 'status' THEN agg.display_status::text COLLATE "und-x-icu"
-            END) AS sk_text,
-           (CASE $1::text WHEN 'rate' THEN agg.rate END) AS sk_num,
-           (CASE $1::text WHEN 'arrival_date' THEN agg.arrival_date END) AS sk_date
-) k
-WHERE r.tenant_id = $3 AND r.property_id = $4
-  AND ($5::bigint IS NULL OR r.company_id = $5::bigint)
-  AND ($6::bigint IS NULL OR r.booking_group_id = $6::bigint)
-  AND ($7::text IS NULL OR r.status = $7::text)
-  AND ($8::text IS NULL OR agg.display_status = $8::text)
-  AND ($9::date IS NULL OR agg.arrival_date >= $9::date)
-  AND ($10::date IS NULL OR agg.arrival_date <= $10::date)
-  AND ($11::date IS NULL OR agg.departure_date >= $11::date)
-  AND ($12::date IS NULL OR agg.departure_date <= $12::date)
-  AND ($13::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.room_type_id = $13::bigint))
-  AND ($14::bigint IS NULL OR EXISTS (SELECT 1 FROM reservation_rooms x WHERE x.reservation_id = r.id AND x.rate_plan_id = $14::bigint))
-  AND ($15::text IS NULL OR r.confirmation_number ILIKE '%' || $15::text || '%'
-       OR g.last_name ILIKE '%' || $15::text || '%' OR g.first_name ILIKE '%' || $15::text || '%'
-       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $15::text || '%'
-       OR EXISTS (SELECT 1 FROM reservation_rooms x JOIN rooms rm ON rm.property_id = x.property_id AND rm.id = x.room_id
-                  WHERE x.reservation_id = r.id AND rm.room_number ILIKE '%' || $15::text || '%'))
-  AND ($16::bigint IS NULL
-       OR CASE WHEN NOT $17::boolean THEN
-               CASE WHEN $18::boolean THEN (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL AND r.id > $16::bigint)
-                    ELSE ((k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL)
-                          OR k.sk_text > $19::text COLLATE "und-x-icu" OR k.sk_num > $20::numeric OR k.sk_date > $21::date
-                          OR ((k.sk_text = $19::text COLLATE "und-x-icu" OR k.sk_num = $20::numeric OR k.sk_date = $21::date)
-                              AND r.id > $16::bigint)) END
-           ELSE
-               CASE WHEN $18::boolean THEN (k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL AND r.id < $16::bigint)
-                    ELSE ((k.sk_text IS NULL AND k.sk_num IS NULL AND k.sk_date IS NULL)
-                          OR k.sk_text < $19::text COLLATE "und-x-icu" OR k.sk_num < $20::numeric OR k.sk_date < $21::date
-                          OR ((k.sk_text = $19::text COLLATE "und-x-icu" OR k.sk_num = $20::numeric OR k.sk_date = $21::date)
-                              AND r.id < $16::bigint)) END
-           END)
-ORDER BY (CASE WHEN NOT $17::boolean THEN k.sk_text END) ASC NULLS LAST, (CASE WHEN NOT $17::boolean THEN k.sk_num END) ASC NULLS LAST,
-         (CASE WHEN NOT $17::boolean THEN k.sk_date END) ASC NULLS LAST,
-         (CASE WHEN $17::boolean THEN k.sk_text END) DESC NULLS LAST, (CASE WHEN $17::boolean THEN k.sk_num END) DESC NULLS LAST,
-         (CASE WHEN $17::boolean THEN k.sk_date END) DESC NULLS LAST,
-         (CASE WHEN NOT $17::boolean THEN r.id END) ASC, (CASE WHEN $17::boolean THEN r.id END) DESC
-LIMIT $22
+ORDER BY (CASE WHEN NOT $17::boolean THEN p.sk_text END) ASC NULLS LAST, (CASE WHEN NOT $17::boolean THEN p.sk_num END) ASC NULLS LAST,
+         (CASE WHEN NOT $17::boolean THEN p.sk_date END) ASC NULLS LAST,
+         (CASE WHEN $17::boolean THEN p.sk_text END) DESC NULLS LAST, (CASE WHEN $17::boolean THEN p.sk_num END) DESC NULLS LAST,
+         (CASE WHEN $17::boolean THEN p.sk_date END) DESC NULLS LAST,
+         (CASE WHEN NOT $17::boolean THEN p.id END) ASC, (CASE WHEN $17::boolean THEN p.id END) DESC
 `
 
 type SearchReservationsParams struct {
-	SortKey        string
-	RefDate        civil.Date
 	TenantID       int64
 	PropertyID     int64
+	SortKey        string
+	RefDate        civil.Date
 	CompanyID      *int64
 	BookingGroupID *int64
 	Status         *string
@@ -1879,12 +1899,15 @@ type SearchReservationsRow struct {
 // first, then the arrivals before it, the most recent first; the confirmation number breaks a tie. That is one text key: 0 or 1 (on or after the date, or before it), the distance in days to
 // seven digits, a bar and the number. One query for every order, the key and the direction being parameters (the arrival, the rate and the status are derived from the rooms, so no index could
 // serve them anyway). The page goes on after (the sort value, id): after_null says that the value of the last row was NULL; the id breaks a tie in the direction of the order.
+//
+// Two steps, for the cost: the inner query finds the page on narrow rows (the id and what the order is made of), the outer one reads the wide rows of those ids only (and the guest, the company,
+// the group). Measured on 75 000 reservations: twice as fast as one query that carries the wide rows through every join.
 func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservationsParams) ([]SearchReservationsRow, error) {
 	rows, err := q.db.Query(ctx, searchReservations,
-		arg.SortKey,
-		arg.RefDate,
 		arg.TenantID,
 		arg.PropertyID,
+		arg.SortKey,
+		arg.RefDate,
 		arg.CompanyID,
 		arg.BookingGroupID,
 		arg.Status,

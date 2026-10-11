@@ -320,3 +320,4 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
 
 Earlier revisions are in [archive/](archive/).
 - **Reservation statuses on the screen** (`22-reservation-ui-status.md`): how `display_status` is named (Reserved, Checked in), why there is no Void, and that a draft holds no inventory. The list answers every filter (status, dates, type, plan, company, room) from the database and carries the rooms, the booked price and the deposit of each row.
+- **The order of the paged lists** (`23-list-sort.md`; ui-uplift 2.4b; migration 00067; `internal/platform/listsort`): `sort` and `order` on the lists of reservations, folios, payments, guests and the audit trail; a cursor bound to its order; the balance of a closed folio is not read; guest names in the ICU collation.

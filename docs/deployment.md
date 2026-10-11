@@ -84,6 +84,8 @@ The stack starts PostgreSQL with the volume `pms-db`. To use a database you run 
 
 The application connects as that one user. It needs no superuser. The migrations install two extensions, `btree_gist` (migration 00001: an exclusion constraint that combines an equality with a date range overlap) and `pg_trgm` (migration 00066: the search of the audit trail by a part of a number). Both are *trusted* extensions since PostgreSQL 13, so the owner of the database may create them (`CREATE EXTENSION` needs the `CREATE` privilege on the database, nothing more). They come with the standard PostgreSQL packages and the official image (`contrib`); a managed service that does not allow them stops the migration with a clear error.
 
+PostgreSQL must be built with **ICU** (the official image is; so is every managed service): migration 00067 creates an index in the ICU collation `und-x-icu`, with which the list of guests is put in alphabetical order (an accent beside its letter, a capital beside a small one), and stops with a clear message if the server has none. `scripts/db-test.sh` checks it too. When you move the database to a server with another version of ICU (a new major version of the image, another operating system), rebuild the index once, because ICU may have changed the order of some characters: `REINDEX INDEX guests_display_name_idx;`. The connections run with `jit = off` (set by the application), so there is nothing to tune for it.
+
 ## 5. Migration
 
 ```text

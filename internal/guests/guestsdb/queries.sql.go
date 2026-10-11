@@ -447,11 +447,11 @@ WHERE g.tenant_id = $1
   AND NOT EXISTS (
       SELECT 1 FROM unnest($4::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )
@@ -532,6 +532,97 @@ func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]S
 	return items, nil
 }
 
+const searchGuestsDesc = `-- name: SearchGuestsDesc :many
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
+FROM guests g
+WHERE g.tenant_id = $1
+  AND ($2::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $3::bigint[]))
+  AND NOT EXISTS (
+      SELECT 1 FROM unnest($4::text[]) AS t(tok)
+      WHERE NOT (
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
+          OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
+              AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
+      )
+  )
+  AND ($5::bigint IS NULL
+       OR ((lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id)
+          < ($6::text COLLATE "und-x-icu", $5::bigint))
+ORDER BY (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu") DESC, g.id DESC
+LIMIT $7
+`
+
+type SearchGuestsDescParams struct {
+	TenantID    int64
+	AllAccess   bool
+	PropertyIds []int64
+	Tokens      []string
+	AfterID     *int64
+	AfterName   *string
+	RowLimit    int32
+}
+
+type SearchGuestsDescRow struct {
+	Guest    Guest
+	SortName string
+}
+
+// The same, Z-A: the index is read backwards.
+func (q *Queries) SearchGuestsDesc(ctx context.Context, arg SearchGuestsDescParams) ([]SearchGuestsDescRow, error) {
+	rows, err := q.db.Query(ctx, searchGuestsDesc,
+		arg.TenantID,
+		arg.AllAccess,
+		arg.PropertyIds,
+		arg.Tokens,
+		arg.AfterID,
+		arg.AfterName,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchGuestsDescRow{}
+	for rows.Next() {
+		var i SearchGuestsDescRow
+		if err := rows.Scan(
+			&i.Guest.ID,
+			&i.Guest.TenantID,
+			&i.Guest.Code,
+			&i.Guest.OriginPropertyID,
+			&i.Guest.FirstName,
+			&i.Guest.LastName,
+			&i.Guest.Email,
+			&i.Guest.Phone,
+			&i.Guest.Nationality,
+			&i.Guest.CountryCode,
+			&i.Guest.DateOfBirth,
+			&i.Guest.Gender,
+			&i.Guest.IDType,
+			&i.Guest.IDNumber,
+			&i.Guest.Address,
+			&i.Guest.City,
+			&i.Guest.Notes,
+			&i.Guest.CreatedAt,
+			&i.Guest.CreatedBy,
+			&i.Guest.UpdatedAt,
+			&i.Guest.UpdatedBy,
+			&i.SortName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchGuestsOrdered = `-- name: SearchGuestsOrdered :many
 SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
 FROM guests g
@@ -547,11 +638,11 @@ WHERE g.tenant_id = $2
   AND NOT EXISTS (
       SELECT 1 FROM unnest($5::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )
@@ -593,7 +684,7 @@ type SearchGuestsOrderedRow struct {
 }
 
 // The same guests in another order: by name (the other way), code or nationality, either way, NULL last (a guest without a nationality). One query for every order, the key and the direction
-// being parameters, so it cannot use an index; the default (name A-Z) has the query above. The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
+// being parameters, so it cannot use an index; name A-Z and Z-A have the queries above (the index serves them). The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
 func (q *Queries) SearchGuestsOrdered(ctx context.Context, arg SearchGuestsOrderedParams) ([]SearchGuestsOrderedRow, error) {
 	rows, err := q.db.Query(ctx, searchGuestsOrdered,
 		arg.SortKey,
