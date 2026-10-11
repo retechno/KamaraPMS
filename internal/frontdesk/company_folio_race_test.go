@@ -263,6 +263,9 @@ func TestInstructionsWaitingForTheStayLockSeeTheStayLeave(t *testing.T) {
 		}
 	}
 	must(t, tx.Commit(ctx))
+	// the folios were closed by hand with their balance, which no way of the application does: opened again when the test ends, so the check that ends every database test holds
+	stayID := s.stay.Stay.ID
+	t.Cleanup(func() { _ = s.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE stay_id = $1`, stayID) })
 	select {
 	case err := <-done:
 		if c := appErrorOrNil(t, "set", err); c != "INSTRUCTION_LINE_CLOSED" && c != "" {

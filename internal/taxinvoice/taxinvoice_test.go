@@ -133,6 +133,8 @@ func (f *fx) issueCL(t *testing.T, id int64, key string) (taxinvoice.Invoice, er
 func (f *fx) closeFolio(t *testing.T, folio int64) {
 	t.Helper()
 	must(t, f.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, folio))
+	// closed by hand with its balance, which no way of the application does: the folio is opened again when the test ends, so the check that ends every database test holds
+	t.Cleanup(func() { _ = f.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, folio) })
 }
 
 func blockerCodes(t *testing.T, err error) []string {
