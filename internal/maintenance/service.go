@@ -177,8 +177,8 @@ func (s *Service) manager(ctx context.Context, propertyID int64) (auth.Principal
 	return p, s.authz.Require(ctx, propertyID, auth.PermMaintenanceManage)
 }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "maintenance_request", EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "maintenance_request", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func view(r maintenancedb.ListRequestsRow) Request {
@@ -344,7 +344,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "maintenance.reported", id, nil, map[string]any{
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "maintenance.reported", id, number, nil, map[string]any{
 			"request_number": number, "room_id": in.RoomID, "location": in.Location, "category": in.Category, "priority": in.Priority,
 		}))
 	})
@@ -380,7 +380,7 @@ func (s *Service) change(ctx context.Context, propertyID, id int64, perm auth.Pe
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, action, id, map[string]any{"status": cur.Status}, detail))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, action, id, cur.RequestNumber, map[string]any{"status": cur.Status}, detail))
 	})
 	if err != nil {
 		return Request{}, err
