@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/payables/payablesdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -346,7 +347,7 @@ func (s *Service) postCredit(ctx context.Context, p auth.Principal, propertyID i
 			}
 		}
 		*out = id
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_posted", "supplier_credit_note", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_posted", "supplier_credit_note", id, auditlabel.SupplierCreditNote(ctx, propertyID, id), nil,
 			map[string]any{"credit_number": number, "supplier": sup.Code, "bill": b.Number, "supplier_credit_number": num, "total": total.String(), "applied": applied.String(), "journal": jnum}))
 	})
 }
@@ -423,7 +424,7 @@ func (s *Service) ApplyCredit(ctx context.Context, propertyID, id int64, in Appl
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_applied", "supplier_credit_note", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_applied", "supplier_credit_note", id, auditlabel.SupplierCreditNote(ctx, propertyID, id), nil,
 			map[string]any{"credit_number": c.Number, "applied": sum.String(), "bills": len(in.Allocations)}))
 	})
 	if err != nil {
@@ -484,7 +485,7 @@ func (s *Service) VoidCreditNote(ctx context.Context, propertyID, id int64, in V
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_voided", "supplier_credit_note", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.credit_note_voided", "supplier_credit_note", id, auditlabel.SupplierCreditNote(ctx, propertyID, id),
 			map[string]any{"status": "POSTED"}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by, "credit_number": c.Number}))
 	})
 	if err != nil {
