@@ -52,6 +52,9 @@ const can = (permission: string) => pid.value !== null && auth.can(permission, p
 const checkIn = ref<Arrival | null>(null)
 const checkOut = ref<{ row: InHouseRow; detail: StayDetail | null; loading: boolean } | null>(null)
 // The list of free rooms of an arrival that has none is open (reservation.update): the page does not read again by itself under it either.
+// The rows of the arrivals and departures columns: one line in a wide column, two in a narrow one (a container query on the list, not the width of the screen).
+const ROW = 'flex flex-col gap-1.5 py-2.5 @[22rem]:flex-row @[22rem]:items-center @[22rem]:gap-3'
+const ACTIONS = 'flex flex-wrap items-center justify-end gap-2 @[22rem]:flex-nowrap @[22rem]:shrink-0'
 const picking = ref<number | null>(null)
 const today = useToday(() => checkIn.value !== null || checkOut.value !== null || picking.value !== null)
 const canAssign = (a: Arrival): boolean => can('reservation.update') && a.status === 'CONFIRMED' && !a.room_id
@@ -238,14 +241,14 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
     <div class="mb-4 grid gap-4 lg:grid-cols-3" data-testid="columns">
       <TodayCard v-if="today.canFront.value" test-id="col-arrivals" :title="t('today.arrivalsTitle')" :count="today.arrivals.value.loaded ? t('today.left', { n: arrivalsLeft.length }) : ''" to="/arrivals" :loaded="today.arrivals.value.loaded" :failed="today.arrivals.value.failed">
         <p v-if="!arrivalRows.length" class="m-0 text-sm text-muted-foreground" data-testid="col-arrivals-empty">{{ t('today.noArrivals') }}</p>
-        <ul v-else class="m-0 list-none divide-y divide-border p-0">
-          <li v-for="a in arrivalRows" :key="a.reservation_room_id" class="flex flex-col gap-1.5 py-2.5" :data-testid="`arrival-${a.reservation_room_id}`">
-            <!-- The name and the room on a line of their own, the actions on the next one (at the right): they do not crowd each other on a phone. -->
+        <!-- One line when the column is wide enough (the name and the room at the left, the actions at the right, level with the name), two when the COLUMN is narrow (a phone): the container, not the screen, decides. -->
+        <ul v-else class="@container m-0 list-none divide-y divide-border p-0" data-testid="arrival-list">
+          <li v-for="a in arrivalRows" :key="a.reservation_room_id" :class="ROW" :data-testid="`arrival-${a.reservation_room_id}`">
             <div class="min-w-0">
               <div class="truncate font-medium">{{ a.guest_name || a.confirmation_number }}</div>
               <div class="text-xs text-muted-foreground">{{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
             </div>
-            <div class="flex flex-wrap items-center justify-end gap-2" :data-testid="`arrival-actions-${a.reservation_room_id}`">
+            <div :class="ACTIONS" :data-testid="`arrival-actions-${a.reservation_room_id}`">
             <template v-for="chip in [arrivalChip(a)]" :key="chip.kind">
               <!-- "No room yet" is said by the button "Choose room" where there is one: the chip stays for who cannot assign. -->
               <Badge v-if="chip.kind === 'noRoom' && !canAssign(a)" variant="outline" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="noRoom">{{ t('today.noRoomYet') }}</Badge>
@@ -268,17 +271,19 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
 
       <TodayCard v-if="today.canFront.value" test-id="col-departures" :title="t('today.departuresTitle')" :count="today.departures.value.loaded ? t('today.left', { n: departuresLeft.length }) : ''" to="/departures" :loaded="today.departures.value.loaded" :failed="today.departures.value.failed">
         <p v-if="!departureRows.length" class="m-0 text-sm text-muted-foreground" data-testid="col-departures-empty">{{ t('today.noDepartures') }}</p>
-        <ul v-else class="m-0 list-none divide-y divide-border p-0">
-          <li v-for="d in departureRows" :key="d.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5" :data-testid="`departure-${d.id}`">
+        <ul v-else class="@container m-0 list-none divide-y divide-border p-0" data-testid="departure-list">
+          <li v-for="d in departureRows" :key="d.id" :class="ROW" :data-testid="`departure-${d.id}`">
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{{ d.guest.name }}</div>
               <div class="text-xs text-muted-foreground">{{ d.room.number }} · {{ d.room.room_type_code }}</div>
             </div>
+            <div :class="ACTIONS" :data-testid="`departure-actions-${d.id}`">
             <div :class="['text-right text-sm tabular-nums', owes(d) && 'font-medium text-warning-text']" :data-testid="`departure-balance-${d.id}`" :data-owes="owes(d)">
               {{ balanceText(d) }}
               <span v-if="d.balance.status !== 'NO_FOLIO'" :class="['block text-xs', owes(d) ? 'text-warning-text' : 'text-muted-foreground']">{{ owes(d) ? t('today.balanceDue') : t('today.balance') }}</span>
             </div>
             <Button v-if="can('frontdesk.checkout')" size="sm" :disabled="checkOut?.loading" :data-testid="`check-out-${d.id}`" @click="openCheckOut(d)">{{ t('frontDesk.inHouse.action.checkOut') }}</Button>
+            </div>
           </li>
         </ul>
       </TodayCard>
