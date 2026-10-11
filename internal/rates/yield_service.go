@@ -152,7 +152,7 @@ func (s *Service) CreateYieldRule(ctx context.Context, propertyID int64, in Yiel
 			return err
 		}
 		out = toYieldRule(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.created", "yield_rule", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.created", "yield_rule", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -199,7 +199,7 @@ func (s *Service) UpdateYieldRule(ctx context.Context, propertyID, id int64, in 
 			return err
 		}
 		out = toYieldRule(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.updated", "yield_rule", id, toYieldRule(before), out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.updated", "yield_rule", id, out.Code, toYieldRule(before), out))
 	})
 	return out, err
 }
@@ -223,7 +223,7 @@ func (s *Service) DeleteYieldRule(ctx context.Context, propertyID, id int64) err
 		if _, err := q.DeleteYieldRule(ctx, ratesdb.DeleteYieldRuleParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.deleted", "yield_rule", id, toYieldRule(before), nil))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "yield_rule.deleted", "yield_rule", id, before.Code, toYieldRule(before), nil))
 	})
 }
 

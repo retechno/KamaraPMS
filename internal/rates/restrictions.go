@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
@@ -299,7 +300,7 @@ func (s *Service) FillRestrictions(ctx context.Context, propertyID int64, in Fil
 			}
 		}
 		out.Dates = len(dates)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_restrictions.filled", "property", propertyID, nil, map[string]any{
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_restrictions.filled", "property", propertyID, auditlabel.Property(ctx, propertyID), nil, map[string]any{
 			"room_type_ids": in.RoomTypeIDs, "rate_plan_ids": in.RatePlanIDs, "from": in.From, "to": in.To, "weekdays": in.Weekdays,
 			"set": map[string]any{
 				attrStopSell: set.StopSell, attrClosedToArrival: set.ClosedToArrival, attrClosedToDeparture: set.ClosedToDeparture,
