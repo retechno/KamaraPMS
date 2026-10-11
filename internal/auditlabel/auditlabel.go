@@ -384,3 +384,16 @@ func Supplier(ctx context.Context, propertyID, id int64) string {
 	}
 	return v
 }
+
+// User is the e-mail of a user of the tenant: staff are named by it in the audit trail (a guest never is: see the code of the guest).
+func User(ctx context.Context, tenantID, id int64) string {
+	q, ok := queries(ctx)
+	if !ok {
+		return ""
+	}
+	v, err := q.UserEmail(ctx, auditlabeldb.UserEmailParams{TenantID: tenantID, ID: id})
+	if err != nil {
+		return ""
+	}
+	return v
+}

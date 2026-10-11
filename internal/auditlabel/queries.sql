@@ -89,3 +89,7 @@ SELECT name FROM bank_accounts WHERE property_id = @property_id AND id = @id;
 
 -- name: SupplierCode :one
 SELECT code FROM suppliers WHERE property_id = @property_id AND id = @id;
+
+-- A user of the tenant is named by the e-mail (staff, not a guest).
+-- name: UserEmail :one
+SELECT email FROM users WHERE tenant_id = @tenant_id AND id = @id;

@@ -467,3 +467,20 @@ func (q *Queries) TaxReturnNumber(ctx context.Context, arg TaxReturnNumberParams
 	err := row.Scan(&return_number)
 	return return_number, err
 }
+
+const userEmail = `-- name: UserEmail :one
+SELECT email FROM users WHERE tenant_id = $1 AND id = $2
+`
+
+type UserEmailParams struct {
+	TenantID int64
+	ID       int64
+}
+
+// A user of the tenant is named by the e-mail (staff, not a guest).
+func (q *Queries) UserEmail(ctx context.Context, arg UserEmailParams) (string, error) {
+	row := q.db.QueryRow(ctx, userEmail, arg.TenantID, arg.ID)
+	var email string
+	err := row.Scan(&email)
+	return email, err
+}
