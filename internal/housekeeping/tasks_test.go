@@ -402,3 +402,34 @@ func TestTaskTablesGuardTheirRows(t *testing.T) {
 		t.Fatal("one AUTO task per room, date and type")
 	}
 }
+
+// A task says whether a guest is due to arrive into its room on the day of the task: only a CONFIRMED line, assigned to the room, that arrives that day.
+func TestATaskKnowsThatAGuestArrivesToday(t *testing.T) {
+	f := newFixture(t)
+	arriving := f.Room(t, f.admin, f.propertyID, f.typeID, "301", housekeeping.Dirty)
+	tomorrow := f.Room(t, f.admin, f.propertyID, f.typeID, "302", housekeeping.Dirty)
+	cancelled := f.Room(t, f.admin, f.propertyID, f.typeID, "303", housekeeping.Dirty)
+	nobody := f.Room(t, f.admin, f.propertyID, f.typeID, "304", housekeeping.Dirty)
+	f.Line(t, f.tenantID, f.propertyID, f.typeID, arriving.ID, "2026-09-30", "2026-10-02", "CONFIRMED")
+	f.Line(t, f.tenantID, f.propertyID, f.typeID, tomorrow.ID, "2026-10-01", "2026-10-03", "CONFIRMED")
+	line := f.Line(t, f.tenantID, f.propertyID, f.typeID, cancelled.ID, "2026-09-30", "2026-10-02", "CONFIRMED")
+	if err := f.Exec(t, `UPDATE reservation_rooms SET status = 'CANCELLED', cancelled_at = now() WHERE id = $1`, line); err != nil {
+		t.Fatal(err)
+	}
+	_ = nobody
+
+	if _, err := f.HK.GenerateTasks(f.admin, f.propertyID); err != nil {
+		t.Fatal(err)
+	}
+	list, err := f.HK.Tasks(f.admin, f.propertyID, housekeeping.TaskFilter{})
+	if err != nil || len(list.Data) != 4 {
+		t.Fatalf("tasks: %d %v", len(list.Data), err)
+	}
+	got := map[string]bool{}
+	for _, task := range list.Data {
+		got[task.RoomNumber] = task.ArrivalToday
+	}
+	if want := map[string]bool{"301": true, "302": false, "303": false, "304": false}; len(got) != 4 || got["301"] != want["301"] || got["302"] || got["303"] || got["304"] {
+		t.Fatalf("arrival_today by room: %v", got)
+	}
+}

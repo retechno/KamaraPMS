@@ -12096,7 +12096,7 @@ components:
       enum: [CHECKOUT, STAYOVER, ARRIVAL, DIRTY, DEEP, OTHER]
     HousekeepingTask:
       type: object
-      required: [id, room_id, room_number, room_type_code, task_date, task_type, status, priority, source, assigned_to, started_at, completed_at, room_status, room_status_since, dnd, make_up_requested]
+      required: [id, room_id, room_number, room_type_code, task_date, task_type, status, priority, source, assigned_to, started_at, completed_at, room_status, room_status_since, dnd, make_up_requested, arrival_today]
       properties:
         id: { type: integer, format: int64 }
         room_id: { type: integer, format: int64 }
@@ -12118,6 +12118,7 @@ components:
         dnd: { type: boolean }
         make_up_requested: { type: boolean }
         flag_note: { type: string }
+        arrival_today: { type: boolean, description: A guest is due to arrive into the room on the day of the task (a confirmed line assigned to it), so the room is wanted ready. }
     HousekeepingWorkload:
       type: object
       required: [user_id, name, total, pending, in_progress, done, skipped]

@@ -11014,6 +11014,8 @@ export interface components {
             dnd: boolean;
             make_up_requested: boolean;
             flag_note?: string;
+            /** @description A guest is due to arrive into the room on the day of the task (a confirmed line assigned to it) */
+            arrival_today: boolean;
         };
         HousekeepingWorkload: {
             /**
