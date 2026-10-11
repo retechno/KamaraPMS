@@ -56,8 +56,8 @@ func (s *Service) actor(ctx context.Context, propertyID int64, perm auth.Permiss
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "booking_group", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "booking_group", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func toGroup(g groupsdb.BookingGroup, company *string, reservations, rooms int32) Group {
@@ -169,7 +169,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in Input) (Group
 		if out, err = s.load(ctx, p.TenantID, propertyID, row.ID); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "group.created", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "group.created", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -282,7 +282,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		if out, err = s.load(ctx, p.TenantID, propertyID, id); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "group.updated", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "group.updated", id, out.Code, before, out))
 	})
 	return out, err
 }
