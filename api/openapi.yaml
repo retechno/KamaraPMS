@@ -833,8 +833,12 @@ paths:
   /api/v1/guests:
     get:
       operationId: searchGuests
-      summary: Search guest profiles (guest.read), alphabetically
+      summary: Search guest profiles (guest.read), A-Z by the name that is shown by default
       description: |
+        The order is asked of the server: `sort` and `order`; without them the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), A-Z in the ICU
+        collation, so an accent stands beside its letter and a capital beside a small one. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise); NULL (a guest without a
+        nationality) sorts last either way.
+
         Free text; every space-separated token must match the start of the first name, last name, email,
         ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
         An empty `q` lists everything the caller may see.
@@ -849,12 +853,15 @@ paths:
         - { name: property_id, in: query, schema: { type: integer, format: int64 } }
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - { name: sort, in: query, schema: { type: string, enum: [name, code, nationality] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
           description: A page of guests.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GuestPage" }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }

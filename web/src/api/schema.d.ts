@@ -656,8 +656,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search guest profiles (guest.read), alphabetically
-         * @description Free text; every space-separated token must match the start of the first name, last name, email,
+         * Search guest profiles (guest.read), A-Z by the name that is shown by default
+         * @description The order is asked of the server: `sort` and `order`; without them the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), A-Z in the ICU
+         *     collation, so an accent stands beside its letter and a capital beside a small one. A cursor belongs to its sort and direction (400 `INVALID_CURSOR` otherwise); NULL (a guest without a
+         *     nationality) sorts last either way.
+         *
+         *     Free text; every space-separated token must match the start of the first name, last name, email,
          *     ID number or guest code, or appear inside the phone number (tokens with at least 4 digits).
          *     An empty `q` lists everything the caller may see.
          *
@@ -13960,6 +13964,10 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Opaque cursor from a previous page's next_cursor. */
                 cursor?: components["parameters"]["Cursor"];
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                sort?: "name" | "code" | "nationality";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path?: never;
@@ -13976,6 +13984,7 @@ export interface operations {
                     "application/json": components["schemas"]["GuestPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
