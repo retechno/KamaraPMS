@@ -1,9 +1,9 @@
 -- Billing configuration queries (sqlc): taxes, service charges, charge codes and their ordered rules.
 -- Every query is scoped by tenant_id and property_id.
 
--- Seeds the standard charge codes (idempotent). Returns how many were created.
+-- Seeds the standard charge codes, named in the language of the data of the new property (en or id; idempotent). Returns how many were created.
 -- name: SeedChargeCodes :one
-SELECT seed_charge_codes(@tenant_id::bigint, @property_id::bigint, sqlc.narg(actor_id)::bigint)::integer AS created;
+SELECT seed_charge_codes(@tenant_id::bigint, @property_id::bigint, sqlc.narg(actor_id)::bigint, @data_language::text)::integer AS created;
 
 -- ---------------------------------------------------------------- taxes
 

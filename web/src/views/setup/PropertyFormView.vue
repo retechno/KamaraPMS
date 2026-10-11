@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
-import { t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { addDays, formatBusinessDate, timeZones, todayIn } from '@/utils/dates'
 
@@ -46,6 +46,8 @@ const form = reactive({
   refund_methods: ['CASH'] as string[],
   status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
   opening_business_date: '',
+  // The language of the names the property starts with (chart of accounts, departments, charge codes): the language of the page, to begin with. Only when it is created.
+  data_language: (currentLocale() === 'id' ? 'id' : 'en') as 'en' | 'id',
 })
 
 let original: PropertyWithDay | null = null
@@ -136,6 +138,7 @@ async function submit(): Promise<void> {
         night_audit_marks_occupied_dirty: form.night_audit_marks_occupied_dirty,
         refund_methods: form.refund_methods as CreatePropertyRequest['refund_methods'],
         opening_business_date: form.opening_business_date,
+        data_language: form.data_language,
       }
       saved = (await api.POST('/api/v1/properties', { body })).data
     } else {
@@ -292,6 +295,20 @@ function changedFields(): PatchPropertyRequest {
       <CardContent>
         <FormField class="max-w-sm" :label="t('propertyForm.openingDate')" :hint="openingHint" :error="fieldError('opening_business_date')">
           <template #default="{ id, invalid }"><Input :id="id" v-model="form.opening_business_date" type="date" name="opening_business_date" :aria-invalid="invalid" /></template>
+        </FormField>
+      </CardContent>
+    </Card>
+
+    <Card v-if="isNew" class="mb-4" data-testid="data-language-card">
+      <CardHeader><CardTitle>{{ t('propertyForm.dataLanguage') }}</CardTitle></CardHeader>
+      <CardContent>
+        <FormField class="max-w-sm" :label="t('propertyForm.dataLanguageLabel')" :hint="t('propertyForm.dataLanguageHint')" :error="fieldError('data_language')">
+          <template #default="{ id, invalid }">
+            <NativeSelect :id="id" v-model="form.data_language" name="data_language" :aria-invalid="invalid">
+              <option value="id">{{ t('propertyForm.dataLanguageId') }}</option>
+              <option value="en">{{ t('propertyForm.dataLanguageEn') }}</option>
+            </NativeSelect>
+          </template>
         </FormField>
       </CardContent>
     </Card>

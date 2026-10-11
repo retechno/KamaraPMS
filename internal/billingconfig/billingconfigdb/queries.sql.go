@@ -888,20 +888,26 @@ func (q *Queries) LockTaxesForShare(ctx context.Context, arg LockTaxesForSharePa
 
 const seedChargeCodes = `-- name: SeedChargeCodes :one
 
-SELECT seed_charge_codes($1::bigint, $2::bigint, $3::bigint)::integer AS created
+SELECT seed_charge_codes($1::bigint, $2::bigint, $3::bigint, $4::text)::integer AS created
 `
 
 type SeedChargeCodesParams struct {
-	TenantID   int64
-	PropertyID int64
-	ActorID    *int64
+	TenantID     int64
+	PropertyID   int64
+	ActorID      *int64
+	DataLanguage string
 }
 
 // Billing configuration queries (sqlc): taxes, service charges, charge codes and their ordered rules.
 // Every query is scoped by tenant_id and property_id.
-// Seeds the standard charge codes (idempotent). Returns how many were created.
+// Seeds the standard charge codes, named in the language of the data of the new property (en or id; idempotent). Returns how many were created.
 func (q *Queries) SeedChargeCodes(ctx context.Context, arg SeedChargeCodesParams) (int32, error) {
-	row := q.db.QueryRow(ctx, seedChargeCodes, arg.TenantID, arg.PropertyID, arg.ActorID)
+	row := q.db.QueryRow(ctx, seedChargeCodes,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ActorID,
+		arg.DataLanguage,
+	)
 	var created int32
 	err := row.Scan(&created)
 	return created, err

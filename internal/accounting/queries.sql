@@ -1,7 +1,7 @@
 -- Accounting (sqlc): chart of accounts, the system account map and journals. Every query is scoped by tenant_id and property_id.
 
 -- name: SeedChart :one
-SELECT seed_chart_of_accounts(@tenant_id, @property_id, sqlc.narg(actor_id), @start_date::date)::int AS created;
+SELECT seed_chart_of_accounts(@tenant_id, @property_id, sqlc.narg(actor_id), @start_date::date, @data_language::text)::int AS created;
 
 -- name: GetSettings :one
 SELECT * FROM accounting_settings WHERE tenant_id = @tenant_id AND property_id = @property_id;

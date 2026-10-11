@@ -299,13 +299,13 @@ func (s *Service) Delete(ctx context.Context, propertyID, id int64) error {
 
 // SeedProperty gives a new property the standard departments (the hook of tenancy.CreateProperty), and the default department of its standard charge codes.
 func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) error {
-	n, err := s.q(ctx).SeedDepartments(ctx, departmentsdb.SeedDepartmentsParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID})
+	n, err := s.q(ctx).SeedDepartments(ctx, departmentsdb.SeedDepartmentsParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID, DataLanguage: in.DataLanguage})
 	if err != nil {
 		return err
 	}
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "department.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"departments": n},
+		Action: "department.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"departments": n, "data_language": in.DataLanguage},
 	})
 }

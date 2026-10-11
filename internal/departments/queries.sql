@@ -33,4 +33,4 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 DELETE FROM departments WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: SeedDepartments :one
-SELECT seed_departments(@tenant_id, @property_id, sqlc.narg(actor_id))::int AS created;
+SELECT seed_departments(@tenant_id, @property_id, sqlc.narg(actor_id), @data_language::text)::int AS created;

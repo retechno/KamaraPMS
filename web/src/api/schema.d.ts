@@ -6787,6 +6787,12 @@ export interface components {
             next_cursor?: string;
         };
         CreatePropertyRequest: {
+            /**
+             * @description The language of the names that the property starts with: the standard chart of accounts (199 accounts), the departments (8) and the charge codes (10), which are written in the language chosen here when the property is created. The codes, the structure of the chart and the system map are the same in both. The names are data that can be changed at any time. A property that exists is not changed. Another value is 422 `VALIDATION_FAILED` on this field.
+             * @default en
+             * @enum {string}
+             */
+            data_language: "en" | "id";
             code: string;
             name: string;
             address?: string;

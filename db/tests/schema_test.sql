@@ -2005,6 +2005,35 @@ BEGIN
 END $$;
 
 ------------------------------------------------------------------------------------------
+-- The language of the seeded data: the names of the chart of accounts, departments and charge codes exist in en and id, for exactly the same codes
+------------------------------------------------------------------------------------------
+DO $$
+DECLARE v_bad text;
+BEGIN
+    SELECT string_agg(f.fn || ': ' || f.n_en || ' en, ' || f.n_id || ' id, ' || f.n_diff || ' codes differ', '; ') INTO v_bad
+      FROM (
+        SELECT 'usali_chart_names' AS fn, (SELECT count(*) FROM usali_chart_names('en')) AS n_en, (SELECT count(*) FROM usali_chart_names('id')) AS n_id,
+               (SELECT count(*) FROM (SELECT code FROM usali_chart_names('en') EXCEPT SELECT code FROM usali_chart_names('id')) x) + (SELECT count(*) FROM (SELECT code FROM usali_chart_names('id') EXCEPT SELECT code FROM usali_chart_names('en')) y) AS n_diff
+        UNION ALL
+        SELECT 'department_names', (SELECT count(*) FROM department_names('en')), (SELECT count(*) FROM department_names('id')),
+               (SELECT count(*) FROM (SELECT code FROM department_names('en') EXCEPT SELECT code FROM department_names('id')) x) + (SELECT count(*) FROM (SELECT code FROM department_names('id') EXCEPT SELECT code FROM department_names('en')) y)
+        UNION ALL
+        SELECT 'charge_code_names', (SELECT count(*) FROM charge_code_names('en')), (SELECT count(*) FROM charge_code_names('id')),
+               (SELECT count(*) FROM (SELECT code FROM charge_code_names('en') EXCEPT SELECT code FROM charge_code_names('id')) x) + (SELECT count(*) FROM (SELECT code FROM charge_code_names('id') EXCEPT SELECT code FROM charge_code_names('en')) y)
+      ) f
+     WHERE f.n_en <> f.n_id OR f.n_diff <> 0 OR f.n_en = 0;
+    IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'FAIL the names of the seeded data differ between the languages: %', v_bad; END IF;
+    IF (SELECT count(*) FROM usali_chart_names('en')) <> (SELECT count(*) FROM usali_chart()) THEN RAISE EXCEPTION 'FAIL usali_chart_names(en) is not usali_chart()'; END IF;
+    BEGIN
+        PERFORM seed_language_check('fr');
+        RAISE EXCEPTION 'FAIL a language without names was accepted';
+    EXCEPTION WHEN sqlstate '22023' THEN NULL;
+    END;
+    INSERT INTO pms_test.results VALUES ('the names of the seeded data exist in en and id for the same codes', 'accepted');
+    RAISE NOTICE 'PASS  the names of the seeded data exist in en and id for the same codes';
+END $$;
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$

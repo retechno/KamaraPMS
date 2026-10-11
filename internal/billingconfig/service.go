@@ -73,14 +73,14 @@ func (s *Service) reader(ctx context.Context, propertyID int64) (auth.Principal,
 // SeedProperty creates the standard charge codes of a new property. It is registered as a property
 // creation hook and runs inside that transaction.
 func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) error {
-	created, err := s.q(ctx).SeedChargeCodes(ctx, billingconfigdb.SeedChargeCodesParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID})
+	created, err := s.q(ctx).SeedChargeCodes(ctx, billingconfigdb.SeedChargeCodesParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID, DataLanguage: in.DataLanguage})
 	if err != nil {
 		return err
 	}
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "charge_codes.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"created": created},
+		Action: "charge_codes.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"created": created, "data_language": in.DataLanguage},
 	})
 }
 

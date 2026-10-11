@@ -35,6 +35,16 @@ Satu istilah untuk satu konsep, dipakai di menu, judul halaman, tombol, dan pesa
 | Upgrade | Naik kelas |
 | Housekeeper | Petugas kebersihan |
 | Check-in / Check-out | Check-in / Check-out (dengan tanda hubung) |
+| Employee benefits | Imbalan kerja | PSAK 24. Akun "Utang imbalan kerja"; untuk beban tetap "Tunjangan karyawan". |
+| Withholding tax | PPh dipotong/dipungut | Akun "Utang PPh dipotong/dipungut". |
+| Current / deferred income tax expense | Beban pajak kini / Beban pajak tangguhan | PSAK 46. |
+| Hotel and restaurant tax | PBJT (pajak hotel dan restoran) | Sejak UU HKPD (UU 1/2022) menjadi Pajak Barang dan Jasa Tertentu. Akun "Utang PBJT (pajak hotel dan restoran)". |
+| Liabilities | Liabilitas | Bukan "Kewajiban" (PSAK). |
+| Accounts payable | Utang usaha | "Utang", bukan "Hutang". |
+| Retained earnings | Laba ditahan | |
+| Owner drawings | Prive | |
+| Suspense / clearing account | Akun penampung | "Akun penampung sementara" untuk transaksi yang belum dipetakan. |
+| Cost of sales | Harga pokok penjualan | |
 
 ## Yang sengaja tetap bahasa Inggris
 
@@ -44,4 +54,4 @@ Istilah serapan yang dipakai staf hotel sehari-hari dan tidak punya padanan yang
 
 - Kode API (CASH, BANK_TRANSFER, `payment.posted`, ALREADY_POSTED, kode error) tidak pernah tampil sebagai teks. Labelnya ada di i18n (`payMethod`, `roomChargeStatus`, `auditAction`, `auditEntity`, `status`, `errorActions`, `systemAccount`, `permissionLabel`, `statementLine`); kode tanpa label tampil sebagai teks terbaca dan `console.warn` sekali (`labelOf`, `src/i18n/labels.ts`).
 - Tes `src/i18n/noRawCodes.test.ts` memindai template dan file bahasa untuk kode mentah.
-- Nama akun di bagan akun, kode tagihan, dan nama perusahaan adalah data yang diketik pengguna: tidak diterjemahkan.
+- Nama akun di bagan akun, departemen, kode tagihan, dan nama perusahaan adalah data yang bisa diubah pengguna: layar tidak menerjemahkannya. Untuk properti BARU, nama bawaan bagan akun, departemen, dan kode biaya ditulis dalam bahasa yang dipilih saat properti dibuat (Indonesia atau English; daftar lengkapnya di `docs/architecture/24-seed-data-language.md`). Properti yang sudah ada tidak berubah. Tipe tempat tidur (King, Queen, ...) dan prefiks nomor dokumen tidak diterjemahkan.

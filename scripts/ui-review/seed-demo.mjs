@@ -4,10 +4,11 @@
 //   2) go run ./cmd/pms-seed rooms -tenant DEMO -property UIREV -floors 5 -per-floor 10
 //      go run ./cmd/pms-seed rates -tenant DEMO -property UIREV -days 60
 //   3) node scripts/ui-review/seed-demo.mjs data         -> tamu, reservasi, check-in, pembayaran, night audit, hari ini
-// Env: PMS_API (default http://127.0.0.1:18080), SHOT_TENANT (DEMO), SHOT_USER, SHOT_PASS, SHOT_PROPERTY (UIREV)
+// Env: PMS_API (default http://127.0.0.1:18080), SHOT_TENANT (DEMO), SHOT_USER, SHOT_PASS, SHOT_PROPERTY (UIREV), SHOT_DATA_LANG (id: the language of the names the property starts with, id or en)
 const BASE = (process.env.PMS_API ?? 'http://127.0.0.1:18080') + '/api/v1'
 const TENANT = process.env.SHOT_TENANT ?? 'DEMO'
 const CODE = process.env.SHOT_PROPERTY ?? 'UIREV'
+const DATA_LANG = process.env.SHOT_DATA_LANG ?? 'id'
 const TZ = 'Asia/Makassar'
 let token = ''
 async function login() {
@@ -26,7 +27,7 @@ const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDa
 await login()
 const step = process.argv[2]
 if (step === 'property') {
-  const p = await api('POST', '/properties', { code: CODE, name: 'Kamara Ubud (review UI)', address: 'Jl. Raya Ubud No. 18', city: 'Gianyar', country_code: 'ID', phone: '+62 361 975 000', email: 'stay@kamara.test', timezone: TZ, currency_code: 'IDR', currency_decimals: 0, check_in_time: '14:00', check_out_time: '12:00', night_audit_earliest_time: '00:00', opening_business_date: localDate(-1) }, false)
+  const p = await api('POST', '/properties', { code: CODE, name: 'Kamara Ubud (review UI)', address: 'Jl. Raya Ubud No. 18', city: 'Gianyar', country_code: 'ID', phone: '+62 361 975 000', email: 'stay@kamara.test', timezone: TZ, currency_code: 'IDR', currency_decimals: 0, check_in_time: '14:00', check_out_time: '12:00', night_audit_earliest_time: '00:00', opening_business_date: localDate(-1), data_language: DATA_LANG }, false)
   console.log(`properti ${p.code} dibuat (id ${p.id}). Lanjut: pms-seed rooms & rates untuk -property ${CODE}, lalu: node scripts/ui-review/seed-demo.mjs data`)
   process.exit(0)
 }

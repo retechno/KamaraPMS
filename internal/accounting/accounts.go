@@ -92,7 +92,7 @@ func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity str
 
 // SeedProperty gives a new property the standard chart of accounts (the hook of tenancy.CreateProperty).
 func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) error {
-	n, err := s.q(ctx).SeedChart(ctx, accountingdb.SeedChartParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID, StartDate: in.BusinessDate})
+	n, err := s.q(ctx).SeedChart(ctx, accountingdb.SeedChartParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID, StartDate: in.BusinessDate, DataLanguage: in.DataLanguage})
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"accounts": n},
+		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"accounts": n, "data_language": in.DataLanguage},
 	})
 }
 
