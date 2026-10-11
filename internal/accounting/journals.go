@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting/accountingdb"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -425,7 +426,7 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 	if err := q.InsertDayPost(ctx, post); err != nil {
 		return false, err
 	}
-	return true, s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.day_posted", "gl_journal", id, nil,
+	return true, s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.day_posted", "gl_journal", id, auditlabel.Journal(ctx, propertyID, id), nil,
 		map[string]any{"journal_number": number, "lines": len(keys), "debit_lines": debits}))
 }
 
@@ -662,7 +663,7 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.journal_posted", "gl_journal", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.journal_posted", "gl_journal", id, auditlabel.Journal(ctx, propertyID, id), nil,
 			map[string]any{"journal_number": number, "journal_date": in.Date, "lines": len(in.Lines), "total": total.String()}))
 	})
 	*out = id
@@ -741,7 +742,7 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.journal_reversed", "gl_journal", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, propertyID, id), nil,
 			map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason, "approved_by": by}))
 	})
 	if err != nil {

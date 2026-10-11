@@ -101,7 +101,7 @@ func (s *Service) ExportInvoices(ctx context.Context, propertyID int64, in Expor
 			}
 		}
 		out = ExportFile{Export: Export{ID: id, Format: FormatCSV, PeriodStart: in.From, PeriodEnd: in.To, InvoiceCount: len(invoices), FileName: name, SHA256: hex.EncodeToString(sum[:]), CreatedAt: s.clock.Now()}, Content: content}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoices_exported", "tax_invoice_export", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoices_exported", "tax_invoice_export", id, name, nil,
 			map[string]any{"from": in.From.String(), "to": in.To.String(), "invoices": len(invoices), "sha256": out.SHA256}))
 	})
 	return out, err

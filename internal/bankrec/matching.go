@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -60,7 +61,7 @@ func (s *Service) Unclear(ctx context.Context, propertyID, statementID, clearing
 		if err := q.DeleteClearing(ctx, bankrecdb.DeleteClearingParams{TenantID: p.TenantID, PropertyID: propertyID, ID: clearingID}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.uncleared", "bank_statement", statementID,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.uncleared", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID),
 			map[string]any{"journal_line_id": c.JournalLineID, "amount": c.Amount.String()}, nil))
 	})
 	if err != nil {
@@ -147,7 +148,7 @@ func (s *Service) AutoMatch(ctx context.Context, propertyID, statementID int64) 
 			}
 			res.Matched++
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.auto_matched", "bank_statement", statementID, nil, map[string]any{"matched": res.Matched, "remaining": res.Remaining}))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.auto_matched", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil, map[string]any{"matched": res.Matched, "remaining": res.Remaining}))
 	})
 	return res, err
 }
@@ -239,7 +240,7 @@ func (s *Service) Adjust(ctx context.Context, propertyID, statementID, lineID in
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.adjusted", "bank_statement", statementID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.adjusted", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
 			map[string]any{"line": line.LineNo, "amount": line.Amount.String(), "account_id": in.AccountID, "journal": jnum}))
 	})
 	if err != nil {
@@ -274,7 +275,7 @@ func (s *Service) Reconcile(ctx context.Context, propertyID, statementID int64) 
 		if err := s.q(ctx).MarkReconciled(ctx, bankrecdb.MarkReconciledParams{TenantID: p.TenantID, PropertyID: propertyID, ID: statementID, Now: ptr(s.clock.Now()), ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_reconciled", "bank_statement", statementID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_reconciled", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
 			map[string]any{"to": d.PeriodTo.String(), "closing": d.ClosingBalance.String(), "book_balance": d.Summary.BookBalance.String()}))
 	})
 	if err != nil {
@@ -326,7 +327,7 @@ func (s *Service) Reopen(ctx context.Context, propertyID, statementID int64, in 
 		if err := s.q(ctx).MarkReopened(ctx, bankrecdb.MarkReopenedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: statementID, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_reopened", "bank_statement", statementID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_reopened", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
 			map[string]any{"reason": reason, "approved_by": approval.UserID()}))
 	})
 	if err != nil {

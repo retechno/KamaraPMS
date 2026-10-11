@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -235,7 +236,7 @@ func (s *Service) payReturn(ctx context.Context, p auth.Principal, propertyID, r
 			return err
 		}
 		*out = id
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.payment_posted", "tax_payment", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.payment_posted", "tax_payment", id, auditlabel.TaxPayment(ctx, propertyID, id), nil,
 			map[string]any{"payment_number": number, "return": ret.Number, "tax": ret.TaxCode, "amount": in.Amount.String(), "penalty": in.Penalty.String(), "method": in.PaymentMethod, "account": payableCode, "journal": jnum}))
 	})
 }
@@ -296,7 +297,7 @@ func (s *Service) VoidPayment(ctx context.Context, propertyID, id int64, in Void
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.payment_voided", "tax_payment", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.payment_voided", "tax_payment", id, auditlabel.TaxPayment(ctx, propertyID, id),
 			map[string]any{"status": "POSTED"}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by, "payment_number": pay.Number}))
 	})
 	if err != nil {

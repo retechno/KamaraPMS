@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { setLocale } from '@/i18n'
 import { setDisplayTimeZone } from '@/utils/format'
 import AuditTrailView from './AuditTrailView.vue'
 
@@ -28,7 +29,6 @@ function mountView(permissions = ['audit.read'], page: object = { data: [entry(2
       if (usersFail) throw new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'x' })
       return { data: { data: USERS } }
     }
-    if (path === '/api/v1/properties/{propertyId}/reservations') return { data: { data: [{ id: 41, confirmation_number: 'RES000041' }] } }
     return { data: page }
   })
   return mount(AuditTrailView, { global: { plugins: [pinia] } })
@@ -100,7 +100,7 @@ describe('AuditTrailView', () => {
     expect(texts('action')).toContain('Checked in')
     expect(texts('user_id')).toEqual(['All users', 'Siti', 'Wayan'])
     for (const text of [...texts('entity_type'), ...texts('action')]) expect(text).not.toMatch(/[a-z]+[._][a-z]+/)
-    expect(w.get('input[name=document]').attributes('placeholder')).toBe('RES000123, STY000035…')
+    expect(w.get('input[name=document]').attributes('placeholder')).toBe('RES000123, 305, FOL000026…')
   })
 
   it('leaves the user filter out when the people cannot be listed', async () => {
@@ -110,38 +110,66 @@ describe('AuditTrailView', () => {
     expect(w.find('select[name=action]').exists()).toBe(true)
   })
 
-  it('looks a reservation number up and asks the server for that reservation', async () => {
+  it('asks the server for the document number: a part of a label, in any case, as q', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('input[name=document]').setValue('res000041')
+    await w.get('input[name=document]').setValue('  res0000 ')
     await w.get('[data-testid=filters]').trigger('submit')
     await flushPromises()
-    expect(GET).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId: 7 }, query: { q: 'RES000041', limit: 5 } } })
-    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { entity_type: 'reservation', entity_id: 41 } } })
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { q: 'res0000' } } })
+    // nothing else is asked: no page of entries is read to look for it, and no reservation is looked up
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/reservations'))).toBe(false)
+    expect(auditCalls().at(-1)?.[1]).not.toMatchObject({ params: { query: { entity_type: 'reservation' } } })
   })
 
-  it('says so when no reservation has the number', async () => {
+  it('keeps the search with the other filters and the cursor', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('input[name=document]').setValue('RES999999')
+    await w.get('input[name=document]').setValue('FOL000026')
+    await w.get('select[name=entity_type]').setValue('folio')
     await w.get('[data-testid=filters]').trigger('submit')
     await flushPromises()
-    expect(w.get('[data-testid=empty]').text()).toContain('No reservation RES999999.')
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { q: 'FOL000026', entity_type: 'folio', limit: 50 } } })
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { q: 'FOL000026', cursor: 'c1' } } })
   })
 
-  it('finds another document by the number its entries carry, reading page after page', async () => {
-    const pages: Record<string, object> = {
-      first: { data: [entry(10, { new_data: { payment_number: 'PAY000001' } }), entry(11, { new_data: { payment_number: 'PAY000032' } })], next_cursor: 'p2' },
-      p2: { data: [entry(12, { new_data: { folio_id: 3 } }), entry(13, { old_data: { payment_number: 'PAY000032' } })], next_cursor: undefined },
-    }
+  it('searches from three characters: under that it says so and does not send q', async () => {
     const w = mountView()
     await flushPromises()
-    GET.mockImplementation(async (path: string, opts: { params: { query: { cursor?: string } } }) => (path === '/api/v1/users' ? { data: { data: USERS } } : { data: pages[opts.params.query.cursor ?? 'first'] }))
-    await w.get('input[name=document]').setValue('pay000032')
+    expect(w.text()).toContain('3 characters or more') // the hint is always there
+    await w.get('input[name=document]').setValue('RE')
+    expect(w.text()).toContain('Type at least 3 characters to search.')
+    expect(w.get('input[name=document]').attributes('aria-invalid')).toBe('true')
     await w.get('[data-testid=filters]').trigger('submit')
     await flushPromises()
-    expect(w.findAll('[data-testid^=entry-]').map((r) => r.attributes('data-testid'))).toEqual(['entry-11', 'entry-13'])
-    expect(w.find('[data-testid=scan-capped]').exists()).toBe(false) // it read to the end
+    expect(auditCalls().at(-1)?.[1]).not.toMatchObject({ params: { query: { q: expect.anything() } } })
+    expect(auditCalls().at(-1)?.[1]?.params.query).not.toHaveProperty('q')
+    await w.get('input[name=document]').setValue('RES')
+    expect(w.text()).not.toContain('Type at least 3 characters to search.')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { q: 'RES' } } })
+  })
+
+  it('counts three characters, not three bytes', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=document]').setValue('日本語')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { q: '日本語' } } })
+  })
+
+  it('says it in Indonesian too', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('Minimal 3 karakter.')
+    await w.get('input[name=document]').setValue('R')
+    expect(w.text()).toContain('Ketik minimal 3 karakter untuk mencari.')
+    setLocale('en')
   })
 
   it('says when nothing matches, shows the server refusal and needs audit.read', async () => {
@@ -156,6 +184,31 @@ describe('AuditTrailView', () => {
     await flushPromises()
     expect(denied.find('[data-testid=no-access]').exists()).toBe(true)
     expect(GET).not.toHaveBeenCalled()
+  })
+
+  it('names what an entry is about by its label: "Room 305", "Reservation RES000012"', async () => {
+    const w = mountView(['audit.read'], { data: [
+      entry(5, { entity_type: 'room', entity_id: 77, entity_label: '305', action: 'room.updated' }),
+      entry(6, { entity_type: 'reservation', entity_id: 12, entity_label: 'RES000012', action: 'reservation.created' }),
+      entry(7, { entity_type: 'stay', entity_id: 9, entity_label: 'STY000035', new_data: { stay_number: 'SOMETHING-ELSE' } }),
+    ] })
+    await flushPromises()
+    expect(w.get('[data-testid=entry-5]').text()).toContain('Room 305')
+    expect(w.get('[data-testid=entry-5]').text()).not.toContain('#77') // not the id
+    expect(w.get('[data-testid=entry-6]').text()).toContain('Reservation RES000012')
+    expect(w.get('[data-testid=entry-7]').text()).toContain('Stay STY000035') // the label of the server wins over what the entry recorded
+  })
+
+  it('names an entry of before the label (null) as it always did: by the number it recorded, else by its id', async () => {
+    const w = mountView(['audit.read'], { data: [
+      entry(8, { entity_label: null, new_data: { stay_number: 'STY000010' } }),
+      entry(9, { entity_label: null, entity_type: 'room', entity_id: 77, new_data: { status: 'DIRTY' } }),
+      entry(10, { entity_label: '', entity_type: 'room', entity_id: 78, new_data: { room_number: '412' } }),
+    ] })
+    await flushPromises()
+    expect(w.get('[data-testid=entry-8]').text()).toContain('Stay STY000010')
+    expect(w.get('[data-testid=entry-9]').text()).toContain('Room #77')
+    expect(w.get('[data-testid=entry-10]').text()).toContain('Room 412')
   })
 
   it('names what an entry is about by its own number when it carries one, and spells a code it has no words for', async () => {

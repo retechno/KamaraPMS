@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -153,7 +154,7 @@ func (s *Service) TransferItem(ctx context.Context, propertyID, itemID int64, in
 			}
 		}
 		if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(),
-			Action: "folio.item_transferred", EntityType: "folio_item", EntityID: itemID,
+			Action: "folio.item_transferred", EntityType: "folio_item", EntityID: itemID, EntityLabel: auditlabel.FolioOfItem(ctx, propertyID, itemID),
 			New: map[string]any{"reversal_item_id": rev.ID, "new_item_id": moved.ID, "from_folio_id": source.ID, "to_folio_id": target.ID, "reason": reason,
 				"actor": p.ActorID(), "approved_by": approval.UserID(), "room_night": isNight}}); err != nil {
 			return err

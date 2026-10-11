@@ -1,6 +1,6 @@
 # Database Schema (revision 3): Steps 5–6
 
-> PostgreSQL 16+. Extensions: `btree_gist`. `pg_trgm` comes later for guest search.
+> PostgreSQL 16+. Extensions: `btree_gist` (00001) and `pg_trgm` (00066, the search of the audit trail by a part of a label; guest search is still prefix and token based). Both are trusted: the owner of the database creates them.
 > The DDL migrations are generated from this document once it's approved.
 
 ## 1. ERD
@@ -850,8 +850,10 @@ There is no `currency_code` column (rejected).
 | request_id | varchar(64) | YES | |
 | ip_address | inet | YES | |
 | created_at | timestamptz | NO | |
+| entity_label | varchar(120) | YES | 00066. What the entry is about as a person reads it: the identifier alone (`305`, `RES000012`, `FOL000026`, a code, a name, the e-mail of a user), written by the module that writes the entry; the kind of thing is `entity_type`, said in the language of the screen. NULL for entries before 00066 (the table is append-only, nothing is filled in) and for those without a readable number. Never the name of a guest (the code of the guest): an entry cannot be erased, a person may ask for their data to be. The writer trims it and cuts it at 120 characters. |
 
 - IDX `(tenant_id, entity_type, entity_id, created_at DESC)`, IDX `(property_id, created_at DESC)`, IDX `(user_id, created_at DESC)`. Monthly partitions can be added later.
+- GIN `(entity_label gin_trgm_ops)` where `entity_label IS NOT NULL` (00066): the search `q` of the API finds a part of a label (`ILIKE '%q%' ESCAPE ''`, 3 to 64 characters, the caller escapes `\`, `%` and `_`), with the tenant and the property filtered as for every query.
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -33,10 +34,10 @@ func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Au
 
 func (s *Service) q(ctx context.Context) *ratesdb.Queries { return ratesdb.New(s.txm.DB(ctx)) }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: entity, EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 
@@ -137,7 +138,7 @@ func (s *Service) CreateRatePlan(ctx context.Context, propertyID int64, in RateP
 			return err
 		}
 		out = toRatePlan(row, code.Code, code.PriceMode)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.created", "rate_plan", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.created", "rate_plan", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -234,7 +235,7 @@ func (s *Service) UpdateRatePlan(ctx context.Context, propertyID, id int64, patc
 			return err
 		}
 		out = toRatePlan(updated, codeName, mode)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.updated", "rate_plan", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.updated", "rate_plan", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -353,7 +354,7 @@ func (s *Service) FillRates(ctx context.Context, propertyID int64, in FillInput)
 			return err
 		}
 		out = FillResult{UpdatedNights: res.Written, CreatedNights: res.Created}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rates.filled", "rate_plan", in.RatePlanID, nil, map[string]any{
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rates.filled", "rate_plan", in.RatePlanID, auditlabel.RatePlan(ctx, propertyID, in.RatePlanID), nil, map[string]any{
 			"room_type_ids": in.RoomTypeIDs, "from": in.From, "to": in.To, "weekdays": in.Weekdays, "amount": amount.String(),
 			"updated_nights": out.UpdatedNights, "created_nights": out.CreatedNights,
 		}))

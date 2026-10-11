@@ -16,6 +16,7 @@ Satu istilah untuk satu konsep, dipakai di menu, judul halaman, tombol, dan pesa
 | Rate plan | Paket tarif | |
 | Fiscal year | Tahun buku | "Tahun fiskal" tidak dipakai. |
 | Chart of accounts | Bagan akun | |
+| Bed type | Tipe tempat tidur | "Tipe ranjang" tidak dipakai. |
 | Tax return (SPT) | SPT Masa PPN | "Pengembalian pajak" keliru: itu restitusi. Di teks, satu SPT disebut "SPT". |
 
 ## Istilah di dalam teks

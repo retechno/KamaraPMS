@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"kamarapms/internal/audit/auditdb"
 	"kamarapms/internal/platform/apperr"
@@ -34,6 +35,7 @@ type Record struct {
 	Action       string          `json:"action"`
 	EntityType   string          `json:"entity_type"`
 	EntityID     int64           `json:"entity_id"`
+	EntityLabel  *string         `json:"entity_label"` // what the entry is about as a person reads it (a number or a code); null for an entry without one
 	OldData      json.RawMessage `json:"old_data"`
 	NewData      json.RawMessage `json:"new_data"`
 	RequestID    string          `json:"request_id,omitempty"`
@@ -48,7 +50,21 @@ type Filter struct {
 	UserID     *int64
 	Action     string
 	From, To   *civil.Date
+	// Q finds the entries whose label holds it, in any case (a part of a number: "0012" finds RES000012). 3 to 64 characters; the escaping for LIKE is done here.
+	Q string
 }
+
+// The length of a search text: three characters so the trigram index serves it, and a number or a code is never longer than 64.
+const (
+	MinQuery = 3
+	MaxQuery = 64
+)
+
+// likeEscaper makes a text literal in a LIKE pattern that has ESCAPE of a backslash: the backslash itself, the percent sign and the underscore.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// likePattern is "%<q>%" with q escaped, so a search for 50% finds the label that holds 50% and not every label.
+func likePattern(q string) string { return "%" + likeEscaper.Replace(q) + "%" }
 
 // Reader reads the audit trail (audit.read). Reading is the only thing it does.
 type Reader struct {
@@ -76,12 +92,20 @@ func (r *Reader) Search(ctx context.Context, f Filter, beforeID int64, limit int
 	} else if !p.IsTenantAdmin {
 		return nil, apperr.New(apperr.KindForbidden, "PERMISSION_DENIED", "the tenant-level audit trail is for tenant administrators")
 	}
+	// The search text is checked here, after the permission: a person who may not read the trail is refused (403) whatever they ask.
+	if n := utf8.RuneCountInString(f.Q); f.Q != "" && (n < MinQuery || n > MaxQuery) {
+		return nil, apperr.Invalid("the query is invalid", apperr.FieldError{Field: "q", Code: "INVALID_LENGTH", Message: "3 to 64 characters"})
+	}
 	q := auditdb.SearchAuditLogsParams{TenantID: p.TenantID, PropertyID: f.PropertyID, EntityID: f.EntityID, UserID: f.UserID, FromDate: f.From, ToDate: f.To, RowLimit: int32(limit)} //nolint:gosec // G115: the page size is bounded by ParsePage
 	if f.EntityType != "" {
 		q.EntityType = &f.EntityType
 	}
 	if f.Action != "" {
 		q.Action = &f.Action
+	}
+	if f.Q != "" {
+		pattern := likePattern(f.Q)
+		q.LabelLike = &pattern
 	}
 	if beforeID > 0 {
 		q.BeforeID = &beforeID
@@ -93,7 +117,7 @@ func (r *Reader) Search(ctx context.Context, f Filter, beforeID int64, limit int
 	out := make([]Record, len(rows))
 	for i, a := range rows {
 		rec := Record{ID: a.ID, CreatedAt: a.CreatedAt, BusinessDate: a.BusinessDate, Action: a.Action, EntityType: a.EntityType, EntityID: a.EntityID,
-			OldData: redact(a.OldData), NewData: redact(a.NewData), IPAddress: a.IpAddress}
+			EntityLabel: a.EntityLabel, OldData: redact(a.OldData), NewData: redact(a.NewData), IPAddress: a.IpAddress}
 		if a.RequestID != nil {
 			rec.RequestID = *a.RequestID
 		}
@@ -173,7 +197,7 @@ func (h *Handler) tenant(w http.ResponseWriter, req *http.Request) error { retur
 func (h *Handler) list(w http.ResponseWriter, req *http.Request, property *int64) error {
 	q := req.URL.Query()
 	var errs []apperr.FieldError
-	f := Filter{PropertyID: property, EntityType: q.Get("entity_type"), Action: q.Get("action")}
+	f := Filter{PropertyID: property, EntityType: q.Get("entity_type"), Action: q.Get("action"), Q: strings.TrimSpace(q.Get("q"))}
 	num := func(name string) *int64 {
 		v := q.Get(name)
 		if v == "" {

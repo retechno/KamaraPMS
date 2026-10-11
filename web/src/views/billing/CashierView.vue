@@ -169,7 +169,7 @@ watch(businessDate, () => {
       </template>
       <template #cell-payment_method="{ row }">{{ methodLabel(row.payment_method) }}</template>
       <template #cell-status="{ row }"><StatusBadge domain="payment" :status="row.status" /></template>
-      <template #cell-folio_id="{ row }"><RouterLink :to="`/folios/${row.folio_id}`">#{{ row.folio_id }}</RouterLink></template>
+      <template #cell-folio_id="{ row }"><RouterLink :to="`/folios/${row.folio_id}`">{{ row.folio_number || `#${row.folio_id}` }}</RouterLink></template>
       <template #empty><EmptyState :description="t('emptyState.cashier')" :action-label="activeFilters ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('cashier.empty')" data-testid="empty" /></template>
     </DataTable>
   </template>

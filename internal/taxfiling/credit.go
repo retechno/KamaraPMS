@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -275,7 +276,7 @@ func (s *Service) SetOpeningCredit(ctx context.Context, propertyID, profileID in
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_set", "tax_opening_credit", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_set", "tax_opening_credit", id, auditlabel.TaxOfOpeningCredit(ctx, propertyID, id), nil,
 			map[string]any{"tax": prof.TaxCode, "amount": in.Amount.String(), "as_of": in.AsOf.String(), "approved_by": by, "journal": jnum}))
 	})
 	if err != nil {
@@ -336,7 +337,7 @@ func (s *Service) VoidOpeningCredit(ctx context.Context, propertyID, profileID i
 		if err := q.VoidOpeningCredit(ctx, taxfilingdb.VoidOpeningCreditParams{TenantID: p.TenantID, PropertyID: propertyID, ID: oc.ID, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason, VoidJournalID: &rj, ApprovedBy: &by}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_voided", "tax_opening_credit", oc.ID,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_voided", "tax_opening_credit", oc.ID, auditlabel.TaxOfOpeningCredit(ctx, propertyID, oc.ID),
 			map[string]any{"amount": oc.Amount.String()}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by}))
 	})
 	if err != nil {

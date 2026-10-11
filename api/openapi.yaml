@@ -3741,6 +3741,7 @@ paths:
         - { name: user_id, in: query, schema: { type: integer, format: int64 } }
         - { name: action, in: query, schema: { type: string, maxLength: 100 }, description: "An exact action such as `stay.checked_in`." }
         - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
+        - { name: q, in: query, schema: { type: string, minLength: 3, maxLength: 64 }, description: "A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it." }
         - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
       responses:
         "200":
@@ -3764,6 +3765,7 @@ paths:
         - { name: user_id, in: query, schema: { type: integer, format: int64 } }
         - { name: action, in: query, schema: { type: string, maxLength: 100 }, description: "An exact action such as `stay.checked_in`." }
         - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
+        - { name: q, in: query, schema: { type: string, minLength: 3, maxLength: 64 }, description: "A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it." }
         - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
       responses:
         "200":
@@ -9565,6 +9567,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
+        confirmation_number: { type: string, description: The confirmation number of the reservation of the folio (`RES000012`), so a list can name it. }
         folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
         bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
         status: { type: string, enum: [OPEN, CLOSED] }
@@ -9600,6 +9603,7 @@ components:
         id: { type: integer, format: int64 }
         payment_number: { type: string }
         folio_id: { type: integer, format: int64 }
+        folio_number: { type: string, description: The number of that folio (`FOL000026`), so a list can name it. Absent where the payment is returned without it. }
         payment_type: { type: string, enum: [PAYMENT, REFUND] }
         payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, CITY_LEDGER], description: CITY_LEDGER is a transfer to a company account, not money received. }
         company_id: { type: [integer, "null"], format: int64, description: The company of a CITY_LEDGER transfer. }
@@ -11309,7 +11313,7 @@ components:
               child_count: { type: integer }
     AuditLog:
       type: object
-      required: [id, created_at, business_date, user, action, entity_type, entity_id, old_data, new_data]
+      required: [id, created_at, business_date, user, action, entity_type, entity_id, entity_label, old_data, new_data]
       properties:
         id: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
@@ -11328,6 +11332,7 @@ components:
         action: { type: string }
         entity_type: { type: string }
         entity_id: { type: integer, format: int64 }
+        entity_label: { type: [string, "null"], maxLength: 120, description: "What the entry is about as a person reads it: the identifier alone (`305`, `RES000012`, `FOL000026`, a code, a name, the e-mail of a user), never the kind of thing (that is `entity_type`) and never the name of a guest (the code of the guest). Null for an entry written before the label existed and for one that has no readable number." }
         old_data: { description: The state before (null for a creation). }
         new_data: { description: The state after. }
         request_id: { type: string }

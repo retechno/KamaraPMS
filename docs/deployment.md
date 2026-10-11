@@ -82,7 +82,7 @@ The API reads its settings from the environment (`internal/platform/config`); no
 
 The stack starts PostgreSQL with the volume `pms-db`. To use a database you run yourself, remove the `db` service and the `depends_on` on it from the compose file, and give `PMS_DATABASE_URL` of the `api` and `migrate` services. Requirements: PostgreSQL 16 or 18 (both pass the schema tests in CI), a database and a user that owns it (the migrations create tables, functions, triggers and views), UTF-8.
 
-The application connects as that one user. It needs no superuser and no extension.
+The application connects as that one user. It needs no superuser. The migrations install two extensions, `btree_gist` (migration 00001: an exclusion constraint that combines an equality with a date range overlap) and `pg_trgm` (migration 00066: the search of the audit trail by a part of a number). Both are *trusted* extensions since PostgreSQL 13, so the owner of the database may create them (`CREATE EXTENSION` needs the `CREATE` privilege on the database, nothing more). They come with the standard PostgreSQL packages and the official image (`contrib`); a managed service that does not allow them stops the migration with a clear error.
 
 ## 5. Migration
 

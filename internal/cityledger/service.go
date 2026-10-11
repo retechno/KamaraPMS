@@ -11,6 +11,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/cityledger/cityledgerdb"
 	"kamarapms/internal/companies"
 	"kamarapms/internal/iam"
@@ -99,8 +100,8 @@ func (s *Service) decimals(ctx context.Context, propertyID int64) (int32, error)
 	return prop.CurrencyDecimals, nil
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_receipt", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_receipt", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func account(id int64, code, name string, active bool, limit *decimal.Decimal, terms int16, transferred, received, adjusted decimal.Decimal, decimals int32) Account {
@@ -505,7 +506,7 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				if err := s.allocate(ctx, p, propertyID, companyID, r.ID, allocations, decimals); err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_posted", r.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_posted", r.ID, auditlabel.CityLedgerReceipt(ctx, propertyID, r.ID), nil, map[string]any{
 					"receipt_number": number, "company_id": companyID, "amount": amount.String(), "method": method, "allocations": len(allocations),
 				})); err != nil {
 					return err
@@ -576,7 +577,7 @@ func (s *Service) VoidReceipt(ctx context.Context, propertyID, receiptID int64, 
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_voided", receiptID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_voided", receiptID, auditlabel.CityLedgerReceipt(ctx, propertyID, receiptID),
 			map[string]any{"status": r.Status}, map[string]any{"status": v.Status, "reason": reason, "actor": p.ActorID(), "approved_by": by})); err != nil {
 			return err
 		}

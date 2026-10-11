@@ -11,6 +11,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -73,8 +74,8 @@ func errShiftNotOpen() *apperr.Error {
 	return apperr.Conflict("SHIFT_NOT_OPEN", "the shift is closed")
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "cashier_shift", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "cashier_shift", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func nullable(s string) *string {
@@ -166,7 +167,7 @@ func (s *Service) UpdateSettings(ctx context.Context, propertyID int64, in Setti
 			return err
 		}
 		out = toSettings(row, decimals)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.settings_changed", row.ID, toSettings(old, decimals), out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.settings_changed", row.ID, "", toSettings(old, decimals), out))
 	})
 	return out, err
 }
@@ -459,7 +460,7 @@ func (s *Service) Open(ctx context.Context, propertyID int64, in OpenInput) (Shi
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_opened", id, nil, map[string]any{
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_opened", id, auditlabel.Shift(ctx, propertyID, id), nil, map[string]any{
 			"shift_number": number, "drawer": drawer, "opening_float": float.String(),
 		}))
 	})
@@ -560,7 +561,7 @@ func (s *Service) Move(ctx context.Context, propertyID, shiftID int64, key strin
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.cash_moved", shiftID, nil, map[string]any{
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.cash_moved", shiftID, auditlabel.Shift(ctx, propertyID, shiftID), nil, map[string]any{
 			"movement_id": id, "kind": in.Kind, "amount": amount.String(), "reason": reason,
 		}))
 	})
@@ -758,7 +759,7 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 				return err
 			}
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_closed", shiftID, nil, map[string]any{
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_closed", shiftID, auditlabel.Shift(ctx, propertyID, shiftID), nil, map[string]any{
 			"shift_number": row.ShiftNumber, "expected_cash": expected.String(), "counted_cash": counted.String(), "over_short": overShort.String(), "reason": reason,
 			"approved_by": approvedBy, "journal_id": journalID,
 		}))

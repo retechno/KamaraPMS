@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/notifications/notificationsdb"
 	"kamarapms/internal/platform/apperr"
@@ -95,7 +96,7 @@ func (s *Service) enqueue(ctx context.Context, tenantID, propertyID, reservation
 		return notificationsdb.EmailOutbox{}, err
 	}
 	err = s.audit.Write(ctx, audit.Entry{TenantID: tenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: actorID,
-		Action: "email.queued", EntityType: "reservation", EntityID: reservationID, New: map[string]any{"kind": KindConfirmation, "to": to, "outbox_id": row.ID}})
+		Action: "email.queued", EntityType: "reservation", EntityID: reservationID, EntityLabel: auditlabel.Reservation(ctx, propertyID, reservationID), New: map[string]any{"kind": KindConfirmation, "to": to, "outbox_id": row.ID}})
 	return row, err
 }
 

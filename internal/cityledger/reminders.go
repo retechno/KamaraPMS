@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/cityledger/cityledgerdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -127,8 +128,8 @@ type ReminderInput struct {
 	InvoiceIDs []int64 `json:"invoice_ids"`
 }
 
-func reminderAudit(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, Old: old, New: updated}
+func reminderAudit(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errReminderNotFound() *apperr.Error {
@@ -304,7 +305,7 @@ func (s *Service) SetLateFee(ctx context.Context, propertyID int64, in LateFeeIn
 		if err := s.q(ctx).UpsertLateFee(ctx, cityledgerdb.UpsertLateFeeParams{TenantID: p.TenantID, PropertyID: propertyID, MonthlyRate: rate, GraceDays: int16(in.GraceDays), ActorID: p.ActorID()}); err != nil { //nolint:gosec // G115: 0..365
 			return err
 		}
-		return s.audit.Write(ctx, reminderAudit(p, propertyID, day.BusinessDate, "cityledger.late_fee_set", "city_ledger_late_fee", propertyID,
+		return s.audit.Write(ctx, reminderAudit(p, propertyID, day.BusinessDate, "cityledger.late_fee_set", "city_ledger_late_fee", propertyID, auditlabel.Property(ctx, propertyID),
 			map[string]any{"monthly_rate": oldRate.String(), "grace_days": oldGrace}, map[string]any{"monthly_rate": rate.String(), "grace_days": in.GraceDays}))
 	})
 	if err != nil {
@@ -502,7 +503,7 @@ func (s *Service) CreateReminder(ctx context.Context, propertyID, companyID int6
 						return err
 					}
 				}
-				if err := s.audit.Write(ctx, reminderAudit(p, propertyID, day.BusinessDate, "cityledger.reminder_recorded", "city_ledger_reminder", r.ID, nil, map[string]any{
+				if err := s.audit.Write(ctx, reminderAudit(p, propertyID, day.BusinessDate, "cityledger.reminder_recorded", "city_ledger_reminder", r.ID, number, nil, map[string]any{
 					"number": number, "company_id": companyID, "level": in.Level, "invoices": len(listed), "outstanding": total.String(), "interest": interest.String(),
 				})); err != nil {
 					return err

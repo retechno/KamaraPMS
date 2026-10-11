@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/payables/payablesdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -127,7 +128,7 @@ func (s *Service) CreateSupplier(ctx context.Context, propertyID int64, in Suppl
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.supplier_created", "supplier", id, nil, map[string]any{"code": code, "name": in.Name}))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.supplier_created", "supplier", id, auditlabel.Supplier(ctx, propertyID, id), nil, map[string]any{"code": code, "name": in.Name}))
 	})
 	if err != nil {
 		return Supplier{}, err
@@ -191,7 +192,7 @@ func (s *Service) UpdateSupplier(ctx context.Context, propertyID, id int64, patc
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.supplier_updated", "supplier", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.supplier_updated", "supplier", id, auditlabel.Supplier(ctx, propertyID, id),
 			map[string]any{"name": cur.Name, "active": cur.IsActive, "terms": cur.PaymentTermsDays}, map[string]any{"name": name, "active": active, "terms": terms}))
 	})
 	if err != nil {

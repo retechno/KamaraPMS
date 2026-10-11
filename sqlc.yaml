@@ -372,3 +372,14 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
+    queries: internal/auditlabel/queries.sql
+    gen:
+      go:
+        package: auditlabeldb
+        out: internal/auditlabel/auditlabeldb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true

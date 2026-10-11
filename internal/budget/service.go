@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/budget/budgetdb"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
@@ -86,8 +87,8 @@ func deref(s *string) string {
 	return *s
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "budget", EntityID: id, Old: old, New: updated}
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "budget", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 // calendar is the fiscal calendar of a property.
@@ -403,7 +404,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.created", id, nil,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.created", id, out.Name, nil,
 			map[string]any{"year": out.YearLabel, "version": out.Version, "name": out.Name, "copied_from": in.CopyFromID}))
 	})
 	return out, err
@@ -440,7 +441,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, in UpdateInp
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.updated", id, map[string]any{"name": old.Name, "description": deref(old.Description)},
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.updated", id, out.Name, map[string]any{"name": old.Name, "description": deref(old.Description)},
 			map[string]any{"name": out.Name, "description": out.Description}))
 	})
 	return out, err
@@ -464,7 +465,7 @@ func (s *Service) Delete(ctx context.Context, propertyID, id int64) error {
 		if err := s.q(ctx).DeleteBudget(ctx, budgetdb.DeleteBudgetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.deleted", id,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.deleted", id, old.Name,
 			map[string]any{"year": yearLabelOf(old.YearStart), "version": old.Version, "name": old.Name}, nil))
 	})
 }
@@ -589,7 +590,7 @@ func (s *Service) SaveGrid(ctx context.Context, propertyID, id int64, in GridInp
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.grid_saved", id, nil,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.grid_saved", id, auditlabel.Budget(ctx, propertyID, id), nil,
 			map[string]any{"accounts": out.AccountCount, "revenue": out.Revenue, "expense": out.Expense}))
 	})
 	return out, err
@@ -738,7 +739,7 @@ func (s *Service) Spread(ctx context.Context, propertyID, id int64, in SpreadInp
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.spread", id, nil,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.spread", id, auditlabel.Budget(ctx, propertyID, id), nil,
 			map[string]any{"account_id": in.AccountID, "department_id": in.DepartmentID, "total": total.StringFixed(decimals), "method": in.Method}))
 	})
 	return out, err
@@ -844,7 +845,7 @@ func (s *Service) FillFromActuals(ctx context.Context, propertyID, id int64, in 
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.filled_from_actuals", id, nil,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.filled_from_actuals", id, auditlabel.Budget(ctx, propertyID, id), nil,
 			map[string]any{"source_year_start": source.String(), "percent_change": pct.String(), "replace": in.Replace, "accounts": len(rows)}))
 	})
 	return out, err
@@ -922,7 +923,7 @@ func (s *Service) Activate(ctx context.Context, propertyID, id int64, in Activat
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.activated", id, map[string]any{"status": StatusDraft},
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.activated", id, auditlabel.Budget(ctx, propertyID, id), map[string]any{"status": StatusDraft},
 			map[string]any{"status": StatusActive, "year": out.YearLabel, "version": out.Version, "approved_by": approval.UserID(), "archived_budget_id": archived}))
 	})
 	return out, err

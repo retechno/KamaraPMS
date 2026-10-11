@@ -11,6 +11,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -78,8 +79,8 @@ func ptr[T any](v T) *T { return &v }
 
 func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errBankAccountNotFound() *apperr.Error {
@@ -185,7 +186,7 @@ func (s *Service) CreateBankAccount(ctx context.Context, propertyID int64, in Ba
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.account_created", "bank_account", id, nil, map[string]any{"name": name, "account_id": in.AccountID}))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.account_created", "bank_account", id, auditlabel.BankAccount(ctx, propertyID, id), nil, map[string]any{"name": name, "account_id": in.AccountID}))
 	})
 	if err != nil {
 		return BankAccount{}, err
@@ -227,7 +228,7 @@ func (s *Service) UpdateBankAccount(ctx context.Context, propertyID, id int64, p
 		if err := s.q(ctx).UpdateBankAccount(ctx, bankrecdb.UpdateBankAccountParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: name, AccountNumber: nullable(number), IsActive: active, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.account_updated", "bank_account", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.account_updated", "bank_account", id, auditlabel.BankAccount(ctx, propertyID, id),
 			map[string]any{"name": cur.Name, "active": cur.IsActive}, map[string]any{"name": name, "active": active}))
 	})
 	if err != nil {
@@ -515,7 +516,7 @@ func (s *Service) ImportStatement(ctx context.Context, propertyID int64, in Impo
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_imported", "bank_statement", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_imported", "bank_statement", id, auditlabel.BankStatement(ctx, propertyID, id), nil,
 			map[string]any{"bank_account": ba.Name, "from": in.PeriodFrom.String(), "to": in.PeriodTo.String(), "lines": len(lines), "closing": in.ClosingBalance.String()}))
 	})
 	if err != nil {
@@ -555,13 +556,14 @@ func (s *Service) DeleteStatement(ctx context.Context, propertyID, id int64) err
 		if err := q.DeleteStatementClearings(ctx, bankrecdb.DeleteStatementClearingsParams{TenantID: p.TenantID, PropertyID: propertyID, StatementID: id}); err != nil {
 			return err
 		}
+		label := auditlabel.BankStatement(ctx, propertyID, id) // before the statement is gone
 		if err := q.DeleteStatementLines(ctx, bankrecdb.DeleteStatementLinesParams{TenantID: p.TenantID, PropertyID: propertyID, StatementID: id}); err != nil {
 			return err
 		}
 		if err := q.DeleteStatement(ctx, bankrecdb.DeleteStatementParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_deleted", "bank_statement", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_deleted", "bank_statement", id, label,
 			map[string]any{"from": st.PeriodFrom.String(), "to": st.PeriodTo.String(), "lines": st.LineCount}, nil))
 	})
 }

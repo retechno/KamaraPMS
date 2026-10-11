@@ -26,8 +26,6 @@ const property = usePropertyStore()
 const open = ref<number | null>(null)
 const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
 const users = ref<{ id: number; full_name: string }[]>([])
-const notFound = ref(false)
-const scanCapped = ref(false)
 
 // The choices of the entity and action filters, in the words of the language of the page.
 const byLabel = (a: { label: string }, b: { label: string }): number => a.label.localeCompare(b.label)
@@ -59,65 +57,29 @@ const columns = computed<Column<AuditLog>[]>(() => [
 const pid = computed(() => property.currentId)
 const allowed = computed(() => auth.can('audit.read', pid.value))
 
-// A document number is looked for in two ways. A reservation number (RES…) is turned into the reservation it names, and the server filters on that. For the
-// other documents the entries are read page by page and the ones that carry the number are kept: the server cannot search for it yet.
-const RESERVATION_NUMBER = /^RES\d+$/
-const SCAN_PAGES = 10
-const SCAN_ENOUGH = 20
-let reservation: number | null = null
+// The document number is a search of the server: it finds a part of the label of an entry (a number or a code, "0012" in RES000012), in any case, from three characters. Under three
+// the search is not sent (the field says so) and the list is as it was.
+const MIN_SEARCH = 3
+const searchText = computed(() => filter.document.trim())
+const searchTooShort = computed(() => searchText.value.length > 0 && [...searchText.value].length < MIN_SEARCH)
 
 function query(cursor?: string): Record<string, string | number | undefined> {
   const q: Record<string, string | number | undefined> = { limit: 50, cursor }
   for (const [k, v] of Object.entries(filter)) {
     if (k !== 'document' && v.trim()) q[k] = k === 'user_id' ? Number(v) : v.trim()
   }
-  if (reservation !== null) Object.assign(q, { entity_type: 'reservation', entity_id: reservation })
+  if (searchText.value && !searchTooShort.value) q.q = searchText.value
   return q
 }
-
-const carries = (row: AuditLog, number: string): boolean => JSON.stringify([row.old_data, row.new_data]).toUpperCase().includes(number)
 
 async function fetchPage(propertyId: number, cursor?: string) {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: query(cursor) } })
   return { entries: data?.data ?? [], next: data?.next_cursor }
 }
 
-async function findReservation(propertyId: number, number: string): Promise<number | null> {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { q: number, limit: 5 } } })
-  return data?.data?.find((r) => r.confirmation_number === number)?.id ?? null
-}
-
-// One page of 50 at a time. A reservation number is the reservation it names (asked of the server); another document number is looked for in the entries, page after
-// page, and what carries it is the page that is given back (see above).
+// One page of 50 at a time, newest first; every filter, the search too, is asked of the server.
 const list = usePagedList<AuditLog>(async (cursor) => {
-  const propertyId = pid.value!
-  const number = filter.document.trim().toUpperCase()
-  if (!cursor) {
-    notFound.value = false
-    reservation = null
-    if (RESERVATION_NUMBER.test(number)) {
-      reservation = await findReservation(propertyId, number)
-      if (reservation === null) {
-        notFound.value = true
-        return { data: [] }
-      }
-    }
-  }
-  if (number && reservation === null) {
-    let next = cursor
-    const found: AuditLog[] = []
-    let pages = 0
-    do {
-      const page = await fetchPage(propertyId, next)
-      found.push(...page.entries.filter((e) => carries(e, number)))
-      next = page.next
-      pages++
-    } while (next && found.length < SCAN_ENOUGH && pages < SCAN_PAGES)
-    scanCapped.value = !!next && found.length < SCAN_ENOUGH
-    return { data: found, next_cursor: next }
-  }
-  scanCapped.value = false
-  const page = await fetchPage(propertyId, cursor)
+  const page = await fetchPage(pid.value!, cursor)
   return { data: page.entries, next_cursor: page.next }
 })
 const { rows, error, loading, loadingMore, loaded, hasMore } = list
@@ -139,10 +101,12 @@ function reset(): void {
 }
 
 const pretty = (v: unknown): string => (v === null || v === undefined ? '—' : JSON.stringify(v, null, 2))
-// What names the thing an entry is about: its own number or code when the entry carries one ("Stay STY000035"), otherwise its id.
+// What an entry is about: the kind of thing in the words of the page and the label the server wrote ("Room 305", "Reservation RES000012"). An entry written before the label existed
+// (or one with no readable number) has none: then its own number or code in what it recorded, and last its id.
 const NAMING = ['room_number', 'stay_number', 'payment_number', 'shift_number', 'journal_number', 'item_number', 'request_number', 'confirmation_number', 'folio_number', 'code', 'name']
-function entityName(row: { entity_type: string; entity_id: number; old_data?: unknown; new_data?: unknown }): string {
+function entityName(row: { entity_type: string; entity_id: number; entity_label?: string | null; old_data?: unknown; new_data?: unknown }): string {
   const label = labelOf('auditEntity', row.entity_type)
+  if (row.entity_label) return `${label} ${row.entity_label}`
   for (const data of [row.new_data, row.old_data]) {
     if (!data || typeof data !== 'object') continue
     const named = NAMING.map((k) => (data as Record<string, unknown>)[k]).find((v) => typeof v === 'string' && v !== '')
@@ -170,8 +134,8 @@ watch(pid, () => {
     <Card class="mb-4">
       <FilterBar class="grid gap-x-4 gap-y-6 px-4 pb-8 pt-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="filters" :active="activeFilters" @submit="load">
       <template #search>
-        <FormField :label="t('audit.document')">
-          <template #default="{ id }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" autocomplete="off" /></template>
+        <FormField :label="t('audit.document')" :hint="t('audit.documentHint')" :error="searchTooShort ? t('audit.documentTooShort') : undefined">
+          <template #default="{ id, invalid }"><Input :id="id" v-model="filter.document" name="document" :placeholder="t('audit.documentPlaceholder')" :aria-invalid="invalid" autocomplete="off" /></template>
         </FormField>
       </template>
 
@@ -212,7 +176,7 @@ watch(pid, () => {
     </Card>
 
     <Card>
-      <EmptyState v-if="loaded && !rows.length" :description="t('emptyState.auditEntries')" :action-label="activeFilters || filter.document ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="reset" :title="notFound ? t('audit.documentNotFound', { number: filter.document.trim().toUpperCase() }) : t('audit.empty')" data-testid="empty" />
+      <EmptyState v-if="loaded && !rows.length" :description="t('emptyState.auditEntries')" :action-label="activeFilters || filter.document ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="reset" :title="t('audit.empty')" data-testid="empty" />
       <DataTable
         v-else-if="rows.length"
         :columns="columns"
@@ -244,7 +208,6 @@ watch(pid, () => {
           <small class="mt-2 block text-muted-foreground">{{ t('audit.request', { id: row.request_id ?? '—' }) }}<template v-if="row.ip_address"> · {{ row.ip_address }}</template></small>
         </template>
       </DataTable>
-      <p v-if="scanCapped" class="m-0 px-4 pt-3 text-sm text-muted-foreground" data-testid="scan-capped">{{ t('audit.scanCapped') }}</p>
     </Card>
   </template>
 </template>

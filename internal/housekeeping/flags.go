@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/housekeeping/housekeepingdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -76,14 +77,14 @@ func (s *Service) SetFlags(ctx context.Context, propertyID, roomID int64, in Fla
 		}
 		out = Flags{RoomID: roomID, Priority: row.Priority, DND: row.Dnd, MakeUpRequested: row.MakeUpRequested, Note: deref(row.Note), UpdatedAt: row.UpdatedAt}
 		bd := day.BusinessDate
-		return s.audit.Write(ctx, flagAudit(p, propertyID, bd, roomID, out))
+		return s.audit.Write(ctx, flagAudit(p, propertyID, bd, roomID, auditlabel.Room(ctx, propertyID, roomID), out))
 	})
 	return out, err
 }
 
-func flagAudit(p auth.Principal, propertyID int64, bd civil.Date, roomID int64, f Flags) audit.Entry {
+func flagAudit(p auth.Principal, propertyID int64, bd civil.Date, roomID int64, label string, f Flags) audit.Entry {
 	return audit.Entry{
-		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: "housekeeping.flags_changed", EntityType: "room", EntityID: roomID,
+		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: "housekeeping.flags_changed", EntityType: "room", EntityID: roomID, EntityLabel: label,
 		New: map[string]any{"priority": f.Priority, "dnd": f.DND, "make_up_requested": f.MakeUpRequested, "note": f.Note},
 	}
 }

@@ -26,7 +26,8 @@ SELECT id FROM folios
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id = @reservation_id AND stay_id IS NULL AND status = 'OPEN';
 
 -- name: ListFolios :many
-SELECT f.*, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit
+SELECT f.*, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit,
+       (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
 FROM folios f
 LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
 WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id > @after_id
@@ -36,6 +37,10 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id > @afte
 GROUP BY f.id
 ORDER BY f.id
 LIMIT @row_limit;
+
+-- The number of a folio, for a list of payments that names it (a plain read, no lock).
+-- name: GetFolioNumber :one
+SELECT folio_number FROM folios WHERE property_id = @property_id AND id = @id;
 
 -- name: FolioTotals :one
 SELECT COALESCE(sum(debit), 0)::numeric AS debit, COALESCE(sum(credit), 0)::numeric AS credit

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -235,7 +236,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 				return err
 			}
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "reservation.created", res.ID, auditlabel.Reservation(ctx, propertyID, res.ID), nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
 			"confirmation_number": res.ConfirmationNumber, "status": res.Status, "rooms": len(in.Rooms), "source": res.Source,
 		}))))); err != nil {
 			return err

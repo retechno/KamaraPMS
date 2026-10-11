@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -106,7 +107,7 @@ func (s *Service) UpdateHeader(ctx context.Context, propertyID, id int64, patch 
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.updated", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.updated", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"guest_id": st.res.GuestID, "source": st.res.Source, "market": deref(st.res.Market), "company_id": st.res.CompanyID, "booking_group_id": st.res.BookingGroupID},
 			map[string]any{"guest_id": res.GuestID, "source": res.Source, "market": deref(res.Market), "company_id": res.CompanyID, "booking_group_id": res.BookingGroupID})); err != nil {
 			return err
@@ -170,7 +171,7 @@ func (s *Service) Confirm(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.confirmed", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.confirmed", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, map[string]any{"status": res.Status, "rooms": len(drafts)}))); err != nil {
 			return err
 		}
@@ -257,7 +258,7 @@ func (s *Service) Cancel(ctx context.Context, propertyID, id int64, version int3
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.cancelled", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.cancelled", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"status": st.res.Status}, map[string]any{"status": res.Status, "reason": reason, "rooms_cancelled": cancelled})); err != nil {
 			return err
 		}
@@ -325,7 +326,7 @@ func (s *Service) CancelLine(ctx context.Context, propertyID, id, lineID int64, 
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_cancelled", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_cancelled", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"reservation_room_id": lineID, "status": line.Status}, map[string]any{"status": LineCancelled, "reason": reason, "reservation_cancelled": all})); err != nil {
 			return err
 		}
@@ -407,7 +408,7 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.reinstated", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.reinstated", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, map[string]any{"status": res.Status, "rooms": len(back)}))); err != nil {
 			return err
 		}
@@ -455,7 +456,7 @@ func (s *Service) NoShow(ctx context.Context, propertyID, id, lineID int64, vers
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.no_show", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.no_show", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"reservation_room_id": lineID, "status": LineConfirmed}, map[string]any{"status": LineNoShow, "reason": reason})); err != nil {
 			return err
 		}
@@ -566,7 +567,7 @@ func (s *Service) BulkNoShow(ctx context.Context, propertyID int64, bd civil.Dat
 				}
 				bumped[l.ReservationID] = true
 			}
-			if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "reservation.no_show", l.ReservationID,
+			if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "reservation.no_show", l.ReservationID, auditlabel.Reservation(ctx, propertyID, l.ReservationID),
 				map[string]any{"reservation_room_id": id, "status": LineConfirmed}, map[string]any{"status": LineNoShow, "reason": reason, "bulk": true})); err != nil {
 				return err
 			}

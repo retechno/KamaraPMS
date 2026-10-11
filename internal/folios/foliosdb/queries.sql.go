@@ -445,6 +445,23 @@ func (q *Queries) GetFolioItemByKey(ctx context.Context, arg GetFolioItemByKeyPa
 	return i, err
 }
 
+const getFolioNumber = `-- name: GetFolioNumber :one
+SELECT folio_number FROM folios WHERE property_id = $1 AND id = $2
+`
+
+type GetFolioNumberParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+// The number of a folio, for a list of payments that names it (a plain read, no lock).
+func (q *Queries) GetFolioNumber(ctx context.Context, arg GetFolioNumberParams) (string, error) {
+	row := q.db.QueryRow(ctx, getFolioNumber, arg.PropertyID, arg.ID)
+	var folio_number string
+	err := row.Scan(&folio_number)
+	return folio_number, err
+}
+
 const getFolioOfStay = `-- name: GetFolioOfStay :one
 SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
 `
@@ -1481,7 +1498,8 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 }
 
 const listFolios = `-- name: ListFolios :many
-SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit
+SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, COALESCE(sum(i.debit), 0)::numeric AS debit, COALESCE(sum(i.credit), 0)::numeric AS credit,
+       (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
 FROM folios f
 LEFT JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
 WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id > $3
@@ -1504,26 +1522,27 @@ type ListFoliosParams struct {
 }
 
 type ListFoliosRow struct {
-	ID              int64
-	TenantID        int64
-	PropertyID      int64
-	FolioNumber     string
-	ReservationID   int64
-	StayID          *int64
-	FolioType       string
-	Status          string
-	OpenedAt        time.Time
-	ClosedAt        *time.Time
-	ClosedBy        *int64
-	Version         int32
-	CreatedAt       time.Time
-	CreatedBy       *int64
-	UpdatedAt       time.Time
-	UpdatedBy       *int64
-	ClosedOn        *civil.Date
-	BillToCompanyID *int64
-	Debit           decimal.Decimal
-	Credit          decimal.Decimal
+	ID                 int64
+	TenantID           int64
+	PropertyID         int64
+	FolioNumber        string
+	ReservationID      int64
+	StayID             *int64
+	FolioType          string
+	Status             string
+	OpenedAt           time.Time
+	ClosedAt           *time.Time
+	ClosedBy           *int64
+	Version            int32
+	CreatedAt          time.Time
+	CreatedBy          *int64
+	UpdatedAt          time.Time
+	UpdatedBy          *int64
+	ClosedOn           *civil.Date
+	BillToCompanyID    *int64
+	Debit              decimal.Decimal
+	Credit             decimal.Decimal
+	ConfirmationNumber string
 }
 
 func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListFoliosRow, error) {
@@ -1564,6 +1583,7 @@ func (q *Queries) ListFolios(ctx context.Context, arg ListFoliosParams) ([]ListF
 			&i.BillToCompanyID,
 			&i.Debit,
 			&i.Credit,
+			&i.ConfirmationNumber,
 		); err != nil {
 			return nil, err
 		}

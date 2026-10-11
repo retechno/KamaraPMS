@@ -98,10 +98,10 @@ func (s *Service) writer(ctx context.Context, propertyID int64, perm auth.Permis
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: "reservation", EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: "reservation", EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 

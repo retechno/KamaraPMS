@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk/frontdeskdb"
@@ -78,10 +79,10 @@ func (s *Service) actor(ctx context.Context, propertyID int64, perm auth.Permiss
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: "stay", EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: "stay", EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 
@@ -273,7 +274,7 @@ func (s *Service) checkInCore(ctx context.Context, c checkInCmd) (CheckInResult,
 		entry["override_room_not_ready"] = true
 		entry["override_reason"] = c.overrideBy
 	}
-	if err := s.audit.Write(ctx, auditEntry(c.p, c.propertyID, c.bd, "stay.checked_in", stay.ID, nil, entry)); err != nil {
+	if err := s.audit.Write(ctx, auditEntry(c.p, c.propertyID, c.bd, "stay.checked_in", stay.ID, stay.StayNumber, nil, entry)); err != nil {
 		return CheckInResult{}, err
 	}
 	return CheckInResult{Stay: toStay(stay, c.line.ReservationID), StayRoom: toSegment(seg, room.RoomNumber), Folio: folio}, nil
@@ -637,7 +638,7 @@ func (s *Service) ReverseCheckIn(ctx context.Context, propertyID, stayID int64, 
 		if err := s.res.MarkCheckInReversed(ctx, p, propertyID, line.ID); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "stay.check_in_reversed", stayID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "stay.check_in_reversed", stayID, auditlabel.Stay(ctx, propertyID, stayID),
 			map[string]any{"status": st.Status}, map[string]any{"status": cancelled.Status, "reason": reason, "room_id": segs[0].RoomID, "closed_folios": closedFolios})); err != nil {
 			return err
 		}

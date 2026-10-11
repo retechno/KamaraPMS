@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/housekeeping/housekeepingdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -201,7 +202,7 @@ func (s *Service) apply(ctx context.Context, c change) (State, error) {
 	bd := c.BusinessDate
 	err = s.audit.Write(ctx, audit.Entry{
 		TenantID: c.TenantID, PropertyID: &c.PropertyID, BusinessDate: &bd, UserID: c.ActorID,
-		Action: "housekeeping.changed", EntityType: "room", EntityID: c.RoomID,
+		Action: "housekeeping.changed", EntityType: "room", EntityID: c.RoomID, EntityLabel: auditlabel.Room(ctx, c.PropertyID, c.RoomID),
 		Old: map[string]any{"status": c.From}, New: toLog(log),
 	})
 	return State{RoomID: c.RoomID, Status: Status(row.Status), UpdatedAt: row.UpdatedAt}, err

@@ -8,6 +8,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
@@ -167,7 +168,7 @@ func (s *Service) AddBedAdjustment(ctx context.Context, propertyID, ratePlanID i
 			ID: row.ID, RatePlanID: ratePlanID, RoomTypeID: row.RoomTypeID, BedTypeID: row.BedTypeID, AdjustKind: row.AdjustKind,
 			Amount: row.Amount.String(), EffectiveFrom: row.EffectiveFrom, CreatedAt: row.CreatedAt,
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.bed_adjustment_added", "rate_plan", ratePlanID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "rate_plan.bed_adjustment_added", "rate_plan", ratePlanID, auditlabel.RatePlan(ctx, propertyID, ratePlanID), nil, out))
 	})
 	return out, err
 }

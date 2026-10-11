@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/bankrec/bankrecdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -246,7 +247,7 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.settled", "bank_statement", statementID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.settled", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
 			map[string]any{"line": line.LineNo, "key": in.AccountKey, "gross": gross.String(), "net": net.String(), "fee": fee.String(), "mdr": mdr.String(), "vat": vat.String(), "vat_treatment": treatment,
 				"proposed_vat": proposed.String(), "expected_mdr": expectedMDR, "expected_vat": expectedVAT, "payments": len(items), "journal": jnum}))
 	})

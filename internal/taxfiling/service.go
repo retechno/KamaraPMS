@@ -11,6 +11,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -73,8 +74,8 @@ func ptr[T any](v T) *T { return &v }
 
 func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errProfileNotFound() *apperr.Error {
@@ -213,7 +214,7 @@ func (s *Service) CreateProfile(ctx context.Context, propertyID int64, in Profil
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.profile_created", "tax_filing_profile", id, nil, map[string]any{"tax": tax.Code, "authority": in.Authority}))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.profile_created", "tax_filing_profile", id, auditlabel.TaxOfProfile(ctx, propertyID, id), nil, map[string]any{"tax": tax.Code, "authority": in.Authority}))
 	})
 	if err != nil {
 		return Profile{}, err
@@ -275,7 +276,7 @@ func (s *Service) UpdateProfile(ctx context.Context, propertyID, id int64, patch
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.profile_updated", "tax_filing_profile", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.profile_updated", "tax_filing_profile", id, auditlabel.TaxOfProfile(ctx, propertyID, id),
 			map[string]any{"authority": cur.Authority, "due_day": cur.DueDay, "active": cur.IsActive}, map[string]any{"authority": authority, "due_day": dueDay, "active": active}))
 	})
 	if err != nil {
@@ -704,7 +705,7 @@ func (s *Service) fileReturn(ctx context.Context, p auth.Principal, propertyID i
 			}
 		}
 		*out = id
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_filed", "tax_return", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_filed", "tax_return", id, auditlabel.TaxReturn(ctx, propertyID, id), nil,
 			map[string]any{"return_number": number, "tax": prof.TaxCode, "period": monthLabel(in.PeriodStart), "base": w.Base.String(), "tax_amount": w.Tax.String(), "reference": in.FilingReference,
 				"input_claimed": w.InputClaimed.String(), "credit_brought_forward": w.CreditBroughtForward.String(), "offset": w.Offset.String(), "payable": w.Payable.String(), "credit_carried_forward": w.CreditCarriedForward.String()}))
 	})
@@ -781,7 +782,7 @@ func (s *Service) VoidReturn(ctx context.Context, propertyID, id int64, in VoidI
 		if err := q.VoidReturn(ctx, taxfilingdb.VoidReturnParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason, ApprovedBy: &by, OffsetVoidJournalID: offsetVoid}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_voided", "tax_return", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_voided", "tax_return", id, auditlabel.TaxReturn(ctx, propertyID, id),
 			map[string]any{"status": "FILED"}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by, "return_number": ret.Number}))
 	})
 	if err != nil {

@@ -141,7 +141,7 @@ func (s *Service) ClosePeriod(ctx context.Context, propertyID int64, start civil
 		if err := s.q(ctx).ClosePeriod(ctx, accountingdb.ClosePeriodParams{TenantID: p.TenantID, PropertyID: propertyID, PeriodStart: start, Now: ptr(s.clock.Now()), ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.period_closed", "gl_period", propertyID, nil, map[string]any{"period": start.String()})); err != nil {
+		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.period_closed", "gl_period", propertyID, start.String(), nil, map[string]any{"period": start.String()})); err != nil {
 			return err
 		}
 		out, err = s.onePeriod(ctx, p.TenantID, propertyID, cfg, day.BusinessDate, start)
@@ -186,7 +186,7 @@ func (s *Service) ReopenPeriod(ctx context.Context, propertyID int64, start civi
 		if err := s.q(ctx).ReopenPeriod(ctx, accountingdb.ReopenPeriodParams{TenantID: p.TenantID, PropertyID: propertyID, PeriodStart: start, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason}); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.period_reopened", "gl_period", propertyID, nil, map[string]any{"period": start.String(), "reason": reason})); err != nil {
+		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.period_reopened", "gl_period", propertyID, start.String(), nil, map[string]any{"period": start.String(), "reason": reason})); err != nil {
 			return err
 		}
 		out, err = s.onePeriod(ctx, p.TenantID, propertyID, cfg, day.BusinessDate, start)

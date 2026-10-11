@@ -161,8 +161,8 @@ func (s *Service) need(ctx context.Context, propertyID int64, perm auth.Permissi
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "lost_found_item", EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "lost_found_item", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func view(r lostfounddb.ListItemsRow) Item {
@@ -247,7 +247,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "lostfound.recorded", id, nil, map[string]any{
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "lostfound.recorded", id, number, nil, map[string]any{
 			"item_number": number, "description": in.Description, "category": in.Category, "room_id": in.RoomID, "location": in.Location,
 		}))
 	})
@@ -379,7 +379,7 @@ func (s *Service) change(ctx context.Context, propertyID, id int64, f func(ctx c
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, action, id, map[string]any{"status": cur.Status}, detail))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, action, id, cur.ItemNumber, map[string]any{"status": cur.Status}, detail))
 	})
 	if err != nil {
 		return Item{}, err

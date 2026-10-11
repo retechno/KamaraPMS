@@ -247,23 +247,27 @@ type Folio struct {
 
 // FolioSummary is a row of the folio list.
 type FolioSummary struct {
-	ID              int64     `json:"id"`
-	FolioNumber     string    `json:"folio_number"`
-	FolioType       string    `json:"folio_type"`
-	BillToCompanyID *int64    `json:"bill_to_company_id"`
-	Status          string    `json:"status"`
-	ReservationID   int64     `json:"reservation_id"`
-	StayID          *int64    `json:"stay_id"`
-	OpenedAt        time.Time `json:"opened_at"`
-	Version         int32     `json:"version"`
-	Balance         string    `json:"balance"`
+	ID              int64  `json:"id"`
+	FolioNumber     string `json:"folio_number"`
+	FolioType       string `json:"folio_type"`
+	BillToCompanyID *int64 `json:"bill_to_company_id"`
+	Status          string `json:"status"`
+	ReservationID   int64  `json:"reservation_id"`
+	// ConfirmationNumber is the number of that reservation ("RES000012"), so a list can name it instead of showing its id.
+	ConfirmationNumber string    `json:"confirmation_number"`
+	StayID             *int64    `json:"stay_id"`
+	OpenedAt           time.Time `json:"opened_at"`
+	Version            int32     `json:"version"`
+	Balance            string    `json:"balance"`
 }
 
 // Payment is a payment or refund.
 type Payment struct {
-	ID                int64      `json:"id"`
-	PaymentNumber     string     `json:"payment_number"`
-	FolioID           int64      `json:"folio_id"`
+	ID            int64  `json:"id"`
+	PaymentNumber string `json:"payment_number"`
+	FolioID       int64  `json:"folio_id"`
+	// FolioNumber is the number of that folio ("FOL000026"), so a list can name it instead of showing its id.
+	FolioNumber       string     `json:"folio_number"`
 	PaymentType       string     `json:"payment_type"`
 	PaymentMethod     string     `json:"payment_method"`
 	CompanyID         *int64     `json:"company_id"`

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam/iamdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -118,7 +119,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Session, error) {
 		}
 		out = sess
 		return s.audit.Write(ctx, audit.Entry{TenantID: user.TenantID, UserID: &user.ID,
-			Action: "auth.login", EntityType: "user", EntityID: user.ID})
+			Action: "auth.login", EntityType: "user", EntityID: user.ID, EntityLabel: user.Email})
 	})
 	return out, err
 }
@@ -244,7 +245,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent string) (
 				return err
 			}
 			return s.audit.Write(ctx, audit.Entry{TenantID: row.TenantID, UserID: &row.UserID,
-				Action: "auth.refresh_token_reused", EntityType: "user", EntityID: row.UserID})
+				Action: "auth.refresh_token_reused", EntityType: "user", EntityID: row.UserID, EntityLabel: auditlabel.User(ctx, row.TenantID, row.UserID)})
 		case row.RevokedAt != nil:
 			failureCode = "SESSION_REVOKED" // ended by logout, password change, ...: not an attack
 			return nil
@@ -359,7 +360,7 @@ func (s *Service) ChangePassword(ctx context.Context, current, next string) erro
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "auth.password_changed", EntityType: "user", EntityID: p.UserID})
+			Action: "auth.password_changed", EntityType: "user", EntityID: p.UserID, EntityLabel: auditlabel.User(ctx, p.TenantID, p.UserID)})
 	})
 }
 
@@ -509,7 +510,7 @@ func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (User, err
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "user.created", EntityType: "user", EntityID: row.ID, New: out})
+			Action: "user.created", EntityType: "user", EntityID: row.ID, EntityLabel: email, New: out})
 	})
 	return out, err
 }
@@ -579,7 +580,7 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "user.updated", EntityType: "user", EntityID: id, Old: before, New: out})
+			Action: "user.updated", EntityType: "user", EntityID: id, EntityLabel: auditlabel.User(ctx, p.TenantID, id), Old: before, New: out})
 	})
 	return out, err
 }
@@ -612,7 +613,7 @@ func (s *Service) ResetPassword(ctx context.Context, id int64, password string) 
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "user.password_reset", EntityType: "user", EntityID: id})
+			Action: "user.password_reset", EntityType: "user", EntityID: id, EntityLabel: auditlabel.User(ctx, p.TenantID, id)})
 	})
 }
 
@@ -650,7 +651,7 @@ func (s *Service) ReplaceGrants(ctx context.Context, userID int64, grants []Gran
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "user.grants_replaced", EntityType: "user", EntityID: userID, Old: before, New: out.Grants})
+			Action: "user.grants_replaced", EntityType: "user", EntityID: userID, EntityLabel: auditlabel.User(ctx, p.TenantID, userID), Old: before, New: out.Grants})
 	})
 	return out, err
 }
@@ -778,7 +779,7 @@ func (s *Service) CreateRole(ctx context.Context, in RoleInput) (Role, error) {
 		}
 		out = toRole(row, perms)
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "role.created", EntityType: "role", EntityID: row.ID, New: out})
+			Action: "role.created", EntityType: "role", EntityID: row.ID, EntityLabel: name, New: out})
 	})
 	return out, err
 }
@@ -836,7 +837,7 @@ func (s *Service) UpdateRole(ctx context.Context, id int64, in RoleInput) (Role,
 		}
 		out = toRole(updated, perms)
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "role.updated", EntityType: "role", EntityID: id, Old: before, New: out})
+			Action: "role.updated", EntityType: "role", EntityID: id, EntityLabel: name, Old: before, New: out})
 	})
 	return out, err
 }
@@ -923,7 +924,7 @@ func (s *Service) BootstrapAdmin(ctx context.Context, tenantCode, email, fullNam
 		}
 		out = toUser(row)
 		out.Grants = []Grant{}
-		return s.audit.Write(ctx, audit.Entry{TenantID: tenant.ID, Action: "user.created", EntityType: "user", EntityID: row.ID, New: out})
+		return s.audit.Write(ctx, audit.Entry{TenantID: tenant.ID, Action: "user.created", EntityType: "user", EntityID: row.ID, EntityLabel: email, New: out})
 	})
 	return out, err
 }

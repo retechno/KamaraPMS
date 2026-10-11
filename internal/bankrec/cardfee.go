@@ -193,7 +193,7 @@ func (s *Service) CreateCardFeeRule(ctx context.Context, propertyID int64, in Fe
 			return err
 		}
 		out = toFeeRule(row)
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.card_fee_rule_added", "card_fee_rule", row.ID, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.card_fee_rule_added", "card_fee_rule", row.ID, "", nil,
 			map[string]any{"payment_method": in.PaymentMethod, "mdr_rate": rate.String(), "vat_rate": vatRate.String(), "settlement_days": in.SettlementDays, "effective_from": in.EffectiveFrom}))
 	})
 	return out, err

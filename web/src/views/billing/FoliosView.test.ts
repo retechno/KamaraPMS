@@ -173,4 +173,16 @@ describe('FoliosView', () => {
     expect((w.get('select[name=status]').element as HTMLSelectElement).value).toBe('OPEN')
     expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { status: 'OPEN' } } })
   })
+
+  it('names the reservation of a folio by its confirmation number, with a link to it, and never as "#id"', async () => {
+    const w = mountView(['folio.read'], { data: [
+      { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 12, confirmation_number: 'RES000012', version: 1, balance: '900' },
+      { id: 4, folio_number: 'FOL000004', status: 'OPEN', reservation_id: 14, version: 1, balance: '0' }, // an answer without the number
+    ] })
+    await flushPromises()
+    const link = w.get('[data-testid=folio-FOL000003] a[href="/reservations/12"]')
+    expect(link.text()).toBe('RES000012')
+    expect(w.get('[data-testid=folio-FOL000003]').text()).not.toContain('#12')
+    expect(w.get('[data-testid=folio-FOL000004] a[href="/reservations/14"]').text()).toBe('#14')
+  })
 })

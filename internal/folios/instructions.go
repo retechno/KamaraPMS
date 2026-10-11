@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -197,7 +198,7 @@ func (s *Service) SetBillingInstructions(ctx context.Context, propertyID, reserv
 			numbers[i] = f.FolioNumber
 		}
 		if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(),
-			Action: "folio.billing_instructions_set", EntityType: "reservation_room", EntityID: lineID,
+			Action: "folio.billing_instructions_set", EntityType: "reservation_room", EntityID: lineID, EntityLabel: auditlabel.ReservationOfLine(ctx, propertyID, lineID),
 			Old: map[string]any{"instructions": before}, New: map[string]any{"instructions": after, "company_folios_opened": numbers}}); err != nil {
 			return err
 		}

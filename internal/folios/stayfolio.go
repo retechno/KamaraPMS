@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -164,7 +165,7 @@ func (s *Service) DetachStayFolio(ctx context.Context, p auth.Principal, propert
 		if err != nil {
 			return StayFolio{}, nil, err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.closed", "folio", c.ID,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.closed", "folio", c.ID, auditlabel.Folio(ctx, propertyID, c.ID),
 			map[string]any{"status": f.Status}, map[string]any{"status": c.Status, "reason": "check-in reversed", "stay_id": stayID, "folio_type": c.FolioType})); err != nil {
 			return StayFolio{}, nil, err
 		}

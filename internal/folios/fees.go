@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/folios/foliosdb"
 	"kamarapms/internal/platform/apperr"
@@ -188,7 +189,7 @@ func (s *Service) PostReservationFee(ctx context.Context, propertyID, reservatio
 			action = "reservation.no_show_fee_posted"
 			details["reservation_room_id"] = subjectID
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, action, "reservation", reservationID, nil, details)); err != nil {
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, action, "reservation", reservationID, auditlabel.Reservation(ctx, propertyID, reservationID), nil, details)); err != nil {
 			return err
 		}
 		res2, err := s.itemResult(ctx, p.TenantID, propertyID, folio.ID, item.ID)

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
@@ -57,7 +58,7 @@ func (s *Service) CreateBedType(ctx context.Context, propertyID int64, in BedTyp
 			return err
 		}
 		out = toBedType(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "bed_type.created", "bed_type", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "bed_type.created", "bed_type", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -106,7 +107,7 @@ func (s *Service) UpdateBedType(ctx context.Context, propertyID, id int64, patch
 			return err
 		}
 		out = toBedType(updated)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "bed_type.updated", "bed_type", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "bed_type.updated", "bed_type", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -134,6 +135,6 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "bed_types.seeded", EntityType: "property", EntityID: in.PropertyID, New: map[string]any{"created": created},
+		Action: "bed_types.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"created": created},
 	})
 }

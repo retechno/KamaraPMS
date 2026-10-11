@@ -72,7 +72,7 @@ func (s *Service) CreateTenant(ctx context.Context, code, name, timezone string)
 			return err
 		}
 		t = toTenant(row)
-		return s.audit.Write(ctx, audit.Entry{TenantID: t.ID, Action: "tenant.created", EntityType: "tenant", EntityID: t.ID, New: t})
+		return s.audit.Write(ctx, audit.Entry{TenantID: t.ID, Action: "tenant.created", EntityType: "tenant", EntityID: t.ID, EntityLabel: t.Code, New: t})
 	})
 	return t, err
 }
@@ -174,11 +174,11 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 		out = PropertyWithDay{Property: prop, BusinessDate: day.BusinessDate}
 		bd := day.BusinessDate
 		if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &prop.ID, BusinessDate: &bd, UserID: p.ActorID(),
-			Action: "property.created", EntityType: "property", EntityID: prop.ID, New: prop}); err != nil {
+			Action: "property.created", EntityType: "property", EntityID: prop.ID, EntityLabel: prop.Code, New: prop}); err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &prop.ID, BusinessDate: &bd, UserID: p.ActorID(),
-			Action: "business_day.opened", EntityType: "business_day", EntityID: day.ID, New: toBusinessDay(day)})
+			Action: "business_day.opened", EntityType: "business_day", EntityID: day.ID, EntityLabel: day.BusinessDate.String(), New: toBusinessDay(day)})
 	})
 	return out, err
 }
@@ -357,7 +357,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			return notFound(err, errBusinessDayNotFound)
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &out.ID, BusinessDate: &day.BusinessDate,
-			UserID: p.ActorID(), Action: "property.updated", EntityType: "property", EntityID: out.ID, Old: before, New: out})
+			UserID: p.ActorID(), Action: "property.updated", EntityType: "property", EntityID: out.ID, EntityLabel: out.Code, Old: before, New: out})
 	})
 	return out, err
 }
@@ -486,7 +486,7 @@ func (s *Service) CloseAndOpenNextLocked(ctx context.Context, prop Property, day
 	closed, opened = toBusinessDay(closedRow), toBusinessDay(openedRow)
 
 	for _, e := range []audit.Entry{
-		{Action: "business_day.closed", EntityID: closed.ID, BusinessDate: &closed.BusinessDate, Old: day, New: closed},
+		{Action: "business_day.closed", EntityID: closed.ID, EntityLabel: closed.BusinessDate.String(), BusinessDate: &closed.BusinessDate, Old: day, New: closed},
 		{Action: "business_day.opened", EntityID: opened.ID, BusinessDate: &opened.BusinessDate, New: opened},
 	} {
 		e.TenantID, e.PropertyID, e.UserID, e.EntityType = prop.TenantID, &prop.ID, closedBy, "business_day"

@@ -1659,6 +1659,20 @@ INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_ty
 VALUES (tn('ABC'), pr('BALI'), '2026-10-01', 'stay.checked_in', 'stay', st('S1'), '{"room": "201"}');
 SELECT expect_error('audit log is append-only', '23001',
     $q$UPDATE audit_logs SET action = 'x'$q$);
+-- The label of an entry (00066): the identifier of what it is about, cut by the writer at 120 characters (the database refuses a longer one), found by a part of it through the trigram index.
+SELECT expect_ok('an entry keeps the label of what it is about',
+    $q$INSERT INTO audit_logs (tenant_id, property_id, business_date, action, entity_type, entity_id, entity_label, new_data)
+       VALUES (tn('ABC'), pr('BALI'), '2026-10-01', 'reservation.created', 'reservation', 1, 'RES000012', '{}')$q$);
+SELECT expect_error('a label longer than 120 characters is refused', '22001',
+    $q$INSERT INTO audit_logs (tenant_id, property_id, action, entity_type, entity_id, entity_label) VALUES (tn('ABC'), pr('BALI'), 'x', 'reservation', 1, repeat('a', 121))$q$);
+SELECT expect_ok('a label is found by a part of it, in any case, and the trigram index is there',
+    $q$DO $d$ BEGIN
+        INSERT INTO audit_logs (tenant_id, property_id, action, entity_type, entity_id, entity_label) VALUES (tn('ABC'), pr('BALI'), 'x', 'reservation', 1, 'RES000012');
+        IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE entity_label ILIKE '%es0000%') THEN RAISE EXCEPTION 'the label was not found'; END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'audit_logs_label_trgm_idx' AND indexdef LIKE '%gin_trgm_ops%') THEN RAISE EXCEPTION 'the trigram index is missing'; END IF;
+    END $d$$q$);
+SELECT expect_error('the label of an entry cannot be changed afterwards', '23001',
+    $q$UPDATE audit_logs SET entity_label = 'x'$q$);
 
 ------------------------------------------------------------------------------------------
 -- A stay with a folio for each payer (00060)

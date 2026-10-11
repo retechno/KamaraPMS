@@ -14,6 +14,7 @@ import (
 
 	"kamarapms/internal/accounting/accountingdb"
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -85,8 +86,8 @@ func (s *Service) need(ctx context.Context, propertyID int64, perm auth.Permissi
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 // SeedProperty gives a new property the standard chart of accounts (the hook of tenancy.CreateProperty).
@@ -101,7 +102,7 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
-		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, New: map[string]any{"accounts": n},
+		Action: "accounting.chart_seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"accounts": n},
 	})
 }
 
@@ -304,7 +305,7 @@ func (s *Service) CreateAccount(ctx context.Context, propertyID int64, in Accoun
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_created", "gl_account", id, nil, map[string]any{"code": in.Code, "name": in.Name, "type": in.AccountType, "department_requirement": in.DepartmentRequirement}))
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_created", "gl_account", id, in.Code, nil, map[string]any{"code": in.Code, "name": in.Name, "type": in.AccountType, "department_requirement": in.DepartmentRequirement}))
 	})
 	if err != nil {
 		return Account{}, err
@@ -413,7 +414,7 @@ func (s *Service) UpdateAccount(ctx context.Context, propertyID, id int64, patch
 				return err
 			}
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_updated", "gl_account", id,
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_updated", "gl_account", id, auditlabel.GLAccount(ctx, propertyID, id),
 			map[string]any{"name": cur.Name, "postable": cur.IsPostable, "active": cur.IsActive, "group": deref(cur.StatementGroup), "parent_id": cur.ParentID, "department_requirement": cur.DepartmentRequirement, "default_department_id": cur.DefaultDepartmentID},
 			map[string]any{"name": name, "postable": postable, "active": active, "group": group, "parent_id": parent, "department_requirement": requirement, "default_department_id": defaultDept}))
 	})
@@ -478,7 +479,7 @@ func (s *Service) DeleteAccount(ctx context.Context, propertyID, id int64) error
 		if err := q.DeleteAccount(ctx, accountingdb.DeleteAccountParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_deleted", "gl_account", id, map[string]any{"code": cur.Code, "name": cur.Name}, nil))
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.account_deleted", "gl_account", id, cur.Code, map[string]any{"code": cur.Code, "name": cur.Name}, nil))
 	})
 }
 
@@ -723,7 +724,7 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID int64, text string, 
 		if err := s.checkMapUsable(ctx, p.TenantID, propertyID); err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.accounts_imported", "property", propertyID, nil, map[string]any{"created": out.Created, "updated": out.Updated, "dry_run": dryRun})); err != nil {
+		if err := s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.accounts_imported", "property", propertyID, auditlabel.Property(ctx, propertyID), nil, map[string]any{"created": out.Created, "updated": out.Updated, "dry_run": dryRun})); err != nil {
 			return err
 		}
 		if dryRun {
