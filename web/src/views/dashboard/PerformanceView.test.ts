@@ -166,7 +166,8 @@ describe('PerformanceView', () => {
     await flushPromises()
     expect(w.findAll('[data-slot=page-header]')).toHaveLength(1)
     expect(w.get('h1').text()).toBe('Property performance')
-    expect(w.get('[data-testid=managers-only]').text()).toContain('report.view')
+    expect(w.get('[data-testid=managers-only]').text()).toBe('Managers only') // the words, not the code of the permission
+    expect(w.get('[data-testid=managers-only]').text()).not.toContain('report.view')
     expect(w.get('[data-testid=updated]').text()).toMatch(/^Updated \d{2}:\d{2}$/)
     expect(w.get('[data-testid=full-report]').attributes('to')).toBe('/reports')
   })
@@ -230,5 +231,24 @@ describe('PerformanceView', () => {
     expect(chart.find('[data-slot=line-100]').exists()).toBe(true)
     expect(chart.find('[data-slot=line-50]').exists()).toBe(true)
     expect(chart.findAll('[data-testid=forecast-bar]').map((b) => b.attributes('data-strong'))).toEqual(['false', 'false', 'true', 'true'])
+  })
+
+  it('has two rows of four cards that take the whole width, two by two on a phone: no empty tracks at the end of a row', async () => {
+    const w = mountView()
+    await flushPromises()
+    for (const id of ['main-kpis', 'movement-kpis']) {
+      const row = w.get(`[data-testid=${id}]`)
+      expect(row.classes(), id).toEqual(expect.arrayContaining(['grid', 'grid-cols-2', 'lg:grid-cols-4']))
+      expect(row.classes().join(' '), id).not.toContain('auto-fill') // auto-fill leaves the room of a card empty at the right
+      expect(row.findAll('[data-slot=kpi-card]'), id).toHaveLength(4)
+    }
+  })
+
+  it('says "Khusus manajer" in Indonesian, without the code of the permission', async () => {
+    setLocale('id')
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=managers-only]').text()).toBe('Khusus manajer')
+    setLocale('en')
   })
 })

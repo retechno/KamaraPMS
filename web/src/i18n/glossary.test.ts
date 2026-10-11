@@ -13,6 +13,7 @@ const BANNED: [RegExp, string][] = [
   [/\bhutang\b/i, 'utang'],
   [/Pengembalian pajak/i, 'SPT Masa PPN'],
   [/Credit note/i, 'Nota kredit'],
+  [/ranjang/i, 'tempat tidur'],
 ]
 
 describe('the glossary of the Indonesian messages', () => {

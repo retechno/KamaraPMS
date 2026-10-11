@@ -215,7 +215,7 @@ const rooms = computed(() => {
     <ErrorNotice v-if="error" :error="error" inline data-testid="dash-error" />
 
     <template v-if="data">
-      <div class="mb-4 grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3" data-testid="main-kpis">
+      <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="main-kpis">
         <KpiCard v-for="k in mainKpis" :key="k.id" :data-testid="`kpi-${k.id}`" :label="k.label" :value="k.value" :icon="k.icon">
           <span v-if="k.hint" class="block">{{ k.hint }}</span>
           <span class="mt-1 flex items-center justify-between gap-2">
@@ -231,7 +231,7 @@ const rooms = computed(() => {
         </KpiCard>
       </div>
 
-      <div class="mb-4 grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3">
+      <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="movement-kpis">
         <KpiCard
           data-testid="kpi-arrivals"
           :label="t('dashboard.manager.arrivalsLeft')"
