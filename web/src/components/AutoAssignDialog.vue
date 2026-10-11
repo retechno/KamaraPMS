@@ -117,16 +117,16 @@ const ready = (r: FreeRoom): boolean => isRoomReady(r.housekeeping_status, requi
           <thead>
             <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th class="py-1.5 pr-2 font-semibold">{{ t('autoAssign.reservation') }}</th>
-              <th class="py-1.5 pr-2 font-semibold">{{ t('autoAssign.type') }}</th>
-              <th class="py-1.5 pr-2 font-semibold">{{ t('autoAssign.stay') }}</th>
+              <th class="hidden py-1.5 pr-2 font-semibold sm:table-cell">{{ t('autoAssign.type') }}</th>
+              <th class="hidden py-1.5 pr-2 font-semibold sm:table-cell">{{ t('autoAssign.stay') }}</th>
               <th class="py-1.5 font-semibold">{{ t('autoAssign.proposed') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="p in proposals" :key="p.line.key" class="border-t border-border align-top" :data-testid="`proposal-${p.line.key}`">
-              <td class="py-2 pr-2"><span class="font-medium">{{ p.line.confirmation }}</span><span class="block text-xs text-muted-foreground">{{ p.line.guest || '—' }}</span></td>
-              <td class="py-2 pr-2">{{ p.line.typeCode }}</td>
-              <td class="py-2 pr-2 whitespace-nowrap text-xs">{{ stay(p.line) }}</td>
+              <td class="py-2 pr-2"><span class="font-medium">{{ p.line.confirmation }}</span><span class="block text-xs text-muted-foreground">{{ p.line.guest || '—' }}</span><span class="block text-xs text-muted-foreground sm:hidden">{{ p.line.typeCode }} · {{ stay(p.line) }}</span></td>
+              <td class="hidden py-2 pr-2 sm:table-cell">{{ p.line.typeCode }}</td>
+              <td class="hidden whitespace-nowrap py-2 pr-2 text-xs sm:table-cell">{{ stay(p.line) }}</td>
               <td class="py-2">
                 <template v-if="outcomes[p.line.key]?.state === 'ok'">
                   <b data-testid="proposed-room">{{ p.room?.room_number }}</b> <span class="text-success-text" data-testid="outcome-ok">✓ {{ t('autoAssign.done') }}</span>
