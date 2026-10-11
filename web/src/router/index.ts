@@ -25,6 +25,12 @@ export const router = createRouter({
       meta: { title: 'Housekeeping' },
     },
     {
+      path: '/housekeeping/my',
+      name: 'housekeeping-my',
+      component: () => import('@/views/rooms/HousekeepingMyView.vue'),
+      meta: { title: 'My tasks' },
+    },
+    {
       path: '/housekeeping/tasks',
       name: 'housekeeping-tasks',
       component: () => import('@/views/rooms/HousekeepingTasksView.vue'),

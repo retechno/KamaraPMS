@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import type { Arrival, AvailabilityCalendar, CityLedgerAccount, HousekeepingBoardRoom, InHouseRow } from '@/api/types'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -127,18 +128,8 @@ export function useToday(paused: () => boolean = () => false) {
     void reload()
   }, { immediate: true })
 
-  function tick(): void {
-    if (paused() || refreshing.value || (typeof document !== 'undefined' && document.hidden)) return
-    void reload()
-  }
-  function visibility(): void {
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') tick()
-  }
-  const timer = setInterval(tick, REFRESH_EVERY_MS)
-  document.addEventListener('visibilitychange', visibility)
+  useAutoRefresh(() => void reload(), { everyMs: REFRESH_EVERY_MS, paused, busy: () => refreshing.value })
   onBeforeUnmount(() => {
-    clearInterval(timer)
-    document.removeEventListener('visibilitychange', visibility)
     latest++ // an answer that comes after the page is gone writes nothing
   })
 

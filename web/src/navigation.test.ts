@@ -47,6 +47,8 @@ describe('navigation', () => {
     expect(activeNav('/reservations/12')?.item.id).toBe('reservations')
     expect(activeNav('/setup/properties/new')?.item.id).toBe('properties')
     expect(activeNav('/housekeeping/tasks')?.item.id).toBe('cleaningList')
+    expect(activeNav('/housekeeping/my')?.item.id).toBe('myTasks')
+    expect(findNavItem('myTasks')?.section.id).toBe('rooms')
     expect(activeNav('/housekeeping')?.item.id).toBe('housekeeping')
     expect(activeNav('/accounting/ledger')?.section.id).toBe('accounting')
     expect(activeNav('/payables/bills')?.section.id).toBe('payables')
@@ -67,13 +69,15 @@ describe('navigation', () => {
 
   it('has the Performance page in the end of the day, shown only to who may view reports', () => {
     const named = items.filter((i) => i.permission)
-    expect(named.map((i) => [i.id, i.to, i.permission])).toEqual([['performance', '/performance', 'report.view']])
+    expect(named.map((i) => [i.id, i.to, i.permission])).toEqual([['myTasks', '/housekeeping/my', 'housekeeping.update'], ['performance', '/performance', 'report.view']])
     expect(findNavItem('performance')?.section.id).toBe('endOfDay')
     const ids = (can?: (p: string) => boolean) => visibleNavigation(false, can).flatMap((s) => s.items.map((i) => i.id))
     expect(ids((p) => p === 'report.view')).toContain('performance')
     expect(ids(() => false)).not.toContain('performance')
     expect(ids()).not.toContain('performance')
     expect(ids(() => false)).toContain('dashboard') // the page of the day is for everyone
+    expect(ids((p) => p === 'housekeeping.update')).toContain('myTasks') // the page of the corridor is for who cleans
+    expect(ids(() => false)).not.toContain('myTasks')
   })
 
   it('keeps an item that names a permission from those who do not have it', () => {
