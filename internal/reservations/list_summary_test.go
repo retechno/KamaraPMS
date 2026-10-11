@@ -6,6 +6,7 @@ import (
 
 	"kamarapms/internal/folios"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms/roomstest"
@@ -16,7 +17,7 @@ import (
 
 func (f *fx) list(t *testing.T, filter reservations.ListFilter) []reservations.Summary {
 	t.Helper()
-	rows, err := f.Res.List(f.admin, f.propID, filter, 0, 100)
+	rows, err := f.Res.List(f.admin, f.propID, filter, 100)
 	must(t, err)
 	return rows
 }
@@ -173,12 +174,12 @@ func TestListFiltersAreAppliedByTheDatabase(t *testing.T) {
 		t.Fatalf("in house: %+v", rows)
 	}
 	// the page is cut by the database: the second page continues after the first, and the filter holds on both
-	page1, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{DisplayStatus: "CONFIRMED"}, 0, 1)
+	page1, err := f.Res.Search(f.admin, f.propID, reservations.ListFilter{DisplayStatus: "CONFIRMED"}, listsort.Sort{}, nil, 1)
 	must(t, err)
-	page2, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{DisplayStatus: "CONFIRMED"}, page1[0].ID, 1)
+	page2, err := f.Res.Search(f.admin, f.propID, reservations.ListFilter{DisplayStatus: "CONFIRMED"}, listsort.Sort{}, page1.Next, 1)
 	must(t, err)
-	if len(page1) != 1 || len(page2) != 1 || page1[0].ID == page2[0].ID {
-		t.Fatalf("pages: %+v %+v", page1, page2)
+	if len(page1.Data) != 1 || len(page2.Data) != 1 || page1.Data[0].ID == page2.Data[0].ID {
+		t.Fatalf("pages: %+v %+v", page1.Data, page2.Data)
 	}
 }
 
@@ -186,15 +187,15 @@ func TestListIsScopedAndAuthorized(t *testing.T) {
 	f := setup(t)
 	f.book(t, f.dlx, "2026-10-05", "2026-10-07")
 	ubud := f.Property(t, f.tenantID, "UBUD")
-	if rows, err := f.Res.List(f.admin, ubud.ID, reservations.ListFilter{}, 0, 50); err != nil || len(rows) != 0 {
+	if rows, err := f.Res.List(f.admin, ubud.ID, reservations.ListFilter{}, 50); err != nil || len(rows) != 0 {
 		t.Fatalf("another property: %v %+v", err, rows)
 	}
 	other := f.Tenant(t, "XYZ")
 	stranger := roomstest.Admin(other.ID)
-	if _, err := f.Res.List(stranger, f.propID, reservations.ListFilter{}, 0, 50); err == nil {
+	if _, err := f.Res.List(stranger, f.propID, reservations.ListFilter{}, 50); err == nil {
 		t.Fatal("another tenant must not list")
 	}
-	_, err := f.Res.List(f.User(t, f.tenantID, f.propID, auth.PermGuestRead), f.propID, reservations.ListFilter{}, 0, 50)
+	_, err := f.Res.List(f.User(t, f.tenantID, f.propID, auth.PermGuestRead), f.propID, reservations.ListFilter{}, 50)
 	wantCode(t, err, "PERMISSION_DENIED")
 }
 

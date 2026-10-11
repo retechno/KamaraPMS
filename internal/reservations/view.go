@@ -8,8 +8,10 @@ import (
 
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/chargecalc"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/reservations/reservationsdb"
 )
 
@@ -210,19 +212,79 @@ func (s *Service) Get(ctx context.Context, propertyID, id int64) (Reservation, e
 	return s.load(ctx, p.TenantID, propertyID, res)
 }
 
-// List searches reservations, newest first (reservation.read). before is the id to continue after.
-func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, before int64, limit int) ([]Summary, error) {
+// SortSpec is what the reservation list can be sorted by. The default (no sort) is "nearest first": the arrivals of the business date and after it soonest first, then the arrivals before it,
+// the most recent first, the confirmation number breaking a tie.
+var SortSpec = listsort.Spec{
+	Columns:     map[string]listsort.Kind{"arrival_date": listsort.Date, "confirmation_number": listsort.Text, "guest_name": listsort.Text, "status": listsort.Text, "rate": listsort.Num},
+	DefaultKind: listsort.Text,
+}
+
+// ListResult is a page of reservations and where it ends, when there are more.
+type ListResult struct {
+	Data []Summary
+	Next *listsort.Position
+}
+
+// List is the first page of the list in the default order (reservation.read): what the tests and the callers that want a plain list use.
+func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, limit int) ([]Summary, error) {
+	res, err := s.Search(ctx, propertyID, f, listsort.Sort{}, nil, limit)
+	return res.Data, err
+}
+
+// Search lists reservations in the order asked for (reservation.read), a page of limit; pos is where the page before ended (nil for the first). The default order is relative to the business
+// date, which the cursor of the default order carries, so a page goes on from the same date even if the night audit has run since.
+func (s *Service) Search(ctx context.Context, propertyID int64, f ListFilter, order listsort.Sort, pos *listsort.Position, limit int) (ListResult, error) {
 	p, err := s.writer(ctx, propertyID, auth.PermReservationRead)
 	if err != nil {
-		return nil, err
+		return ListResult{}, err
+	}
+	kind := SortSpec.Kind(order)
+	after, err := listsort.AfterOf(pos, kind)
+	if err != nil {
+		return ListResult{}, err
+	}
+	var ref civil.Date
+	if order.Key == "" {
+		if pos != nil && pos.Ref != "" {
+			if ref, err = civil.ParseDate(pos.Ref); err != nil {
+				return ListResult{}, apperr.BadRequest("INVALID_CURSOR", "the pagination cursor is invalid")
+			}
+		} else {
+			day, err := s.days.CurrentBusinessDay(ctx, propertyID)
+			if err != nil {
+				return ListResult{}, err
+			}
+			ref = day.BusinessDate
+		}
 	}
 	rows, err := s.q(ctx).SearchReservations(ctx, reservationsdb.SearchReservationsParams{
-		TenantID: p.TenantID, PropertyID: propertyID, BeforeID: before, Status: nullable(f.Status), DisplayStatus: nullable(f.DisplayStatus), ArrivalFrom: f.ArrivalFrom,
+		SortKey: order.Key, RefDate: ref, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, Status: nullable(f.Status), DisplayStatus: nullable(f.DisplayStatus), ArrivalFrom: f.ArrivalFrom,
 		ArrivalTo: f.ArrivalTo, DepartureFrom: f.DepartureFrom, DepartureTo: f.DepartureTo, Q: likeText(f.Query), CompanyID: f.CompanyID, BookingGroupID: f.GroupID,
-		RoomTypeID: f.RoomTypeID, RatePlanID: f.RatePlanID, RowLimit: rowLimit(limit),
+		RoomTypeID: f.RoomTypeID, RatePlanID: f.RatePlanID, AfterID: after.ID, AfterNull: after.Null, AfterText: after.Text, AfterNum: after.Num, AfterDate: after.Date, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {
-		return nil, err
+		return ListResult{}, err
+	}
+	var next *listsort.Position
+	if len(rows) > limit {
+		last := rows[limit-1]
+		np := listsort.Position{ID: last.ID}
+		if !last.SortNull {
+			switch kind {
+			case listsort.Num:
+				np.Value = listsort.NumValue(&last.SortNum)
+			case listsort.Date:
+				np.Value = listsort.DateValue(&last.SortDate)
+			default:
+				v := last.SortText
+				np.Value = &v
+			}
+		}
+		if order.Key == "" {
+			np.Ref = ref.String()
+		}
+		next = &np
+		rows = rows[:limit]
 	}
 	ids := make([]int64, len(rows))
 	for i, r := range rows {
@@ -230,7 +292,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 	}
 	lines, deposits, err := s.summaryExtras(ctx, p.TenantID, propertyID, ids)
 	if err != nil {
-		return nil, err
+		return ListResult{}, err
 	}
 	out := make([]Summary, len(rows))
 	for i, r := range rows {
@@ -248,7 +310,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f ListFilter, befo
 			out[i].Rooms = []SummaryLine{}
 		}
 	}
-	return out, nil
+	return ListResult{Data: out, Next: next}, nil
 }
 
 // likeText escapes a search text for ILIKE (it is a text to find, not a pattern); nil when there is none.

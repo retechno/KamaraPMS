@@ -9,6 +9,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/tenancy"
 )
 
@@ -137,10 +138,6 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 	return httpx.WriteJSON(w, http.StatusCreated, res)
 }
 
-type listCursor struct {
-	BeforeID int64 `json:"b"`
-}
-
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	pid, err := tenancy.PropertyID(r)
 	if err != nil {
@@ -167,23 +164,24 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	if len(errs) > 0 {
 		return apperr.Invalid("the filter is invalid", errs...)
 	}
-	var cur listCursor
-	if page.Cursor != "" {
-		if err := httpx.DecodeCursor(page.Cursor, &cur); err != nil {
-			return err
-		}
-	}
-	items, err := h.svc.List(r.Context(), pid, f, cur.BeforeID, page.Limit+1)
+	order, err := SortSpec.Parse(r)
 	if err != nil {
 		return err
 	}
-	out := httpx.Page[Summary]{Data: items}
+	pos, err := listsort.Decode(page.Cursor, order)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.Search(r.Context(), pid, f, order, pos, page.Limit)
+	if err != nil {
+		return err
+	}
+	out := httpx.Page[Summary]{Data: res.Data}
 	if out.Data == nil {
 		out.Data = []Summary{}
 	}
-	if len(items) > page.Limit {
-		out.Data = items[:page.Limit]
-		if out.NextCursor, err = httpx.EncodeCursor(listCursor{BeforeID: out.Data[page.Limit-1].ID}); err != nil {
+	if res.Next != nil {
+		if out.NextCursor, err = listsort.Encode(order, *res.Next); err != nil {
 			return err
 		}
 	}
