@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { BellOff, ChevronsUp, RefreshCw, Search, Sparkles } from 'lucide-vue-next'
+import { BellOff, Check, ChevronsUp, RefreshCw, Search, Sparkles, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { HousekeepingBoardRoom } from '@/api/types'
+import type { HousekeepingBoardRoom, HousekeepingBulkResult, HousekeepingStatus } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -13,6 +13,7 @@ import { statusLegend, statusSwatch } from '@/components/app/statusMap'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { confirm } from '@/composables/useConfirm'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
@@ -38,6 +39,10 @@ const selected = ref<HousekeepingBoardRoom | null>(null)
 
 const canRead = computed(() => auth.can('housekeeping.read', property.currentId) || auth.can('reservation.read', property.currentId))
 
+// Changing the cleaning of many rooms at once: housekeeping.update; "Inspected" also needs housekeeping.inspect (the same rule as the single change).
+const canChange = computed(() => auth.can('housekeeping.update', property.currentId))
+const canInspect = computed(() => canChange.value && auth.can('housekeeping.inspect', property.currentId))
+
 const counts = computed(() => ({
   occupied: rooms.value.filter((r) => r.occupancy === 'OCCUPIED').length,
   reserved: rooms.value.filter((r) => r.occupancy === 'RESERVED').length,
@@ -51,15 +56,17 @@ const roomTypes = computed(() => {
   return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
 })
 
-const visible = computed(() => {
+// The rooms that pass the filters other than the cleaning chip: what the chips count (so the number of a chip is what the board shows when it is pressed).
+const beforeCleaning = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rooms.value.filter((r) => {
     if (occupancyFilter.value === 'BLOCKED' ? !r.block : occupancyFilter.value !== 'ALL' && r.occupancy !== occupancyFilter.value) return false
-    if (housekeepingFilter.value !== 'ALL' && r.status !== housekeepingFilter.value) return false
     if (typeFilter.value && String(r.room_type_id) !== typeFilter.value) return false
     return !q || r.room_number.toLowerCase().includes(q)
   })
 })
+const visible = computed(() => beforeCleaning.value.filter((r) => housekeepingFilter.value === 'ALL' || r.status === housekeepingFilter.value))
+const cleaningCount = (status: 'ALL' | HousekeepingStatus): number => (status === 'ALL' ? beforeCleaning.value.length : beforeCleaning.value.filter((r) => r.status === status).length)
 
 const floors = computed(() => {
   const by = new Map<string, HousekeepingBoardRoom[]>()
@@ -75,11 +82,11 @@ const occupancyChips = computed(() => [
   { value: 'BLOCKED' as const, label: t('roomStatus.blocked') },
 ])
 const housekeepingChips = computed(() => [
-  { value: 'ALL' as const, label: t('roomStatus.all') },
-  { value: 'DIRTY' as const, label: t('status.DIRTY') },
-  { value: 'CLEANING' as const, label: t('status.CLEANING') },
-  { value: 'CLEAN' as const, label: t('status.CLEAN') },
-  { value: 'INSPECTED' as const, label: t('status.INSPECTED') },
+  { value: 'ALL' as const, label: t('roomStatus.all'), count: cleaningCount('ALL') },
+  { value: 'DIRTY' as const, label: t('status.DIRTY'), count: cleaningCount('DIRTY') },
+  { value: 'CLEANING' as const, label: t('status.CLEANING'), count: cleaningCount('CLEANING') },
+  { value: 'CLEAN' as const, label: t('status.CLEAN'), count: cleaningCount('CLEAN') },
+  { value: 'INSPECTED' as const, label: t('status.INSPECTED'), count: cleaningCount('INSPECTED') },
 ])
 
 /**
@@ -100,6 +107,110 @@ function tileLook(r: HousekeepingBoardRoom): TileLook {
 
 // The legend is the map the tiles are drawn from: the five cleaning states, then what a white tile means.
 const legend = computed(() => statusLegend('housekeeping').map((e) => ({ ...e, label: e.status === 'BLOCKED' ? t('roomStatus.blocked') : statusText(e.status) })))
+
+// ---- Selecting rooms and changing their cleaning together ----
+
+/** One request takes this many rooms (the limit of the API); a longer selection goes in several requests. */
+const BULK_MAX = 100
+/** More rooms than this are asked about before they are changed. */
+const CONFIRM_ABOVE = 10
+
+const picked = ref<number[]>([])
+const bulkBusy = ref(false)
+const outcome = ref<{ changed: number; failed: number; skipped: HousekeepingBulkResult[]; to: HousekeepingStatus } | null>(null)
+const isPicked = (r: HousekeepingBoardRoom): boolean => picked.value.includes(r.room_id)
+function togglePick(r: HousekeepingBoardRoom): void {
+  picked.value = isPicked(r) ? picked.value.filter((id) => id !== r.room_id) : [...picked.value, r.room_id]
+}
+// A tile opens its details, until a room is selected: then a click on a tile selects (or unselects) it, as in the design.
+function onTile(r: HousekeepingBoardRoom): void {
+  if (canChange.value && picked.value.length) togglePick(r)
+  else selected.value = r
+}
+const allShownPicked = computed(() => visible.value.length > 0 && visible.value.every(isPicked))
+function toggleAllShown(): void {
+  picked.value = allShownPicked.value ? [] : visible.value.map((r) => r.room_id)
+}
+const floorPicked = (list: HousekeepingBoardRoom[]): boolean => list.every(isPicked)
+function toggleFloor(list: HousekeepingBoardRoom[]): void {
+  const ids = list.map((r) => r.room_id)
+  picked.value = floorPicked(list) ? picked.value.filter((id) => !ids.includes(id)) : [...new Set([...picked.value, ...ids])]
+}
+// A room that a filter hides is not selected any more: what the bar acts on is what is on the screen.
+watch(visible, (list) => {
+  const shown = new Set(list.map((r) => r.room_id))
+  if (picked.value.some((id) => !shown.has(id))) picked.value = picked.value.filter((id) => shown.has(id))
+})
+
+const barActions = computed(() => [
+  { to: 'CLEAN' as const, label: t('roomStatus.markClean', { n: picked.value.length }), testid: 'bulk-clean', primary: false },
+  { to: 'DIRTY' as const, label: t('roomStatus.markDirty', { n: picked.value.length }), testid: 'bulk-dirty', primary: false },
+  ...(canInspect.value ? [{ to: 'INSPECTED' as const, label: t('roomStatus.markInspected', { n: picked.value.length }), testid: 'bulk-inspected', primary: true }] : []),
+])
+
+/** Why a room stayed as it was, in words: it already has the status, the rules do not allow the change, or the room is gone. */
+function reason(r: HousekeepingBulkResult, to: HousekeepingStatus): string {
+  if (r.error?.code === 'ROOM_NOT_FOUND') return t('roomStatus.reasonNotFound')
+  if (r.error?.code === 'INVALID_HK_TRANSITION' && r.from) {
+    return r.from === to
+      ? t('roomStatus.reasonSame', { status: statusText(to).toLowerCase() })
+      : t('roomStatus.reasonTransition', { from: statusText(r.from).toLowerCase(), to: statusText(to).toLowerCase() })
+  }
+  return t('roomStatus.reasonOther')
+}
+const outcomeSummary = computed(() => {
+  const o = outcome.value
+  if (!o) return ''
+  return o.failed ? t('roomStatus.resultMixed', { changed: o.changed, failed: o.failed }) : t('roomStatus.resultDone', { changed: o.changed }, o.changed)
+})
+
+/**
+ * Changes the selected rooms to a status. It asks first only when it matters: more than ten rooms, or rooms that were inspected going back to dirty (an INSPECTED room can only go to
+ * DIRTY). What the server skipped is reported room by room and stays selected; what changed leaves the selection.
+ */
+async function applyBulk(to: HousekeepingStatus): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || !picked.value.length || bulkBusy.value) return
+  const ids = [...picked.value]
+  const lowered = to === 'DIRTY' ? rooms.value.filter((r) => ids.includes(r.room_id) && r.status === 'INSPECTED').length : 0
+  if (ids.length > CONFIRM_ABOVE || lowered > 0) {
+    const lines = [
+      ...(ids.length > CONFIRM_ABOVE ? [t('roomStatus.confirmMany', { max: CONFIRM_ABOVE })] : []),
+      ...(lowered > 0 ? [t('roomStatus.confirmLowered', { n: lowered, status: statusText(to).toLowerCase() }, lowered)] : []),
+    ]
+    const yes = await confirm({
+      title: t('roomStatus.confirmTitle', { n: ids.length, status: statusText(to).toLowerCase() }, ids.length),
+      description: lines.join(' '),
+      confirmLabel: t('roomStatus.confirmButton'),
+      destructive: lowered > 0,
+    })
+    if (!yes) return
+  }
+  bulkBusy.value = true
+  error.value = null
+  outcome.value = null
+  const changedIds = new Set<number>()
+  const skipped: HousekeepingBulkResult[] = []
+  try {
+    for (let i = 0; i < ids.length; i += BULK_MAX) {
+      const { data } = await api.POST('/api/v1/properties/{propertyId}/housekeeping/bulk', { params: { path: { propertyId } }, body: { room_ids: ids.slice(i, i + BULK_MAX), status: to } })
+      for (const r of data?.results ?? []) {
+        if (r.ok) changedIds.add(r.room_id)
+        else skipped.push(r)
+      }
+    }
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  } finally {
+    bulkBusy.value = false
+  }
+  // What changed leaves the selection; the rooms that were skipped, and the ones a refused request never reached, stay selected.
+  picked.value = ids.filter((id) => !changedIds.has(id))
+  outcome.value = { changed: changedIds.size, failed: skipped.length, skipped, to }
+  const failure = error.value
+  await load()
+  error.value = failure
+}
 
 function clearFilters(): void {
   occupancyFilter.value = 'ALL'
@@ -137,6 +248,8 @@ watch(() => property.currentId, () => {
   rooms.value = []
   loaded.value = false
   selected.value = null
+  picked.value = []
+  outcome.value = null
   void load()
 }, { immediate: true })
 </script>
@@ -193,7 +306,7 @@ watch(() => property.currentId, () => {
           :data-testid="`filter-hk-${c.value}`"
           @click="housekeepingFilter = c.value"
         >
-          {{ c.label }}
+          {{ c.label }}<span class="ml-1.5 font-bold" :data-testid="`count-hk-${c.value}`">{{ c.count }}</span>
         </Button>
       </div>
       <NativeSelect v-model="typeFilter" class="w-44" name="room_type" :aria-label="t('roomStatus.roomType')">
@@ -204,27 +317,48 @@ watch(() => property.currentId, () => {
         <Search class="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
         <Input v-model="search" class="w-44 pl-8" name="room_search" :placeholder="t('roomStatus.findRoom')" :aria-label="t('roomStatus.findRoom')" />
       </div>
+      <Button v-if="canChange && visible.length" variant="outline" size="sm" :aria-pressed="allShownPicked" data-testid="pick-all" @click="toggleAllShown">
+        {{ allShownPicked ? t('roomStatus.selectNone') : t('roomStatus.selectAll', { n: visible.length }) }}
+      </Button>
+    </div>
+
+    <div v-if="outcome" class="mb-4 rounded-lg border bg-card p-3 text-sm" role="status" data-testid="bulk-result">
+      <div class="flex items-start justify-between gap-3">
+        <p class="m-0 font-semibold" data-testid="bulk-result-summary">{{ outcomeSummary }}</p>
+        <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted" :aria-label="t('roomStatus.resultClose')" data-testid="bulk-result-close" @click="outcome = null"><X class="size-4" aria-hidden="true" /></button>
+      </div>
+      <details v-if="outcome.skipped.length" class="mt-2" open>
+        <summary class="cursor-pointer text-muted-foreground">{{ t('roomStatus.resultSkipped') }}</summary>
+        <ul class="m-0 mt-1 list-none space-y-0.5 p-0" data-testid="bulk-skipped">
+          <li v-for="r in outcome.skipped" :key="r.room_id" :data-testid="`skipped-${r.room_number ?? r.room_id}`"><b>{{ r.room_number ?? r.room_id }}</b> · {{ reason(r, outcome.to) }}</li>
+        </ul>
+      </details>
     </div>
 
     <EmptyState v-if="!visible.length" :title="t('roomStatus.noMatch')" :description="t('emptyState.noMatch')" :action-label="t('dataTable.clearFilters')" action-variant="outline" data-testid="no-match" @action="clearFilters" />
     <section v-for="[floor, list] in floors" :key="floor" class="mb-6">
-      <h2 class="mb-2 text-sm font-semibold text-muted-foreground">{{ floor ? t('roomStatus.floor', { floor }) : t('roomStatus.noFloor') }}</h2>
+      <div class="mb-2 flex items-center gap-3">
+        <h2 class="m-0 text-sm font-semibold text-muted-foreground">{{ floor ? t('roomStatus.floor', { floor }) : t('roomStatus.noFloor') }}</h2>
+        <Button v-if="canChange" variant="ghost" size="sm" class="h-7 px-2 text-xs" :aria-pressed="floorPicked(list)" :data-testid="`pick-floor-${floor || 'none'}`" @click="toggleFloor(list)">
+          {{ floorPicked(list) ? t('roomStatus.selectNone') : t('roomStatus.selectFloor', { floor: floor || t('roomStatus.noFloor') }) }}
+        </Button>
+      </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+        <div v-for="r in list" :key="r.room_id" class="relative">
         <button
-          v-for="r in list"
-          :key="r.room_id"
           type="button"
           :data-testid="`tile-${r.room_number}`"
           :data-tile="tileLook(r).neutral ? 'neutral' : 'filled'"
-          :class="cn('flex min-h-24 cursor-pointer flex-col items-start justify-between gap-1 rounded-lg border p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring', tileLook(r).cls)"
-          @click="selected = r"
+          :data-picked="isPicked(r) ? 'true' : undefined"
+          :class="cn('flex min-h-24 w-full cursor-pointer flex-col items-start justify-between gap-1 rounded-lg border p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring', tileLook(r).cls, isPicked(r) && 'ring-2 ring-primary ring-offset-2 ring-offset-background')"
+          @click="onTile(r)"
         >
           <span class="flex w-full items-start justify-between gap-1">
             <span class="flex flex-col gap-0.5">
               <strong class="text-lg leading-none">{{ r.room_number }}</strong>
               <small class="font-semibold">{{ r.room_type_code }}</small>
             </span>
-            <span class="flex items-center gap-0.5">
+            <span :class="cn('flex items-center gap-0.5', canChange && 'pr-7')">
               <BellOff v-if="r.dnd" class="size-3.5" :title="t('roomStatus.dnd')" role="img" :aria-label="t('roomStatus.dnd')" />
               <Sparkles v-if="r.make_up_requested" class="size-3.5" :title="t('roomStatus.makeUp')" role="img" :aria-label="t('roomStatus.makeUp')" />
               <ChevronsUp v-if="r.priority === 'HIGH'" class="size-3.5" :title="t('roomStatus.highPriority')" role="img" :aria-label="t('roomStatus.highPriority')" />
@@ -234,12 +368,46 @@ watch(() => property.currentId, () => {
           <StatusBadge v-if="tileLook(r).neutral" domain="housekeeping" :status="r.status" data-slot="tile-cleaning" />
           <span v-else class="text-sm font-bold" data-slot="tile-cleaning">{{ r.block ? t(`roomStatus.${r.block.type}` as never) : statusText(r.status) }}</span>
         </button>
+        <!-- The checkbox is next to the tile, not in it (a button cannot hold a button); the hit area is a 36 px square in the corner. -->
+        <button
+          v-if="canChange"
+          type="button"
+          class="absolute right-0 top-0 grid size-9 cursor-pointer place-items-center rounded-lg focus-visible:ring-2 focus-visible:ring-ring"
+          :aria-pressed="isPicked(r)"
+          :aria-label="t('roomStatus.selectRoom', { number: r.room_number })"
+          :data-testid="`pick-${r.room_number}`"
+          @click="togglePick(r)"
+        >
+          <span :class="cn('grid size-5 place-items-center rounded-md border-2 border-foreground/60 bg-card text-primary-foreground', isPicked(r) && 'border-primary bg-primary')"><Check v-if="isPicked(r)" class="size-3.5" stroke-width="3" aria-hidden="true" /></span>
+        </button>
+        </div>
       </div>
     </section>
+    <div v-if="picked.length" class="h-24" aria-hidden="true" />
   </template>
 
   <div v-else-if="canRead && property.currentId !== null && !error" class="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2" data-testid="loading">
     <Skeleton v-for="n in 12" :key="n" class="h-28" />
+  </div>
+
+  <div
+    v-if="canChange && picked.length"
+    role="region"
+    :aria-label="t('roomStatus.barLabel')"
+    class="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-xl bg-foreground p-3 text-background shadow-xl"
+    data-testid="bulk-bar"
+  >
+    <strong class="flex-1 px-1.5 text-sm" data-testid="bulk-count">{{ t('roomStatus.selectedCount', { n: picked.length }, picked.length) }}</strong>
+    <Button
+      v-for="a in barActions"
+      :key="a.to"
+      :variant="a.primary ? 'default' : 'secondary'"
+      class="min-h-11"
+      :disabled="bulkBusy"
+      :data-testid="a.testid"
+      @click="applyBulk(a.to)"
+    >{{ a.label }}</Button>
+    <Button variant="ghost" class="min-h-11 text-background/80 hover:bg-background/10 hover:text-background" :disabled="bulkBusy" data-testid="bulk-cancel" @click="picked = []">{{ t('roomStatus.cancelSelection') }}</Button>
   </div>
 
   <Sheet v-model:open="sheetOpen">
