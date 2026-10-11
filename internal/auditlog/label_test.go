@@ -9,6 +9,8 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
+	"kamarapms/internal/guests"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/rooms/roomstest"
 )
 
@@ -208,5 +210,49 @@ func TestTheSearchTextIsThreeToSixtyFourCharacters(t *testing.T) {
 		if got := call(q); got != want {
 			t.Fatalf("q=%q: status %d, want %d", q, got, want)
 		}
+	}
+}
+
+func TestAGuestIsNamedByTheCodeAndNeverByTheName(t *testing.T) {
+	f := setup(t)
+	r, err := f.Guests.Create(f.admin, f.propID, guests.Profile{FirstName: "Siti", LastName: "Rahmawati", Email: "siti@example.com"})
+	must(t, err)
+	var created *string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT entity_label FROM audit_logs WHERE action = 'guest.created' AND entity_id = $1`, r.Guest.ID).Scan(&created))
+	if created == nil || *created != r.Guest.Code || r.Guest.Code == "" {
+		t.Fatalf("the label of a guest is the code %q: %v", r.Guest.Code, created)
+	}
+	// no label of any entry holds the name or the e-mail of the guest, however the entry was written
+	var n int
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE entity_label ILIKE '%Siti%' OR entity_label ILIKE '%Rahmawati%' OR entity_label ILIKE '%siti@%'`).Scan(&n))
+	if n != 0 {
+		t.Fatalf("%d labels hold the name of the guest", n)
+	}
+	// the update of the profile is named by the code as well
+	city := "Ubud"
+	_, err = f.Guests.Update(f.admin, r.Guest.ID, guests.Patch{City: &city})
+	must(t, err)
+	var label *string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT entity_label FROM audit_logs WHERE action = 'guest.updated' ORDER BY id DESC LIMIT 1`).Scan(&label))
+	if label == nil || *label != r.Guest.Code {
+		t.Fatalf("an update is about the code too: %v", label)
+	}
+}
+
+func TestStaffAreNamedByTheEmail(t *testing.T) {
+	f := setup(t)
+	u, err := f.IAM.CreateUser(f.admin, iam.CreateUserInput{Email: "clerk@hotel.com", FullName: "Clerk One", Password: "a-long-enough-password-1"})
+	must(t, err)
+	var created, updated *string
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT entity_label FROM audit_logs WHERE action = 'user.created' AND entity_id = $1`, u.ID).Scan(&created))
+	if created == nil || *created != "clerk@hotel.com" {
+		t.Fatalf("user.created: %v", created)
+	}
+	active := false
+	_, err = f.IAM.UpdateUser(f.admin, u.ID, iam.UserPatch{IsActive: &active})
+	must(t, err)
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT entity_label FROM audit_logs WHERE action = 'user.updated' AND entity_id = $1 ORDER BY id DESC LIMIT 1`, u.ID).Scan(&updated))
+	if updated == nil || *updated != "clerk@hotel.com" {
+		t.Fatalf("user.updated is about the e-mail: %v", updated)
 	}
 }
