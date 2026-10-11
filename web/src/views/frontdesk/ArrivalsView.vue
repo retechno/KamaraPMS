@@ -8,6 +8,8 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, GuestView } from '@/api/types'
 import ArrivalDrawer from '@/components/ArrivalDrawer.vue'
+import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
+import RoomPicker from '@/components/RoomPicker.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -26,7 +28,9 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { type ArrivalAction, MORE_ARRIVAL_ACTIONS, PRIMARY_ARRIVAL_ACTIONS, arrivalActions, arrivalTarget } from '@/utils/arrivals'
+import { type AssignFailure } from '@/utils/assignRoom'
 import { fullName } from '@/utils/inHouse'
+import { lineOfArrival } from '@/utils/roomAssign'
 import { lineUiStatus } from '@/utils/reservationStatus'
 import CheckInPanel from './CheckInPanel.vue'
 
@@ -80,6 +84,29 @@ const sheetOpen = computed({
 })
 // The menu of the row that is open: it closes when an action is chosen, so it is not left open behind the sheet or dialog the action opens.
 const menuFor = ref<number | null>(null)
+
+// A room for an arrival that has none, or another room for one that has: from the row, without going to the reservation (reservation.update; only a room that waits for its check-in).
+// The rooms are of the booked type (an upgrade goes through the reservation); the version is the one of the row, and the list is read again after an assignment or a conflict.
+const canAssign = (a: Arrival): boolean => can('reservation.update') && a.status === 'CONFIRMED'
+const changing = ref<number | null>(null)
+const autoOpen = ref(false)
+const autoLines = computed(() => rows.value.filter((a) => canAssign(a) && !a.room_id).map(lineOfArrival))
+const assignTarget = (a: Arrival) => ({ reservationId: a.reservation_id, lineId: a.reservation_room_id, version: a.reservation_version })
+function startChange(a: Arrival): void {
+  menuFor.value = null
+  // The list opens once the menu has closed and given its focus back: a list that opened in the same moment would be closed by that very focus change.
+  setTimeout(() => {
+    changing.value = a.reservation_room_id
+  }, 0)
+}
+async function roomAssigned(room: { room_number: string }): Promise<void> {
+  changing.value = null
+  toast.success(t('roomPicker.assigned', { room: room.room_number }))
+  await load()
+}
+async function assignFailed(failure: AssignFailure): Promise<void> {
+  if (failure.reload) await load() // the row (its version, its room) as it is now
+}
 const actionsOf = (a: Arrival) => arrivalActions(a, can)
 const primary = (a: Arrival) => actionsOf(a).filter((x) => PRIMARY_ARRIVAL_ACTIONS.includes(x))
 const more = (a: Arrival) => actionsOf(a).filter((x) => MORE_ARRIVAL_ACTIONS.includes(x))
@@ -208,6 +235,12 @@ watch(() => props.refresh, restart)
       <Button v-if="!isDefault" type="button" variant="outline" size="sm" class="mb-1" data-testid="clear-filters" @click="clearFilters">{{ t('dataTable.clearFilters') }}</Button>
     </form>
 
+    <!-- The rooms of the arrivals that have none, put in one go: a proposal is shown first and saved when the person confirms. -->
+    <div v-if="autoLines.length" class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" data-testid="auto-bar">
+      <span data-testid="without-room">{{ t('frontDesk.arrivals.withoutRoom', { n: autoLines.length }, autoLines.length) }}</span>
+      <Button type="button" size="sm" variant="outline" data-testid="auto-assign-open" @click="autoOpen = true">{{ t('autoAssign.button') }}</Button>
+    </div>
+
     <DataTable
       v-if="!error || loaded"
       class="hidden md:block"
@@ -225,6 +258,19 @@ watch(() => props.refresh, restart)
         </template>
         <span v-else class="text-muted-foreground" :data-testid="`no-room-${row.reservation_room_id}`">{{ t('frontDesk.arrivals.noRoom') }}</span>
         <div class="text-xs text-muted-foreground" :title="row.room_type_name">{{ row.room_type_code }}</div>
+        <div v-if="canAssign(row) && !row.room_id" class="mt-1" @click.stop>
+          <RoomPicker
+            :target="assignTarget(row)" :type-id="row.room_type_id" :type-code="row.room_type_code" :arrival="row.arrival_date" :departure="row.departure_date"
+            :requested-bed-type-id="row.requested_bed_type_id ?? null" :test-id="`pick-room-${row.reservation_room_id}`" @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
+          />
+        </div>
+        <div v-if="changing === row.reservation_room_id" class="relative" @click.stop>
+          <RoomPicker
+            :open="true" bare :target="assignTarget(row)" :type-id="row.room_type_id" :type-code="row.room_type_code" :arrival="row.arrival_date" :departure="row.departure_date"
+            :requested-bed-type-id="row.requested_bed_type_id ?? null" :current-room-id="row.room_id ?? null" @update:open="(v: boolean) => { if (!v) changing = null }"
+            @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
+          />
+        </div>
         <Badge
           v-if="row.requested_bed_type_code && row.room_bed_type_code"
           :variant="row.requested_bed_type_code === row.room_bed_type_code ? 'success' : 'warning'"
@@ -263,12 +309,13 @@ watch(() => props.refresh, restart)
           <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkIn' ? 'default' : 'outline'" :data-testid="a === 'checkIn' ? `open-${row.reservation_room_id}` : `${a}-${row.reservation_room_id}`" @click="act(a, row)">
             {{ t(`frontDesk.arrivals.action.${a}`) }}
           </Button>
-          <Popover v-if="more(row).length" :open="menuFor === row.reservation_room_id" @update:open="(v: boolean) => (menuFor = v ? row.reservation_room_id : null)">
+          <Popover v-if="more(row).length || (canAssign(row) && row.room_id)" :open="menuFor === row.reservation_room_id" @update:open="(v: boolean) => (menuFor = v ? row.reservation_room_id : null)">
             <PopoverTrigger as-child>
               <Button type="button" size="sm" variant="ghost" :aria-label="t('frontDesk.inHouse.moreActions')" :data-testid="`more-${row.reservation_room_id}`"><MoreVertical /></Button>
             </PopoverTrigger>
             <PopoverContent class="w-48 p-1">
               <div :data-testid="`menu-${row.reservation_room_id}`">
+                <Button v-if="canAssign(row) && row.room_id" type="button" variant="ghost" size="sm" class="w-full justify-start" :data-testid="`change-room-${row.reservation_room_id}`" @click="startChange(row)">{{ t('roomPicker.change') }}</Button>
                 <Button v-for="a in more(row)" :key="a" type="button" variant="ghost" size="sm" class="w-full justify-start" :data-testid="`${a}-${row.reservation_room_id}`" @click="act(a, row)">{{ t(`frontDesk.arrivals.action.${a}`) }}</Button>
               </div>
             </PopoverContent>
@@ -294,17 +341,23 @@ watch(() => props.refresh, restart)
         <div class="mt-1 text-sm">{{ $date(a.arrival_date) }} → {{ $date(a.departure_date) }}</div>
         <div v-if="a.company" class="text-sm text-muted-foreground">{{ a.company.name }}</div>
         <div class="mt-2 flex flex-wrap gap-1.5">
+          <RoomPicker
+            v-if="canAssign(a) && !a.room_id" :target="assignTarget(a)" :type-id="a.room_type_id" :type-code="a.room_type_code" :arrival="a.arrival_date" :departure="a.departure_date"
+            :requested-bed-type-id="a.requested_bed_type_id ?? null" :test-id="`card-pick-room-${a.reservation_room_id}`" @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
+          />
           <Button v-for="x in primary(a)" :key="x" type="button" size="sm" :variant="x === 'checkIn' ? 'default' : 'outline'" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>
         </div>
-        <details v-if="more(a).length" class="mt-2">
+        <details v-if="more(a).length || (canAssign(a) && a.room_id)" class="mt-2">
           <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>
           <div class="mt-2 flex flex-wrap gap-1.5">
+            <Button v-if="canAssign(a) && a.room_id" type="button" size="sm" variant="outline" :data-testid="`card-change-room-${a.reservation_room_id}`" @click="startChange(a)">{{ t('roomPicker.change') }}</Button>
             <Button v-for="x in more(a)" :key="x" type="button" size="sm" variant="outline" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>
           </div>
         </details>
       </li>
     </ul>
 
+    <AutoAssignDialog v-model:open="autoOpen" :lines="autoLines" @changed="load" />
     <ArrivalDrawer v-model:open="drawerOpen" :row="drawerRow" @act="act" />
     <GuestEditDialog v-model:open="guestOpen" :guest-id="guestId" @saved="guestSaved" />
     <Sheet v-model:open="sheetOpen">

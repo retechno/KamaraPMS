@@ -10,7 +10,8 @@ import HomeView from './HomeView.vue'
 
 // A fresh mock per test (reassigned in beforeEach); the module mock delegates to it.
 let GET = vi.fn()
-vi.mock('@/api/client', () => ({ api: { GET: (...args: unknown[]) => GET(...args) } }))
+let POST = vi.fn()
+vi.mock('@/api/client', () => ({ api: { GET: (...args: unknown[]) => GET(...args), POST: (...args: unknown[]) => POST(...args) } }))
 
 const PATH = '/api/v1/properties/{propertyId}'
 
@@ -98,6 +99,7 @@ interface World {
   rooms?: unknown[]
   accounts?: unknown[]
   nights?: unknown[]
+  freeRooms?: unknown[]
   failing?: string[]
 }
 const defaultWorld = (): World => ({
@@ -135,6 +137,9 @@ function serve(): void {
       case `${PATH}/city-ledger/accounts`:
         fail('accounts')
         return { data: { data: world.accounts } }
+      case `${PATH}/availability/rooms`:
+        fail('free')
+        return { data: { data: world.freeRooms ?? [{ room_id: 71, room_number: '701', housekeeping_status: 'CLEAN', bed_type_id: null }, { room_id: 72, room_number: '702', housekeeping_status: 'DIRTY', bed_type_id: null }] } }
       case `${PATH}/stays/{id}`:
         fail('stay')
         return { data: { stay: { id: 1, status: 'OPEN', departure_date: '2026-10-10', version: 1 }, folios: [], guest: { id: 1 } } }
@@ -179,6 +184,7 @@ describe('HomeView, Today', () => {
     setLocale('en')
     world = defaultWorld()
     serve()
+    POST = vi.fn(async (_p: string, init: { params: { path: { id: number } } }) => ({ data: { id: init.params.path.id, version: 99, rooms: [] } }))
   })
   afterEach(() => {
     mounted?.unmount()
@@ -682,5 +688,58 @@ describe('HomeView, Today', () => {
       await flushPromises()
       expect(w.get('[data-testid=strip-occupancy]').text()).toContain('10.00%')
     })
+
+  describe('a room for an arrival that has none', () => {
+    const ALLOWED = [...FRONT, 'reservation.update']
+
+    it('offers "Choose room" on the arrivals without a room, to who may update a reservation, and on no other', async () => {
+      const w = await mountToday(ALLOWED)
+      expect(w.get('[data-testid=pick-room-3]').text()).toBe('Choose room') // the arrival without a room
+      expect(w.find('[data-testid=pick-room-1]').exists()).toBe(false) // it has one
+      expect(w.find('[data-testid=pick-room-2]').exists()).toBe(false)
+      mounted?.unmount()
+      const without = await mountToday(FRONT)
+      expect(without.find('[data-testid=pick-room-3]').exists()).toBe(false)
+    })
+
+    it('lists the free rooms of the type for the nights, assigns the one that is chosen with the version of the row, and reads the day again', async () => {
+      const w = await mountToday(ALLOWED)
+      await w.get('[data-testid=pick-room-3]').trigger('click')
+      await flushPromises()
+      expect(GET).toHaveBeenCalledWith(`${PATH}/availability/rooms`, { params: { path: { propertyId: 7 }, query: { room_type_id: 1, arrival: '2026-10-10', departure: '2026-10-12' } } })
+      const before = callsTo(`${PATH}/arrivals`)
+      ;(bodyEl('[data-testid=room-option-71]') as HTMLElement).click()
+      await flushPromises()
+      expect(POST).toHaveBeenCalledWith(`${PATH}/reservations/{id}/rooms/{lineId}/assign-room`, { params: { path: { propertyId: 7, id: 3, lineId: 3 } }, body: { version: 1, room_id: 71, upgrade: false } })
+      expect(callsTo(`${PATH}/arrivals`)).toBeGreaterThan(before)
+      expect(bodyEl('[data-testid=room-picker]')).toBeNull()
+    })
+
+    it('reads the day again when the room was taken meanwhile', async () => {
+      const w = await mountToday(ALLOWED)
+      await w.get('[data-testid=pick-room-3]').trigger('click')
+      await flushPromises()
+      POST = vi.fn(async () => {
+        throw new ApiError({ type: 't', title: 'x', status: 409, code: 'ROOM_NOT_AVAILABLE', detail: 'x' })
+      })
+      const before = callsTo(`${PATH}/arrivals`)
+      ;(bodyEl('[data-testid=room-option-71]') as HTMLElement).click()
+      await flushPromises()
+      expect(bodyEl('[data-testid=room-picker-error]')?.textContent).toContain('That room was taken meanwhile')
+      expect(callsTo(`${PATH}/arrivals`)).toBeGreaterThan(before)
+    })
+
+    it('does not read the day again by itself while the list of rooms is open', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+      vi.setSystemTime(new Date('2026-10-10T01:05:00Z'))
+      const w = await mountToday(ALLOWED)
+      await w.get('[data-testid=pick-room-3]').trigger('click')
+      await flushPromises()
+      const open = callsTo(`${PATH}/arrivals`)
+      vi.advanceTimersByTime(240_000)
+      await flushPromises()
+      expect(callsTo(`${PATH}/arrivals`)).toBe(open)
+    })
+  })
   })
 })

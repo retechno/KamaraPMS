@@ -10,6 +10,7 @@ import NightsChart, { type NightBar } from '@/components/app/NightsChart.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import RoomPicker from '@/components/RoomPicker.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,6 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { useSystemStore, type ComponentStatus } from '@/stores/system'
 import { arrivalActions } from '@/utils/arrivals'
+import type { AssignFailure } from '@/utils/assignRoom'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
 import { formatBalance, formatDate, formatPercent } from '@/utils/format'
 import { arrivalChip, arrivalsBlockedBy, greetingFor, listWithMore, overCreditLimit, roomCounts, roomsOf } from '@/utils/today'
@@ -49,7 +51,24 @@ const can = (permission: string) => pid.value !== null && auth.can(permission, p
 // The check-in and the check-out are filled in in a sheet: while one is open the page does not read again by itself, so nothing moves under the clerk's hands.
 const checkIn = ref<Arrival | null>(null)
 const checkOut = ref<{ row: InHouseRow; detail: StayDetail | null; loading: boolean } | null>(null)
-const today = useToday(() => checkIn.value !== null || checkOut.value !== null)
+// The list of free rooms of an arrival that has none is open (reservation.update): the page does not read again by itself under it either.
+const picking = ref<number | null>(null)
+const today = useToday(() => checkIn.value !== null || checkOut.value !== null || picking.value !== null)
+const canAssign = (a: Arrival): boolean => can('reservation.update') && a.status === 'CONFIRMED' && !a.room_id
+const assignTarget = (a: Arrival) => ({ reservationId: a.reservation_id, lineId: a.reservation_room_id, version: a.reservation_version })
+const pickerOpen = (a: Arrival): boolean => picking.value === a.reservation_room_id
+function setPicker(a: Arrival, v: boolean): void {
+  if (v) picking.value = a.reservation_room_id
+  else if (picking.value === a.reservation_room_id) picking.value = null
+}
+async function roomAssigned(room: { room_number: string }): Promise<void> {
+  picking.value = null
+  toast.success(t('roomPicker.assigned', { room: room.room_number }))
+  await today.reload()
+}
+async function assignFailed(failure: AssignFailure): Promise<void> {
+  if (failure.reload) await today.reload() // the arrivals as they are now (a version, a room)
+}
 
 const checkInOpen = computed({
   get: () => checkIn.value !== null,
@@ -232,6 +251,11 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
               <Badge v-else-if="chip.kind === 'guestMissing'" variant="warning" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="guestMissing">{{ t('today.chipGuestMissing') }}</Badge>
               <StatusBadge v-else-if="chip.kind === 'housekeeping'" domain="housekeeping" :status="chip.status" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="housekeeping" />
             </template>
+            <RoomPicker
+              v-if="canAssign(a)" :open="pickerOpen(a)" :target="assignTarget(a)" :type-id="a.room_type_id" :type-code="a.room_type_code" :arrival="a.arrival_date" :departure="a.departure_date"
+              :requested-bed-type-id="a.requested_bed_type_id ?? null" :test-id="`pick-room-${a.reservation_room_id}`" @update:open="(v: boolean) => setPicker(a, v)"
+              @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
+            />
             <!-- The main button only for an arrival that is ready; the others can still open the panel (to choose a room), as an outline button. -->
             <Button v-if="canCheckIn(a)" size="sm" :variant="a.readiness.status === 'READY' ? 'default' : 'outline'" :data-testid="`check-in-${a.reservation_room_id}`" :data-ready="a.readiness.status === 'READY'" @click="checkIn = a">{{ t('frontDesk.arrivals.action.checkIn') }}</Button>
           </li>
