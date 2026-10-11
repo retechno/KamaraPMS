@@ -2934,9 +2934,9 @@ export const id: Messages = {
     allActions: 'Semua aksi',
     allUsers: 'Semua pengguna',
     document: 'Nomor dokumen',
-    documentPlaceholder: 'RES000123, STY000035…',
-    documentNotFound: 'Tidak ada reservasi {number}.',
-    scanCapped: 'Nomor ini dicari hanya di entri terbaru. Persempit tanggalnya, atau muat lagi untuk terus mencari.',
+    documentPlaceholder: 'RES000123, 305, FOL000026…',
+    documentHint: 'Nomor atau kode, atau sebagian darinya. Minimal 3 karakter.',
+    documentTooShort: 'Ketik minimal 3 karakter untuk mencari.',
   },
   login: {
     title: 'Masuk ke KamaraPMS',

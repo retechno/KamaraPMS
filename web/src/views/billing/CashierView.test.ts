@@ -215,4 +215,19 @@ describe('CashierView', () => {
     expect(w.get('[data-testid=total-CASH]').text()).toContain('100,000')
     expect(w.find('[data-testid=payment-PAY000001]').exists()).toBe(true) // and its rows are not shown either
   })
+
+  it('names the folio of a payment by its number, with a link to it, and never as "#id"', async () => {
+    const w = mountView()
+    GET.mockResolvedValue({ data: { data: [
+      { id: 6, payment_number: 'PAY000006', folio_id: 26, folio_number: 'FOL000026', payment_type: 'PAYMENT', payment_method: 'CASH', amount: '1000', status: 'POSTED' },
+      { id: 7, payment_number: 'PAY000007', folio_id: 31, payment_type: 'PAYMENT', payment_method: 'CASH', amount: '1000', status: 'POSTED' }, // an answer without the number
+    ], totals: [] } })
+    await flushPromises()
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    const link = w.get('[data-testid=payment-PAY000006] a[href="/folios/26"]')
+    expect(link.text()).toBe('FOL000026')
+    expect(w.get('[data-testid=payment-PAY000006]').text()).not.toContain('#26')
+    expect(w.get('[data-testid=payment-PAY000007] a[href="/folios/31"]').text()).toBe('#31') // the old way when the API gives no number
+  })
 })

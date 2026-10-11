@@ -2935,9 +2935,9 @@ export const en = {
     allActions: 'All actions',
     allUsers: 'All users',
     document: 'Document number',
-    documentPlaceholder: 'RES000123, STY000035…',
-    documentNotFound: 'No reservation {number}.',
-    scanCapped: 'Only the latest entries were read for this number. Narrow the dates, or load more to keep looking.',
+    documentPlaceholder: 'RES000123, 305, FOL000026…',
+    documentHint: 'A number or a code, or a part of one. 3 characters or more.',
+    documentTooShort: 'Type at least 3 characters to search.',
   },
   login: {
     title: 'Sign in to KamaraPMS',
