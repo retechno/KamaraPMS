@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/budget/budgetdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -165,7 +166,7 @@ func (s *Service) SaveStatistics(ctx context.Context, propertyID, id int64, in S
 		if out, err = s.detail(ctx, p.TenantID, propertyID, id, decimals); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.statistics_saved", id, nil, map[string]any{"months": len(cells)}))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.statistics_saved", id, auditlabel.Budget(ctx, propertyID, id), nil, map[string]any{"months": len(cells)}))
 	})
 	return out, err
 }

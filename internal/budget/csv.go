@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
@@ -198,7 +199,7 @@ func (s *Service) ImportCSV(ctx context.Context, propertyID, id int64, text stri
 			return err
 		}
 		out.Accounts = len(grid)
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.imported", id, nil, map[string]any{"accounts": out.Accounts, "dry_run": dryRun})); err != nil {
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.imported", id, auditlabel.Budget(ctx, propertyID, id), nil, map[string]any{"accounts": out.Accounts, "dry_run": dryRun})); err != nil {
 			return err
 		}
 		if dryRun {
