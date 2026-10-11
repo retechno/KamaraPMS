@@ -24,6 +24,9 @@ export function arrivalActions(a: Arrival, can: (permission: string) => boolean)
   return [...PRIMARY_ARRIVAL_ACTIONS, ...MORE_ARRIVAL_ACTIONS].filter((x) => allowed[x])
 }
 
+/** The check-in button is the solid one only for an arrival that is ready; for the others it is an outline button (the panel still opens, to choose a room). One rule for Today and Arrivals. */
+export const checkInVariant = (a: Pick<Arrival, 'readiness'>): 'default' | 'outline' => (a.readiness.status === 'READY' ? 'default' : 'outline')
+
 /** Where an action that is done on another page goes; check-in and edit guest are done in place. */
 export function arrivalTarget(a: Arrival, action: ArrivalAction): string | undefined {
   switch (action) {

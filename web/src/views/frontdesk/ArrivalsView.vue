@@ -27,7 +27,7 @@ import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { type ArrivalAction, MORE_ARRIVAL_ACTIONS, PRIMARY_ARRIVAL_ACTIONS, arrivalActions, arrivalTarget } from '@/utils/arrivals'
+import { type ArrivalAction, MORE_ARRIVAL_ACTIONS, PRIMARY_ARRIVAL_ACTIONS, arrivalActions, arrivalTarget, checkInVariant } from '@/utils/arrivals'
 import { type AssignFailure } from '@/utils/assignRoom'
 import { fullName } from '@/utils/inHouse'
 import { lineOfArrival } from '@/utils/roomAssign'
@@ -306,7 +306,7 @@ watch(() => props.refresh, restart)
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap items-center justify-end gap-1.5">
-          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkIn' ? 'default' : 'outline'" :data-testid="a === 'checkIn' ? `open-${row.reservation_room_id}` : `${a}-${row.reservation_room_id}`" @click="act(a, row)">
+          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkIn' ? checkInVariant(row) : 'outline'" :data-testid="a === 'checkIn' ? `open-${row.reservation_room_id}` : `${a}-${row.reservation_room_id}`" @click="act(a, row)">
             {{ t(`frontDesk.arrivals.action.${a}`) }}
           </Button>
           <Popover v-if="more(row).length || (canAssign(row) && row.room_id)" :open="menuFor === row.reservation_room_id" @update:open="(v: boolean) => (menuFor = v ? row.reservation_room_id : null)">
@@ -345,7 +345,7 @@ watch(() => props.refresh, restart)
             v-if="canAssign(a) && !a.room_id" :target="assignTarget(a)" :type-id="a.room_type_id" :type-code="a.room_type_code" :arrival="a.arrival_date" :departure="a.departure_date"
             :requested-bed-type-id="a.requested_bed_type_id ?? null" :test-id="`card-pick-room-${a.reservation_room_id}`" @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
           />
-          <Button v-for="x in primary(a)" :key="x" type="button" size="sm" :variant="x === 'checkIn' ? 'default' : 'outline'" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>
+          <Button v-for="x in primary(a)" :key="x" type="button" size="sm" :variant="x === 'checkIn' ? checkInVariant(a) : 'outline'" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>
         </div>
         <details v-if="more(a).length || (canAssign(a) && a.room_id)" class="mt-2">
           <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>

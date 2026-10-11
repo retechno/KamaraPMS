@@ -13,6 +13,23 @@ const plan = (lines: AssignLine[], rooms: FreeRoom[], includeNotReady = false, r
   proposeAssignments(lines, new Map(lines.map((l) => [freeRoomsKey(l), rooms])), { includeNotReady, requiresInspection }).map((p) => p.room?.room_number ?? null)
 const KEPT = { requestedBedTypeId: KING, bedLocked: true }
 
+describe('proposeAssignments for a guest who comes after the business date', () => {
+  const later = (lines: AssignLine[], rooms: FreeRoom[], includeNotReady = false) =>
+    proposeAssignments(lines, new Map(lines.map((l) => [freeRoomsKey(l), rooms])), { includeNotReady, requiresInspection: false, businessDate: '2026-10-10' }).map((p) => p.room?.room_number ?? null)
+
+  it('does not look at the housekeeping status of today: a dirty room is proposed, the bed asked for first, then the number', () => {
+    const rooms = [room(1, 'DIRTY', TWIN), room(2, 'CLEANING', KING), room(3, 'CLEAN', KING)]
+    expect(later([line(1, { arrival: '2026-10-24', departure: '2026-10-26', requestedBedTypeId: KING })], rooms)).toEqual(['102'])
+    expect(later([line(1, { arrival: '2026-10-24', departure: '2026-10-26' }), line(2, { arrival: '2026-10-24', departure: '2026-10-26' })], rooms)).toEqual(['101', '102']) // by number, readiness aside
+  })
+
+  it('still reads the status for a guest who comes on the business date', () => {
+    const rooms = [room(1, 'DIRTY'), room(2, 'CLEAN')]
+    expect(later([line(1)], rooms)).toEqual(['102'])
+    expect(later([line(1), line(2)], rooms)).toEqual(['102', null]) // ready rooms only
+  })
+})
+
 describe('proposeAssignments, ready rooms only', () => {
   it('proposes the first ready room to each line, and never the same room twice', () => {
     expect(plan([line(1), line(2), line(3)], [room(1, 'CLEAN'), room(2, 'INSPECTED'), room(3, 'CLEAN')])).toEqual(['101', '102', '103'])

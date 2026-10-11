@@ -130,6 +130,12 @@ const singleUnassigned = (r: ReservationSummary): ReservationSummary['rooms'][nu
   const only = r.rooms.length === 1 ? r.rooms[0] : undefined
   return can('reservation.update') && only && isUnassigned(only) ? only : null
 }
+/** A reservation of several rooms, some of which wait for a room: how many have one ("1 of 3 rooms assigned"), instead of the first room and "+2 more". */
+const progress = (r: ReservationSummary): { done: number; total: number } | null => {
+  const live = r.rooms.filter((l) => l.status !== 'CANCELLED')
+  const missing = live.filter((l) => isUnassigned(l)).length
+  return live.length > 1 && missing > 0 ? { done: live.filter((l) => l.room_id != null).length, total: live.length } : null
+}
 const sheetFor = ref<number | null>(null)
 const sheetRow = computed(() => rows.value.find((r) => r.id === sheetFor.value) ?? null)
 const sheetOpen = computed({
@@ -319,7 +325,8 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       </template>
       <template #cell-room="{ row }">
         <template v-if="row.rooms.length">
-          <div :data-testid="`room-${row.confirmation_number}`">
+          <div v-if="progress(row)" class="font-medium text-warning-text" :data-testid="`rooms-progress-${row.confirmation_number}`">{{ t('reservations.roomsAssigned', { done: progress(row)!.done, total: progress(row)!.total }) }}</div>
+          <div v-else :data-testid="`room-${row.confirmation_number}`">
             {{ row.rooms[0]?.room_number || t('reservations.noRoom') }}<span v-if="row.rooms.length > 1" class="text-muted-foreground"> {{ t('reservations.moreRooms', { n: row.rooms.length - 1 }) }}</span>
           </div>
           <div class="text-xs text-muted-foreground">{{ [...new Set(row.rooms.map((l) => l.room_type_code))].join(' · ') }}</div>

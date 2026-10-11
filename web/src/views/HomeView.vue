@@ -21,7 +21,7 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { useSystemStore, type ComponentStatus } from '@/stores/system'
-import { arrivalActions } from '@/utils/arrivals'
+import { arrivalActions, checkInVariant } from '@/utils/arrivals'
 import type { AssignFailure } from '@/utils/assignRoom'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
 import { formatBalance, formatDate, formatPercent } from '@/utils/format'
@@ -239,13 +239,16 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
       <TodayCard v-if="today.canFront.value" test-id="col-arrivals" :title="t('today.arrivalsTitle')" :count="today.arrivals.value.loaded ? t('today.left', { n: arrivalsLeft.length }) : ''" to="/arrivals" :loaded="today.arrivals.value.loaded" :failed="today.arrivals.value.failed">
         <p v-if="!arrivalRows.length" class="m-0 text-sm text-muted-foreground" data-testid="col-arrivals-empty">{{ t('today.noArrivals') }}</p>
         <ul v-else class="m-0 list-none divide-y divide-border p-0">
-          <li v-for="a in arrivalRows" :key="a.reservation_room_id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5" :data-testid="`arrival-${a.reservation_room_id}`">
-            <div class="min-w-0 flex-1">
+          <li v-for="a in arrivalRows" :key="a.reservation_room_id" class="flex flex-col gap-1.5 py-2.5" :data-testid="`arrival-${a.reservation_room_id}`">
+            <!-- The name and the room on a line of their own, the actions on the next one (at the right): they do not crowd each other on a phone. -->
+            <div class="min-w-0">
               <div class="truncate font-medium">{{ a.guest_name || a.confirmation_number }}</div>
               <div class="text-xs text-muted-foreground">{{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
             </div>
+            <div class="flex flex-wrap items-center justify-end gap-2" :data-testid="`arrival-actions-${a.reservation_room_id}`">
             <template v-for="chip in [arrivalChip(a)]" :key="chip.kind">
-              <Badge v-if="chip.kind === 'noRoom'" variant="outline" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="noRoom">{{ t('today.noRoomYet') }}</Badge>
+              <!-- "No room yet" is said by the button "Choose room" where there is one: the chip stays for who cannot assign. -->
+              <Badge v-if="chip.kind === 'noRoom' && !canAssign(a)" variant="outline" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="noRoom">{{ t('today.noRoomYet') }}</Badge>
               <Badge v-else-if="chip.kind === 'waitingCheckOut'" variant="warning" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="waitingCheckOut">{{ t('today.chipWaitingCheckOut') }}</Badge>
               <Badge v-else-if="chip.kind === 'blocked'" variant="closed" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="blocked">{{ t('today.chipBlocked') }}</Badge>
               <Badge v-else-if="chip.kind === 'guestMissing'" variant="warning" :data-testid="`arrival-chip-${a.reservation_room_id}`" data-chip="guestMissing">{{ t('today.chipGuestMissing') }}</Badge>
@@ -257,7 +260,8 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
               @assigned="(_r, room) => roomAssigned(room)" @failed="assignFailed"
             />
             <!-- The main button only for an arrival that is ready; the others can still open the panel (to choose a room), as an outline button. -->
-            <Button v-if="canCheckIn(a)" size="sm" :variant="a.readiness.status === 'READY' ? 'default' : 'outline'" :data-testid="`check-in-${a.reservation_room_id}`" :data-ready="a.readiness.status === 'READY'" @click="checkIn = a">{{ t('frontDesk.arrivals.action.checkIn') }}</Button>
+            <Button v-if="canCheckIn(a)" size="sm" :variant="checkInVariant(a)" :data-testid="`check-in-${a.reservation_room_id}`" :data-ready="a.readiness.status === 'READY'" @click="checkIn = a">{{ t('frontDesk.arrivals.action.checkIn') }}</Button>
+            </div>
           </li>
         </ul>
       </TodayCard>

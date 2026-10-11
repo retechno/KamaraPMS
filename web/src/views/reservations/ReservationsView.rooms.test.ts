@@ -96,6 +96,21 @@ describe('ReservationsView: rooms from the list', () => {
       expect(w.find('[data-testid=pick-room-RES000005]').exists()).toBe(false) // cancelled
     })
 
+    it('says how many rooms of a reservation of several have one, in the colour of a warning, and keeps the old text when all have', async () => {
+      page = [
+        row(1, [line(10, { room_id: 30, room_number: '301' }), line(11), line(12, { room_type_code: 'STD', room_type_id: 11 })]),
+        row(3, [line(30), line(31, { room_type_code: 'STD', room_type_id: 11 })]),
+        row(2, [line(20, { room_id: 30, room_number: '301' }), line(21, { room_id: 31, room_number: '302' })]),
+      ]
+      const { w } = await mountView()
+      const part = w.get('[data-testid=rooms-progress-RES000001]')
+      expect(part.text()).toBe('1 of 3 rooms assigned')
+      expect(part.classes()).toContain('text-warning-text')
+      expect(w.get('[data-testid=rooms-progress-RES000003]').text()).toBe('0 of 2 rooms assigned')
+      expect(w.find('[data-testid=rooms-progress-RES000002]').exists()).toBe(false) // all have a room: "301 +1 more" as before
+      expect(w.get('[data-testid=room-RES000002]').text()).toContain('301')
+    })
+
     it('is offered on the card of a phone too', async () => {
       const { w } = await mountView(UPDATE, 390)
       expect(w.get('[data-testid=pick-room-RES000001]').text()).toBe('Choose room')
@@ -185,6 +200,7 @@ describe('ReservationsView: rooms from the list', () => {
       expect(body('[data-testid=assign-rooms-sheet]')?.textContent).toContain('Rooms of RES000003')
       expect(body('[data-testid=sheet-line-30]')?.textContent).toContain('DLX')
       expect(body('[data-testid=sheet-line-31]')?.textContent).toContain('STD')
+      expect(body('[data-testid=sheet-line-30]')?.textContent).toMatch(/2 Oct 2026\s*→\s*4 Oct 2026/) // the arrow of the tables, not "to"
       expect(body('[data-testid=sheet-room-30]')?.textContent).toBe('No room yet')
       expect(body('[data-testid=sheet-pick-30]')?.textContent).toBe('Choose room')
       expect(body('[data-testid=sheet-pick-31]')?.textContent).toBe('Choose room')
