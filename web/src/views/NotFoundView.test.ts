@@ -25,7 +25,7 @@ describe('NotFoundView', () => {
   it('has a main button back to the dashboard, which goes to the home page', async () => {
     const { w, router } = await mountPage()
     const back = w.get('a[data-testid=empty-action]')
-    expect(back.text()).toBe('Back to the dashboard')
+    expect(back.text()).toBe('Back to Today')
     expect(back.classes().join(' ')).toContain('bg-primary')
     await back.trigger('click')
     await flushPromises()
@@ -36,6 +36,6 @@ describe('NotFoundView', () => {
     setLocale('id')
     const { w } = await mountPage()
     expect(w.get('h1').text()).toBe('Halaman tidak ditemukan')
-    expect(w.get('a[data-testid=empty-action]').text()).toBe('Kembali ke dasbor')
+    expect(w.get('a[data-testid=empty-action]').text()).toBe('Kembali ke Hari Ini')
   })
 })

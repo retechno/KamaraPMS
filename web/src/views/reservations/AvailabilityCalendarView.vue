@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { ChevronLeft, SlidersHorizontal } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -177,7 +177,7 @@ watch(businessDate, () => {
     <template #actions>
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('availabilityCalendar.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('availabilityCalendar.businessDate') }}</Button>
-      <Button variant="outline" size="sm" @click="shift(7)">{{ t('availabilityCalendar.week') }} &rarr;</Button>
+      <Button variant="outline" size="sm" @click="shift(7)">{{ t('availabilityCalendar.week') }}<ChevronRight /></Button>
       <label class="flex items-center gap-2 text-sm"><input v-model="byBed" name="by_bed" type="checkbox" class="size-4 accent-primary" @change="load" /><span>{{ t('availabilityCalendar.showBeds') }}</span></label>
       <Popover>
         <PopoverTrigger as-child>
@@ -201,7 +201,7 @@ watch(businessDate, () => {
         <option :value="14">{{ t('availabilityCalendar.days', { n: 14 }) }}</option>
         <option :value="28">{{ t('availabilityCalendar.days', { n: 28 }) }}</option>
       </NativeSelect>
-      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations/tape">{{ t('availabilityCalendar.tapeChart') }}</RouterLink></Button>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/reservations/tape">{{ t('availabilityCalendar.tapeChart') }}</RouterLink></Button>
     </template>
   </PageHeader>
 

@@ -136,7 +136,12 @@ describe('AvailabilityCalendarView', () => {
   it('moves the window by a week', async () => {
     const w = mountView()
     await flushPromises()
-    await w.findAll('button').find((b) => b.text().includes('Week →'))?.trigger('click')
+    // the two buttons of the week have their arrows as icons, one to each side: ‹ Week and Week ›
+    const [earlier, later] = w.findAll('button').filter((b) => b.text() === 'Week')
+    expect(earlier?.find('svg.lucide-chevron-left').exists()).toBe(true)
+    expect(later?.find('svg.lucide-chevron-right').exists()).toBe(true)
+    expect(w.text()).not.toContain('→')
+    await later?.trigger('click')
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1]).toMatchObject({ params: { query: { from: '2026-10-08', to: '2026-10-22' } } })
   })

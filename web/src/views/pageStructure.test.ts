@@ -52,6 +52,23 @@ describe('the header of a page', () => {
     }
     expect(bad).toEqual([])
   })
+
+  it('has a link in its actions only as a button, and not a ghost one (a ghost button over a link is read as a green text link)', () => {
+    const bare: string[] = []
+    for (const v of walk('views')) {
+      const s = read(v)
+      for (const m of s.matchAll(/<PageHeader\b[\s\S]*?<\/PageHeader>/g)) {
+        const header = m[0]
+        for (const link of header.matchAll(/<RouterLink\b/g)) {
+          const before = header.slice(Math.max(0, link.index! - 160), link.index)
+          const wrapped = /<Button\b[^>]*\bas-child\b[^>]*>\s*$/.test(before) || /custom/.test(header.slice(link.index!, link.index! + 80))
+          if (!wrapped) bare.push(`${v}: a RouterLink that is not a Button`)
+        }
+        for (const ghost of header.matchAll(/<Button\b[^>]*as-child[^>]*variant="ghost"|<Button\b[^>]*variant="ghost"[^>]*as-child/g)) bare.push(`${v}: ${ghost[0].slice(0, 70)}`)
+      }
+    }
+    expect(bare).toEqual([])
+  })
 })
 
 describe('an empty state', () => {

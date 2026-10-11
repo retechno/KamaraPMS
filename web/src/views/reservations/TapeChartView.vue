@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { ChevronLeft } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -94,12 +94,12 @@ watch(businessDate, () => {
     <template #actions>
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('tapeChart.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('tapeChart.businessDate') }}</Button>
-      <Button variant="outline" size="sm" @click="shift(7)">{{ t('tapeChart.week') }} &rarr;</Button>
+      <Button variant="outline" size="sm" @click="shift(7)">{{ t('tapeChart.week') }}<ChevronRight /></Button>
       <NativeSelect v-model.number="days" class="w-28" :aria-label="t('tapeChart.daysShown')" @change="load">
         <option :value="14">{{ t('tapeChart.days', { n: 14 }) }}</option>
         <option :value="28">{{ t('tapeChart.days', { n: 28 }) }}</option>
       </NativeSelect>
-      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('tapeChart.reservations') }}</RouterLink></Button>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/reservations">{{ t('tapeChart.reservations') }}</RouterLink></Button>
     </template>
   </PageHeader>
 

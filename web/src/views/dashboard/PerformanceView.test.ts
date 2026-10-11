@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import ManagerDashboard from './ManagerDashboard.vue'
+import { setLocale } from '@/i18n'
+import PerformanceView from './PerformanceView.vue'
 
 let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...args: unknown[]) => GET(...args) } }))
@@ -39,10 +40,10 @@ function mountView(permissions = ['report.view']) {
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'm@hotel.com', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  return mount(ManagerDashboard, { global: { plugins: [pinia], stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+  return mount(PerformanceView, { global: { plugins: [pinia], stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
 }
 
-describe('ManagerDashboard', () => {
+describe('PerformanceView', () => {
   beforeEach(() => {
     GET = vi.fn().mockResolvedValue({ data: dashboard() })
   })
@@ -139,5 +140,95 @@ describe('ManagerDashboard', () => {
     await flushPromises()
     expect(GET).not.toHaveBeenCalled()
     expect(w.find('[data-testid=manager-dashboard]').exists()).toBe(false)
+    // the person is told why, and is not left with an empty page or an error of the API
+    expect(w.findAll('[data-slot=page-header]')).toHaveLength(1)
+    expect(w.get('[data-testid=no-access]').text()).toContain('The Performance page is for managers')
+    expect(w.get('[data-testid=no-access]').text()).toContain('View reports')
+    expect(w.find('[data-testid=no-access] svg').exists()).toBe(true) // the lock
+    expect(w.get('[data-testid=no-access] a[data-testid=empty-action]').text()).toBe('Back to Today')
+    expect(w.get('[data-testid=no-access] a[data-testid=empty-action]').attributes('to')).toBe('/')
+    expect(w.find('[data-testid=period]').exists()).toBe(false) // no controls for a page that is not there
+    expect(w.find('[data-testid=managers-only]').exists()).toBe(false) // no badge and no line about the figures: the title and the lock
+    expect(w.find('[data-slot=page-header] p').exists()).toBe(false)
+  })
+
+  it('says it in Indonesian too', async () => {
+    setLocale('id')
+    const w = mountView(['folio.read'])
+    await flushPromises()
+    expect(w.get('[data-testid=no-access]').text()).toContain('Halaman Kinerja khusus manajer')
+    expect(w.get('[data-testid=no-access] a[data-testid=empty-action]').text()).toBe('Kembali ke Hari Ini')
+    setLocale('en')
+  })
+
+  it('has a header with the badge for managers, the period, when it was updated and the link to the full report', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.findAll('[data-slot=page-header]')).toHaveLength(1)
+    expect(w.get('h1').text()).toBe('Property performance')
+    expect(w.get('[data-testid=managers-only]').text()).toContain('report.view')
+    expect(w.get('[data-testid=updated]').text()).toMatch(/^Updated \d{2}:\d{2}$/)
+    expect(w.get('[data-testid=full-report]').attributes('to')).toBe('/reports')
+  })
+
+  it('shows the four figures of today, each with its change against last month and the line of the closed days', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=main-kpis]').findAll('[data-slot=kpi-card]')).toHaveLength(4)
+    expect(w.get('[data-testid=delta-adr]').text()).toContain('▲ 25.0%') // 1,000,000 against 800,000
+    expect(w.get('[data-testid=delta-adr]').text()).toContain('vs last month')
+    expect(w.get('[data-testid=delta-occupancy]').text()).toContain('▲') // 66.67 against 40
+    expect(w.find('[data-testid=spark-occupancy]').exists()).toBe(true)
+    expect(w.get('[data-testid=spark-occupancy] polyline').attributes('points')).toBeTruthy()
+  })
+
+  it('has no change to show when last month has no closed day, and no line from fewer than two days', async () => {
+    const d = dashboard()
+    GET.mockResolvedValue({ data: { ...d, previous_month: totals({ days: 0 }), trend: [d.trend[0]] } })
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=delta-adr]').exists()).toBe(false)
+    expect(w.find('[data-testid=spark-adr]').exists()).toBe(false)
+  })
+
+  it('switches to the month so far: its figures and the change of the month against the month before', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=period-month]').trigger('click')
+    expect(w.get('[data-testid=period-month]').attributes('aria-pressed')).toBe('true')
+    expect(w.get('[data-testid=kpi-occupancy]').text()).toContain('60.00%')
+    expect(w.get('[data-testid=kpi-occupancy]').text()).toContain('10 closed days')
+    expect(w.get('[data-testid=kpi-adr]').text()).toContain('IDR 1M')
+    expect(w.get('[data-testid=delta-adr]').text()).toContain('▲ 25.0%')
+    await w.get('[data-testid=period-today]').trigger('click')
+    expect(w.get('[data-testid=kpi-occupancy]').text()).toContain('66.67%')
+    expect(GET).toHaveBeenCalledTimes(1) // the period is a view of what was read
+  })
+
+  it('says what the month has not got yet instead of a zero', async () => {
+    GET.mockResolvedValue({ data: dashboard({ month_to_date: totals({ days: 0 }) }) })
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=period-month]').trigger('click')
+    expect(w.get('[data-testid=kpi-adr] [data-slot=kpi-value]').text()).toBe('–')
+    expect(w.get('[data-testid=kpi-adr]').text()).toContain('No day of this month is closed yet.')
+    expect(w.find('[data-testid=delta-adr]').exists()).toBe(false)
+  })
+
+  it('writes the average and the highest day above the closed days', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=trend-summary]').text()).toBe('Average 65.00% · highest 80.00% on 10 Oct')
+  })
+
+  it('draws the nights ahead with the lines at 50% and 100%, and the nights at 90% or more in the strong colour', async () => {
+    const d = dashboard()
+    GET.mockResolvedValue({ data: { ...d, forecast: [...d.forecast, { date: '2026-10-13', rooms_sellable: 10, rooms_booked: 10, occupancy_percent: '100.00' }, { date: '2026-10-14', rooms_sellable: 10, rooms_booked: 9, occupancy_percent: '90.00' }] } })
+    const w = mountView()
+    await flushPromises()
+    const chart = w.get('[data-testid=forecast]')
+    expect(chart.find('[data-slot=line-100]').exists()).toBe(true)
+    expect(chart.find('[data-slot=line-50]').exists()).toBe(true)
+    expect(chart.findAll('[data-testid=forecast-bar]').map((b) => b.attributes('data-strong'))).toEqual(['false', 'false', 'true', 'true'])
   })
 })

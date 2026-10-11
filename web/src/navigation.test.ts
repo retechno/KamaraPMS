@@ -65,8 +65,18 @@ describe('navigation', () => {
     expect(navigation.find((s) => s.id === 'tax')?.items.some((i) => i.id === 'taxReturns')).toBe(true)
   })
 
-  it('keeps an item that names a permission from those who do not have it (no item of the menu uses this yet)', () => {
-    expect(items.some((i) => i.permission)).toBe(false)
+  it('has the Performance page in the end of the day, shown only to who may view reports', () => {
+    const named = items.filter((i) => i.permission)
+    expect(named.map((i) => [i.id, i.to, i.permission])).toEqual([['performance', '/performance', 'report.view']])
+    expect(findNavItem('performance')?.section.id).toBe('endOfDay')
+    const ids = (can?: (p: string) => boolean) => visibleNavigation(false, can).flatMap((s) => s.items.map((i) => i.id))
+    expect(ids((p) => p === 'report.view')).toContain('performance')
+    expect(ids(() => false)).not.toContain('performance')
+    expect(ids()).not.toContain('performance')
+    expect(ids(() => false)).toContain('dashboard') // the page of the day is for everyone
+  })
+
+  it('keeps an item that names a permission from those who do not have it', () => {
     const menu = [{ ...navigation[0]!, items: [{ id: 'performance', to: '/performance', permission: 'report.view' }, { id: 'dashboard', to: '/' }] }]
     const ids = (can?: (p: string) => boolean, admin = false) => visibleNavigation(admin, can, menu).flatMap((s) => s.items.map((i) => i.id))
     expect(ids((p) => p === 'report.view')).toEqual(['performance', 'dashboard'])

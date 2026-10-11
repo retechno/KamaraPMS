@@ -420,7 +420,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <Button v-if="status !== 'DRAFT' && status !== 'CANCELLED'" variant="outline" size="sm" data-testid="print-confirmation" @click="printConfirmation"><Printer />{{ t('reservation.confirmationPdf') }}</Button>
         <Button v-if="has('cancel')" variant="outline" size="sm" class="text-destructive" :disabled="busy" data-testid="cancel" @click="ask('cancel')">{{ t('reservation.cancelReservation') }}</Button>
       </template>
-      <Button as-child variant="ghost" size="sm"><RouterLink to="/reservations">{{ t('reservation.list') }}</RouterLink></Button>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/reservations">{{ t('reservation.list') }}</RouterLink></Button>
     </template>
   </PageHeader>
 
