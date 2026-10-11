@@ -52,33 +52,74 @@ UPDATE guests SET
 WHERE tenant_id = @tenant_id AND id = @id
 RETURNING *;
 
--- Every token must match the start of the first name, last name, email, id number or guest code, or
--- appear in the phone number's digits (tokens with at least 4 digits). Alphabetical keyset paging.
+-- Every token must match the start of the first name, last name, email, id number or guest code, or appear in the phone number's digits (tokens with at least 4 digits).
+-- Guests by the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), lower case, in the ICU collation (the collation of the database does not
+-- order names: see migration 00067). The expression is the one of the index guests_display_name_idx letter for letter. The page goes on after (name, id).
 -- name: SearchGuests :many
-SELECT sqlc.embed(g), lower(g.last_name) AS sort_last, lower(coalesce(g.first_name, '')) AS sort_first
+SELECT sqlc.embed(g), (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
 FROM guests g
 WHERE g.tenant_id = @tenant_id
   AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )
   )
   AND (sqlc.narg(after_id)::bigint IS NULL
-       OR (lower(g.last_name), lower(coalesce(g.first_name, '')), g.id)
-          > (sqlc.narg(after_last)::text, sqlc.narg(after_first)::text, sqlc.narg(after_id)::bigint))
-ORDER BY lower(g.last_name), lower(coalesce(g.first_name, '')), g.id
+       OR ((lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id)
+          > (sqlc.narg(after_name)::text COLLATE "und-x-icu", sqlc.narg(after_id)::bigint))
+ORDER BY (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id
 LIMIT @row_limit;
 
--- Candidate duplicates of a profile (same email, same phone digits, same ID document, or same name and
--- birth date), with whether the caller may see each one.
+-- The same guests in another order: by name (the other way), code or nationality, either way, NULL last (a guest without a nationality). One query for every order, the key and the direction
+-- being parameters, so it cannot use an index; the default (name A-Z) has the query above. The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
+-- name: SearchGuestsOrdered :many
+SELECT sqlc.embed(g), (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
+FROM guests g
+CROSS JOIN LATERAL (
+    SELECT CASE @sort_key::text
+               WHEN 'code' THEN g.code::text COLLATE "und-x-icu"
+               WHEN 'nationality' THEN g.nationality::text COLLATE "und-x-icu"
+               ELSE (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")
+           END AS sk_text
+) k
+WHERE g.tenant_id = @tenant_id
+  AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
+  AND NOT EXISTS (
+      SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
+      WHERE NOT (
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
+              AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
+      )
+  )
+  AND (sqlc.narg(after_id)::bigint IS NULL
+       OR CASE WHEN NOT @sort_desc::boolean THEN
+               CASE WHEN @after_null::boolean THEN (k.sk_text IS NULL AND g.id > sqlc.narg(after_id)::bigint)
+                    ELSE (k.sk_text IS NULL OR k.sk_text > sqlc.narg(after_text)::text COLLATE "und-x-icu"
+                          OR (k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" AND g.id > sqlc.narg(after_id)::bigint)) END
+           ELSE
+               CASE WHEN @after_null::boolean THEN (k.sk_text IS NULL AND g.id < sqlc.narg(after_id)::bigint)
+                    ELSE (k.sk_text IS NULL OR k.sk_text < sqlc.narg(after_text)::text COLLATE "und-x-icu"
+                          OR (k.sk_text = sqlc.narg(after_text)::text COLLATE "und-x-icu" AND g.id < sqlc.narg(after_id)::bigint)) END
+           END)
+ORDER BY (CASE WHEN NOT @sort_desc::boolean THEN k.sk_text END) ASC NULLS LAST,
+         (CASE WHEN @sort_desc::boolean THEN k.sk_text END) DESC NULLS LAST,
+         (CASE WHEN NOT @sort_desc::boolean THEN g.id END) ASC,
+         (CASE WHEN @sort_desc::boolean THEN g.id END) DESC
+LIMIT @row_limit;
+
 -- name: FindGuestDuplicates :many
 SELECT sqlc.embed(g),
        (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))::boolean AS visible

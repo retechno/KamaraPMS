@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/tenancy"
 )
 
@@ -88,21 +89,17 @@ func (sc scope) ids() []int64 {
 	return sc.propertyIDs
 }
 
-// SearchAfter is the keyset position of the alphabetical guest list.
-type SearchAfter struct {
-	Last  string `json:"l"`
-	First string `json:"f"`
-	ID    int64  `json:"i"`
-}
+// SortSpec is what the guest list can be sorted by: the name that is shown (the first name, then the last), the code, the nationality. Name A-Z is the default.
+var SortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"name": listsort.Text, "code": listsort.Text, "nationality": listsort.Text}, DefaultKind: listsort.Text}
 
 // SearchResult is one page of guests with the position to continue from.
 type SearchResult struct {
 	Guests []Guest
-	Next   *SearchAfter // set when more results exist
+	Next   *listsort.Position // set when more results exist
 }
 
-// Search finds visible guests by free text (names, email, phone, ID number, code), alphabetically.
-func (s *Service) Search(ctx context.Context, q string, propertyID *int64, after *SearchAfter, limit int) (SearchResult, error) {
+// Search finds visible guests by free text (names, email, phone, ID number, code), in the order asked for (by the name that is shown, A-Z, when none is). pos is where the page before ended.
+func (s *Service) Search(ctx context.Context, q string, propertyID *int64, order listsort.Sort, pos *listsort.Position, limit int) (SearchResult, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return SearchResult{}, err
@@ -114,27 +111,53 @@ func (s *Service) Search(ctx context.Context, q string, propertyID *int64, after
 	if limit < 1 || limit > maxSearchLimit {
 		limit = 50
 	}
-	arg := guestsdb.SearchGuestsParams{
-		TenantID: p.TenantID, AllAccess: sc.all || p.IsTenantAdmin, PropertyIds: sc.ids(), Tokens: SearchTokens(q), RowLimit: rowLimit(limit + 1),
-	}
-	if arg.Tokens == nil {
-		arg.Tokens = []string{}
-	}
-	if after != nil {
-		arg.AfterID, arg.AfterLast, arg.AfterFirst = &after.ID, &after.Last, &after.First
-	}
-	rows, err := s.q(ctx).SearchGuests(ctx, arg)
+	after, err := listsort.AfterOf(pos, listsort.Text)
 	if err != nil {
 		return SearchResult{}, err
 	}
+	tokens := SearchTokens(q)
+	if tokens == nil {
+		tokens = []string{}
+	}
+	all, ids := sc.all || p.IsTenantAdmin, sc.ids()
+	type hit struct {
+		guest guestsdb.Guest
+		value *string // the sort value of the row, nil when NULL
+	}
+	var hits []hit
+	if order.Key == "" || (order.Key == "name" && !order.Desc) {
+		// name A-Z: the index serves it
+		rows, err := s.q(ctx).SearchGuests(ctx, guestsdb.SearchGuestsParams{TenantID: p.TenantID, AllAccess: all, PropertyIds: ids, Tokens: tokens, AfterID: after.ID, AfterName: after.Text, RowLimit: rowLimit(limit + 1)})
+		if err != nil {
+			return SearchResult{}, err
+		}
+		for _, r := range rows {
+			v := r.SortName
+			hits = append(hits, hit{r.Guest, &v})
+		}
+	} else {
+		rows, err := s.q(ctx).SearchGuestsOrdered(ctx, guestsdb.SearchGuestsOrderedParams{SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, AllAccess: all, PropertyIds: ids, Tokens: tokens,
+			AfterID: after.ID, AfterNull: after.Null, AfterText: after.Text, RowLimit: rowLimit(limit + 1)})
+		if err != nil {
+			return SearchResult{}, err
+		}
+		for _, r := range rows {
+			var v *string
+			if !r.SortNull {
+				val := r.SortValue
+				v = &val
+			}
+			hits = append(hits, hit{r.Guest, v})
+		}
+	}
 	var res SearchResult
-	for i, r := range rows {
+	for i, h := range hits {
 		if i == limit {
-			last := rows[limit-1]
-			res.Next = &SearchAfter{Last: last.SortLast, First: last.SortFirst, ID: last.Guest.ID}
+			last := hits[limit-1]
+			res.Next = &listsort.Position{Value: last.value, ID: last.guest.ID}
 			break
 		}
-		res.Guests = append(res.Guests, toGuest(r.Guest))
+		res.Guests = append(res.Guests, toGuest(h.guest))
 	}
 	return res, nil
 }

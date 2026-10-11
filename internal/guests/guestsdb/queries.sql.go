@@ -160,8 +160,6 @@ type FindGuestDuplicatesRow struct {
 	Visible bool
 }
 
-// Candidate duplicates of a profile (same email, same phone digits, same ID document, or same name and
-// birth date), with whether the caller may see each one.
 func (q *Queries) FindGuestDuplicates(ctx context.Context, arg FindGuestDuplicatesParams) ([]FindGuestDuplicatesRow, error) {
 	rows, err := q.db.Query(ctx, findGuestDuplicates,
 		arg.AllAccess,
@@ -442,27 +440,27 @@ func (q *Queries) NextGuestNumber(ctx context.Context, tenantID int64) (NextGues
 }
 
 const searchGuests = `-- name: SearchGuests :many
-SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, lower(g.last_name) AS sort_last, lower(coalesce(g.first_name, '')) AS sort_first
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
 FROM guests g
 WHERE g.tenant_id = $1
   AND ($2::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $3::bigint[]))
   AND NOT EXISTS (
       SELECT 1 FROM unnest($4::text[]) AS t(tok)
       WHERE NOT (
-          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE '\'
-          OR lower(g.code) LIKE t.tok || '%' ESCAPE '\'
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
           OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
               AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
       )
   )
   AND ($5::bigint IS NULL
-       OR (lower(g.last_name), lower(coalesce(g.first_name, '')), g.id)
-          > ($6::text, $7::text, $5::bigint))
-ORDER BY lower(g.last_name), lower(coalesce(g.first_name, '')), g.id
-LIMIT $8
+       OR ((lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id)
+          > ($6::text COLLATE "und-x-icu", $5::bigint))
+ORDER BY (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu"), g.id
+LIMIT $7
 `
 
 type SearchGuestsParams struct {
@@ -471,19 +469,18 @@ type SearchGuestsParams struct {
 	PropertyIds []int64
 	Tokens      []string
 	AfterID     *int64
-	AfterLast   *string
-	AfterFirst  *string
+	AfterName   *string
 	RowLimit    int32
 }
 
 type SearchGuestsRow struct {
-	Guest     Guest
-	SortLast  string
-	SortFirst string
+	Guest    Guest
+	SortName string
 }
 
-// Every token must match the start of the first name, last name, email, id number or guest code, or
-// appear in the phone number's digits (tokens with at least 4 digits). Alphabetical keyset paging.
+// Every token must match the start of the first name, last name, email, id number or guest code, or appear in the phone number's digits (tokens with at least 4 digits).
+// Guests by the name that is shown ("Siti Rahmawati": the first name, then the last; a single name is the last name), lower case, in the ICU collation (the collation of the database does not
+// order names: see migration 00067). The expression is the one of the index guests_display_name_idx letter for letter. The page goes on after (name, id).
 func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]SearchGuestsRow, error) {
 	rows, err := q.db.Query(ctx, searchGuests,
 		arg.TenantID,
@@ -491,8 +488,7 @@ func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]S
 		arg.PropertyIds,
 		arg.Tokens,
 		arg.AfterID,
-		arg.AfterLast,
-		arg.AfterFirst,
+		arg.AfterName,
 		arg.RowLimit,
 	)
 	if err != nil {
@@ -524,8 +520,124 @@ func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]S
 			&i.Guest.CreatedBy,
 			&i.Guest.UpdatedAt,
 			&i.Guest.UpdatedBy,
-			&i.SortLast,
-			&i.SortFirst,
+			&i.SortName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchGuestsOrdered = `-- name: SearchGuestsOrdered :many
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
+FROM guests g
+CROSS JOIN LATERAL (
+    SELECT CASE $1::text
+               WHEN 'code' THEN g.code::text COLLATE "und-x-icu"
+               WHEN 'nationality' THEN g.nationality::text COLLATE "und-x-icu"
+               ELSE (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")
+           END AS sk_text
+) k
+WHERE g.tenant_id = $2
+  AND ($3::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $4::bigint[]))
+  AND NOT EXISTS (
+      SELECT 1 FROM unnest($5::text[]) AS t(tok)
+      WHERE NOT (
+          lower(coalesce(g.first_name, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.last_name) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.email, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(coalesce(g.id_number, '')) LIKE t.tok || '%' ESCAPE ''
+          OR lower(g.code) LIKE t.tok || '%' ESCAPE ''
+          OR (length(regexp_replace(t.tok, '\D', '', 'g')) >= 4
+              AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') LIKE '%' || regexp_replace(t.tok, '\D', '', 'g') || '%')
+      )
+  )
+  AND ($6::bigint IS NULL
+       OR CASE WHEN NOT $7::boolean THEN
+               CASE WHEN $8::boolean THEN (k.sk_text IS NULL AND g.id > $6::bigint)
+                    ELSE (k.sk_text IS NULL OR k.sk_text > $9::text COLLATE "und-x-icu"
+                          OR (k.sk_text = $9::text COLLATE "und-x-icu" AND g.id > $6::bigint)) END
+           ELSE
+               CASE WHEN $8::boolean THEN (k.sk_text IS NULL AND g.id < $6::bigint)
+                    ELSE (k.sk_text IS NULL OR k.sk_text < $9::text COLLATE "und-x-icu"
+                          OR (k.sk_text = $9::text COLLATE "und-x-icu" AND g.id < $6::bigint)) END
+           END)
+ORDER BY (CASE WHEN NOT $7::boolean THEN k.sk_text END) ASC NULLS LAST,
+         (CASE WHEN $7::boolean THEN k.sk_text END) DESC NULLS LAST,
+         (CASE WHEN NOT $7::boolean THEN g.id END) ASC,
+         (CASE WHEN $7::boolean THEN g.id END) DESC
+LIMIT $10
+`
+
+type SearchGuestsOrderedParams struct {
+	SortKey     string
+	TenantID    int64
+	AllAccess   bool
+	PropertyIds []int64
+	Tokens      []string
+	AfterID     *int64
+	SortDesc    bool
+	AfterNull   bool
+	AfterText   *string
+	RowLimit    int32
+}
+
+type SearchGuestsOrderedRow struct {
+	Guest     Guest
+	SortNull  bool
+	SortValue string
+}
+
+// The same guests in another order: by name (the other way), code or nationality, either way, NULL last (a guest without a nationality). One query for every order, the key and the direction
+// being parameters, so it cannot use an index; the default (name A-Z) has the query above. The page goes on after (the sort value, id): after_null says that the value of the last row was NULL.
+func (q *Queries) SearchGuestsOrdered(ctx context.Context, arg SearchGuestsOrderedParams) ([]SearchGuestsOrderedRow, error) {
+	rows, err := q.db.Query(ctx, searchGuestsOrdered,
+		arg.SortKey,
+		arg.TenantID,
+		arg.AllAccess,
+		arg.PropertyIds,
+		arg.Tokens,
+		arg.AfterID,
+		arg.SortDesc,
+		arg.AfterNull,
+		arg.AfterText,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchGuestsOrderedRow{}
+	for rows.Next() {
+		var i SearchGuestsOrderedRow
+		if err := rows.Scan(
+			&i.Guest.ID,
+			&i.Guest.TenantID,
+			&i.Guest.Code,
+			&i.Guest.OriginPropertyID,
+			&i.Guest.FirstName,
+			&i.Guest.LastName,
+			&i.Guest.Email,
+			&i.Guest.Phone,
+			&i.Guest.Nationality,
+			&i.Guest.CountryCode,
+			&i.Guest.DateOfBirth,
+			&i.Guest.Gender,
+			&i.Guest.IDType,
+			&i.Guest.IDNumber,
+			&i.Guest.Address,
+			&i.Guest.City,
+			&i.Guest.Notes,
+			&i.Guest.CreatedAt,
+			&i.Guest.CreatedBy,
+			&i.Guest.UpdatedAt,
+			&i.Guest.UpdatedBy,
+			&i.SortNull,
+			&i.SortValue,
 		); err != nil {
 			return nil, err
 		}

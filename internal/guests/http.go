@@ -7,6 +7,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/listsort"
 )
 
 // Handler exposes the guests API (docs/architecture/06-api.md §8).
@@ -45,15 +46,15 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) error {
 		}
 		propertyID = &id
 	}
-	var after *SearchAfter
-	if page.Cursor != "" {
-		var c SearchAfter
-		if err := httpx.DecodeCursor(page.Cursor, &c); err != nil {
-			return err
-		}
-		after = &c
+	order, err := SortSpec.Parse(r)
+	if err != nil {
+		return err
 	}
-	res, err := h.svc.Search(r.Context(), r.URL.Query().Get("q"), propertyID, after, page.Limit)
+	pos, err := listsort.Decode(page.Cursor, order)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.Search(r.Context(), r.URL.Query().Get("q"), propertyID, order, pos, page.Limit)
 	if err != nil {
 		return err
 	}
@@ -62,7 +63,7 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) error {
 		out.Data = []Guest{}
 	}
 	if res.Next != nil {
-		if out.NextCursor, err = httpx.EncodeCursor(res.Next); err != nil {
+		if out.NextCursor, err = listsort.Encode(order, *res.Next); err != nil {
 			return err
 		}
 	}

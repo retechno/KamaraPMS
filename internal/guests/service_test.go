@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/guests"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/rooms/roomstest"
 )
 
@@ -71,7 +72,7 @@ func names(list []guests.Guest) string {
 
 func (f fixture) search(t *testing.T, ctx context.Context, q string, propertyID *int64) []guests.Guest {
 	t.Helper()
-	res, err := f.Guests.Search(ctx, q, propertyID, nil, 50)
+	res, err := f.Guests.Search(ctx, q, propertyID, listsort.Sort{}, nil, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,17 +182,17 @@ func TestSearchFindsByNameEmailPhoneIDAndCode(t *testing.T) {
 	if got := f.search(t, f.admin, "%", nil); len(got) != 0 {
 		t.Errorf("'%%' matched %s", names(got))
 	}
-	// An empty query lists everything alphabetically, and paging walks it without gaps.
+	// An empty query lists everything alphabetically by the name that is shown, and paging walks it without gaps.
 	all := f.search(t, f.admin, "", nil)
-	if names(all) != "Siska Dewi, Siti Nurhaliza, Budi Santoso" {
-		t.Fatalf("alphabetical by last name: %s", names(all))
+	if names(all) != "Budi Santoso, Siska Dewi, Siti Nurhaliza" {
+		t.Fatalf("alphabetical by the name shown: %s", names(all))
 	}
-	p1, err := f.Guests.Search(f.admin, "", nil, nil, 2)
+	p1, err := f.Guests.Search(f.admin, "", nil, listsort.Sort{}, nil, 2)
 	if err != nil || len(p1.Guests) != 2 || p1.Next == nil {
 		t.Fatalf("page 1: %v %+v", err, p1)
 	}
-	p2, err := f.Guests.Search(f.admin, "", nil, p1.Next, 2)
-	if err != nil || len(p2.Guests) != 1 || p2.Next != nil || p2.Guests[0].LastName != "Santoso" {
+	p2, err := f.Guests.Search(f.admin, "", nil, listsort.Sort{}, p1.Next, 2)
+	if err != nil || len(p2.Guests) != 1 || p2.Next != nil || p2.Guests[0].LastName != "Nurhaliza" {
 		t.Fatalf("page 2: %v %+v", err, p2)
 	}
 }
@@ -219,7 +220,7 @@ func TestVisibilityWithAndWithoutSearchAll(t *testing.T) {
 
 	// guest.search_all widens the view to the whole tenant.
 	searcher := f.UserAt(t, f.tenantID, map[int64][]auth.Permission{f.bali: {auth.PermGuestRead, auth.PermGuestSearchAll}})
-	if got := names(f.search(t, searcher, "", nil)); got != "Ann Bali,  Guest, Bob Jakarta, Cy Visitor" {
+	if got := names(f.search(t, searcher, "", nil)); got != "Ann Bali, Bob Jakarta, Cy Visitor,  Guest" {
 		t.Fatalf("search_all: %q", got)
 	}
 	if _, err := f.Guests.Get(searcher, jktGuest.ID); err != nil {
@@ -227,7 +228,7 @@ func TestVisibilityWithAndWithoutSearchAll(t *testing.T) {
 	}
 	// ...but search_all alone does not allow reading without guest.read.
 	blind := f.UserAt(t, f.tenantID, map[int64][]auth.Permission{f.bali: {auth.PermGuestSearchAll}})
-	_, err = f.Guests.Search(blind, "", nil, nil, 10)
+	_, err = f.Guests.Search(blind, "", nil, listsort.Sort{}, nil, 10)
 	wantCode(t, err, "PERMISSION_DENIED")
 
 	// The property_id filter evaluates permissions at that property only.
@@ -237,11 +238,11 @@ func TestVisibilityWithAndWithoutSearchAll(t *testing.T) {
 	if got := names(f.search(t, both, "", &f.bali)); got != "Ann Bali, Cy Visitor" {
 		t.Fatalf("scoped to Bali: %q", got)
 	}
-	if got := names(f.search(t, both, "", &f.jkt)); got != "Ann Bali,  Guest, Bob Jakarta, Cy Visitor" {
+	if got := names(f.search(t, both, "", &f.jkt)); got != "Ann Bali, Bob Jakarta, Cy Visitor,  Guest" {
 		t.Fatalf("scoped to Jakarta: %q", got)
 	}
 	other := f.Property(t, f.tenantID, "SBY")
-	_, err = f.Guests.Search(both, "", &other.ID, nil, 10) // no grant there
+	_, err = f.Guests.Search(both, "", &other.ID, listsort.Sort{}, nil, 10) // no grant there
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 
 	// Another tenant sees nothing and cannot address these ids.
