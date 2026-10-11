@@ -37,6 +37,11 @@ func (s *Service) paymentView(ctx context.Context, propertyID int64, pay foliosd
 		rate, vat := pay.MdrVatRate.String(), fixed(*pay.MdrVat, decimals)
 		v.MDRVATRate, v.MDRVAT = &rate, &vat
 	}
+	number, err := s.q(ctx).GetFolioNumber(ctx, foliosdb.GetFolioNumberParams{PropertyID: propertyID, ID: pay.FolioID})
+	if err != nil {
+		return Payment{}, err
+	}
+	v.FolioNumber = number
 	g, err := s.q(ctx).GetPaymentGroup(ctx, foliosdb.GetPaymentGroupParams{TenantID: pay.TenantID, PropertyID: propertyID, PaymentID: &pay.ID})
 	if err != nil {
 		return Payment{}, err

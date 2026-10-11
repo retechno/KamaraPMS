@@ -276,7 +276,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 	}
 	out := make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, StayID: r.StayID,
+		out[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Debit.Sub(r.Credit), decimals)}
 	}
 	return out, nil
