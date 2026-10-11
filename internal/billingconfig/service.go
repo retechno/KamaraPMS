@@ -44,10 +44,10 @@ func (s *Service) q(ctx context.Context) *billingconfigdb.Queries {
 	return billingconfigdb.New(s.txm.DB(ctx))
 }
 
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: entity, EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 
@@ -148,7 +148,7 @@ func (s *Service) CreateTax(ctx context.Context, propertyID int64, in TaxInput) 
 			return err
 		}
 		out = toTax(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "tax.created", "tax", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "tax.created", "tax", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -222,7 +222,7 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 			}
 			out.AffectedOpenStays = &n
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "tax.updated", "tax", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "tax.updated", "tax", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -277,7 +277,7 @@ func (s *Service) CreateServiceCharge(ctx context.Context, propertyID int64, in 
 			return err
 		}
 		out = toServiceCharge(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "service_charge.created", "service_charge", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "service_charge.created", "service_charge", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -348,7 +348,7 @@ func (s *Service) UpdateServiceCharge(ctx context.Context, propertyID, id int64,
 			}
 			out.AffectedOpenStays = &n
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "service_charge.updated", "service_charge", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "service_charge.updated", "service_charge", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -476,7 +476,7 @@ func (s *Service) CreateChargeCode(ctx context.Context, propertyID int64, in Cha
 			return err
 		}
 		out = toChargeCode(row, decimals)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.created", "charge_code", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.created", "charge_code", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -571,7 +571,7 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		if out, err = s.loadChargeCode(ctx, p.TenantID, propertyID, id); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.updated", "charge_code", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.updated", "charge_code", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -675,7 +675,7 @@ func (s *Service) ReplaceRules(ctx context.Context, propertyID, chargeCodeID int
 		if out, err = s.loadChargeCode(ctx, p.TenantID, propertyID, chargeCodeID); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.rules_replaced", "charge_code", chargeCodeID,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "charge_code.rules_replaced", "charge_code", chargeCodeID, out.Code,
 			map[string]any{"taxes": before.Taxes, "service_charges": before.ServiceCharges},
 			map[string]any{"taxes": out.Taxes, "service_charges": out.ServiceCharges}))
 	})
