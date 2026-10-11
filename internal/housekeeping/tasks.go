@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/housekeeping/housekeepingdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -130,8 +131,8 @@ func toTask(r housekeepingdb.ListHousekeepingTasksRow) Task {
 	}
 }
 
-func taskAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "housekeeping_task", EntityID: id, Old: old, New: updated}
+func taskAudit(p auth.Principal, propertyID int64, bd civil.Date, action string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "housekeeping_task", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 // Staff lists who can be assigned cleaning work (housekeeping.assign).
@@ -274,7 +275,7 @@ func (s *Service) GenerateTasks(ctx context.Context, propertyID int64) (Generate
 			return err
 		}
 		out = GenerateResult{Date: day.BusinessDate, Created: int(n)}
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_generated", 0, nil, map[string]any{"created": n}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_generated", 0, "", nil, map[string]any{"created": n}))
 	})
 	return out, err
 }
@@ -334,7 +335,7 @@ func (s *Service) CreateTask(ctx context.Context, propertyID int64, in TaskInput
 			return err
 		}
 		id = row.ID
-		return s.audit.Write(ctx, taskAudit(p, propertyID, bd, "housekeeping.task_created", id, nil, map[string]any{"room_id": in.RoomID, "type": in.TaskType, "assigned_to": in.AssignedTo}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, bd, "housekeeping.task_created", id, auditlabel.TaskRoom(ctx, propertyID, id), nil, map[string]any{"room_id": in.RoomID, "type": in.TaskType, "assigned_to": in.AssignedTo}))
 	})
 	if err != nil {
 		return Task{}, err
@@ -401,7 +402,7 @@ func (s *Service) AssignTasks(ctx context.Context, propertyID int64, taskIDs []i
 			return apperr.Conflict("TASK_NOT_ASSIGNABLE", "a task does not exist or is already finished").WithContext("task_ids", missing)
 		}
 		n = len(done)
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_assigned", 0, nil, map[string]any{"task_ids": ids, "user_id": userID}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_assigned", 0, "", nil, map[string]any{"task_ids": ids, "user_id": userID}))
 	})
 	return n, err
 }
@@ -452,7 +453,7 @@ func (s *Service) StartTask(ctx context.Context, propertyID, taskID int64) (Task
 				return err
 			}
 		}
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_started", taskID, map[string]any{"status": task.Status}, map[string]any{"status": TaskInProgress}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_started", taskID, auditlabel.TaskRoom(ctx, propertyID, taskID), map[string]any{"status": task.Status}, map[string]any{"status": TaskInProgress}))
 	})
 	if err != nil {
 		return Task{}, err
@@ -496,7 +497,7 @@ func (s *Service) CompleteTask(ctx context.Context, propertyID, taskID int64, no
 				return err
 			}
 		}
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_completed", taskID, map[string]any{"status": task.Status}, map[string]any{"status": TaskDone}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_completed", taskID, auditlabel.TaskRoom(ctx, propertyID, taskID), map[string]any{"status": task.Status}, map[string]any{"status": TaskDone}))
 	})
 	if err != nil {
 		return Task{}, err
@@ -535,7 +536,7 @@ func (s *Service) SkipTask(ctx context.Context, propertyID, taskID int64, reason
 			}
 			return err
 		}
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_skipped", taskID, map[string]any{"status": task.Status}, map[string]any{"status": TaskSkipped, "reason": reason}))
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_skipped", taskID, auditlabel.TaskRoom(ctx, propertyID, taskID), map[string]any{"status": task.Status}, map[string]any{"status": TaskSkipped, "reason": reason}))
 	})
 	if err != nil {
 		return Task{}, err
