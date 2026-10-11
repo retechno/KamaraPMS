@@ -12737,6 +12737,8 @@ export interface components {
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
+        /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+        SortOrder: "asc" | "desc";
     };
     requestBodies: never;
     headers: never;
@@ -17817,6 +17819,10 @@ export interface operations {
                 q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
+                /** @description The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first. */
+                sort?: "created_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path: {
@@ -17835,6 +17841,7 @@ export interface operations {
                     "application/json": components["schemas"]["AuditLogPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -17857,6 +17864,10 @@ export interface operations {
                 q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
+                /** @description The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first. */
+                sort?: "created_at";
+                /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
+                order?: components["parameters"]["SortOrder"];
             };
             header?: never;
             path?: never;
@@ -17873,6 +17884,7 @@ export interface operations {
                     "application/json": components["schemas"]["AuditLogPage"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };

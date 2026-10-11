@@ -207,3 +207,99 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 	}
 	return items, nil
 }
+
+const searchAuditLogsAsc = `-- name: SearchAuditLogsAsc :many
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+       a.old_data, a.new_data, a.request_id, a.ip_address
+FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
+WHERE a.tenant_id = $1
+  AND (CASE WHEN $2::bigint IS NULL THEN a.property_id IS NULL ELSE a.property_id = $2::bigint END)
+  AND ($3::text IS NULL OR a.entity_type = $3::text)
+  AND ($4::bigint IS NULL OR a.entity_id = $4::bigint)
+  AND ($5::bigint IS NULL OR a.user_id = $5::bigint)
+  AND ($6::text IS NULL OR a.action = $6::text)
+  AND ($7::date IS NULL OR a.business_date >= $7::date)
+  AND ($8::date IS NULL OR a.business_date <= $8::date)
+  -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
+  AND ($9::text IS NULL OR a.entity_label ILIKE $9::text ESCAPE '\')
+  AND ($10::bigint IS NULL OR a.id > $10::bigint)
+ORDER BY a.id ASC
+LIMIT $11
+`
+
+type SearchAuditLogsAscParams struct {
+	TenantID   int64
+	PropertyID *int64
+	EntityType *string
+	EntityID   *int64
+	UserID     *int64
+	Action     *string
+	FromDate   *civil.Date
+	ToDate     *civil.Date
+	LabelLike  *string
+	AfterID    *int64
+	RowLimit   int32
+}
+
+type SearchAuditLogsAscRow struct {
+	ID           int64
+	CreatedAt    time.Time
+	BusinessDate *civil.Date
+	UserID       *int64
+	UserName     *string
+	Action       string
+	EntityType   string
+	EntityID     int64
+	EntityLabel  *string
+	OldData      []byte
+	NewData      []byte
+	RequestID    *string
+	IpAddress    *netip.Addr
+}
+
+// The same, oldest first: the order is by id (ids grow with time), so the keyset is the id and the position is the id after which the page goes on.
+func (q *Queries) SearchAuditLogsAsc(ctx context.Context, arg SearchAuditLogsAscParams) ([]SearchAuditLogsAscRow, error) {
+	rows, err := q.db.Query(ctx, searchAuditLogsAsc,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.EntityType,
+		arg.EntityID,
+		arg.UserID,
+		arg.Action,
+		arg.FromDate,
+		arg.ToDate,
+		arg.LabelLike,
+		arg.AfterID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchAuditLogsAscRow{}
+	for rows.Next() {
+		var i SearchAuditLogsAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.BusinessDate,
+			&i.UserID,
+			&i.UserName,
+			&i.Action,
+			&i.EntityType,
+			&i.EntityID,
+			&i.EntityLabel,
+			&i.OldData,
+			&i.NewData,
+			&i.RequestID,
+			&i.IpAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
