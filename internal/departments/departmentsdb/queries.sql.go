@@ -160,17 +160,23 @@ func (q *Queries) ListDepartments(ctx context.Context, arg ListDepartmentsParams
 }
 
 const seedDepartments = `-- name: SeedDepartments :one
-SELECT seed_departments($1, $2, $3)::int AS created
+SELECT seed_departments($1, $2, $3, $4::text)::int AS created
 `
 
 type SeedDepartmentsParams struct {
-	TenantID   int64
-	PropertyID int64
-	ActorID    *int64
+	TenantID     int64
+	PropertyID   int64
+	ActorID      *int64
+	DataLanguage string
 }
 
 func (q *Queries) SeedDepartments(ctx context.Context, arg SeedDepartmentsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, seedDepartments, arg.TenantID, arg.PropertyID, arg.ActorID)
+	row := q.db.QueryRow(ctx, seedDepartments,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ActorID,
+		arg.DataLanguage,
+	)
 	var created int32
 	err := row.Scan(&created)
 	return created, err

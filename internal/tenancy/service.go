@@ -24,6 +24,8 @@ type PropertyCreated struct {
 	PropertyID   int64
 	BusinessDate civil.Date
 	ActorID      *int64
+	// DataLanguage is the language of the names that the property starts with (the chart of accounts, the departments, the charge codes): "en" or "id". Never empty.
+	DataLanguage string
 }
 
 // Service is the tenancy application service.
@@ -85,7 +87,15 @@ type CreatePropertyInput struct {
 	Code                string
 	Settings            PropertySettings
 	OpeningBusinessDate civil.Date
+	// DataLanguage is the language of the names that the property starts with: "en" (the default when empty) or "id". It is used once, when the property is created.
+	DataLanguage string
 }
+
+// DataLanguages are the languages that the standard names (chart of accounts, departments, charge codes) exist in.
+const (
+	DataLanguageEN = "en"
+	DataLanguageID = "id"
+)
 
 // PropertyWithDay is a property together with its current business date.
 type PropertyWithDay struct {
@@ -105,7 +115,13 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 
 	in.Code = NormalizeCode(in.Code)
 	in.Settings.Normalize()
+	if in.DataLanguage == "" {
+		in.DataLanguage = DataLanguageEN
+	}
 	fields := validateCode("code", in.Code)
+	if in.DataLanguage != DataLanguageEN && in.DataLanguage != DataLanguageID {
+		fields = append(fields, apperr.FieldError{Field: "data_language", Code: "INVALID_VALUE", Message: "en or id"})
+	}
 	fields = append(fields, in.Settings.Validate()...)
 	if in.OpeningBusinessDate.IsZero() {
 		fields = append(fields, apperr.FieldError{Field: "opening_business_date", Code: "REQUIRED"})
@@ -166,7 +182,7 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 		}
 
 		for _, hook := range s.onCreated {
-			if err := hook(ctx, PropertyCreated{TenantID: p.TenantID, PropertyID: prop.ID, BusinessDate: day.BusinessDate, ActorID: p.ActorID()}); err != nil {
+			if err := hook(ctx, PropertyCreated{TenantID: p.TenantID, PropertyID: prop.ID, BusinessDate: day.BusinessDate, ActorID: p.ActorID(), DataLanguage: in.DataLanguage}); err != nil {
 				return err
 			}
 		}

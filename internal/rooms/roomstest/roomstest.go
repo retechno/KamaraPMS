@@ -170,8 +170,14 @@ func (e *Env) Property(t *testing.T, tenantID int64, code string) tenancy.Proper
 // PropertyIn creates a property with the given currency whose business date is BD.
 func (e *Env) PropertyIn(t *testing.T, tenantID int64, code, currency string, decimals int32) tenancy.PropertyWithDay {
 	t.Helper()
+	return e.PropertyData(t, tenantID, code, currency, decimals, "")
+}
+
+// PropertyData creates a property whose names (chart of accounts, departments, charge codes) start in the language given: "en" or "id" ("" is "en").
+func (e *Env) PropertyData(t *testing.T, tenantID int64, code, currency string, decimals int32, dataLanguage string) tenancy.PropertyWithDay {
+	t.Helper()
 	p, err := e.Tenancy.CreateProperty(Admin(tenantID), tenancy.CreatePropertyInput{
-		Code: code,
+		Code: code, DataLanguage: dataLanguage,
 		Settings: tenancy.PropertySettings{
 			Name: "Hotel " + code, Timezone: "Asia/Jakarta", CurrencyCode: currency, CurrencyDecimals: decimals,
 			CheckInTime: civil.MustParseTimeOfDay("14:00"), CheckOutTime: civil.MustParseTimeOfDay("12:00"),

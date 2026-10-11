@@ -1,6 +1,6 @@
 # D3: data bawaan berbahasa Indonesia untuk properti baru (RENCANA, belum ada kode)
 
-Status: rencana disetujui dengan koreksi (ui-uplift-plan 2.5); daftar terjemahan menunggu konfirmasi sebelum kode. Branch `ui-uplift-d3` dari `main` (13e39a1). Berkas ini belum di-commit.
+Status: rencana disetujui dengan koreksi (ui-uplift-plan 2.5); daftar terjemahan disetujui dengan koreksi akhir (nama final di tabel di bawah); dikerjakan. Branch `ui-uplift-d3` dari `main` (13e39a1). Berkas ini belum di-commit.
 
 ## 1. Temuan
 
@@ -47,7 +47,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 1150 | Credit card clearing | Akun penampung kartu kredit |
 | 1160 | Other payment clearing (e-wallet, vouchers) | Akun penampung pembayaran lain (e-wallet, voucher) |
 | 1200 | Receivables | Piutang |
-| 1210 | Guest ledger (in-house guests) | Folio tamu menginap (guest ledger) |
+| 1210 | Guest ledger (in-house guests) | Piutang tamu menginap (guest ledger) |
 | 1220 | City ledger - accounts receivable | Piutang perusahaan (city ledger) |
 | 1230 | Other receivables | Piutang lain-lain |
 | 1240 | Allowance for doubtful accounts | Cadangan kerugian piutang |
@@ -79,20 +79,20 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 2120 | Accounts payable - other | Utang lain-lain |
 | 2200 | Accrued expenses | Beban yang masih harus dibayar |
 | 2210 | Accrued payroll | Utang gaji |
-| 2220 | Accrued employee benefits | Utang tunjangan karyawan |
+| 2220 | Accrued employee benefits | Utang imbalan kerja |
 | 2230 | Accrued utilities | Utang utilitas |
 | 2240 | Accrued interest | Utang bunga |
 | 2250 | Other accrued expenses | Beban yang masih harus dibayar lainnya |
 | 2300 | Guest deposits and unearned revenue | Deposit tamu dan pendapatan diterima di muka |
-| 2310 | Advance deposits | Uang muka (advance deposit) |
+| 2310 | Advance deposits | Deposit tamu (advance deposit) |
 | 2320 | Gift certificates and vouchers outstanding | Voucher dan sertifikat hadiah yang belum digunakan |
 | 2330 | Unearned revenue (groups and events) | Pendapatan diterima di muka (grup dan acara) |
 | 2400 | Taxes and service charges payable | Utang pajak dan service charge |
 | 2410 | Hotel and restaurant tax payable | Utang PBJT (pajak hotel dan restoran) |
 | 2420 | Value added tax payable | Utang PPN |
 | 2430 | Service charge payable | Utang service charge |
-| 2440 | Withholding tax payable | Utang pajak yang dipotong |
-| 2450 | Income tax payable | Utang pajak penghasilan |
+| 2440 | Withholding tax payable | Utang PPh dipotong/dipungut |
+| 2450 | Income tax payable | Utang PPh badan |
 | 2460 | Other taxes payable | Utang pajak lainnya |
 | 2500 | Other current liabilities | Liabilitas lancar lainnya |
 | 2510 | Current portion of long-term debt | Bagian lancar utang jangka panjang |
@@ -139,11 +139,11 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 4430 | Commissions earned | Komisi yang diterima |
 | 4440 | Concessions | Konsesi |
 | 4500 | Miscellaneous income | Pendapatan lain-lain |
-| 4510 | No-show and cancellation fees | Biaya tidak datang (no-show) dan pembatalan |
+| 4510 | No-show and cancellation fees | Pendapatan no-show dan pembatalan |
 | 4520 | Forfeited deposits | Deposit hangus |
 | 4530 | Service charge income retained | Service charge yang menjadi pendapatan hotel |
 | 4540 | Foreign exchange gain | Keuntungan selisih kurs |
-| 4590 | Other miscellaneous income | Pendapatan lain-lain – lainnya |
+| 4590 | Other miscellaneous income | Pendapatan lainnya |
 | 5000 | Departmental expenses | Beban departemen |
 | 5100 | Rooms department expenses | Beban departemen kamar |
 | 5110 | Salaries and wages | Gaji dan upah |
@@ -178,7 +178,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 6150 | Professional fees | Jasa profesional |
 | 6160 | Office supplies and printing | Alat tulis kantor dan percetakan |
 | 6170 | Travel and entertainment | Perjalanan dinas dan jamuan |
-| 6180 | Licences and permits | Izin dan perizinan |
+| 6180 | Licences and permits | Biaya izin dan lisensi |
 | 6190 | Other administrative and general | Administrasi dan umum lainnya |
 | 6195 | Cash over and short | Selisih kas (lebih dan kurang) |
 | 6200 | Information and telecommunications systems | Sistem informasi dan telekomunikasi |
@@ -194,7 +194,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 6350 | Franchise marketing fees | Biaya pemasaran waralaba |
 | 6360 | Online and digital marketing | Pemasaran online dan digital |
 | 6390 | Other sales and marketing | Penjualan dan pemasaran lainnya |
-| 6400 | Property operations and maintenance | Operasional dan pemeliharaan properti |
+| 6400 | Property operations and maintenance | Teknik dan pemeliharaan (engineering) |
 | 6410 | Salaries and wages | Gaji dan upah |
 | 6420 | Employee benefits | Tunjangan karyawan |
 | 6430 | Repairs and maintenance - building | Perbaikan dan pemeliharaan – gedung |
@@ -213,7 +213,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 6720 | Incentive management fee | Biaya manajemen insentif |
 | 6730 | Franchise royalty fee | Royalti waralaba |
 | 7000 | Non-operating income and expenses | Pendapatan dan beban nonoperasional |
-| 7100 | Rent and leases | Sewa |
+| 7100 | Rent and leases | Beban sewa |
 | 7110 | Land and building rent | Sewa tanah dan bangunan |
 | 7120 | Equipment rent | Sewa peralatan |
 | 7200 | Property and other taxes | Pajak properti dan pajak lainnya |
@@ -234,9 +234,9 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 7610 | Interest expense - bank loans | Beban bunga – pinjaman bank |
 | 7620 | Interest expense - other | Beban bunga – lainnya |
 | 7630 | Interest income | Pendapatan bunga |
-| 7900 | Income taxes | Pajak penghasilan |
-| 7910 | Current income tax | Pajak penghasilan kini |
-| 7920 | Deferred income tax | Pajak penghasilan tangguhan |
+| 7900 | Income taxes | Beban pajak penghasilan |
+| 7910 | Current income tax | Beban pajak kini |
+| 7920 | Deferred income tax | Beban pajak tangguhan |
 
 ### Departemen (8)
 
@@ -268,6 +268,9 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | Undistributed operating expenses | Beban operasional tidak terdistribusi | Istilah USALI. |
 | Guest ledger | Folio tamu menginap (guest ledger) | |
 | Service charge | Service charge | Tetap (sudah dipakai di layar). |
+| Employee benefits | Imbalan kerja | PSAK 24. "Utang imbalan kerja", "Tunjangan karyawan" tetap untuk beban. |
+| Withholding tax | PPh dipotong/dipungut | "Utang PPh dipotong/dipungut". |
+| Current / deferred income tax expense | Beban pajak kini / tangguhan | PSAK 46. |
 | Hotel and restaurant tax | PBJT (pajak hotel dan restoran) | Sejak UU HKPD (UU 1/2022) pajak hotel dan restoran menjadi Pajak Barang dan Jasa Tertentu (PBJT). Akun yang menyebutnya memakai "PBJT" dengan penjelasan di kurung. |
 
 ## 5. Kode biaya (10) dan teks bawaan lain
@@ -283,7 +286,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | LAUNDRY | Laundry | Laundry |
 | MINIBAR | Minibar | Minibar |
 | EXTRA_BED | Extra bed | Extra bed |
-| NO_SHOW_FEE | No-show fee | Biaya tidak datang (no-show) |
+| NO_SHOW_FEE | No-show fee | Biaya no-show |
 | CANCEL_FEE | Cancellation fee | Biaya pembatalan |
 | OTHER | Other charges | Biaya lain-lain |
 

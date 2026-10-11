@@ -95,6 +95,8 @@ type createPropertyRequest struct {
 	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
 	RefundMethods                   []string `json:"refund_methods"`
 	OpeningBusinessDate             *string  `json:"opening_business_date"`
+	// DataLanguage is the language of the names the property starts with (the chart of accounts, the departments, the charge codes): en (the default) or id.
+	DataLanguage string `json:"data_language"`
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
@@ -103,7 +105,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	in := CreatePropertyInput{
-		Code: req.Code,
+		Code: req.Code, DataLanguage: req.DataLanguage,
 		Settings: PropertySettings{
 			Name: req.Name, Address: req.Address, City: req.City, CountryCode: req.CountryCode,
 			Phone: req.Phone, Email: req.Email, TaxID: req.TaxID, DocumentFooter: req.DocumentFooter,

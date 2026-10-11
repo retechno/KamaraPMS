@@ -1796,14 +1796,15 @@ func (q *Queries) ReopenPeriod(ctx context.Context, arg ReopenPeriodParams) erro
 
 const seedChart = `-- name: SeedChart :one
 
-SELECT seed_chart_of_accounts($1, $2, $3, $4::date)::int AS created
+SELECT seed_chart_of_accounts($1, $2, $3, $4::date, $5::text)::int AS created
 `
 
 type SeedChartParams struct {
-	TenantID   int64
-	PropertyID int64
-	ActorID    *int64
-	StartDate  civil.Date
+	TenantID     int64
+	PropertyID   int64
+	ActorID      *int64
+	StartDate    civil.Date
+	DataLanguage string
 }
 
 // Accounting (sqlc): chart of accounts, the system account map and journals. Every query is scoped by tenant_id and property_id.
@@ -1813,6 +1814,7 @@ func (q *Queries) SeedChart(ctx context.Context, arg SeedChartParams) (int32, er
 		arg.PropertyID,
 		arg.ActorID,
 		arg.StartDate,
+		arg.DataLanguage,
 	)
 	var created int32
 	err := row.Scan(&created)
