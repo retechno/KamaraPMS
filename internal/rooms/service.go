@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/platform/apperr"
@@ -35,10 +36,10 @@ func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Au
 func (s *Service) q(ctx context.Context) *roomsdb.Queries { return roomsdb.New(s.txm.DB(ctx)) }
 
 // auditEntry fills the fields every rooms audit entry shares.
-func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
+func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
 	return audit.Entry{
 		TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
-		Action: action, EntityType: entity, EntityID: id, Old: old, New: updated,
+		Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated,
 	}
 }
 
@@ -121,7 +122,7 @@ func (s *Service) CreateRoomType(ctx context.Context, propertyID int64, in RoomT
 			return err
 		}
 		out = toRoomType(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_type.created", "room_type", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_type.created", "room_type", out.ID, out.Code, nil, out))
 	})
 	return out, err
 }
@@ -196,7 +197,7 @@ func (s *Service) UpdateRoomType(ctx context.Context, propertyID, id int64, patc
 			return err
 		}
 		out = toRoomType(updated)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_type.updated", "room_type", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_type.updated", "room_type", id, out.Code, before, out))
 	})
 	return out, err
 }
@@ -324,7 +325,7 @@ func (s *Service) CreateRoom(ctx context.Context, propertyID int64, in CreateRoo
 		if err := s.hk.InitRoom(ctx, p.TenantID, propertyID, out.ID, in.InitialHousekeeping, p.ActorID()); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room.created", "room", out.ID, nil,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room.created", "room", out.ID, out.RoomNumber, nil,
 			map[string]any{"room": out, "housekeeping_status": in.InitialHousekeeping}))
 	})
 	return out, err
@@ -475,7 +476,7 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 			return err
 		}
 		out = toRoom(updated)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room.updated", "room", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room.updated", "room", id, out.RoomNumber, before, out))
 	})
 	return out, err
 }
@@ -659,7 +660,7 @@ func (s *Service) CreateBlock(ctx context.Context, propertyID int64, in CreateBl
 			return err
 		}
 		out = toBlock(row)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.created", "room_block", out.ID, nil, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.created", "room_block", out.ID, auditlabel.Room(ctx, propertyID, out.RoomID), nil, out))
 	})
 	return out, err
 }
@@ -773,7 +774,7 @@ func (s *Service) UpdateBlock(ctx context.Context, propertyID, id int64, patch B
 			return err
 		}
 		out = toBlock(updated)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.updated", "room_block", id, before, out))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.updated", "room_block", id, auditlabel.Room(ctx, propertyID, out.RoomID), before, out))
 	})
 	return out, err
 }
@@ -814,7 +815,7 @@ func (s *Service) CancelBlock(ctx context.Context, propertyID, id int64, reason 
 			return err
 		}
 		out = toBlock(cancelled)
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.cancelled", "room_block", id,
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "room_block.cancelled", "room_block", id, auditlabel.Room(ctx, propertyID, out.RoomID),
 			toBlock(row), map[string]any{"block": out, "cancel_reason": reason}))
 	})
 	return out, err
