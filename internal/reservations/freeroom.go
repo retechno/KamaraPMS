@@ -185,7 +185,7 @@ func (s *Service) SetFreeNightQuota(ctx context.Context, propertyID int64, kind 
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "free_night_quota.set", 0, nil, map[string]any{"occupancy_kind": kind, "monthly_nights": monthlyNights}))
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "free_night_quota.set", 0, "", nil, map[string]any{"occupancy_kind": kind, "monthly_nights": monthlyNights}))
 	})
 }
 

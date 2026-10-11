@@ -3,6 +3,7 @@ package reservations
 import (
 	"context"
 
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -107,7 +108,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_added", id, auditlabel.Reservation(ctx, propertyID, id), nil, withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, map[string]any{
 			"reservation_room_id": line.ID, "status": status, "room_type_id": in.RoomTypeID, "arrival_date": in.Arrival, "departure_date": in.Departure,
 		}))))); err != nil {
 			return err
@@ -283,7 +284,7 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_amended", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_amended", id, auditlabel.Reservation(ctx, propertyID, id),
 			lineSnapshot(old), withRestrictionAudit(ctx, withFreeRoomAudit(ctx, withOverrideAudit(ctx, lineSnapshot(next)))))); err != nil {
 			return err
 		}
@@ -351,7 +352,7 @@ func (s *Service) AssignRoom(ctx context.Context, propertyID, id, lineID int64, 
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_assigned", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_assigned", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"reservation_room_id": lineID, "room_id": oldRoom},
 			map[string]any{"reservation_room_id": lineID, "room_id": roomID, "upgrade": physical != line.RoomTypeID})); err != nil {
 			return err
@@ -401,7 +402,7 @@ func (s *Service) UnassignRoom(ctx context.Context, propertyID, id, lineID int64
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_unassigned", id,
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.room_unassigned", id, auditlabel.Reservation(ctx, propertyID, id),
 			map[string]any{"reservation_room_id": lineID, "room_id": oldRoom}, map[string]any{"reservation_room_id": lineID, "room_id": nil})); err != nil {
 			return err
 		}
