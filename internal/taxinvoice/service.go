@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -75,8 +76,8 @@ func ptr[T any](v T) *T { return &v }
 
 func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, old, updated any) audit.Entry {
-	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, Old: old, New: updated}
+func entry(p auth.Principal, propertyID int64, bd civil.Date, action, entity string, id int64, label string, old, updated any) audit.Entry {
+	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: entity, EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
 func errInvoiceNotFound() *apperr.Error {
@@ -511,7 +512,7 @@ func (s *Service) issue(ctx context.Context, p auth.Principal, propertyID int64,
 			}
 		}
 		*out = id
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_issued", "tax_invoice", id, nil,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_issued", "tax_invoice", id, auditlabel.TaxInvoice(ctx, propertyID, id), nil,
 			map[string]any{"invoice_ref": number, "source": pv.SourceType, "source_ref": pv.SourceRef, "buyer": pv.Buyer.Name, "taxable_base": pv.TaxableBase.String(), "vat": pv.VATAmount.String()}))
 	})
 }
@@ -546,7 +547,7 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 		if err := s.q(ctx).VoidInvoice(ctx, taxinvoicedb.VoidInvoiceParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason, ApprovedBy: &by}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_voided", "tax_invoice", id,
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_voided", "tax_invoice", id, auditlabel.TaxInvoice(ctx, propertyID, id),
 			map[string]any{"status": StatusIssued}, map[string]any{"status": StatusVoided, "reason": reason, "approved_by": by, "invoice_ref": cur.Ref}))
 	})
 	if err != nil {
@@ -586,7 +587,7 @@ func (s *Service) SetDJPNumber(ctx context.Context, propertyID, id int64, in DJP
 		if err := s.q(ctx).SetDJPNumber(ctx, taxinvoicedb.SetDJPNumberParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, DjpNumber: &number}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_number_recorded", "tax_invoice", id, nil, map[string]any{"invoice_ref": cur.Ref, "djp_number": number}))
+		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.invoice_number_recorded", "tax_invoice", id, auditlabel.TaxInvoice(ctx, propertyID, id), nil, map[string]any{"invoice_ref": cur.Ref, "djp_number": number}))
 	})
 	if err != nil {
 		return Invoice{}, err
