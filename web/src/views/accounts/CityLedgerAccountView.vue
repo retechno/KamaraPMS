@@ -45,7 +45,7 @@ const notice = ref('')
 const busy = ref(false)
 const period = reactive({ from: '', to: '' })
 const receipt = reactive({ amount: '', method: 'BANK_TRANSFER' as CityLedgerReceipt['payment_method'], reference: '', remarks: '' })
-const METHODS: CityLedgerReceipt['payment_method'][] = ['BANK_TRANSFER', 'CASH', 'CARD', 'OTHER']
+const METHODS: CityLedgerReceipt['payment_method'][] = ['BANK_TRANSFER', 'CASH', 'CARD', 'OTHER', 'QRIS']
 // A void waiting for its reason and its approval: a receipt or an invoice.
 const voiding = ref<{ kind: 'receipt' | 'invoice' | 'adjustment'; id: number; label: string; reason: string; asking: boolean } | null>(null)
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.

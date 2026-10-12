@@ -127,6 +127,17 @@ describe('FolioView', () => {
     expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '50000', payment_method: 'CARD' } })
   })
 
+  it('takes a payment by QRIS, a method of its own', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('select[name=payment_method]').findAll('option').map((o) => o.text())).toEqual(['Cash', 'Card', 'Bank transfer', 'Other', 'QRIS'])
+    await w.get('input[name=amount]').setValue('125000')
+    await w.get('select[name=payment_method]').setValue('QRIS')
+    await w.get('form[data-testid=payment-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '125000', payment_method: 'QRIS' } })
+  })
+
   it('reverses an item only after a reason and an approval', async () => {
     const w = mountView()
     await flushPromises()
@@ -216,6 +227,9 @@ describe('FolioView', () => {
     usePropertyStore().current = { id: 7, refund_methods: ['CASH', 'BANK_TRANSFER'] } as never
     await flushPromises()
     expect(select()).toEqual(['Cash', 'Bank transfer'])
+    usePropertyStore().current = { id: 7, refund_methods: ['CASH', 'QRIS'] } as never
+    await flushPromises()
+    expect(select()).toEqual(['Cash', 'QRIS']) // a refund by QRIS only where the property allows it
   })
 
   it('posts an adjustment through the approval dialog', async () => {

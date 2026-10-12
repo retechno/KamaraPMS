@@ -393,6 +393,7 @@ watch([() => pid.value, sid], () => {
                   <NativeSelect :id="id" v-model="settle.key" name="settle_key" @change="loadSettleLines">
                     <option value="CARD">{{ t('reconcile.card') }}</option>
                     <option value="OTHER_PAYMENT">{{ t('reconcile.ewallet') }}</option>
+                    <option value="QRIS">{{ t('reconcile.qris') }}</option>
                   </NativeSelect>
                 </template>
               </FormField>

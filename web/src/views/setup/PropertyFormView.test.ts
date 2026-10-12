@@ -71,7 +71,7 @@ describe('PropertyFormView (create)', () => {
     await wrapper.get('input[name=code]').setValue('BALI')
     await wrapper.get('input[name=name]').setValue('Hotel Bali')
     const methods = wrapper.findAll('input[name=refund_methods]')
-    expect(methods.map((m) => (m.element as HTMLInputElement).checked)).toEqual([true, false, false, false]) // cash only
+    expect(methods.map((m) => (m.element as HTMLInputElement).checked)).toEqual([true, false, false, false, false]) // cash only: QRIS is a choice, never a default
     await methods[2]!.setValue(true) // bank transfer too
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -85,6 +85,20 @@ describe('PropertyFormView (create)', () => {
     })
     expect(opts.body.opening_business_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(router.currentRoute.value.path).toBe('/setup/properties')
+  })
+
+  it('can allow refunds by QRIS', async () => {
+    POST.mockResolvedValue({ data: { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' } })
+    GET.mockResolvedValue({ data: { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' } })
+    const { wrapper } = await mountForm()
+    await wrapper.get('input[name=code]').setValue('BALI')
+    await wrapper.get('input[name=name]').setValue('Hotel Bali')
+    const methods = wrapper.findAll('input[name=refund_methods]')
+    expect(methods).toHaveLength(5)
+    await methods[4]!.setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body.refund_methods).toEqual(['CASH', 'QRIS'])
   })
 })
 

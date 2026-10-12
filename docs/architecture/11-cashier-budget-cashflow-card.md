@@ -11,7 +11,7 @@ Each is built the usual way (DB, backend, API, frontend, tests together) and com
 
 ## What exists today (read from the code)
 
-- `payments` (append-only except POSTED to VOIDED) has the method (CASH, CARD, BANK_TRANSFER, OTHER), `created_by`, `paid_at`
+- `payments` (append-only except POSTED to VOIDED) has the method (CASH, CARD, BANK_TRANSFER, OTHER, QRIS: see `27-qris.md`), `created_by`, `paid_at`
   and `business_date`, but **no shift and no drawer**. The cashier report sums payments by date and method; it does not know
   who held the cash.
 - City ledger receipts in CASH also go into the drawer (they are in `city_ledger_receipts`, with `created_by`).
