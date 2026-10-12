@@ -59,7 +59,7 @@ describe('RoomStatusView: the bulk change', () => {
     await pick(w, '101', '102')
     expect(w.get('[data-testid=bulk-count]').text()).toBe('2 rooms selected')
     expect(w.get('[data-testid=bulk-clean]').text()).toBe('Mark clean (2)')
-    expect(w.get('[data-testid=bulk-dirty]').text()).toBe('Mark dirty (2)')
+    expect(w.get('[data-testid=bulk-dirty]').text()).toBe('Mark dirty (0)') // both are dirty already: nothing to change
     expect(w.find('[data-testid=bulk-inspected]').exists()).toBe(false)
     expect(w.get('[data-testid=tile-101]').attributes('data-picked')).toBe('true')
     await w.get('[data-testid=bulk-cancel]').trigger('click')
@@ -68,7 +68,7 @@ describe('RoomStatusView: the bulk change', () => {
 
     const sup = mountView(SUPERVISOR)
     await flushPromises()
-    await pick(sup, '101')
+    await pick(sup, '101', '201') // a dirty room cannot be inspected, a clean one can
     expect(sup.get('[data-testid=bulk-inspected]').text()).toBe('Inspected (1)')
     sup.unmount()
   })
@@ -136,16 +136,18 @@ describe('RoomStatusView: the bulk change', () => {
       },
     })
     await pick(w, '101', '201', '202')
+    expect(w.get('[data-testid=bulk-clean]').text()).toBe('Mark clean (1)') // 201 is clean already, 202 cannot go there
     await w.get('[data-testid=bulk-clean]').trigger('click')
     await flushPromises()
 
     expect(POST).toHaveBeenCalledTimes(1)
     expect(POST.mock.calls[0]![0]).toBe('/api/v1/properties/{propertyId}/housekeeping/bulk')
     expect(posted()).toEqual([{ room_ids: [1, 3, 4], status: 'CLEAN' }])
-    expect(w.get('[data-testid=bulk-result-summary]').text()).toBe('1 changed, 2 skipped')
-    expect(w.get('[data-testid=skipped-201]').text()).toBe('201 · already clean')
+    expect(w.get('[data-testid=bulk-result-summary]').text()).toBe('1 changed · 1 unchanged · 1 skipped')
+    expect(w.get('[data-testid=same-201]').text()).toBe('201 · already clean') // neutral: not in the list of the skipped
+    expect(w.find('[data-testid=skipped-201]').exists()).toBe(false)
     expect(w.get('[data-testid=skipped-202]').text()).toBe('202 · cannot go from inspected to clean')
-    expect(w.get('[data-testid=bulk-count]').text()).toBe('2 rooms selected') // the two that were skipped
+    expect(w.get('[data-testid=bulk-count]').text()).toBe('1 room selected') // only the one that was skipped; the unchanged one has nothing left to do
     expect(GET).toHaveBeenCalledTimes(2) // the board was read again
     await w.get('[data-testid=bulk-result-close]').trigger('click')
     expect(w.find('[data-testid=bulk-result]').exists()).toBe(false)
@@ -171,7 +173,7 @@ describe('RoomStatusView: the bulk change', () => {
     const { ApiError } = await import('@/api/problem')
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Forbidden', status: 403, code: 'PERMISSION_DENIED', detail: 'not allowed' }))
     await pick(w, '101')
-    await w.get('[data-testid=bulk-dirty]').trigger('click')
+    await w.get('[data-testid=bulk-clean]').trigger('click')
     await flushPromises()
     expect(w.find('[data-testid=form-error]').exists()).toBe(true)
     expect(w.get('[data-testid=bulk-count]').text()).toBe('1 room selected')
@@ -228,18 +230,46 @@ describe('RoomStatusView: the bulk change', () => {
     })
 
     it('does not ask when the action does not lower inspected rooms (to clean, or no inspected room in the selection)', async () => {
-      const w = mountView(SUPERVISOR, [room(1, '101', '1', 'INSPECTED'), room(2, '102', '1', 'CLEAN')])
+      const w = mountView(SUPERVISOR, [room(1, '101', '1', 'CLEAN'), room(2, '102', '1', 'DIRTY'), room(3, '103', '1', 'INSPECTED')])
       await flushPromises()
       POST.mockResolvedValue(okResults([2]))
       await pick(w, '101', '102')
-      await w.get('[data-testid=bulk-clean]').trigger('click') // INSPECTED→CLEAN is not a change at all: it is skipped by the server
+      await w.get('[data-testid=bulk-clean]').trigger('click') // 101 is clean already, 102 changes
       await flushPromises()
       expect(ask).not.toHaveBeenCalled()
-      await pick(w, '101') // 102 changed and left the selection; 101 is still selected: unselect it, then 102 alone to dirty
-      await pick(w, '102')
+      // 102 left the selection; 101 (clean) is alone in it, to dirty: no inspected room in it
       await w.get('[data-testid=bulk-dirty]').trigger('click')
       await flushPromises()
       expect(ask).not.toHaveBeenCalled()
+      w.unmount()
+    })
+
+    it('counts only the rooms that change against the limit of 10', async () => {
+      const board = [...many(10), room(50, '150', '1', 'CLEAN'), room(51, '151', '1', 'CLEAN')] // 10 dirty and 2 clean ones
+      const w = mountView(MAID, board)
+      await flushPromises()
+      POST.mockImplementation((_p: string, o: { body: { room_ids: number[] } }) => Promise.resolve(okResults(o.body.room_ids)))
+      await w.get('[data-testid=pick-all]').trigger('click')
+      expect(w.get('[data-testid=bulk-count]').text()).toBe('12 rooms selected')
+      expect(w.get('[data-testid=bulk-clean]').text()).toBe('Mark clean (10)') // 12 selected, 10 change: no question
+      await w.get('[data-testid=bulk-clean]').trigger('click')
+      await flushPromises()
+      expect(ask).not.toHaveBeenCalled()
+      expect(posted()[0]!.room_ids).toHaveLength(12) // the server is told all of them and says which ones stayed
+      w.unmount()
+    })
+
+    it('disables a button that would change nothing and says why', async () => {
+      const w = mountView(SUPERVISOR)
+      await flushPromises()
+      await pick(w, '101', '102') // both dirty
+      const dirty = w.get('[data-testid=bulk-dirty]')
+      expect(dirty.attributes('disabled')).toBeDefined()
+      expect(dirty.attributes('title')).toBe('All are already dirty')
+      expect(w.get('[data-testid=bulk-inspected]').attributes('title')).toBe('None of the selected rooms can become inspected')
+      expect(w.get('[data-testid=bulk-clean]').attributes('disabled')).toBeUndefined()
+      await dirty.trigger('click')
+      expect(POST).not.toHaveBeenCalled()
       w.unmount()
     })
 
@@ -261,10 +291,12 @@ describe('RoomStatusView: the bulk change', () => {
     setLocale('id')
     const w = mountView(SUPERVISOR)
     await flushPromises()
-    await pick(w, '101', '102')
+    await pick(w, '101', '201')
     expect(w.get('[data-testid=bulk-count]').text()).toBe('2 kamar dipilih')
-    expect(w.get('[data-testid=bulk-clean]').text()).toBe('Tandai bersih (2)')
-    expect(w.get('[data-testid=bulk-inspected]').text()).toBe('Diperiksa (2)')
+    expect(w.get('[data-testid=bulk-clean]').text()).toBe('Tandai bersih (1)')
+    expect(w.get('[data-testid=bulk-inspected]').text()).toBe('Diperiksa (1)')
+    await pick(w, '201')
+    expect(w.get('[data-testid=bulk-dirty]').attributes('title')).toBe('Semua sudah kotor')
     w.unmount()
     setLocale('en')
   })

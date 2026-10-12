@@ -117,7 +117,9 @@ const CONFIRM_ABOVE = 10
 
 const picked = ref<number[]>([])
 const bulkBusy = ref(false)
-const outcome = ref<{ changed: number; failed: number; skipped: HousekeepingBulkResult[]; to: HousekeepingStatus } | null>(null)
+/** `same`: rooms that already had the status (neutral); `skipped`: rooms the rules or the data refused. */
+const outcome = ref<{ changed: number; failed: number; same: HousekeepingBulkResult[]; skipped: HousekeepingBulkResult[]; to: HousekeepingStatus } | null>(null)
+const isSame = (r: HousekeepingBulkResult, to: HousekeepingStatus): boolean => r.error?.code === 'INVALID_HK_TRANSITION' && r.from === to
 const isPicked = (r: HousekeepingBoardRoom): boolean => picked.value.includes(r.room_id)
 function togglePick(r: HousekeepingBoardRoom): void {
   picked.value = isPicked(r) ? picked.value.filter((id) => id !== r.room_id) : [...picked.value, r.room_id]
@@ -142,11 +144,31 @@ watch(visible, (list) => {
   if (picked.value.some((id) => !shown.has(id))) picked.value = picked.value.filter((id) => shown.has(id))
 })
 
-const barActions = computed(() => [
-  { to: 'CLEAN' as const, label: t('roomStatus.markClean', { n: picked.value.length }), testid: 'bulk-clean', primary: false },
-  { to: 'DIRTY' as const, label: t('roomStatus.markDirty', { n: picked.value.length }), testid: 'bulk-dirty', primary: false },
-  ...(canInspect.value ? [{ to: 'INSPECTED' as const, label: t('roomStatus.markInspected', { n: picked.value.length }), testid: 'bulk-inspected', primary: true }] : []),
-])
+/** The manual changes the server allows (the same table as `checkTransition` in internal/housekeeping): used to count what a button WILL change. The server still decides. */
+const NEXT: Partial<Record<HousekeepingStatus, HousekeepingStatus[]>> = {
+  DIRTY: ['CLEANING', 'CLEAN'],
+  CLEANING: ['CLEAN', 'DIRTY'],
+  CLEAN: ['INSPECTED', 'DIRTY'],
+  INSPECTED: ['DIRTY'],
+}
+const pickedRooms = computed(() => rooms.value.filter((r) => picked.value.includes(r.room_id)))
+/** How many of the selected rooms a button changes: the ones that already have the status, or cannot go there, are not counted. */
+const willChange = (to: HousekeepingStatus): number => pickedRooms.value.filter((r) => r.status !== to && (NEXT[r.status] ?? []).includes(to)).length
+const alreadyIn = (to: HousekeepingStatus): number => pickedRooms.value.filter((r) => r.status === to).length
+
+const barActions = computed(() => {
+  const mk = (to: 'CLEAN' | 'DIRTY' | 'INSPECTED', key: 'markClean' | 'markDirty' | 'markInspected', testid: string, primary: boolean) => {
+    const n = willChange(to)
+    const status = statusText(to).toLowerCase()
+    const hint = n > 0 ? '' : alreadyIn(to) === picked.value.length ? t('roomStatus.noneAll', { status }) : t('roomStatus.noneCan', { status })
+    return { to, label: t(`roomStatus.${key}`, { n }), testid, primary, n, hint }
+  }
+  return [
+    mk('CLEAN', 'markClean', 'bulk-clean', false),
+    mk('DIRTY', 'markDirty', 'bulk-dirty', false),
+    ...(canInspect.value ? [mk('INSPECTED', 'markInspected', 'bulk-inspected', true)] : []),
+  ]
+})
 
 /** Why a room stayed as it was, in words: it already has the status, the rules do not allow the change, or the room is gone. */
 function reason(r: HousekeepingBulkResult, to: HousekeepingStatus): string {
@@ -161,7 +183,7 @@ function reason(r: HousekeepingBulkResult, to: HousekeepingStatus): string {
 const outcomeSummary = computed(() => {
   const o = outcome.value
   if (!o) return ''
-  return o.failed ? t('roomStatus.resultMixed', { changed: o.changed, failed: o.failed }) : t('roomStatus.resultDone', { changed: o.changed }, o.changed)
+  return o.failed || o.same.length ? t('roomStatus.resultMixed', { changed: o.changed, same: o.same.length, failed: o.failed }) : t('roomStatus.resultDone', { changed: o.changed }, o.changed)
 })
 
 /**
@@ -172,14 +194,17 @@ async function applyBulk(to: HousekeepingStatus): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null || !picked.value.length || bulkBusy.value) return
   const ids = [...picked.value]
+  // The question is about the rooms that will change, the number on the button.
+  const changing = willChange(to)
+  if (changing === 0) return
   const lowered = to === 'DIRTY' ? rooms.value.filter((r) => ids.includes(r.room_id) && r.status === 'INSPECTED').length : 0
-  if (ids.length > CONFIRM_ABOVE || lowered > 0) {
+  if (changing > CONFIRM_ABOVE || lowered > 0) {
     const lines = [
-      ...(ids.length > CONFIRM_ABOVE ? [t('roomStatus.confirmMany', { max: CONFIRM_ABOVE })] : []),
+      ...(changing > CONFIRM_ABOVE ? [t('roomStatus.confirmMany', { max: CONFIRM_ABOVE })] : []),
       ...(lowered > 0 ? [t('roomStatus.confirmLowered', { n: lowered, status: statusText(to).toLowerCase() }, lowered)] : []),
     ]
     const yes = await confirm({
-      title: t('roomStatus.confirmTitle', { n: ids.length, status: statusText(to).toLowerCase() }, ids.length),
+      title: t('roomStatus.confirmTitle', { n: changing, status: statusText(to).toLowerCase() }, changing),
       description: lines.join(' '),
       confirmLabel: t('roomStatus.confirmButton'),
       destructive: lowered > 0,
@@ -191,11 +216,13 @@ async function applyBulk(to: HousekeepingStatus): Promise<void> {
   outcome.value = null
   const changedIds = new Set<number>()
   const skipped: HousekeepingBulkResult[] = []
+  const same: HousekeepingBulkResult[] = []
   try {
     for (let i = 0; i < ids.length; i += BULK_MAX) {
       const { data } = await api.POST('/api/v1/properties/{propertyId}/housekeeping/bulk', { params: { path: { propertyId } }, body: { room_ids: ids.slice(i, i + BULK_MAX), status: to } })
       for (const r of data?.results ?? []) {
         if (r.ok) changedIds.add(r.room_id)
+        else if (isSame(r, to)) same.push(r)
         else skipped.push(r)
       }
     }
@@ -204,9 +231,10 @@ async function applyBulk(to: HousekeepingStatus): Promise<void> {
   } finally {
     bulkBusy.value = false
   }
-  // What changed leaves the selection; the rooms that were skipped, and the ones a refused request never reached, stay selected.
-  picked.value = ids.filter((id) => !changedIds.has(id))
-  outcome.value = { changed: changedIds.size, failed: skipped.length, skipped, to }
+  // What changed leaves the selection, and so do the rooms that already had the status (nothing is left to do for them); the rooms that were skipped, and the ones a refused request never reached, stay selected.
+  const sameIds = new Set(same.map((r) => r.room_id))
+  picked.value = ids.filter((id) => !changedIds.has(id) && !sameIds.has(id))
+  outcome.value = { changed: changedIds.size, failed: skipped.length, same, skipped, to }
   const failure = error.value
   await load()
   error.value = failure
@@ -327,6 +355,12 @@ watch(() => property.currentId, () => {
         <p class="m-0 font-semibold" data-testid="bulk-result-summary">{{ outcomeSummary }}</p>
         <button type="button" class="cursor-pointer rounded border-0 bg-transparent p-1 text-muted-foreground hover:bg-muted" :aria-label="t('roomStatus.resultClose')" data-testid="bulk-result-close" @click="outcome = null"><X class="size-4" aria-hidden="true" /></button>
       </div>
+      <details v-if="outcome.same.length" class="mt-2" data-testid="bulk-same-details">
+        <summary class="cursor-pointer text-muted-foreground">{{ t('roomStatus.resultSame') }}</summary>
+        <ul class="m-0 mt-1 list-none space-y-0.5 p-0 text-muted-foreground" data-testid="bulk-same">
+          <li v-for="r in outcome.same" :key="r.room_id" :data-testid="`same-${r.room_number ?? r.room_id}`"><b>{{ r.room_number ?? r.room_id }}</b> · {{ reason(r, outcome.to) }}</li>
+        </ul>
+      </details>
       <details v-if="outcome.skipped.length" class="mt-2" open>
         <summary class="cursor-pointer text-muted-foreground">{{ t('roomStatus.resultSkipped') }}</summary>
         <ul class="m-0 mt-1 list-none space-y-0.5 p-0" data-testid="bulk-skipped">
@@ -403,7 +437,8 @@ watch(() => property.currentId, () => {
       :key="a.to"
       :variant="a.primary ? 'default' : 'secondary'"
       class="min-h-11"
-      :disabled="bulkBusy"
+      :disabled="bulkBusy || a.n === 0"
+      :title="a.hint || undefined"
       :data-testid="a.testid"
       @click="applyBulk(a.to)"
     >{{ a.label }}</Button>
