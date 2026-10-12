@@ -47,7 +47,12 @@ const MethodCityLedger = "CITY_LEDGER"
 // methodCash is the payment method that goes through a cashier shift.
 const methodCash = "CASH"
 
-var paymentMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
+var paymentMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER", "QRIS"}
+
+// hasAcquirerFee reports whether a payment by the method is paid out by an acquirer, net of its fee (MDR): the payment keeps a snapshot of the fee rule of the day (cards, e-wallets, QRIS).
+func hasAcquirerFee(method string) bool {
+	return method == "CARD" || method == "OTHER" || method == "QRIS"
+}
 
 func fieldErr(field, code, msg string) apperr.FieldError {
 	return apperr.FieldError{Field: field, Code: code, Message: msg}

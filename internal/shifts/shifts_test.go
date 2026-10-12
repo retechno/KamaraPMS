@@ -756,3 +756,23 @@ func TestTheDatabaseRefusesShiftRowsDatedAClosedDay(t *testing.T) {
 		t.Errorf("a shift closed on a closed day: %v", err)
 	}
 }
+
+// QRIS is not drawer cash: it is another tender on the report of the shift, under its own name, and it does not enter what the drawer is expected to hold.
+func TestAQRISPaymentIsAnotherTenderOfTheShiftNotDrawerCash(t *testing.T) {
+	f := setup(t)
+	sh := f.open(t, f.cashier, "", "100000")
+	folio := f.folio(t)
+	_, err := f.pay(f.cashier, folio, "p1", "CASH", "400000")
+	must(t, err)
+	_, err = f.pay(f.cashier, folio, "p2", "QRIS", "250000")
+	must(t, err)
+	x, err := f.Shifts.Report(f.cashier, f.propID, sh.ID)
+	must(t, err)
+	if len(x.CashPayments) != 1 || x.CashPayments[0].Amount != "400000" {
+		t.Fatalf("only cash is drawer cash: %+v", x.CashPayments)
+	}
+	if len(x.OtherTenders) != 1 || x.OtherTenders[0].Method != "QRIS" || x.OtherTenders[0].Kind != "PAYMENT" || x.OtherTenders[0].Count != 1 || x.OtherTenders[0].Amount != "250000" {
+		t.Fatalf("QRIS is another tender: %+v", x.OtherTenders)
+	}
+	eqd(t, "expected in the drawer", x.Shift.Cash.Expected, "500000")
+}

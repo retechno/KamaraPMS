@@ -17,24 +17,25 @@ import (
 	"kamarapms/internal/taxfiling"
 )
 
-// Settlement account keys: the clearing accounts that guest payments by card and by e-wallet are posted to until the
+// Settlement account keys: the clearing accounts that guest payments by card, by e-wallet and by QRIS are posted to until the
 // acquirer pays them out, net of its commission.
 const (
 	KeyCard         = "CARD"
 	KeyOtherPayment = "OTHER_PAYMENT"
+	KeyQRIS         = "QRIS"
 )
 
-func validKey(k string) bool { return k == KeyCard || k == KeyOtherPayment }
+func validKey(k string) bool { return k == KeyCard || k == KeyOtherPayment || k == KeyQRIS }
 
 // SettlementLines lists the lines of the card or e-wallet clearing account, up to the end of the statement, that no
-// settlement has settled yet: the payments the acquirer has not paid out (bank.view). `key` is CARD or OTHER_PAYMENT.
+// settlement has settled yet: the payments the acquirer has not paid out (bank.view). `key` is CARD, OTHER_PAYMENT or QRIS.
 func (s *Service) SettlementLines(ctx context.Context, propertyID, statementID int64, key string) ([]UnclearedLine, error) {
 	p, err := s.need(ctx, propertyID, auth.PermBankView)
 	if err != nil {
 		return nil, err
 	}
 	if !validKey(key) {
-		return nil, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD or OTHER_PAYMENT"))
+		return nil, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD, OTHER_PAYMENT or QRIS"))
 	}
 	st, err := s.statementRow(ctx, p.TenantID, propertyID, statementID)
 	if err != nil {
@@ -79,7 +80,7 @@ func (s *Service) Settle(ctx context.Context, propertyID, statementID, lineID in
 	}
 	var fields []apperr.FieldError
 	if !validKey(in.AccountKey) {
-		fields = append(fields, fieldErr("account_key", "INVALID", "CARD or OTHER_PAYMENT"))
+		fields = append(fields, fieldErr("account_key", "INVALID", "CARD, OTHER_PAYMENT or QRIS"))
 	}
 	if n := len(in.JournalLineIDs); n < 1 || n > maxClearBatch {
 		fields = append(fields, fieldErr("journal_line_ids", "INVALID_COUNT", "between 1 and 200 payment lines"))

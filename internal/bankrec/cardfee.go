@@ -151,8 +151,8 @@ func (s *Service) CreateCardFeeRule(ctx context.Context, propertyID int64, in Fe
 		return FeeRule{}, err
 	}
 	var fields []apperr.FieldError
-	if in.PaymentMethod != "CARD" && in.PaymentMethod != "OTHER" {
-		fields = append(fields, fieldErr("payment_method", "INVALID_VALUE", "CARD or OTHER"))
+	if in.PaymentMethod != "CARD" && in.PaymentMethod != "OTHER" && in.PaymentMethod != "QRIS" {
+		fields = append(fields, fieldErr("payment_method", "INVALID_VALUE", "CARD, OTHER or QRIS"))
 	}
 	vatRate := decimal.Zero
 	if v := strings.TrimSpace(in.VATRate); v != "" {
@@ -279,7 +279,7 @@ func (s *Service) expectedLines(ctx context.Context, tenantID, propertyID, accou
 
 func (s *Service) clearingAccount(ctx context.Context, tenantID, propertyID int64, key string) (int64, error) {
 	if !validKey(key) {
-		return 0, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD or OTHER_PAYMENT"))
+		return 0, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD, OTHER_PAYMENT or QRIS"))
 	}
 	id, err := s.q(ctx).MapAccount(ctx, bankrecdb.MapAccountParams{TenantID: tenantID, PropertyID: propertyID, MapKey: key})
 	if isNoRows(err) {

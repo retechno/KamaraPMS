@@ -352,6 +352,8 @@ func methodLabel(m string) string {
 		return "Bank transfer"
 	case "CARD":
 		return "Card"
+	case "QRIS":
+		return "QRIS"
 	case "CASH":
 		return "Cash"
 	case "CITY_LEDGER":

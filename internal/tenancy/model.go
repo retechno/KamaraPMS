@@ -172,7 +172,7 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 }
 
 // RefundMethodChoices are the methods a property can allow for refunds.
-var RefundMethodChoices = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
+var RefundMethodChoices = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER", "QRIS"}
 
 // Business day statuses.
 const (
