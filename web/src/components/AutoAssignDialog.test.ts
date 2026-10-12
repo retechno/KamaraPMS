@@ -99,7 +99,8 @@ describe('AutoAssignDialog', () => {
     })
     const w = await mountDialog([line(1), line(2)])
     ;(body('[data-testid=auto-confirm]') as HTMLElement).click()
-    await new Promise((r) => setTimeout(r, 60))
+    // wait for the work, not for a fixed time: a busy machine (the whole suite in parallel) takes longer than any number of milliseconds chosen here
+    await vi.waitFor(() => expect(order).toHaveLength(4), { timeout: 5000 })
     await flushPromises()
     expect(order).toEqual(['start 10', 'end 10', 'start 20', 'end 20']) // never two at once
     expect(POST.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7, id: 1, lineId: 10 } }, body: { version: 1, room_id: 1, upgrade: false } })
