@@ -618,6 +618,19 @@ INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, servic
 VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'PAYMENT', pm('P1'),
         'Cash payment', 1, 500000, 'EXCLUSIVE', -500000, -500000, 500000, 'MANUAL');
 
+SELECT expect_ok('a payment may be made by QRIS, and keeps the fee snapshot of its method',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, mdr_rate, mdr_fee, expected_settlement_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PQR1', fo('F1'), 'PAYMENT', 'QRIS', 100000, '2026-10-01', 0.7, 700, '2026-10-02')$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, payment_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, credit, source)
+       VALUES (tn('ABC'), pr('BALI'), fo('F1'), '2026-10-01', '2026-10-01', 'PAYMENT', pm('PQR1'),
+               'QRIS payment', 1, 100000, 'EXCLUSIVE', -100000, -100000, 100000, 'MANUAL')$q$);
+SELECT expect_error('a method that does not exist is no payment method', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PQR2', fo('F1'), 'PAYMENT', 'PAYPAL', 100, '2026-10-01')$q$);
+SELECT expect_error('a bank transfer keeps no fee snapshot', '23514',
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, mdr_rate, mdr_fee, expected_settlement_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PQR3', fo('F1'), 'PAYMENT', 'BANK_TRANSFER', 100, '2026-10-01', 0.7, 1, '2026-10-02')$q$);
 SELECT expect_error('one ledger entry per payment', '23505',
     $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, payment_id,
                                 description, quantity, unit_price, price_mode, base_amount, net_amount, credit, source)
@@ -767,6 +780,8 @@ SELECT expect_ok('a transfer to a company of the property is a payment',
 
 INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
 VALUES (tn('ABC'), pr('BALI'), 'CLR1', (SELECT id FROM companies WHERE property_id = pr('BALI')), 50, 'CASH', '2026-10-01');
+SELECT expect_ok('a company may pay a receipt by QRIS, with the fee snapshot of its method', $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date, mdr_rate, mdr_fee, expected_settlement_date)
+    VALUES (tn('ABC'), pr('BALI'), 'CLRQ', (SELECT id FROM companies WHERE property_id = pr('BALI')), 5000, 'QRIS', '2026-10-01', 0.7, 35, '2026-10-02')$q$);
 SELECT expect_error('a receipt amount is positive', '23514',
     $q$INSERT INTO city_ledger_receipts (tenant_id, property_id, receipt_number, company_id, amount, payment_method, business_date)
        VALUES (tn('ABC'), pr('BALI'), 'CLR2', (SELECT id FROM companies WHERE property_id = pr('BALI')), 0, 'CASH', '2026-10-01')$q$);
@@ -1115,6 +1130,8 @@ SELECT expect_error('a known system key', '23514',
     $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'PETTY', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
 SELECT expect_error('a system key is mapped once', '23505',
     $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'CASH', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_ok('the system key QRIS can be mapped', $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'QRIS', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_error('a key that is not a system key cannot be mapped', '23514', $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'PAYPAL', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
 SELECT expect_error('the map names an account of its property', '23503',
     $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'CARD', (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1110'))$q$);
 SELECT expect_error('an account in the map cannot be deleted', '23503',
@@ -1431,6 +1448,7 @@ SELECT expect_error('a tax journal type exists, an unknown one does not', '23514
 
 -- Refund methods of a property
 SELECT expect_ok('a property refunds in cash by default', $q$SELECT 1 FROM properties WHERE refund_methods = ARRAY['CASH']$q$);
+SELECT expect_ok('a property may allow refunds by QRIS', $q$UPDATE properties SET refund_methods = ARRAY['CASH', 'QRIS']$q$);
 SELECT expect_error('a property keeps at least one refund method', '23514', $q$UPDATE properties SET refund_methods = '{}'$q$);
 SELECT expect_error('a refund method is one of the list', '23514', $q$UPDATE properties SET refund_methods = ARRAY['CASH', 'BITCOIN']$q$);
 SELECT expect_error('a refund is not made on the city ledger', '23514', $q$UPDATE properties SET refund_methods = ARRAY['CITY_LEDGER']$q$);
@@ -1510,6 +1528,9 @@ SELECT expect_ok('a rule takes the VAT rate of the commission', $q$INSERT INTO c
 SELECT expect_error('the VAT rate of a rule is a percentage', '23514',
     $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 0.7, 101, 1, '2026-09-06')$q$);
 -- The VAT of the commission of a settlement (00056): the identity fee = MDR + VAT, the treatment frozen with the VAT, the claim of a settlement
+SELECT expect_ok('a fee rule for QRIS, with the VAT of its commission', $q$INSERT INTO card_fee_rules (tenant_id, property_id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from) VALUES (tn('ABC'), pr('BALI'), 'QRIS', 0.7, 11, 1, '2026-09-07')$q$);
+SELECT expect_ok('a QRIS settlement pays the gross as net plus commission', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'QRIS', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 993, 7)$q$);
+SELECT expect_error('a settlement clears a clearing account only', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CASH', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 980, 20)$q$);
 SELECT expect_ok('a settlement with the VAT of its commission', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate)
     VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM bank_accounts WHERE property_id = pr('BALI') AND name = 'Main bank'), 'CARD', (SELECT id FROM gl_journals WHERE journal_number = 'JV000001'), 1000, 978, 22, 2, 'CREDITABLE', 20, 2, 2, 2, 11)$q$);
 SELECT expect_error('the VAT of a settlement is not more than the deduction', '23514', $q$INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment)
