@@ -455,8 +455,9 @@ LEFT JOIN room_blocks b ON b.property_id = r.property_id AND b.room_id = r.id AN
 WHERE r.tenant_id = $2 AND r.property_id = $3 AND r.is_active
   AND ($4::text IS NULL OR h.status = $4::text)
   AND ($5::text IS NULL OR r.floor = $5::text)
+  AND ($6::bigint IS NULL OR r.id = $6::bigint)
 ORDER BY r.floor NULLS LAST, r.room_number
-LIMIT $6
+LIMIT $7
 `
 
 type ListHousekeepingBoardParams struct {
@@ -465,6 +466,7 @@ type ListHousekeepingBoardParams struct {
 	PropertyID   int64
 	Status       *string
 	Floor        *string
+	RoomID       *int64
 	RowLimit     int32
 }
 
@@ -498,6 +500,7 @@ func (q *Queries) ListHousekeepingBoard(ctx context.Context, arg ListHousekeepin
 		arg.PropertyID,
 		arg.Status,
 		arg.Floor,
+		arg.RoomID,
 		arg.RowLimit,
 	)
 	if err != nil {

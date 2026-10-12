@@ -195,6 +195,11 @@ There are no endpoints to open or close days directly. That only happens through
 **GET `{P}/rooms/{id}/housekeeping/logs`**
 - **TX:** R
 
+**GET `{P}/rooms/{roomId}/summary`** (the room panel; module `internal/roompanel`)
+- One read for the panel that opens from a room number: `room` (as the room board states it), `business_date`, `stay` (guest, night n of N, special request), `folio` (`charges`, `paid`, `balance`, the folios), `next_arrival` (an empty room), `history` (what happened to the room and its stay on the OPEN business date, newest first, at most 30) and `access`.
+- The module owns no table and no rule: each part is the answer of the service that owns the data (housekeeping board, front desk stays, reservations, folio totals, audit trail), with the permission that service asks for: `reservation.read` (stay, next arrival), `folio.read` (folio), `audit.read` (the audit entries of the history; changes of cleaning are listed for anyone). A part the caller may not read is `null` and its flag in `access` is false; with the flag true, `null` means nothing is there. 404 `ROOM_NOT_FOUND`, 409 `BUSINESS_DAY_NOT_FOUND`.
+- **TX:** `R` in one READ ONLY, REPEATABLE READ transaction (`TxManager.WithinReadTx`), so the parts agree with each other; no lock, no write, no audit.
+
 ## 8. Guests (tenant-wide)
 
 **Visibility (one rule for search, profile, duplicates and history).** A guest is *linked* to a property when it is the guest's origin property, or the guest is a booker or occupant of a reservation there, or a primary or accompanying guest of a stay there (`guest_linked_to`, migration 00013). The caller's *readable properties* are those where they hold `guest.read` (tenant administrators: all). A guest is visible when the caller holds `guest.search_all` at one of their readable properties, or the guest is linked to one. An invisible guest is indistinguishable from a missing one: 404 `GUEST_NOT_FOUND`. With `property_id`, only permissions at that property count (404 `PROPERTY_NOT_FOUND` without a grant there). Without `guest.read` anywhere: 403.

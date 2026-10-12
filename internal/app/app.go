@@ -41,6 +41,7 @@ import (
 	"kamarapms/internal/reports"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/roomcharge"
+	"kamarapms/internal/roompanel"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/shifts"
 	"kamarapms/internal/taxfiling"
@@ -165,7 +166,9 @@ func New(d Deps) *App {
 	taxfiling.NewHandler(taxSvc).Register(api)
 	taxinvoice.NewHandler(taxInvoiceSvc).Register(api)
 	lostfound.NewHandler(lostFoundSvc).Register(api)
-	auditlog.NewHandler(auditlog.NewReader(d.TxManager, authz)).Register(api)
+	auditReader := auditlog.NewReader(d.TxManager, authz)
+	auditlog.NewHandler(auditReader).Register(api)
+	roompanel.NewHandler(roompanel.NewService(d.TxManager, tenancySvc, hkSvc, frontdeskSvc, reservationsSvc, foliosSvc, auditReader)).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))

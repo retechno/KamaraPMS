@@ -674,6 +674,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/rooms/{roomId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                roomId: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The room panel - what is going on in a room today (any caller with a grant on the property; each part has its own permission)
+         * @description One call for the panel that opens from a room number: the room as the room board states it, the guest in it (nights, special request), the folio totals, the guest booked next into an empty
+         *     room, and what happened to the room and its stay on the open business date. "Today" is the OPEN business date, never the date of the server. 409 `BUSINESS_DAY_NOT_FOUND` when none is open.
+         *
+         *     Every part comes from the service of the module that owns it and needs the permission that module asks for: `stay` and `next_arrival` need `reservation.read`, `folio` needs `folio.read`, the audit entries
+         *     of the history need `audit.read` (the changes of cleaning are listed for anyone). A part the caller may not read is `null` and its flag in `access` is false; with the flag true, `null` means there is
+         *     nothing there (no guest in the room, no folio, no booking to come). The parts are read in one read-only, repeatable-read transaction, so they describe the same moment. Nothing is locked or written.
+         *
+         *     `folio` sums the folios of the stay with the folio service: `charges` is what was charged, `paid` what was paid or credited, `balance` charged minus paid (the number the in-house list shows).
+         */
+        get: operations["getRoomSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/guests": {
         parameters: {
             query?: never;
@@ -7123,6 +7153,82 @@ export interface components {
         };
         /** @enum {string} */
         HousekeepingPriority: "NORMAL" | "HIGH";
+        RoomSummary: {
+            room: components["schemas"]["HousekeepingBoardRoom"];
+            business_date: components["schemas"]["Date"];
+            /** @description Which parts the caller may read. A part that is not readable is null; with its flag true, null means there is nothing there. */
+            access: {
+                stay: boolean;
+                folio: boolean;
+                arrival: boolean;
+                audit: boolean;
+            };
+            stay: null | {
+                /** Format: int64 */
+                id: number;
+                stay_number: string;
+                guest: {
+                    /** Format: int64 */
+                    id: number;
+                    name: string;
+                };
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+                source?: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                /** @description The night the stay is in on the business date (1 on the arrival date) */
+                night: number;
+                nights: number;
+                adult_count: number;
+                child_count: number;
+                special_request?: string;
+            };
+            folio: null | {
+                charges: string;
+                paid: string;
+                /** @description Charged minus paid; above zero is owed. */
+                balance: string;
+                folios: {
+                    /** Format: int64 */
+                    id: number;
+                    folio_number: string;
+                    /** @enum {string} */
+                    folio_type: "GUEST" | "COMPANY";
+                    /** @enum {string} */
+                    status: "OPEN" | "CLOSED";
+                    balance: string;
+                }[];
+            };
+            next_arrival: null | {
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+                guest_name?: string;
+                room_type_code: string;
+                arrival_date: components["schemas"]["Date"];
+                departure_date: components["schemas"]["Date"];
+                nights: number;
+                adult_count: number;
+                child_count: number;
+            };
+            /** @description What happened to the room and its stay on the business date, newest first (at most 30). */
+            history: {
+                /** Format: date-time */
+                at: string;
+                /** @enum {string} */
+                kind: "CLEANING" | "AUDIT";
+                /** @description The audit action of an AUDIT entry. A change of cleaning is only listed as CLEANING. */
+                action?: string;
+                entity_type?: string;
+                label?: string;
+                user?: string;
+                from?: components["schemas"]["HousekeepingStatus"];
+                to?: components["schemas"]["HousekeepingStatus"];
+                notes?: string;
+            }[];
+        };
         HousekeepingBoard: {
             data: components["schemas"]["HousekeepingBoardRoom"][];
         };
@@ -14054,6 +14160,31 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getRoomSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                roomId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The panel. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomSummary"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     searchGuests: {

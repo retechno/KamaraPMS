@@ -221,6 +221,8 @@ type BoardFilter struct {
 	Status    *Status
 	Floor     *string
 	Occupancy *Occupancy
+	// RoomID narrows the board to one room (the room panel); a room that is not active or not in the property gives an empty board.
+	RoomID *int64
 	// Flagged keeps rooms that have a flag set (high priority, do not disturb, make-up request or a note).
 	Flagged bool
 }
@@ -246,7 +248,7 @@ func (s *Service) Board(ctx context.Context, propertyID int64, f BoardFilter) ([
 		return nil, err
 	}
 	arg := housekeepingdb.ListHousekeepingBoardParams{
-		BusinessDate: day.BusinessDate, TenantID: p.TenantID, PropertyID: propertyID, Floor: f.Floor, RowLimit: maxBoardRooms,
+		BusinessDate: day.BusinessDate, TenantID: p.TenantID, PropertyID: propertyID, Floor: f.Floor, RoomID: f.RoomID, RowLimit: maxBoardRooms,
 	}
 	if f.Status != nil {
 		st := string(*f.Status)

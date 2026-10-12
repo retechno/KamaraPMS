@@ -155,6 +155,19 @@ ORDER BY s.id, (i.scope = 'ALL') DESC, (i.scope = 'ROOM') DESC, i.id;
 -- name: ListCompanyNames :many
 SELECT id, name FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
 
+-- The next guest booked into a room that is still to arrive (or has not been checked in yet): the first CONFIRMED line assigned to the room whose stay has not ended on the date.
+-- name: NextArrivalOfRoom :one
+SELECT l.reservation_id, res.confirmation_number, l.id AS line_id, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
+       t.code AS room_type_code, g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM reservation_rooms l
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.room_id = @room_id
+  AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.departure_date > @on_date::date
+ORDER BY l.arrival_date, l.id
+LIMIT 1;
+
 -- The rooms arriving on a date (the arrivals list): CONFIRMED by default, or CHECKED_IN, CANCELLED or NO_SHOW. The search reads the guest, the confirmation number and the room; the type narrows
 -- the list. The company is the one of the first billing instruction of the line; the rate is the booked night of the arrival date (the snapshot, never the rate master).
 -- name: ListArrivals :many

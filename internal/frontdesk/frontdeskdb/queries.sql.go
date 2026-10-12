@@ -1476,6 +1476,63 @@ func (q *Queries) ListUnchargedNights(ctx context.Context, arg ListUnchargedNigh
 	return items, nil
 }
 
+const nextArrivalOfRoom = `-- name: NextArrivalOfRoom :one
+SELECT l.reservation_id, res.confirmation_number, l.id AS line_id, l.arrival_date, l.departure_date, l.adult_count, l.child_count,
+       t.code AS room_type_code, g.first_name AS guest_first_name, g.last_name AS guest_last_name
+FROM reservation_rooms l
+JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+JOIN room_types t ON t.property_id = l.property_id AND t.id = l.room_type_id
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.room_id = $3
+  AND l.status = 'CONFIRMED' AND res.status = 'CONFIRMED' AND l.departure_date > $4::date
+ORDER BY l.arrival_date, l.id
+LIMIT 1
+`
+
+type NextArrivalOfRoomParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoomID     *int64
+	OnDate     civil.Date
+}
+
+type NextArrivalOfRoomRow struct {
+	ReservationID      int64
+	ConfirmationNumber string
+	LineID             int64
+	ArrivalDate        civil.Date
+	DepartureDate      civil.Date
+	AdultCount         int16
+	ChildCount         int16
+	RoomTypeCode       string
+	GuestFirstName     *string
+	GuestLastName      *string
+}
+
+// The next guest booked into a room that is still to arrive (or has not been checked in yet): the first CONFIRMED line assigned to the room whose stay has not ended on the date.
+func (q *Queries) NextArrivalOfRoom(ctx context.Context, arg NextArrivalOfRoomParams) (NextArrivalOfRoomRow, error) {
+	row := q.db.QueryRow(ctx, nextArrivalOfRoom,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomID,
+		arg.OnDate,
+	)
+	var i NextArrivalOfRoomRow
+	err := row.Scan(
+		&i.ReservationID,
+		&i.ConfirmationNumber,
+		&i.LineID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+		&i.AdultCount,
+		&i.ChildCount,
+		&i.RoomTypeCode,
+		&i.GuestFirstName,
+		&i.GuestLastName,
+	)
+	return i, err
+}
+
 const updateStayDeparture = `-- name: UpdateStayDeparture :one
 UPDATE stays SET departure_date = $1, version = version + 1, updated_by = $2
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5

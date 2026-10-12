@@ -113,6 +113,7 @@ var propertyReads = map[string]string{
 	"GET /api/v1/properties/{propertyId}/rooms":                            propertyRead,
 	"GET /api/v1/properties/{propertyId}/rooms/{id}":                       propertyRead,
 	"GET /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping/logs": propertyRead,
+	"GET /api/v1/properties/{propertyId}/rooms/{roomId}/summary":           "the room panel: the room is read like the room board (the grant), every other part asks the permission of the module that owns it and is left out without it (TestRoomPanelAPI)",
 	"GET /api/v1/properties/{propertyId}/service-charges":                  propertyRead,
 	"GET /api/v1/properties/{propertyId}/taxes":                            propertyRead,
 	"GET /api/v1/properties/{propertyId}/yield-rules":                      propertyRead,
