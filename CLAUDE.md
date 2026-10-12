@@ -31,7 +31,7 @@ scripts/db-test.sh                # migrations up/down/up + 80 schema integrity 
 scripts/lint.sh                   # golangci-lint v2.14.0 (must report 0 issues)
 scripts/sqlc.sh generate          # after editing any queries.sql; CI fails if generated code is stale
 go run ./cmd/migrate up|down|status
-go run ./cmd/pms-admin create-tenant|create-admin ...
+go run ./cmd/pms-admin create-tenant|create-admin ...   # also plans, subscriptions and invoices: run it without arguments (docs/architecture/26-subscriptions.md)
 go run ./cmd/pms-seed rooms -tenant DEMO -property BALI   # demo data for a DEVELOPMENT database: 100 rooms over 4 types (idempotent, -dry-run shows it)
 go run ./cmd/pms-seed rates -tenant DEMO -property BALI   # demo rate plan RO and 90 days of prices per room type, higher on Fri/Sat (idempotent)
 cd web && npm test && npm run type-check && npm run build
@@ -54,7 +54,7 @@ Before saying a milestone or change is done, run: build, vet, lint, `go test ./.
   `numeric(18,3)` in SQL, rounded half away from zero at `properties.currency_decimals` (0 to 3).
 - **Transactions:** a use case opens `TxManager.WithinTx`; services join the ambient transaction and never
   commit. Row locks only via `db.LockRows` / `db.EnterLockLevel` (global lock order is enforced at runtime:
-  business day → room types → rooms → reservations → stays → folios → payments/cashier shifts → companies → groups → accounting → suppliers → bank accounts → tax profiles/budgets → sequences).
+  subscription (quota) → business day → room types → rooms → reservations → stays → folios → payments/cashier shifts → companies → groups → accounting → suppliers → bank accounts → tax profiles/budgets → sequences).
 - **Every business-dated write** first calls `RequireOpenBusinessDay(ctx, propertyID, db.ForShare, …)`. That is the application gate; behind it a database trigger (`business_day_must_be_open`, migration 00065) refuses a ledger or cash row (folio items, payments, room-night postings, city ledger receipts, adjustments and invoices, shift movements and shifts) dated a CLOSED day (`BUSINESS_DAY_CLOSED`). A new table that holds posting rows dated by the business day needs the same trigger; journals, supplier and tax documents and operational records are not covered.
 - **Errors:** return `*apperr.Error` with a stable code. DB constraint names map to codes in
   `internal/platform/db/errors.go` (a test verifies every name exists). New constraint → add a mapping.

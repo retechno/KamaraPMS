@@ -1,7 +1,7 @@
 # 26. Subscriptions: plans, modules, quotas and the paid period
 
-Status: **step 1 (backend) built** on branch `subscription-backend`: migration 00069, `internal/subscription`, the module gate, the quota gate, the read-only state, `pms-admin` commands and the
-two read endpoints. Step 2 (screens) waits for the UI uplift (`docs/ui-uplift-plan.md`) so that it is built once on the new components.
+Status: **step 1 (backend) built**: migration 00069, `internal/subscription`, the module gate, the quota gate, the read-only state, the `pms-admin` commands and the two read
+endpoints, with tests (rules, a quota race, the gates over the real router, invoices). Step 2 (screens) waits for the UI uplift (`docs/ui-uplift-plan.md`) so that it is built once on the new components.
 
 KamaraPMS is sold as SaaS: a **tenant** (a hotel company) pays for a **plan**. The plan decides which optional modules the tenant may use and how much it may hold (properties, active
 rooms, active users), and the paid period decides until when it may write. Billing is **manual** for now: the operator issues an invoice and records its payment with `pms-admin`; a
