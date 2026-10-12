@@ -1,6 +1,6 @@
 # 26. Subscriptions: plans, modules, quotas and the paid period
 
-Status: **step 1 (backend) built**: migration 00069, `internal/subscription`, the module gate, the quota gate, the read-only state, the `pms-admin` commands and the two read
+Status: **step 1 (backend) built**: migration 00070, `internal/subscription`, the module gate, the quota gate, the read-only state, the `pms-admin` commands and the two read
 endpoints, with tests (rules, a quota race, the gates over the real router, invoices). Step 2 (screens) waits for the UI uplift (`docs/ui-uplift-plan.md`) so that it is built once on the new components.
 
 KamaraPMS is sold as SaaS: a **tenant** (a hotel company) pays for a **plan**. The plan decides which optional modules the tenant may use and how much it may hold (properties, active
@@ -17,7 +17,7 @@ payment gateway can later call the same service.
 | Access state | Derived, never stored: `FULL`, `GRACE` or `READ_ONLY` (section 4). |
 | Subscription invoice | What the operator bills a tenant for one period (`subscription_invoices`), ISSUED, PAID or VOID. Not a hotel document: it has nothing to do with folios, the city ledger or the property's tax invoices. |
 
-## 2. Tables (migration 00069)
+## 2. Tables (migration 00070)
 
 - `subscription_plans`: `code` (unique, upper case), `name`, `modules text[]` (each one of the optional module codes; `CORE` is implied and not listed), `max_properties`,
   `max_rooms`, `max_users` (positive or NULL), `price numeric(18,3) ≥ 0`, `currency_code char(3)`, `billing_period_months` (1, 3, 6 or 12), `trial_days ≥ 0`, `is_active` (a retired plan
