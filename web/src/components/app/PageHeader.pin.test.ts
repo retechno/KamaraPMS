@@ -10,7 +10,7 @@ import PageHeader from './PageHeader.vue'
 
 let wrapper: VueWrapper | null = null
 
-async function mountHeader(path: string, permissions: string[] = ['reservation.read']) {
+async function mountHeader(path: string, permissions: string[] = ['reservation.read', 'guest.read']) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 1, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never

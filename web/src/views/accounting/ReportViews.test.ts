@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import GeneralLedgerView from './GeneralLedgerView.vue'
@@ -59,11 +60,12 @@ const answers: Record<string, unknown> = {
   },
 }
 
-function mountView(component: object, permissions = ['accounting.view'], routeName = '', over: Record<string, unknown> = {}) {
+function mountView(component: object, permissions = ['accounting.view'], routeName = '', over: Record<string, unknown> = {}, openDay = '') {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
+  if (openDay) usePropertyStore().clock = { business_date: openDay } as never
   GET = vi.fn(async (path: string) => {
     const hit = Object.keys({ ...answers, ...over }).find((k) => path.endsWith(k))
     if (hit) return { data: { ...answers, ...over }[hit] }
@@ -210,6 +212,58 @@ describe('report views', () => {
     expect(bad.find('[data-testid=not-reconciled]').exists()).toBe(true)
     expect(bad.get('[data-testid=pending]').text()).toContain('2 closed business day')
     expect(bad.find('[data-testid=open-day]').exists()).toBe(true)
+  })
+
+  describe('the control accounts of an open day', () => {
+    const rows = [
+      { key: 'GUEST_LEDGER', title: 'Guest ledger', account: '1210 Piutang tamu', ledger: '4150000', source: '-3750000', difference: '7900000', basis: 'What the folios owe' },
+      { key: 'SOMETHING_NEW', title: 'New control', account: '9999 X', ledger: '1', source: '0', difference: '1', basis: 'a new basis' },
+    ]
+    const behind = { as_of: '2026-10-13', start_date: '2026-10-12', pending_days: 0, includes_open_day: true, reconciled: false, controls: rows }
+    const query = () => GET.mock.calls.find((c) => String(c[0]).endsWith('/reconciliation'))?.[1].params.query
+
+    it('opens on the last closed day, and shows the open day when asked', async () => {
+      const w = await mountView(ReconciliationView, ['accounting.view'], '', {}, '2026-10-13')
+      await flushPromises()
+      expect(query()).toEqual({ as_of: '2026-10-12' })
+      expect((w.get('input[name=as_of]').element as HTMLInputElement).value).toBe('2026-10-12')
+      await w.get('[data-testid=as-of-open]').trigger('click')
+      await flushPromises()
+      expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-10-13' })
+    })
+
+    it('says the day is still open, in the colour of a warning, and not that the books do not agree', async () => {
+      const w = await mountView(ReconciliationView, ['accounting.view'], '', { '/reconciliation': behind }, '2026-10-13')
+      await flushPromises()
+      expect(w.get('[data-testid=open-day-warning]').text()).toBe("The business day is still open: today's transactions are not in the journals yet.")
+      expect(w.find('[data-testid=not-reconciled]').exists()).toBe(false)
+      expect(w.get('[data-testid=control-GUEST_LEDGER]').classes()).toContain('text-warning-text')
+      expect(w.get('[data-testid=control-GUEST_LEDGER]').classes()).not.toContain('text-destructive')
+      expect(w.get('[data-testid=control-GUEST_LEDGER]').text()).toMatch(/7[.,]900[.,]000/) // the difference is still shown
+    })
+
+    it('still says "not reconciled", in red, for a closed day or when closed days have no journal', async () => {
+      const closed = await mountView(ReconciliationView, ['accounting.view'], '', { '/reconciliation': { ...behind, includes_open_day: false } })
+      await flushPromises()
+      expect(closed.find('[data-testid=not-reconciled]').exists()).toBe(true)
+      expect(closed.find('[data-testid=open-day-warning]').exists()).toBe(false)
+      expect(closed.get('[data-testid=control-GUEST_LEDGER]').classes()).toContain('text-destructive')
+      const pending = await mountView(ReconciliationView, ['accounting.view'], '', { '/reconciliation': { ...behind, pending_days: 1 } })
+      await flushPromises()
+      expect(pending.find('[data-testid=not-reconciled]').exists()).toBe(true)
+      expect(pending.get('[data-testid=control-GUEST_LEDGER]').classes()).toContain('text-destructive')
+    })
+
+    it('names the rows in the language of the page by their code, and keeps the text of the server for a code it does not know', async () => {
+      await setLocale('id')
+      const w = await mountView(ReconciliationView, ['accounting.view'], '', { '/reconciliation': behind })
+      await flushPromises()
+      expect(w.get('[data-testid=control-GUEST_LEDGER]').text()).toContain('Buku besar tamu')
+      expect(w.get('[data-testid=control-GUEST_LEDGER]').text()).not.toContain('What the folios owe')
+      expect(w.get('[data-testid=control-SOMETHING_NEW]').text()).toContain('New control')
+      expect(w.get('[data-testid=control-SOMETHING_NEW]').text()).toContain('a new basis')
+      await setLocale('en')
+    })
   })
 
   it('needs accounting.view', async () => {

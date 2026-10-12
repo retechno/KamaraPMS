@@ -63,7 +63,7 @@ const businessDayShort = computed(() => businessDay.value.replace(/ \d{4}$/, '')
 /** Overdue is always in words, in the colour of a warning, at every width; ready and later are a dot on a narrow bar and words from a wide one. */
 const audit = computed(() => {
   const c = property.clock
-  if (!c) return null
+  if (!c || !auth.can('nightaudit.run', property.currentId)) return null // night audit is for who may run it
   if (c.night_audit_overdue) return { state: 'overdue' as const, text: t('shell.nightAuditOverdue'), short: t('shell.nightAuditOverdueShort'), dot: 'bg-warning' }
   if (c.night_audit_allowed) return { state: 'ready' as const, text: t('shell.nightAuditReady'), short: t('shell.nightAuditReady'), dot: 'bg-success' }
   return { state: 'later' as const, text: t('shell.nightAuditNotYet'), short: t('shell.nightAuditNotYet'), dot: 'bg-muted-foreground' }

@@ -288,7 +288,7 @@ const ghost = computed(() => {
 
 <template>
   <PageHeader :title="t('tapeChart.title')">
-    <template #actions>
+    <template v-if="canRead" #actions>
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('tapeChart.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('tapeChart.businessDate') }}</Button>
       <Button variant="outline" size="sm" @click="shift(7)">{{ t('tapeChart.week') }}<ChevronRight /></Button>

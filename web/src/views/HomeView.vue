@@ -156,8 +156,8 @@ interface Attention {
 }
 const auditAttention = computed<Attention | null>(() => {
   const c = property.clock
-  if (!c || !property.current) return null
-  const to = can('nightaudit.run') ? '/night-audit' : undefined
+  if (!c || !property.current || !can('nightaudit.run')) return null // night audit is for who may run it
+  const to = '/night-audit'
   const date = t('today.auditDate', { date: formatBusinessDate(c.business_date) })
   if (c.night_audit_overdue) return { id: 'audit', tone: 'warn', title: t('today.auditOverdue'), detail: date, to }
   if (c.night_audit_allowed) return { id: 'audit', tone: 'info', title: t('today.auditReady'), detail: date, to }

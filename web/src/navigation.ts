@@ -10,7 +10,11 @@ export interface NavItem {
   id: string
   to: string
   adminOnly?: boolean // shown to tenant administrators only
-  permission?: string // shown only to who has this permission at the open property (for pages that are for some roles: the manager's performance page)
+  /**
+   * Shown only to who has this permission at the open property: the one that the read endpoint of the page asks for (not the one to change things). A list means any of them.
+   * No permission: the endpoint lets in every member of the property.
+   */
+  permission?: string | string[]
 }
 
 export interface NavSection {
@@ -28,15 +32,15 @@ export const navigation: NavSection[] = [
     defaultOpen: true,
     items: [
       { id: 'dashboard', to: '/' },
-      { id: 'reservations', to: '/reservations' },
-      { id: 'tapeChart', to: '/reservations/tape' },
-      { id: 'availability', to: '/availability' },
-      { id: 'arrivals', to: '/arrivals' },
-      { id: 'inHouse', to: '/in-house' },
-      { id: 'departures', to: '/departures' },
-      { id: 'walkIn', to: '/walk-in' },
-      { id: 'guests', to: '/guests' },
-      { id: 'groups', to: '/groups' },
+      { id: 'reservations', to: '/reservations', permission: 'reservation.read' },
+      { id: 'tapeChart', to: '/reservations/tape', permission: 'reservation.read' },
+      { id: 'availability', to: '/availability', permission: 'reservation.read' },
+      { id: 'arrivals', to: '/arrivals', permission: 'reservation.read' },
+      { id: 'inHouse', to: '/in-house', permission: 'reservation.read' },
+      { id: 'departures', to: '/departures', permission: 'reservation.read' },
+      { id: 'walkIn', to: '/walk-in', permission: 'reservation.read' },
+      { id: 'guests', to: '/guests', permission: 'guest.read' },
+      { id: 'groups', to: '/groups', permission: 'reservation.read' },
     ],
   },
   {
@@ -48,8 +52,8 @@ export const navigation: NavSection[] = [
       { id: 'housekeeping', to: '/housekeeping' },
       { id: 'myTasks', to: '/housekeeping/my', permission: 'housekeeping.update' },
       { id: 'cleaningList', to: '/housekeeping/tasks' },
-      { id: 'maintenance', to: '/maintenance' },
-      { id: 'lostFound', to: '/lost-found' },
+      { id: 'maintenance', to: '/maintenance', permission: 'maintenance.report' },
+      { id: 'lostFound', to: '/lost-found', permission: 'lostfound.report' },
       { id: 'roomBlocks', to: '/room-blocks' },
     ],
   },
@@ -58,12 +62,12 @@ export const navigation: NavSection[] = [
     icon: Receipt,
     defaultOpen: true,
     items: [
-      { id: 'folios', to: '/folios' },
-      { id: 'cashier', to: '/cashier' },
-      { id: 'cashierShifts', to: '/cashier/shifts' },
-      { id: 'roomCharges', to: '/room-charges' },
-      { id: 'cityLedger', to: '/city-ledger' },
-      { id: 'cityLedgerOverdue', to: '/city-ledger/overdue' },
+      { id: 'folios', to: '/folios', permission: 'folio.read' },
+      { id: 'cashier', to: '/cashier', permission: 'cashier.shift' },
+      { id: 'cashierShifts', to: '/cashier/shifts', permission: ['cashier.shift', 'cashier.shift_manage'] },
+      { id: 'roomCharges', to: '/room-charges', permission: ['nightaudit.run', 'folio.post_charge'] },
+      { id: 'cityLedger', to: '/city-ledger', permission: 'cityledger.read' },
+      { id: 'cityLedgerOverdue', to: '/city-ledger/overdue', permission: 'cityledger.read' },
     ],
   },
   {
@@ -71,8 +75,8 @@ export const navigation: NavSection[] = [
     icon: MoonStar,
     defaultOpen: true,
     items: [
-      { id: 'nightAudit', to: '/night-audit' },
-      { id: 'reports', to: '/reports' },
+      { id: 'nightAudit', to: '/night-audit', permission: 'nightaudit.run' },
+      { id: 'reports', to: '/reports', permission: 'report.view' },
       { id: 'performance', to: '/performance', permission: 'report.view' },
     ],
   },
@@ -80,58 +84,58 @@ export const navigation: NavSection[] = [
     id: 'accounting',
     icon: BookOpen,
     items: [
-      { id: 'chartOfAccounts', to: '/accounting/accounts' },
-      { id: 'systemAccounts', to: '/accounting/mapping' },
-      { id: 'journals', to: '/accounting/journals' },
-      { id: 'periods', to: '/accounting/periods' },
-      { id: 'fiscalYears', to: '/accounting/fiscal-years' },
-      { id: 'departments', to: '/accounting/departments' },
-      { id: 'trialBalance', to: '/accounting/trial-balance' },
-      { id: 'generalLedger', to: '/accounting/ledger' },
-      { id: 'incomeStatement', to: '/accounting/income-statement' },
-      { id: 'departmentReport', to: '/accounting/department-report' },
-      { id: 'balanceSheet', to: '/accounting/balance-sheet' },
-      { id: 'cashFlow', to: '/accounting/cash-flow' },
-      { id: 'controlAccounts', to: '/accounting/reconciliation' },
+      { id: 'chartOfAccounts', to: '/accounting/accounts', permission: 'accounting.view' },
+      { id: 'systemAccounts', to: '/accounting/mapping', permission: 'accounting.view' },
+      { id: 'journals', to: '/accounting/journals', permission: 'accounting.view' },
+      { id: 'periods', to: '/accounting/periods', permission: 'accounting.view' },
+      { id: 'fiscalYears', to: '/accounting/fiscal-years', permission: 'accounting.view' },
+      { id: 'departments', to: '/accounting/departments', permission: 'accounting.view' },
+      { id: 'trialBalance', to: '/accounting/trial-balance', permission: 'accounting.view' },
+      { id: 'generalLedger', to: '/accounting/ledger', permission: 'accounting.view' },
+      { id: 'incomeStatement', to: '/accounting/income-statement', permission: 'accounting.view' },
+      { id: 'departmentReport', to: '/accounting/department-report', permission: 'accounting.view' },
+      { id: 'balanceSheet', to: '/accounting/balance-sheet', permission: 'accounting.view' },
+      { id: 'cashFlow', to: '/accounting/cash-flow', permission: 'accounting.view' },
+      { id: 'controlAccounts', to: '/accounting/reconciliation', permission: 'accounting.view' },
     ],
   },
   {
     id: 'payables',
     icon: Truck,
     items: [
-      { id: 'suppliers', to: '/payables/suppliers' },
-      { id: 'supplierBills', to: '/payables/bills' },
-      { id: 'supplierCredits', to: '/payables/credit-notes' },
-      { id: 'supplierPayments', to: '/payables/payments' },
-      { id: 'payablesAging', to: '/payables/aging' },
+      { id: 'suppliers', to: '/payables/suppliers', permission: 'payables.view' },
+      { id: 'supplierBills', to: '/payables/bills', permission: 'payables.view' },
+      { id: 'supplierCredits', to: '/payables/credit-notes', permission: 'payables.view' },
+      { id: 'supplierPayments', to: '/payables/payments', permission: 'payables.view' },
+      { id: 'payablesAging', to: '/payables/aging', permission: 'payables.view' },
     ],
   },
   {
     id: 'tax',
     icon: Percent,
     items: [
-      { id: 'taxStatus', to: '/tax/status' },
-      { id: 'filingProfiles', to: '/tax/profiles' },
-      { id: 'taxReturns', to: '/tax/returns' },
-      { id: 'taxInvoices', to: '/tax/invoices' },
-      { id: 'taxOwed', to: '/tax/liability' },
+      { id: 'taxStatus', to: '/tax/status', permission: 'tax.view' },
+      { id: 'filingProfiles', to: '/tax/profiles', permission: 'tax.view' },
+      { id: 'taxReturns', to: '/tax/returns', permission: 'tax.view' },
+      { id: 'taxInvoices', to: '/tax/invoices', permission: 'tax.view' },
+      { id: 'taxOwed', to: '/tax/liability', permission: 'tax.view' },
     ],
   },
   {
     id: 'bank',
     icon: Landmark,
     items: [
-      { id: 'bankAccounts', to: '/bank/accounts' },
-      { id: 'bankStatements', to: '/bank/statements' },
-      { id: 'bankCards', to: '/bank/cards' },
+      { id: 'bankAccounts', to: '/bank/accounts', permission: 'bank.view' },
+      { id: 'bankStatements', to: '/bank/statements', permission: 'bank.view' },
+      { id: 'bankCards', to: '/bank/cards', permission: 'bank.view' },
     ],
   },
   {
     id: 'budget',
     icon: PiggyBank,
     items: [
-      { id: 'budgets', to: '/budget' },
-      { id: 'budgetVsActual', to: '/budget/vs-actual' },
+      { id: 'budgets', to: '/budget', permission: 'budget.view' },
+      { id: 'budgetVsActual', to: '/budget/vs-actual', permission: 'budget.view' },
     ],
   },
   {
@@ -146,23 +150,26 @@ export const navigation: NavSection[] = [
       { id: 'roomsSetup', to: '/setup/rooms' },
       { id: 'taxesService', to: '/setup/taxes' },
       { id: 'chargeCodes', to: '/setup/charge-codes' },
-      { id: 'companies', to: '/setup/companies' },
+      { id: 'companies', to: '/setup/companies', permission: ['reservation.read', 'cityledger.read'] },
       { id: 'ratePlans', to: '/setup/rate-plans' },
       { id: 'freeQuotas', to: '/setup/free-quotas' },
       { id: 'rateGrid', to: '/setup/rates' },
       { id: 'bedSupplements', to: '/setup/bed-supplements' },
       { id: 'restrictions', to: '/setup/restrictions' },
       { id: 'yieldRules', to: '/setup/yield-rules' },
-      { id: 'auditTrail', to: '/audit' },
+      { id: 'auditTrail', to: '/audit', permission: 'audit.read' },
     ],
   },
 ]
+
+/** Does `can` allow the item: the permission it names, or any of the permissions when it names a list. */
+export const permitted = (i: Pick<NavItem, 'permission'>, can: (permission: string) => boolean): boolean => !i.permission || [i.permission].flat().some((p) => can(p))
 
 /**
  * The sections a person sees: items for administrators only are left out, an item that names a permission is left out unless `can` says the person has it, and a section left empty disappears.
  */
 export function visibleNavigation(isAdmin: boolean, can?: (permission: string) => boolean, menu: NavSection[] = navigation): NavSection[] {
-  const allowed = (i: NavItem): boolean => (!i.adminOnly || isAdmin) && (!i.permission || (can ? can(i.permission) : false))
+  const allowed = (i: NavItem): boolean => (!i.adminOnly || isAdmin) && (!i.permission || (can ? permitted(i, can) : false))
   return menu.map((s) => ({ ...s, items: s.items.filter(allowed) })).filter((s) => s.items.length > 0)
 }
 

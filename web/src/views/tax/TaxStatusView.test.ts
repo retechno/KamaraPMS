@@ -37,6 +37,8 @@ describe('PKP status', () => {
     expect(w.get('[data-testid=current-status]').text()).toBe('Not PKP')
     expect(w.get('[data-testid=current-treatment]').text()).toContain('Added to the cost of the purchase')
     expect(w.find('[data-testid=status-2000-01-01]').exists()).toBe(true)
+    expect(w.get('[data-testid=status-2000-01-01]').text()).toContain('Since the beginning') // the date the migration gave it is not shown as a day in 2000
+    expect(w.get('[data-testid=status-2000-01-01]').text()).not.toContain('2000')
   })
 
   it('a viewer reads it but cannot change it; without the permission nothing is read', async () => {

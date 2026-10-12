@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { formatDate } from '@/utils/format'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -28,6 +29,10 @@ const notice = ref('')
 const busy = ref(false)
 const editing = ref(false)
 const asking = ref(false)
+/** 2000-01-01 is the date the migration gave to the status that existed before the history was kept: it is "since the beginning", not a day in the year 2000. */
+const BEGINNING = '2000-01-01'
+const fromText = (d: string): string => (d === BEGINNING ? t('taxStatus.sinceBeginning') : formatDate(d))
+
 const blank = () => ({ effective_from: '', is_pkp: false, npwp: '', pkp_number: '', pkp_confirmed_on: '', input_vat_treatment: 'EXPENSE', signer_name: '', signer_title: '' })
 const form = reactive(blank())
 
@@ -180,7 +185,7 @@ watch(() => pid.value, () => {
     <Card>
       <CardHeader><CardTitle>{{ t('taxStatus.history') }}</CardTitle></CardHeader>
       <DataTable :columns="columns" :rows="history" row-key="id" :row-test-id="(h) => `status-${h.effective_from}`" :caption="t('taxStatus.history')" data-testid="history">
-        <template #cell-from="{ row }">{{ $date(row.effective_from) }}</template>
+        <template #cell-from="{ row }">{{ fromText(row.effective_from) }}</template>
         <template #cell-status="{ row }"><Badge :variant="row.is_pkp ? 'success' : 'outline'">{{ row.is_pkp ? t('taxStatus.pkp') : t('taxStatus.notPkp') }}</Badge></template>
         <template #cell-npwp="{ row }">{{ row.npwp ?? '—' }}</template>
         <template #cell-treatment="{ row }">{{ t('taxStatus.treatment_' + row.input_vat_treatment) }}</template>

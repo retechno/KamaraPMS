@@ -77,6 +77,8 @@ describe('TapeChartView', () => {
     const w = mountView(['guest.read'])
     await flushPromises()
     expect(w.find('[data-testid=no-access]').exists()).toBe(true)
+    expect(w.text()).not.toContain('Reservations') // the toolbar (weeks, business date, days, link) is not drawn for who may not read
+    expect(w.find('select').exists()).toBe(false)
     expect(GET).not.toHaveBeenCalled()
   })
 

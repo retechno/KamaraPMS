@@ -119,7 +119,7 @@ describe('CommandPalette', () => {
   })
 
   it('searches the pages in the current language', async () => {
-    await openPalette([])
+    await openPalette(['reservation.read'])
     setLocale('id')
     await type('kedatangan')
     expect($('[data-testid=palette-page-arrivals]')).not.toBeNull()

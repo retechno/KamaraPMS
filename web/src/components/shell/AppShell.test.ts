@@ -7,6 +7,7 @@ import { resetNavPins } from '@/composables/useNavPins'
 import { toast } from '@/composables/useToast'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { NAV_PERMISSIONS } from '@/test/navAccess'
 import { usePropertyStore } from '@/stores/property'
 import AppShell from './AppShell.vue'
 
@@ -23,7 +24,7 @@ async function mountShell(width: number, clockOver: object = {}) {
   setWidth(width)
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 1, email: 'a@b.c', full_name: 'Rina', is_tenant_admin: false }, properties: [] } as never
+  useAuthStore().me = { user: { id: 1, email: 'a@b.c', full_name: 'Rina', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: NAV_PERMISSIONS }] } as never
   const property = usePropertyStore()
   property.loaded = true
   property.properties = [{ id: 7, code: 'BALI', name: 'Bali' }] as never

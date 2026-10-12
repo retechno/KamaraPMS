@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { currentLocale, setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { NAV_PERMISSIONS } from '@/test/navAccess'
 import { usePropertyStore } from '@/stores/property'
 import TopBar from './TopBar.vue'
 
@@ -20,7 +21,7 @@ const body = <T extends Element = HTMLElement>(sel: string): T | null => documen
 async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[] } = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [] } as never
+  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: NAV_PERMISSIONS }] } as never
   const property = usePropertyStore()
   property.loaded = true
   property.properties = (opts.properties ?? [{ id: 7, code: 'BALI', name: 'Bali' }, { id: 8, code: 'LOMBOK', name: 'Lombok' }]) as never
