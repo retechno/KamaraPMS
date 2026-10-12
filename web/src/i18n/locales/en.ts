@@ -548,7 +548,7 @@ export const en = {
     },
     checkIn: {
       title: 'Check in {guest} · {type}',
-      subtitle: '{confirmation} · {arrival} to {departure}',
+      subtitle: '{confirmation} · {arrival} → {departure}',
       roomType: 'Room type',
       booked: '(booked)',
       upgrade: '(upgrade)',

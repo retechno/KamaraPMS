@@ -124,6 +124,8 @@ describe('the check-in sheet: a returning guest', () => {
     expect((find('input[name=deposit_amount]').element as HTMLInputElement).value).toBe('2840000')
     expect(find('[data-testid=deposit-method-CASH]').attributes('aria-pressed')).toBe('true')
     expect(find('[data-testid=checkin-submit]').text()).toBe('Take deposit and check in')
+    expect(document.body.textContent).toContain('2,840,000') // the amount typed is also shown formatted, under the field
+    expect(find('[data-testid=checkin-sheet]').text()).toContain('10 Oct 2026 → 13 Oct 2026')
 
     await enter() // the deposit, then the check-in
     expect(post('/deposits')).toHaveLength(1)

@@ -245,7 +245,7 @@ const lastVisit = computed(() => {
       <p v-else-if="!ci.canTakeDeposit.value" class="m-0 text-sm text-muted-foreground" data-testid="deposit-nopermission">{{ t('frontDesk.checkIn.noDepositRight') }}</p>
 
       <template v-if="ci.canTakeDeposit.value && !ci.posted.value">
-        <FormField :label="t('frontDesk.checkIn.received')" :error="fieldError('amount')">
+        <FormField :label="t('frontDesk.checkIn.received')" :hint="ci.willTake.value ? formatMoney(ci.dep.amount) : undefined" :error="fieldError('amount')">
           <template #default="{ id, invalid }">
             <Input :id="id" v-model="ci.dep.amount" name="deposit_amount" inputmode="decimal" autocomplete="off" data-autofocus class="h-12 text-xl font-bold" :aria-invalid="invalid" @input="ci.dep.touched = true" />
           </template>

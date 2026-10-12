@@ -547,7 +547,7 @@ export const id: Messages = {
     },
     checkIn: {
       title: 'Check-in {guest} · {type}',
-      subtitle: '{confirmation} · {arrival} sampai {departure}',
+      subtitle: '{confirmation} · {arrival} → {departure}',
       roomType: 'Tipe kamar',
       booked: '(dipesan)',
       upgrade: '(naik kelas)',
