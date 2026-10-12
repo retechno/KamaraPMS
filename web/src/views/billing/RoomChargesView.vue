@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import { formatDate } from '@/utils/format'
 import { labelOf } from '@/i18n/labels'
 import { computed, ref, watch } from 'vue'
@@ -135,7 +136,7 @@ watch([pid, businessDate], () => {
           :caption="t('roomCharges.title')"
           data-testid="items"
         >
-          <template #cell-room_number="{ row }">{{ row.room_number || '—' }}</template>
+          <template #cell-room_number="{ row }"><RoomLink v-if="row.room_number" :number="row.room_number" /><template v-else>—</template></template>
           <template #cell-service_date="{ row }">{{ $date(row.service_date) }} <small v-if="isMissing(row)" class="text-muted-foreground">{{ t('roomCharges.missing') }}</small></template>
           <template #cell-service_charge="{ row }">{{ row.status === 'READY' ? $money(row.service_charge) : '' }}</template>
           <template #cell-tax="{ row }">{{ row.status === 'READY' ? $money(row.tax) : '' }}</template>

@@ -15,6 +15,7 @@ import ReservationEditDialog from '@/components/ReservationEditDialog.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import RestrictionOverride from '@/components/RestrictionOverride.vue'
@@ -457,7 +458,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <Card v-for="line in res.rooms" :key="line.id" class="mb-4" :data-testid="`room-${line.id}`">
         <CardHeader class="flex-row flex-wrap items-center gap-x-3 gap-y-1 pb-2">
           <CardTitle>{{ line.room_type_code }}</CardTitle>
-          <span v-if="line.room_number" class="text-sm font-medium" :data-testid="`room-number-${line.id}`">{{ t('reservation.roomNumber', { number: line.room_number }) }}</span>
+          <span v-if="line.room_number" class="text-sm font-medium" :data-testid="`room-number-${line.id}`"><RoomLink :room-id="line.room_id" :number="line.room_number">{{ t('reservation.roomNumber', { number: line.room_number }) }}</RoomLink></span>
           <span v-else class="text-sm text-muted-foreground">{{ t('reservation.noRoom') }}</span>
           <StatusBadge domain="reservation" :status="lineUiStatus(line.status)" :data-testid="`line-status-${line.id}`" />
           <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>

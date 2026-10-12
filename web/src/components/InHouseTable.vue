@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import type { GuestView, InHouseRow } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import CheckoutStatus from '@/components/CheckoutStatus.vue'
 import EditRateDialog from '@/components/EditRateDialog.vue'
 import GuestEditDialog from '@/components/GuestEditDialog.vue'
@@ -101,7 +102,7 @@ function rateSaved(): void {
   <div>
     <DataTable class="hidden md:block" :columns="columns" :rows="rows" row-key="id" :loading="!loaded" :row-test-id="(s) => `stay-${s.stay_number}`" :caption="mode === 'departures' ? t('frontDesk.page.departures') : t('frontDesk.page.inHouse')">
       <template #cell-room_number="{ row }">
-        <div class="font-semibold">{{ row.room.number }}</div>
+        <div class="font-semibold"><RoomLink :room-id="row.room.id" :number="row.room.number" /></div>
         <div class="text-xs text-muted-foreground" :title="row.room.room_type_name">{{ row.room.room_type_code }}</div>
       </template>
       <template #cell-guest_name="{ row }">
