@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/money"
@@ -73,6 +75,8 @@ type PropertySettings struct {
 	NightAuditEarliestTime          civil.TimeOfDay `json:"night_audit_earliest_time"`
 	// RefundMethods are the methods a refund may leave by (CASH by default).
 	RefundMethods []string `json:"refund_methods"`
+	// CheckinIncidentalDeposit is the incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (0: none; a proposal the desk can change).
+	CheckinIncidentalDeposit decimal.Decimal `json:"checkin_incidental_deposit"`
 }
 
 var (
@@ -167,6 +171,11 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 			break
 		}
 		seen[m] = true
+	}
+	if s.CheckinIncidentalDeposit.IsNegative() {
+		add("checkin_incidental_deposit", "OUT_OF_RANGE", "zero or more")
+	} else if !s.CheckinIncidentalDeposit.Equal(money.Round(s.CheckinIncidentalDeposit, s.CurrencyDecimals)) {
+		add("checkin_incidental_deposit", "TOO_MANY_DECIMALS", "more decimals than the property currency has")
 	}
 	return errs
 }

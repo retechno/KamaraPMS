@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -80,13 +81,13 @@ const createProperty = `-- name: CreateProperty :one
 INSERT INTO properties (
     tenant_id, code, name, address, city, country_code, phone, email, tax_id, document_footer, timezone, currency_code, currency_decimals,
     check_in_time, check_out_time, require_room_inspection_for_checkin,
-    night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, created_by, updated_by
+    night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, checkin_incidental_deposit, created_by, updated_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
     $12, $13, $14, $15, $16,
-    $17, $18, $19, $20, $20
+    $17, $18, $19, $20, $21, $21
 )
-RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods
+RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit
 `
 
 type CreatePropertyParams struct {
@@ -109,6 +110,7 @@ type CreatePropertyParams struct {
 	NightAuditMarksOccupiedDirty    bool
 	NightAuditEarliestTime          civil.TimeOfDay
 	RefundMethods                   []string
+	CheckinIncidentalDeposit        decimal.Decimal
 	ActorID                         *int64
 }
 
@@ -133,6 +135,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg CreatePropertyParams) 
 		arg.NightAuditMarksOccupiedDirty,
 		arg.NightAuditEarliestTime,
 		arg.RefundMethods,
+		arg.CheckinIncidentalDeposit,
 		arg.ActorID,
 	)
 	var i Property
@@ -162,6 +165,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg CreatePropertyParams) 
 		&i.TaxID,
 		&i.DocumentFooter,
 		&i.RefundMethods,
+		&i.CheckinIncidentalDeposit,
 	)
 	return i, err
 }
@@ -220,7 +224,7 @@ func (q *Queries) GetOpenBusinessDay(ctx context.Context, propertyID int64) (Bus
 }
 
 const getProperty = `-- name: GetProperty :one
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods FROM properties WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties WHERE tenant_id = $1 AND id = $2
 `
 
 type GetPropertyParams struct {
@@ -257,12 +261,13 @@ func (q *Queries) GetProperty(ctx context.Context, arg GetPropertyParams) (Prope
 		&i.TaxID,
 		&i.DocumentFooter,
 		&i.RefundMethods,
+		&i.CheckinIncidentalDeposit,
 	)
 	return i, err
 }
 
 const getPropertyForUpdate = `-- name: GetPropertyForUpdate :one
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods FROM properties WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type GetPropertyForUpdateParams struct {
@@ -299,6 +304,7 @@ func (q *Queries) GetPropertyForUpdate(ctx context.Context, arg GetPropertyForUp
 		&i.TaxID,
 		&i.DocumentFooter,
 		&i.RefundMethods,
+		&i.CheckinIncidentalDeposit,
 	)
 	return i, err
 }
@@ -409,7 +415,7 @@ func (q *Queries) ListBusinessDays(ctx context.Context, arg ListBusinessDaysPara
 }
 
 const listProperties = `-- name: ListProperties :many
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods FROM properties
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties
 WHERE tenant_id = $1 AND id > $2
 ORDER BY id
 LIMIT $3
@@ -456,6 +462,7 @@ func (q *Queries) ListProperties(ctx context.Context, arg ListPropertiesParams) 
 			&i.TaxID,
 			&i.DocumentFooter,
 			&i.RefundMethods,
+			&i.CheckinIncidentalDeposit,
 		); err != nil {
 			return nil, err
 		}
@@ -468,7 +475,7 @@ func (q *Queries) ListProperties(ctx context.Context, arg ListPropertiesParams) 
 }
 
 const listPropertiesForUser = `-- name: ListPropertiesForUser :many
-SELECT p.id, p.tenant_id, p.code, p.name, p.address, p.city, p.country_code, p.timezone, p.currency_code, p.currency_decimals, p.check_in_time, p.check_out_time, p.require_room_inspection_for_checkin, p.night_audit_marks_occupied_dirty, p.night_audit_earliest_time, p.status, p.created_at, p.created_by, p.updated_at, p.updated_by, p.phone, p.email, p.tax_id, p.document_footer, p.refund_methods FROM properties p
+SELECT p.id, p.tenant_id, p.code, p.name, p.address, p.city, p.country_code, p.timezone, p.currency_code, p.currency_decimals, p.check_in_time, p.check_out_time, p.require_room_inspection_for_checkin, p.night_audit_marks_occupied_dirty, p.night_audit_earliest_time, p.status, p.created_at, p.created_by, p.updated_at, p.updated_by, p.phone, p.email, p.tax_id, p.document_footer, p.refund_methods, p.checkin_incidental_deposit FROM properties p
 JOIN user_properties up ON up.property_id = p.id AND up.tenant_id = p.tenant_id
 WHERE p.tenant_id = $1 AND up.user_id = $2 AND p.id > $3
 ORDER BY p.id
@@ -522,6 +529,7 @@ func (q *Queries) ListPropertiesForUser(ctx context.Context, arg ListPropertiesF
 			&i.TaxID,
 			&i.DocumentFooter,
 			&i.RefundMethods,
+			&i.CheckinIncidentalDeposit,
 		); err != nil {
 			return nil, err
 		}
@@ -637,10 +645,11 @@ UPDATE properties SET
     night_audit_marks_occupied_dirty = $15,
     night_audit_earliest_time = $16,
     refund_methods = $17,
-    status = $18,
-    updated_by = $19
-WHERE tenant_id = $20 AND id = $21
-RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods
+    checkin_incidental_deposit = $18,
+    status = $19,
+    updated_by = $20
+WHERE tenant_id = $21 AND id = $22
+RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit
 `
 
 type UpdatePropertyParams struct {
@@ -661,6 +670,7 @@ type UpdatePropertyParams struct {
 	NightAuditMarksOccupiedDirty    bool
 	NightAuditEarliestTime          civil.TimeOfDay
 	RefundMethods                   []string
+	CheckinIncidentalDeposit        decimal.Decimal
 	Status                          string
 	ActorID                         *int64
 	TenantID                        int64
@@ -686,6 +696,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg UpdatePropertyParams) 
 		arg.NightAuditMarksOccupiedDirty,
 		arg.NightAuditEarliestTime,
 		arg.RefundMethods,
+		arg.CheckinIncidentalDeposit,
 		arg.Status,
 		arg.ActorID,
 		arg.TenantID,
@@ -718,6 +729,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg UpdatePropertyParams) 
 		&i.TaxID,
 		&i.DocumentFooter,
 		&i.RefundMethods,
+		&i.CheckinIncidentalDeposit,
 	)
 	return i, err
 }

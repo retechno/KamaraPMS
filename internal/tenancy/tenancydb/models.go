@@ -7,6 +7,7 @@ package tenancydb
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -51,6 +52,7 @@ type Property struct {
 	TaxID                           *string
 	DocumentFooter                  *string
 	RefundMethods                   []string
+	CheckinIncidentalDeposit        decimal.Decimal
 }
 
 type Tenant struct {

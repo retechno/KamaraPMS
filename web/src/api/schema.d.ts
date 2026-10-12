@@ -6860,6 +6860,8 @@ export interface components {
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time: components["schemas"]["TimeOfDay"];
             refund_methods: components["schemas"]["RefundMethods"];
+            /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
+            checkin_incidental_deposit: string;
         };
         /** @description The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`. */
         RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS")[];
@@ -6914,6 +6916,8 @@ export interface components {
             night_audit_marks_occupied_dirty: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
             refund_methods?: components["schemas"]["RefundMethods"];
+            /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
+            checkin_incidental_deposit?: string;
             /** @description The property's current local date or the day before. */
             opening_business_date: components["schemas"]["Date"];
         };
@@ -6939,6 +6943,8 @@ export interface components {
             night_audit_marks_occupied_dirty?: boolean;
             night_audit_earliest_time?: components["schemas"]["TimeOfDay"];
             refund_methods?: components["schemas"]["RefundMethods"];
+            /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
+            checkin_incidental_deposit?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
         };
