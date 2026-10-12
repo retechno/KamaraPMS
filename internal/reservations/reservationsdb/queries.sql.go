@@ -1662,7 +1662,8 @@ func (q *Queries) ListTapeRooms(ctx context.Context, arg ListTapeRoomsParams) ([
 }
 
 const listTapeSegments = `-- name: ListTapeSegments :many
-SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date,
+SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date, st.id AS stay_id, l.room_type_id,
+       (sr.end_business_date IS NULL)::boolean AS open_segment,
        COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1))::date AS end_date,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name
 FROM stays st
@@ -1690,6 +1691,9 @@ type ListTapeSegmentsRow struct {
 	ConfirmationNumber string
 	RoomID             int64
 	StartBusinessDate  civil.Date
+	StayID             int64
+	RoomTypeID         int64
+	OpenSegment        bool
 	EndDate            civil.Date
 	GuestFirstName     *string
 	GuestLastName      *string
@@ -1717,6 +1721,9 @@ func (q *Queries) ListTapeSegments(ctx context.Context, arg ListTapeSegmentsPara
 			&i.ConfirmationNumber,
 			&i.RoomID,
 			&i.StartBusinessDate,
+			&i.StayID,
+			&i.RoomTypeID,
+			&i.OpenSegment,
 			&i.EndDate,
 			&i.GuestFirstName,
 			&i.GuestLastName,

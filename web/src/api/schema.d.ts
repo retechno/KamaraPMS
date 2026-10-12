@@ -8497,12 +8497,25 @@ export interface components {
             folio_balance: string;
             requires_folio_resolution: boolean;
         };
+        /** @description A CHECKED_IN booking is one bar per room segment of its stay: a stay that moved has several, with the dates of each segment. */
         TapeBooking: {
             /** Format: int64 */
             reservation_id: number;
             confirmation_number: string;
             /** Format: int64 */
             reservation_room_id: number;
+            /**
+             * Format: int64
+             * @description The BOOKED room type of the line. The room the booking sits in can be of another type (an upgrade): the row says that one.
+             */
+            room_type_id: number;
+            /**
+             * Format: int64
+             * @description The stay of a checked-in line; null before check-in.
+             */
+            stay_id: number | null;
+            /** @description True for the segment of a stay that is in its room now, the only one that can be moved or extended; false for a closed segment (history) and for a line that is not checked in. */
+            open_segment: boolean;
             /** @enum {string} */
             status: "CONFIRMED" | "CHECKED_IN";
             guest_name?: string;

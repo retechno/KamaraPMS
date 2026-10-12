@@ -9519,11 +9519,15 @@ components:
         requires_folio_resolution: { type: boolean }
     TapeBooking:
       type: object
-      required: [reservation_id, confirmation_number, reservation_room_id, status, arrival_date, departure_date]
+      required: [reservation_id, confirmation_number, reservation_room_id, room_type_id, stay_id, open_segment, status, arrival_date, departure_date]
+      description: "A CHECKED_IN booking is one bar per room segment of its stay: a stay that moved has several, with the dates of each segment."
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
         reservation_room_id: { type: integer, format: int64 }
+        room_type_id: { type: integer, format: int64, description: "The BOOKED room type of the line. The room the booking sits in can be of another type (an upgrade): the row says that one." }
+        stay_id: { type: [integer, "null"], format: int64, description: The stay of a checked-in line; null before check-in. }
+        open_segment: { type: boolean, description: "True for the segment of a stay that is in its room now, the only one that can be moved or extended; false for a closed segment (history) and for a line that is not checked in." }
         status: { type: string, enum: [CONFIRMED, CHECKED_IN] }
         guest_name: { type: string }
         arrival_date: { $ref: "#/components/schemas/Date" }
