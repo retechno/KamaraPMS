@@ -49,7 +49,7 @@ func TestTheNamesOfEveryLanguageAreOfTheSameCodes(t *testing.T) {
 	for _, c := range []struct {
 		fn    string
 		count int
-	}{{"usali_chart_names", 199}, {"department_names", 8}, {"charge_code_names", 10}} {
+	}{{"usali_chart_names", 200}, {"department_names", 8}, {"charge_code_names", 10}} {
 		en, id := f.names(t, c.fn, "en"), f.names(t, c.fn, "id")
 		if len(en) != c.count || len(id) != c.count {
 			t.Fatalf("%s: %d English and %d Indonesian names, want %d", c.fn, len(en), len(id), c.count)
@@ -67,7 +67,7 @@ func TestTheNamesOfEveryLanguageAreOfTheSameCodes(t *testing.T) {
 	// the English names are the standard definition, word for word
 	var differ int
 	must(t, f.Pool.QueryRow(context.Background(), `SELECT count(*) FROM usali_chart() c JOIN usali_chart_names('en') n ON n.code = c.code WHERE n.name <> c.name`).Scan(&differ))
-	if differ != 0 || f.Count(t, `SELECT count(*) FROM usali_chart()`) != 199 {
+	if differ != 0 || f.Count(t, `SELECT count(*) FROM usali_chart()`) != 200 {
 		t.Fatalf("the English names are those of usali_chart(): %d differ", differ)
 	}
 	// a language that has no names is refused, not seeded in English
@@ -87,7 +87,7 @@ func TestAPropertyInIndonesianHasIndonesianNames(t *testing.T) {
 		return n
 	}
 	for code, want := range map[string]string{
-		"1110": "Kas di front office", "1220": "Piutang perusahaan (city ledger)", "1210": "Piutang tamu menginap (guest ledger)", "2310": "Deposit tamu (advance deposit)",
+		"1110": "Kas di front office", "1155": "Akun penampung QRIS", "1220": "Piutang perusahaan (city ledger)", "1210": "Piutang tamu menginap (guest ledger)", "2310": "Deposit tamu (advance deposit)",
 		"2410": "Utang PBJT (pajak hotel dan restoran)", "2420": "Utang PPN", "2440": "Utang PPh dipotong/dipungut", "2450": "Utang PPh badan", "3200": "Laba ditahan (tahun sebelumnya)",
 		"4110": "Pendapatan kamar – individu", "4510": "Pendapatan no-show dan pembatalan", "4590": "Pendapatan lainnya", "6180": "Biaya izin dan lisensi", "6400": "Teknik dan pemeliharaan (engineering)",
 		"7100": "Beban sewa", "7900": "Beban pajak penghasilan", "7910": "Beban pajak kini", "7920": "Beban pajak tangguhan", "2220": "Utang imbalan kerja",
@@ -153,7 +153,7 @@ func TestTheTwoLanguagesDifferOnlyInTheNames(t *testing.T) {
 			t.Errorf("%s differ between the languages (%d and %d rows)", what, len(a), len(b))
 		}
 	}
-	if n := f.Count(t, `SELECT count(*) FROM gl_accounts WHERE property_id = $1`, id.ID); n != 199 {
+	if n := f.Count(t, `SELECT count(*) FROM gl_accounts WHERE property_id = $1`, id.ID); n != 200 {
 		t.Fatalf("the chart has %d accounts", n)
 	}
 }
@@ -225,5 +225,20 @@ func TestTheLanguageOfTheDataIsChosenWhenThePropertyIsCreated(t *testing.T) {
 	}
 	if n := f.Count(t, `SELECT count(*) FROM properties WHERE code = 'FRNC'`); n != 0 {
 		t.Fatal("a refused property is not created")
+	}
+}
+
+// QRIS is received into an account of its own, beside the card (1150) and the e-wallet (1160) clearing accounts: a new property has it, in the language of its data, and the system key points at it.
+func TestANewPropertyHasTheQRISClearingAccountAndItsKey(t *testing.T) {
+	f := setup(t)
+	for _, c := range []struct{ code, lang, name string }{{"KUTA", "en", "QRIS clearing"}, {"UBUD", "id", "Akun penampung QRIS"}} {
+		p := f.PropertyData(t, f.tenantID, c.code, "IDR", 0, c.lang)
+		var code, name, typ, side, parent, group string
+		must(t, f.Pool.QueryRow(context.Background(), `SELECT a.code, a.name, a.account_type, a.normal_side, COALESCE(pa.code, ''), COALESCE(a.statement_group, '')
+			FROM gl_account_map m JOIN gl_accounts a ON a.property_id = m.property_id AND a.id = m.account_id LEFT JOIN gl_accounts pa ON pa.property_id = a.property_id AND pa.id = a.parent_id
+			WHERE m.property_id = $1 AND m.map_key = 'QRIS'`, p.ID).Scan(&code, &name, &typ, &side, &parent, &group))
+		if code != "1155" || name != c.name || typ != "ASSET" || side != "DEBIT" || parent != "1100" || group != "CASH" {
+			t.Errorf("%s: the key QRIS points at %s %q (%s, %s, under %s, %s)", c.lang, code, name, typ, side, parent, group)
+		}
 	}
 }

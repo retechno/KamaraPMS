@@ -32,7 +32,7 @@ const date = ref('')
 const method = ref('')
 const totals = ref<MethodTotal[]>([])
 
-const METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER'] as const
+const METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER', 'QRIS'] as const
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 const canPrint = computed(() => auth.can('reservation.read', property.currentId)) // a receipt names the guest and the reservation

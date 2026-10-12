@@ -407,3 +407,29 @@ func TestRoomRevenueIsAdjustedOnlyOnceItIsPosted(t *testing.T) {
 	wantCode(t, adjust("r2", "-5000000"), "ADJUSTMENT_EXCEEDS_POSTED")
 	must(t, adjust("r3", "50000")) // an increase of what is posted
 }
+
+// QRIS has its own line on the cashier report, beside cash and card, and in the total of the day.
+func TestTheCashierReportListsQRISAsAMethodOfItsOwn(t *testing.T) {
+	f := setup(t)
+	st := f.stay(t, f.r101, "2026-10-03")
+	_, err := f.Folios.PostPayment(f.admin, f.propID, st.Folio.ID, "p1", folios.PaymentInput{Amount: "300000", PaymentMethod: "CASH"})
+	must(t, err)
+	_, err = f.Folios.PostPayment(f.admin, f.propID, st.Folio.ID, "p2", folios.PaymentInput{Amount: "200000", PaymentMethod: "CARD"})
+	must(t, err)
+	_, err = f.Folios.PostPayment(f.admin, f.propID, st.Folio.ID, "p3", folios.PaymentInput{Amount: "125000", PaymentMethod: "QRIS", ReferenceNumber: "QR-1"})
+	must(t, err)
+	r, err := f.Reports.Cashier(f.admin, f.propID, d("2026-09-30"), d("2026-09-30"))
+	must(t, err)
+	if len(r.Lines) != 3 || r.Net != "625000" || len(r.ByMethod) != 3 {
+		t.Fatalf("cashier: %+v", r)
+	}
+	var qris *reports.CashierLine
+	for i := range r.Lines {
+		if r.Lines[i].Method == "QRIS" {
+			qris = &r.Lines[i]
+		}
+	}
+	if qris == nil || qris.Payments != "125000" || qris.Net != "125000" || qris.Count != 1 {
+		t.Fatalf("QRIS: %+v", qris)
+	}
+}

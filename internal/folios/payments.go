@@ -106,7 +106,7 @@ func (ps posting) createPayment(ctx context.Context, payType, method string, amo
 	}
 	var mdrRate, mdrFee, mdrVATRate, mdrVAT *decimal.Decimal
 	var settleOn *civil.Date
-	if payType == PaymentTypePayment && (method == "CARD" || method == "OTHER") {
+	if payType == PaymentTypePayment && hasAcquirerFee(method) {
 		rule, err := ps.s.q(ctx).CardFeeRule(ctx, foliosdb.CardFeeRuleParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, PaymentMethod: method, OnDate: ps.bd})
 		switch {
 		case err == nil:

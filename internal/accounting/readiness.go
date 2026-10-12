@@ -32,9 +32,9 @@ const (
 	readinessSystemRequired = "the day close posts to it"
 )
 
-// dayCloseKeys are the system accounts the day close resolves (resolver.system): the ledgers, one account per payment method and the three fallbacks. They are the keys the night audit
+// dayCloseKeys are the system accounts the day close resolves (resolver.system): the ledgers, one account per payment method (cash, card, bank transfer, e-wallet and other, QRIS) and the three fallbacks. They are the keys the night audit
 // needs; the others of mapKeys are used by the fiscal year close, the payables and the cashier shifts.
-var dayCloseKeys = []string{KeyGuestLedger, KeyAdvanceDeposits, KeyCityLedger, KeyCash, KeyCard, KeyBankTransfer, KeyOtherPayment, KeySuspense, KeyTaxPayable, KeyServicePayable}
+var dayCloseKeys = []string{KeyGuestLedger, KeyAdvanceDeposits, KeyCityLedger, KeyCash, KeyCard, KeyBankTransfer, KeyOtherPayment, KeyQRIS, KeySuspense, KeyTaxPayable, KeyServicePayable}
 
 // ReadinessBlocker is one thing that stops the night audit.
 type ReadinessBlocker struct {

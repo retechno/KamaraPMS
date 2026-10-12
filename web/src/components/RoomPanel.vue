@@ -384,7 +384,7 @@ const updatedAt = (iso: string): string => formatDateTime(iso)
 
       <footer class="flex flex-wrap gap-x-4 gap-y-1 border-t border-border px-6 py-3 text-xs text-muted-foreground">
         <template v-for="a in actions.filter((x) => x.key)" :key="a.id">
-          <span><kbd class="rounded border border-border px-1.5 font-[inherit] uppercase">{{ a.key }}</kbd> {{ a.id === 'pay' ? t('roomPanel.keyPay') : a.id === 'charge' ? t('roomPanel.keyCharge') : t('roomPanel.keyCheckOut') }}</span>
+          <span class="max-sm:hidden pointer-coarse:hidden" data-testid="rp-key-hint"><kbd class="rounded border border-border px-1.5 font-[inherit] uppercase">{{ a.key }}</kbd> {{ a.id === 'pay' ? t('roomPanel.keyPay') : a.id === 'charge' ? t('roomPanel.keyCharge') : t('roomPanel.keyCheckOut') }}</span>
         </template>
         <span class="ml-auto">{{ t('roomPanel.footerHint') }}</span>
       </footer>

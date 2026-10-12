@@ -165,7 +165,7 @@ func (s *Service) SettlementPreview(ctx context.Context, propertyID, statementID
 		return SettlementPreview{}, err
 	}
 	if !validKey(in.AccountKey) {
-		return SettlementPreview{}, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD or OTHER_PAYMENT"))
+		return SettlementPreview{}, apperr.Invalid("the request is invalid", fieldErr("account_key", "INVALID", "CARD, OTHER_PAYMENT or QRIS"))
 	}
 	if n := len(in.JournalLineIDs); n < 1 || n > maxClearBatch {
 		return SettlementPreview{}, apperr.Invalid("the request is invalid", fieldErr("journal_line_ids", "INVALID_COUNT", "between 1 and 200 payment lines"))

@@ -22,7 +22,7 @@ type ExpectedLine = ExpectedCardSettlements['lines'][number]
 const auth = useAuthStore()
 const property = usePropertyStore()
 
-const key = ref<'CARD' | 'OTHER_PAYMENT'>('CARD')
+const key = ref<'CARD' | 'OTHER_PAYMENT' | 'QRIS'>('CARD')
 const expected = ref<ExpectedCardSettlements | null>(null)
 const rules = ref<CardFeeRule[]>([])
 const settlements = ref<CardSettlement[]>([])
@@ -30,7 +30,7 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const loaded = ref(false)
-const rule = reactive({ payment_method: 'CARD' as 'CARD' | 'OTHER', mdr_rate: '', vat_rate: '', settlement_days: '1', effective_from: '' })
+const rule = reactive({ payment_method: 'CARD' as 'CARD' | 'OTHER' | 'QRIS', mdr_rate: '', vat_rate: '', settlement_days: '1', effective_from: '' })
 
 const pid = computed(() => property.currentId)
 const canView = computed(() => auth.can('bank.view', pid.value))
@@ -131,6 +131,7 @@ watch(key, () => void load())
             <NativeSelect :id="id" v-model="key" name="account_key">
               <option value="CARD">{{ t('cards.card') }}</option>
               <option value="OTHER_PAYMENT">{{ t('cards.ewallet') }}</option>
+              <option value="QRIS">{{ t('cards.qris') }}</option>
             </NativeSelect>
           </template>
         </FormField>
@@ -169,7 +170,7 @@ watch(key, () => void load())
       <CardContent>
         <p v-if="loaded && !rules.length" class="mt-0 text-sm text-muted-foreground" data-testid="no-rules">{{ t('cards.noRules') }}</p>
         <ul v-else class="mt-0 list-none p-0 text-sm" data-testid="rule-list">
-          <li v-for="r in rules" :key="r.id">{{ r.payment_method === 'CARD' ? t('cards.card') : t('cards.ewallet') }} · {{ r.mdr_rate }}%<template v-if="Number(r.vat_rate) > 0"> + {{ t('cards.vat') }} {{ r.vat_rate }}%</template> · {{ r.settlement_days }} · {{ $date(r.effective_from) }}</li>
+          <li v-for="r in rules" :key="r.id">{{ r.payment_method === 'CARD' ? t('cards.card') : r.payment_method === 'QRIS' ? t('cards.qris') : t('cards.ewallet') }} · {{ r.mdr_rate }}%<template v-if="Number(r.vat_rate) > 0"> + {{ t('cards.vat') }} {{ r.vat_rate }}%</template> · {{ r.settlement_days }} · {{ $date(r.effective_from) }}</li>
         </ul>
         <form v-if="canManage" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="rule-form" @submit.prevent="addRule">
           <FormField class="w-40" :label="t('cards.ruleMethod')" :error="fieldError('payment_method')">
@@ -177,6 +178,7 @@ watch(key, () => void load())
               <NativeSelect :id="id" v-model="rule.payment_method" name="rule_method">
                 <option value="CARD">{{ t('cards.card') }}</option>
                 <option value="OTHER">{{ t('cards.ewallet') }}</option>
+                <option value="QRIS">{{ t('cards.qris') }}</option>
               </NativeSelect>
             </template>
           </FormField>

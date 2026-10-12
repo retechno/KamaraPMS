@@ -58,7 +58,7 @@ const bedPick = reactive<Record<number, number>>({})
 const lockPick = reactive<Record<number, boolean>>({})
 const assigning = ref<{ lineId: number; typeId: number } | null>(null)
 const header = reactive({ source: 'PHONE', remarks: '' })
-const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER', reference: '' })
+const deposit = reactive({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'OTHER' | 'QRIS', reference: '' })
 let depositKey = newIdempotencyKey() // kept while a request may have been lost, renewed once the server has answered
 
 const { ratePlans, companies } = useReservationLookups()
@@ -635,7 +635,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <FormField :label="t('reservation.method')">
               <template #default="{ id }">
                 <NativeSelect :id="id" v-model="deposit.method" name="deposit_method">
-                  <option v-for="m in ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>
+                  <option v-for="m in ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER', 'QRIS']" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>
                 </NativeSelect>
               </template>
             </FormField>

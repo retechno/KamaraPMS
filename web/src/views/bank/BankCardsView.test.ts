@@ -99,6 +99,27 @@ describe('BankCardsView', () => {
     expect(w.get('[data-testid=notice]').text()).toContain('The rule is added')
   })
 
+  it('adds a fee rule for QRIS and settles it as its own clearing account', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('select[name=rule_method]').findAll('option').map((o) => o.text())).toEqual(['Cards', 'E-wallets', 'QRIS'])
+    expect(w.get('select[name=account_key]').findAll('option').map((o) => o.text())).toEqual(['Cards', 'E-wallets', 'QRIS'])
+    await w.get('select[name=rule_method]').setValue('QRIS')
+    await w.get('input[name=mdr_rate]').setValue('0.7')
+    await w.get('input[name=vat_rate]').setValue('11')
+    await w.get('input[name=effective_from]').setValue('2026-10-15')
+    await w.get('[data-testid=rule-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/bank/card-fee-rules', {
+      params: { path: { propertyId: 7 } },
+      body: { payment_method: 'QRIS', mdr_rate: '0.7', vat_rate: '11', settlement_days: 1, effective_from: '2026-10-15' },
+    })
+    GET.mockClear()
+    await w.get('select[name=account_key]').setValue('QRIS')
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => JSON.stringify(c[1]).includes('"account_key":"QRIS"'))).toBe(true)
+  })
+
   it('adds a fee rule with the VAT the acquirer charges on its commission', async () => {
     const w = mountView()
     await flushPromises()

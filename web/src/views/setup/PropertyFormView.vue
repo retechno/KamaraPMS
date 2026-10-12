@@ -23,7 +23,7 @@ const store = usePropertyStore()
 const isNew = computed(() => !props.id)
 const zones = timeZones()
 
-const REFUND_CHOICES = [{ value: 'CASH' }, { value: 'CARD' }, { value: 'BANK_TRANSFER' }, { value: 'OTHER' }]
+const REFUND_CHOICES = [{ value: 'CASH' }, { value: 'CARD' }, { value: 'BANK_TRANSFER' }, { value: 'OTHER' }, { value: 'QRIS' }]
 
 const form = reactive({
   code: '',

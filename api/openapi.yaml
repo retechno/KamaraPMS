@@ -5650,7 +5650,7 @@ paths:
     get:
       operationId: getGlAccountMap
       summary: The accounts the system posts to (accounting.view)
-      description: "Ten keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT (what a payment method is received into), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account."
+      description: "The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account."
       tags: [accounting]
       responses:
         "200":
@@ -6876,10 +6876,10 @@ paths:
     get:
       operationId: listSettlementLines
       summary: Card or e-wallet payments waiting for their settlement (bank.view)
-      description: "The lines of the card (`CARD`) or e-wallet (`OTHER_PAYMENT`) clearing account, up to the end of the statement, that no settlement has settled."
+      description: "The lines of the card (`CARD`), e-wallet (`OTHER_PAYMENT`) or QRIS (`QRIS`) clearing account, up to the end of the statement, that no settlement has settled."
       tags: [bank]
       parameters:
-        - { name: account_key, in: query, required: true, schema: { type: string, enum: [CARD, OTHER_PAYMENT] } }
+        - { name: account_key, in: query, required: true, schema: { type: string, enum: [CARD, OTHER_PAYMENT, QRIS] } }
       responses:
         "200":
           description: The payment lines.
@@ -6962,10 +6962,10 @@ paths:
     get:
       operationId: getExpectedCardSettlements
       summary: What the acquirer should still pay (bank.view)
-      description: "The payment lines of the card (`CARD`, the default) or e-wallet (`OTHER_PAYMENT`) clearing account that no settlement has settled, each with the fee and the payout day its payment expected. The ones past that day are late. Payments are on the list once the day they were taken on is closed (their journal is made with the day close)."
+      description: "The payment lines of the card (`CARD`, the default), e-wallet (`OTHER_PAYMENT`) or QRIS (`QRIS`) clearing account that no settlement has settled, each with the fee and the payout day its payment expected. The ones past that day are late. Payments are on the list once the day they were taken on is closed (their journal is made with the day close)."
       tags: [bank]
       parameters:
-        - { name: account_key, in: query, schema: { type: string, enum: [CARD, OTHER_PAYMENT], default: CARD } }
+        - { name: account_key, in: query, schema: { type: string, enum: [CARD, OTHER_PAYMENT, QRIS], default: CARD } }
       responses:
         "200":
           description: The expected settlements.
@@ -7009,7 +7009,7 @@ paths:
       description: "The unsettled payments made by the day of the line, in the order they come due, up to the number whose expected net is closest to the line. `matched` says the difference is within the tolerance (a currency unit or half a percent of the line). Only a choice of lines: settling them is the settle call."
       tags: [bank]
       parameters:
-        - { name: account_key, in: query, required: true, schema: { type: string, enum: [CARD, OTHER_PAYMENT] } }
+        - { name: account_key, in: query, required: true, schema: { type: string, enum: [CARD, OTHER_PAYMENT, QRIS] } }
       responses:
         "200":
           description: The proposal.
@@ -7889,7 +7889,7 @@ components:
       type: array
       minItems: 1
       uniqueItems: true
-      items: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+      items: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS] }
       description: "The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`."
     Property:
       allOf:
@@ -9651,7 +9651,8 @@ components:
         password: { type: string, format: password }
     PaymentMethod:
       type: string
-      enum: [CASH, CARD, BANK_TRANSFER, OTHER]
+      enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS]
+      description: QRIS is received like a card or an e-wallet (into its own clearing account, paid out by the acquirer net of its fee), so it takes the same fee rules and the same settlement.
     PostChargeRequest:
       type: object
       required: [charge_code_id, quantity]
@@ -9867,7 +9868,7 @@ components:
         folio_id: { type: integer, format: int64 }
         folio_number: { type: string, description: The number of that folio (`FOL000026`), so a list can name it. Absent where the payment is returned without it. }
         payment_type: { type: string, enum: [PAYMENT, REFUND] }
-        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, CITY_LEDGER], description: CITY_LEDGER is a transfer to a company account, not money received. }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS, CITY_LEDGER], description: CITY_LEDGER is a transfer to a company account, not money received. }
         company_id: { type: [integer, "null"], format: int64, description: The company of a CITY_LEDGER transfer. }
         amount: { type: string }
         paid_at: { type: string, format: date-time }
@@ -11023,7 +11024,7 @@ components:
       required: [id, payment_method, mdr_rate, vat_rate, settlement_days, effective_from, created_at]
       properties:
         id: { type: integer, format: int64 }
-        payment_method: { type: string, enum: [CARD, OTHER] }
+        payment_method: { type: string, enum: [CARD, OTHER, QRIS] }
         mdr_rate: { type: string, description: A percent. }
         vat_rate: { type: string, description: "The VAT (percent) the acquirer charges on the MDR; 0 when none." }
         settlement_days: { type: integer }
@@ -11034,7 +11035,7 @@ components:
       required: [payment_method, mdr_rate, settlement_days, effective_from]
       additionalProperties: false
       properties:
-        payment_method: { type: string, enum: [CARD, OTHER] }
+        payment_method: { type: string, enum: [CARD, OTHER, QRIS] }
         mdr_rate: { type: string, description: "0 to 100, at most 4 decimals." }
         vat_rate: { type: string, description: "The VAT the acquirer charges on the MDR, 0 to 100, at most 4 decimals; absent is 0 (422 `INVALID_RATE`)." }
         settlement_days: { type: integer, minimum: 0, maximum: 60 }
@@ -11884,7 +11885,7 @@ components:
       additionalProperties: false
       properties:
         amount: { type: string }
-        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS] }
         reference_number: { type: string, maxLength: 100 }
         remarks: { type: string, maxLength: 500 }
         allocations:
@@ -11936,7 +11937,7 @@ components:
         receipt_number: { type: string }
         company_id: { type: integer, format: int64 }
         amount: { type: string }
-        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER] }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS] }
         reference_number: { type: string }
         remarks: { type: string }
         business_date: { $ref: "#/components/schemas/Date" }
@@ -12758,7 +12759,7 @@ components:
       type: object
       required: [map_key, meaning, account_id, account_code, account_name, account_type]
       properties:
-        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE, INPUT_VAT] }
+        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE, INPUT_VAT, CASH_OVER_SHORT] }
         meaning: { type: string }
         account_id: { type: integer, format: int64 }
         account_code: { type: string }
@@ -13564,7 +13565,7 @@ components:
       required: [account_key, journal_line_ids]
       additionalProperties: false
       properties:
-        account_key: { type: string, enum: [CARD, OTHER_PAYMENT] }
+        account_key: { type: string, enum: [CARD, OTHER_PAYMENT, QRIS] }
         journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
         fee_account_id: { type: integer, format: int64, description: The account for the commission; needed when the payments add up to more than the line. }
         department_id: { type: [integer, "null"], format: int64, description: "The department of the commission expense, when it belongs to one." }
@@ -13575,7 +13576,7 @@ components:
       required: [account_key, journal_line_ids]
       additionalProperties: false
       properties:
-        account_key: { type: string, enum: [CARD, OTHER_PAYMENT] }
+        account_key: { type: string, enum: [CARD, OTHER_PAYMENT, QRIS] }
         journal_line_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
     SettlementPreview:
       type: object

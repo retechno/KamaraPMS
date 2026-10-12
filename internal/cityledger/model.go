@@ -12,7 +12,7 @@ import (
 )
 
 // Receipt payment methods.
-var receiptMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER"}
+var receiptMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER", "QRIS"}
 
 const (
 	maxReferenceLen = 100

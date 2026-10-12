@@ -224,6 +224,15 @@ describe('RoomPanel', () => {
     expect(onChanged).toHaveBeenCalled()
   })
 
+  it('says the floor once, in the header, and hides the key hints on a touch screen and on a phone', async () => {
+    await openPanel()
+    expect((text('[data-testid=room-sheet]').match(/Floor/g) ?? []).length).toBe(1)
+    expect(text('[data-testid=rp-place]')).toBe('Floor 3 · North · KING')
+    const hints = [...body().querySelectorAll('[data-testid=rp-key-hint]')]
+    expect(hints.length).toBe(3) // P, T and O
+    for (const h of hints) expect(h.className).toContain('max-sm:hidden pointer-coarse:hidden')
+  })
+
   it('lists what happened today, the change of cleaning and the audit entries', async () => {
     await openPanel()
     const items = [...body().querySelectorAll('[data-testid=rp-history] li')].map((li) => li.textContent!.replace(/\s+/g, ' ').trim())

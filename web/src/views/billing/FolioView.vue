@@ -41,7 +41,7 @@ const notice = ref('')
 const busy = ref(false)
 const open = ref<number | null>(null) // item whose components are shown
 
-const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER']
+const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER', 'QRIS']
 const charge = reactive({ codeId: 0, quantity: '1', unitPrice: '', description: '' })
 const payment = reactive({ amount: '', method: 'CASH' as PaymentMethod, reference: '' })
 const adjust = reactive({ codeId: 0, amount: '', reason: '' })

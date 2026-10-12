@@ -472,7 +472,7 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				}
 				var mdrRate, mdrFee, mdrVATRate, mdrVAT *decimal.Decimal
 				var settleOn *civil.Date
-				if method == "CARD" || method == "OTHER" {
+				if method == "CARD" || method == "OTHER" || method == "QRIS" {
 					rule, err := s.q(ctx).CardFeeRule(ctx, cityledgerdb.CardFeeRuleParams{TenantID: p.TenantID, PropertyID: propertyID, PaymentMethod: method, OnDate: day.BusinessDate})
 					switch {
 					case err == nil:

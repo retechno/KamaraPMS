@@ -209,6 +209,18 @@ describe('ReservationDetailView', () => {
     expect(w.get('[data-testid=notice]').text()).toContain('PAY000001')
   })
 
+  it('takes a deposit by QRIS', async () => {
+    const w = mountView(reservation({ folios: [{ id: 3, folio_number: 'FOL000001', stay_id: null, status: 'OPEN', balance: '-100000' }] }))
+    await flushPromises()
+    expect(w.get('select[name=deposit_method]').findAll('option').map((o) => o.element.getAttribute('value'))).toEqual(['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER', 'QRIS'])
+    POST.mockResolvedValue({ data: { payment: { payment_number: 'PAY000002' }, folio_balance: '-250000' } })
+    await w.get('input[name=deposit_amount]').setValue('150000')
+    await w.get('select[name=deposit_method]').setValue('QRIS')
+    await w.get('form[data-testid=deposit-form]').trigger('submit')
+    await flushPromises()
+    expect((POST.mock.calls[0] as [string, { body: object }])[1].body).toMatchObject({ amount: '150000', payment_method: 'QRIS' })
+  })
+
   it('hides actions the role does not have', async () => {
     const w = mountView(reservation(), ['reservation.read'])
     await flushPromises()

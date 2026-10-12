@@ -800,7 +800,7 @@ Triggers:
 | payment_number | varchar(20) | NO | UK `(property_id, payment_number)` |
 | folio_id | bigint | NO | FK → folios. IDX. |
 | payment_type | varchar(10) | NO | CHECK IN (`PAYMENT`,`REFUND`) |
-| payment_method | varchar(15) | NO | CHECK IN (`CASH`,`CARD`,`BANK_TRANSFER`,`OTHER`) |
+| payment_method | varchar(15) | NO | CHECK IN (`CASH`,`CARD`,`BANK_TRANSFER`,`OTHER`, `QRIS` from 00071; `CITY_LEDGER` from 00022) |
 | amount | numeric(18,3) | NO | CHECK > 0. The currency is the property's. |
 | paid_at | timestamptz | NO | Server time |
 | business_date | date | NO | FK → business_days. IDX `(property_id, business_date)`. |

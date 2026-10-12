@@ -4881,7 +4881,7 @@ export interface paths {
         };
         /**
          * The accounts the system posts to (accounting.view)
-         * @description Ten keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT (what a payment method is received into), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
+         * @description The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
          */
         get: operations["getGlAccountMap"];
         /**
@@ -6010,7 +6010,7 @@ export interface paths {
         };
         /**
          * Card or e-wallet payments waiting for their settlement (bank.view)
-         * @description The lines of the card (`CARD`) or e-wallet (`OTHER_PAYMENT`) clearing account, up to the end of the statement, that no settlement has settled.
+         * @description The lines of the card (`CARD`), e-wallet (`OTHER_PAYMENT`) or QRIS (`QRIS`) clearing account, up to the end of the statement, that no settlement has settled.
          */
         get: operations["listSettlementLines"];
         put?: never;
@@ -6081,7 +6081,7 @@ export interface paths {
         };
         /**
          * What the acquirer should still pay (bank.view)
-         * @description The payment lines of the card (`CARD`, the default) or e-wallet (`OTHER_PAYMENT`) clearing account that no settlement has settled, each with the fee and the payout day its payment expected. The ones past that day are late. Payments are on the list once the day they were taken on is closed (their journal is made with the day close).
+         * @description The payment lines of the card (`CARD`, the default), e-wallet (`OTHER_PAYMENT`) or QRIS (`QRIS`) clearing account that no settlement has settled, each with the fee and the payout day its payment expected. The ones past that day are late. Payments are on the list once the day they were taken on is closed (their journal is made with the day close).
          */
         get: operations["getExpectedCardSettlements"];
         put?: never;
@@ -6862,7 +6862,7 @@ export interface components {
             refund_methods: components["schemas"]["RefundMethods"];
         };
         /** @description The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`. */
-        RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER")[];
+        RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS")[];
         Property: components["schemas"]["PropertySettings"] & {
             /** Format: int64 */
             id: number;
@@ -8603,8 +8603,11 @@ export interface components {
             /** Format: password */
             password: string;
         };
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+        /**
+         * @description QRIS is received like a card or an e-wallet (into its own clearing account, paid out by the acquirer net of its fee), so it takes the same fee rules and the same settlement.
+         * @enum {string}
+         */
+        PaymentMethod: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS";
         PostChargeRequest: {
             /** Format: int64 */
             charge_code_id: number;
@@ -8850,7 +8853,7 @@ export interface components {
              * @description CITY_LEDGER is a transfer to a company account
              * @enum {string}
              */
-            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "CITY_LEDGER";
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS" | "CITY_LEDGER";
             /**
              * Format: int64
              * @description The company of a CITY_LEDGER transfer.
@@ -10004,7 +10007,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            payment_method: "CARD" | "OTHER";
+            payment_method: "CARD" | "OTHER" | "QRIS";
             /** @description A percent. */
             mdr_rate: string;
             /** @description The VAT (percent) the acquirer charges on the MDR; 0 when none. */
@@ -10016,7 +10019,7 @@ export interface components {
         };
         CardFeeRuleRequest: {
             /** @enum {string} */
-            payment_method: "CARD" | "OTHER";
+            payment_method: "CARD" | "OTHER" | "QRIS";
             /** @description 0 to 100, at most 4 decimals. */
             mdr_rate: string;
             /** @description The VAT the acquirer charges on the MDR, 0 to 100, at most 4 decimals; absent is 0 (422 `INVALID_RATE`). */
@@ -10769,7 +10772,7 @@ export interface components {
         ReceiveRequest: {
             amount: string;
             /** @enum {string} */
-            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS";
             reference_number?: string;
             remarks?: string;
             allocations?: components["schemas"]["ReceiptAllocationRequest"][];
@@ -10816,7 +10819,7 @@ export interface components {
             company_id: number;
             amount: string;
             /** @enum {string} */
-            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER";
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS";
             reference_number?: string;
             remarks?: string;
             business_date: components["schemas"]["Date"];
@@ -11616,7 +11619,7 @@ export interface components {
         };
         GlAccountMapEntry: {
             /** @enum {string} */
-            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE" | "INPUT_VAT";
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "QRIS" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE" | "INPUT_VAT" | "CASH_OVER_SHORT";
             meaning: string;
             /** Format: int64 */
             account_id: number;
@@ -12437,7 +12440,7 @@ export interface components {
         };
         SettleRequest: {
             /** @enum {string} */
-            account_key: "CARD" | "OTHER_PAYMENT";
+            account_key: "CARD" | "OTHER_PAYMENT" | "QRIS";
             journal_line_ids: number[];
             /**
              * Format: int64
@@ -12455,7 +12458,7 @@ export interface components {
         };
         SettlementPreviewRequest: {
             /** @enum {string} */
-            account_key: "CARD" | "OTHER_PAYMENT";
+            account_key: "CARD" | "OTHER_PAYMENT" | "QRIS";
             journal_line_ids: number[];
         };
         SettlementPreview: {
@@ -22522,7 +22525,7 @@ export interface operations {
     listSettlementLines: {
         parameters: {
             query: {
-                account_key: "CARD" | "OTHER_PAYMENT";
+                account_key: "CARD" | "OTHER_PAYMENT" | "QRIS";
             };
             header?: never;
             path: {
@@ -22638,7 +22641,7 @@ export interface operations {
     getExpectedCardSettlements: {
         parameters: {
             query?: {
-                account_key?: "CARD" | "OTHER_PAYMENT";
+                account_key?: "CARD" | "OTHER_PAYMENT" | "QRIS";
             };
             header?: never;
             path: {
@@ -22695,7 +22698,7 @@ export interface operations {
     getSettlementProposal: {
         parameters: {
             query: {
-                account_key: "CARD" | "OTHER_PAYMENT";
+                account_key: "CARD" | "OTHER_PAYMENT" | "QRIS";
             };
             header?: never;
             path: {

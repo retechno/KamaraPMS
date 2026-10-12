@@ -354,12 +354,12 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND year_start = @ye
 SELECT count(*)::int FROM gl_periods
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED' AND period_start BETWEEN @first_day::date AND @last_day::date;
 
--- The system accounts added after the first chart (retained earnings, accounts payable, input VAT) for a new property.
+-- The system accounts added after the first chart (retained earnings, accounts payable, input VAT, cash over and short, QRIS) for a new property.
 -- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;
 

@@ -192,7 +192,7 @@ func methodKey(method string) string {
 	if method == "OTHER" {
 		return "OTHER_PAYMENT"
 	}
-	return method // CASH, CARD, BANK_TRANSFER and CITY_LEDGER are keys of their own
+	return method // CASH, CARD, BANK_TRANSFER, QRIS and CITY_LEDGER are keys of their own
 }
 
 var sourceLabels = map[string]string{

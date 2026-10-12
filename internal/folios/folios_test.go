@@ -868,3 +868,44 @@ func TestConcurrentAdjustmentsCannotCreditMoreThanIsPosted(t *testing.T) {
 		t.Fatalf("net on the minibar is %s", net)
 	}
 }
+
+// QRIS is a way to pay of its own. A refund leaves by it only when the property allows it (cash only by default), and a method that does not exist is no method.
+func TestAQRISPaymentIsAMethodOfItsOwnAndItsRefundNeedsThePropertyToAllowIt(t *testing.T) {
+	f := setup(t)
+	pay, err := f.Folios.PostPayment(f.admin, f.propID, f.folio, "tq", folios.PaymentInput{Amount: "100000", PaymentMethod: "QRIS", ReferenceNumber: "QR-1"})
+	must(t, err)
+	if pay.Payment.PaymentMethod != "QRIS" || pay.Payment.PaymentType != "PAYMENT" {
+		t.Fatalf("payment: %+v", pay.Payment)
+	}
+	_, err = f.Folios.PostPayment(f.admin, f.propID, f.folio, "tx", folios.PaymentInput{Amount: "1000", PaymentMethod: "PAYPAL"})
+	wantCode(t, err, "VALIDATION_FAILED")
+	refund := func(key, method string) (folios.PaymentResult, error) {
+		return f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, key, folios.RefundInput{Amount: "10000", PaymentMethod: method, Reason: "goodwill", Approval: f.approval()})
+	}
+	// by default a refund leaves in cash, and QRIS is refused
+	res, err := refund("q1", "")
+	must(t, err)
+	if res.Payment.PaymentMethod != "CASH" {
+		t.Fatalf("default method: %s", res.Payment.PaymentMethod)
+	}
+	wantCode(t, mustErr2(refund("q2", "QRIS")), "VALIDATION_FAILED")
+	// the property allows QRIS: the method of the payment becomes the default
+	_, err = f.Tenancy.UpdateProperty(f.admin, f.propID, tenancy.PropertyPatch{RefundMethods: []string{"CASH", "QRIS"}})
+	must(t, err)
+	res, err = refund("q3", "")
+	must(t, err)
+	if res.Payment.PaymentMethod != "QRIS" {
+		t.Fatalf("default method once allowed: %s", res.Payment.PaymentMethod)
+	}
+	res, err = refund("q4", "QRIS")
+	must(t, err)
+	if res.Payment.PaymentMethod != "QRIS" || res.Payment.PaymentType != "REFUND" || res.Payment.MDRRate != nil {
+		t.Fatalf("a refund by QRIS keeps no fee snapshot: %+v", res.Payment)
+	}
+	// the list of payments filters by the method
+	list, err := f.Folios.ListPayments(f.admin, f.propID, folios.PaymentFilter{Method: "QRIS"}, listsort.Sort{}, nil, 50)
+	must(t, err)
+	if len(list.Data) != 3 {
+		t.Fatalf("payments by QRIS: %d", len(list.Data))
+	}
+}

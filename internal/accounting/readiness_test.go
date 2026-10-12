@@ -74,6 +74,8 @@ func TestTheNightAuditRefusesToCloseADayItCannotJournal(t *testing.T) {
 		{"the cash account is not mapped", `DELETE FROM gl_account_map WHERE property_id = $1 AND map_key = 'CASH'`, "ACCOUNT_MAP_MISSING:CASH"},
 		{"the guest ledger is not mapped", `DELETE FROM gl_account_map WHERE property_id = $1 AND map_key = 'GUEST_LEDGER'`, "ACCOUNT_MAP_MISSING:GUEST_LEDGER"},
 		{"the suspense account is not mapped", `DELETE FROM gl_account_map WHERE property_id = $1 AND map_key = 'SUSPENSE'`, "ACCOUNT_MAP_MISSING:SUSPENSE"},
+		{"the QRIS clearing account is not mapped", `DELETE FROM gl_account_map WHERE property_id = $1 AND map_key = 'QRIS'`, "ACCOUNT_MAP_MISSING:QRIS"},
+		{"the QRIS clearing account points at a revenue account", `UPDATE gl_account_map SET account_id = (SELECT id FROM gl_accounts WHERE property_id = $1 AND code = '4110') WHERE property_id = $1 AND map_key = 'QRIS'`, "ACCOUNT_MAP_UNUSABLE:QRIS"},
 		{"the cash account was switched off", `UPDATE gl_accounts SET is_active = false WHERE property_id = $1 AND code = '1110'`, "ACCOUNT_MAP_UNUSABLE:CASH"},
 		{"the card account points at a revenue account", `UPDATE gl_account_map SET account_id = (SELECT id FROM gl_accounts WHERE property_id = $1 AND code = '4110') WHERE property_id = $1 AND map_key = 'CARD'`, "ACCOUNT_MAP_UNUSABLE:CARD"},
 		{"the room charge code has no account", `UPDATE charge_codes SET gl_account_code = NULL WHERE property_id = $1 AND code = 'ROOM'`, "ROOM_CHARGE_CODE_UNMAPPED:ROOM"},

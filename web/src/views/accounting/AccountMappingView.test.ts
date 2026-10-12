@@ -19,7 +19,7 @@ const accounts = [
   acc(5, '1100', 'Cash header', 'ASSET', { is_postable: false }), acc(6, '1199', 'Closed bank', 'ASSET', { is_active: false }),
 ]
 const entry = (key: string, meaning: string, id: number) => ({ map_key: key, meaning, account_id: id, account_code: 'x', account_name: 'y', account_type: 'ASSET' })
-const map = [entry('CASH', 'Cash payments', 1), entry('ADVANCE_DEPOSITS', 'Deposits held until the guest checks out', 3), entry('SUSPENSE', 'Anything that cannot be placed', 3)]
+const map = [entry('CASH', 'Cash payments', 1), entry('QRIS', 'QRIS payments (clearing)', 1), entry('ADVANCE_DEPOSITS', 'Deposits held until the guest checks out', 3), entry('SUSPENSE', 'Anything that cannot be placed', 3)]
 const issues = {
   checked: 13,
   issues: [
@@ -56,6 +56,7 @@ describe('AccountMappingView', () => {
     expect(cash).toEqual(['1110 · Cash on hand', '1130 · Bank']) // assets that take postings and are active
     expect(w.findAll('select[name=map_ADVANCE_DEPOSITS] option').map((o) => o.text())).toEqual(['2310 · Advance deposits'])
     expect(w.findAll('select[name=map_SUSPENSE] option')).toHaveLength(4) // suspense may be anything that takes postings
+    expect(w.findAll('select[name=map_QRIS] option').map((o) => o.text())).toEqual(cash) // QRIS is received into an asset that takes postings, like the other methods
     expect((w.get('[data-testid=save-map]').element as HTMLButtonElement).disabled).toBe(true)
   })
 
