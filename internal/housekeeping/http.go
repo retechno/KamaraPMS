@@ -19,6 +19,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/properties/{propertyId}/housekeeping", httpx.HandlerFunc(h.board))
 	mux.Handle("POST /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping", httpx.HandlerFunc(h.setStatus))
 	mux.Handle("GET /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping/logs", httpx.HandlerFunc(h.logs))
+	mux.Handle("POST /api/v1/properties/{propertyId}/housekeeping/bulk", httpx.HandlerFunc(h.bulk))
 	h.RegisterTasks(mux)
 }
 
@@ -78,6 +79,22 @@ func (h *Handler) setStatus(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) bulk(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in BulkInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.SetStatusBulk(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 type logCursor struct {

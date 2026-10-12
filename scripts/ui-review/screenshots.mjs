@@ -47,7 +47,7 @@ const ids = {
 const routes = [
   ['/', 'beranda'], ['/reservations', 'reservasi'], ['/reservations/new', 'reservasi-baru'], ['/reservations/tape', 'tape-chart'], ['/availability', 'ketersediaan'],
   ['/arrivals', 'kedatangan'], ['/in-house', 'menginap'], ['/departures', 'keberangkatan'], ['/walk-in', 'walk-in'], ['/guests', 'tamu'], ['/groups', 'grup'],
-  ['/room-status', 'status-kamar'], ['/housekeeping', 'housekeeping'], ['/housekeeping/tasks', 'daftar-bersih'], ['/maintenance', 'maintenance'], ['/lost-found', 'lost-found'], ['/room-blocks', 'blokir-kamar'],
+  ['/room-status', 'status-kamar'], ['/housekeeping', 'housekeeping'], ['/housekeeping/my', 'tugas-saya'], ['/housekeeping/tasks', 'daftar-bersih'], ['/maintenance', 'maintenance'], ['/lost-found', 'lost-found'], ['/room-blocks', 'blokir-kamar'],
   ['/folios', 'folio'], ['/cashier', 'kasir'], ['/cashier/shifts', 'shift-kasir'], ['/room-charges', 'room-charges'], ['/city-ledger', 'city-ledger'], ['/city-ledger/overdue', 'city-ledger-jatuh-tempo'],
   ['/night-audit', 'night-audit'], ['/reports', 'laporan'], ['/performance', 'kinerja'], ['/audit', 'audit-log'],
   ['/accounting/accounts', 'akun'], ['/accounting/mapping', 'akun-sistem'], ['/accounting/journals', 'jurnal'], ['/accounting/periods', 'periode'], ['/accounting/fiscal-years', 'tahun-fiskal'], ['/accounting/departments', 'departemen'],

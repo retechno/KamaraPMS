@@ -189,6 +189,7 @@ There are no endpoints to open or close days directly. That only happens through
 - **Request:** `{ status, notes? }`
 - **Response:** `{ room_id, status, updated_at }`
 - **Rules:** the legal transitions (Step 14 §14.4). An invalid one returns 409 `INVALID_HK_TRANSITION`.
+- **Bulk:** `POST {P}/housekeeping/bulk` `{room_ids (1..100), status, notes?}` changes many rooms to one status: the same rule, log and audit entry per room as the single change, one transaction with the rows locked in ascending room id. A room that cannot make the change (`INVALID_HK_TRANSITION`, `ROOM_NOT_FOUND`) is reported in `results` and the others change; the whole request is refused (403, 422, 409 `BUSINESS_DAY_CLOSED`) only for what holds for every room (permissions, status, list, closed day).
 - **TX:** `T[L1 share, room_housekeeping FOR UPDATE]`: update and insert the log (`business_date = BD`)
 
 **GET `{P}/rooms/{id}/housekeeping/logs`**

@@ -9,6 +9,15 @@ SELECT * FROM room_housekeeping
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id
 FOR UPDATE;
 
+-- The housekeeping rows of several rooms, locked in ascending room id (the bulk change decides from the locked states). A room that is not in the property has no row here.
+-- name: ListRoomHousekeepingForUpdate :many
+SELECT h.room_id, r.room_number, h.status
+FROM room_housekeeping h
+JOIN rooms r ON r.property_id = h.property_id AND r.id = h.room_id
+WHERE h.tenant_id = @tenant_id AND h.property_id = @property_id AND h.room_id = ANY(@room_ids::bigint[])
+ORDER BY h.room_id
+FOR UPDATE OF h;
+
 -- name: SetRoomHousekeeping :one
 UPDATE room_housekeeping SET status = @status, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id
@@ -154,7 +163,9 @@ SELECT * FROM housekeeping_tasks WHERE tenant_id = @tenant_id AND property_id = 
 SELECT t.id, t.room_id, r.room_number, r.floor, rt.code AS room_type_code, t.task_date, t.task_type, t.status, t.priority, t.source,
        t.assigned_to, u.full_name AS assignee_name, t.notes, t.started_at, t.completed_at,
        h.status AS room_status, h.updated_at AS room_status_since,
-       COALESCE(f.dnd, false)::boolean AS dnd, COALESCE(f.make_up_requested, false)::boolean AS make_up_requested, f.note AS flag_note
+       COALESCE(f.dnd, false)::boolean AS dnd, COALESCE(f.make_up_requested, false)::boolean AS make_up_requested, f.note AS flag_note,
+       -- a guest is due to arrive into this room on the day of the task (a CONFIRMED line assigned to the room, the same fact as RESERVED on the board)
+       EXISTS (SELECT 1 FROM reservation_rooms rr WHERE rr.property_id = t.property_id AND rr.room_id = t.room_id AND rr.status = 'CONFIRMED' AND rr.arrival_date = t.task_date)::boolean AS arrival_today
 FROM housekeeping_tasks t
 JOIN rooms r ON r.property_id = t.property_id AND r.id = t.room_id
 JOIN room_types rt ON rt.property_id = r.property_id AND rt.id = r.room_type_id

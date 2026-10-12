@@ -46,6 +46,7 @@ export const navigation: NavSection[] = [
     items: [
       { id: 'roomStatus', to: '/room-status' },
       { id: 'housekeeping', to: '/housekeeping' },
+      { id: 'myTasks', to: '/housekeeping/my', permission: 'housekeeping.update' },
       { id: 'cleaningList', to: '/housekeeping/tasks' },
       { id: 'maintenance', to: '/maintenance' },
       { id: 'lostFound', to: '/lost-found' },

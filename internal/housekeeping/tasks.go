@@ -67,6 +67,8 @@ type Task struct {
 	DND             bool       `json:"dnd"`
 	MakeUp          bool       `json:"make_up_requested"`
 	FlagNote        string     `json:"flag_note,omitempty"`
+	// ArrivalToday: a guest is due to arrive into the room on the day of the task (a room to be ready for them).
+	ArrivalToday bool `json:"arrival_today"`
 }
 
 // Workload is what one housekeeper has on the list.
@@ -127,7 +129,7 @@ func toTask(r housekeepingdb.ListHousekeepingTasksRow) Task {
 		ID: r.ID, RoomID: r.RoomID, RoomNumber: r.RoomNumber, Floor: deref(r.Floor), RoomTypeCode: r.RoomTypeCode, TaskDate: r.TaskDate,
 		TaskType: r.TaskType, Status: r.Status, Priority: r.Priority, Source: r.Source, AssignedTo: r.AssignedTo, AssigneeName: deref(r.AssigneeName),
 		Notes: deref(r.Notes), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, RoomStatus: Status(r.RoomStatus), RoomStatusSince: r.RoomStatusSince,
-		DND: r.Dnd, MakeUp: r.MakeUpRequested, FlagNote: deref(r.FlagNote),
+		DND: r.Dnd, MakeUp: r.MakeUpRequested, FlagNote: deref(r.FlagNote), ArrivalToday: r.ArrivalToday,
 	}
 }
 

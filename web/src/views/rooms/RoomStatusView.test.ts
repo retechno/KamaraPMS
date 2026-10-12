@@ -8,18 +8,20 @@ import { usePropertyStore } from '@/stores/property'
 import RoomStatusView from './RoomStatusView.vue'
 
 let GET = vi.fn()
-vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
+let POST = vi.fn()
+vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
 const room = (id: number, number: string, floor: string, occupancy: string, extra: object = {}) => ({
   room_id: id, room_number: number, floor, room_type_id: 10, room_type_code: 'DLX', room_type_name: 'Deluxe', status: 'CLEAN', status_updated_at: '2026-09-30T08:00:00Z', occupancy, allowed_next: [], priority: 'NORMAL', dnd: false, make_up_requested: false, ...extra,
 })
 
-function mountView(permissions = ['reservation.read'], attach = false) {
+function mountView(permissions = ['reservation.read'], attach = false, list?: object[]) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
-  GET = vi.fn().mockResolvedValue({ data: { data: [
+  POST = vi.fn()
+  GET = vi.fn().mockResolvedValue({ data: { data: list ?? [
     room(1, '101', '1', 'OCCUPIED'), room(2, '102', '1', 'VACANT'), room(3, '201', '2', 'RESERVED'), room(4, '202', '2', 'VACANT', { block: { type: 'OOO', end_date: '2026-10-03' } }),
   ] } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -29,6 +31,7 @@ function mountView(permissions = ['reservation.read'], attach = false) {
 describe('RoomStatusView', () => {
   beforeEach(() => {
     GET = vi.fn()
+    POST = vi.fn()
   })
 
   it('shows the derived occupancy of every room by floor, with counts and blocks', async () => {
