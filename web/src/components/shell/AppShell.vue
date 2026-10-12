@@ -5,6 +5,7 @@ import ConfirmHost from '@/components/app/ConfirmHost.vue'
 import ToastHost from '@/components/app/ToastHost.vue'
 import CommandPalette from '@/components/shell/CommandPalette.vue'
 import PropertySwitcher from '@/components/shell/PropertySwitcher.vue'
+import CheckInHost from '@/components/shell/CheckInHost.vue'
 import RoomPanelHost from '@/components/shell/RoomPanelHost.vue'
 import SidebarNav from '@/components/shell/SidebarNav.vue'
 import TopBar from '@/components/shell/TopBar.vue'
@@ -94,6 +95,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
     <CommandPalette v-model:open="palette" />
     <RoomPanelHost />
+    <CheckInHost />
     <ConfirmHost />
     <ToastHost />
   </div>

@@ -8,11 +8,12 @@ import PropertyFormView from './PropertyFormView.vue'
 
 let POST = vi.fn()
 let GET = vi.fn()
+let PATCH = vi.fn()
 vi.mock('@/api/client', () => ({
   api: {
     POST: (...a: unknown[]) => POST(...a),
     GET: (...a: unknown[]) => GET(...a),
-    PATCH: vi.fn(),
+    PATCH: (...a: unknown[]) => PATCH(...a),
   },
 }))
 
@@ -163,6 +164,38 @@ describe('PropertyFormView (edit)', () => {
     await flushPromises()
     return wrapper
   }
+
+  it('shows the incidental deposit of check-in, and sends it only when it changed', async () => {
+    const w = await mountEdit(property({ checkin_incidental_deposit: '250000' }))
+    expect((w.get('input[name=checkin_incidental_deposit]').element as HTMLInputElement).value).toBe('250000')
+    PATCH = vi.fn().mockResolvedValue({ data: property() })
+    await w.get('input[name=name]').setValue('Hotel Bali 2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((PATCH.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toEqual({ name: 'Hotel Bali 2' })
+    PATCH = vi.fn().mockResolvedValue({ data: property() })
+    await w.get('input[name=checkin_incidental_deposit]').setValue('300000')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((PATCH.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ checkin_incidental_deposit: '300000' })
+  })
+
+  it('a new property proposes no incidental deposit', async () => {
+    const created = { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' }
+    POST = vi.fn().mockResolvedValue({ data: created })
+    GET = vi.fn().mockResolvedValue({ data: created })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    const w = mount(PropertyFormView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect((w.get('input[name=checkin_incidental_deposit]').element as HTMLInputElement).value).toBe('0')
+    await w.get('input[name=code]').setValue('BALI')
+    await w.get('input[name=name]').setValue('Hotel Bali')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body.checkin_incidental_deposit).toBe('0')
+  })
 
   it('has no choice of the language of the standard names: it is for a new property only', async () => {
     const w = await mountEdit(property())

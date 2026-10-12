@@ -4,9 +4,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/platform/money"
 )
 
 // Handler exposes the tenancy API (docs/architecture/06-api.md §3).
@@ -68,6 +71,19 @@ func (f *fieldParser) date(field string, s *string, dst *civil.Date) {
 	*dst = d
 }
 
+// amount reads a money amount (a plain decimal string); a bad one is INVALID_FORMAT.
+func (f *fieldParser) amount(field string, s *string) *decimal.Decimal {
+	if s == nil {
+		return nil
+	}
+	d, err := money.Parse(*s)
+	if err != nil {
+		f.errs = append(f.errs, apperr.FieldError{Field: field, Code: "INVALID_FORMAT", Message: "a plain amount, e.g. 150000"})
+		return nil
+	}
+	return &d
+}
+
 func (f *fieldParser) err() error {
 	if len(f.errs) == 0 {
 		return nil
@@ -94,6 +110,7 @@ type createPropertyRequest struct {
 	NightAuditMarksOccupiedDirty    *bool    `json:"night_audit_marks_occupied_dirty"`
 	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
 	RefundMethods                   []string `json:"refund_methods"`
+	CheckinIncidentalDeposit        *string  `json:"checkin_incidental_deposit"`
 	OpeningBusinessDate             *string  `json:"opening_business_date"`
 	// DataLanguage is the language of the names the property starts with (the chart of accounts, the departments, the charge codes): en (the default) or id.
 	DataLanguage string `json:"data_language"`
@@ -131,6 +148,9 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 	fp.timeOfDay("check_in_time", req.CheckInTime, &in.Settings.CheckInTime, true)
 	fp.timeOfDay("check_out_time", req.CheckOutTime, &in.Settings.CheckOutTime, true)
 	fp.timeOfDay("night_audit_earliest_time", req.NightAuditEarliestTime, &in.Settings.NightAuditEarliestTime, false)
+	if v := fp.amount("checkin_incidental_deposit", req.CheckinIncidentalDeposit); v != nil {
+		in.Settings.CheckinIncidentalDeposit = *v
+	}
 	fp.date("opening_business_date", req.OpeningBusinessDate, &in.OpeningBusinessDate)
 	if err := fp.err(); err != nil {
 		return err
@@ -202,6 +222,7 @@ type patchPropertyRequest struct {
 	NightAuditMarksOccupiedDirty    *bool    `json:"night_audit_marks_occupied_dirty"`
 	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
 	RefundMethods                   []string `json:"refund_methods"`
+	CheckinIncidentalDeposit        *string  `json:"checkin_incidental_deposit"`
 	Status                          *string  `json:"status"`
 }
 
@@ -224,6 +245,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
 		Status:                          req.Status,
 	}
 	var fp fieldParser
+	patch.CheckinIncidentalDeposit = fp.amount("checkin_incidental_deposit", req.CheckinIncidentalDeposit)
 	for _, t := range []struct {
 		field string
 		in    *string

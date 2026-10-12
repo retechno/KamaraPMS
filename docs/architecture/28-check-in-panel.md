@@ -1,0 +1,31 @@
+# Check-in in one panel
+
+The check-in of an arrival is one sheet of four steps: **Guest, Room, Deposit, Done**. It is the same sheet from Arrivals, from Today and from the panel of a room (`CheckInSheet.vue`, opened in the shell by `openCheckIn(arrival)` for the room panel). The state of all four steps lives in one composable (`useCheckIn`), so going back (Esc, or the step in the header) loses nothing that was typed. Enter goes to the next step; for a returning guest whose room is assigned and ready that is three Enter keys.
+
+Nothing here is a new rule of the check-in. The backend check-in is the endpoint that existed (`POST …/rooms/{lineId}/check-in`); the deposit is the endpoint that existed (`POST …/reservations/{id}/deposits`). The only backend change is one property setting (below).
+
+## The steps
+
+1. **Guest.** The profile is read (`GET /guests/{id}`) and shown in a compact form, with a line about the earlier stays (`GET /guests/{id}/history`). What was corrected is saved with one `PATCH /guests/{id}` when the person goes on (`guest.write`; a profile that cannot be edited is shown read-only). A reservation with no guest (`GUEST_MISSING`) lets the desk find a guest or add one on the step; the check-in takes the `guest_id` itself, so the reservation is not changed.
+   - What blocks: only that a guest exists. That is the only guest rule of the check-in (`GUEST_MISSING`). The identity and the phone are **recommended** (a note, never a block); for a guest whose nationality is not Indonesia the passport number is stressed in the danger colour ("must be reported to immigration (APOA)"), and still does not block. Whether an identity is mandatory can become a setting of the property later.
+2. **Room.** The free rooms (`useFreeRooms`, `sortFreeRooms`: the room of the line, ready rooms with the bed asked for, ready rooms, then the rooms that are not ready) with the room type (another type is an upgrade, as before). A room that is not ready needs the override of the check-in: the permission `frontdesk.checkin_unready_room`, the ticked override and a reason, which go to the check-in request. Without the permission the room cannot be passed.
+3. **Deposit.** The proposal is the estimate of the stay plus the incidental deposit, less what the reservation already holds.
+   - The estimate is the figure the server gives for the line (`GET /reservations/{id}`, `rooms[].estimate.total`, with tax and service charge as the charge engine computes them). **The client computes no tax**: it only adds figures the server gave. If the estimate cannot be read the screen says so and the proposal is the incidental alone.
+   - The incidental deposit is a setting of the property (`properties.checkin_incidental_deposit`, migration 00072, in Setup → Properties). It is 0 by default: nothing is proposed that nobody set. It is per room and the desk can change the amount for a guest.
+   - Methods: cash, card, QRIS, bank transfer (the endpoint also takes OTHER; it is not offered here). The method last used is remembered in the browser only.
+   - A reservation billed to a company (the first billing instruction, `arrival.company`) does not need a deposit; neither does one whose deposit already covers the stay, nor a desk without `payment.post`. For a guest who pays, the step needs an amount or a deliberate **Continue without deposit**: Enter alone never skips it. This is a rule of the screen: the check-in endpoint has no payment rule and still has none.
+4. **Done.** The summary (stay, folio, the deposit), the registration card (`stays/{id}/registration-card.pdf`), the receipt of the deposit, the confirmation e-mail (`POST …/emails`, only when e-mail is on and the guest has an address) and **Next check-in**: the next ready arrival of the list the sheet came from, without closing the sheet. The room panel reads the arrivals still to come when it opens the sheet for the same purpose.
+
+## Order and failure
+
+The last step sends two requests, each its own transaction with its own `Idempotency-Key`: **the deposit first, then the check-in.**
+
+- The deposit goes to the unlinked folio of the reservation, and the check-in links that folio to the stay (`18-architecture-decisions.md`), so the money is an advance deposit and is on the guest folio in the same transaction the stay starts in. The other order would leave a guest in the room with no deposit, and the deposit endpoint refuses once a room is checked in.
+- A deposit does not change the version of the reservation, so the check-in that follows takes the version the sheet already has.
+- **The deposit fails:** nothing is recorded and no check-in is tried. The sheet stays on the step with the message of the server. A cash deposit needs an open cashier shift (409 `NO_OPEN_SHIFT`): the desk opens one or chooses another method.
+- **The deposit goes through and the check-in does not** (the room was taken, the version changed, the room is not ready): the money is safe on the reservation and the stay has not started. The sheet stays on the Deposit step with a banner ("Deposit PAY… of … is recorded, but the check-in did not go through"), the amount is not asked again and the button reads "Try the check-in again", which repeats the check-in only. The desk can also go back to the Room step to change the room. The arrival list shows the deposit as paid.
+- A request whose answer was lost is repeated with the same key; a new key is made only when the server has answered.
+
+## Tests
+
+`CheckInSheet.test.ts` (the full flow of a returning guest with Enter only, the proposal with and without an incidental, with a deposit held and without an estimate, a guest with data missing, the passport of a foreign guest, finding and adding a guest, a room that is not ready with and without the override permission, a deposit by QRIS, no deposit for a company, a deposit that fails, a check-in that fails after the deposit, the next check-in, Esc and the steps of the header), `utils/checkin.test.ts` (the sums in the smallest unit, the proposal, the hints), `RoomPanel.test.ts` (the action for a guest due today), `PropertyFormView.test.ts` (the setting), and in Go the setting through the API (`internal/app/checkin_incidental_api_test.go`), its validation and `db/tests/schema_test.sql`.

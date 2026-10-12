@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/platform/apperr"
@@ -187,6 +188,7 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
 			RefundMethods:                   st.RefundMethods,
+			CheckinIncidentalDeposit:        st.CheckinIncidentalDeposit,
 			ActorID:                         p.ActorID(),
 		})
 		if err != nil {
@@ -304,6 +306,7 @@ type PropertyPatch struct {
 	NightAuditMarksOccupiedDirty    *bool
 	NightAuditEarliestTime          *civil.TimeOfDay
 	RefundMethods                   []string
+	CheckinIncidentalDeposit        *decimal.Decimal
 	Status                          *string
 }
 
@@ -350,6 +353,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.RequireRoomInspectionForCheckin, patch.RequireRoomInspectionForCheckin)
 		apply(&st.NightAuditMarksOccupiedDirty, patch.NightAuditMarksOccupiedDirty)
 		apply(&st.NightAuditEarliestTime, patch.NightAuditEarliestTime)
+		apply(&st.CheckinIncidentalDeposit, patch.CheckinIncidentalDeposit)
 		if patch.RefundMethods != nil {
 			st.RefundMethods = patch.RefundMethods
 		}
@@ -399,6 +403,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			NightAuditMarksOccupiedDirty:    st.NightAuditMarksOccupiedDirty,
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
 			RefundMethods:                   st.RefundMethods,
+			CheckinIncidentalDeposit:        st.CheckinIncidentalDeposit,
 			Status:                          status,
 			ActorID:                         p.ActorID(),
 		})

@@ -2,6 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { closeCheckIn, useCheckInSheet } from '@/composables/useCheckInSheet'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -265,5 +266,45 @@ describe('RoomPanel', () => {
     expect(text('[data-testid=rp-actions]')).toContain('Kirim housekeeping')
     expect($('[data-owes=true]')!.textContent).toContain('Harus dibayar')
     setLocale('en')
+  })
+
+  describe('check in the guest who comes next', () => {
+    const today = (extra: object = {}) => summary({
+      room: board({ occupancy: 'VACANT', allowed_next: [] }), stay: null, folio: null, access: { stay: true, folio: true, arrival: true, audit: true },
+      next_arrival: { reservation_id: 31, confirmation_number: 'RES000031', guest_name: 'Lucas Martin', room_type_code: 'DLX', arrival_date: '2026-09-30', departure_date: '2026-10-02', nights: 2, adult_count: 2, child_count: 0 }, ...extra,
+    })
+    const line = { reservation_id: 31, reservation_room_id: 77, confirmation_number: 'RES000031', status: 'CONFIRMED', room_id: 5, guest_name: 'Lucas Martin' }
+    const withDay = async (permissions: string[]) => {
+      const opened = await openPanel(permissions)
+      usePropertyStore().clock = { business_date: '2026-09-30' } as never
+      await flushPromises()
+      return opened
+    }
+    beforeEach(() => closeCheckIn())
+
+    it('offers it for a guest due today, and opens the check-in sheet with the full arrival', async () => {
+      answer = today()
+      const baseGET = GET
+      GET = vi.fn(async (path: string, init?: unknown) => (path.endsWith('/arrivals') ? { data: { data: [{ ...line, reservation_room_id: 78, room_id: 9 }, line] } } : baseGET(path, init)))
+      const { onClose } = await withDay([...ALL, 'frontdesk.checkin'])
+      expect($('[data-testid=rp-checkin]')).not.toBeNull()
+      $<HTMLButtonElement>('[data-testid=rp-checkin]')!.click()
+      await flushPromises()
+      expect(GET.mock.calls.find((c) => String(c[0]).endsWith('/arrivals'))?.[1]).toMatchObject({ params: { query: { q: 'RES000031' } } })
+      // the line of this room is the one that opens, and the panel makes way for the sheet
+      expect(useCheckInSheet().target.value).toMatchObject({ reservation_room_id: 77 })
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('is not offered for an arrival of another day, or to a role that cannot check in', async () => {
+      answer = today({ next_arrival: { reservation_id: 31, confirmation_number: 'RES000031', guest_name: 'Lucas Martin', room_type_code: 'DLX', arrival_date: '2026-10-14', departure_date: '2026-10-16', nights: 2, adult_count: 2, child_count: 0 } })
+      await withDay([...ALL, 'frontdesk.checkin'])
+      expect($('[data-testid=rp-checkin]')).toBeNull()
+      mounted?.unmount()
+      body().innerHTML = ''
+      answer = today()
+      await withDay(ALL)
+      expect($('[data-testid=rp-checkin]')).toBeNull()
+    })
   })
 })

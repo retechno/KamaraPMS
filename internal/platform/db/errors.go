@@ -82,6 +82,7 @@ var constraintErrors = map[string]mapped{
 	"yield_rules_weekdays_ck":                 {apperr.KindInvalid, "VALIDATION_FAILED", "the yield rule weekdays are invalid"},
 	"yield_rules_bounds_ck":                   {apperr.KindInvalid, "VALIDATION_FAILED", "the yield rule floor and cap are invalid"},
 	"properties_refund_methods_ck":            {apperr.KindInvalid, "VALIDATION_FAILED", "refund_methods: one or more of CASH, CARD, BANK_TRANSFER, OTHER, QRIS"},
+	"properties_incidental_deposit_ck":        {apperr.KindInvalid, "VALIDATION_FAILED", "checkin_incidental_deposit cannot be negative"},
 	"properties_currency_lock":                {apperr.KindConflict, "CURRENCY_LOCKED", "the property currency cannot change once financial data exists"},
 	"charge_codes_price_mode_lock":            {apperr.KindConflict, "PRICE_MODE_LOCKED", "the price mode of a charge code in use cannot change"},
 	"charge_codes_charge_type_lock":           {apperr.KindConflict, "CHARGE_TYPE_LOCKED", "the charge type of a room revenue code cannot change"},

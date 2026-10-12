@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/platform/civil"
 )
 
@@ -93,6 +95,37 @@ func TestPropertySettingsValidate(t *testing.T) {
 		if !fields[f] {
 			t.Errorf("expected an error for %s", f)
 		}
+	}
+}
+
+func TestTheIncidentalDepositIsZeroOrMoreAtTheCurrencyDecimals(t *testing.T) {
+	ok := PropertySettings{Name: "Hotel", Timezone: "Asia/Jakarta", CurrencyCode: "IDR", CurrencyDecimals: 0, RefundMethods: []string{"CASH"}}
+	has := func(s PropertySettings) string {
+		for _, e := range s.Validate() {
+			if e.Field == "checkin_incidental_deposit" {
+				return e.Code
+			}
+		}
+		return ""
+	}
+	if has(ok) != "" {
+		t.Fatal("zero is the default and valid")
+	}
+	ok.CheckinIncidentalDeposit = decimal.RequireFromString("150000")
+	if has(ok) != "" {
+		t.Fatal("a whole amount is valid in IDR")
+	}
+	ok.CheckinIncidentalDeposit = decimal.RequireFromString("-1")
+	if has(ok) != "OUT_OF_RANGE" {
+		t.Fatalf("negative: %q", has(ok))
+	}
+	ok.CheckinIncidentalDeposit = decimal.RequireFromString("100.5")
+	if has(ok) != "TOO_MANY_DECIMALS" {
+		t.Fatalf("a fraction of a rupiah: %q", has(ok))
+	}
+	ok.CurrencyDecimals = 2
+	if has(ok) != "" {
+		t.Fatal("two decimals are valid in a two-decimal currency")
 	}
 }
 

@@ -717,6 +717,11 @@ SELECT expect_error('cascading from a parent table does not get around it', '230
 ------------------------------------------------------------------------------------------
 -- E-mail outbox and property contact details
 ------------------------------------------------------------------------------------------
+SELECT expect_ok('a property may propose an incidental deposit at check-in (zero by default)',
+    $q$UPDATE properties SET checkin_incidental_deposit = 250000 WHERE code = 'BALI'$q$,
+    $q$UPDATE properties SET checkin_incidental_deposit = 0 WHERE code = 'BALI'$q$);
+SELECT expect_error('the incidental deposit cannot be negative', '23514',
+    $q$UPDATE properties SET checkin_incidental_deposit = -1 WHERE code = 'BALI'$q$);
 SELECT expect_ok('a property keeps contact details for its documents',
     $q$UPDATE properties SET phone = '+62 361 1', email = 'info@bali.test', tax_id = '01.234', document_footer = 'Thank you' WHERE code = 'BALI'$q$);
 INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address)
