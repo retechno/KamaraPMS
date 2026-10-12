@@ -20,6 +20,7 @@ type LockLevel int
 const (
 	LevelNone         LockLevel = 0
 	LevelNightAudit   LockLevel = 5  // L0: advisory, night audit only
+	LevelSubscription LockLevel = 7  // L0: the tenant's subscription row (serialises the quota counts of properties, rooms and users; docs/architecture/26-subscriptions.md §5)
 	LevelBusinessDay  LockLevel = 10 // L1: OPEN business_days row (FOR SHARE / FOR UPDATE)
 	LevelRoomTypes    LockLevel = 20 // L2
 	LevelRooms        LockLevel = 30 // L3

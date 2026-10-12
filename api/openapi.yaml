@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: KamaraPMS API
-  version: 0.48.0
+  version: 0.49.0
   description: |
     REST API of the KamaraPMS property management system.
     Contract reference: docs/architecture/06-api.md. This file grows with each milestone
@@ -13,6 +13,12 @@ info:
     Any request can be answered with 429 `TOO_MANY_REQUESTS` and a `Retry-After` header when a client address
     exceeds the request limit (the health probes are exempt); sign-in and approval attempts have stricter limits
     of their own (429 `TOO_MANY_ATTEMPTS`).
+
+    Subscriptions (docs/architecture/26-subscriptions.md): any authenticated request can be answered with 403
+    `MODULE_NOT_IN_PLAN` (`context.module`) when its module is not in the tenant's plan, or 403 `SUBSCRIPTION_READ_ONLY`
+    for a write after the paid period and its grace; every authenticated response carries `X-Subscription-Access`
+    (FULL, GRACE or READ_ONLY). Creating or activating a property, a room or a user can be answered with 409
+    `PLAN_LIMIT_REACHED` (`context.resource`, `limit`, `used`).
 servers:
   - url: /
 security:
@@ -3854,6 +3860,39 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/subscription:
+    get:
+      operationId: getSubscription
+      summary: The caller's tenant's subscription (any signed-in user)
+      description: "The plan, its modules (always with CORE), the access state, the paid period and its grace, the limits in force (an override of the tenant or the plan's; null is unlimited) and the usage. The screens use it to hide the modules that are off and to warn in GRACE and READ_ONLY (docs/architecture/26-subscriptions.md)."
+      tags: [subscription]
+      responses:
+        "200":
+          description: The subscription.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/subscription/invoices:
+    get:
+      operationId: listSubscriptionInvoices
+      summary: The tenant's subscription invoices, newest first (tenant administrators)
+      tags: [subscription]
+      responses:
+        "200":
+          description: Up to 200 invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SubscriptionInvoice" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folios/{id}/invoice.pdf:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -11569,6 +11608,55 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AuditLog" }
         next_cursor: { type: string }
+    SubscriptionLimits:
+      type: object
+      required: [max_properties, max_rooms, max_users]
+      properties:
+        max_properties: { type: [integer, "null"], description: Active properties; null is unlimited. }
+        max_rooms: { type: [integer, "null"], description: Active rooms over all properties; null is unlimited. }
+        max_users: { type: [integer, "null"], description: "Active users, administrators included; null is unlimited." }
+    SubscriptionSummary:
+      type: object
+      required: [plan_code, plan_name, modules, status, access, started_on, paid_through, grace_ends_on, days_left, limits, usage]
+      properties:
+        plan_code: { type: string }
+        plan_name: { type: string }
+        modules:
+          type: array
+          items: { type: string, enum: [CORE, HOUSEKEEPING, ACCOUNTING, INVENTORY, BANQUET, POS] }
+        status: { type: string, enum: [TRIAL, ACTIVE, CANCELLED] }
+        access: { type: string, enum: [FULL, GRACE, READ_ONLY], description: "FULL until paid_through, GRACE until grace_ends_on (writes allowed), then READ_ONLY: every write answers 403 SUBSCRIPTION_READ_ONLY." }
+        started_on: { $ref: "#/components/schemas/Date" }
+        paid_through: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: The last paid (or trial) day in the tenant's time zone; null has no end. }
+        grace_ends_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        days_left: { type: [integer, "null"], description: "Days of writing left (today included): to paid_through while FULL, to grace_ends_on while GRACE, 0 when READ_ONLY, null without an end." }
+        limits: { $ref: "#/components/schemas/SubscriptionLimits" }
+        usage:
+          type: object
+          required: [properties, rooms, users]
+          properties:
+            properties: { type: integer }
+            rooms: { type: integer }
+            users: { type: integer }
+    SubscriptionInvoice:
+      type: object
+      required: [id, number, plan_id, plan_code, period_start, period_end, amount, currency_code, status, issued_at, due_on]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string, examples: ["SUB-2026-00001"] }
+        plan_id: { type: integer, format: int64 }
+        plan_code: { type: string }
+        period_start: { $ref: "#/components/schemas/Date" }
+        period_end: { $ref: "#/components/schemas/Date" }
+        amount: { $ref: "#/components/schemas/Amount" }
+        currency_code: { type: string }
+        status: { type: string, enum: [ISSUED, PAID, VOID] }
+        issued_at: { type: string, format: date-time }
+        due_on: { $ref: "#/components/schemas/Date" }
+        paid_on: { $ref: "#/components/schemas/Date" }
+        payment_reference: { type: string }
+        void_reason: { type: string }
+        notes: { type: string }
     EmailEntry:
       type: object
       required: [id, kind, to, status, attempts, sent_at, created_at]

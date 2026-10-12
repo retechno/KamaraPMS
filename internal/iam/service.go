@@ -18,6 +18,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/entitlement"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/platform/logging"
 )
@@ -30,7 +31,12 @@ type Service struct {
 	tokens   tokens
 	accounts *limiter // failed logins per tenant+email
 	sources  *limiter // failed logins per client IP
+	quota    entitlement.Gate
 }
+
+// SetQuotaGate sets the plan's limit on active users (docs/architecture/26-subscriptions.md §5); none means unlimited.
+// The operator's BootstrapAdmin is not limited.
+func (s *Service) SetQuotaGate(g entitlement.Gate) { s.quota = g }
 
 // NewService wires the iam service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, cfg TokenConfig) *Service {
@@ -496,6 +502,9 @@ func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (User, err
 
 	var out User
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		if err := entitlement.OrUnlimited(s.quota).Require(ctx, p.TenantID, entitlement.Users, 1); err != nil {
+			return err
+		}
 		q := s.q(ctx)
 		row, err := q.CreateUser(ctx, iamdb.CreateUserParams{TenantID: p.TenantID, Email: email, PasswordHash: hash,
 			FullName: strings.TrimSpace(in.FullName), IsTenantAdmin: in.IsTenantAdmin, ActorID: p.ActorID()})
@@ -537,6 +546,12 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 	}
 	var out User
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		activating := patch.IsActive != nil && *patch.IsActive
+		if activating { // the quota lock comes before the user row
+			if err := entitlement.OrUnlimited(s.quota).Hold(ctx, p.TenantID); err != nil {
+				return err
+			}
+		}
 		q := s.q(ctx)
 		row, err := q.GetUserForUpdate(ctx, iamdb.GetUserForUpdateParams{TenantID: p.TenantID, ID: id})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -555,6 +570,11 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 		}
 		if patch.IsTenantAdmin != nil {
 			admin = *patch.IsTenantAdmin
+		}
+		if activating && !row.IsActive {
+			if err := entitlement.OrUnlimited(s.quota).Check(ctx, p.TenantID, entitlement.Users, 1); err != nil {
+				return err
+			}
 		}
 		if row.IsTenantAdmin && row.IsActive && (!admin || !active) {
 			n, err := q.CountActiveAdmins(ctx, p.TenantID)
