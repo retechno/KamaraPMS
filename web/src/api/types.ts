@@ -25,6 +25,7 @@ export type RoomBlock = Schemas['RoomBlock']
 export type BlockType = Schemas['BlockType']
 export type HousekeepingStatus = Schemas['HousekeepingStatus']
 export type HousekeepingBoardRoom = Schemas['HousekeepingBoardRoom']
+export type RoomSummary = Schemas['RoomSummary']
 export type HousekeepingBulkResult = Schemas['HousekeepingBulkResult']
 export type Occupancy = Schemas['Occupancy']
 
