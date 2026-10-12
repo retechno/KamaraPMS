@@ -4,7 +4,7 @@ Tiga skrip untuk database DEVELOPMENT (jangan dipakai di produksi):
 
 - `seed-demo.mjs`: membuat properti **UIREV** dengan 50 kamar dan data yang realistis: hari kemarin yang sudah ditutup lewat night audit, 30 tamu menginap, kedatangan dan keberangkatan hari ini, sekitar 120 reservasi 14 hari ke depan (termasuk draf dan pembatalan), pembayaran berbagai metode, status housekeeping campuran, kamar out of order, permintaan maintenance, barang temuan, dan satu perusahaan (city ledger). Skrip ini sudah diuji terhadap API KamaraPMS.
 - `overflow.mjs`: membuka semua rute di layar ponsel (390 px) dan melaporkan halaman yang bisa digeser ke samping, beserta elemen penyebabnya.
-- `screenshots.mjs`: login lewat layar login, memilih bahasa Indonesia dan properti UIREV, lalu memotret semua halaman dalam 3 ukuran (desktop 1440, laptop 1366, ponsel 390), mode gelap untuk halaman utama, serta beberapa keadaan khusus (Ctrl K, drawer menu ponsel, sheet kamar, dialog check-in). Hasilnya disimpan di `screenshots/<label>/` beserta `index.md`.
+- `screenshots.mjs`: login lewat layar login, memilih bahasa Indonesia dan properti UIREV, lalu memotret semua halaman dalam 3 ukuran (desktop 1440, laptop 1280, ponsel 390) dan desktop gelap (1440, semua rute), serta beberapa keadaan khusus (Ctrl K, drawer menu ponsel, sheet kamar, dialog check-in). Hasilnya disimpan di `screenshots/<label>/` beserta `index.md`.
 
 ## Langkah (dari root repo, Windows PowerShell atau bash)
 
