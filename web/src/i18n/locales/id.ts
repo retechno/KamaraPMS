@@ -581,7 +581,7 @@ export const id: Messages = {
       depositTitle: 'Deposit',
       estimateStay: 'Perkiraan menginap, {n} malam | Perkiraan menginap, {n} malam',
       estimateMissing: 'Perkiraan menginap tidak bisa dibaca',
-      estimateTaxed: 'Termasuk pajak dan service charge, sesuai hitungan sistem',
+      estimateTaxed: 'Total menurut hitungan sistem (pajak dan service charge bila ada)',
       incidental: 'Deposit insidental',
       incidentalNone: 'Belum diatur di properti ini',
       alreadyHeld: 'Reservasi sudah menyimpan {amount}; jumlah itu dikurangkan dari usulan.',

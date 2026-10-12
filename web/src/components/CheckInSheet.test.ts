@@ -119,7 +119,7 @@ describe('the check-in sheet: a returning guest', () => {
     expect(stepNow()).toBe('checkin-step-deposit')
     expect(find('[data-testid=deposit-estimate]').text()).toContain('2,340,000')
     expect(find('[data-testid=deposit-estimate]').text()).toContain('3 nights')
-    expect(find('[data-testid=deposit-estimate]').text()).toContain('With tax and service charge')
+    expect(find('[data-testid=deposit-estimate]').text()).toContain('as the system computes it')
     expect(find('[data-testid=deposit-incidental]').text()).toContain('500,000')
     expect((find('input[name=deposit_amount]').element as HTMLInputElement).value).toBe('2840000')
     expect(find('[data-testid=deposit-method-CASH]').attributes('aria-pressed')).toBe('true')

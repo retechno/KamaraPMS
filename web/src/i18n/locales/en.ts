@@ -582,7 +582,7 @@ export const en = {
       depositTitle: 'Deposit',
       estimateStay: 'Estimate of the stay, {n} night | Estimate of the stay, {n} nights',
       estimateMissing: 'The estimate of the stay could not be read',
-      estimateTaxed: 'With tax and service charge, as the system computes them',
+      estimateTaxed: 'Total as the system computes it (tax and service charge where they apply)',
       incidental: 'Incidental deposit',
       incidentalNone: 'None set for this property',
       alreadyHeld: 'The reservation already holds {amount}; it is taken off the proposal.',

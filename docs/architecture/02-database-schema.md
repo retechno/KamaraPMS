@@ -337,6 +337,7 @@ The scope columns, scope FKs and `UNIQUE (…, id)` from the conventions are not
 | require_room_inspection_for_checkin | boolean | NO | DEFAULT false |
 | night_audit_marks_occupied_dirty | boolean | NO | DEFAULT true |
 | night_audit_earliest_time | time | NO | DEFAULT '20:00'. The earliest local time at which the current BD can be closed on the same calendar date. |
+| checkin_incidental_deposit | numeric(18,3) | NO | DEFAULT 0, CHECK `>= 0` (migration 00072). The incidental deposit the front desk proposes at check-in, per room, on top of the stay estimate; 0 proposes nothing. A proposal only: the check-in never requires it (`28-check-in-panel.md`). |
 | status | varchar(10) | NO | CHECK IN (`ACTIVE`,`INACTIVE`) |
 | [std] | | | |
 
