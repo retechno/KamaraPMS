@@ -3598,6 +3598,10 @@ export const en = {
     TOO_MANY_REQUESTS: 'Wait a minute and try again.',
     EMAIL_NOT_CONFIGURED: 'The administrator has to set up sending e-mail first.',
     NOT_FOUND: 'It may have been removed. Go back and reload the list.',
+    // Subscriptions
+    MODULE_NOT_IN_PLAN: 'Ask your administrator about a plan that includes it.',
+    SUBSCRIPTION_READ_ONLY: 'Ask your administrator to renew the subscription.',
+    PLAN_LIMIT_REACHED: 'Deactivate one you no longer use, or ask your administrator about a larger plan.',
   },
   routeTitles: {
     login: 'Sign in',
@@ -4227,6 +4231,20 @@ export const en = {
     DEPARTMENT_HAS_ACTIVE_CHILDREN: 'Switch off its sub-departments first.',
     DEPARTMENT_PARENT_INACTIVE: 'Switch on the department it belongs to first.',
     TOO_DEEP: 'A sub-department has no sub-departments: at most two levels.',
+    // Subscriptions (docs/architecture/26-subscriptions.md)
+    MODULE_NOT_IN_PLAN: 'This module is not part of your subscription plan.',
+    SUBSCRIPTION_READ_ONLY: 'The subscription has ended: the data can be read but not changed.',
+    PLAN_LIMIT_REACHED: 'The subscription plan\'s limit is reached.',
+    SUBSCRIPTION_NOT_FOUND: 'The tenant has no subscription.',
+    SUBSCRIPTION_EXISTS: 'The tenant already has a subscription.',
+    PLAN_NOT_FOUND: 'The subscription plan does not exist.',
+    PLAN_INACTIVE: 'The subscription plan is retired and cannot be given to a tenant.',
+    NO_DEFAULT_PLAN: 'No subscription plan is the default for new tenants.',
+    DEFAULT_PLAN_REQUIRED: 'Make another plan the default first.',
+    DEFAULT_PLAN_TAKEN: 'Another plan is already the default.',
+    INVOICE_NOT_OPEN: 'The subscription invoice is already paid or void.',
+    INVOICE_PERIOD_OVERLAP: 'An open subscription invoice already covers part of this period.',
+    INVOICE_FINAL: 'A paid or void subscription invoice cannot change.',
   },
   fieldErrors: {
     DEPARTMENT_REQUIRED: 'A department is required: the account needs one and has no default.',
