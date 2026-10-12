@@ -191,6 +191,9 @@ BEGIN
     IF tables IS NOT NULL THEN
         EXECUTE 'TRUNCATE ' || tables || ' RESTART IDENTITY CASCADE';
     END IF;
+    IF to_regproc('seed_subscription_plans') IS NOT NULL THEN
+        PERFORM seed_subscription_plans(); -- reference data the migration seeds: a new tenant needs the default plan
+    END IF;
 END $$`)
 	if err != nil {
 		t.Fatalf("dbtest: reset: %v", err)

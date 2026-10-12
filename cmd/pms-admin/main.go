@@ -5,6 +5,9 @@
 //	pms-admin show-tenant -code ABC
 //	pms-admin create-admin -tenant ABC -email admin@hotel.com -name "Admin"   (prints a generated password)
 //
+// The subscription commands (plans, a tenant's subscription, its invoices) are in subscription.go; run
+// pms-admin without arguments for the list (docs/architecture/26-subscriptions.md §8).
+//
 // It reads PMS_DATABASE_URL from the environment or ./.env.
 package main
 
@@ -24,6 +27,7 @@ import (
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/config"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/subscription"
 	"kamarapms/internal/tenancy"
 )
 
@@ -37,13 +41,17 @@ func main() {
 const usage = `usage:
   pms-admin create-tenant -code CODE -name NAME -timezone ZONE
   pms-admin show-tenant -code CODE
-  pms-admin create-admin -tenant CODE -email EMAIL -name NAME [-password-env VAR]`
+  pms-admin create-admin -tenant CODE -email EMAIL -name NAME [-password-env VAR]
+` + subscriptionUsage
 
 func run(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
 	}
 	cmd, rest := args[0], args[1:]
+	if _, ok := subscriptionCommands[cmd]; ok {
+		return runSubscription(cmd, rest)
+	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	code := fs.String("code", "", "tenant code (A-Z, 0-9, - or _), used at login")
 	name := fs.String("name", "", "tenant display name")
@@ -55,23 +63,17 @@ func run(args []string) error {
 		return err
 	}
 
-	if err := config.LoadDotEnv(".env"); err != nil {
-		return err
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := db.Open(ctx, cfg.DatabaseURL, 2)
+	txm, closeDB, err := connect(ctx)
 	if err != nil {
 		return err
 	}
-	defer pool.Close()
-	txm := db.NewTxManager(pool, cfg.DBLockTimeout)
+	defer closeDB()
 	aw := audit.NewWriter(clock.System{})
 	svc := tenancy.NewService(txm, clock.System{}, aw, iam.NewAuthorizer(txm))
+	subs := subscription.NewService(txm, clock.System{}, aw)
+	svc.OnTenantCreated(subs.StartTenant) // as in the API: a new tenant starts on the default plan
 
 	switch cmd {
 	case "create-tenant":
@@ -80,6 +82,9 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("created tenant %s (id %d, time zone %s)\n", t.Code, t.ID, t.Timezone)
+		if v, err := subs.Show(ctx, t.Code); err == nil {
+			fmt.Printf("subscription: plan %s, %s, paid through %s\n", v.Summary.PlanCode, v.Summary.Status, dateOr(v.Summary.PaidThrough, "no end"))
+		}
 		fmt.Printf("next: pms-admin create-admin -tenant %s -email you@example.com -name \"Your Name\"\n", t.Code)
 	case "show-tenant":
 		t, err := svc.TenantByCode(ctx, *code)
@@ -110,6 +115,22 @@ func run(args []string) error {
 		return fmt.Errorf("unknown command %q\n%s", cmd, usage)
 	}
 	return nil
+}
+
+// connect opens the database named by PMS_DATABASE_URL (environment or ./.env).
+func connect(ctx context.Context) (*db.TxManager, func(), error) {
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return nil, nil, err
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	pool, err := db.Open(ctx, cfg.DatabaseURL, 2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return db.NewTxManager(pool, cfg.DBLockTimeout), pool.Close, nil
 }
 
 // generatePassword returns a random 20-character password (120 bits of entropy).

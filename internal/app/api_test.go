@@ -20,6 +20,7 @@ import (
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
+	"kamarapms/internal/subscription"
 	"kamarapms/internal/tenancy"
 )
 
@@ -50,6 +51,7 @@ func newAPI(t *testing.T) *apiEnv {
 	aw := audit.NewWriter(c)
 	tokens := iam.TokenConfig{Secret: []byte(strings.Repeat("s", 32)), AccessTTL: 15 * time.Minute, RefreshTTL: 720 * time.Hour}
 	ten := tenancy.NewService(txm, c, aw, iam.NewAuthorizer(txm))
+	ten.OnTenantCreated(subscription.NewService(txm, c, aw).StartTenant) // as in New: every tenant has a subscription
 	users := iam.NewService(txm, c, aw, tokens)
 	for _, code := range []string{"ABC", "XYZ"} {
 		if _, err := ten.CreateTenant(context.Background(), code, code+" Hotels", "Asia/Jakarta"); err != nil {

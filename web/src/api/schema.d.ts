@@ -3247,6 +3247,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's tenant's subscription (any signed-in user)
+         * @description The plan, its modules (always with CORE), the access state, the paid period and its grace, the limits in force (an override of the tenant or the plan's; null is unlimited) and the usage. The screens use it to hide the modules that are off and to warn in GRACE and READ_ONLY (docs/architecture/26-subscriptions.md).
+         */
+        get: operations["getSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscription/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's subscription invoices, newest first (tenant administrators) */
+        get: operations["listSubscriptionInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/folios/{id}/invoice.pdf": {
         parameters: {
             query?: {
@@ -10462,6 +10499,60 @@ export interface components {
         AuditLogPage: {
             data: components["schemas"]["AuditLog"][];
             next_cursor?: string;
+        };
+        SubscriptionLimits: {
+            /** @description Active properties; null is unlimited. */
+            max_properties: number | null;
+            /** @description Active rooms over all properties; null is unlimited. */
+            max_rooms: number | null;
+            /** @description Active users, administrators included; null is unlimited. */
+            max_users: number | null;
+        };
+        SubscriptionSummary: {
+            plan_code: string;
+            plan_name: string;
+            modules: ("CORE" | "HOUSEKEEPING" | "ACCOUNTING" | "INVENTORY" | "BANQUET" | "POS")[];
+            /** @enum {string} */
+            status: "TRIAL" | "ACTIVE" | "CANCELLED";
+            /**
+             * @description FULL until paid_through, GRACE until grace_ends_on (writes allowed), then READ_ONLY: every write answers 403 SUBSCRIPTION_READ_ONLY.
+             * @enum {string}
+             */
+            access: "FULL" | "GRACE" | "READ_ONLY";
+            started_on: components["schemas"]["Date"];
+            /** @description The last paid (or trial) day in the tenant's time zone; null has no end. */
+            paid_through: components["schemas"]["Date"] | null;
+            grace_ends_on: components["schemas"]["Date"] | null;
+            /** @description Days of writing left (today included): to paid_through while FULL, to grace_ends_on while GRACE, 0 when READ_ONLY, null without an end. */
+            days_left: number | null;
+            limits: components["schemas"]["SubscriptionLimits"];
+            usage: {
+                properties: number;
+                rooms: number;
+                users: number;
+            };
+        };
+        SubscriptionInvoice: {
+            /** Format: int64 */
+            id: number;
+            /** @example SUB-2026-00001 */
+            number: string;
+            /** Format: int64 */
+            plan_id: number;
+            plan_code: string;
+            period_start: components["schemas"]["Date"];
+            period_end: components["schemas"]["Date"];
+            amount: components["schemas"]["Amount"];
+            currency_code: string;
+            /** @enum {string} */
+            status: "ISSUED" | "PAID" | "VOID";
+            /** Format: date-time */
+            issued_at: string;
+            due_on: components["schemas"]["Date"];
+            paid_on?: components["schemas"]["Date"];
+            payment_reference?: string;
+            void_reason?: string;
+            notes?: string;
         };
         EmailEntry: {
             /** Format: int64 */
@@ -18148,6 +18239,52 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subscription. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listSubscriptionInvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 invoices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SubscriptionInvoice"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getInvoicePdf: {

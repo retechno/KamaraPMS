@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/entitlement"
 	"kamarapms/internal/tenancy/tenancydb"
 )
 
@@ -28,14 +29,24 @@ type PropertyCreated struct {
 	DataLanguage string
 }
 
+// TenantCreated describes a tenant that was just created, for modules that start their own tenant
+// data (the subscription) in the same transaction.
+type TenantCreated struct {
+	TenantID int64
+	Code     string
+	Timezone string
+}
+
 // Service is the tenancy application service.
 type Service struct {
-	onCreated []func(context.Context, PropertyCreated) error
-	txm       *db.TxManager
-	clock     clock.Clock
-	audit     *audit.Writer
-	authz     auth.Authorizer
-	store     store
+	onCreated       []func(context.Context, PropertyCreated) error
+	onTenantCreated []func(context.Context, TenantCreated) error
+	quota           entitlement.Gate
+	txm             *db.TxManager
+	clock           clock.Clock
+	audit           *audit.Writer
+	authz           auth.Authorizer
+	store           store
 }
 
 // OnPropertyCreated registers a hook that CreateProperty runs inside its transaction. Hooks are registered
@@ -44,9 +55,18 @@ func (s *Service) OnPropertyCreated(fn func(context.Context, PropertyCreated) er
 	s.onCreated = append(s.onCreated, fn)
 }
 
+// OnTenantCreated registers a hook that CreateTenant runs inside its transaction (registered once at start-up).
+// A failing hook rolls the tenant back.
+func (s *Service) OnTenantCreated(fn func(context.Context, TenantCreated) error) {
+	s.onTenantCreated = append(s.onTenantCreated, fn)
+}
+
+// SetQuotaGate sets the plan's limit on active properties (docs/architecture/26-subscriptions.md §5); none means unlimited.
+func (s *Service) SetQuotaGate(g entitlement.Gate) { s.quota = g }
+
 // NewService wires the tenancy service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, store: store{txm: txm}}
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, store: store{txm: txm}, quota: entitlement.Unlimited{}}
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +94,11 @@ func (s *Service) CreateTenant(ctx context.Context, code, name, timezone string)
 			return err
 		}
 		t = toTenant(row)
+		for _, hook := range s.onTenantCreated {
+			if err := hook(ctx, TenantCreated{TenantID: t.ID, Code: t.Code, Timezone: t.Timezone}); err != nil {
+				return err
+			}
+		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: t.ID, Action: "tenant.created", EntityType: "tenant", EntityID: t.ID, EntityLabel: t.Code, New: t})
 	})
 	return t, err
@@ -137,6 +162,9 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 
 	var out PropertyWithDay
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		if err := entitlement.OrUnlimited(s.quota).Require(ctx, p.TenantID, entitlement.Properties, 1); err != nil {
+			return err
+		}
 		q := s.store.q(ctx)
 		st := in.Settings
 		row, err := q.CreateProperty(ctx, tenancydb.CreatePropertyParams{
@@ -292,6 +320,12 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 
 	var out Property
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		reactivating := patch.Status != nil && *patch.Status == PropertyActive
+		if reactivating { // the quota lock comes before the property row (docs/architecture/26-subscriptions.md §5)
+			if err := entitlement.OrUnlimited(s.quota).Hold(ctx, p.TenantID); err != nil {
+				return err
+			}
+		}
 		q := s.store.q(ctx)
 		row, err := q.GetPropertyForUpdate(ctx, tenancydb.GetPropertyForUpdateParams{TenantID: p.TenantID, ID: propertyID})
 		if err != nil {
@@ -328,6 +362,11 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		}
 		if len(fields) > 0 {
 			return apperr.Invalid("the property settings are invalid", fields...)
+		}
+		if reactivating && before.Status != PropertyActive {
+			if err := entitlement.OrUnlimited(s.quota).Check(ctx, p.TenantID, entitlement.Properties, 1); err != nil {
+				return err
+			}
 		}
 
 		if st.CurrencyCode != before.CurrencyCode || st.CurrencyDecimals != before.CurrencyDecimals {

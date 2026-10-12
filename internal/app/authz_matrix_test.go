@@ -84,6 +84,7 @@ var signedInRoutes = map[string]string{
 	"POST /api/v1/auth/password": "the caller's own password, checked against the current one",
 	"GET /api/v1/permissions":    "the catalogue of permission names, the same for everyone",
 	"GET /api/v1/properties":     "lists the properties the caller has a grant on",
+	"GET /api/v1/subscription":   "the caller's tenant's plan, modules and access state, which every screen needs to know what to show",
 }
 
 // propertyReads are the reads that ask for a grant on the property and for no permission (the services call CanAccess and not a permission). They are configuration and reference data of the
