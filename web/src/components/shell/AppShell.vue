@@ -5,6 +5,7 @@ import ConfirmHost from '@/components/app/ConfirmHost.vue'
 import ToastHost from '@/components/app/ToastHost.vue'
 import CommandPalette from '@/components/shell/CommandPalette.vue'
 import PropertySwitcher from '@/components/shell/PropertySwitcher.vue'
+import RoomPanelHost from '@/components/shell/RoomPanelHost.vue'
 import SidebarNav from '@/components/shell/SidebarNav.vue'
 import TopBar from '@/components/shell/TopBar.vue'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -92,6 +93,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     </Dialog>
 
     <CommandPalette v-model:open="palette" />
+    <RoomPanelHost />
     <ConfirmHost />
     <ToastHost />
   </div>

@@ -13,6 +13,7 @@ import RoomPicker from '@/components/RoomPicker.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import ReadinessBadge from '@/components/ReadinessBadge.vue'
@@ -253,7 +254,7 @@ watch(() => props.refresh, restart)
     >
       <template #cell-room_number="{ row }">
         <template v-if="row.room_number">
-          <div class="font-semibold">{{ row.room_number }}</div>
+          <div class="font-semibold"><RoomLink :room-id="row.room_id" :number="row.room_number" /></div>
           <StatusBadge v-if="row.housekeeping_status" domain="housekeeping" :status="row.housekeeping_status" />
         </template>
         <span v-else class="text-muted-foreground" :data-testid="`no-room-${row.reservation_room_id}`">{{ t('frontDesk.arrivals.noRoom') }}</span>

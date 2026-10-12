@@ -7,6 +7,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { TapeBooking, TapeChart } from '@/api/types'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import { statusLegend, statusSwatch } from '@/components/app/statusMap'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -133,7 +134,7 @@ watch(businessDate, () => {
               <th :colspan="dates.length + 1" class="border-b border-t border-border bg-muted px-2 py-1 text-left text-xs font-semibold">{{ room.room_type_code }}</th>
             </tr>
             <tr :data-testid="`room-${room.room_number}`">
-              <th scope="row" class="sticky left-0 z-10 border-b border-border bg-card px-2 py-1 text-left font-medium">{{ room.room_number }}</th>
+              <th scope="row" class="sticky left-0 z-10 border-b border-border bg-card px-2 py-1 text-left font-medium"><RoomLink :room-id="room.room_id" :number="room.room_number" /></th>
               <td v-for="d in dates" :key="d" :class="cn('h-8 border-b border-l border-border p-0 text-center', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')">
                 <template v-for="c in [cellAt(room.room_id, d)]" :key="d">
                   <RouterLink

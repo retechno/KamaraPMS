@@ -2,10 +2,12 @@ package frontdesk
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/availability"
@@ -450,4 +452,36 @@ func (s *Service) stayDetail(ctx context.Context, p auth.Principal, propertyID, 
 		return StayDetail{}, err
 	}
 	return out, nil
+}
+
+// RoomArrival is the next guest booked into a room: who, when, and the reservation.
+type RoomArrival struct {
+	ReservationID      int64      `json:"reservation_id"`
+	ConfirmationNumber string     `json:"confirmation_number"`
+	GuestName          string     `json:"guest_name,omitempty"`
+	RoomTypeCode       string     `json:"room_type_code"`
+	ArrivalDate        civil.Date `json:"arrival_date"`
+	DepartureDate      civil.Date `json:"departure_date"`
+	Nights             int        `json:"nights"`
+	AdultCount         int        `json:"adult_count"`
+	ChildCount         int        `json:"child_count"`
+}
+
+// NextArrivalOfRoom returns the next guest booked into a room whose stay has not ended on the date (reservation.read), or nil when there is none.
+func (s *Service) NextArrivalOfRoom(ctx context.Context, propertyID, roomID int64, onDate civil.Date) (*RoomArrival, error) {
+	p, err := s.actor(ctx, propertyID, auth.PermReservationRead)
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.q(ctx).NextArrivalOfRoom(ctx, frontdeskdb.NextArrivalOfRoomParams{TenantID: p.TenantID, PropertyID: propertyID, RoomID: &roomID, OnDate: onDate})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &RoomArrival{
+		ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, GuestName: guestNameOpt(r.GuestFirstName, r.GuestLastName), RoomTypeCode: r.RoomTypeCode,
+		ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate), AdultCount: int(r.AdultCount), ChildCount: int(r.ChildCount),
+	}, nil
 }

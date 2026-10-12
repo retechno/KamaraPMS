@@ -7,6 +7,7 @@ import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, CheckOutResult, InHouseRow, StayDetail } from '@/api/types'
 import KpiCard from '@/components/app/KpiCard.vue'
 import NightsChart, { type NightBar } from '@/components/app/NightsChart.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
@@ -246,7 +247,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
           <li v-for="a in arrivalRows" :key="a.reservation_room_id" :class="ROW" :data-testid="`arrival-${a.reservation_room_id}`">
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{{ a.guest_name || a.confirmation_number }}</div>
-              <div class="text-xs text-muted-foreground">{{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
+              <div class="text-xs text-muted-foreground"><RoomLink v-if="a.room_number" :room-id="a.room_id" :number="a.room_number" /><template v-else>{{ t('frontDesk.arrivals.noRoom') }}</template> · {{ a.room_type_code }}</div>
             </div>
             <div :class="ACTIONS" :data-testid="`arrival-actions-${a.reservation_room_id}`">
             <template v-for="chip in [arrivalChip(a)]" :key="chip.kind">
@@ -275,7 +276,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
           <li v-for="d in departureRows" :key="d.id" :class="ROW" :data-testid="`departure-${d.id}`">
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{{ d.guest.name }}</div>
-              <div class="text-xs text-muted-foreground">{{ d.room.number }} · {{ d.room.room_type_code }}</div>
+              <div class="text-xs text-muted-foreground"><RoomLink :room-id="d.room.id" :number="d.room.number" /> · {{ d.room.room_type_code }}</div>
             </div>
             <div :class="ACTIONS" :data-testid="`departure-actions-${d.id}`">
             <div :class="['text-right text-sm tabular-nums', owes(d) && 'font-medium text-warning-text']" :data-testid="`departure-balance-${d.id}`" :data-owes="owes(d)">

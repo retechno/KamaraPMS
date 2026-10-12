@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RoomLink from '@/components/app/RoomLink.vue'
 import { computed } from 'vue'
 import type { Arrival } from '@/api/types'
 import ReadinessBadge from '@/components/ReadinessBadge.vue'
@@ -32,7 +33,7 @@ const actions = computed(() => (props.row ? arrivalActions(props.row, (p) => aut
           <dd class="m-0 mt-1">
             <div>{{ $date(row.arrival_date) }} → {{ $date(row.departure_date) }}</div>
             <div class="text-muted-foreground">{{ t('frontDesk.inHouse.party', { a: row.adult_count, c: row.child_count }) }}</div>
-            <div class="text-muted-foreground">{{ t('frontDesk.page.room') }} {{ row.room_number || t('frontDesk.arrivals.noRoom') }} · {{ row.room_type_name || row.room_type_code }}</div>
+            <div class="text-muted-foreground">{{ t('frontDesk.page.room') }} <RoomLink v-if="row.room_number" :room-id="row.room_id" :number="row.room_number" /><template v-else>{{ t('frontDesk.arrivals.noRoom') }}</template> · {{ row.room_type_name || row.room_type_code }}</div>
           </dd>
         </div>
         <div>

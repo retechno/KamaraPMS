@@ -10,6 +10,7 @@ import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RoomLink from '@/components/app/RoomLink.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import AssignRoomsSheet from '@/components/AssignRoomsSheet.vue'
 import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
@@ -340,7 +341,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <template v-if="row.rooms.length">
           <div v-if="progress(row)" class="font-medium text-warning-text" :data-testid="`rooms-progress-${row.confirmation_number}`">{{ t('reservations.roomsAssigned', { done: progress(row)!.done, total: progress(row)!.total }) }}</div>
           <div v-else :data-testid="`room-${row.confirmation_number}`">
-            {{ row.rooms[0]?.room_number || t('reservations.noRoom') }}<span v-if="row.rooms.length > 1" class="text-muted-foreground"> {{ t('reservations.moreRooms', { n: row.rooms.length - 1 }) }}</span>
+            <RoomLink v-if="row.rooms[0]?.room_number" :room-id="row.rooms[0].room_id" :number="row.rooms[0].room_number" /><template v-else>{{ t('reservations.noRoom') }}</template><span v-if="row.rooms.length > 1" class="text-muted-foreground"> {{ t('reservations.moreRooms', { n: row.rooms.length - 1 }) }}</span>
           </div>
           <div class="text-xs text-muted-foreground">{{ [...new Set(row.rooms.map((l) => l.room_type_code))].join(' · ') }}</div>
           <div v-if="singleUnassigned(row)" class="mt-1" @click.stop>

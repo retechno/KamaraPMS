@@ -98,6 +98,35 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) e
 	return nil
 }
 
+// WithinReadTx runs fn in a READ ONLY, REPEATABLE READ transaction: every read in fn sees the same snapshot, and nothing can be written or locked.
+// It is for a read that combines several modules (a summary page), so the parts agree with each other. If ctx already carries a transaction, fn joins it
+// and keeps the isolation that transaction has.
+func (m *TxManager) WithinReadTx(ctx context.Context, fn func(ctx context.Context) error) (err error) {
+	if stateFrom(ctx) != nil {
+		return fn(ctx)
+	}
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return MapError(fmt.Errorf("db: begin read: %w", err))
+	}
+	rollback := func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }
+	defer func() {
+		if p := recover(); p != nil {
+			rollback()
+			panic(p)
+		}
+	}()
+	if err := fn(context.WithValue(ctx, txKey{}, &txState{tx: tx})); err != nil {
+		rollback()
+		return MapError(err)
+	}
+	// A read-only transaction has nothing to commit; the commit just ends it.
+	if err := tx.Commit(ctx); err != nil {
+		return MapError(fmt.Errorf("db: end read: %w", err))
+	}
+	return nil
+}
+
 // DB returns the ambient transaction if there is one, otherwise the pool.
 // Use it for reads that may run inside or outside a use-case transaction.
 func (m *TxManager) DB(ctx context.Context) DBTX {

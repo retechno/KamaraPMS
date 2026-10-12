@@ -192,6 +192,42 @@ func (s *Service) StayFolios(ctx context.Context, tenantID, propertyID, stayID i
 	return out, nil
 }
 
+// StayFolioTotal is a folio of a stay with what was charged to it, what was paid or credited, and the balance (charged minus paid): the ledger totals of the folio, the same
+// numbers its own page shows.
+type StayFolioTotal struct {
+	StayFolio
+	Debit  string `json:"debit"`
+	Credit string `json:"credit"`
+}
+
+// StayFolioTotals lists the folios of a stay with their totals (folio.read): the guest folio first, then those billed to a company. A stay without a folio gives an empty list.
+func (s *Service) StayFolioTotals(ctx context.Context, propertyID, stayID int64) ([]StayFolioTotal, error) {
+	p, err := s.actor(ctx, propertyID, auth.PermFolioRead)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q(ctx).ListStayFolios(ctx, foliosdb.ListStayFoliosParams{TenantID: p.TenantID, PropertyID: propertyID, StayID: &stayID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StayFolioTotal, 0, len(rows))
+	for _, f := range rows {
+		balance, totals, err := s.balanceOf(ctx, propertyID, f.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, StayFolioTotal{
+			StayFolio: StayFolio{ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, Status: f.Status, Balance: fixed(balance, decimals)},
+			Debit:     fixed(totals.Debit, decimals), Credit: fixed(totals.Credit, decimals),
+		})
+	}
+	return out, nil
+}
+
 // ClosedFolio is a folio closed by a check-out.
 type ClosedFolio struct {
 	ID          int64  `json:"id"`

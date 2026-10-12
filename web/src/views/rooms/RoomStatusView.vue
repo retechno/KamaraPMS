@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import RoomPanel from '@/components/RoomPanel.vue'
 import { BellOff, Check, ChevronsUp, RefreshCw, Search, Sparkles, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { HousekeepingBoardRoom, HousekeepingBulkResult, HousekeepingStatus } from '@/api/types'
@@ -14,13 +14,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { confirm } from '@/composables/useConfirm'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { formatBusinessDate } from '@/utils/dates'
 import { statusText } from '@/utils/status'
 
 const auth = useAuthStore()
@@ -270,8 +268,6 @@ const sheetOpen = computed({
   },
 })
 
-const updatedAt = (iso: string): string => new Date(iso).toLocaleString()
-
 watch(() => property.currentId, () => {
   rooms.value = []
   loaded.value = false
@@ -445,29 +441,5 @@ watch(() => property.currentId, () => {
     <Button variant="ghost" class="min-h-11 text-background/80 hover:bg-background/10 hover:text-background" :disabled="bulkBusy" data-testid="bulk-cancel" @click="picked = []">{{ t('roomStatus.cancelSelection') }}</Button>
   </div>
 
-  <Sheet v-model:open="sheetOpen">
-    <SheetContent v-if="selected" class="p-6" data-testid="room-sheet">
-      <SheetTitle class="text-xl">{{ t('roomStatus.details', { number: selected.room_number }) }}</SheetTitle>
-      <SheetDescription class="mt-1">{{ selected.room_type_code }} · {{ selected.room_type_name }}</SheetDescription>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <StatusBadge domain="occupancy" :status="selected.occupancy" />
-        <StatusBadge domain="housekeeping" :status="selected.status" />
-        <StatusBadge v-if="selected.block" domain="block" :status="selected.block.type" :label="t(`roomStatus.${selected.block.type}` as never)" />
-      </div>
-      <dl class="m-0 mt-4 divide-y divide-border text-sm">
-        <div v-if="selected.floor" class="flex justify-between gap-3 py-2"><dt class="font-medium">{{ t('roomStatus.floorLabel') }}</dt><dd class="m-0">{{ selected.floor }}</dd></div>
-        <div v-if="selected.building" class="flex justify-between gap-3 py-2"><dt class="font-medium">{{ t('roomStatus.building') }}</dt><dd class="m-0">{{ selected.building }}</dd></div>
-        <div class="flex justify-between gap-3 py-2"><dt class="font-medium">{{ t('roomStatus.updated') }}</dt><dd class="m-0">{{ updatedAt(selected.status_updated_at) }}</dd></div>
-        <div v-if="selected.allowed_next.length" class="flex items-center justify-between gap-3 py-2">
-          <dt class="font-medium">{{ t('roomStatus.canBe') }}</dt>
-          <dd class="m-0 flex flex-wrap justify-end gap-1"><StatusBadge v-for="s in selected.allowed_next" :key="s" domain="housekeeping" :status="s" /></dd>
-        </div>
-        <div v-if="selected.block" class="py-2" data-testid="sheet-block">{{ t('roomStatus.blockedUntil', { date: formatBusinessDate(selected.block.end_date) }) }}</div>
-        <div v-if="selected.flag_note" class="py-2"><dt class="font-medium">{{ t('roomStatus.note') }}</dt><dd class="m-0 mt-1 text-muted-foreground">{{ selected.flag_note }}</dd></div>
-      </dl>
-      <Button as-child variant="outline" class="mt-5">
-        <RouterLink to="/housekeeping" data-testid="sheet-housekeeping">{{ t('roomStatus.openHousekeeping') }}</RouterLink>
-      </Button>
-    </SheetContent>
-  </Sheet>
+  <RoomPanel v-if="selected" v-model:open="sheetOpen" :room-id="selected.room_id" :number="selected.room_number" :seed="selected" @changed="load" @close="selected = null" />
 </template>

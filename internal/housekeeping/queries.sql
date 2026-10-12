@@ -86,6 +86,7 @@ LEFT JOIN room_blocks b ON b.property_id = r.property_id AND b.room_id = r.id AN
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.is_active
   AND (sqlc.narg(status)::text IS NULL OR h.status = sqlc.narg(status)::text)
   AND (sqlc.narg(floor)::text IS NULL OR r.floor = sqlc.narg(floor)::text)
+  AND (sqlc.narg(room_id)::bigint IS NULL OR r.id = sqlc.narg(room_id)::bigint)
 ORDER BY r.floor NULLS LAST, r.room_number
 LIMIT @row_limit;
 
