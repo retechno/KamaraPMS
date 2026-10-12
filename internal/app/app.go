@@ -44,6 +44,7 @@ import (
 	"kamarapms/internal/roompanel"
 	"kamarapms/internal/rooms"
 	"kamarapms/internal/shifts"
+	"kamarapms/internal/subscription"
 	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/taxinvoice"
 	"kamarapms/internal/tenancy"
@@ -86,6 +87,10 @@ func New(d Deps) *App {
 	iamSvc := iam.NewService(d.TxManager, d.Clock, auditWriter, d.Tokens)
 	iamHTTP := iam.NewHandler(iamSvc, d.Tokens.CookieSecure)
 	tenancySvc := tenancy.NewService(d.TxManager, d.Clock, auditWriter, authz)
+	subscriptionSvc := subscription.NewService(d.TxManager, d.Clock, auditWriter)
+	tenancySvc.OnTenantCreated(subscriptionSvc.StartTenant) // a new tenant starts on the default plan
+	tenancySvc.SetQuotaGate(subscriptionSvc)                // the plan limits active properties,
+	iamSvc.SetQuotaGate(subscriptionSvc)                    // active users,
 	hkSvc := housekeeping.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	billingSvc := billingconfig.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	tenancySvc.OnPropertyCreated(billingSvc.SeedProperty) // standard charge codes for every new property
@@ -100,6 +105,7 @@ func New(d Deps) *App {
 	guestsSvc := guests.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
 	roomsSvc := rooms.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, hkSvc, availSvc)
 	tenancySvc.OnPropertyCreated(roomsSvc.SeedProperty) // the standard bed types of every new property
+	roomsSvc.SetQuotaGate(subscriptionSvc)              // and active rooms
 
 	foliosSvc := folios.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, billingSvc, iamSvc)
 	reservationsSvc := reservations.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, availSvc, ratesSvc, billingSvc, guestsSvc)
@@ -169,6 +175,7 @@ func New(d Deps) *App {
 	auditReader := auditlog.NewReader(d.TxManager, authz)
 	auditlog.NewHandler(auditReader).Register(api)
 	roompanel.NewHandler(roompanel.NewService(d.TxManager, tenancySvc, hkSvc, frontdeskSvc, reservationsSvc, foliosSvc, auditReader)).Register(api)
+	subscription.NewHandler(subscriptionSvc).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))
@@ -177,7 +184,8 @@ func New(d Deps) *App {
 	mux.Handle("GET /healthz", health.Live())
 	mux.Handle("GET /readyz", health.Ready(d.DB, d.ReadyChecks...))
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
-	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(api)))
+	// The subscription gate runs after authentication: the module of the route and the read-only state (docs/architecture/26-subscriptions.md).
+	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(subscriptionSvc.Gate(api))))
 
 	return &App{notifier: notifierSvc, Handler: httpx.Chain(mux,
 		httpx.RequestID(d.Logger, d.TrustedProxies...),

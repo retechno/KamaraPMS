@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/platform/entitlement"
 	"kamarapms/internal/rooms/roomsdb"
 	"kamarapms/internal/tenancy"
 )
@@ -26,7 +27,11 @@ type Service struct {
 	days  *tenancy.Service
 	hk    *housekeeping.Service
 	avail *availability.Service
+	quota entitlement.Gate
 }
+
+// SetQuotaGate sets the plan's limit on active rooms (docs/architecture/26-subscriptions.md §5); none means unlimited.
+func (s *Service) SetQuotaGate(g entitlement.Gate) { s.quota = g }
 
 // NewService wires the rooms service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, hk *housekeeping.Service, avail *availability.Service) *Service {
@@ -297,6 +302,11 @@ func (s *Service) CreateRoom(ctx context.Context, propertyID int64, in CreateRoo
 
 	var out Room
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		if in.IsActive { // the quota lock comes first (docs/architecture/26-subscriptions.md §5)
+			if err := entitlement.OrUnlimited(s.quota).Require(ctx, p.TenantID, entitlement.Rooms, 1); err != nil {
+				return err
+			}
+		}
 		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
 		if err != nil {
 			return err
@@ -369,6 +379,12 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 
 	var out Room
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+		activating := patch.IsActive != nil && *patch.IsActive
+		if activating { // the quota lock comes first; the count is checked once the room is read
+			if err := entitlement.OrUnlimited(s.quota).Hold(ctx, p.TenantID); err != nil {
+				return err
+			}
+		}
 		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
 		if err != nil {
 			return err
@@ -415,6 +431,11 @@ func (s *Service) UpdateRoom(ctx context.Context, propertyID, id int64, patch Ro
 		in.Normalize()
 		if fields := in.Validate(); len(fields) > 0 {
 			return apperr.Invalid("the room is invalid", fields...)
+		}
+		if activating && !before.IsActive {
+			if err := entitlement.OrUnlimited(s.quota).Check(ctx, p.TenantID, entitlement.Rooms, 1); err != nil {
+				return err
+			}
 		}
 		if before.BedTypeID != *in.BedTypeID { // a bed type that is newly chosen must be active
 			if err := s.requireActiveBedType(ctx, p.TenantID, propertyID, *in.BedTypeID); err != nil {

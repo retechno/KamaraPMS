@@ -330,6 +330,15 @@ var constraintErrors = map[string]mapped{
 	"folio_items_business_day_fk":                  {apperr.KindConflict, "BUSINESS_DAY_NOT_FOUND", "the posting business date does not exist"},
 	"payments_business_day_fk":                     {apperr.KindConflict, "BUSINESS_DAY_NOT_FOUND", "the posting business date does not exist"},
 	"stay_charge_postings_bd_fk":                   {apperr.KindConflict, "BUSINESS_DAY_NOT_FOUND", "the posting business date does not exist"},
+
+	// Subscriptions (docs/architecture/26-subscriptions.md)
+	"subscription_plans_code_uk":       {apperr.KindConflict, "CODE_TAKEN", "a plan with this code already exists"},
+	"subscription_plans_default_uk":    {apperr.KindConflict, "DEFAULT_PLAN_TAKEN", "another plan is already the default"},
+	"subscription_plans_modules_ck":    {apperr.KindInvalid, "INVALID_VALUE", "a plan lists an unknown module"},
+	"tenant_subscriptions_tenant_uk":   {apperr.KindConflict, "SUBSCRIPTION_EXISTS", "the tenant already has a subscription"},
+	"tenant_subscriptions_period_ck":   {apperr.KindInvalid, "INVALID_VALUE", "the paid period cannot end before the subscription starts"},
+	"subscription_invoices_overlap_ex": {apperr.KindConflict, "INVOICE_PERIOD_OVERLAP", "an open invoice already covers part of this period: pay or void it first"},
+	"subscription_invoice_final":       {apperr.KindConflict, "INVOICE_FINAL", "a paid or void subscription invoice cannot change"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error
