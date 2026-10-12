@@ -105,10 +105,11 @@ type Staff struct {
 	Email    string `json:"email"`
 }
 
-// GenerateResult says how many tasks a run added.
+// GenerateResult says how many tasks a run added and how many it corrected to the kind the room needs now.
 type GenerateResult struct {
 	Date    civil.Date `json:"date"`
 	Created int        `json:"created"`
+	Retyped int        `json:"retyped"`
 }
 
 // TaskInput adds a task by hand.
@@ -256,9 +257,17 @@ func (s *Service) Tasks(ctx context.Context, propertyID int64, f TaskFilter) (Ta
 	return out, nil
 }
 
-// GenerateTasks adds the cleaning list of the current business date (housekeeping.assign): occupied rooms
-// (CHECKOUT or STAYOVER), rooms a guest arrives into that are not ready, and other vacant rooms that are not clean.
-// Running it again adds only what is new, so it can be run through the day.
+// GenerateTasks makes the cleaning list of the current business date (housekeeping.assign): occupied rooms (CHECKOUT or
+// STAYOVER), rooms a guest arrives into that are not ready, and other vacant rooms that are not clean. A room has at most one
+// generated task a day, whatever its kind, and the same rule holds for every room:
+//   - no generated task yet: one is added;
+//   - a PENDING one of another kind (a stay was extended, a departure moved up): its kind is corrected, it is not doubled, and
+//     the correction is audited with its reason;
+//   - one that is started, done or skipped: nothing is changed or added (a skipped task is final for the day; a supervisor adds
+//     a manual task to go back to the room).
+//
+// Running it again changes only what is new, so it can be run through the day, also by two people at once (the unique index
+// hk_tasks_auto_room_day_uk lets one insert win; a task being corrected is locked).
 func (s *Service) GenerateTasks(ctx context.Context, propertyID int64) (GenerateResult, error) {
 	p, err := s.assigner(ctx, propertyID)
 	if err != nil {
@@ -270,14 +279,55 @@ func (s *Service) GenerateTasks(ctx context.Context, propertyID int64) (Generate
 		if err != nil {
 			return err
 		}
-		n, err := s.q(ctx).GenerateHousekeepingTasks(ctx, housekeepingdb.GenerateHousekeepingTasksParams{
-			TenantID: p.TenantID, PropertyID: propertyID, TaskDate: day.BusinessDate, ActorID: p.ActorID(),
-		})
+		q := s.q(ctx)
+		wanted, err := q.ListTaskCandidates(ctx, housekeepingdb.ListTaskCandidatesParams{TenantID: p.TenantID, PropertyID: propertyID, TaskDate: day.BusinessDate})
 		if err != nil {
 			return err
 		}
-		out = GenerateResult{Date: day.BusinessDate, Created: int(n)}
-		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_generated", 0, "", nil, map[string]any{"created": n}))
+		have, err := q.ListAutoTasksOfDayForUpdate(ctx, housekeepingdb.ListAutoTasksOfDayForUpdateParams{TenantID: p.TenantID, PropertyID: propertyID, TaskDate: day.BusinessDate})
+		if err != nil {
+			return err
+		}
+		byRoom := map[int64][]housekeepingdb.ListAutoTasksOfDayForUpdateRow{}
+		for _, t := range have {
+			byRoom[t.RoomID] = append(byRoom[t.RoomID], t)
+		}
+		seen := map[int64]bool{}
+		for _, c := range wanted {
+			if seen[c.RoomID] {
+				continue // a room with two open stay lines gets one task
+			}
+			seen[c.RoomID] = true
+			tasks := byRoom[c.RoomID]
+			if len(tasks) == 0 {
+				n, err := q.InsertAutoTask(ctx, housekeepingdb.InsertAutoTaskParams{TenantID: p.TenantID, PropertyID: propertyID, RoomID: c.RoomID, TaskDate: day.BusinessDate, TaskType: c.TaskType, Priority: c.Priority, ActorID: p.ActorID()})
+				if err != nil {
+					return err
+				}
+				out.Created += int(n)
+				continue
+			}
+			// The one that can be corrected is a lone PENDING task: any other state (or a task of the right kind) is left as it is.
+			if len(tasks) != 1 || tasks[0].Status != TaskPending || tasks[0].TaskType == c.TaskType {
+				continue
+			}
+			old := tasks[0]
+			n, err := q.RetypeAutoTask(ctx, housekeepingdb.RetypeAutoTaskParams{TenantID: p.TenantID, PropertyID: propertyID, ID: old.ID, TaskType: c.TaskType})
+			if err != nil {
+				return err
+			}
+			if n == 0 {
+				continue // another run corrected it first
+			}
+			out.Retyped++
+			reason := "the task list was generated again: the room now needs " + c.TaskType + " instead of " + old.TaskType
+			if err := s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.task_retyped", old.ID, auditlabel.TaskRoom(ctx, propertyID, old.ID),
+				map[string]any{"task_type": old.TaskType}, map[string]any{"task_type": c.TaskType, "reason": reason})); err != nil {
+				return err
+			}
+		}
+		out.Date = day.BusinessDate
+		return s.audit.Write(ctx, taskAudit(p, propertyID, day.BusinessDate, "housekeeping.tasks_generated", 0, "", nil, map[string]any{"created": out.Created, "retyped": out.Retyped}))
 	})
 	return out, err
 }

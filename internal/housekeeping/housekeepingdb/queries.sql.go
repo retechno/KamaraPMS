@@ -131,65 +131,6 @@ func (q *Queries) CreateRoomHousekeeping(ctx context.Context, arg CreateRoomHous
 	return err
 }
 
-const generateHousekeepingTasks = `-- name: GenerateHousekeepingTasks :execrows
-INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, created_by)
-SELECT $1, $2, c.room_id, $3::date, c.task_type,
-       CASE WHEN COALESCE(f.priority, 'NORMAL') = 'HIGH' OR EXISTS (
-                SELECT 1 FROM reservation_rooms a
-                WHERE a.property_id = $2 AND a.room_id = c.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $3::date)
-            THEN 'HIGH' ELSE 'NORMAL' END,
-       'AUTO', $4
-FROM (
-    SELECT sr.room_id, CASE WHEN s.departure_date <= $3::date THEN 'CHECKOUT' ELSE 'STAYOVER' END AS task_type
-    FROM stay_rooms sr
-    JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
-    WHERE sr.property_id = $2 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
-    UNION ALL
-    SELECT h.room_id,
-           CASE WHEN EXISTS (
-                SELECT 1 FROM reservation_rooms a
-                WHERE a.property_id = $2 AND a.room_id = h.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $3::date)
-                THEN 'ARRIVAL' ELSE 'DIRTY' END
-    FROM room_housekeeping h
-    WHERE h.property_id = $2 AND h.status IN ('DIRTY', 'CLEANING')
-      AND NOT EXISTS (SELECT 1 FROM stay_rooms o JOIN stays os ON os.property_id = o.property_id AND os.id = o.stay_id
-                      WHERE o.property_id = $2 AND o.room_id = h.room_id AND o.check_out_at IS NULL AND os.status = 'OPEN')
-      AND NOT EXISTS (SELECT 1 FROM housekeeping_tasks t
-                      WHERE t.property_id = $2 AND t.room_id = h.room_id AND t.task_date = $3::date AND t.status <> 'SKIPPED')
-) c
-JOIN rooms ro ON ro.property_id = $2 AND ro.id = c.room_id AND ro.is_active
-LEFT JOIN room_hk_flags f ON f.property_id = $2 AND f.room_id = c.room_id
-WHERE ro.tenant_id = $1
-  AND NOT EXISTS (SELECT 1 FROM room_blocks b
-                  WHERE b.property_id = $2 AND b.room_id = c.room_id AND b.status = 'ACTIVE'
-                    AND b.start_date <= $3::date AND $3::date < b.end_date)
-ON CONFLICT (property_id, room_id, task_date, task_type) WHERE source = 'AUTO' DO NOTHING
-`
-
-type GenerateHousekeepingTasksParams struct {
-	TenantID   int64
-	PropertyID int64
-	TaskDate   civil.Date
-	ActorID    *int64
-}
-
-// The generated list for a business date: occupied rooms (CHECKOUT when the guest leaves today or is overdue,
-// STAYOVER otherwise), rooms a guest arrives into that are not ready, and other vacant rooms that are not clean. A room
-// that already has a task that day gets no second kind, and a room under a block gets none. Running it again only adds
-// what is new (the unique index on AUTO tasks is the backstop).
-func (q *Queries) GenerateHousekeepingTasks(ctx context.Context, arg GenerateHousekeepingTasksParams) (int64, error) {
-	result, err := q.db.Exec(ctx, generateHousekeepingTasks,
-		arg.TenantID,
-		arg.PropertyID,
-		arg.TaskDate,
-		arg.ActorID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getHousekeepingTask = `-- name: GetHousekeepingTask :one
 SELECT id, tenant_id, property_id, room_id, task_date, task_type, status, priority, source, assigned_to, assigned_at, notes, started_at, completed_at, completed_by, created_at, created_by, updated_at FROM housekeeping_tasks WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -280,6 +221,39 @@ func (q *Queries) GetRoomHousekeepingForUpdate(ctx context.Context, arg GetRoomH
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const insertAutoTask = `-- name: InsertAutoTask :execrows
+INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, 'AUTO', $7)
+ON CONFLICT (property_id, room_id, task_date) WHERE source = 'AUTO' AND status IN ('PENDING', 'IN_PROGRESS') DO NOTHING
+`
+
+type InsertAutoTaskParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoomID     int64
+	TaskDate   civil.Date
+	TaskType   string
+	Priority   string
+	ActorID    *int64
+}
+
+// At most one ACTIVE AUTO task per room and day (the unique index hk_tasks_auto_room_day_uk is the backstop when two runs meet).
+func (q *Queries) InsertAutoTask(ctx context.Context, arg InsertAutoTaskParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertAutoTask,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoomID,
+		arg.TaskDate,
+		arg.TaskType,
+		arg.Priority,
+		arg.ActorID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertHousekeepingLog = `-- name: InsertHousekeepingLog :one
@@ -390,6 +364,54 @@ func (q *Queries) InsertManualTask(ctx context.Context, arg InsertManualTaskPara
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAutoTasksOfDayForUpdate = `-- name: ListAutoTasksOfDayForUpdate :many
+SELECT id, room_id, task_type, status
+FROM housekeeping_tasks
+WHERE tenant_id = $1 AND property_id = $2 AND task_date = $3 AND source = 'AUTO'
+ORDER BY id
+FOR UPDATE
+`
+
+type ListAutoTasksOfDayForUpdateParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaskDate   civil.Date
+}
+
+type ListAutoTasksOfDayForUpdateRow struct {
+	ID       int64
+	RoomID   int64
+	TaskType string
+	Status   string
+}
+
+// The generated (AUTO) tasks of a business date, every status, locked: a task that is finished or skipped is the end of that
+// room's list for the day, a PENDING one may be corrected to the kind the room needs now.
+func (q *Queries) ListAutoTasksOfDayForUpdate(ctx context.Context, arg ListAutoTasksOfDayForUpdateParams) ([]ListAutoTasksOfDayForUpdateRow, error) {
+	rows, err := q.db.Query(ctx, listAutoTasksOfDayForUpdate, arg.TenantID, arg.PropertyID, arg.TaskDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAutoTasksOfDayForUpdateRow{}
+	for rows.Next() {
+		var i ListAutoTasksOfDayForUpdateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.TaskType,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listHousekeepingBoard = `-- name: ListHousekeepingBoard :many
@@ -762,6 +784,100 @@ func (q *Queries) ListRoomHousekeepingForUpdate(ctx context.Context, arg ListRoo
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTaskCandidates = `-- name: ListTaskCandidates :many
+SELECT c.room_id, c.task_type::text AS task_type,
+       (CASE WHEN COALESCE(f.priority, 'NORMAL') = 'HIGH' OR EXISTS (
+                SELECT 1 FROM reservation_rooms a
+                WHERE a.property_id = $1 AND a.room_id = c.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $2::date)
+            THEN 'HIGH' ELSE 'NORMAL' END)::text AS priority
+FROM (
+    SELECT sr.room_id, CASE WHEN s.departure_date <= $2::date THEN 'CHECKOUT' ELSE 'STAYOVER' END AS task_type
+    FROM stay_rooms sr
+    JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+    WHERE sr.property_id = $1 AND sr.check_out_at IS NULL AND s.status = 'OPEN'
+    UNION ALL
+    SELECT h.room_id,
+           CASE WHEN EXISTS (
+                SELECT 1 FROM reservation_rooms a
+                WHERE a.property_id = $1 AND a.room_id = h.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = $2::date)
+                THEN 'ARRIVAL' ELSE 'DIRTY' END
+    FROM room_housekeeping h
+    WHERE h.property_id = $1 AND h.status IN ('DIRTY', 'CLEANING')
+      AND NOT EXISTS (SELECT 1 FROM stay_rooms o JOIN stays os ON os.property_id = o.property_id AND os.id = o.stay_id
+                      WHERE o.property_id = $1 AND o.room_id = h.room_id AND o.check_out_at IS NULL AND os.status = 'OPEN')
+) c
+JOIN rooms ro ON ro.property_id = $1 AND ro.id = c.room_id AND ro.is_active
+LEFT JOIN room_hk_flags f ON f.property_id = $1 AND f.room_id = c.room_id
+WHERE ro.tenant_id = $3
+  AND NOT EXISTS (SELECT 1 FROM room_blocks b
+                  WHERE b.property_id = $1 AND b.room_id = c.room_id AND b.status = 'ACTIVE'
+                    AND b.start_date <= $2::date AND $2::date < b.end_date)
+ORDER BY c.room_id
+`
+
+type ListTaskCandidatesParams struct {
+	PropertyID int64
+	TaskDate   civil.Date
+	TenantID   int64
+}
+
+type ListTaskCandidatesRow struct {
+	RoomID   int64
+	TaskType string
+	Priority string
+}
+
+// What the cleaning list of a business date should hold, one row per room: occupied rooms (CHECKOUT when the guest leaves
+// today or is overdue, STAYOVER otherwise), rooms a guest arrives into that are not ready (ARRIVAL), and other vacant rooms
+// that are not clean (DIRTY). A room under a block is left out. Whether the room already has a task that day is decided by
+// the caller (GenerateTasks), the same way for every kind of room.
+func (q *Queries) ListTaskCandidates(ctx context.Context, arg ListTaskCandidatesParams) ([]ListTaskCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listTaskCandidates, arg.PropertyID, arg.TaskDate, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTaskCandidatesRow{}
+	for rows.Next() {
+		var i ListTaskCandidatesRow
+		if err := rows.Scan(&i.RoomID, &i.TaskType, &i.Priority); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const retypeAutoTask = `-- name: RetypeAutoTask :execrows
+UPDATE housekeeping_tasks SET task_type = $1
+WHERE tenant_id = $2 AND property_id = $3 AND id = $4
+  AND source = 'AUTO' AND status = 'PENDING' AND task_type <> $1
+`
+
+type RetypeAutoTaskParams struct {
+	TaskType   string
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// Corrects the kind of a task that has not been started. A second run that meets the same task finds it corrected: 0 rows.
+func (q *Queries) RetypeAutoTask(ctx context.Context, arg RetypeAutoTaskParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retypeAutoTask,
+		arg.TaskType,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const roomExists = `-- name: RoomExists :one

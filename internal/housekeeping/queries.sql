@@ -112,18 +112,16 @@ WHERE u.tenant_id = @tenant_id AND u.is_active
         WHERE up.user_id = u.id AND up.property_id = @property_id))
 ORDER BY u.full_name, u.id;
 
--- The generated list for a business date: occupied rooms (CHECKOUT when the guest leaves today or is overdue,
--- STAYOVER otherwise), rooms a guest arrives into that are not ready, and other vacant rooms that are not clean. A room
--- that already has a task that day gets no second kind, and a room under a block gets none. Running it again only adds
--- what is new (the unique index on AUTO tasks is the backstop).
--- name: GenerateHousekeepingTasks :execrows
-INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, created_by)
-SELECT @tenant_id, @property_id, c.room_id, @task_date::date, c.task_type,
-       CASE WHEN COALESCE(f.priority, 'NORMAL') = 'HIGH' OR EXISTS (
+-- What the cleaning list of a business date should hold, one row per room: occupied rooms (CHECKOUT when the guest leaves
+-- today or is overdue, STAYOVER otherwise), rooms a guest arrives into that are not ready (ARRIVAL), and other vacant rooms
+-- that are not clean (DIRTY). A room under a block is left out. Whether the room already has a task that day is decided by
+-- the caller (GenerateTasks), the same way for every kind of room.
+-- name: ListTaskCandidates :many
+SELECT c.room_id, c.task_type::text AS task_type,
+       (CASE WHEN COALESCE(f.priority, 'NORMAL') = 'HIGH' OR EXISTS (
                 SELECT 1 FROM reservation_rooms a
                 WHERE a.property_id = @property_id AND a.room_id = c.room_id AND a.status = 'CONFIRMED' AND a.arrival_date = @task_date::date)
-            THEN 'HIGH' ELSE 'NORMAL' END,
-       'AUTO', sqlc.narg(actor_id)
+            THEN 'HIGH' ELSE 'NORMAL' END)::text AS priority
 FROM (
     SELECT sr.room_id, CASE WHEN s.departure_date <= @task_date::date THEN 'CHECKOUT' ELSE 'STAYOVER' END AS task_type
     FROM stay_rooms sr
@@ -139,8 +137,6 @@ FROM (
     WHERE h.property_id = @property_id AND h.status IN ('DIRTY', 'CLEANING')
       AND NOT EXISTS (SELECT 1 FROM stay_rooms o JOIN stays os ON os.property_id = o.property_id AND os.id = o.stay_id
                       WHERE o.property_id = @property_id AND o.room_id = h.room_id AND o.check_out_at IS NULL AND os.status = 'OPEN')
-      AND NOT EXISTS (SELECT 1 FROM housekeeping_tasks t
-                      WHERE t.property_id = @property_id AND t.room_id = h.room_id AND t.task_date = @task_date::date AND t.status <> 'SKIPPED')
 ) c
 JOIN rooms ro ON ro.property_id = @property_id AND ro.id = c.room_id AND ro.is_active
 LEFT JOIN room_hk_flags f ON f.property_id = @property_id AND f.room_id = c.room_id
@@ -148,7 +144,28 @@ WHERE ro.tenant_id = @tenant_id
   AND NOT EXISTS (SELECT 1 FROM room_blocks b
                   WHERE b.property_id = @property_id AND b.room_id = c.room_id AND b.status = 'ACTIVE'
                     AND b.start_date <= @task_date::date AND @task_date::date < b.end_date)
-ON CONFLICT (property_id, room_id, task_date, task_type) WHERE source = 'AUTO' DO NOTHING;
+ORDER BY c.room_id;
+
+-- The generated (AUTO) tasks of a business date, every status, locked: a task that is finished or skipped is the end of that
+-- room's list for the day, a PENDING one may be corrected to the kind the room needs now.
+-- name: ListAutoTasksOfDayForUpdate :many
+SELECT id, room_id, task_type, status
+FROM housekeeping_tasks
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND task_date = @task_date AND source = 'AUTO'
+ORDER BY id
+FOR UPDATE;
+
+-- At most one ACTIVE AUTO task per room and day (the unique index hk_tasks_auto_room_day_uk is the backstop when two runs meet).
+-- name: InsertAutoTask :execrows
+INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, created_by)
+VALUES (@tenant_id, @property_id, @room_id, @task_date, @task_type, @priority, 'AUTO', sqlc.narg(actor_id))
+ON CONFLICT (property_id, room_id, task_date) WHERE source = 'AUTO' AND status IN ('PENDING', 'IN_PROGRESS') DO NOTHING;
+
+-- Corrects the kind of a task that has not been started. A second run that meets the same task finds it corrected: 0 rows.
+-- name: RetypeAutoTask :execrows
+UPDATE housekeeping_tasks SET task_type = @task_type
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+  AND source = 'AUTO' AND status = 'PENDING' AND task_type <> @task_type;
 
 -- name: InsertManualTask :one
 INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, priority, source, assigned_to, assigned_at, notes, created_by)

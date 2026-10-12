@@ -632,7 +632,7 @@ Permissions: `housekeeping.update` (flags, start, finish, skip), `housekeeping.a
 | `GET {P}/housekeeping?occupancy&flagged` | access | The board now carries `priority`, `dnd`, `make_up_requested`, `flag_note` |
 | `GET {P}/housekeeping/staff` | `housekeeping.assign` | Who can be assigned |
 | `GET {P}/housekeeping/tasks?date&status&assigned_to&unassigned&floor` | access | `{date, data, workload}`; high priority first |
-| `POST {P}/housekeeping/tasks/generate` | `housekeeping.assign` | Adds the day's list; `{date, created}`; idempotent |
+| `POST {P}/housekeeping/tasks/generate` | `housekeeping.assign` | Adds the day's list and corrects the kind of a PENDING task that no longer fits (`retyped`); `{date, created, retyped}`; idempotent |
 | `POST {P}/housekeeping/tasks` | `housekeeping.assign` | A manual task for the current business date |
 | `POST {P}/housekeeping/tasks/assign` | `housekeeping.assign` | `{task_ids, user_id\|null}`; 409 `TASK_NOT_ASSIGNABLE` (`context.task_ids`), field error `ASSIGNEE_INVALID` |
 | `POST {P}/housekeeping/tasks/{id}/start`, `/complete`, `/skip` | `housekeeping.update` | 409 `TASK_NOT_PENDING`, `TASK_ALREADY_CLOSED`; skip needs `{reason}` |

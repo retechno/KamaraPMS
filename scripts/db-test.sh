@@ -65,6 +65,11 @@ echo "==> schema tests"
 psql_run < "$ROOT/db/tests/schema_test.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 psql_run -c "SET client_min_messages = warning; DROP SCHEMA pms_test CASCADE" >/dev/null
 
+echo "==> migration 00069 on duplicate tasks"
+psql_run < "$ROOT/db/tests/migration_00069_pre.sql"
+section up "$(ls "$ROOT"/migrations/00069_*.sql)" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00069_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"
