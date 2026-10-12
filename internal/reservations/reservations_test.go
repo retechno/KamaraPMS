@@ -791,6 +791,20 @@ func TestOrphanedEnumerationHelpers(t *testing.T) {
 	}
 }
 
+// An upgraded line sits in a room of another type: the row says the type of the room, the booking the type that was booked (a drag onto a room of a third type is judged by it).
+func TestTapeChartNamesTheBookedTypeOfAnUpgradedLine(t *testing.T) {
+	f := setup(t)
+	a := f.book(t, f.std, "2026-10-02", "2026-10-04")
+	_, err := f.Res.AssignRoom(f.admin, f.propID, a.ID, a.Rooms[0].ID, a.Version, f.r101.ID, true) // a DLX room for a STD booking
+	must(t, err)
+	tape, err := f.Res.TapeChart(f.admin, f.propID, d("2026-10-01"), d("2026-10-08"))
+	must(t, err)
+	row := tape.Rooms[0]
+	if row.RoomNumber != "101" || row.RoomTypeID != f.dlx.ID || len(row.Bookings) != 1 || row.Bookings[0].RoomTypeID != f.std.ID {
+		t.Fatalf("upgrade: %+v", row)
+	}
+}
+
 func TestTapeChart(t *testing.T) {
 	f := setup(t)
 	a := f.book(t, f.dlx, "2026-10-02", "2026-10-05")
@@ -814,6 +828,13 @@ func TestTapeChart(t *testing.T) {
 	}
 	if len(tape.Rooms[2].Bookings) != 0 || len(tape.Unassigned) != 1 || tape.Unassigned[0].RoomTypeCode != "DLX" || len(tape.Unassigned[0].Bookings) != 1 {
 		t.Fatalf("unassigned: %+v", tape)
+	}
+	// the booking names the BOOKED type and, before check-in, no stay
+	if b := tape.Rooms[1].Bookings[0]; b.RoomTypeID != f.dlx.ID || b.StayID != nil || b.OpenSegment {
+		t.Fatalf("booked type, stay and segment: %+v", b)
+	}
+	if b := tape.Unassigned[0].Bookings[0]; b.RoomTypeID != f.dlx.ID || b.StayID != nil {
+		t.Fatalf("unassigned: %+v", b)
 	}
 	_, err = f.Res.TapeChart(f.admin, f.propID, d("2026-10-01"), d("2026-12-31"))
 	wantCode(t, err, "VALIDATION_FAILED")

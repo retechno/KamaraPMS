@@ -505,6 +505,11 @@ func TestTapeChartFollowsMovesAndDepartureChanges(t *testing.T) {
 		len(bars["102"]) != 1 || bars["102"][0].ArrivalDate != d("2026-10-01") || bars["102"][0].DepartureDate != d("2026-10-03") || bars["102"][0].Status != "CHECKED_IN" {
 		t.Fatalf("bars: %+v", bars)
 	}
+	// every bar of the stay names the stay and the booked type; only the segment that is in the room now is open (the one that can be moved or extended)
+	if bars["101"][0].StayID == nil || *bars["101"][0].StayID != st.Stay.ID || bars["101"][0].OpenSegment || bars["101"][0].RoomTypeID == 0 ||
+		bars["102"][0].StayID == nil || *bars["102"][0].StayID != st.Stay.ID || !bars["102"][0].OpenSegment || bars["102"][0].RoomTypeID != bars["101"][0].RoomTypeID {
+		t.Fatalf("stay, type and open segment: %+v", bars)
+	}
 }
 
 func TestRoomChargesCarryTheRevenueAccountCode(t *testing.T) {

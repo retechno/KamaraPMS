@@ -15,13 +15,18 @@ const MaxTapeDays = 62
 
 // TapeBooking is a booked room line on the chart.
 type TapeBooking struct {
-	ReservationID      int64      `json:"reservation_id"`
-	ConfirmationNumber string     `json:"confirmation_number"`
-	ReservationRoomID  int64      `json:"reservation_room_id"`
-	Status             string     `json:"status"`
-	GuestName          string     `json:"guest_name,omitempty"`
-	ArrivalDate        civil.Date `json:"arrival_date"`
-	DepartureDate      civil.Date `json:"departure_date"`
+	ReservationID      int64  `json:"reservation_id"`
+	ConfirmationNumber string `json:"confirmation_number"`
+	ReservationRoomID  int64  `json:"reservation_room_id"`
+	// RoomTypeID is the BOOKED room type of the line (the room the booking sits in may be of another type: an upgrade). StayID is the stay of a checked-in line, null before check-in.
+	RoomTypeID int64  `json:"room_type_id"`
+	StayID     *int64 `json:"stay_id"`
+	// OpenSegment is true for the segment of a stay that is in the room now (the only one that can be moved or extended); a closed segment is history. False for a line that is not checked in.
+	OpenSegment   bool       `json:"open_segment"`
+	Status        string     `json:"status"`
+	GuestName     string     `json:"guest_name,omitempty"`
+	ArrivalDate   civil.Date `json:"arrival_date"`
+	DepartureDate civil.Date `json:"departure_date"`
 }
 
 // TapeBlock is an active OOO/OOS block on the chart.
@@ -103,7 +108,7 @@ func (s *Service) TapeChart(ctx context.Context, propertyID int64, from, to civi
 		if fn := deref(l.GuestFirstName); fn != "" {
 			name = fn + " " + name
 		}
-		b := TapeBooking{ReservationID: l.ReservationID, ConfirmationNumber: l.ConfirmationNumber, ReservationRoomID: l.ID, Status: l.Status,
+		b := TapeBooking{ReservationID: l.ReservationID, ConfirmationNumber: l.ConfirmationNumber, ReservationRoomID: l.ID, RoomTypeID: l.RoomTypeID, Status: l.Status,
 			GuestName: name, ArrivalDate: l.ArrivalDate, DepartureDate: l.DepartureDate}
 		if l.RoomID != nil {
 			if row := byRoom[*l.RoomID]; row != nil {
@@ -128,7 +133,8 @@ func (s *Service) TapeChart(ctx context.Context, propertyID int64, from, to civi
 		if fn := deref(sg.GuestFirstName); fn != "" {
 			name = fn + " " + name
 		}
-		row.Bookings = append(row.Bookings, TapeBooking{ReservationID: sg.ReservationID, ConfirmationNumber: sg.ConfirmationNumber, ReservationRoomID: sg.ID,
+		stayID := sg.StayID
+		row.Bookings = append(row.Bookings, TapeBooking{ReservationID: sg.ReservationID, ConfirmationNumber: sg.ConfirmationNumber, ReservationRoomID: sg.ID, RoomTypeID: sg.RoomTypeID, StayID: &stayID, OpenSegment: sg.OpenSegment,
 			Status: "CHECKED_IN", GuestName: name, ArrivalDate: sg.StartBusinessDate, DepartureDate: sg.EndDate})
 	}
 	for i := range out.Rooms {

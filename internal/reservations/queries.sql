@@ -307,7 +307,8 @@ ORDER BY l.arrival_date, l.id;
 -- Checked-in lines are drawn from their open stay: one bar per room segment, the open one up to the stay's
 -- departure (at least one night), so room moves, extensions and shortened stays show as they are.
 -- name: ListTapeSegments :many
-SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date,
+SELECT l.id, l.reservation_id, res.confirmation_number, sr.room_id, sr.start_business_date, st.id AS stay_id, l.room_type_id,
+       (sr.end_business_date IS NULL)::boolean AS open_segment,
        COALESCE(sr.end_business_date, GREATEST(st.departure_date, sr.start_business_date + 1))::date AS end_date,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name
 FROM stays st

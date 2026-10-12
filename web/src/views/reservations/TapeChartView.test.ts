@@ -10,7 +10,7 @@ import TapeChartView from './TapeChartView.vue'
 let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
 
-const booking = { reservation_id: 9, confirmation_number: 'RES000009', reservation_room_id: 4, status: 'CONFIRMED', guest_name: 'Siti Nurhaliza', arrival_date: '2026-10-02', departure_date: '2026-10-04' }
+const booking = { reservation_id: 9, confirmation_number: 'RES000009', reservation_room_id: 4, room_type_id: 10, stay_id: null, open_segment: false, status: 'CONFIRMED', guest_name: 'Siti Nurhaliza', arrival_date: '2026-10-02', departure_date: '2026-10-04' }
 const chart = {
   from: '2026-10-01', to: '2026-10-15',
   rooms: [
@@ -41,15 +41,23 @@ describe('TapeChartView', () => {
     const w = mountView()
     await flushPromises()
     expect(GET.mock.calls[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 }, query: { from: '2026-10-01', to: '2026-10-15' } } })
-    // a booking covers its arrival night up to the night before departure
+    // one element per booking, placed from its arrival night to the night before departure: column 2 is the first night of the window (column 1 is the room), so 2 Oct starts at column 3 and spans 2
     expect(w.find('[data-testid=bar-101-2026-10-01]').exists()).toBe(false)
-    expect(w.get('[data-testid=bar-101-2026-10-02]').attributes('href')).toBe('/reservations/9')
-    expect(w.find('[data-testid=bar-101-2026-10-03]').exists()).toBe(true)
-    expect(w.find('[data-testid=bar-101-2026-10-04]').exists()).toBe(false)
+    const bar = w.get('[data-testid=bar-101-2026-10-02]')
+    expect(bar.element.tagName).toBe('BUTTON')
+    expect(bar.attributes('style')).toContain('grid-column: 3 / span 2')
+    expect(w.findAll('[data-room-id="1"] [data-booking]')).toHaveLength(1)
+    expect(w.find('[data-testid=bar-101-2026-10-03]').exists()).toBe(false)
+    expect(bar.text()).toContain('Siti Nurhaliza')
+    expect(bar.text()).toContain('2 nights')
+    expect(bar.classes()).toContain('text-[13px]') // no text under 13 px on the bar
     expect(w.get('[data-testid=block-102-2026-10-05]').text()).toBe('OOS')
+    expect(w.get('[data-testid=block-102-2026-10-05]').attributes('style')).toContain('grid-column: 6 / span 2')
     expect(w.find('[data-testid=block-102-2026-10-07]').exists()).toBe(false)
-    expect(w.get('[data-testid=count-DLX-2026-10-03]').text()).toBe('1')
-    expect(w.find('[data-testid=count-DLX-2026-10-04]').exists()).toBe(false)
+    // a booking with no room is a bar of its own under its type
+    expect(w.get('[data-testid=unassigned-DLX]').text()).toContain('1 booking(s)')
+    expect(w.get('[data-testid=bar-unassigned-5]').attributes('style')).toContain('grid-column: 4 / span 1')
+    expect(w.get('[data-testid=unassigned-row-5]').text()).toContain('RES000009')
   })
 
   it('moves the window by a week', async () => {
@@ -105,7 +113,7 @@ describe('TapeChartView', () => {
   it('names the weekday over each date and shades the weekend', async () => {
     const w = mountView()
     await flushPromises()
-    const heads = w.findAll('thead th').slice(1)
+    const heads = w.findAll('[data-day-head]')
     expect(heads[0]!.text()).toContain('Thu') // 1 Oct 2026
     expect(heads[0]!.text()).toContain('01/10')
     expect(heads[0]!.classes()).toContain('bg-primary/10') // the business date
@@ -120,7 +128,7 @@ describe('TapeChartView', () => {
     await flushPromises()
     expect(w.get('h1').text()).toBe('Bagan kamar')
     expect(w.get('[data-testid=unassigned-DLX]').text()).toContain('1 pemesanan')
-    expect(w.get('table').text()).toContain('Belum ditetapkan')
+    expect(w.get('[data-testid=tape]').text()).toContain('Belum ditetapkan')
     expect(w.get('select').findAll('option').map((o) => o.text())).toEqual(['14 hari', '28 hari'])
     setLocale('en')
   })
