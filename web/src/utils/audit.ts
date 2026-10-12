@@ -53,6 +53,7 @@ export const AUDIT_ACTIONS = [
   'housekeeping.changed',
   'housekeeping.tasks_assigned',
   'housekeeping.tasks_generated',
+  'housekeeping.task_retyped',
   'housekeeping.task_started',
   'housekeeping.task_completed',
   'housekeeping.task_skipped',
