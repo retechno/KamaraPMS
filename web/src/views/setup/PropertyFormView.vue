@@ -44,6 +44,7 @@ const form = reactive({
   require_room_inspection_for_checkin: false,
   night_audit_marks_occupied_dirty: true,
   refund_methods: ['CASH'] as string[],
+  checkin_incidental_deposit: '0',
   status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
   opening_business_date: '',
   // The language of the names the property starts with (chart of accounts, departments, charge codes): the language of the page, to begin with. Only when it is created.
@@ -102,6 +103,7 @@ onMounted(async () => {
         require_room_inspection_for_checkin: data.require_room_inspection_for_checkin,
         night_audit_marks_occupied_dirty: data.night_audit_marks_occupied_dirty,
         refund_methods: [...data.refund_methods],
+        checkin_incidental_deposit: data.checkin_incidental_deposit,
         status: data.status,
       })
     }
@@ -137,6 +139,7 @@ async function submit(): Promise<void> {
         require_room_inspection_for_checkin: form.require_room_inspection_for_checkin,
         night_audit_marks_occupied_dirty: form.night_audit_marks_occupied_dirty,
         refund_methods: form.refund_methods as CreatePropertyRequest['refund_methods'],
+        checkin_incidental_deposit: form.checkin_incidental_deposit.trim() || '0',
         opening_business_date: form.opening_business_date,
         data_language: form.data_language,
       }
@@ -166,7 +169,7 @@ function changedFields(): PatchPropertyRequest {
   const keys = [
     'name', 'address', 'city', 'country_code', 'phone', 'email', 'tax_id', 'document_footer', 'timezone', 'currency_code', 'currency_decimals', 'check_in_time',
     'check_out_time', 'night_audit_earliest_time', 'require_room_inspection_for_checkin',
-    'night_audit_marks_occupied_dirty', 'status',
+    'night_audit_marks_occupied_dirty', 'checkin_incidental_deposit', 'status',
   ] as const
   if (form.refund_methods.length && [...form.refund_methods].sort().join() !== [...original.refund_methods].sort().join()) patch.refund_methods = form.refund_methods
   for (const k of keys) {
@@ -263,6 +266,9 @@ function changedFields(): PatchPropertyRequest {
           </FormField>
           <FormField :label="t('propertyForm.checkOut')" :error="fieldError('check_out_time')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="form.check_out_time" type="time" name="check_out_time" :aria-invalid="invalid" /></template>
+          </FormField>
+          <FormField :label="t('propertyForm.incidental')" :hint="t('propertyForm.incidentalHint')" :error="fieldError('checkin_incidental_deposit')">
+            <template #default="{ id, invalid }"><Input :id="id" v-model="form.checkin_incidental_deposit" name="checkin_incidental_deposit" inputmode="decimal" autocomplete="off" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('propertyForm.auditEarliest')" :hint="t('propertyForm.auditEarliestHint')">
             <template #default="{ id }"><Input :id="id" v-model="form.night_audit_earliest_time" type="time" name="night_audit_earliest_time" /></template>

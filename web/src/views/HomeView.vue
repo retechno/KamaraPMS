@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, BedDouble, CalendarPlus, DoorClosed, DoorOpen, MoonStar, Percent, RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -28,7 +28,8 @@ import { formatBusinessDate, wallClock } from '@/utils/dates'
 import { formatBalance, formatDate, formatPercent } from '@/utils/format'
 import { arrivalChip, arrivalsBlockedBy, greetingFor, listWithMore, overCreditLimit, roomCounts, roomsOf } from '@/utils/today'
 import { zoneTime } from '@/utils/zoneTime'
-import CheckInPanel from '@/views/frontdesk/CheckInPanel.vue'
+import CheckInSheet from '@/components/CheckInSheet.vue'
+import { checkedInCount } from '@/composables/useCheckInSheet'
 import TodayCard from '@/views/home/TodayCard.vue'
 
 /**
@@ -74,12 +75,6 @@ async function assignFailed(failure: AssignFailure): Promise<void> {
   if (failure.reload) await today.reload() // the arrivals as they are now (a version, a room)
 }
 
-const checkInOpen = computed({
-  get: () => checkIn.value !== null,
-  set: (v: boolean) => {
-    if (!v) checkIn.value = null
-  },
-})
 const checkOutOpen = computed({
   get: () => !!checkOut.value?.detail,
   set: (v: boolean) => {
@@ -87,8 +82,9 @@ const checkOutOpen = computed({
   },
 })
 
+watch(checkedInCount, () => void today.reload()) // a check-in made from the room panel
+
 async function checkedIn(result: CheckInResult): Promise<void> {
-  checkIn.value = null
   toast.success(t('frontDesk.arrivals.checkedIn', { stay: result.stay.stay_number, room: result.stay_room.room_number }))
   await today.reload()
 }
@@ -352,15 +348,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
     </Card>
   </div>
 
-  <Sheet v-model:open="checkInOpen">
-    <SheetContent v-if="checkIn" class="p-6" data-testid="checkin-sheet">
-      <SheetTitle class="text-lg">{{ t('frontDesk.checkIn.title', { guest: checkIn.guest_name || checkIn.confirmation_number, type: checkIn.room_type_code }) }}</SheetTitle>
-      <SheetDescription class="mt-1">
-        {{ t('frontDesk.checkIn.subtitle', { confirmation: checkIn.confirmation_number, arrival: formatDate(checkIn.arrival_date), departure: formatDate(checkIn.departure_date) }) }}
-      </SheetDescription>
-      <CheckInPanel :key="checkIn.reservation_room_id" :arrival="checkIn" class="mt-4" @done="checkedIn" @cancel="checkIn = null" />
-    </SheetContent>
-  </Sheet>
+  <CheckInSheet :arrival="checkIn" :queue="arrivalsLeft" @close="checkIn = null" @done="checkedIn" />
 
   <Sheet v-model:open="checkOutOpen">
     <SheetContent v-if="checkOut?.detail" class="p-6" data-testid="checkout-sheet">

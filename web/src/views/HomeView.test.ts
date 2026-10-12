@@ -390,15 +390,18 @@ describe('HomeView, Today', () => {
       expect(bodyEl('[data-testid=checkin-panel]')?.textContent).toBe('Guest 2')
     })
 
-    it('reads the day again after a check-in, and closes the sheet', async () => {
+    it('reads the day again after a check-in, and keeps the sheet open for the end of the check-in', async () => {
       const w = await mountToday()
       await w.get('[data-testid=check-in-1]').trigger('click')
       await flushPromises()
       const before = callsTo(`${PATH}/arrivals`)
       ;(bodyEl('[data-testid=stub-done]') as HTMLElement).click()
       await flushPromises()
-      expect(bodyEl('[data-testid=checkin-sheet]')).toBeNull()
+      expect(bodyEl('[data-testid=checkin-sheet]')).not.toBeNull() // the sheet shows the last step; it closes when the desk closes it
       expect(callsTo(`${PATH}/arrivals`)).toBeGreaterThan(before)
+      ;(bodyEl('[data-testid=stub-cancel]') as HTMLElement).click()
+      await flushPromises()
+      expect(bodyEl('[data-testid=checkin-sheet]')).toBeNull()
     })
   })
 

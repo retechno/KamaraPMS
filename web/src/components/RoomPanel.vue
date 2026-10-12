@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { openCheckIn } from '@/composables/useCheckInSheet'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { labelOf } from '@/i18n/labels'
@@ -150,6 +151,34 @@ const actions = computed<Action[]>(() => {
   return out
 })
 
+// ---- check in the guest who comes next, in the check-in sheet (the same one as Arrivals and Today)
+const canCheckIn = computed(() => !!arrival.value && arrival.value.arrival_date === (property.clock?.business_date ?? '') && can('frontdesk.checkin') && can('reservation.read'))
+const starting = ref(false)
+async function startCheckIn(): Promise<void> {
+  const propertyId = pid.value
+  const next = arrival.value
+  if (propertyId === null || !next || starting.value) return
+  starting.value = true
+  error.value = null
+  try {
+    // the summary names the reservation, not the line: the arrival is read in full (version, rate, deposit) from the list the desk works from
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/arrivals', { params: { path: { propertyId }, query: { q: next.confirmation_number } } })
+    const mine = (data?.data ?? []).filter((a) => a.reservation_id === next.reservation_id && a.status === 'CONFIRMED')
+    const line = mine.find((a) => a.room_id === props.roomId) ?? mine[0]
+    if (!line) {
+      error.value = null
+      toast.error(t('roomPanel.checkInGone'))
+      return
+    }
+    leave()
+    openCheckIn(line)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  } finally {
+    starting.value = false
+  }
+}
+
 function leave(): void {
   open.value = false
   emit('close')
@@ -274,6 +303,7 @@ const updatedAt = (iso: string): string => formatDateTime(iso)
             <strong class="text-base">{{ arrival.guest_name || arrival.confirmation_number }}</strong>
             <span class="text-sm text-muted-foreground">{{ arrivalLine }} · {{ arrival.room_type_code }}</span>
             <RouterLink :to="`/reservations/${arrival.reservation_id}`" class="text-sm font-semibold" data-testid="rp-reservation" @click="leave">{{ arrival.confirmation_number }} · {{ t('roomPanel.openReservation') }}</RouterLink>
+            <Button v-if="canCheckIn" type="button" size="sm" class="mt-1 self-start" :disabled="starting" data-testid="rp-checkin" @click="startCheckIn">{{ t('roomPanel.checkIn') }}</Button>
           </div>
         </section>
 

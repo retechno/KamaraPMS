@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { formatDate } from '@/utils/format'
 import { MoreVertical } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -22,7 +21,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { toast } from '@/composables/useToast'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
@@ -33,7 +31,8 @@ import { type AssignFailure } from '@/utils/assignRoom'
 import { fullName } from '@/utils/inHouse'
 import { lineOfArrival } from '@/utils/roomAssign'
 import { lineUiStatus } from '@/utils/reservationStatus'
-import CheckInPanel from './CheckInPanel.vue'
+import CheckInSheet from '@/components/CheckInSheet.vue'
+import { checkedInCount } from '@/composables/useCheckInSheet'
 
 /**
  * The arrivals tab of the front desk: the rooms arriving on a date (the business date by default) with what the desk needs before a check-in (company, booked rate, deposit, readiness), a
@@ -49,7 +48,7 @@ const route = useRoute()
 const { types } = useRoomTypes()
 
 const rows = ref<Arrival[]>([])
-const open = ref<number | null>(null)
+const checkInFor = ref<Arrival | null>(null) // the arrival in the check-in sheet: a copy, so the sheet keeps it when the list is read again
 const error = ref<ApiError | null>(null)
 const loaded = ref(false)
 const drawerId = ref<number | null>(null)
@@ -75,14 +74,7 @@ const isDefault = computed(() => !chosenDate.value && status.value === 'CONFIRME
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const can = (permission: string) => auth.can(permission, property.currentId)
-const current = computed(() => rows.value.find((a) => a.reservation_room_id === open.value) ?? null)
 const drawerRow = computed(() => rows.value.find((a) => a.reservation_room_id === drawerId.value) ?? null)
-const sheetOpen = computed({
-  get: () => open.value !== null,
-  set: (v: boolean) => {
-    if (!v) open.value = null
-  },
-})
 // The menu of the row that is open: it closes when an action is chosen, so it is not left open behind the sheet or dialog the action opens.
 const menuFor = ref<number | null>(null)
 
@@ -168,7 +160,7 @@ function act(action: ArrivalAction, a: Arrival): void {
   menuFor.value = null
   if (action === 'checkIn') {
     drawerOpen.value = false
-    open.value = a.reservation_room_id
+    checkInFor.value = a
     return
   }
   if (action === 'editGuest') {
@@ -189,18 +181,18 @@ function guestSaved(g: GuestView): void {
 
 /** Checked in: the list is read again (the room is no longer waiting), the other tabs are told, and the desk is told which stay it is. */
 async function checkedIn(result: CheckInResult): Promise<void> {
-  open.value = null
   toast.success(t('frontDesk.arrivals.checkedIn', { stay: result.stay.stay_number, room: result.stay_room.room_number }))
   emit('changed')
   await load()
 }
 
 watch(() => [property.currentId, businessDate.value, chosenDate.value, status.value, q.value.trim(), typeId.value], () => {
-  open.value = null
+  checkInFor.value = null
   drawerOpen.value = false
   restart()
 }, { immediate: true })
 watch(() => props.refresh, restart)
+watch(checkedInCount, () => void load()) // a check-in made from the room panel
 </script>
 
 <template>
@@ -361,16 +353,6 @@ watch(() => props.refresh, restart)
     <AutoAssignDialog v-model:open="autoOpen" :lines="autoLines" @changed="load" />
     <ArrivalDrawer v-model:open="drawerOpen" :row="drawerRow" @act="act" />
     <GuestEditDialog v-model:open="guestOpen" :guest-id="guestId" @saved="guestSaved" />
-    <Sheet v-model:open="sheetOpen">
-      <SheetContent v-if="current" class="p-6" data-testid="checkin-sheet">
-        <SheetTitle class="text-lg">
-          {{ t('frontDesk.checkIn.title', { guest: current.guest_name || current.confirmation_number, type: current.room_type_code }) }}
-        </SheetTitle>
-        <SheetDescription class="mt-1">
-          {{ t('frontDesk.checkIn.subtitle', { confirmation: current.confirmation_number, arrival: formatDate(current.arrival_date), departure: formatDate(current.departure_date) }) }}
-        </SheetDescription>
-        <CheckInPanel :key="current.reservation_room_id" :arrival="current" class="mt-4" @done="checkedIn" @cancel="open = null" />
-      </SheetContent>
-    </Sheet>
+    <CheckInSheet :arrival="checkInFor" :queue="rows" @close="checkInFor = null" @done="checkedIn" />
   </template>
 </template>
