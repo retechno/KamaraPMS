@@ -11613,7 +11613,7 @@ components:
       properties:
         max_properties: { type: [integer, "null"], description: Active properties; null is unlimited. }
         max_rooms: { type: [integer, "null"], description: Active rooms over all properties; null is unlimited. }
-        max_users: { type: [integer, "null"], description: Active users, administrators included; null is unlimited. }
+        max_users: { type: [integer, "null"], description: "Active users, administrators included; null is unlimited." }
     SubscriptionSummary:
       type: object
       required: [plan_code, plan_name, modules, status, access, started_on, paid_through, grace_ends_on, days_left, limits, usage]
