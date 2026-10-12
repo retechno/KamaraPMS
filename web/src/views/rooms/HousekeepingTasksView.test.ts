@@ -85,11 +85,24 @@ describe('HousekeepingTasksView', () => {
   it('generates the list and says what it added', async () => {
     const w = mountView()
     await flushPromises()
-    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 4 } })
+    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 4, retyped: 0 } })
     await w.get('[data-testid=generate]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/housekeeping/tasks/generate')
     expect(w.get('[data-testid=notice]').text()).toContain('4 task(s) added')
+  })
+
+  it('says how many tasks were adjusted to the kind the room needs now', async () => {
+    const w = mountView()
+    await flushPromises()
+    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 12, retyped: 2 } })
+    await w.get('[data-testid=generate]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=notice]').text()).toContain('12 added · 2 adjusted')
+    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 0, retyped: 1 } })
+    await w.get('[data-testid=generate]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=notice]').text()).toContain('0 added · 1 adjusted')
   })
 
   it('assigns the ticked tasks to a housekeeper, or takes them back', async () => {
@@ -207,7 +220,7 @@ describe('HousekeepingTasksView', () => {
     expect(w.get('h1').text()).toBe('Daftar pembersihan')
     expect(w.get('[data-testid=generate]').text()).toBe('Buat daftar hari ini')
     expect(w.get('[data-testid=task-101-ARRIVAL]').text()).toContain('Kedatangan')
-    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 4 } })
+    POST.mockResolvedValue({ data: { date: '2026-09-30', created: 4, retyped: 0 } })
     await w.get('[data-testid=generate]').trigger('click')
     await flushPromises()
     expect(w.get('[data-testid=notice]').text()).toBe('4 tugas ditambahkan.')

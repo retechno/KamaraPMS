@@ -4224,8 +4224,12 @@ export interface paths {
          * Generate the cleaning list of the current business date (housekeeping.assign)
          * @description Occupied rooms get a CHECKOUT task (the guest leaves today or is overdue) or a STAYOVER task; a vacant room that
          *     is not clean gets an ARRIVAL task when a guest is assigned to it today, otherwise a DIRTY task. Arrivals and rooms
-         *     flagged HIGH get high priority. A room that already has a task that day gets no second kind, and a room under a
-         *     block gets none. Running it again only adds what is new, so it can be run through the day, also by two people at once.
+         *     flagged HIGH get high priority. A room has at most one generated task a day, whatever its kind, for occupied and
+         *     vacant rooms alike: a PENDING task of another kind (a stay was extended, a departure moved up) is corrected to the kind
+         *     the room needs now (`retyped`, audited as `housekeeping.task_retyped`), a task that is started, done or skipped is left
+         *     as it is and nothing is added (a skipped task is final for the day; a supervisor adds a manual task to go back), and a
+         *     room under a block gets none. Manual tasks are not limited. Running it again only changes what is new, so it can be run
+         *     through the day, also by two people at once.
          */
         post: operations["generateHousekeepingTasks"];
         delete?: never;
@@ -11038,6 +11042,8 @@ export interface components {
         GenerateHousekeepingResult: {
             date: components["schemas"]["Date"];
             created: number;
+            /** @description Tasks that were not started and whose kind was corrected to what the room needs now. */
+            retyped: number;
         };
         CreateHousekeepingTaskRequest: {
             /** Format: int64 */
@@ -19515,7 +19521,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description How many tasks this run added. */
+            /** @description How many tasks this run added and how many it corrected. */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -96,7 +96,9 @@ async function run(action: () => Promise<unknown>, done = ''): Promise<void> {
 
 const generate = () => run(async () => {
   const { data } = await api.POST('/api/v1/properties/{propertyId}/housekeeping/tasks/generate', { params: { path: { propertyId: pid.value as number } } })
-  notice.value = data?.created ? t('cleaning.added', { n: data.created }) : t('cleaning.nothingNew')
+  const created = data?.created ?? 0
+  const retyped = data?.retyped ?? 0
+  notice.value = retyped ? t('cleaning.addedAdjusted', { created, retyped }) : created ? t('cleaning.added', { n: created }) : t('cleaning.nothingNew')
 })
 
 const assign = () => run(async () => {

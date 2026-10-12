@@ -4898,12 +4898,16 @@ paths:
       description: |
         Occupied rooms get a CHECKOUT task (the guest leaves today or is overdue) or a STAYOVER task; a vacant room that
         is not clean gets an ARRIVAL task when a guest is assigned to it today, otherwise a DIRTY task. Arrivals and rooms
-        flagged HIGH get high priority. A room that already has a task that day gets no second kind, and a room under a
-        block gets none. Running it again only adds what is new, so it can be run through the day, also by two people at once.
+        flagged HIGH get high priority. A room has at most one generated task a day, whatever its kind, for occupied and
+        vacant rooms alike: a PENDING task of another kind (a stay was extended, a departure moved up) is corrected to the kind
+        the room needs now (`retyped`, audited as `housekeeping.task_retyped`), a task that is started, done or skipped is left
+        as it is and nothing is added (a skipped task is final for the day; a supervisor adds a manual task to go back), and a
+        room under a block gets none. Manual tasks are not limited. Running it again only changes what is new, so it can be run
+        through the day, also by two people at once.
       tags: [housekeeping]
       responses:
         "200":
-          description: How many tasks this run added.
+          description: How many tasks this run added and how many it corrected.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GenerateHousekeepingResult" }
@@ -12143,10 +12147,11 @@ components:
           items: { $ref: "#/components/schemas/HousekeepingWorkload" }
     GenerateHousekeepingResult:
       type: object
-      required: [date, created]
+      required: [date, created, retyped]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         created: { type: integer }
+        retyped: { type: integer, description: Tasks that were not started and whose kind was corrected to what the room needs now. }
     CreateHousekeepingTaskRequest:
       type: object
       required: [room_id, task_type]

@@ -937,7 +937,17 @@ SELECT expect_error('a flag priority is NORMAL or HIGH', '23514',
     $q$UPDATE room_hk_flags SET priority = 'URGENT'$q$);
 SELECT expect_ok('a task is generated for a room and a date', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
        VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
-SELECT expect_error('one AUTO task per room, date and type', '23505', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+SELECT expect_error('one active AUTO task per room and date, whatever the type', '23505', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'CHECKOUT')$q$,
+    $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'STAYOVER')$q$);
+SELECT expect_ok('a DONE or SKIPPED AUTO task does not count as active', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, status, started_at, completed_at)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'CHECKOUT', 'DONE', now(), now())$q$,
+    $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type, status, completed_at, notes)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'STAYOVER', 'SKIPPED', now(), 'guest asked')$q$,
+    $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
+SELECT expect_error('one AUTO task per room, date and type (the same type twice)', '23505', $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
        VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$,
     $q$INSERT INTO housekeeping_tasks (tenant_id, property_id, room_id, task_date, task_type)
        VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM rooms WHERE property_id = pr('BALI') ORDER BY id LIMIT 1), '2026-10-01', 'DIRTY')$q$);
