@@ -165,6 +165,14 @@ describe('NightAuditView', () => {
     expect(w.find('[data-testid=cannot-run]').exists()).toBe(false) // a warning, not a blocker
   })
 
+  it('warns when the master folio a group routes to is closed, and still lets the audit run', async () => {
+    const w = mountView({ ...clean(), warnings: { ...clean().warnings, group_masters_closed: [{ group_id: 4, group_code: 'GRP1', group_name: 'Conference', folio_number: 'FOL000030', stays: 3 }, { group_id: 5, group_code: 'GRP2', group_name: 'Wedding', folio_number: '', stays: 1 }] } })
+    await flushPromises()
+    expect(w.get('[data-testid=closed-master-4]').text()).toBe('Group GRP1: the master folio FOL000030 is closed, so the nights of 3 room(s) go to the guest folios until it is reopened.')
+    expect(w.get('[data-testid=closed-master-5]').text()).toBe('Group GRP2 has instructions but no master folio: the nights of 1 room(s) go to the guest folios.')
+    expect(w.find('[data-testid=cannot-run]').exists()).toBe(false)
+  })
+
   it('says at the top whether the audit is ready and how many steps need attention', async () => {
     const ready = mountView()
     await flushPromises()

@@ -160,8 +160,28 @@ func TestTheMasterFolioRoutesAskTheirRightsAndStayInsideTheTenant(t *testing.T) 
 	if r := manager.do(http.MethodPut, mine.base+"/groups/"+myGroup+"/routing", map[string]any{"instructions": []map[string]any{{"scope": "ALL"}}, "excluded_lines": []int{}}); r.status != 200 {
 		t.Errorf("a manager sets the routing: %d %v", r.status, r.body)
 	}
-	// who holds folio.master_close closes it: the group has no room that is not over and the balance is zero
-	r := closer.do(http.MethodPost, mine.base+"/folios/"+myMaster+"/close", map[string]any{"version": 1})
+	// a balance stops the close, whoever asks: 409 FOLIO_BALANCE_NOT_ZERO with the balance, and the master stays open
+	ch := abc.doWith(http.MethodPost, mine.base+"/folios/"+myMaster+"/charges", map[string]any{"charge_code_id": mustInt(mine.minibar), "quantity": "1", "unit_price": "250000"}, map[string]string{"Idempotency-Key": "mc-1"})
+	if ch.status != 201 {
+		t.Fatalf("a charge on the master: %d %v", ch.status, ch.body)
+	}
+	mv := abc.do(http.MethodGet, mine.base+"/folios/"+myMaster, nil)
+	owed := closer.do(http.MethodPost, mine.base+"/folios/"+myMaster+"/close", map[string]any{"version": mv.body["version"]})
+	if owed.status != 409 || owed.body["code"] != "FOLIO_BALANCE_NOT_ZERO" {
+		t.Errorf("closing a master with a balance: %d %v", owed.status, owed.body)
+	}
+	if ctx, _ := owed.body["context"].(map[string]any); ctx["balance"] == nil {
+		t.Errorf("the refusal says the balance: %v", owed.body)
+	}
+	if got := abc.do(http.MethodGet, mine.base+"/folios/"+myMaster, nil); got.body["status"] != "OPEN" {
+		t.Errorf("the master stays open: %v", got.body)
+	}
+	// paid, it closes: who holds folio.master_close closes it (the group has no room that is not over)
+	if pay := abc.doWith(http.MethodPost, mine.base+"/folios/"+myMaster+"/payments", map[string]any{"amount": mv.body["balance"], "payment_method": "CARD"}, map[string]string{"Idempotency-Key": "mc-2"}); pay.status != 201 {
+		t.Fatalf("the payment: %d %v", pay.status, pay.body)
+	}
+	mv = abc.do(http.MethodGet, mine.base+"/folios/"+myMaster, nil)
+	r := closer.do(http.MethodPost, mine.base+"/folios/"+myMaster+"/close", map[string]any{"version": mv.body["version"]})
 	if r.status != 200 || r.body["status"] != "CLOSED" {
 		t.Errorf("a closer closes the master: %d %v", r.status, r.body)
 	}

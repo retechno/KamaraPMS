@@ -33,7 +33,7 @@ const codes = [
 ]
 
 const mounted: VueWrapper[] = []
-function mountView(permissions = ['folio.read', 'folio.reverse', 'folio.post_charge']) {
+function mountView(permissions = ['folio.read', 'folio.reverse', 'folio.post_charge'], data: object = folio) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.test', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -45,7 +45,7 @@ function mountView(permissions = ['folio.read', 'folio.reverse', 'folio.post_cha
     if (path.endsWith('/transfers')) return { data: { data: [] } }
     if (path.endsWith('/transfer-targets')) return { data: { data: [] } }
     if (path.endsWith('/folios')) return { data: { data: [] } }
-    return { data: folio }
+    return { data }
   })
   POST = vi.fn()
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -129,6 +129,31 @@ describe('FolioView: transfers between folios', () => {
     await flushPromises()
     expect(reader.find('[data-testid=transfer-bar]').exists()).toBe(false)
     expect(reader.find('[data-testid=select-1]').exists()).toBe(false)
+  })
+
+  it('says the charges were moved, with links to where, when the table is empty only because the corrections are hidden', async () => {
+    const moved = { ...folio, balance: '0', items: [items[3], items[4]] }
+    const w2 = mountView(['folio.read', 'folio.reverse', 'folio.post_charge'], moved)
+    await flushPromises()
+    expect(w2.find('[data-testid=all-moved]').exists()).toBe(true)
+    expect(w2.get('[data-testid=all-moved]').text()).toContain('Everything that was posted to this folio has been moved to another folio.')
+    expect(w2.get('[data-testid=moved-to-8]').attributes('href')).toBe('/folios/8')
+    expect(w2.find('[data-testid=empty]').exists()).toBe(false)
+    await w2.get('[data-testid=all-moved-show-corrections]').trigger('click')
+    expect(w2.find('[data-testid=all-moved]').exists()).toBe(false)
+    expect(w2.find('[data-testid=item-4]').exists()).toBe(true)
+  })
+
+  it('folds the notes of a master folio fed by many member folios into one that opens', async () => {
+    const many = Array.from({ length: 25 }, (_, k) => item({ id: 100 + k, description: `Room ${k}`, charge_code: 'ROOM', charge_code_id: 3, transfer: { transfer_id: 100 + k, role: 'IN', kind: 'ITEM', is_return: false, hidden: false, from: ref(200 + k, `FOL${200 + k}`, String(100 + k)), to: ref(3, 'FOL000001'), origin: ref(200 + k, `FOL${200 + k}`), returned: false } }))
+    const w = mountView(['folio.read', 'folio.reverse'], { ...folio, items: many })
+    await flushPromises()
+    expect(w.findAll('[data-testid=copy-notes-summary]')).toHaveLength(1)
+    expect(w.get('[data-testid=copy-notes-toggle]').text()).toBe('25 line(s) moved here from 25 folios')
+    expect((w.get('[data-testid=copy-notes-summary]').element as HTMLDetailsElement).open).toBe(false) // closed until asked
+    expect(w.findAll('[data-testid^=copy-note-]').filter((n) => /^copy-note-\d+$/.test(n.attributes('data-testid') ?? ''))).toHaveLength(25)
+    expect(w.get('[data-testid=copy-note-224]').text()).toContain('FOL224 · 1 line(s)')
+    expect(w.get('[data-testid=copy-note-224] a').attributes('href')).toBe('/folios/224')
   })
 
   it('does not offer Reverse or Move on a line of TRF, nor Reverse on the copy a transfer made; the copy says where to return it', async () => {

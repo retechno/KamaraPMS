@@ -1541,6 +1541,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/groups/{id}/routing/move-posted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the posted charges of the members that the instructions send to the master, in one transaction (folio.reverse, needs approval)
+         * @description The transfer of charges by charge code over every member folio listed by `GET .../routing/posted`: all or nothing, with the folios locked once in ascending order, one reason and one approval. Each folio and
+         *     charge code is a batch of the transfer log under `Idempotency-Key#folio#code`: repeating the request answers 200 with what was moved and moves nothing twice. `expected_count` and `expected_total` are the
+         *     count and the total of the list the person was shown: if it changed before the locks (a night was posted, a charge reversed) the answer is 409 `POSTED_LIST_CHANGED` and nothing moves. The master folio must be
+         *     open (409 `FOLIO_CLOSED`), and a folio of a member that is closed is refused with its number. Nothing to move is 409 `TRANSFER_SELECTION_EMPTY`.
+         */
+        post: operations["moveToMasterFolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/groups/{id}/master-folio": {
         parameters: {
             query?: never;
@@ -8987,6 +9013,11 @@ export interface components {
             discount_amount?: string;
             service_date?: components["schemas"]["Date"];
             description?: string;
+            /**
+             * Format: int64
+             * @description Only on the master folio of a group: a stay of a member, so the line says whose it is (422 `ONLY_ON_MASTER`, `NOT_IN_GROUP`). The charge stays on the master.
+             */
+            stay_id?: number | null;
         };
         PostAdjustmentRequest: {
             /** Format: int64 */
@@ -9093,6 +9124,13 @@ export interface components {
             transaction_at: string;
             description: string;
             charge_code?: string;
+            /**
+             * Format: int64
+             * @description On the master folio of a group: the stay the line is for (a room night routed from a member, a charge posted for a guest).
+             */
+            stay_id?: number | null;
+            /** @description On the master folio: the guest of that stay. */
+            guest_name?: string;
             /** Format: int64 */
             charge_code_id?: number | null;
             /** @description The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. */
@@ -9325,6 +9363,14 @@ export interface components {
             status: string;
             /** @description The room stays out of the routing of the group. */
             excluded: boolean;
+            /**
+             * Format: int64
+             * @description The open stay of the room, if any.
+             */
+            stay_id?: number | null;
+            /** @description The room the guest is in now. */
+            room_number?: string;
+            guest_name?: string;
         };
         GroupRouting: {
             /** Format: int64 */
@@ -9370,6 +9416,20 @@ export interface components {
             charge_code_name: string;
             count: number;
             total: string;
+        };
+        MoveToMasterRequest: {
+            reason: string;
+            approval: components["schemas"]["Approval"];
+            /** @description The number of charges of the list that was shown. */
+            expected_count: number;
+            /** @description The total of the list that was shown. */
+            expected_total: string;
+        };
+        MoveToMasterResult: {
+            batches: components["schemas"]["TransferResult"][];
+            moved: number;
+            total: string;
+            replayed: boolean;
         };
         MasterInfo: {
             /** Format: int64 */
@@ -10789,6 +10849,16 @@ export interface components {
                 confirmation_number: string;
                 balance: components["schemas"]["Amount"];
             }[];
+            /** @description Groups whose instructions point at a master folio that is closed or was never opened: the rooms in house go to their own folios until it is reopened. A warning: the night audit is not blocked. */
+            group_masters_closed?: {
+                /** Format: int64 */
+                group_id: number;
+                group_code: string;
+                group_name: string;
+                folio_number: string;
+                /** @description The rooms in house the instructions apply to. */
+                stays: number;
+            }[];
             /** @description Master folios of groups whose rooms are all over, still open, with their balance. A warning: a hotel may bill a group days later. */
             open_group_masters?: {
                 /** Format: int64 */
@@ -11561,8 +11631,16 @@ export interface components {
             /** Format: int64 */
             reservation_id: number;
             confirmation_number: string;
-            /** @enum {string} */
+            /**
+             * @description The status of the header of the reservation.
+             * @enum {string}
+             */
             status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+            /**
+             * @description The status staff see, derived from the rooms (the one of the reservation screens).
+             * @enum {string}
+             */
+            display_status: "DRAFT" | "CONFIRMED" | "IN_HOUSE" | "CHECKED_OUT" | "NO_SHOW" | "CANCELLED";
             guest_name?: string;
             /** Format: int64 */
             company_id: number | null;
@@ -16593,6 +16671,48 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    moveToMasterFolio: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveToMasterRequest"];
+            };
+        };
+        responses: {
+            /** @description A repeat of a request that went through. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveToMasterResult"];
+                };
+            };
+            /** @description What moved. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveToMasterResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     openMasterFolio: {

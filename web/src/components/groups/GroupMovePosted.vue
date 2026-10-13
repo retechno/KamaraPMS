@@ -12,13 +12,14 @@ import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
+import { newIdempotencyKey } from '@/utils/reservations'
 
 /**
  * Moves the charges already posted to the members of a group to its master folio, right after the instructions were saved (docs/architecture/30-group-folio.md, 5.3). It is a use of the transfer of
  * part B (by charge code, scope GROUP_MASTER), one request for each folio and charge code, with the same reason and the same approval; a request that fails stops the others, and what was moved is said.
  */
-const props = defineProps<{ master: MasterFolio; posted: PostedCharges[] }>()
-const emit = defineEmits<{ done: [message: string]; close: [] }>()
+const props = defineProps<{ groupId: number; master: MasterFolio; posted: PostedCharges[] }>()
+const emit = defineEmits<{ done: [message: string]; close: []; stale: [] }>()
 
 const property = usePropertyStore()
 const reason = ref('')
@@ -26,6 +27,7 @@ const stage = ref<'form' | 'approval'>('form')
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
+const key = newIdempotencyKey()
 
 const total = computed(() => props.posted.reduce((n, p) => n + Number(p.total), 0))
 const count = computed(() => props.posted.reduce((n, p) => n + p.count, 0))
@@ -35,26 +37,22 @@ async function approve(approval: Approval): Promise<void> {
   if (propertyId === null) return
   busy.value = true
   dialogError.value = null
-  let moved = 0
   try {
-    for (const row of props.posted) {
-      await api.POST('/api/v1/properties/{propertyId}/folios/{id}/transfer-items', {
-        params: { path: { propertyId, id: row.folio_id } },
-        body: { folio_id: props.master.id, charge_code_id: row.charge_code_id, reason: reason.value.trim(), approval },
-      })
-      moved += row.count
-    }
-    emit('done', t('groupMaster.moved', { n: moved, folio: props.master.folio_number }))
+    // one request, one transaction: all or nothing. The key stays the same for a retry of this request, so a repeat that went through the first time moves nothing twice; the count and the total are those of
+    // the list on the screen, so the approval is for what was seen (the server refuses it if the list changed).
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/groups/{id}/routing/move-posted', {
+      params: { path: { propertyId, id: props.groupId }, header: { 'Idempotency-Key': key } },
+      body: { reason: reason.value.trim(), approval, expected_count: count.value, expected_total: String(total.value) },
+    })
+    emit('done', t('groupMaster.moved', { n: data?.moved ?? count.value, folio: props.master.folio_number }))
   } catch (e) {
-    // a wrong password can be tried again; what was moved before the failure stays moved, and the list is read again when the dialog closes
     const err = e instanceof ApiError ? e : null
-    if (moved > 0) {
-      error.value = err
-      stage.value = 'form'
-      emit('done', t('groupMaster.movedPartly', { n: moved, folio: props.master.folio_number }))
-    } else {
-      dialogError.value = err
+    if (err?.code === 'POSTED_LIST_CHANGED') {
+      // what is posted changed since the list was shown: nothing moved; the list is read again and the person asks anew
+      emit('stale')
+      return
     }
+    dialogError.value = err
   } finally {
     busy.value = false
   }

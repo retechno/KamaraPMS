@@ -172,11 +172,13 @@ func (s *Service) resolve(ctx context.Context, tenantID, propertyID int64, stayI
 	for _, rule := range groupRules {
 		r := out[rule.StayID]
 		r.excluded = rule.Excluded
-		// the master of the group, when it is open: a rule whose master is closed or missing answers FolioID 0 and Routed, which is ROUTING_TARGET_CLOSED, never the guest folio
-		t := Target{Routed: true}
-		if rule.MasterStatus == "OPEN" {
-			t.FolioID = rule.MasterID
+		// The master of the group takes the charge when it is open. A master that is closed (or missing) does not stop the night audit: the rule is not applied and the charge goes where it would
+		// have gone without it, the guest folio, and the night audit says so as a warning. (A company folio of a line's own instruction is another matter: that one is a blocker, below.)
+		if rule.MasterStatus != "OPEN" {
+			out[rule.StayID] = r
+			continue
 		}
+		t := Target{FolioID: rule.MasterID, Routed: true}
 		switch rule.Scope {
 		case "ALL":
 			r.gAll = &t

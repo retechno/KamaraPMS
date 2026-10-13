@@ -2,6 +2,7 @@ package folios_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -203,10 +204,18 @@ func TestTheResolverRoutesTheMembersOfAGroupToItsMasterBehindTheirOwnInstruction
 		t.Fatalf("batch: %+v", m)
 	}
 
-	// a master that is closed or missing is never a reason to bill the guest: FolioID 0, Routed
+	// a master that is closed does not stop anything: the rule is not applied and the night goes to the guest folio (the night audit says so as a warning); the instruction of the line itself is another matter
 	must(t, p.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, master))
-	if id, routed := target(otherStay, folios.RoomRoute); id != 0 || !routed {
-		t.Fatalf("a closed master: %d %v", id, routed)
+	if id, routed := target(otherStay, folios.RoomRoute); id != other || routed {
+		t.Fatalf("a closed master: %d %v, want the guest folio %d", id, routed, other)
+	}
+	if id, routed := target(otherStay, folios.Route{ChargeCodeID: p.laundry}); id != other || routed {
+		t.Fatalf("a closed master, another charge: %d %v", id, routed)
+	}
+	m, err = p.Folios.ResolveRoomTargets(p.admin, p.tenantID, p.propID, []int64{otherStay})
+	must(t, err)
+	if m[otherStay].Default.FolioID != other || m[otherStay].Default.Routed {
+		t.Fatalf("the batch: %+v", m[otherStay])
 	}
 }
 
@@ -587,4 +596,152 @@ func (p *payerFx) masterIDOf(t *testing.T, group int64) int64 {
 	var id int64
 	must(t, p.Pool.QueryRow(context.Background(), `SELECT id FROM folios WHERE booking_group_id = $1 AND folio_type = 'MASTER'`, group).Scan(&id))
 	return id
+}
+
+// A line of the master folio says whose it is: the stay a charge was posted for, the stay of a charge moved from a member, with the room and the guest.
+func TestALineOfTheMasterSaysWhoseItIs(t *testing.T) {
+	p := setupPayer(t)
+	g := p.group(t)
+	master := p.openMaster(t, g).ID
+	other := p.otherFolio(t) // a stay of a reservation that is in no group
+	var otherStay int64
+	must(t, p.Pool.QueryRow(context.Background(), `SELECT stay_id FROM folios WHERE id = $1`, other).Scan(&otherStay))
+
+	// a charge posted to the master for a guest of the group
+	res, err := p.Folios.PostCharge(p.admin, p.propID, master, "c1", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("100000"), StayID: &p.stay})
+	must(t, err)
+	if res.Item.StayID == nil || *res.Item.StayID != p.stay || res.Item.GuestName == "" || res.Item.RoomNumber != "101" {
+		t.Fatalf("the line: %+v", res.Item)
+	}
+	// a charge with no guest says nothing, and the guest folio has no guest on its lines
+	plain, err := p.Folios.PostCharge(p.admin, p.propID, master, "c2", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("50000")})
+	must(t, err)
+	if plain.Item.StayID != nil || plain.Item.GuestName != "" {
+		t.Fatalf("a charge for nobody: %+v", plain.Item)
+	}
+	mine, err := p.Folios.PostCharge(p.admin, p.propID, p.guestFolio, "c3", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("10000")})
+	must(t, err)
+	if mine.Item.GuestName != "" {
+		t.Fatalf("a guest folio does not repeat the guest on every line: %+v", mine.Item)
+	}
+	// only on the master, and only for a stay of the group
+	_, err = p.Folios.PostCharge(p.admin, p.propID, p.guestFolio, "c4", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("1"), StayID: &p.stay})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = p.Folios.PostCharge(p.admin, p.propID, master, "c5", folios.ChargeInput{ChargeCodeID: p.minibar, Quantity: "1", UnitPrice: ptr("1"), StayID: &otherStay})
+	wantCode(t, err, "VALIDATION_FAILED")
+
+	// a charge moved from a member to the master keeps the stay it was for, and goes back to a member under the stay of that folio
+	item := p.charge(t, p.guestFolio, "k1")
+	_, err = p.moveItems(p.guestFolio, master, p.items(item))
+	must(t, err)
+	f, err := p.Folios.GetFolio(p.admin, p.propID, master)
+	must(t, err)
+	named := 0
+	for _, it := range f.Items {
+		if it.TransactionType == "CHARGE" && it.StayID != nil && *it.StayID == p.stay && it.GuestName != "" {
+			named++
+		}
+	}
+	if named != 2 {
+		t.Fatalf("%d lines name the guest, want the posted charge and the moved one", named)
+	}
+	// the lines of the group tell the charge form who is in each room
+	r, err := p.Folios.GetGroupRouting(p.admin, p.propID, g)
+	must(t, err)
+	if len(r.Lines) != 1 || r.Lines[0].StayID == nil || *r.Lines[0].StayID != p.stay || r.Lines[0].RoomNumber != "101" || r.Lines[0].GuestName == "" {
+		t.Fatalf("lines: %+v", r.Lines)
+	}
+}
+
+// Moving what is posted to the master is one transaction over every member folio: all or nothing, one approval, the batches of the log under the key of the request, and a repeat moves nothing twice.
+func TestMovingThePostedChargesToTheMasterIsAllOrNothingAndIdempotent(t *testing.T) {
+	p := setupPayer(t)
+	g := p.group(t)
+	other := p.otherFolio(t)
+	p.joinGroup(t, g, other)
+	p.charge(t, p.guestFolio, "a1")
+	p.charge(t, p.guestFolio, "a2")
+	p.charge(t, other, "b1")
+	p.route(t, g, "MINIBAR")
+	master := p.masterIDOf(t, g)
+	list, err := p.Folios.PostedForMaster(p.admin, p.propID, g)
+	must(t, err)
+	if len(list) != 2 {
+		t.Fatalf("two folios, one code: %+v", list)
+	}
+	in := func(count int, total string) folios.MoveToMasterInput {
+		return folios.MoveToMasterInput{Reason: "the group pays the minibar", Approval: p.approval(), ExpectedCount: count, ExpectedTotal: total}
+	}
+
+	// the list changed since it was shown: the approval was for another list, nothing moves
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-stale", in(3, "999"))
+	wantCode(t, err, "POSTED_LIST_CHANGED")
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-stale2", in(2, "366300"))
+	wantCode(t, err, "POSTED_LIST_CHANGED")
+	if p.Count(t, `SELECT count(*) FROM folio_transfers`) != 0 || p.balance(t, master) != "0" {
+		t.Fatal("a refused request moves nothing")
+	}
+	// the shape of the request
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-bad", folios.MoveToMasterInput{Approval: p.approval(), ExpectedCount: 3, ExpectedTotal: "366300"})
+	wantCode(t, err, "VALIDATION_FAILED")
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "", in(3, "366300"))
+	wantCode(t, err, "VALIDATION_FAILED")
+	clerk := p.User(t, p.tenantID, p.propID, auth.PermFolioRead)
+	_, err = p.Folios.MoveToMaster(clerk, p.propID, g, "k-clerk", in(3, "366300"))
+	wantCode(t, err, "PERMISSION_DENIED")
+
+	// a master that is closed takes nothing
+	must(t, p.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, master))
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-closed", in(3, "366300"))
+	wantCode(t, err, "FOLIO_CLOSED")
+	must(t, p.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, master))
+
+	// the move: everything, once
+	res, err := p.Folios.MoveToMaster(p.admin, p.propID, g, "k-move", in(3, "366300"))
+	must(t, err)
+	if res.Replayed || res.Moved != 3 || len(res.Batches) != 2 || res.Total != "366300" || p.balance(t, master) != "366300" || p.balance(t, p.guestFolio) != "0" || p.balance(t, other) != "0" {
+		t.Fatalf("moved: %+v, master %s", res, p.balance(t, master))
+	}
+	if p.Count(t, `SELECT count(*) FROM folio_transfer_batches WHERE idempotency_key LIKE 'k-move#%' AND scope = 'GROUP_MASTER'`) != 2 {
+		t.Fatal("each folio and code is a batch of the log under the key of the request")
+	}
+	// the same request again answers with what was moved and moves nothing
+	again, err := p.Folios.MoveToMaster(p.admin, p.propID, g, "k-move", in(3, "366300"))
+	must(t, err)
+	if !again.Replayed || again.Moved != 3 || p.Count(t, `SELECT count(*) FROM folio_transfers`) != 3 || p.balance(t, master) != "366300" {
+		t.Fatalf("replay: %+v", again)
+	}
+	// and a new request has nothing left to move
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-again", in(3, "366300"))
+	wantCode(t, err, "TRANSFER_SELECTION_EMPTY")
+}
+
+// A failure in the middle of the move rolls back what was moved before it: the first folio does not stay moved.
+func TestAFailureInTheMiddleOfTheMoveToTheMasterMovesNothing(t *testing.T) {
+	p := setupPayer(t)
+	g := p.group(t)
+	other := p.otherFolio(t)
+	p.joinGroup(t, g, other)
+	p.charge(t, p.guestFolio, "a1")
+	// the second folio has more charges of the code than one transfer takes: the move of it fails after the first folio was moved
+	for i := 0; i <= folios.MaxTransferItems; i++ {
+		p.charge(t, other, fmt.Sprintf("b%d", i))
+	}
+	p.route(t, g, "MINIBAR")
+	master := p.masterIDOf(t, g)
+	list, err := p.Folios.PostedForMaster(p.admin, p.propID, g)
+	must(t, err)
+	count := 0
+	for _, r := range list {
+		count += r.Count
+	}
+	total := p.balance(t, p.guestFolio)
+	_ = total
+	var sum string
+	must(t, p.Pool.QueryRow(context.Background(), `SELECT sum(debit - credit)::text FROM folio_items WHERE folio_id IN ($1, $2)`, p.guestFolio, other).Scan(&sum))
+	_, err = p.Folios.MoveToMaster(p.admin, p.propID, g, "k-fail", folios.MoveToMasterInput{Reason: "x", Approval: p.approval(), ExpectedCount: count, ExpectedTotal: strings.TrimSuffix(sum, ".000")})
+	wantCode(t, err, "TOO_MANY_ITEMS")
+	if p.Count(t, `SELECT count(*) FROM folio_transfers`) != 0 || p.Count(t, `SELECT count(*) FROM folio_transfer_batches`) != 0 || p.balance(t, master) != "0" || p.balance(t, p.guestFolio) != "122100" {
+		t.Fatalf("nothing moved: master %s, first folio %s", p.balance(t, master), p.balance(t, p.guestFolio))
+	}
 }

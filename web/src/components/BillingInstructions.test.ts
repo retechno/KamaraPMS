@@ -47,7 +47,7 @@ describe('BillingInstructions', () => {
     const group = { id: 4, code: 'GRP1', name: 'Conference', master_folio_id: 30, master_folio_number: 'FOL000030', master_status: 'OPEN' }
     const w = mountSection([], true, { room: 'GROUP', excluded: false, group, group_instructions: [{ scope: 'ROOM', charge_code_id: null }] })
     await flushPromises()
-    expect(w.get('[data-testid=routing-note-3]').text()).toBe('The room charges go to the master folio FOL000030 of group GRP1.')
+    expect(w.get('[data-testid=routing-note-3]').text()).toBe('These charges go to the master folio FOL000030 of group GRP1: room charges.')
     const alone = mountSection([], true, { room: 'NONE', excluded: false, group: null, group_instructions: [] })
     await flushPromises()
     expect(alone.find('[data-testid=routing-note-3]').exists()).toBe(false)

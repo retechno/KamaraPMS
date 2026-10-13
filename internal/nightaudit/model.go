@@ -70,6 +70,15 @@ type StaleDraft struct {
 	ArrivalDate        civil.Date `json:"arrival_date"`
 }
 
+// ClosedMaster is a group that routes to a master folio that is closed (or was never opened): the rooms in house go to their own folios until it is reopened.
+type ClosedMaster struct {
+	GroupID     int64  `json:"group_id"`
+	GroupCode   string `json:"group_code"`
+	GroupName   string `json:"group_name"`
+	FolioNumber string `json:"folio_number"`
+	Stays       int    `json:"stays"`
+}
+
 // OpenMaster is the master folio of a group that has left, still open, with its balance.
 type OpenMaster struct {
 	FolioID     int64  `json:"folio_id"`
@@ -100,8 +109,10 @@ type Warnings struct {
 	StaleDrafts []StaleDraft `json:"stale_drafts"`
 	OpenFolios  []DeadFolio  `json:"open_folios_of_cancelled_reservations"`
 	// OpenMasters are master folios of groups that have left (every room over) and are still open: a hotel may bill a group days later, so it is a warning, never a blocker.
-	OpenMasters  []OpenMaster  `json:"open_group_masters"`
-	BlocksEnding []EndingBlock `json:"blocks_ending"`
+	OpenMasters []OpenMaster `json:"open_group_masters"`
+	// ClosedMasters are groups whose instructions point at a master folio that is closed: their nights go to the guest folios, which the audit allows and says.
+	ClosedMasters []ClosedMaster `json:"group_masters_closed"`
+	BlocksEnding  []EndingBlock  `json:"blocks_ending"`
 }
 
 // Preview is the full pre-check (nothing is written).

@@ -17,8 +17,8 @@ const group = (over: object = {}) => ({
   contact_name: 'Budi', is_active: true, reservation_count: 2, room_count: 3, ...over,
 })
 const members = [
-  { reservation_id: 11, confirmation_number: 'RES000011', status: 'CONFIRMED', guest_name: 'Siti Nurhaliza', company_id: 1, arrival_date: '2026-10-10', departure_date: '2026-10-12', room_count: 2 },
-  { reservation_id: 12, confirmation_number: 'RES000012', status: 'CANCELLED', guest_name: 'Andi', company_id: 1, arrival_date: '2026-10-11', departure_date: '2026-10-13', room_count: 1 },
+  { reservation_id: 11, confirmation_number: 'RES000011', status: 'CONFIRMED', display_status: 'CONFIRMED', guest_name: 'Siti Nurhaliza', company_id: 1, arrival_date: '2026-10-10', departure_date: '2026-10-12', room_count: 2 },
+  { reservation_id: 12, confirmation_number: 'RES000012', status: 'CANCELLED', display_status: 'CANCELLED', guest_name: 'Andi', company_id: 1, arrival_date: '2026-10-11', departure_date: '2026-10-13', room_count: 1 },
 ]
 
 function mountView(g = group(), permissions = ['group.manage', 'reservation.read', 'reservation.create']) {
@@ -56,6 +56,19 @@ describe('GroupDetailView', () => {
     await flushPromises()
     expect(w.get('[data-testid=member-RES000011]').text()).not.toContain('Confirmed')
     setLocale('en')
+  })
+
+  it('shows the status staff see, not the header: a room in house is "In house" while the header stays confirmed', async () => {
+    const first = members[0] as { display_status: string }
+    first.display_status = 'IN_HOUSE'
+    try {
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid=member-RES000011]').text()).toContain('In house')
+      expect(w.get('[data-testid=member-RES000011]').text()).not.toContain('Confirmed')
+    } finally {
+      first.display_status = 'CONFIRMED'
+    }
   })
 
   it('opens the form of rooms in bulk, and the rooming list is under the reservations', async () => {

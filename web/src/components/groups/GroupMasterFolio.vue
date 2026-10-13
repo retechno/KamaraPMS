@@ -59,6 +59,8 @@ const dirty = computed(() => {
   const was = r.lines.filter((l) => l.excluded).map((l) => l.reservation_room_id).sort()
   return JSON.stringify(was) !== JSON.stringify([...excluded.value].sort())
 })
+// a master with a balance is not closed: the balance is paid, or moved to the city ledger of the company (the server refuses it too)
+const owes = computed(() => !!master.value && master.value.balance !== '' && Number(master.value.balance) !== 0)
 const postedTotal = computed(() => posted.value.reduce((n, p) => n + p.count, 0))
 const postedFolios = computed(() => new Set(posted.value.map((p) => p.folio_id)).size)
 
@@ -152,6 +154,13 @@ async function closeMaster(): Promise<void> {
   })
 }
 
+// What is posted changed since the list was shown: nothing moved; the list is read again and the person looks at it and asks anew.
+async function stale(): Promise<void> {
+  moving.value = false
+  notice.value = t('groupMaster.listChanged')
+  await load()
+}
+
 async function moved(message: string): Promise<void> {
   moving.value = false
   notice.value = message
@@ -178,7 +187,8 @@ async function moved(message: string): Promise<void> {
           <span v-if="master.balance !== ''" class="text-sm tabular-nums" data-testid="master-balance">{{ t('groupMaster.balance') }} {{ $money(master.balance) }}</span>
           <span v-if="master.bill_to_company_name" class="text-sm text-muted-foreground" data-testid="master-company">{{ t('groupMaster.billedTo', { company: master.bill_to_company_name }) }}</span>
           <span v-else class="text-sm text-muted-foreground">{{ t('groupMaster.billedToContact') }}</span>
-          <Button v-if="canClose && master.status === 'OPEN'" type="button" variant="outline" size="sm" class="ml-auto" :disabled="busy" data-testid="master-close" @click="closeMaster">{{ t('groupMaster.close') }}</Button>
+          <Button v-if="canClose && master.status === 'OPEN'" type="button" variant="outline" size="sm" class="ml-auto" :disabled="busy || owes" data-testid="master-close" @click="closeMaster">{{ t('groupMaster.close') }}</Button>
+          <p v-if="canClose && master.status === 'OPEN' && owes" class="m-0 w-full text-sm text-muted-foreground" data-testid="master-close-hint">{{ t('groupMaster.closeNeedsZero', { balance: $money(master.balance) }) }}</p>
         </template>
         <template v-else>
           <span class="text-sm text-muted-foreground" data-testid="master-none">{{ t('groupMaster.none') }}</span>
@@ -237,5 +247,5 @@ async function moved(message: string): Promise<void> {
       </section>
     </CardContent>
   </Card>
-  <GroupMovePosted v-if="moving && master" :master="master" :posted="posted" @done="moved" @close="moving = false" />
+  <GroupMovePosted v-if="moving && master" :group-id="groupId" :master="master" :posted="posted" @done="moved" @close="moving = false" @stale="stale" />
 </template>

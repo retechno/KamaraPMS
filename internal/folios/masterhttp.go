@@ -12,6 +12,7 @@ func (h *Handler) registerMaster(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/groups/{id}/routing", httpx.HandlerFunc(h.getGroupRouting))
 	mux.Handle("PUT "+p+"/groups/{id}/routing", httpx.HandlerFunc(h.putGroupRouting))
 	mux.Handle("GET "+p+"/groups/{id}/routing/posted", httpx.HandlerFunc(h.postedForMaster))
+	mux.Handle("POST "+p+"/groups/{id}/routing/move-posted", httpx.HandlerFunc(h.moveToMaster))
 	mux.Handle("POST "+p+"/groups/{id}/master-folio", httpx.HandlerFunc(h.openMaster))
 	mux.Handle("GET "+p+"/reservations/{id}/rooms/{lineId}/routing", httpx.HandlerFunc(h.getLineRouting))
 }
@@ -82,4 +83,28 @@ func (h *Handler) postedForMaster(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
+func (h *Handler) moveToMaster(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in MoveToMasterInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.MoveToMaster(r.Context(), pid, id, key, in)
+	if err != nil {
+		return err
+	}
+	status := http.StatusCreated
+	if out.Replayed {
+		status = http.StatusOK
+	}
+	return httpx.WriteJSON(w, status, out)
 }

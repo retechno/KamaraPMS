@@ -2,7 +2,6 @@ package accounting_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -10,8 +9,8 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
-	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms/roomstest"
 )
@@ -108,38 +107,39 @@ func TestTheNightAuditPostsTheRoomsOfAGroupToItsMasterFolio(t *testing.T) {
 	}
 }
 
-func TestAClosedMasterStopsTheNightAuditBeforeAnythingIsPosted(t *testing.T) {
+func TestAClosedMasterDoesNotStopTheNightAuditTheNightsGoToTheGuestFolios(t *testing.T) {
 	h := setupHotel(t)
-	group, _ := h.groupOfMembers(t, "2026-09-30", "2026-10-02", 2)
+	group, ms := h.groupOfMembers(t, "2026-09-30", "2026-10-02", 2)
 	h.route(t, group)
 	master := h.masterOf(t, group)
 	must(t, h.Exec(t, `UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $1`, master)) // a mistaken close, repaired later by a reopen
 	pre, err := h.Audit.Preview(h.admin, h.propID)
 	must(t, err)
-	found := false
-	for _, e := range pre.Blockers.ChargeErrors {
-		found = found || e.Reason == "ROUTING_TARGET_CLOSED"
+	if len(pre.Blockers.ChargeErrors) != 0 || !pre.CanRun {
+		t.Fatalf("a closed master is not a blocker: %+v", pre.Blockers.ChargeErrors)
 	}
-	if !found || pre.CanRun {
-		t.Fatalf("the preview must name the blocker: %+v", pre.Blockers.ChargeErrors)
+	if w := pre.Warnings.ClosedMasters; len(w) != 1 || w[0].GroupCode != "GRP1" || w[0].Stays != 2 || w[0].FolioNumber == "" {
+		t.Fatalf("the preview warns: %+v", pre.Warnings.ClosedMasters)
 	}
-	before := h.sideEffects(t)
-	err = h.runDay(t)
-	var ae *apperr.Error
-	if !errors.As(err, &ae) || ae.Code != "NIGHT_AUDIT_BLOCKED" {
-		t.Fatalf("the night audit must be blocked: %v", err)
-	}
-	if after := h.sideEffects(t); after != before {
-		t.Fatalf("nothing is posted: %v -> %v", before, after)
-	}
-	if n := h.Count(t, `SELECT count(*) FROM folio_items WHERE source = 'ROOM_POSTING'`); n != 0 {
-		t.Fatalf("%d room nights posted to someone's folio", n)
-	}
-	// repaired: the master is open again and the night audit runs
-	must(t, h.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, master))
 	h.closeDay(t)
-	if n := h.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1 AND source = 'ROOM_POSTING'`, master); n != 2 {
-		t.Fatalf("%d nights on the master", n)
+	if n := h.Count(t, `SELECT count(*) FROM folio_items WHERE folio_id = $1 AND source = 'ROOM_POSTING'`, master); n != 0 {
+		t.Fatalf("%d nights on a closed master", n)
+	}
+	for _, m := range ms {
+		if h.folioBalance(t, m.st.Folio.ID).String() != "1000000" {
+			t.Fatalf("the night is on the guest folio: %s", h.folioBalance(t, m.st.Folio.ID))
+		}
+	}
+	if got := h.balance(t, "4110"); !got.Equal(dec("-2000000")) {
+		t.Fatalf("room revenue %s", got)
+	}
+	h.requireBalanced(t)
+	// repaired: the master is open again and the next night goes to it
+	must(t, h.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, master))
+	pre, err = h.Audit.Preview(h.admin, h.propID)
+	must(t, err)
+	if len(pre.Warnings.ClosedMasters) != 0 {
+		t.Fatalf("no warning once it is open: %+v", pre.Warnings.ClosedMasters)
 	}
 }
 
@@ -264,4 +264,210 @@ func TestAChangeOfTheRoutingAndTheNightAuditTakeTurns(t *testing.T) {
 		t.Fatalf("the nights after the change go to the master: %d, want %d", n, onMaster+2)
 	}
 	_ = ms
+}
+
+// The deposit rule of the master across days (docs/architecture/30-group-folio.md 5.2): a payment taken before the first charge of the master is an advance deposit and stays one when the charges come;
+// one taken after it is a settlement; the deposit is released (2310 to 1210) when the master closes; the books and the reconciliation agree on every day.
+func TestTheMasterDepositRuleAcrossDaysAndItsReleaseAtTheClose(t *testing.T) {
+	h := setupHotel(t)
+	group, ms := h.groupOfMembers(t, "2026-09-30", "2026-10-02", 2)
+	h.route(t, group)
+	master := h.masterOf(t, group)
+	reconcile := func(date, when string) {
+		t.Helper()
+		asOf := civil.MustParseDate(date)
+		rec, err := h.Accounting.Reconciliation(h.admin, h.propID, &asOf)
+		must(t, err)
+		if !rec.Reconciled {
+			t.Fatalf("%s: %+v", when, rec)
+		}
+	}
+	pay := func(amount, method, key string) {
+		t.Helper()
+		_, err := h.Folios.PostPayment(h.admin, h.propID, master, key, folios.PaymentInput{Amount: amount, PaymentMethod: method})
+		must(t, err)
+	}
+	held := func() string { return h.balance(t, "2310").String() }
+
+	// day 1: the deposit comes before any charge; the nights of the day are charged at the close
+	pay("400000", "CARD", "dep")
+	h.closeDay(t)
+	if held() != "-400000" || h.balance(t, "1210").String() != "2000000" {
+		t.Fatalf("day 1: deposits %s, guest ledger %s", held(), h.balance(t, "1210"))
+	}
+	reconcile("2026-09-30", "day 1")
+
+	// day 2: a payment after the first charge is a settlement, and the deposit of day 1 stays a deposit
+	pay("600000", "CARD", "settle")
+	h.closeDay(t)
+	if held() != "-400000" {
+		t.Fatalf("day 2 leaves the deposit alone: %s", held())
+	}
+	if got := h.balance(t, "1210"); !got.Equal(dec("3400000")) { // 4,000,000 of nights less the 600,000 settled (the deposit is not in the guest ledger)
+		t.Fatalf("day 2: guest ledger %s, want 3400000", got)
+	}
+	reconcile("2026-10-01", "day 2")
+
+	// day 3: the members leave, the rest is paid, the master closes and the deposit is released at the next close
+	for _, m := range ms {
+		st, err := h.Front.GetStay(h.admin, h.propID, m.st.Stay.ID)
+		must(t, err)
+		_, err = h.Front.CheckOut(h.admin, h.propID, m.st.Stay.ID, frontdesk.CheckOutInput{Version: st.Stay.Version})
+		must(t, err)
+	}
+	pay("3000000", "CARD", "rest")
+	info, err := h.Folios.GetFolio(h.admin, h.propID, master)
+	must(t, err)
+	if info.Balance != "0" {
+		t.Fatalf("the master balance %s", info.Balance)
+	}
+	_, err = h.Folios.CloseFolio(h.admin, h.propID, master, info.Version)
+	must(t, err)
+	h.closeDay(t)
+	if held() != "0" || !h.balance(t, "1210").IsZero() {
+		t.Fatalf("after the release: deposits %s, guest ledger %s", held(), h.balance(t, "1210"))
+	}
+	h.requireBalanced(t)
+	reconcile("2026-10-02", "after the close of the master")
+}
+
+// A payment taken after a charge that is then reversed the same day was taken before the first charge that stands: a deposit. The view says so before the close and the close journals it so, and
+// the reconciliation agrees.
+func TestADepositWhoseFirstChargeIsReversedTheSameDay(t *testing.T) {
+	h := setupHotel(t)
+	group, _ := h.groupOfMembers(t, "2026-09-30", "2026-10-02", 1)
+	master := h.openMasterOf(t, group)
+	var minibar int64
+	must(t, h.Pool.QueryRow(context.Background(), `SELECT id FROM charge_codes WHERE property_id = $1 AND code = 'MINIBAR'`, h.propID).Scan(&minibar))
+	unit := "100000"
+	res, err := h.Folios.PostCharge(h.admin, h.propID, master, "c1", folios.ChargeInput{ChargeCodeID: minibar, Quantity: "1", UnitPrice: &unit})
+	must(t, err)
+	pay, err := h.Folios.PostPayment(h.admin, h.propID, master, "p1", folios.PaymentInput{Amount: "50000", PaymentMethod: "CARD"})
+	must(t, err)
+	isDeposit := func() bool {
+		var b bool
+		must(t, h.Pool.QueryRow(context.Background(), `SELECT is_deposit FROM folio_item_gl WHERE payment_id = $1 AND item_id = (SELECT min(id) FROM folio_items WHERE payment_id = $1)`, pay.Payment.ID).Scan(&b))
+		return b
+	}
+	if isDeposit() {
+		t.Fatal("a payment after a charge that stands is a settlement")
+	}
+	_, err = h.Folios.Reverse(h.admin, h.propID, res.Item.ID, folios.CorrectionInput{Reason: "wrong guest", Approval: h.approval()})
+	must(t, err)
+	if !isDeposit() {
+		t.Fatal("with the only charge reversed the payment was taken before the first charge that stands: a deposit")
+	}
+	h.closeDay(t)
+	if got := h.balance(t, "2310"); !got.Equal(dec("-50000")) {
+		t.Fatalf("advance deposits %s", got)
+	}
+	asOf := civil.MustParseDate("2026-09-30")
+	rec, err := h.Accounting.Reconciliation(h.admin, h.propID, &asOf)
+	must(t, err)
+	if !rec.Reconciled {
+		t.Fatalf("the reconciliation agrees: %+v", rec)
+	}
+}
+
+// openMasterOf opens the master of a group with no instruction.
+func (h *hotel) openMasterOf(t *testing.T, group int64) int64 {
+	t.Helper()
+	r, err := h.Folios.OpenMaster(h.admin, h.propID, group)
+	must(t, err)
+	return r.Master.ID
+}
+
+// Every read that touches folios has to survive a master folio: no reservation, no stay, a payment and a transfer to the city ledger on it. This is the test of the audit of the queries that join
+// folios to reservations or stays (docs/architecture/30-group-folio.md, 13.11).
+func TestEveryReadThatTouchesFoliosSurvivesAMasterFolio(t *testing.T) {
+	h := setupHotel(t)
+	group, ms := h.groupOfMembers(t, "2026-09-30", "2026-10-02", 2)
+	var company int64
+	must(t, h.Pool.QueryRow(context.Background(), `INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES ($1, $2, 'ACME', 'Acme Corp', 100000000) RETURNING id`, h.tenantID, h.propID).Scan(&company))
+	must(t, h.Exec(t, `UPDATE booking_groups SET company_id = $1 WHERE id = $2`, company, group))
+	h.route(t, group)
+	master := h.masterOf(t, group)
+	h.closeDay(t) // the nights of day 1 go to the master
+	pay, err := h.Folios.PostPayment(h.admin, h.propID, master, "pay", folios.PaymentInput{Amount: "500000", PaymentMethod: "CARD"})
+	must(t, err)
+	tr, err := h.Folios.Transfer(h.admin, h.propID, master, "tr", folios.TransferInput{CompanyID: company, Amount: "700000"})
+	must(t, err)
+
+	// the folio screens and lists
+	list, err := h.Folios.ListFolios(h.admin, h.propID, folios.FolioFilter{}, listsort.Sort{}, nil, 50)
+	must(t, err)
+	seen := false
+	for _, f := range list.Data {
+		seen = seen || (f.ID == master && f.FolioType == "MASTER" && f.ReservationID == nil && f.BookingGroupCode == "GRP1")
+	}
+	if !seen {
+		t.Fatalf("the master is in the folio list: %+v", list.Data)
+	}
+	if _, err = h.Folios.GetFolio(h.admin, h.propID, master); err != nil {
+		t.Fatalf("GetFolio: %v", err)
+	}
+	if _, err = h.Folios.TransferTargets(h.admin, h.propID, master, "", 25); err != nil {
+		t.Fatalf("TransferTargets from a master: %v", err)
+	}
+	if _, err = h.Folios.TransferTargets(h.admin, h.propID, ms[0].st.Folio.ID, "Conf", 25); err != nil {
+		t.Fatalf("TransferTargets to a master, by the name of the group: %v", err)
+	}
+	if _, err = h.Folios.ListTransfers(h.admin, h.propID, master, "", 50); err != nil {
+		t.Fatalf("ListTransfers: %v", err)
+	}
+	// the city ledger: the transfer from the master is on the account of the company, named by the group
+	if _, err = h.CityLedger.Statement(h.admin, h.propID, company, nil, nil); err != nil {
+		t.Fatalf("Statement: %v", err)
+	}
+	cands, err := h.CityLedger.Candidates(h.admin, h.propID, company)
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	found := false
+	for _, c := range cands {
+		found = found || (c.PaymentNumber == tr.Payment.PaymentNumber && c.ConfirmationNumber == "GRP1" && c.FolioNumber != "" && !c.Invoiceable) // the group is still in house
+	}
+	if !found {
+		t.Fatalf("the transfer of the master is a candidate of the invoice: %+v", cands)
+	}
+	// the group leaves: the transfer of its master can be invoiced, as the transfer of a guest who checked out
+	must(t, h.Exec(t, `UPDATE reservation_rooms SET status = 'COMPLETED' WHERE reservation_id IN (SELECT id FROM reservations WHERE booking_group_id = $1)`, group))
+	if cands, err = h.CityLedger.Candidates(h.admin, h.propID, company); err != nil || len(cands) != 1 || !cands[0].Invoiceable {
+		t.Fatalf("invoiceable once the group has left: %+v %v", cands, err)
+	}
+	must(t, h.Exec(t, `UPDATE reservation_rooms SET status = 'CHECKED_IN' WHERE reservation_id IN (SELECT id FROM reservations WHERE booking_group_id = $1)`, group))
+	if _, err = h.CityLedger.Aging(h.admin, h.propID, company); err != nil {
+		t.Fatalf("Aging: %v", err)
+	}
+	// documents
+	if _, err = h.Docs.Invoice(h.admin, h.propID, master); err != nil {
+		t.Fatalf("Invoice: %v", err)
+	}
+	if _, err = h.Docs.Receipt(h.admin, h.propID, pay.Payment.ID); err != nil {
+		t.Fatalf("Receipt: %v", err)
+	}
+	// the reports and the night audit
+	bd := civil.MustParseDate("2026-10-01")
+	if _, err = h.Reports.DailySummary(h.admin, h.propID, bd); err != nil {
+		t.Fatalf("DailySummary: %v", err)
+	}
+	if _, err = h.Reports.Revenue(h.admin, h.propID, civil.MustParseDate("2026-09-30"), bd); err != nil {
+		t.Fatalf("Revenue: %v", err)
+	}
+	if _, err = h.Reports.Cashier(h.admin, h.propID, civil.MustParseDate("2026-09-30"), bd); err != nil {
+		t.Fatalf("Cashier: %v", err)
+	}
+	if _, err = h.Reports.InHouse(h.admin, h.propID); err != nil {
+		t.Fatalf("InHouse: %v", err)
+	}
+	if _, err = h.Audit.Preview(h.admin, h.propID); err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	// the books agree with the folios, the master included
+	asOf := civil.MustParseDate("2026-09-30")
+	rec, err := h.Accounting.Reconciliation(h.admin, h.propID, &asOf)
+	must(t, err)
+	if !rec.Reconciled {
+		t.Fatalf("the reconciliation agrees with a master that holds a payment and a transfer: %+v", rec)
+	}
 }

@@ -63,6 +63,10 @@ type GroupLine struct {
 	ConfirmationNumber string `json:"confirmation_number"`
 	Status             string `json:"status"`
 	Excluded           bool   `json:"excluded"`
+	// StayID, RoomNumber and GuestName tell who is in the room now (the open stay), for the charge form of the master folio: a charge can be posted for a guest.
+	StayID     *int64 `json:"stay_id"`
+	RoomNumber string `json:"room_number,omitempty"`
+	GuestName  string `json:"guest_name,omitempty"`
 }
 
 // GroupRouting is the master folio of a group, its instructions and the lines that are excluded.
@@ -124,7 +128,7 @@ func (s *Service) groupLines(ctx context.Context, tenantID, propertyID, groupID 
 	}
 	out := make([]GroupLine, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, GroupLine{ReservationRoomID: r.ReservationRoomID, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, Excluded: r.Excluded})
+		out = append(out, GroupLine{ReservationRoomID: r.ReservationRoomID, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, Excluded: r.Excluded, StayID: stayPtr(r.OpenStayID), RoomNumber: r.RoomNumber, GuestName: r.GuestName})
 	}
 	return out, nil
 }
@@ -557,6 +561,15 @@ func (s *Service) PostedForMaster(ctx context.Context, propertyID, groupID int64
 	if err != nil {
 		return nil, err
 	}
+	if len(instr) == 0 {
+		return []PostedCharges{}, nil
+	}
+	return s.postedFor(ctx, p.TenantID, propertyID, groupID, instr)
+}
+
+// postedFor is the list of PostedForMaster for the instructions given, without a permission check.
+func (s *Service) postedFor(ctx context.Context, tenantID, propertyID, groupID int64, instr []GroupInstruction) ([]PostedCharges, error) {
+	q := s.q(ctx)
 	all, room := false, false
 	codes := map[int64]bool{}
 	for _, i := range instr {
@@ -572,10 +585,7 @@ func (s *Service) PostedForMaster(ctx context.Context, propertyID, groupID int64
 		}
 	}
 	out := []PostedCharges{}
-	if len(instr) == 0 {
-		return out, nil
-	}
-	rows, err := q.ListPostedForMaster(ctx, foliosdb.ListPostedForMasterParams{TenantID: p.TenantID, PropertyID: propertyID, GroupID: &groupID})
+	rows, err := q.ListPostedForMaster(ctx, foliosdb.ListPostedForMasterParams{TenantID: tenantID, PropertyID: propertyID, GroupID: &groupID})
 	if err != nil {
 		return nil, err
 	}
@@ -591,4 +601,11 @@ func (s *Service) PostedForMaster(ctx context.Context, propertyID, groupID int64
 			ChargeCode: r.ChargeCode, ChargeCodeName: r.ChargeCodeName, Count: int(r.ItemCount), Total: fixed(r.Total, decimals)})
 	}
 	return out, nil
+}
+
+func stayPtr(id int64) *int64 {
+	if id == 0 {
+		return nil
+	}
+	return &id
 }

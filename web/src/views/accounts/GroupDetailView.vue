@@ -33,11 +33,11 @@ const roomingReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
-  { key: 'confirmation_number', label: t('groupDetail.confirmation') },
+  { key: 'confirmation_number', label: t('groupDetail.confirmation'), card: 'primary' as const },
   { key: 'guest_name', label: t('groupDetail.booker') },
-  { key: 'dates', label: t('groupDetail.dates') },
-  { key: 'room_count', label: t('groupDetail.rooms'), align: 'right' },
-  { key: 'status', label: t('setup.status') },
+  { key: 'dates', label: t('groupDetail.dates'), card: 'secondary' as const },
+  { key: 'room_count', label: t('groupDetail.rooms'), align: 'right' as const },
+  { key: 'status', label: t('setup.status'), card: 'badge' as const },
 ])
 
 const pid = computed(() => property.currentId)
@@ -171,10 +171,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <CardHeader><CardTitle>{{ t('groupDetail.members') }}</CardTitle></CardHeader>
     <CardContent>
       <p v-if="!members.length" class="m-0 text-sm text-muted-foreground" data-testid="no-members">{{ t('groupDetail.noMembers') }}</p>
-      <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')">
+      <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')" cards>
         <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`" class="text-primary hover:underline">{{ row.confirmation_number }}</RouterLink></template>
         <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
-        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" /></template>
+        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.display_status" /></template>
       </DataTable>
     </CardContent>
   </Card>

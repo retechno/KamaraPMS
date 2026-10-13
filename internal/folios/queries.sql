@@ -164,9 +164,17 @@ ORDER BY folio_item_id, component_type, sequence;
 -- Items of a folio in posting order, with what a screen needs: the charge code, the reversal that undid the item
 -- and the room of the stay segment.
 -- name: ListFolioItems :many
-SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number,
+SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id,
+       COALESCE(r.room_number, lr.room_number, '')::text AS room_number,
+       -- on the master folio of a group a line says whose it is: the guest of its stay (and the room of the stay when the line has no room segment of its own)
+       CASE WHEN fo.folio_type = 'MASTER' THEN COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '') ELSE '' END::text AS guest_name,
        COALESCE(g.group_code, 'A')::text AS group_code -- a reversal is printed with the line it reverses; a line without a row is in group A
 FROM folio_items i
+JOIN folios fo ON fo.property_id = i.property_id AND fo.id = i.folio_id
+LEFT JOIN stays st ON st.property_id = i.property_id AND st.id = i.stay_id AND fo.folio_type = 'MASTER'
+LEFT JOIN guests gu ON gu.tenant_id = st.tenant_id AND gu.id = st.guest_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms s2 JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                    WHERE s2.property_id = st.property_id AND s2.stay_id = st.id ORDER BY s2.id DESC LIMIT 1) lr ON true
 LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
@@ -593,6 +601,10 @@ VALUES (@tenant_id, @property_id, @group_id, @scope, sqlc.narg(charge_code_id), 
 -- name: ListGroupLines :many
 SELECT rr.id AS reservation_room_id, r.id AS reservation_id, r.confirmation_number, rr.status,
        COALESCE((SELECT s.id FROM stays s WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), 0)::bigint AS open_stay_id,
+       COALESCE((SELECT rm.room_number FROM stays s JOIN stay_rooms s2 ON s2.property_id = s.property_id AND s2.stay_id = s.id JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC, s2.id DESC LIMIT 1), '')::text AS room_number,
+       COALESCE((SELECT NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), '') FROM stays s JOIN guests gu ON gu.tenant_id = s.tenant_id AND gu.id = s.guest_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), '')::text AS guest_name,
        (x.reservation_room_id IS NOT NULL)::boolean AS excluded
 FROM reservation_rooms rr
 JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
@@ -676,3 +688,14 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = '
   AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
 GROUP BY f.id, f.folio_number, r.id, r.confirmation_number, i.charge_code_id, cc.code, cc.name, cc.charge_type
 ORDER BY f.id, cc.code;
+
+-- A stay of a member of the group of a master folio (a charge posted to the master can name whose it is).
+-- name: StayOfGroup :one
+SELECT s.id FROM stays s
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @stay_id AND r.booking_group_id = @group_id AND s.status <> 'CANCELLED';
+
+-- The batches of a request that moves many folios in one transaction: each carries the key of the request and a suffix.
+-- name: ListBatchesByKeyPrefix :many
+SELECT * FROM folio_transfer_batches WHERE tenant_id = @tenant_id AND property_id = @property_id AND starts_with(idempotency_key, @prefix::text) ORDER BY id;

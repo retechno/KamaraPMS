@@ -67,6 +67,8 @@ type ChargeInput struct {
 	Discount     string      `json:"discount_amount"`
 	ServiceDate  *civil.Date `json:"service_date"`
 	Description  string      `json:"description"`
+	// StayID names whose the charge is, on the master folio of a group only: a stay of a member of the group. It does not move the charge to the guest's folio.
+	StayID *int64 `json:"stay_id"`
 }
 
 // AdjustmentInput is a signed correction on the current business date. Amount is read in PriceMode terms.
@@ -224,6 +226,9 @@ type Item struct {
 	GroupCode  string `json:"group_code"`
 	Reason     string `json:"reason,omitempty"`
 	RoomNumber string `json:"room_number,omitempty"`
+	// StayID and GuestName say whose a line of a master folio is (the stay a charge was posted for, or the night routed from it); empty on the other folios.
+	StayID     *int64 `json:"stay_id"`
+	GuestName  string `json:"guest_name,omitempty"`
 	CreatedBy  *int64 `json:"created_by"`
 	ApprovedBy *int64 `json:"approved_by"`
 	// Transfer marks a line that a transfer between folios made or moved (nil: none); see ItemTransfer.

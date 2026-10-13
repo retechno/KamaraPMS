@@ -37,14 +37,16 @@ type Group struct {
 
 // Member is a reservation of a group.
 type Member struct {
-	ReservationID      int64      `json:"reservation_id"`
-	ConfirmationNumber string     `json:"confirmation_number"`
-	Status             string     `json:"status"`
-	GuestName          string     `json:"guest_name,omitempty"`
-	CompanyID          *int64     `json:"company_id"`
-	ArrivalDate        civil.Date `json:"arrival_date"`
-	DepartureDate      civil.Date `json:"departure_date"`
-	RoomCount          int        `json:"room_count"`
+	ReservationID      int64  `json:"reservation_id"`
+	ConfirmationNumber string `json:"confirmation_number"`
+	Status             string `json:"status"`
+	// DisplayStatus is the status staff see (the one of the reservation screens), derived from the rooms: Status is the header's own and stays CONFIRMED while a room is in house.
+	DisplayStatus string     `json:"display_status"`
+	GuestName     string     `json:"guest_name,omitempty"`
+	CompanyID     *int64     `json:"company_id"`
+	ArrivalDate   civil.Date `json:"arrival_date"`
+	DepartureDate civil.Date `json:"departure_date"`
+	RoomCount     int        `json:"room_count"`
 }
 
 // Input is the editable part of a group (the code is fixed at creation).

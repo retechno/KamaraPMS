@@ -90,7 +90,7 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	a := analysis{
 		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
-		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, BlocksEnding: []EndingBlock{}},
+		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}},
 	}
 	arrivals, err := q.ListUnresolvedArrivals(ctx, nightauditdb.ListUnresolvedArrivalsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})
 	if err != nil {
@@ -180,6 +180,13 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	}
 	for _, m := range masters {
 		a.warnings.OpenMasters = append(a.warnings.OpenMasters, OpenMaster{FolioID: m.FolioID, FolioNumber: m.FolioNumber, GroupCode: m.GroupCode, GroupName: m.GroupName, Balance: fixed(m.Balance, decimals)})
+	}
+	closed, err := q.ListClosedMastersWithRoutes(ctx, nightauditdb.ListClosedMastersWithRoutesParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return a, err
+	}
+	for _, c := range closed {
+		a.warnings.ClosedMasters = append(a.warnings.ClosedMasters, ClosedMaster{GroupID: c.GroupID, GroupCode: c.GroupCode, GroupName: c.GroupName, FolioNumber: c.FolioNumber, Stays: int(c.Stays)})
 	}
 	blocks, err := q.ListBlocksEndingAt(ctx, nightauditdb.ListBlocksEndingAtParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})
 	if err != nil {

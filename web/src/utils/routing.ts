@@ -7,9 +7,13 @@ import { t } from '@/i18n'
  */
 export function routingText(r: RoutingNotice | null): string {
   const g = r?.group
-  if (!r || !g || r.room === 'LINE') return ''
+  if (!r || !g) return ''
   if (r.excluded) return r.group_instructions.length ? t('groupMaster.noticeExcluded', { group: g.code }) : ''
-  if (r.room !== 'GROUP') return ''
+  // what the group sends to its master: every instruction that applies to the room (the room's own instruction for the room nights wins over the group's)
+  const what = r.group_instructions
+    .filter((i) => !(i.scope === 'ROOM' && r.room === 'LINE'))
+    .map((i) => (i.scope === 'ROOM' ? t('groupMaster.whatRoom') : i.scope === 'ALL' ? t('groupMaster.whatAll') : t('groupMaster.whatCode', { code: i.charge_code ?? String(i.charge_code_id) })))
+  if (!what.length) return ''
   if (g.master_status === 'CLOSED') return t('groupMaster.noticeMasterClosed', { folio: g.master_folio_number, group: g.code })
-  return t('groupMaster.noticeRoom', { folio: g.master_folio_number, group: g.code })
+  return t('groupMaster.noticeGoes', { folio: g.master_folio_number, group: g.code, what: what.join(', ') })
 }

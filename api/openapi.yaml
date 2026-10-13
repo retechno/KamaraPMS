@@ -1993,6 +1993,41 @@ paths:
                     items: { $ref: "#/components/schemas/PostedCharges" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/routing/move-posted:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveToMasterFolio
+      summary: Move the posted charges of the members that the instructions send to the master, in one transaction (folio.reverse, needs approval)
+      description: |
+        The transfer of charges by charge code over every member folio listed by `GET .../routing/posted`: all or nothing, with the folios locked once in ascending order, one reason and one approval. Each folio and
+        charge code is a batch of the transfer log under `Idempotency-Key#folio#code`: repeating the request answers 200 with what was moved and moves nothing twice. `expected_count` and `expected_total` are the
+        count and the total of the list the person was shown: if it changed before the locks (a night was posted, a charge reversed) the answer is 409 `POSTED_LIST_CHANGED` and nothing moves. The master folio must be
+        open (409 `FOLIO_CLOSED`), and a folio of a member that is closed is refused with its number. Nothing to move is 409 `TRANSFER_SELECTION_EMPTY`.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveToMasterRequest" }
+      responses:
+        "200":
+          description: A repeat of a request that went through.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoveToMasterResult" }
+        "201":
+          description: What moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoveToMasterResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/groups/{id}/master-folio:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -10093,6 +10128,7 @@ components:
         discount_amount: { type: string }
         service_date: { $ref: "#/components/schemas/Date" }
         description: { type: string, maxLength: 300 }
+        stay_id: { type: [integer, "null"], format: int64, description: "Only on the master folio of a group: a stay of a member, so the line says whose it is (422 `ONLY_ON_MASTER`, `NOT_IN_GROUP`). The charge stays on the master." }
     PostAdjustmentRequest:
       type: object
       required: [charge_code_id, amount, reason, approval]
@@ -10202,6 +10238,8 @@ components:
         transaction_at: { type: string, format: date-time }
         description: { type: string }
         charge_code: { type: string }
+        stay_id: { type: [integer, "null"], format: int64, description: "On the master folio of a group: the stay the line is for (a room night routed from a member, a charge posted for a guest)." }
+        guest_name: { type: string, description: "On the master folio: the guest of that stay." }
         charge_code_id: { type: [integer, "null"], format: int64 }
         revenue_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. }
         quantity: { type: string }
@@ -10389,6 +10427,9 @@ components:
         confirmation_number: { type: string }
         status: { type: string }
         excluded: { type: boolean, description: "The room stays out of the routing of the group." }
+        stay_id: { type: [integer, "null"], format: int64, description: "The open stay of the room, if any." }
+        room_number: { type: string, description: "The room the guest is in now." }
+        guest_name: { type: string }
     GroupRouting:
       type: object
       required: [group_id, master, instructions, lines]
@@ -10445,6 +10486,25 @@ components:
         charge_code_name: { type: string }
         count: { type: integer }
         total: { type: string }
+    MoveToMasterRequest:
+      type: object
+      required: [reason, approval, expected_count, expected_total]
+      additionalProperties: false
+      properties:
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+        expected_count: { type: integer, description: The number of charges of the list that was shown. }
+        expected_total: { type: string, description: The total of the list that was shown. }
+    MoveToMasterResult:
+      type: object
+      required: [batches, moved, total, replayed]
+      properties:
+        batches:
+          type: array
+          items: { $ref: "#/components/schemas/TransferResult" }
+        moved: { type: integer }
+        total: { type: string }
+        replayed: { type: boolean }
     MasterInfo:
       type: object
       required: [folio_id, folio_number, balance, group_code, group_name]
@@ -11809,6 +11869,18 @@ components:
               folio_number: { type: string }
               confirmation_number: { type: string }
               balance: { $ref: "#/components/schemas/Amount" }
+        group_masters_closed:
+          type: array
+          description: "Groups whose instructions point at a master folio that is closed or was never opened: the rooms in house go to their own folios until it is reopened. A warning: the night audit is not blocked."
+          items:
+            type: object
+            required: [group_id, group_code, group_name, folio_number, stays]
+            properties:
+              group_id: { type: integer, format: int64 }
+              group_code: { type: string }
+              group_name: { type: string }
+              folio_number: { type: string }
+              stays: { type: integer, description: The rooms in house the instructions apply to. }
         open_group_masters:
           type: array
           description: "Master folios of groups whose rooms are all over, still open, with their balance. A warning: a hotel may bill a group days later."
@@ -12677,11 +12749,12 @@ components:
         is_active: { type: boolean }
     GroupMember:
       type: object
-      required: [reservation_id, confirmation_number, status, company_id, arrival_date, departure_date, room_count]
+      required: [reservation_id, confirmation_number, status, display_status, company_id, arrival_date, departure_date, room_count]
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
-        status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] }
+        status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED], description: The status of the header of the reservation. }
+        display_status: { type: string, enum: [DRAFT, CONFIRMED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED], description: "The status staff see, derived from the rooms (the one of the reservation screens)." }
         guest_name: { type: string }
         company_id: { type: [integer, "null"], format: int64 }
         arrival_date: { $ref: "#/components/schemas/Date" }

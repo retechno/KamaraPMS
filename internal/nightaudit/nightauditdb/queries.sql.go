@@ -57,6 +57,62 @@ func (q *Queries) ListBlocksEndingAt(ctx context.Context, arg ListBlocksEndingAt
 	return items, nil
 }
 
+const listClosedMastersWithRoutes = `-- name: ListClosedMastersWithRoutes :many
+SELECT g.id AS group_id, g.code AS group_code, g.name AS group_name, COALESCE(m.id, 0)::bigint AS folio_id, COALESCE(m.folio_number, '')::text AS folio_number, count(DISTINCT s.id)::int AS stays
+FROM booking_groups g
+LEFT JOIN folios m ON m.property_id = g.property_id AND m.booking_group_id = g.id AND m.folio_type = 'MASTER'
+JOIN reservations r ON r.property_id = g.property_id AND r.booking_group_id = g.id
+JOIN reservation_rooms rr ON rr.property_id = r.property_id AND rr.reservation_id = r.id
+JOIN stays s ON s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN'
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
+WHERE g.tenant_id = $1 AND g.property_id = $2 AND (m.id IS NULL OR m.status <> 'OPEN') AND x.reservation_room_id IS NULL
+  AND EXISTS (SELECT 1 FROM group_billing_instructions i WHERE i.property_id = g.property_id AND i.booking_group_id = g.id)
+GROUP BY g.id, g.code, g.name, m.id, m.folio_number
+ORDER BY g.id
+`
+
+type ListClosedMastersWithRoutesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListClosedMastersWithRoutesRow struct {
+	GroupID     int64
+	GroupCode   string
+	GroupName   string
+	FolioID     int64
+	FolioNumber string
+	Stays       int32
+}
+
+// Groups whose instructions send charges to a master folio that is closed (or was never opened), with the rooms in house they apply to: those nights go to the guest folios, and the audit says so.
+func (q *Queries) ListClosedMastersWithRoutes(ctx context.Context, arg ListClosedMastersWithRoutesParams) ([]ListClosedMastersWithRoutesRow, error) {
+	rows, err := q.db.Query(ctx, listClosedMastersWithRoutes, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClosedMastersWithRoutesRow{}
+	for rows.Next() {
+		var i ListClosedMastersWithRoutesRow
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.GroupCode,
+			&i.GroupName,
+			&i.FolioID,
+			&i.FolioNumber,
+			&i.Stays,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOccupiedRoomIDs = `-- name: ListOccupiedRoomIDs :many
 SELECT DISTINCT sr.room_id
 FROM stay_rooms sr JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id

@@ -217,8 +217,9 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 		transactionType: TypeCharge, chargeCodeID: &id, serviceDate: cmd.serviceDate, description: desc, amounts: amountsOf(b),
 		key: nullable(cmd.key), components: componentsOf(b), reason: cmd.reason, referenceType: cmd.referenceType, referenceID: cmd.referenceID,
 	}
+	spec.stayID = cmd.stayID
 	if cmd.room != nil {
-		spec.stayRoomID, spec.stayID, spec.source = cmd.room, cmd.stayID, "ROOM_POSTING"
+		spec.stayRoomID, spec.source = cmd.room, "ROOM_POSTING"
 	}
 	return ps.insert(ctx, spec)
 }

@@ -56,13 +56,25 @@ WHERE r.property_id = @property_id AND r.booking_group_id = @group_id AND r.stat
 
 -- name: ListMembers :many
 SELECT r.id, r.confirmation_number, r.status, r.company_id,
+       -- the status staff see: DisplayStatus (reservations/model.go) in SQL, as the list of reservations has it
+       (CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
+             WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
+             WHEN agg.n_checked_in > 0 THEN 'IN_HOUSE'
+             WHEN agg.n_waiting > 0 THEN 'CONFIRMED'
+             WHEN agg.n_completed > 0 THEN 'CHECKED_OUT'
+             WHEN agg.n_no_show > 0 THEN 'NO_SHOW'
+             ELSE 'CANCELLED' END)::text AS display_status,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
        COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name
 FROM reservations r
 CROSS JOIN LATERAL (
     SELECT COALESCE(min(l.arrival_date) FILTER (WHERE l.status <> 'CANCELLED'), min(l.arrival_date)) AS arrival_date,
            COALESCE(max(l.departure_date) FILTER (WHERE l.status <> 'CANCELLED'), max(l.departure_date)) AS departure_date,
-           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count
+           count(*) FILTER (WHERE l.status <> 'CANCELLED') AS room_count,
+           count(*) FILTER (WHERE l.status = 'CHECKED_IN') AS n_checked_in,
+           count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) AS n_waiting,
+           count(*) FILTER (WHERE l.status = 'COMPLETED') AS n_completed,
+           count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
 LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id

@@ -54,7 +54,8 @@ CREATE TABLE folio_group_routing_exclusions (
 CREATE INDEX fgre_property_idx ON folio_group_routing_exclusions (property_id);
 
 -- 3. is_deposit by role (docs/architecture/18-architecture-decisions.md 3.9). A GUEST or COMPANY folio keeps the old expression (paid before the check-in of its stay, or it has no stay). A MASTER
--- has no stay, so a payment on it is a deposit only when it was taken before the first CHARGE row of the folio (a TRF charge included), and a settlement after that.
+-- has no stay, so a payment on it is a deposit only when it was taken before the first live CHARGE row of the folio (a TRF charge included; a charge that was reversed does not count, a reversal being
+-- possible only on the day of the charge), and a settlement after that.
 CREATE OR REPLACE VIEW folio_item_gl AS
 SELECT fi.tenant_id, fi.property_id, fi.id AS item_id, fi.folio_id, fi.business_date,
        CASE WHEN COALESCE(o.transaction_type, fi.transaction_type) IN ('PAYMENT', 'REFUND') THEN 'PAYMENT' ELSE 'CHARGE' END AS kind,
@@ -67,7 +68,8 @@ SELECT fi.tenant_id, fi.property_id, fi.id AS item_id, fi.folio_id, fi.business_
         AND CASE WHEN f.folio_type = 'MASTER'
                  THEN NOT EXISTS (SELECT 1 FROM folio_items c
                                    WHERE c.property_id = fi.property_id AND c.folio_id = fi.folio_id AND c.transaction_type = 'CHARGE'
-                                     AND c.id < (SELECT min(pi.id) FROM folio_items pi WHERE pi.property_id = rp.property_id AND pi.payment_id = rp.id))
+                                     AND c.id < (SELECT min(pi.id) FROM folio_items pi WHERE pi.property_id = rp.property_id AND pi.payment_id = rp.id)
+                                     AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = c.property_id AND rv.reverses_item_id = c.id))
                  ELSE (st.id IS NULL OR rp.paid_at < st.actual_check_in_at) END) AS is_deposit,
        p.id AS payment_id, p.payment_number, p.reference_number AS payment_reference,
        COALESCE(fi.department_id, o.department_id) AS department_id

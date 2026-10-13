@@ -222,6 +222,11 @@ func (s *Service) prepare(ctx context.Context, tenantID, propertyID int64, in Is
 		if row.Status != "CLOSED" {
 			block("SOURCE_NOT_CLOSED", "the folio is not closed")
 		}
+		// The master folio of a group with no company has no buyer to name, and the way its tax invoice is addressed (the contact of the group, the guests, the organiser) is not settled: it waits for the
+		// answer of the tax consultant (docs/architecture/30-group-folio.md 5.4). Nothing is invented here: the invoice cannot be issued until the group has a company.
+		if row.FolioType == "MASTER" && row.BillToCompanyID == nil {
+			block("MASTER_FOLIO_NO_COMPANY", "the master folio of a group with no company has no tax invoice yet: give the group a company, or wait for the rule on who the buyer is")
+		}
 		transfers = append(transfers, part{in.FolioID, decimal.Zero, true})
 	default:
 		return Preview{}, apperr.Invalid("the tax invoice is invalid", fieldErr("source_type", "INVALID_VALUE", "CITY_LEDGER_INVOICE or FOLIO"))

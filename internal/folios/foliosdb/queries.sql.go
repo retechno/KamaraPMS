@@ -2095,10 +2095,64 @@ func (q *Queries) ListBatchTransfers(ctx context.Context, arg ListBatchTransfers
 	return items, nil
 }
 
+const listBatchesByKeyPrefix = `-- name: ListBatchesByKeyPrefix :many
+SELECT id, tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_at, created_by FROM folio_transfer_batches WHERE tenant_id = $1 AND property_id = $2 AND starts_with(idempotency_key, $3::text) ORDER BY id
+`
+
+type ListBatchesByKeyPrefixParams struct {
+	TenantID   int64
+	PropertyID int64
+	Prefix     string
+}
+
+// The batches of a request that moves many folios in one transaction: each carries the key of the request and a suffix.
+func (q *Queries) ListBatchesByKeyPrefix(ctx context.Context, arg ListBatchesByKeyPrefixParams) ([]FolioTransferBatch, error) {
+	rows, err := q.db.Query(ctx, listBatchesByKeyPrefix, arg.TenantID, arg.PropertyID, arg.Prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FolioTransferBatch{}
+	for rows.Next() {
+		var i FolioTransferBatch
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.Kind,
+			&i.IsReturn,
+			&i.FromFolioID,
+			&i.ToFolioID,
+			&i.Scope,
+			&i.Reason,
+			&i.BusinessDate,
+			&i.ApprovedBy,
+			&i.IdempotencyKey,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFolioItems = `-- name: ListFolioItems :many
-SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number,
+SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id, c.code AS charge_code, rv.id AS reversed_by_item_id,
+       COALESCE(r.room_number, lr.room_number, '')::text AS room_number,
+       -- on the master folio of a group a line says whose it is: the guest of its stay (and the room of the stay when the line has no room segment of its own)
+       CASE WHEN fo.folio_type = 'MASTER' THEN COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '') ELSE '' END::text AS guest_name,
        COALESCE(g.group_code, 'A')::text AS group_code -- a reversal is printed with the line it reverses; a line without a row is in group A
 FROM folio_items i
+JOIN folios fo ON fo.property_id = i.property_id AND fo.id = i.folio_id
+LEFT JOIN stays st ON st.property_id = i.property_id AND st.id = i.stay_id AND fo.folio_type = 'MASTER'
+LEFT JOIN guests gu ON gu.tenant_id = st.tenant_id AND gu.id = st.guest_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms s2 JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                    WHERE s2.property_id = st.property_id AND s2.stay_id = st.id ORDER BY s2.id DESC LIMIT 1) lr ON true
 LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
@@ -2152,7 +2206,8 @@ type ListFolioItemsRow struct {
 	DepartmentID       *int64
 	ChargeCode         *string
 	ReversedByItemID   *int64
-	RoomNumber         *string
+	RoomNumber         string
+	GuestName          string
 	GroupCode          string
 }
 
@@ -2206,6 +2261,7 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 			&i.ChargeCode,
 			&i.ReversedByItemID,
 			&i.RoomNumber,
+			&i.GuestName,
 			&i.GroupCode,
 		); err != nil {
 			return nil, err
@@ -2538,6 +2594,10 @@ func (q *Queries) ListGroupInstructions(ctx context.Context, arg ListGroupInstru
 const listGroupLines = `-- name: ListGroupLines :many
 SELECT rr.id AS reservation_room_id, r.id AS reservation_id, r.confirmation_number, rr.status,
        COALESCE((SELECT s.id FROM stays s WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), 0)::bigint AS open_stay_id,
+       COALESCE((SELECT rm.room_number FROM stays s JOIN stay_rooms s2 ON s2.property_id = s.property_id AND s2.stay_id = s.id JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC, s2.id DESC LIMIT 1), '')::text AS room_number,
+       COALESCE((SELECT NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), '') FROM stays s JOIN guests gu ON gu.tenant_id = s.tenant_id AND gu.id = s.guest_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), '')::text AS guest_name,
        (x.reservation_room_id IS NOT NULL)::boolean AS excluded
 FROM reservation_rooms rr
 JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
@@ -2558,6 +2618,8 @@ type ListGroupLinesRow struct {
 	ConfirmationNumber string
 	Status             string
 	OpenStayID         int64
+	RoomNumber         string
+	GuestName          string
 	Excluded           bool
 }
 
@@ -2577,6 +2639,8 @@ func (q *Queries) ListGroupLines(ctx context.Context, arg ListGroupLinesParams) 
 			&i.ConfirmationNumber,
 			&i.Status,
 			&i.OpenStayID,
+			&i.RoomNumber,
+			&i.GuestName,
 			&i.Excluded,
 		); err != nil {
 			return nil, err
@@ -3777,6 +3841,33 @@ func (q *Queries) SetItemGroup(ctx context.Context, arg SetItemGroupParams) erro
 		arg.ActorID,
 	)
 	return err
+}
+
+const stayOfGroup = `-- name: StayOfGroup :one
+SELECT s.id FROM stays s
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = $3 AND r.booking_group_id = $4 AND s.status <> 'CANCELLED'
+`
+
+type StayOfGroupParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     int64
+	GroupID    *int64
+}
+
+// A stay of a member of the group of a master folio (a charge posted to the master can name whose it is).
+func (q *Queries) StayOfGroup(ctx context.Context, arg StayOfGroupParams) (int64, error) {
+	row := q.db.QueryRow(ctx, stayOfGroup,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StayID,
+		arg.GroupID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const sumNetOfChargeCodeOnFolio = `-- name: SumNetOfChargeCodeOnFolio :one

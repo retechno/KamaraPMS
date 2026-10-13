@@ -116,7 +116,7 @@ describe('GroupMasterFolio', () => {
   })
 
   it('closes the master folio after the question, and names the rooms that are not over', async () => {
-    const w = mountPanel()
+    const w = mountPanel(ALL, routing({ master: master({ balance: '0' }) }))
     await flushPromises()
     vi.stubGlobal('confirm', vi.fn(() => true))
     POST = vi.fn().mockRejectedValue(new ApiError({ code: 'MASTER_FOLIO_GROUP_ACTIVE', title: 'active', status: 409, context: { lines: [{ reservation_room_id: 1, confirmation_number: 'RES000001', status: 'IN_HOUSE' }], lines_total: 1 } } as never))
@@ -135,10 +135,21 @@ describe('GroupMasterFolio', () => {
     expect(closed.get('[data-testid=master-status]').text()).toBe('Closed')
   })
 
-  it('offers to move what is already posted, one transfer for each folio and code, with one reason and one approval', async () => {
+  it('does not offer to close a master that owes, and says why', async () => {
+    const w = mountPanel(ALL, routing({ master: master({ balance: '2000000' }) }))
+    await flushPromises()
+    expect(w.get('[data-testid=master-close]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=master-close-hint]').text()).toBe('The balance of the master folio (2,000,000) must be zero before it closes: have it paid, or move it to the city ledger of the company.')
+    const paid = mountPanel(ALL, routing({ master: master({ balance: '0' }) }))
+    await flushPromises()
+    expect(paid.get('[data-testid=master-close]').attributes('disabled')).toBeUndefined()
+    expect(paid.find('[data-testid=master-close-hint]').exists()).toBe(false)
+  })
+
+  it('offers to move what is already posted, in one request with one key, one reason and one approval', async () => {
     const w = mountPanel(ALL, routing(), posted)
     await flushPromises()
-    expect(w.get('[data-testid=posted-text]').text()).toBe('3 charge(s) on 2 folio(s) of the members are already posted and would now go to the master folio.')
+    expect(w.get('[data-testid=posted-text]').text()).toBe('3 charge(s) already posted on 2 folio(s) of the members match these instructions, but they stay on those folios until they are moved.')
     await w.get('[data-testid=posted-move]').trigger('click')
     await flushPromises()
     expect(body('[data-testid=move-posted-total]').text()).toBe('3 charge(s), 2,700,000')
@@ -149,18 +160,23 @@ describe('GroupMasterFolio', () => {
     ;(document.body.querySelector('[data-testid=move-posted-form]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
     expect(POST).not.toHaveBeenCalled() // the approval comes first
+    POST = vi.fn(async () => ({ data: { batches: [], moved: 3, total: '2700000', replayed: false } }))
     await type('input[name=approval_email]', 'boss@hotel.test')
     await type('input[name=approval_password]', 'secret')
     ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
-    expect(POST.mock.calls.map((c) => c[1].params.path.id)).toEqual([11, 12])
-    expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/folios/{id}/transfer-items')
-    expect(POST.mock.calls[0]?.[1].body).toEqual({ folio_id: 30, charge_code_id: 3, reason: 'the group pays the rooms', approval: { email: 'boss@hotel.test', password: 'secret' } })
+    expect(POST).toHaveBeenCalledTimes(1) // one request for all the folios, not one for each
+    const call = POST.mock.calls[0]
+    expect(call?.[0]).toBe('/api/v1/properties/{propertyId}/groups/{id}/routing/move-posted')
+    expect(call?.[1].params.path).toEqual({ propertyId: 7, id: 4 })
+    expect(typeof call?.[1].params.header['Idempotency-Key']).toBe('string')
+    // what was shown is what is approved: the count and the total of the list
+    expect(call?.[1].body).toEqual({ reason: 'the group pays the rooms', approval: { email: 'boss@hotel.test', password: 'secret' }, expected_count: 3, expected_total: '2700000' })
     expect(w.get('[data-testid=master-notice]').text()).toBe('3 charge(s) moved to FOL000030.')
     expect(has('[data-testid=move-posted-dialog]')).toBe(false)
   })
 
-  it('says what was moved when a request fails half way', async () => {
+  it('keeps the key of the request when the answer is lost, so a repeat that went through moves nothing twice', async () => {
     const w = mountPanel(ALL, routing(), posted)
     await flushPromises()
     await w.get('[data-testid=posted-move]').trigger('click')
@@ -168,12 +184,39 @@ describe('GroupMasterFolio', () => {
     await type('input[name=move_reason]', 'x')
     ;(document.body.querySelector('[data-testid=move-posted-form]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
-    POST = vi.fn().mockResolvedValueOnce({ data: {} }).mockRejectedValueOnce(new ApiError({ code: 'FOLIO_CLOSED', title: 'closed', status: 409 } as never))
+    POST = vi.fn().mockRejectedValueOnce(new ApiError({ code: 'INTERNAL', title: 'lost', status: 500 } as never)).mockResolvedValueOnce({ data: { batches: [], moved: 3, total: '2700000', replayed: true } })
+    const submit = async () => {
+      await type('input[name=approval_email]', 'boss@hotel.test')
+      await type('input[name=approval_password]', 'secret')
+      ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+      await flushPromises()
+    }
+    await submit()
+    expect(has('[data-testid=approval-error]') || has('[data-testid=approval-dialog]')).toBe(true) // the dialog stays: nothing is lost
+    await submit()
+    const keys = POST.mock.calls.map((c) => c[1].params.header['Idempotency-Key'])
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+    expect(w.get('[data-testid=master-notice]').text()).toBe('3 charge(s) moved to FOL000030.')
+  })
+
+  it('moves nothing and reads the list again when what is posted changed since it was shown', async () => {
+    const w = mountPanel(ALL, routing(), posted)
+    await flushPromises()
+    await w.get('[data-testid=posted-move]').trigger('click')
+    await flushPromises()
+    await type('input[name=move_reason]', 'x')
+    ;(document.body.querySelector('[data-testid=move-posted-form]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    POST = vi.fn().mockRejectedValue(new ApiError({ code: 'POSTED_LIST_CHANGED', title: 'changed', status: 409 } as never))
+    const reads = GET.mock.calls.length
     await type('input[name=approval_email]', 'boss@hotel.test')
     await type('input[name=approval_password]', 'secret')
     ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
-    expect(w.get('[data-testid=master-notice]').text()).toBe('2 charge(s) were moved to FOL000030 before a request failed: nothing else moved.')
+    expect(w.get('[data-testid=master-notice]').text()).toBe('What is posted changed since the list was shown: nothing was moved. Look at the list again and ask again.')
+    expect(has('[data-testid=move-posted-dialog]')).toBe(false)
+    expect(GET.mock.calls.length).toBeGreaterThan(reads) // the list is read again
   })
 
   it('is in Indonesian too', async () => {

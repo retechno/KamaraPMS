@@ -108,6 +108,18 @@ func (s *Service) PostCharge(ctx context.Context, propertyID, folioID int64, key
 				if err := requireOpen(folio); err != nil {
 					return err
 				}
+				if in.StayID != nil {
+					if folio.FolioType != FolioTypeMaster || folio.BookingGroupID == nil {
+						return apperr.Invalid("the charge is invalid", fieldErr("stay_id", "ONLY_ON_MASTER", "only on the master folio of a group"))
+					}
+					if _, err := s.q(ctx).StayOfGroup(ctx, foliosdb.StayOfGroupParams{TenantID: p.TenantID, PropertyID: propertyID, StayID: *in.StayID, GroupID: folio.BookingGroupID}); err != nil {
+						if errors.Is(err, pgx.ErrNoRows) {
+							return apperr.Invalid("the charge is invalid", fieldErr("stay_id", "NOT_IN_GROUP", "a stay of a member of the group"))
+						}
+						return err
+					}
+					cmd.stayID = in.StayID
+				}
 				if cmd.serviceDate.IsZero() {
 					cmd.serviceDate = day.BusinessDate
 				} else if cmd.serviceDate.After(day.BusinessDate) {

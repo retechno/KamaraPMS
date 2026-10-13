@@ -1316,7 +1316,12 @@ SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
        COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = p.property_id AND a.payment_id = p.id AND a.status = 'POSTED'
                   AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)), 0)::numeric AS credited,
        f.folio_number, COALESCE(r.confirmation_number, bg.code, '')::text AS confirmation_number,
-       COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
+       COALESCE(s.stay_number, '')::text AS stay_number,
+       -- a transfer from the master folio of a group has no stay: it can be invoiced once every room of the group is over (the same "has left" the guest's check-out says for a folio of a stay)
+       (CASE WHEN f.folio_type = 'MASTER' THEN (CASE WHEN EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations lr ON lr.property_id = l.property_id AND lr.id = l.reservation_id
+                                                                     WHERE l.property_id = f.property_id AND lr.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW'))
+                                                 THEN 'OPEN' ELSE 'CHECKED_OUT' END)
+             ELSE COALESCE(s.status, '') END)::text AS stay_status,
        s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
        COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
        COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)

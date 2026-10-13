@@ -197,7 +197,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),
 			TaxTotal: fixed(r.TaxTotal, decimals), Debit: fixed(r.Debit, decimals), Credit: fixed(r.Credit, decimals), Components: cs,
 			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, GroupCode: r.GroupCode, Reason: deref(r.Reason),
-			RoomNumber: deref(r.RoomNumber), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
+			RoomNumber: r.RoomNumber, StayID: stayShown(r.StayID, r.GuestName), GuestName: r.GuestName, CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
 		}
 	}
 	return out, nil
@@ -407,4 +407,12 @@ func tenantOf(ctx context.Context) int64 {
 		return 0
 	}
 	return p.TenantID
+}
+
+// stayShown is the stay of a line as the view gives it: only on the master folio of a group (where the query names the guest), because on the folio of a stay every line has the stay of the folio.
+func stayShown(stay *int64, guest string) *int64 {
+	if guest == "" {
+		return nil
+	}
+	return stay
 }
