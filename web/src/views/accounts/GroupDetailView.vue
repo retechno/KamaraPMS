@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import GroupBulkRooms from '@/components/groups/GroupBulkRooms.vue'
+import GroupRoomingList from '@/components/groups/GroupRoomingList.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -15,7 +17,6 @@ import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { statusLabel } from '@/utils/reservations'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -26,6 +27,8 @@ const members = ref<GroupMember[]>([])
 const error = ref<ApiError | null>(null)
 const editing = ref(false)
 const saving = ref(false)
+const bulkOpen = ref(false)
+const roomingReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
@@ -68,6 +71,12 @@ function startEdit(): void {
   editing.value = true
 }
 
+/** Rooms were booked in bulk: the members and the rooming list are read again. */
+async function bulkSaved(): Promise<void> {
+  await load()
+  roomingReload.value++
+}
+
 async function save(): Promise<void> {
   saving.value = true
   error.value = null
@@ -104,14 +113,17 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.status') }}</dt><dd class="m-0 text-sm">{{ group.is_active ? t('setup.active') : t('groupDetail.inactiveNote') }}</dd></div>
       </dl>
       <p v-if="group.notes" class="mb-0 mt-3 text-sm text-muted-foreground">{{ group.notes }}</p>
-      <div class="mt-4 flex justify-end gap-2">
+      <div class="mt-4 flex flex-wrap justify-end gap-2">
         <Button v-if="canManage" type="button" variant="outline" data-testid="edit-group" @click="startEdit">{{ t('common.edit') }}</Button>
         <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
           <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
         </RouterLink>
+        <Button v-if="canBook" type="button" data-testid="bulk-rooms-open" @click="bulkOpen = !bulkOpen">{{ t('groupRooms.open') }}</Button>
       </div>
     </CardContent>
   </Card>
+
+  <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 
   <Card v-if="group && editing" class="mb-4">
     <form v-autofocus novalidate data-testid="group-form" @submit.prevent="save">
@@ -159,8 +171,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')">
         <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`" class="text-primary hover:underline">{{ row.confirmation_number }}</RouterLink></template>
         <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
-        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" :label="statusLabel(row.status)" /></template>
+        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" /></template>
       </DataTable>
     </CardContent>
   </Card>
+
+  <GroupRoomingList v-if="group" class="mt-4" :group-id="group.id" :reload="roomingReload" />
 </template>

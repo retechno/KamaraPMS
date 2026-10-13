@@ -246,6 +246,10 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 				return err
 			}
 		}
+		if b := batchFrom(ctx); b != nil && b.quiet { // a batch reads its reservations back in one query: the full view of each would cost dozens of statements a room
+			out = Reservation{ID: res.ID, ConfirmationNumber: res.ConfirmationNumber, Status: res.Status, Version: res.Version}
+			return nil
+		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)
 		return err
 	})

@@ -40,6 +40,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/reservations/{id}/rooms/{lineId}/no-show", httpx.HandlerFunc(h.noShow))
 	mux.Handle("POST "+p+"/reservations/{id}/rooms/{lineId}/assign-room", httpx.HandlerFunc(h.assign))
 	mux.Handle("POST "+p+"/reservations/{id}/rooms/{lineId}/unassign-room", httpx.HandlerFunc(h.unassign))
+	h.registerGroupRooms(mux)
 }
 
 func queryDate(r *http.Request, name string, errs *[]apperr.FieldError, required bool) *civil.Date {

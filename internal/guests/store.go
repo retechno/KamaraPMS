@@ -26,7 +26,7 @@ func toGuest(g guestsdb.Guest) Guest {
 		ID: g.ID, Code: g.Code, OriginPropertyID: g.OriginPropertyID, FirstName: deref(g.FirstName), LastName: g.LastName,
 		Email: deref(g.Email), Phone: deref(g.Phone), Nationality: deref(g.Nationality), CountryCode: deref(g.CountryCode),
 		DateOfBirth: g.DateOfBirth, Gender: deref(g.Gender), IDType: deref(g.IDType), IDNumber: deref(g.IDNumber),
-		Address: deref(g.Address), City: deref(g.City), Notes: deref(g.Notes), CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
+		Address: deref(g.Address), City: deref(g.City), Notes: deref(g.Notes), IsPlaceholder: g.IsPlaceholder, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
 	}
 }
 

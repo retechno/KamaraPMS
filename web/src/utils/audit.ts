@@ -48,6 +48,8 @@ export const AUDIT_ACTIONS = [
   'folio_item.group_changed',
   'group.created',
   'group.updated',
+  'group.rooms_added',
+  'group.rooming_list_updated',
   'guest.created',
   'guest.updated',
   'housekeeping.changed',

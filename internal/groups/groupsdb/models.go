@@ -11,21 +11,22 @@ import (
 )
 
 type BookingGroup struct {
-	ID            int64
-	TenantID      int64
-	PropertyID    int64
-	Code          string
-	Name          string
-	CompanyID     *int64
-	ContactName   *string
-	ContactEmail  *string
-	ContactPhone  *string
-	ArrivalDate   civil.Date
-	DepartureDate civil.Date
-	Notes         *string
-	IsActive      bool
-	CreatedAt     time.Time
-	CreatedBy     *int64
-	UpdatedAt     time.Time
-	UpdatedBy     *int64
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	Code           string
+	Name           string
+	CompanyID      *int64
+	ContactName    *string
+	ContactEmail   *string
+	ContactPhone   *string
+	ArrivalDate    civil.Date
+	DepartureDate  civil.Date
+	Notes          *string
+	IsActive       bool
+	CreatedAt      time.Time
+	CreatedBy      *int64
+	UpdatedAt      time.Time
+	UpdatedBy      *int64
+	ContactGuestID *int64
 }

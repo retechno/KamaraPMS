@@ -83,7 +83,7 @@ INSERT INTO booking_groups (
     $1, $2, $3, $4, $5, $6, $7, $8,
     $9, $10, $11, $12, $13, $13
 )
-RETURNING id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by, contact_guest_id
 `
 
 type CreateGroupParams struct {
@@ -137,12 +137,13 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Booki
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ContactGuestID,
 	)
 	return i, err
 }
 
 const getGroup = `-- name: GetGroup :one
-SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, c.name AS company_name,
+SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, g.contact_guest_id, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
@@ -175,6 +176,7 @@ type GetGroupRow struct {
 	CreatedBy        *int64
 	UpdatedAt        time.Time
 	UpdatedBy        *int64
+	ContactGuestID   *int64
 	CompanyName      *string
 	ReservationCount int32
 	RoomCount        int32
@@ -201,6 +203,7 @@ func (q *Queries) GetGroup(ctx context.Context, arg GetGroupParams) (GetGroupRow
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ContactGuestID,
 		&i.CompanyName,
 		&i.ReservationCount,
 		&i.RoomCount,
@@ -209,7 +212,7 @@ func (q *Queries) GetGroup(ctx context.Context, arg GetGroupParams) (GetGroupRow
 }
 
 const getGroupForUpdate = `-- name: GetGroupForUpdate :one
-SELECT id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by FROM booking_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by, contact_guest_id FROM booking_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetGroupForUpdateParams struct {
@@ -239,12 +242,13 @@ func (q *Queries) GetGroupForUpdate(ctx context.Context, arg GetGroupForUpdatePa
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ContactGuestID,
 	)
 	return i, err
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, c.name AS company_name,
+SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, g.contact_guest_id, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
@@ -286,6 +290,7 @@ type ListGroupsRow struct {
 	CreatedBy        *int64
 	UpdatedAt        time.Time
 	UpdatedBy        *int64
+	ContactGuestID   *int64
 	CompanyName      *string
 	ReservationCount int32
 	RoomCount        int32
@@ -326,6 +331,7 @@ func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]ListG
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.ContactGuestID,
 			&i.CompanyName,
 			&i.ReservationCount,
 			&i.RoomCount,
@@ -408,7 +414,7 @@ UPDATE booking_groups SET
     contact_phone = $5, arrival_date = $6, departure_date = $7, notes = $8,
     is_active = $9, updated_by = $10
 WHERE tenant_id = $11 AND property_id = $12 AND id = $13
-RETURNING id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, property_id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, notes, is_active, created_at, created_by, updated_at, updated_by, contact_guest_id
 `
 
 type UpdateGroupParams struct {
@@ -462,6 +468,7 @@ func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Booki
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.ContactGuestID,
 	)
 	return i, err
 }

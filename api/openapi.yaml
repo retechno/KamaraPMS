@@ -4312,6 +4312,150 @@ paths:
               schema: { $ref: "#/components/schemas/GroupMemberList" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/room-batches/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: previewGroupRooms
+      summary: What a bulk booking of rooms for a group would do (reservation.create)
+      description: |
+        Read-only, no lock, no write: a snapshot. For each row the price in force of every night (`uniform` and `rate_per_night` say when it is one price, the default of the form), the estimate of a room and of
+        the row, the sales restrictions that stand in the way, and **the rooms left per room type per night after the whole request** (the rows are added up in order). A row that does not fit has `short`
+        (the first night, and by how many rooms). A row that cannot be sold or priced is a problem of that row, not an error of the request. The save asks again under the locks.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupRoomBatchRequest" }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupRoomPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/room-batches:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: createGroupRooms
+      summary: Book many rooms for a group, one reservation for each room, all or nothing (reservation.create, guest.write)
+      description: |
+        One transaction: the business day, the room types of every row (ascending) and the group are locked once at the start, then each room is booked through the booking engine that exists. If any room
+        does not fit nothing is kept (409 `ROOM_TYPE_NOT_AVAILABLE`, with `context.row` and `context.room_in_row`; a field error names `rows[n]`). At most 100 rooms and 20 rows (422 `TOO_MANY_ROOMS`,
+        `TOO_MANY_ROWS`). Each room gets a guest of its own named "group name · n" (a placeholder, left out of the guest search until it is named: see the rooming list) and the reservation is booked by the
+        contact of the group (409 `GROUP_CONTACT_REQUIRED` when there is none and no `booker_guest_id`). No room is assigned and no confirmation e-mail is queued for each room.
+
+        A row whose `rate_per_night` differs from the price in force is a rate override: one `rate_override_reason` and one `rate_override_approval` for the whole request (the approval is the caller's own
+        when they hold `reservation.override_rate_approve`). **Idempotent**: the same `Idempotency-Key` and body returns the reservations that were made (200, `replayed`), another body is 422
+        `IDEMPOTENCY_KEY_REUSED`.
+      tags: [groups]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 90 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupRoomBatchRequest" }
+      responses:
+        "200":
+          description: The request was made before; these are its reservations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupRoomBatchResult" }
+        "201":
+          description: The reservations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupRoomBatchResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/rooming-list:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getRoomingList
+      summary: The rooms booked for a group with their guests (reservation.read, guest.read)
+      tags: [groups]
+      responses:
+        "200":
+          description: One row for each reservation room of the group.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RoomingRow" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateRoomingList
+      summary: Edit the guests of rooms of a group, all rows or none (reservation.update, guest.write)
+      description: |
+        Each row is the whole name, e-mail and phone of the guest of a room (an empty e-mail or phone clears it). It edits that guest in place; naming a placeholder makes it a guest like any other. A room
+        of another group, a cancelled room, a room without a guest and an invalid e-mail or phone are field errors (`rows[n].…`) and nothing is changed. To give a room a guest that exists already, change
+        the guest of the room on its reservation.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              additionalProperties: false
+              properties:
+                rows:
+                  type: array
+                  items: { $ref: "#/components/schemas/RoomingEdit" }
+      responses:
+        "200":
+          description: What was changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomingResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/rooming-list/import:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: dry_run, in: query, schema: { type: boolean }, description: "true: check the file and say what would change, write nothing." }
+    post:
+      operationId: importRoomingList
+      summary: Import the rooming list from a CSV, all or nothing (reservation.update, guest.write)
+      description: |
+        The body is the CSV (`text/csv`): a header row with `confirmation_number` and `name` (required), `email` and `phone`; one row for each reservation room (a reservation with several rooms is edited
+        in the list). **Every wrong row is reported**, not the first only, with its line of the file. With `dry_run=true` the answer is 200 with `problems` and `changes` and nothing is written. Without it,
+        a file with a wrong row is 422 `ROOMING_IMPORT_INVALID` (the rows are in `context.problems`) and nothing is changed.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomingImport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -8390,7 +8534,7 @@ components:
         next_cursor: { type: string }
     Guest:
       type: object
-      required: [id, code, last_name, created_at, updated_at]
+      required: [id, code, last_name, is_placeholder, created_at, updated_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string, examples: [GST000001] }
@@ -8408,6 +8552,7 @@ components:
         address: { type: string }
         city: { type: string }
         notes: { type: string }
+        is_placeholder: { type: boolean, description: "Made by a group booking and not yet named; left out of the guest search until it is." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     GuestView:
@@ -11774,7 +11919,7 @@ components:
         is_active: { type: boolean }
     Group:
       type: object
-      required: [id, code, name, company_id, arrival_date, departure_date, is_active, reservation_count, room_count, created_at]
+      required: [id, code, name, company_id, contact_guest_id, arrival_date, departure_date, is_active, reservation_count, room_count, created_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -11784,6 +11929,7 @@ components:
         contact_name: { type: string }
         contact_email: { type: string }
         contact_phone: { type: string }
+        contact_guest_id: { type: [integer, "null"], format: int64, description: "The guest made from the contact, the booker of the rooms booked for the group in bulk (null until the first bulk booking)." }
         arrival_date: { $ref: "#/components/schemas/Date" }
         departure_date: { $ref: "#/components/schemas/Date" }
         notes: { type: string }
@@ -11791,6 +11937,182 @@ components:
         reservation_count: { type: integer, description: Reservations that are not cancelled. }
         room_count: { type: integer, description: Rooms that are not cancelled. }
         created_at: { type: string, format: date-time }
+    GroupRoomBatchRow:
+      type: object
+      required: [room_type_id, rate_plan_id, count, arrival_date, departure_date, adult_count]
+      additionalProperties: false
+      properties:
+        room_type_id: { type: integer, format: int64 }
+        rate_plan_id: { type: integer, format: int64 }
+        count: { type: integer, minimum: 1, maximum: 100, description: The number of rooms; each is its own reservation. }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        adult_count: { type: integer, minimum: 1 }
+        child_count: { type: integer, minimum: 0 }
+        rate_per_night: { type: string, description: "Replaces the price of every night of the row (a rate override). Empty or absent: the price in force." }
+        occupancy_reason: { type: string, description: Why the rooms are free (a complimentary or house use plan). }
+    GroupRoomBatchRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows: { type: array, minItems: 1, maxItems: 20, items: { $ref: "#/components/schemas/GroupRoomBatchRow" } }
+        source: { type: string, description: "The source of the reservations; OTHER when empty." }
+        confirm: { type: boolean, description: "Default true. False makes drafts, which hold no inventory." }
+        booker_guest_id: { type: integer, format: int64, description: The booker; by default the guest made from the contact of the group. }
+        rate_override_reason: { type: string, maxLength: 500, description: One reason for every row that has a rate of its own. }
+        rate_override_approval: { $ref: "#/components/schemas/Approval", description: "One approval for the whole request: the credentials of a user holding `reservation.override_rate_approve`; not needed when the caller holds that permission too." }
+        occupancy_approval: { $ref: "#/components/schemas/Approval" }
+        exceed_free_quota: { type: boolean }
+        restriction_override: { $ref: "#/components/schemas/RestrictionOverride" }
+    GroupRoomBatchReservation:
+      type: object
+      required: [position, row, reservation_id, confirmation_number, line_id, guest_id, room_type_id, arrival_date, departure_date]
+      properties:
+        position: { type: integer, description: "The place of the room in the request, from 1: the rows in order, the rooms of a row in order." }
+        row: { type: integer, description: The row, from 0. }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        line_id: { type: integer, format: int64 }
+        guest_id: { type: [integer, "null"], format: int64 }
+        room_type_id: { type: integer, format: int64 }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+    GroupRoomBatchResult:
+      type: object
+      required: [reservations, rooms, nights, replayed]
+      properties:
+        reservations: { type: array, items: { $ref: "#/components/schemas/GroupRoomBatchReservation" } }
+        rooms: { type: integer }
+        nights: { type: integer, description: Room nights in all. }
+        replayed: { type: boolean, description: The answer is the one stored for the Idempotency-Key; nothing was made now. }
+    GroupRoomPreviewNight:
+      type: object
+      required: [date, amount]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        amount: { type: string }
+    GroupRoomPreviewProblem:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: "`STAY_RESTRICTED`, `RATE_NOT_SET`, `OUTSIDE_GROUP_DATES`, `ROOM_TYPE_NOT_AVAILABLE`, `OCCUPANCY_EXCEEDED`, `IN_THE_PAST`, `PERMISSION_DENIED`, `OVERRIDE_NOT_ALLOWED`, or the code of the engine." }
+        message: { type: string }
+        date: { $ref: "#/components/schemas/Date" }
+    GroupRoomPreviewRow:
+      type: object
+      required: [row, room_type_id, room_type_code, rooms, nights, nightly, uniform, rate_per_night, override, room_estimate, row_estimate, problems]
+      properties:
+        row: { type: integer }
+        room_type_id: { type: integer, format: int64 }
+        room_type_code: { type: string }
+        rooms: { type: integer }
+        nights: { type: integer }
+        nightly: { type: array, items: { $ref: "#/components/schemas/GroupRoomPreviewNight" }, description: The price in force of each night. }
+        uniform: { type: boolean, description: Every night has the same price in force. }
+        grid_rate: { type: string, description: The price when `uniform`. }
+        rate_per_night: { type: string, description: "What the row sells at: the request's rate, else the price in force when `uniform`, else empty." }
+        override: { type: boolean, description: The rate of the row differs from the price in force. }
+        room_estimate: { $ref: "#/components/schemas/Estimate" }
+        row_estimate: { $ref: "#/components/schemas/Estimate" }
+        short:
+          type: object
+          required: [date, missing]
+          properties:
+            date: { $ref: "#/components/schemas/Date" }
+            missing: { type: integer }
+        problems: { type: array, items: { $ref: "#/components/schemas/GroupRoomPreviewProblem" } }
+    GroupRoomPreview:
+      type: object
+      required: [rows, availability, rooms, nights, total, needs_approval, ok]
+      properties:
+        rows: { type: array, items: { $ref: "#/components/schemas/GroupRoomPreviewRow" } }
+        availability:
+          type: array
+          items:
+            type: object
+            required: [room_type_id, code, nights]
+            properties:
+              room_type_id: { type: integer, format: int64 }
+              code: { type: string }
+              nights:
+                type: array
+                items:
+                  type: object
+                  required: [date, available, needed, left]
+                  properties:
+                    date: { $ref: "#/components/schemas/Date" }
+                    available: { type: integer }
+                    needed: { type: integer }
+                    left: { type: integer, description: Negative when the request is short that night. }
+        rooms: { type: integer }
+        nights: { type: integer }
+        total: { $ref: "#/components/schemas/Estimate" }
+        needs_approval: { type: boolean, description: "A row has a rate of its own and the caller cannot approve it: the save needs a reason and an approver's credentials." }
+        ok: { type: boolean, description: No row has a problem. }
+    RoomingRow:
+      type: object
+      required: [reservation_id, confirmation_number, reservation_status, version, line_id, line_status, room_type, arrival_date, departure_date, guest_id, name, email, phone, is_placeholder]
+      properties:
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        reservation_status: { type: string }
+        version: { type: integer, format: int32, description: The version of the reservation. }
+        line_id: { type: integer, format: int64 }
+        line_status: { type: string }
+        room_type: { type: string }
+        room_number: { type: string }
+        arrival_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date" }
+        guest_id: { type: [integer, "null"], format: int64 }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        is_placeholder: { type: boolean, description: "A guest made by a group booking and not yet named." }
+    RoomingEdit:
+      type: object
+      required: [line_id, name]
+      additionalProperties: false
+      properties:
+        line_id: { type: integer, format: int64 }
+        name: { type: string, description: "The whole name; the last word is the last name." }
+        email: { type: string }
+        phone: { type: string }
+    RoomingResult:
+      type: object
+      required: [updated, unchanged]
+      properties:
+        updated: { type: integer }
+        unchanged: { type: integer }
+    RoomingChange:
+      type: object
+      required: [line_id, confirmation_number, from_name, to_name, from_email, to_email, from_phone, to_phone]
+      properties:
+        line_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        from_name: { type: string }
+        to_name: { type: string }
+        from_email: { type: string }
+        to_email: { type: string }
+        from_phone: { type: string }
+        to_phone: { type: string }
+    RoomingProblem:
+      type: object
+      required: [row, column, code, message]
+      properties:
+        row: { type: integer, description: The line of the file (or the place in the request), from 1. }
+        column: { type: string }
+        code: { type: string }
+        message: { type: string }
+    RoomingImport:
+      type: object
+      required: [dry_run, rows, changes, problems, applied]
+      properties:
+        dry_run: { type: boolean }
+        rows: { type: integer }
+        changes: { type: array, items: { $ref: "#/components/schemas/RoomingChange" } }
+        problems: { type: array, items: { $ref: "#/components/schemas/RoomingProblem" } }
+        applied: { type: boolean }
     GroupPage:
       type: object
       required: [data]

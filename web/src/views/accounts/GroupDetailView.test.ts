@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import GroupDetailView from './GroupDetailView.vue'
@@ -45,6 +46,38 @@ describe('GroupDetailView', () => {
     expect(w.get('[data-testid=member-RES000011]').text()).toContain('Siti Nurhaliza')
     expect(w.get('[data-testid=member-RES000012]').text()).toContain('Cancelled')
     expect(w.get('[data-testid=add-rooms]').attributes('href')).toBe('/reservations/new?group=4')
+  })
+
+  it('shows the status of a reservation as a translated badge', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=member-RES000011]').text()).toContain('Confirmed')
+    setLocale('id')
+    await flushPromises()
+    expect(w.get('[data-testid=member-RES000011]').text()).not.toContain('Confirmed')
+    setLocale('en')
+  })
+
+  it('opens the form of rooms in bulk, and the rooming list is under the reservations', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=bulk-rooms]').exists()).toBe(false)
+    await w.get('[data-testid=bulk-rooms-open]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=bulk-rooms]').exists()).toBe(true)
+    await w.get('[data-testid=bulk-close]').trigger('click')
+    expect(w.find('[data-testid=bulk-rooms]').exists()).toBe(false)
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/rooming-list'))).toBe(false) // no guest.read: the list is not asked for
+    const reader = mountView(group(), ['reservation.read'])
+    await flushPromises()
+    expect(reader.find('[data-testid=bulk-rooms-open]').exists()).toBe(false)
+    const inactive = mountView(group({ is_active: false }))
+    await flushPromises()
+    expect(inactive.find('[data-testid=bulk-rooms-open]').exists()).toBe(false)
+    const full = mountView(group(), ['group.manage', 'reservation.read', 'reservation.create', 'guest.read'])
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/rooming-list'))).toBe(true)
+    expect(full.find('[data-testid=rooming-list]').exists()).toBe(true)
   })
 
   it('offers no booking into an inactive group, nor to roles that cannot create reservations', async () => {

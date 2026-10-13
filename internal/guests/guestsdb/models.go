@@ -32,4 +32,5 @@ type Guest struct {
 	CreatedBy        *int64
 	UpdatedAt        time.Time
 	UpdatedBy        *int64
+	IsPlaceholder    bool
 }

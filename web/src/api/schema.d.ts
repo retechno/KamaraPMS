@@ -3665,6 +3665,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/groups/{id}/room-batches/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a bulk booking of rooms for a group would do (reservation.create)
+         * @description Read-only, no lock, no write: a snapshot. For each row the price in force of every night (`uniform` and `rate_per_night` say when it is one price, the default of the form), the estimate of a room and of
+         *     the row, the sales restrictions that stand in the way, and **the rooms left per room type per night after the whole request** (the rows are added up in order). A row that does not fit has `short`
+         *     (the first night, and by how many rooms). A row that cannot be sold or priced is a problem of that row, not an error of the request. The save asks again under the locks.
+         */
+        post: operations["previewGroupRooms"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/room-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book many rooms for a group, one reservation for each room, all or nothing (reservation.create, guest.write)
+         * @description One transaction: the business day, the room types of every row (ascending) and the group are locked once at the start, then each room is booked through the booking engine that exists. If any room
+         *     does not fit nothing is kept (409 `ROOM_TYPE_NOT_AVAILABLE`, with `context.row` and `context.room_in_row`; a field error names `rows[n]`). At most 100 rooms and 20 rows (422 `TOO_MANY_ROOMS`,
+         *     `TOO_MANY_ROWS`). Each room gets a guest of its own named "group name · n" (a placeholder, left out of the guest search until it is named: see the rooming list) and the reservation is booked by the
+         *     contact of the group (409 `GROUP_CONTACT_REQUIRED` when there is none and no `booker_guest_id`). No room is assigned and no confirmation e-mail is queued for each room.
+         *
+         *     A row whose `rate_per_night` differs from the price in force is a rate override: one `rate_override_reason` and one `rate_override_approval` for the whole request (the approval is the caller's own
+         *     when they hold `reservation.override_rate_approve`). **Idempotent**: the same `Idempotency-Key` and body returns the reservations that were made (200, `replayed`), another body is 422
+         *     `IDEMPOTENCY_KEY_REUSED`.
+         */
+        post: operations["createGroupRooms"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/rooming-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The rooms booked for a group with their guests (reservation.read, guest.read) */
+        get: operations["getRoomingList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit the guests of rooms of a group, all rows or none (reservation.update, guest.write)
+         * @description Each row is the whole name, e-mail and phone of the guest of a room (an empty e-mail or phone clears it). It edits that guest in place; naming a placeholder makes it a guest like any other. A room
+         *     of another group, a cancelled room, a room without a guest and an invalid e-mail or phone are field errors (`rows[n].…`) and nothing is changed. To give a room a guest that exists already, change
+         *     the guest of the room on its reservation.
+         */
+        patch: operations["updateRoomingList"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/rooming-list/import": {
+        parameters: {
+            query?: {
+                /** @description true: check the file and say what would change, write nothing. */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the rooming list from a CSV, all or nothing (reservation.update, guest.write)
+         * @description The body is the CSV (`text/csv`): a header row with `confirmation_number` and `name` (required), `email` and `phone`; one row for each reservation room (a reservation with several rooms is edited
+         *     in the list). **Every wrong row is reported**, not the first only, with its line of the file. With `dry_run=true` the answer is 200 with `problems` and `changes` and nothing is written. Without it,
+         *     a file with a wrong row is 422 `ROOMING_IMPORT_INVALID` (the rows are in `context.problems`) and nothing is changed.
+         */
+        post: operations["importRoomingList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/folios/{id}/city-ledger-transfers": {
         parameters: {
             query?: never;
@@ -7359,6 +7468,8 @@ export interface components {
             address?: string;
             city?: string;
             notes?: string;
+            /** @description Made by a group booking and not yet named; left out of the guest search until it is. */
+            is_placeholder: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -10693,6 +10804,11 @@ export interface components {
             contact_name?: string;
             contact_email?: string;
             contact_phone?: string;
+            /**
+             * Format: int64
+             * @description The guest made from the contact, the booker of the rooms booked for the group in bulk (null until the first bulk booking).
+             */
+            contact_guest_id: number | null;
             arrival_date: components["schemas"]["Date"];
             departure_date: components["schemas"]["Date"];
             notes?: string;
@@ -10703,6 +10819,185 @@ export interface components {
             room_count: number;
             /** Format: date-time */
             created_at: string;
+        };
+        GroupRoomBatchRow: {
+            /** Format: int64 */
+            room_type_id: number;
+            /** Format: int64 */
+            rate_plan_id: number;
+            /** @description The number of rooms; each is its own reservation. */
+            count: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            adult_count: number;
+            child_count?: number;
+            /** @description Replaces the price of every night of the row (a rate override). Empty or absent: the price in force. */
+            rate_per_night?: string;
+            /** @description Why the rooms are free (a complimentary or house use plan). */
+            occupancy_reason?: string;
+        };
+        GroupRoomBatchRequest: {
+            rows: components["schemas"]["GroupRoomBatchRow"][];
+            /** @description The source of the reservations; OTHER when empty. */
+            source?: string;
+            /** @description Default true. False makes drafts, which hold no inventory. */
+            confirm?: boolean;
+            /**
+             * Format: int64
+             * @description The booker; by default the guest made from the contact of the group.
+             */
+            booker_guest_id?: number;
+            /** @description One reason for every row that has a rate of its own. */
+            rate_override_reason?: string;
+            /** @description One approval for the whole request: the credentials of a user holding `reservation.override_rate_approve`; not needed when the caller holds that permission too. */
+            rate_override_approval?: components["schemas"]["Approval"];
+            occupancy_approval?: components["schemas"]["Approval"];
+            exceed_free_quota?: boolean;
+            restriction_override?: components["schemas"]["RestrictionOverride"];
+        };
+        GroupRoomBatchReservation: {
+            /** @description The place of the room in the request, from 1: the rows in order, the rooms of a row in order. */
+            position: number;
+            /** @description The row */
+            row: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            line_id: number;
+            /** Format: int64 */
+            guest_id: number | null;
+            /** Format: int64 */
+            room_type_id: number;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+        };
+        GroupRoomBatchResult: {
+            reservations: components["schemas"]["GroupRoomBatchReservation"][];
+            rooms: number;
+            /** @description Room nights in all. */
+            nights: number;
+            /** @description The answer is the one stored for the Idempotency-Key; nothing was made now. */
+            replayed: boolean;
+        };
+        GroupRoomPreviewNight: {
+            date: components["schemas"]["Date"];
+            amount: string;
+        };
+        GroupRoomPreviewProblem: {
+            /** @description `STAY_RESTRICTED`, `RATE_NOT_SET`, `OUTSIDE_GROUP_DATES`, `ROOM_TYPE_NOT_AVAILABLE`, `OCCUPANCY_EXCEEDED`, `IN_THE_PAST`, `PERMISSION_DENIED`, `OVERRIDE_NOT_ALLOWED`, or the code of the engine. */
+            code: string;
+            message: string;
+            date?: components["schemas"]["Date"];
+        };
+        GroupRoomPreviewRow: {
+            row: number;
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_code: string;
+            rooms: number;
+            nights: number;
+            /** @description The price in force of each night. */
+            nightly: components["schemas"]["GroupRoomPreviewNight"][];
+            /** @description Every night has the same price in force. */
+            uniform: boolean;
+            /** @description The price when `uniform`. */
+            grid_rate?: string;
+            /** @description What the row sells at: the request's rate, else the price in force when `uniform`, else empty. */
+            rate_per_night: string;
+            /** @description The rate of the row differs from the price in force. */
+            override: boolean;
+            room_estimate: components["schemas"]["Estimate"];
+            row_estimate: components["schemas"]["Estimate"];
+            short?: {
+                date: components["schemas"]["Date"];
+                missing: number;
+            };
+            problems: components["schemas"]["GroupRoomPreviewProblem"][];
+        };
+        GroupRoomPreview: {
+            rows: components["schemas"]["GroupRoomPreviewRow"][];
+            availability: {
+                /** Format: int64 */
+                room_type_id: number;
+                code: string;
+                nights: {
+                    date: components["schemas"]["Date"];
+                    available: number;
+                    needed: number;
+                    /** @description Negative when the request is short that night. */
+                    left: number;
+                }[];
+            }[];
+            rooms: number;
+            nights: number;
+            total: components["schemas"]["Estimate"];
+            /** @description A row has a rate of its own and the caller cannot approve it: the save needs a reason and an approver's credentials. */
+            needs_approval: boolean;
+            /** @description No row has a problem. */
+            ok: boolean;
+        };
+        RoomingRow: {
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            reservation_status: string;
+            /**
+             * Format: int32
+             * @description The version of the reservation.
+             */
+            version: number;
+            /** Format: int64 */
+            line_id: number;
+            line_status: string;
+            room_type: string;
+            room_number?: string;
+            arrival_date: components["schemas"]["Date"];
+            departure_date: components["schemas"]["Date"];
+            /** Format: int64 */
+            guest_id: number | null;
+            name: string;
+            email: string;
+            phone: string;
+            /** @description A guest made by a group booking and not yet named. */
+            is_placeholder: boolean;
+        };
+        RoomingEdit: {
+            /** Format: int64 */
+            line_id: number;
+            /** @description The whole name; the last word is the last name. */
+            name: string;
+            email?: string;
+            phone?: string;
+        };
+        RoomingResult: {
+            updated: number;
+            unchanged: number;
+        };
+        RoomingChange: {
+            /** Format: int64 */
+            line_id: number;
+            confirmation_number: string;
+            from_name: string;
+            to_name: string;
+            from_email: string;
+            to_email: string;
+            from_phone: string;
+            to_phone: string;
+        };
+        RoomingProblem: {
+            /** @description The line of the file (or the place in the request) */
+            row: number;
+            column: string;
+            code: string;
+            message: string;
+        };
+        RoomingImport: {
+            dry_run: boolean;
+            rows: number;
+            changes: components["schemas"]["RoomingChange"][];
+            problems: components["schemas"]["RoomingProblem"][];
+            applied: boolean;
         };
         GroupPage: {
             data: components["schemas"]["Group"][];
@@ -18912,6 +19207,171 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    previewGroupRooms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRoomBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRoomPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createGroupRooms: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRoomBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description The request was made before; these are its reservations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRoomBatchResult"];
+                };
+            };
+            /** @description The reservations. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRoomBatchResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRoomingList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row for each reservation room of the group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RoomingRow"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRoomingList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: components["schemas"]["RoomingEdit"][];
+                };
+            };
+        };
+        responses: {
+            /** @description What was changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomingResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importRoomingList: {
+        parameters: {
+            query?: {
+                /** @description true: check the file and say what would change, write nothing. */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomingImport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     transferFolioToCompany: {
