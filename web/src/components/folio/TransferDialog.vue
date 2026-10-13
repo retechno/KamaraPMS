@@ -35,8 +35,9 @@ const chosen = ref<TransferTarget | null>(null)
 const target = ref<number | null>(null)
 // The amount is typed with the separators of the language and kept as a plain decimal text ("150000.5") for the request.
 const DECIMAL = { en: '.', id: ',' } as const
-const amount = ref(Number(props.folio.balance) > 0 ? props.folio.balance.replace(/\.0+$/, '') : '')
-const amountText = ref(formatMoney(amount.value))
+// No default: a transfer of the whole balance is a choice, not what the field already says.
+const amount = ref('')
+const amountText = ref('')
 function typeAmount(text: string): void {
   const dec = DECIMAL[currentLocale()]
   const at = text.indexOf(dec)

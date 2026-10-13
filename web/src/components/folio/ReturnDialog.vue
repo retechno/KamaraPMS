@@ -88,7 +88,8 @@ async function approve(approval: Approval): Promise<void> {
         <FormField :label="t('folioTransfer.reason')">
           <template #default="{ id }"><Input :id="id" v-model="reason" name="return_reason" maxlength="500" /></template>
         </FormField>
-        <div class="mt-5 flex justify-end gap-2">
+        <p v-if="!reason.trim()" class="m-0 mt-4 text-sm text-muted-foreground" data-testid="return-missing">{{ t('folioTransfer.missing', { what: t('folioTransfer.missingReason') }) }}</p>
+        <div class="mt-3 flex justify-end gap-2">
           <Button type="button" variant="outline" data-testid="return-cancel" @click="emit('close')">{{ t('common.cancel') }}</Button>
           <Button type="submit" :disabled="!reason.trim() || busy" data-testid="return-continue">{{ t('folioTransfer.continueApproval') }}</Button>
         </div>

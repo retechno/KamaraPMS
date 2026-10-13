@@ -115,7 +115,8 @@ describe('TransferDialog', () => {
     mounted.push(w)
     await settle()
     expect(body('[data-testid=tax-warning]').text()).toBe("Need a tax invoice in the payer's name? Use transfer by transaction.")
-    expect((document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value).toBe('122,100') // the balance, as the default, with thousands
+    expect((document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value).toBe('') // empty: the whole balance is never what a transfer starts with
+    expect(body('[data-testid=transfer-continue]').attributes('disabled')).toBeDefined()
     await type('input[name=transfer_balance_amount]', '50000')
     await pickTarget(8)
     await type('input[name=transfer_reason]', 'the company pays part')
@@ -195,6 +196,8 @@ describe('TransferDialog', () => {
     mounted.push(w)
     await settle()
     const field = () => (document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value
+    expect(field()).toBe('') // nothing is filled in
+    expect(body('[data-testid=transfer-missing]').text()).toContain('an amount within the balance')
     await pickTarget(8)
     await type('input[name=transfer_reason]', 'part')
     const off = () => body('[data-testid=transfer-continue]').attributes('disabled') !== undefined
@@ -225,7 +228,7 @@ describe('TransferDialog', () => {
     mounted.push(w)
     await settle()
     const field = () => (document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value
-    expect(field()).toBe('122.100')
+    expect(field()).toBe('')
     await type('input[name=transfer_balance_amount]', '2500,5')
     expect(field()).toBe('2.500,5')
     setLocale('en')
@@ -299,6 +302,17 @@ describe('ReturnDialog', () => {
     await flushPromises()
     expect((document.body.querySelector('input[value=ORIGIN]') as HTMLInputElement).disabled).toBe(true)
     expect(has('[data-testid=return-balance-note]')).toBe(true)
+  })
+
+  it('asks for the reason in words, as the transfer dialog does', async () => {
+    const w = mount(ReturnDialog, { props: { holderId: 8, holderNumber: 'FOL000002', rows: [row()] }, ...setupAuth() })
+    mounted.push(w)
+    await flushPromises()
+    expect(body('[data-testid=return-missing]').text()).toBe('Still needed: a reason.')
+    expect(body('[data-testid=return-continue]').attributes('disabled')).toBeDefined()
+    await type('input[name=return_reason]', 'wrong folio')
+    expect(has('[data-testid=return-missing]')).toBe(false)
+    expect(body('[data-testid=return-continue]').attributes('disabled')).toBeUndefined()
   })
 
   it('names a balance in words of the page, never with the description the database holds', async () => {

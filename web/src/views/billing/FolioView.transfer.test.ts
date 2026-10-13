@@ -138,8 +138,12 @@ describe('FolioView: transfers between folios', () => {
     expect(w.find('[data-testid=reverse-6]').exists()).toBe(false) // the copy of a transfer
     expect(w.find('[data-testid=reverse-7]').exists()).toBe(false) // a line of TRF
     expect(w.find('[data-testid=move-7]').exists()).toBe(false)
-    expect(w.get('[data-testid=copy-hint-6]').text()).toContain('Send it back from FOL000009')
-    expect(w.find('[data-testid=copy-hint-1]').exists()).toBe(false)
+    // one note for the folio the lines came from, not one for each line
+    expect(w.findAll('[data-testid^=copy-note-]')).toHaveLength(1)
+    const note = w.get('[data-testid=copy-note-9]')
+    expect(note.text()).toContain('1 line(s) moved here from FOL000009.')
+    expect(note.text()).toContain('open FOL000009 → Show what was transferred → Return.')
+    expect(note.get('a').attributes('href')).toBe('/folios/9')
     expect(w.get('[data-testid=item-7]').text()).toContain('Balance transfer') // the debit side of TRF is typed like its credit side
   })
 

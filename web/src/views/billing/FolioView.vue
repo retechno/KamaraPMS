@@ -315,6 +315,17 @@ const transferText = (i: FolioItem): string => {
 
 // A line of the transfer code TRF is never reversed or moved, and the copy a transfer made is not reversed: both go back with a return (from the folio the transfer left).
 const isCopy = (i: FolioItem): boolean => i.transfer?.role === 'IN' && i.charge_code !== 'TRF'
+// The lines that came here from another folio, counted by the folio they came from: one note for each, not one for each line.
+const copyNotes = computed(() => {
+  const by = new Map<number, { from: { id: number; number: string }; n: number }>()
+  for (const i of shownItems.value) {
+    if (!isCopy(i) || !i.transfer) continue
+    const e = by.get(i.transfer.from.id) ?? { from: i.transfer.from, n: 0 }
+    e.n++
+    by.set(i.transfer.from.id, e)
+  }
+  return [...by.values()]
+})
 const frozen = (i: FolioItem): boolean => i.charge_code === 'TRF' || isCopy(i)
 const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id && !frozen(i)
 const movable = (i: FolioItem) => isOpen.value && can('folio.reverse') && siblings.value.length > 0 && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id && i.charge_code !== 'TRF'
@@ -461,6 +472,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <label class="ml-auto inline-flex items-center gap-2 text-sm"><input v-model="showCorrections" type="checkbox" name="show_corrections" class="size-4 accent-primary" data-testid="show-corrections" />{{ t('folioTransfer.showCorrections') }}</label>
       <Button type="button" :variant="showTransferred ? 'default' : 'outline'" size="sm" :aria-pressed="showTransferred" data-testid="show-transferred" @click="showTransferred = !showTransferred">{{ t('folioTransfer.showTransferred') }}</Button>
     </div>
+    <ul v-if="copyNotes.length" class="m-0 mb-2 grid list-none gap-1 p-0 text-sm text-muted-foreground" data-testid="copy-notes">
+      <li v-for="c in copyNotes" :key="c.from.id" :data-testid="`copy-note-${c.from.id}`">
+        {{ t('folioTransfer.copyNoteHead', { n: c.n }) }}
+        <RouterLink :to="`/folios/${c.from.id}`" class="text-primary hover:underline">{{ c.from.number }}</RouterLink>.
+        {{ t('folioTransfer.copyNoteTail', { folio: c.from.number }) }}
+      </li>
+    </ul>
     <TransferredList v-if="showTransferred" :folio-id="folio.id" :folio-number="folio.folio_number" :reload="transferredReload" @changed="transferDone" />
     <Card class="mb-4" data-testid="items">
       <DataTable
@@ -490,7 +508,6 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             {{ t('folioTransfer.fromFolio') }}
             <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
             <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
-            <div :data-testid="`copy-hint-${i.id}`">{{ t('folioTransfer.copyHint', { folio: i.transfer.from.number }) }}</div>
           </div>
           <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
             <RouterLink :to="`/folios/${i.transfer.role === 'IN' ? i.transfer.from.id : i.transfer.to.id}`" class="text-primary hover:underline">{{ i.transfer.role === 'IN' ? i.transfer.from.number : i.transfer.to.number }}</RouterLink>

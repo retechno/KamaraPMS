@@ -370,3 +370,10 @@ What was built follows sections 4.1 to 4.5. Where building it differed from what
 - **The amount of a balance transfer** is typed with the separators of the language, refuses zero and more than the balance on the screen, and is checked again by the server (`VALIDATION_FAILED`, `TRANSFER_EXCEEDS_BALANCE`, under the lock).
 - **On a phone** the folio is a list of cards, so the amounts are not cut off at the right.
 - **New test, the second day:** charges posted and closed on day 1, transferred by item and by balance and returned on day 2: four `TRF` lines on 1215 for 800,000 each way, a reversal and a copy for each moved charge, a day-2 journal with no line on 1215 and the new charge alone in the revenue accounts, 1215 at zero, the books balanced and the reconciliation agreeing.
+
+### 12.2 Second review of PR 2
+
+- The hint on each copy is one note for each folio the lines came from ("N line(s) moved here from FOLxxx. To send them back, open FOLxxx → Show what was transferred → Return."), with the number as a link.
+- The return dialog says "Still needed: a reason" like the transfer dialog.
+- The amount of a balance transfer starts empty: the whole balance is never filled in by default.
+- **Out of scope, noted:** the description of a room-night line ("Room 209 - 12 Oct 2026") is written by the server in English, so the month is English in the Indonesian screens. It is not part of the transfers; a fix means writing the description from the structured date on the screen (or per the language of the property).
