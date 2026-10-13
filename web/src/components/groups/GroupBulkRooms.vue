@@ -231,7 +231,7 @@ const failedAt = computed(() => {
       <ErrorNotice v-if="error" :error="error" inline data-testid="bulk-error">
         <span v-if="failedAt"> {{ failedAt }}</span>
       </ErrorNotice>
-      <p v-if="result" class="alert" role="status" data-testid="bulk-done">
+      <p v-if="result" class="notice" role="status" data-testid="bulk-done">
         {{ result.replayed ? t('groupRooms.replayed') : t('groupRooms.done', { n: result.rooms, reservations: result.reservations.length }) }}
       </p>
 

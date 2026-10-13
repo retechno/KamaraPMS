@@ -172,7 +172,7 @@ function download(): void {
     </CardHeader>
     <CardContent>
       <ErrorNotice v-if="error && !check" :error="error" inline data-testid="rooming-error" />
-      <p v-if="notice" class="alert" role="status" data-testid="rooming-notice">{{ notice }}</p>
+      <p v-if="notice" class="notice" role="status" data-testid="rooming-notice">{{ notice }}</p>
       <p v-if="!rows.length && !loading" class="m-0 text-sm text-muted-foreground" data-testid="rooming-empty">{{ t('rooming.empty') }}</p>
 
       <div v-else class="grid gap-3" data-testid="rooming-rows">
