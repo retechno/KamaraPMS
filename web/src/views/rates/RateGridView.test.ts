@@ -55,8 +55,8 @@ describe('RateGridView', () => {
     const call = GET.mock.calls.find(([p]) => (p as string).endsWith('/rates'))
     expect(call?.[1]).toMatchObject({ params: { query: { rate_plan_id: 1, from: '2026-10-01', to: '2026-10-15' } } })
     expect(w.findAll('[data-testid^=row-]').map((r) => r.attributes('data-testid'))).toEqual(['row-DLX', 'row-STD']) // inactive types are not sold
-    expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('1000000')
-    expect(w.get('[data-testid=cell-STD-2026-10-02]').text()).toBe('750000')
+    expect(w.get('[data-testid=cell-DLX-2026-10-01]').text()).toBe('1,000,000')
+    expect(w.get('[data-testid=cell-STD-2026-10-02]').text()).toBe('750,000')
     expect(w.get('[data-testid=cell-DLX-2026-10-02]').text()).toBe('—')
     expect(w.get('[data-testid=price-mode]').text()).toContain('exclusive: service and tax are added')
   })

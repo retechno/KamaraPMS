@@ -62,8 +62,10 @@ async function load(): Promise<void> {
   }
 }
 
-watch(() => pid.value, () => {
+// "As of" opens on the business date of the property (the report says the same when it is left empty, but the filter shows it).
+watch(() => [pid.value, property.clock?.business_date], () => {
   report.value = null
+  asOf.value = property.clock?.business_date ?? ''
   void load()
 }, { immediate: true })
 </script>

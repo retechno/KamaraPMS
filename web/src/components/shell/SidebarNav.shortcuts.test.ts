@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { resetNavPins } from '@/composables/useNavPins'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { NAV_PERMISSIONS } from '@/test/navAccess'
 import { usePropertyStore } from '@/stores/property'
 import SidebarNav from './SidebarNav.vue'
 
@@ -15,7 +16,7 @@ async function mountNav(opts: { path?: string; rail?: boolean; permissions?: str
   setActivePinia(pinia)
   useAuthStore().me = {
     user: { id: 1, email: 'a@b.c', is_tenant_admin: opts.admin ?? false },
-    properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? ['reservation.read', 'folio.read'] }],
+    properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? NAV_PERMISSIONS }],
   } as never
   usePropertyStore().currentId = 7
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -51,7 +52,7 @@ describe('SidebarNav: pinned and recent pages', () => {
 
   it('shows only the pinned pages the person may open', async () => {
     const { w } = await mountNav({ permissions: [] })
-    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today'])
+    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today', 'Room status']) // the two that every member of the property may open
   })
 
   it('leaves out of the pinned and recent pages those that are not in the menu or not for this person, without an error', async () => {
@@ -65,6 +66,7 @@ describe('SidebarNav: pinned and recent pages', () => {
     const { w } = await mountNav({ permissions: [] })
     expect(w.find('[data-testid=pinned-dashboard]').exists()).toBe(true)
     await w.get('[data-testid=unpin-dashboard]').trigger('click')
+    await w.get('[data-testid=unpin-roomStatus]').trigger('click')
     expect(w.find('[data-testid=section-pinned]').exists()).toBe(false)
     expect(JSON.parse(localStorage.getItem('pms.nav.1')!).pins).toEqual([])
   })

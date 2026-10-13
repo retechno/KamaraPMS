@@ -63,7 +63,7 @@ const businessDayShort = computed(() => businessDay.value.replace(/ \d{4}$/, '')
 /** Overdue is always in words, in the colour of a warning, at every width; ready and later are a dot on a narrow bar and words from a wide one. */
 const audit = computed(() => {
   const c = property.clock
-  if (!c) return null
+  if (!c || !auth.can('nightaudit.run', property.currentId)) return null // night audit is for who may run it
   if (c.night_audit_overdue) return { state: 'overdue' as const, text: t('shell.nightAuditOverdue'), short: t('shell.nightAuditOverdueShort'), dot: 'bg-warning' }
   if (c.night_audit_allowed) return { state: 'ready' as const, text: t('shell.nightAuditReady'), short: t('shell.nightAuditReady'), dot: 'bg-success' }
   return { state: 'later' as const, text: t('shell.nightAuditNotYet'), short: t('shell.nightAuditNotYet'), dot: 'bg-muted-foreground' }
@@ -123,19 +123,21 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
     <div :class="cn('flex items-center gap-2', !phone && 'ml-auto')">
       <template v-if="property.hasProperties">
         <PropertySwitcher v-if="!phone" class="w-44 xl:w-52" />
-        <RouterLink
-          v-if="property.clock && audit"
-          to="/night-audit"
+        <component
+          :is="audit ? RouterLink : 'div'"
+          v-if="property.clock"
+          v-bind="audit ? { to: '/night-audit' } : {}"
           :class="
             cn(
               'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md border px-2.5 text-sm no-underline',
-              audit.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : 'border-border bg-background text-foreground hover:bg-accent',
+              audit?.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : 'border-border bg-background text-foreground',
+              audit && audit.state !== 'overdue' && 'hover:bg-accent',
             )
           "
           :title="clockTitle"
           data-testid="business-date"
         >
-          <span :class="cn('size-2 shrink-0 rounded-full', audit.dot)" aria-hidden="true" />
+          <span v-if="audit" :class="cn('size-2 shrink-0 rounded-full', audit.dot)" aria-hidden="true" />
           <template v-if="phone">
             <strong>{{ businessDayShort }}</strong>
           </template>
@@ -144,11 +146,12 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
             <span v-if="local && local.date !== property.clock.business_date" class="hidden text-muted-foreground xl:inline">· {{ t('shell.localTime') }} {{ formatBusinessDate(local.date) }} {{ local.time }}</span>
           </template>
           <span
+            v-if="audit"
             :class="cn('text-xs', audit.state === 'overdue' ? 'font-semibold' : 'sr-only xl:not-sr-only xl:text-muted-foreground')"
             :data-state="audit.state"
             data-testid="night-audit-status"
           >{{ phone ? audit.short : audit.text }}</span>
-        </RouterLink>
+        </component>
       </template>
       <RouterLink v-else-if="property.loaded" to="/setup/properties/new" class="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground no-underline">
         {{ t('shell.noPropertyYet') }}

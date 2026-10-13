@@ -40,11 +40,13 @@ const filedReturn = (over: Record<string, unknown> = {}) => ({
 })
 const accounts = [{ id: 6, code: '7220', name: 'Other taxes', account_type: 'EXPENSE', is_postable: true, is_active: true }, { id: 7, code: '1130', name: 'Bank', account_type: 'ASSET', is_postable: true, is_active: true }]
 
+let openDay = '' // the business date of the property, when a test needs the clock
 function mountView(component: object, permissions = ['tax.view', 'tax.manage', 'tax.file', 'accounting.view'], path = '/') {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
+  if (openDay) usePropertyStore().clock = { business_date: openDay } as never
   GET = vi.fn(async (p: string) => {
     if (p.endsWith('/tax/profiles')) return { data: { data: profileList() } }
     if (p.endsWith('/taxes')) return { data: { data: taxes } }
@@ -177,6 +179,18 @@ describe('tax views', () => {
     expect(POST.mock.calls.at(-1)?.[0]).toBe('/api/v1/properties/{propertyId}/tax/payments/{id}/void')
     expect(POST.mock.calls.at(-1)?.[1].params.path).toEqual({ propertyId: 7, id: 21 })
     expect(POST.mock.calls.at(-1)?.[1].body).toEqual({ reason: 'paid twice', approval: { email: 'a@b.c', password: 'pw' } })
+  })
+
+  it('opens what is owed on the business date of the property', async () => {
+    openDay = '2026-10-13'
+    try {
+      const w = await mountView(TaxLiabilityView)
+      await flushPromises()
+      expect((w.get('input[name=as_of]').element as HTMLInputElement).value).toBe('2026-10-13')
+      expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-10-13' })
+    } finally {
+      openDay = ''
+    }
   })
 
   it('shows what is owed, what is overdue and how the books compare', async () => {

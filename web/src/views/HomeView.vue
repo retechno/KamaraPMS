@@ -156,8 +156,8 @@ interface Attention {
 }
 const auditAttention = computed<Attention | null>(() => {
   const c = property.clock
-  if (!c || !property.current) return null
-  const to = can('nightaudit.run') ? '/night-audit' : undefined
+  if (!c || !property.current || !can('nightaudit.run')) return null // night audit is for who may run it
+  const to = '/night-audit'
   const date = t('today.auditDate', { date: formatBusinessDate(c.business_date) })
   if (c.night_audit_overdue) return { id: 'audit', tone: 'warn', title: t('today.auditOverdue'), detail: date, to }
   if (c.night_audit_allowed) return { id: 'audit', tone: 'info', title: t('today.auditReady'), detail: date, to }
@@ -286,7 +286,8 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
       </TodayCard>
 
       <TodayCard test-id="col-attention" :title="t('today.attentionTitle')" :count="attention.length ? String(attention.length) : ''" :loaded="attentionLoaded" :failed="attentionFailed">
-        <ul class="m-0 list-none divide-y divide-border p-0">
+        <p v-if="attentionLoaded && !attention.length" class="m-0 text-sm text-muted-foreground" data-testid="col-attention-empty">{{ t('today.nothingAttention') }}</p>
+        <ul v-else class="m-0 list-none divide-y divide-border p-0">
           <li v-for="x in attention" :key="x.id" class="flex items-start gap-2.5 py-2.5" :data-testid="`attention-${x.id}`">
             <component :is="x.id === 'audit' ? MoonStar : AlertTriangle" :class="['mt-0.5 size-4 shrink-0', x.tone === 'warn' ? 'text-warning-text' : 'text-muted-foreground']" aria-hidden="true" />
             <div class="min-w-0">

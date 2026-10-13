@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
 import { router } from '@/router'
-import { activeNav, findNavItem, navigation, visibleNavigation } from './navigation'
+import { activeNav, findNavItem, navigation, permitted, visibleNavigation } from './navigation'
 
 const items = navigation.flatMap((s) => s.items)
 
@@ -68,7 +68,7 @@ describe('navigation', () => {
   })
 
   it('has the Performance page in the end of the day, shown only to who may view reports', () => {
-    const named = items.filter((i) => i.permission)
+    const named = items.filter((i) => ['myTasks', 'performance'].includes(i.id))
     expect(named.map((i) => [i.id, i.to, i.permission])).toEqual([['myTasks', '/housekeeping/my', 'housekeeping.update'], ['performance', '/performance', 'report.view']])
     expect(findNavItem('performance')?.section.id).toBe('endOfDay')
     const ids = (can?: (p: string) => boolean) => visibleNavigation(false, can).flatMap((s) => s.items.map((i) => i.id))
@@ -90,6 +90,34 @@ describe('navigation', () => {
     const adminOnly = [{ ...navigation[0]!, items: [{ id: 'x', to: '/x', adminOnly: true, permission: 'report.view' }] }]
     expect(visibleNavigation(false, () => true, adminOnly)).toEqual([]) // both rules hold
     expect(visibleNavigation(true, () => true, adminOnly)).toHaveLength(1)
+  })
+
+  describe('for a housekeeper (housekeeping.update, maintenance.report, lostfound.report)', () => {
+    const held = new Set(['housekeeping.update', 'maintenance.report', 'lostfound.report'])
+    const seen = visibleNavigation(false, (p) => held.has(p)).flatMap((s) => s.items.map((i) => i.id))
+    const sections = visibleNavigation(false, (p) => held.has(p)).map((s) => s.id)
+
+    it('does not show the pages of the front desk, the books, tax and the bank', () => {
+      for (const id of ['reservations', 'tapeChart', 'availability', 'arrivals', 'inHouse', 'departures', 'walkIn', 'guests', 'groups', 'folios', 'cashier', 'cityLedger', 'nightAudit', 'reports', 'performance', 'chartOfAccounts', 'controlAccounts', 'suppliers', 'taxStatus', 'taxOwed', 'bankAccounts', 'budgets', 'auditTrail']) {
+        expect(seen, id).not.toContain(id)
+      }
+      for (const id of ['accounting', 'payables', 'tax', 'bank', 'budget', 'billing']) expect(sections, id).not.toContain(id)
+    })
+    it('keeps the pages the housekeeper works in', () => {
+      for (const id of ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'maintenance', 'lostFound']) expect(seen, id).toContain(id)
+    })
+  })
+
+  it('shows an item that names several permissions to who has any of them', () => {
+    expect(permitted({ permission: ['a', 'b'] }, (p) => p === 'b')).toBe(true)
+    expect(permitted({ permission: ['a', 'b'] }, () => false)).toBe(false)
+    expect(permitted({}, () => false)).toBe(true)
+  })
+
+  it('names the permission of the read endpoint on every page, except the ones that every member of the property may read', () => {
+    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles', 'roomTypes', 'bedTypes', 'roomsSetup', 'taxesService', 'chargeCodes', 'ratePlans', 'freeQuotas', 'rateGrid', 'bedSupplements', 'restrictions', 'yieldRules']
+    const bare = items.filter((i) => !i.permission && !i.adminOnly).map((i) => i.id)
+    expect(bare.sort()).toEqual(open.filter((id) => !['properties', 'users', 'roles', 'myTasks'].includes(id)).sort())
   })
 
   it('finds an item by its id with its section, and nothing for an id that is gone', () => {

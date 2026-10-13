@@ -2,7 +2,6 @@ import { computed, inject, ref } from 'vue'
 import { routeLocationKey } from 'vue-router'
 import { activeNav, type ActiveNav } from '@/navigation'
 import { useAuthStore } from '@/stores/auth'
-import { usePropertyStore } from '@/stores/property'
 import { useVisibleNavigation } from './useVisibleNavigation'
 
 /**
@@ -18,13 +17,8 @@ interface Stored {
   showRecent?: boolean
 }
 
-/** What a person gets before they have pinned anything: the pages of every day, those they may open. */
-export const DEFAULT_PINS: readonly { id: string; permission?: string }[] = [
-  { id: 'dashboard' },
-  { id: 'roomStatus', permission: 'reservation.read' },
-  { id: 'tapeChart', permission: 'reservation.read' },
-  { id: 'cashier', permission: 'folio.read' },
-]
+/** What a person gets before they have pinned anything: the pages of every day; those the menu does not show to them are left out. */
+export const DEFAULT_PINS: readonly { id: string }[] = [{ id: 'dashboard' }, { id: 'roomStatus' }, { id: 'tapeChart' }, { id: 'cashier' }]
 
 const storageKey = (userId: number | string | undefined): string => `pms.nav.${userId ?? 'anonymous'}`
 const isIds = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string')
@@ -48,7 +42,6 @@ const changed = ref<Record<string, Stored>>({})
 
 export function useNavPins() {
   const auth = useAuthStore()
-  const property = usePropertyStore()
   const route = inject(routeLocationKey, null) // no router in a page that is shown on its own (a test): then there is no page to track
   const nav = useVisibleNavigation()
 
@@ -67,7 +60,7 @@ export function useNavPins() {
   }
 
   const pinIds = computed<string[]>(
-    () => stored.value.pins ?? DEFAULT_PINS.filter((d) => !d.permission || auth.can(d.permission, property.currentId)).map((d) => d.id),
+    () => stored.value.pins ?? DEFAULT_PINS.map((d) => d.id).filter((id) => nav.byId(id)),
   )
   const visible = (id: string): ActiveNav | undefined => nav.byId(id)
   const pinned = computed<ActiveNav[]>(() => pinIds.value.map(visible).filter((x): x is ActiveNav => !!x))

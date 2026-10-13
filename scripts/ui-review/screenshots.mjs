@@ -69,7 +69,7 @@ const list = only ? routes.filter(([r]) => only.includes(r)) : routes
 
 const sizes = [
   { name: 'desktop', width: 1440, height: 900, dark: true },
-  { name: 'laptop', width: 1366, height: 768 },
+  { name: 'laptop', width: 1280, height: 800 },
   { name: 'ponsel', width: 390, height: 844, mobile: true },
 ]
 
@@ -109,7 +109,7 @@ for (const size of sizes) for (const scheme of size.dark ? ['light', 'dark'] : [
   await settle(page)
   await pickProperty(page, !!size.mobile)
   await settle(page)
-  const pages = scheme === 'dark' ? list.filter(([r]) => ['/', '/room-status', '/reservations/tape', '/folios', '/night-audit'].includes(r) || r.startsWith('/folios/')) : list
+  const pages = list // the dark desktop takes every route, like the light ones
   for (const [route, name] of pages) {
     no++
     const file = `${String(no).padStart(3, '0')}-${name}-${size.name}${scheme === 'dark' ? '-gelap' : ''}.png`

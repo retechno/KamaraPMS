@@ -36,7 +36,7 @@ describe('CompaniesView', () => {
   it('lists companies with their credit terms', async () => {
     const w = mountView()
     await flushPromises()
-    expect(w.get('[data-testid=company-ACME]').text()).toContain('5000000')
+    expect(w.get('[data-testid=company-ACME]').text()).toContain('5,000,000') // grouped like the other pages
     expect(w.get('[data-testid=company-ACME]').text()).toContain('45 days')
     expect(w.get('[data-testid=company-FREE]').text()).toContain('No limit')
     expect(w.get('[data-testid=company-NONE]').text()).toContain('No credit')

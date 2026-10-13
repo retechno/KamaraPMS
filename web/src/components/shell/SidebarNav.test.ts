@@ -4,12 +4,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { usePropertyStore } from '@/stores/property'
+import { NAV_PERMISSIONS } from '@/test/navAccess'
 import SidebarNav from './SidebarNav.vue'
 
 async function mountNav(path = '/', admin = false, rail = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 1, email: 'a@b.c', is_tenant_admin: admin }, properties: [] } as never
+  useAuthStore().me = { user: { id: 1, email: 'a@b.c', is_tenant_admin: admin }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: NAV_PERMISSIONS }] } as never
+  usePropertyStore().currentId = 7
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   await router.push(path)
   const w = mount(SidebarNav, { props: { rail }, global: { plugins: [pinia, router] } })

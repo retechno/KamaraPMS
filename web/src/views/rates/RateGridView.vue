@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
+import { formatMoney } from '@/utils/format'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -196,7 +197,7 @@ watch(planId, () => void loadGrid())
                 :data-testid="`cell-${rt.code}-${d}`"
                 @click="pick(rt.id, d)"
               >
-                {{ cell(rt.id, d) ?? '—' }}
+                {{ formatMoney(cell(rt.id, d)) || '—' }}
               </button>
             </td>
           </tr>

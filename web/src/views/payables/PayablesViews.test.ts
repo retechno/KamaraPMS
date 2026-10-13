@@ -35,11 +35,13 @@ const payment = (id: number, number: string, over: Record<string, unknown> = {})
   status: 'POSTED', journal_id: 12, journal_number: 'JV000012', void_journal_id: null, voided_at: null, created_at: '2026-09-30T00:00:00Z', ...over,
 })
 
+let openDay = '' // the business date of the property, when a test needs the clock
 function mountView(component: object, permissions = ['payables.view', 'payables.manage', 'payables.post', 'accounting.view'], query = '/', override?: (path: string) => unknown) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'a@b.c', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
+  if (openDay) usePropertyStore().clock = { business_date: openDay } as never
   GET = vi.fn(async (path: string) => {
     const overridden = override?.(path)
     if (overridden !== undefined) return overridden
@@ -243,6 +245,18 @@ describe('payables views', () => {
     await w.get('[data-testid=apply]').trigger('submit')
     await flushPromises()
     expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-10-01' })
+  })
+
+  it('opens the aging on the business date of the property, and asks the server for it', async () => {
+    openDay = '2026-10-13'
+    try {
+      const w = await mountView(AgingView)
+      await flushPromises()
+      expect((w.get('input[name=as_of]').element as HTMLInputElement).value).toBe('2026-10-13')
+      expect(GET.mock.calls.at(-1)?.[1].params.query).toEqual({ as_of: '2026-10-13' })
+    } finally {
+      openDay = ''
+    }
   })
 
   it('shows the credit of a supplier that no bill has taken off, in the aging, in the supplier list and on the bill', async () => {

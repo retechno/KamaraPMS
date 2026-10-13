@@ -311,6 +311,13 @@ describe('dragging a block to another room', () => {
     expect(find('[data-room-id="4"]').attributes('title')).toBe('Blocked on those nights.')
     expect(find('[data-room-id="5"]').attributes('data-drop')).toBe('ok') // another type, with the permission
     expect(find('[data-room-id="1"]').attributes('data-drop')).toBe('none') // its own room
+    // the mark is over the nights of the block (5 to 8 Oct: columns 6 to 8), not the whole width of the row
+    const zones = Array.from(document.body.querySelectorAll('[data-testid=tape-drop-zone]'))
+    expect(zones.length).toBeGreaterThan(0)
+    for (const z of zones) expect(z.getAttribute('style')).toContain('grid-column: 6 / span 3')
+    expect(find('[data-room-id="2"] [data-testid=tape-drop-zone]').attributes('data-zone')).toBe('no')
+    expect(find('[data-room-id="3"] [data-testid=tape-drop-zone]').attributes('data-zone')).toBe('hover')
+    expect(find('[data-room-id="2"]').classes().join(' ')).not.toContain('status-hatch') // the row itself is not marked
     pointer('pointerup', 3, 30)
     await flush()
     expect(has('[data-testid=tape-move-dialog]')).toBe(true)

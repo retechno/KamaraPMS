@@ -17,6 +17,7 @@ import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { formatMoney } from '@/utils/format'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -90,7 +91,7 @@ async function save(): Promise<void> {
   }
 }
 
-const limitText = (c: Company) => (c.credit_limit === null ? t('companies.noLimit') : c.credit_limit === '0' ? t('companies.noCredit') : c.credit_limit)
+const limitText = (c: Company) => (c.credit_limit === null ? t('companies.noLimit') : c.credit_limit === '0' ? t('companies.noCredit') : formatMoney(c.credit_limit))
 const columns = computed<Column<Company>[]>(() => [
   { key: 'code', label: t('companies.code'), sortable: true, filter: 'text' as const },
   { key: 'name', label: t('companies.name'), sortable: true, filter: 'text' as const },

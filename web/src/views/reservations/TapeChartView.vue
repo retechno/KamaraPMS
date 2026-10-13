@@ -238,6 +238,18 @@ function guardClick(e: Event): void {
 }
 
 const dragging = computed(() => !!drag.value?.active)
+/** The columns of the dragged block: the nights a drop would cover. */
+const dropZone = computed(() => {
+  const d = drag.value
+  if (!d?.active || d.kind !== 'move') return null
+  return columnsOf(d.booking.arrival_date, d.booking.departure_date, start.value, days.value)
+})
+const zoneClass = (state: 'ok' | 'no' | 'hover' | 'none'): string => ({
+  no: 'status-hatch bg-muted/70 opacity-80',
+  ok: 'ring-1 ring-inset ring-primary/40',
+  hover: 'bg-primary/10 ring-2 ring-inset ring-primary',
+  none: '',
+})[state]
 const rowState = (roomId: number): 'ok' | 'no' | 'hover' | 'none' => {
   const d = drag.value
   if (!d?.active || d.kind !== 'move') return 'none'
@@ -276,7 +288,7 @@ const ghost = computed(() => {
 
 <template>
   <PageHeader :title="t('tapeChart.title')">
-    <template #actions>
+    <template v-if="canRead" #actions>
       <Button variant="outline" size="sm" @click="shift(-7)"><ChevronLeft />{{ t('tapeChart.week') }}</Button>
       <Button variant="outline" size="sm" @click="start = businessDate; load()">{{ t('tapeChart.businessDate') }}</Button>
       <Button variant="outline" size="sm" @click="shift(7)">{{ t('tapeChart.week') }}<ChevronRight /></Button>
@@ -317,7 +329,7 @@ const ghost = computed(() => {
         <template v-for="(room, i) in chart.rooms" :key="room.room_id">
           <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold">{{ room.room_type_code }}</div>
           <div
-            :class="cn('relative grid h-10 border-b border-border', rowState(room.room_id) === 'no' && 'status-hatch opacity-70', rowState(room.room_id) === 'ok' && 'ring-1 ring-inset ring-primary/40', rowState(room.room_id) === 'hover' && 'bg-primary/10 ring-2 ring-inset ring-primary')"
+            class="relative grid h-10 border-b border-border"
             :style="gridStyle" :data-room-id="room.room_id" :data-testid="`room-${room.room_number}`" :data-drop="rowState(room.room_id)" :title="rowState(room.room_id) === 'no' ? refusalText(room.room_id) : undefined" role="row"
           >
             <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 font-medium" role="rowheader"><RoomLink :room-id="room.room_id" :number="room.room_number" /></div>
@@ -325,6 +337,12 @@ const ghost = computed(() => {
             <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
               <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
             </div>
+
+            <!-- while a block is dragged: only the nights of that block are marked in this room, not the whole row -->
+            <span
+              v-if="dropZone && rowState(room.room_id) !== 'none'" :class="cn('pointer-events-none z-[5] my-0.5 rounded-sm', zoneClass(rowState(room.room_id)))"
+              :style="{ gridColumn: `${dropZone.start + 2} / span ${dropZone.span}`, gridRow: '1' }" data-testid="tape-drop-zone" :data-zone="rowState(room.room_id)" aria-hidden="true"
+            />
 
             <template v-for="p in placed(room.bookings)" :key="p.key">
               <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">

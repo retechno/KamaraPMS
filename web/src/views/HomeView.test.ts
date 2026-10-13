@@ -520,16 +520,33 @@ describe('HomeView, Today', () => {
     })
 
     it('tells the state of the night audit: when it opens, that it can run, that it is overdue, with a link only for who runs it', async () => {
-      const opens = await mountToday()
+      const opens = await mountToday(FRONT)
       expect(opens.get('[data-testid=attention-audit]').text()).toContain('Night audit opens at 23:00')
       expect(opens.get('[data-testid=attention-audit] a').attributes('href')).toBe('/night-audit')
       mounted?.unmount()
       const ready = await mountToday(FRONT, { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: false })
       expect(ready.get('[data-testid=attention-audit]').text()).toContain('Night audit can run now')
       mounted?.unmount()
-      const late = await mountToday(['reservation.read'], { business_date: '2026-10-10', property_local_time: '2026-10-11T08:00:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: true })
+      const late = await mountToday(FRONT, { business_date: '2026-10-10', property_local_time: '2026-10-11T08:00:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: true })
       expect(late.get('[data-testid=attention-audit]').text()).toContain('Night audit is overdue')
-      expect(late.find('[data-testid=attention-audit] a').exists()).toBe(false)
+      mounted?.unmount()
+      // who may not run night audit is told nothing about it, whatever the state
+      for (const clock of [{ night_audit_allowed: true, night_audit_overdue: false }, { night_audit_allowed: true, night_audit_overdue: true }, { night_audit_allowed: false, night_audit_overdue: false }]) {
+        const other = await mountToday(['reservation.read'], { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', ...clock })
+        expect(other.find('[data-testid=attention-audit]').exists()).toBe(false)
+        mounted?.unmount()
+      }
+    })
+
+    it('says so when nothing needs attention, once it has loaded', async () => {
+      world.arrivals = [arrival(1)]
+      world.accounts = []
+      const other = await mountToday(['reservation.read'], { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: false })
+      expect(other.get('[data-testid=col-attention-empty]').text()).toBe('Nothing needs attention')
+      expect(other.find('[data-testid=col-attention] li').exists()).toBe(false)
+      mounted?.unmount()
+      const busy = await mountToday(FRONT)
+      expect(busy.find('[data-testid=col-attention-empty]').exists()).toBe(false)
     })
 
     it('shows five items at most', async () => {
