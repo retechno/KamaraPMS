@@ -140,6 +140,59 @@ func (q *Queries) ListOpenFoliosOfDeadReservations(ctx context.Context, arg List
 	return items, nil
 }
 
+const listOpenMastersOfGoneGroups = `-- name: ListOpenMastersOfGoneGroups :many
+SELECT f.id AS folio_id, f.folio_number, g.code AS group_code, g.name AS group_name,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance
+FROM folios f
+JOIN booking_groups g ON g.property_id = f.property_id AND g.id = f.booking_group_id
+WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.status = 'OPEN' AND f.folio_type = 'MASTER'
+  AND EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+              WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id)
+  AND NOT EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+                  WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW'))
+ORDER BY f.id
+`
+
+type ListOpenMastersOfGoneGroupsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListOpenMastersOfGoneGroupsRow struct {
+	FolioID     int64
+	FolioNumber string
+	GroupCode   string
+	GroupName   string
+	Balance     decimal.Decimal
+}
+
+// OPEN master folios of groups whose rooms are all over (checked out, cancelled or no-show), with their balance: the group has left and its bill is still open.
+func (q *Queries) ListOpenMastersOfGoneGroups(ctx context.Context, arg ListOpenMastersOfGoneGroupsParams) ([]ListOpenMastersOfGoneGroupsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenMastersOfGoneGroups, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenMastersOfGoneGroupsRow{}
+	for rows.Next() {
+		var i ListOpenMastersOfGoneGroupsRow
+		if err := rows.Scan(
+			&i.FolioID,
+			&i.FolioNumber,
+			&i.GroupCode,
+			&i.GroupName,
+			&i.Balance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleDrafts = `-- name: ListStaleDrafts :many
 SELECT l.id AS reservation_room_id, l.reservation_id, res.confirmation_number, l.arrival_date
 FROM reservation_rooms l

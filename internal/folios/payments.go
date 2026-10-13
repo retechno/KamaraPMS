@@ -277,7 +277,7 @@ func (s *Service) Deposit(ctx context.Context, propertyID, reservationID int64, 
 // lock level may be taken.
 func (s *Service) depositFolio(ctx context.Context, p auth.Principal, propertyID, reservationID int64) (foliosdb.Folio, error) {
 	q := s.q(ctx)
-	id, err := q.FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: reservationID})
+	id, err := q.FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
 	if err == nil {
 		return s.lockFolio(ctx, p.TenantID, propertyID, id)
 	}
@@ -288,7 +288,7 @@ func (s *Service) depositFolio(ctx context.Context, p auth.Principal, propertyID
 	if err != nil {
 		return foliosdb.Folio{}, err
 	}
-	return q.InsertFolio(ctx, foliosdb.InsertFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: reservationID, ActorID: p.ActorID()})
+	return q.InsertFolio(ctx, foliosdb.InsertFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: &reservationID, ActorID: p.ActorID()})
 }
 
 // Void voids a payment taken on the current business date (payment.void) with an approval: the payment

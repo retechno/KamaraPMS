@@ -519,7 +519,11 @@ func (s *Service) CheckOut(ctx context.Context, propertyID, stayID int64, in Che
 		if posted == nil {
 			posted = []roomcharge.Result{}
 		}
-		out = CheckOutResult{Stay: toStay(done, pre.line.ReservationID), PostedRoomCharges: posted, Folios: closedFolios, Housekeeping: string(housekeeping.Dirty)}
+		master, err := s.folios.OpenMasterOfFinishedGroup(ctx, p.TenantID, propertyID, pre.line.ReservationID)
+		if err != nil {
+			return err
+		}
+		out = CheckOutResult{Stay: toStay(done, pre.line.ReservationID), PostedRoomCharges: posted, Folios: closedFolios, Housekeeping: string(housekeeping.Dirty), MasterFolio: master}
 		return nil
 	})
 	return out, err

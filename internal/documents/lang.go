@@ -182,6 +182,7 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"Charges (net)": "Biaya (neto)", "Total charges": "Total biaya", "Payments received": "Pembayaran diterima", "Balance due": "Saldo terutang",
 	"Balance (credit)": "Saldo (kredit)",
 	"Group":            "Grup",
+	"Rooms":            "Kamar",
 	"This bill is not final: charges can still be posted until check-out. A final invoice is issued when the folio is closed.": "Tagihan ini belum final: biaya masih bisa diposting sampai check-out. Invoice final diterbitkan saat folio ditutup.",
 	// registration card
 	"Registration card": "Kartu registrasi", "REGISTRATION CARD": "KARTU REGISTRASI", "Arrival": "Kedatangan", "Departure": "Keberangkatan", "Nights": "Malam",

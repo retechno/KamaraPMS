@@ -336,3 +336,45 @@ func TestInvoiceOfOneTransactionGroup(t *testing.T) {
 	_, err = f.Docs.InvoiceGroup(f.admin, f.propID, f.stay.Folio.ID, "E")
 	wantCode(t, err, "VALIDATION_FAILED")
 }
+
+// The invoice and the receipt of the master folio of a group (docs/architecture/30-group-folio.md, part C): the party is the company of the group, else its contact; the booking line is the group, and
+// the rooms of its members are listed.
+func TestInvoiceOfTheMasterFolioIsAddressedToTheCompanyOfTheGroupElseItsContact(t *testing.T) {
+	f := setup(t)
+	co, err := f.Companies.Create(f.admin, f.propID, companies.Input{Code: "ACME", Name: "ACME Ltd", Address: "Jl. Kenanga 9", City: "Surabaya", PaymentTermsDays: 30, IsActive: true})
+	must(t, err)
+	var group int64
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO booking_groups (tenant_id, property_id, code, name, company_id, contact_name, contact_email, arrival_date, departure_date)
+		VALUES ($1, $2, 'GRP1', 'Conference', $3, 'Dewi Lestari', 'dewi@acme.test', '2026-09-30', '2026-10-02') RETURNING id`, f.tenantID, f.propID, co.ID).Scan(&group))
+	must(t, f.Exec(t, `UPDATE reservations SET booking_group_id = $1 WHERE id = $2`, group, f.reservation.ID))
+	opened, err := f.Folios.OpenMaster(f.admin, f.propID, group)
+	must(t, err)
+	master := opened.Master.ID
+	_, err = f.Folios.PostCharge(f.admin, f.propID, master, "m1", folios.ChargeInput{ChargeCodeID: f.minibar, Quantity: "1", UnitPrice: ptr("300000")})
+	must(t, err)
+	pay, err := f.Folios.PostPayment(f.admin, f.propID, master, "mp", folios.PaymentInput{Amount: "100000", PaymentMethod: "CASH"})
+	must(t, err)
+
+	doc, err := f.Docs.Invoice(f.admin, f.propID, master)
+	must(t, err)
+	s := pdfText(t, doc)
+	for _, want := range []string{"Bill to", "ACME Ltd", "Jl. Kenanga 9, Surabaya", "GRP1 Conference", "101", opened.Master.FolioNumber, "MINIBAR"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the invoice of the master lacks %q", want)
+		}
+	}
+	receipt, err := f.Docs.Receipt(f.admin, f.propID, pay.Payment.ID)
+	must(t, err)
+	if r := pdfText(t, receipt); !strings.Contains(r, "ACME Ltd") || !strings.Contains(r, "GRP1") {
+		t.Errorf("the receipt of a payment on the master names the party and the group: %q", r)
+	}
+
+	// a group without a company is billed to its contact
+	must(t, f.Exec(t, `UPDATE booking_groups SET company_id = NULL WHERE id = $1`, group))
+	must(t, f.Exec(t, `UPDATE folios SET bill_to_company_id = NULL WHERE id = $1`, master))
+	doc, err = f.Docs.Invoice(f.admin, f.propID, master)
+	must(t, err)
+	if s := pdfText(t, doc); !strings.Contains(s, "Dewi Lestari") || strings.Contains(s, "ACME Ltd") {
+		t.Errorf("without a company the party is the contact: %q", s)
+	}
+}

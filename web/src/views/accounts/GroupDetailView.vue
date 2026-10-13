@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import GroupBulkRooms from '@/components/groups/GroupBulkRooms.vue'
+import GroupMasterFolio from '@/components/groups/GroupMasterFolio.vue'
 import GroupRoomingList from '@/components/groups/GroupRoomingList.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -122,6 +123,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </div>
     </CardContent>
   </Card>
+
+  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" />
 
   <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 

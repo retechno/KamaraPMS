@@ -42,7 +42,9 @@ type InvoiceData struct {
 	Currency  string
 	Lines     []InvoiceLine
 	// Group is the transaction group the page is limited to ("" for the whole folio): the page lists the lines of that group and their totals.
-	Group   string
+	Group string
+	// Master is the master folio of a group: the booking line is the group, and Room lists the rooms of its members.
+	Master  bool
 	Summary []Amount // net, service charges, taxes, total charges, payments, balance (the last one is emphasised)
 }
 
@@ -54,7 +56,12 @@ func RenderInvoice(d InvoiceData) ([]byte, error) {
 	}
 	g := newPage(d.Hotel, d.Lang, title, d.Printed)
 	g.title(title, d.Number)
-	if d.BillTo != nil {
+	if d.Master {
+		g.pairs([][2]string{
+			{"Bill to", d.BillTo.Name}, {"Group", d.Booking},
+			{"Address", d.BillTo.addressLine()}, {"Rooms", d.Room},
+		})
+	} else if d.BillTo != nil {
 		g.pairs([][2]string{
 			{"Bill to", d.BillTo.Name}, {"Reservation", d.Booking},
 			{"Address", d.BillTo.addressLine()}, {"Stay", d.Stay},

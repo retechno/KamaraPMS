@@ -4,11 +4,12 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { BillingInstruction, ChargeCode, Company } from '@/api/types'
+import type { BillingInstruction, ChargeCode, Company, RoutingNotice } from '@/api/types'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
 
 // Who pays what on one room of a reservation: the company that is billed for the room, for one charge code, or for everything else. The rest goes to the guest folio.
@@ -25,6 +26,8 @@ const busy = ref(false)
 const error = ref<ApiError | null>(null)
 const companies = ref<Company[]>([])
 const codes = ref<ChargeCode[]>([])
+const routing = ref<RoutingNotice | null>(null)
+const routingNote = computed(() => routingText(routing.value))
 
 const pid = computed(() => property.currentId)
 const path = () => ({ propertyId: pid.value as number, id: props.reservationId, lineId: props.lineId })
@@ -36,6 +39,17 @@ async function load(): Promise<void> {
     rules.value = data?.instructions ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+  await loadRouting()
+}
+
+// Where the room charges go when the room's group has a master folio: a line the screen adds, nothing the person can set here.
+async function loadRouting(): Promise<void> {
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/routing', { params: { path: path() } })
+    routing.value = data && 'room' in data ? data : null
+  } catch {
+    routing.value = null
   }
 }
 
@@ -88,6 +102,7 @@ watch(() => [pid.value, props.reservationId, props.lineId], () => void load(), {
       <span v-if="!rules.length && !editing" class="text-muted-foreground" :data-testid="`instructions-none-${lineId}`">{{ t('billingInstructions.none') }}</span>
       <Button v-if="editable && !editing" variant="outline" size="sm" :data-testid="`edit-instructions-${lineId}`" @click="startEdit">{{ t('billingInstructions.edit') }}</Button>
     </div>
+    <p v-if="routingNote" class="m-0 mt-1 text-muted-foreground" :data-testid="`routing-note-${lineId}`">{{ routingNote }}</p>
     <ul v-if="rules.length && !editing" class="m-0 mt-1 list-none p-0">
       <li v-for="(r, i) in rules" :key="i" :data-testid="`instruction-${lineId}-${i}`">{{ t('billingInstructions.pays', { scope: scopeText(r), company: r.company_name }) }}</li>
     </ul>

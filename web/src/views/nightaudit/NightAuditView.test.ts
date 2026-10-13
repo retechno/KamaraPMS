@@ -156,6 +156,15 @@ describe('NightAuditView', () => {
     expect(GET).not.toHaveBeenCalled()
   })
 
+  it('warns about the master folio of a group that has left, without blocking the audit', async () => {
+    const w = mountView({ ...clean(), warnings: { ...clean().warnings, open_group_masters: [{ folio_id: 30, folio_number: 'FOL000030', group_code: 'GRP1', group_name: 'Conference', balance: '2000000' }] } })
+    await flushPromises()
+    const line = w.get('[data-testid=open-master-30]')
+    expect(line.text()).toContain('The group GRP1 has left and its master folio FOL000030 is still open (balance 2,000,000).')
+    expect(line.get('a').attributes('href')).toBe('/folios/30')
+    expect(w.find('[data-testid=cannot-run]').exists()).toBe(false) // a warning, not a blocker
+  })
+
   it('says at the top whether the audit is ready and how many steps need attention', async () => {
     const ready = mountView()
     await flushPromises()

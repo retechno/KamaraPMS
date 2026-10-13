@@ -217,18 +217,23 @@ func (s *Service) TransferTargets(ctx context.Context, propertyID, fromID int64,
 	if err != nil {
 		return nil, orNotFound(err, errFolioNotFound())
 	}
-	groups, err := db.ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: []int64{from.ReservationID}})
-	if err != nil {
-		return nil, err
-	}
 	var group *int64
-	for _, g := range groups {
-		group = g.BookingGroupID
+	if from.FolioType == "MASTER" {
+		group = from.BookingGroupID
+	} else if from.ReservationID != nil {
+		groups, err := db.ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: []int64{*from.ReservationID}})
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range groups {
+			group = g.BookingGroupID
+		}
 	}
 	includeAny := s.authz.Require(ctx, propertyID, auth.PermFolioTransferAny) == nil
 	q = strings.TrimSpace(q)
 	rows, err := db.SearchTransferTargets(ctx, foliosdb.SearchTransferTargetsParams{
-		TenantID: p.TenantID, PropertyID: propertyID, FromFolioID: fromID, FromReservationID: from.ReservationID, FromGroupID: group, IncludeAny: includeAny, Q: nullable(q), RowLimit: rowLimit(limit),
+		TenantID: p.TenantID, PropertyID: propertyID, FromFolioID: fromID, FromReservationID: from.ReservationID, FromGroupID: group, FromIsMaster: from.FolioType == "MASTER", IncludeAny: includeAny,
+		Q: nullable(q), RowLimit: rowLimit(limit),
 	})
 	if err != nil {
 		return nil, err
@@ -243,13 +248,23 @@ func (s *Service) TransferTargets(ctx context.Context, propertyID, fromID int64,
 		switch {
 		case r.SameReservation:
 			scope = ScopeReservation
+		case r.GroupMaster:
+			scope = ScopeGroupMaster
 		case r.SameGroup:
 			scope = ScopeGroupMember
 		}
 		out[i] = TransferTarget{
-			ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, ConfirmationNumber: r.ConfirmationNumber, Room: r.RoomNumber, Guest: strings.TrimSpace(deref(r.FirstName) + " " + deref(r.LastName)),
-			Company: deref(r.CompanyName), Balance: fixed(r.Balance, decimals), Scope: scope,
+			ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, ConfirmationNumber: r.ConfirmationNumber, Room: r.RoomNumber, Guest: guestOrGroup(r.GroupName, deref(r.FirstName), deref(r.LastName)),
+			Company: r.CompanyName, Balance: fixed(r.Balance, decimals), Scope: scope,
 		}
 	}
 	return out, nil
+}
+
+// guestOrGroup is what names a target on the screen: the guest of a folio of a stay, the name of the group for the master folio of a group.
+func guestOrGroup(group, first, last string) string {
+	if group != "" {
+		return group
+	}
+	return strings.TrimSpace(first + " " + last)
 }

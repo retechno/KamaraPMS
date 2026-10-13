@@ -1462,6 +1462,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Where the charges of a room go (reservation.read)
+         * @description The instruction of the room itself (a company folio) wins over those of its group, and a room that is excluded from the routing of its group ignores them.
+         *     `room` says where a room night goes: `LINE` (a company folio), `GROUP` (the master folio of the group) or `NONE` (the guest folio). A reservation in no group has no `group`.
+         */
+        get: operations["getLineRouting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The master folio of a group, its instructions and its rooms (reservation.read)
+         * @description The balance of the master is given only to a reader who holds `folio.read` (it is empty for the others).
+         */
+        get: operations["getGroupRouting"];
+        /**
+         * Replace the instructions of a group and the rooms that stay out of them (folio.master_manage)
+         * @description An instruction sends the room nights (`ROOM`), one charge code (`CHARGE_CODE`) or everything that posts without being told a folio (`ALL`) of the members of the group to its master folio.
+         *     The set is replaced as a whole and applies from the next night not yet posted: a night already posted stays where it is (moving it is a transfer to the master, scope `GROUP_MASTER`).
+         *     The first instruction opens the master folio. A room in `excluded_lines` keeps to its own instructions and its guest folio. A room's own instruction (a company folio) wins over the group's.
+         *     A group that is inactive takes no master (409 `GROUP_INACTIVE`). A night routed to a master that is closed is reported by the night audit as `ROUTING_TARGET_CLOSED` and nothing is posted.
+         */
+        put: operations["setGroupRouting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/routing/posted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The charges already posted to members that the instructions of the group would send to the master (folio.read)
+         * @description One row for each open folio of a member and charge code: the room nights for `ROOM`, the charge codes named for `CHARGE_CODE`, every charge for `ALL`. A room that is excluded and a charge that was reversed are left out.
+         *     They stay where they are until they are moved with `POST /folios/{id}/transfer-items` to the master folio (scope `GROUP_MASTER`).
+         */
+        get: operations["listPostedForMaster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/master-folio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the master folio of a group (folio.master_manage)
+         * @description A group has one master folio: asking again returns it (200, `created` false). The company of the group is copied onto the folio and is the buyer of its invoices; a group with no company is billed to its contact.
+         *     The master takes payments like any folio (a payment before its first charge is an advance deposit, after it a settlement) and is closed with `POST /folios/{id}/close`, which needs `folio.master_close`,
+         *     a zero balance and every room of the group over (409 `FOLIO_BALANCE_NOT_ZERO`, 409 `MASTER_FOLIO_GROUP_ACTIVE` with the rooms in the context).
+         */
+        post: operations["openMasterFolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel": {
         parameters: {
             query?: never;
@@ -1733,8 +1837,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Close a folio with a zero balance (folio.post_charge)
-         * @description For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
+         * Close a folio with a zero balance (folio.post_charge, or folio.master_close for a master folio)
+         * @description The master folio of a group is closed with `folio.master_close` and only when every room of the group is over (409 `MASTER_FOLIO_GROUP_ACTIVE`, the rooms in the context). For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
          */
         post: operations["closeFolio"];
         delete?: never;
@@ -9173,6 +9277,108 @@ export interface components {
             /** @enum {string} */
             scope: "RESERVATION" | "GROUP_MEMBER" | "ANY";
         };
+        MasterFolio: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** @description Empty for a reader who may not read folios. */
+            balance: string;
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            bill_to_company_id: number | null;
+            bill_to_company_name?: string;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        MasterResult: {
+            master: components["schemas"]["MasterFolio"];
+            created: boolean;
+        };
+        GroupInstruction: {
+            /** @enum {string} */
+            scope: "ALL" | "ROOM" | "CHARGE_CODE";
+            /** Format: int64 */
+            charge_code_id: number | null;
+            charge_code?: string;
+            charge_code_name?: string;
+        };
+        GroupInstructionInput: {
+            /** @enum {string} */
+            scope: "ALL" | "ROOM" | "CHARGE_CODE";
+            /**
+             * Format: int64
+             * @description Only for the scope CHARGE_CODE.
+             */
+            charge_code_id?: number | null;
+        };
+        GroupLine: {
+            /** Format: int64 */
+            reservation_room_id: number;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            status: string;
+            /** @description The room stays out of the routing of the group. */
+            excluded: boolean;
+        };
+        GroupRouting: {
+            /** Format: int64 */
+            group_id: number;
+            master: components["schemas"]["MasterFolio"] | null;
+            instructions: components["schemas"]["GroupInstruction"][];
+            lines: components["schemas"]["GroupLine"][];
+        };
+        GroupRoutingRequest: {
+            instructions: components["schemas"]["GroupInstructionInput"][];
+            excluded_lines: number[];
+        };
+        RoutingNotice: {
+            /** @enum {string} */
+            room: "LINE" | "GROUP" | "NONE";
+            excluded: boolean;
+            group: {
+                /** Format: int64 */
+                id: number;
+                code: string;
+                name: string;
+                /**
+                 * Format: int64
+                 * @description 0 when the group has no master folio yet.
+                 */
+                master_folio_id: number;
+                master_folio_number: string;
+                /** @description OPEN, CLOSED, or empty when there is no master. */
+                master_status: string;
+            } | null;
+            group_instructions: components["schemas"]["GroupInstruction"][];
+        };
+        PostedCharges: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            charge_code_name: string;
+            count: number;
+            total: string;
+        };
+        MasterInfo: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            balance: string;
+            group_code: string;
+            group_name: string;
+        };
         FolioTotals: {
             debit: string;
             credit: string;
@@ -9182,21 +9388,35 @@ export interface components {
             id: number;
             folio_number: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY";
+            folio_type: "GUEST" | "COMPANY" | "MASTER";
             /**
              * Format: int64
-             * @description The company a COMPANY folio is billed to; null on a guest folio.
+             * @description The company a COMPANY folio is billed to, or the company of the group on a MASTER folio; null on a guest folio.
              */
             bill_to_company_id: number | null;
             /** @description The name of that company (absent on a guest folio). */
             bill_to_company_name?: string;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
-            /** Format: int64 */
-            reservation_id: number;
+            /**
+             * Format: int64
+             * @description Null on a MASTER folio.
+             */
+            reservation_id: number | null;
+            /**
+             * Format: int64
+             * @description The group of a MASTER folio; null on the others.
+             */
+            booking_group_id?: number | null;
+            booking_group_code?: string;
+            booking_group_name?: string;
+            /** @description The contact of the group, on a MASTER folio: the party of its invoice when the group has no company. */
+            booking_group_contact_name?: string;
+            booking_group_contact_email?: string;
+            booking_group_contact_phone?: string;
             /** Format: int64 */
             stay_id: number | null;
             /** Format: date-time */
@@ -9216,10 +9436,10 @@ export interface components {
             /** @description The confirmation number of the reservation of the folio (`RES000012`) */
             confirmation_number?: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY";
+            folio_type: "GUEST" | "COMPANY" | "MASTER";
             /**
              * Format: int64
              * @description The company a COMPANY folio is billed to; null on a guest folio.
@@ -9227,8 +9447,15 @@ export interface components {
             bill_to_company_id: number | null;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
+            /**
+             * Format: int64
+             * @description Null on a MASTER folio.
+             */
+            reservation_id: number | null;
             /** Format: int64 */
-            reservation_id: number;
+            booking_group_id?: number | null;
+            booking_group_code?: string;
+            booking_group_name?: string;
             /** Format: int64 */
             stay_id: number | null;
             /** Format: date-time */
@@ -9523,6 +9750,8 @@ export interface components {
             folios: components["schemas"]["ClosedFolio"][];
             /** @description The housekeeping status the room has now (DIRTY). */
             housekeeping: string;
+            /** @description Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing. */
+            master_folio?: components["schemas"]["MasterInfo"] | null;
         };
         StaySummary: {
             /** Format: int64 */
@@ -10558,6 +10787,15 @@ export interface components {
                 folio_id: number;
                 folio_number: string;
                 confirmation_number: string;
+                balance: components["schemas"]["Amount"];
+            }[];
+            /** @description Master folios of groups whose rooms are all over, still open, with their balance. A warning: a hotel may bill a group days later. */
+            open_group_masters?: {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+                group_code: string;
+                group_name: string;
                 balance: components["schemas"]["Amount"];
             }[];
             blocks_ending: {
@@ -16248,6 +16486,150 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    getLineRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: components["parameters"]["LineId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The routing of the room. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingNotice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getGroupRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The routing of the group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRouting"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setGroupRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRoutingRequest"];
+            };
+        };
+        responses: {
+            /** @description The routing after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRouting"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPostedForMaster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What can move. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PostedCharges"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    openMasterFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The master folio that already existed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterResult"];
+                };
+            };
+            /** @description The master folio, opened now. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     cancelReservationRoom: {
         parameters: {
             query?: never;
@@ -16442,6 +16824,9 @@ export interface operations {
                 /** @description Opaque cursor from a previous page's next_cursor. */
                 cursor?: components["parameters"]["Cursor"];
                 reservation_id?: number;
+                /** @description The master folio of that group. */
+                booking_group_id?: number;
+                folio_type?: "GUEST" | "COMPANY" | "MASTER";
                 stay_id?: number;
                 status?: "OPEN" | "CLOSED";
                 /** @description The column to sort by; the id breaks a tie in the direction of the order. */

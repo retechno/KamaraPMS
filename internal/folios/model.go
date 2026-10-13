@@ -114,9 +114,11 @@ type RefundInput struct {
 
 // FolioFilter narrows the folio list.
 type FolioFilter struct {
-	ReservationID *int64
-	StayID        *int64
-	Status        string
+	ReservationID  *int64
+	StayID         *int64
+	BookingGroupID *int64
+	FolioType      string
+	Status         string
 }
 
 // PaymentFilter narrows the cashier list.
@@ -240,17 +242,25 @@ type Folio struct {
 	FolioNumber string `json:"folio_number"`
 	FolioType   string `json:"folio_type"`
 	// BillToCompanyID is the company a COMPANY folio is billed to (nil on a guest folio).
-	BillToCompanyID   *int64     `json:"bill_to_company_id"`
-	BillToCompanyName string     `json:"bill_to_company_name,omitempty"`
-	Status            string     `json:"status"`
-	ReservationID     int64      `json:"reservation_id"`
-	StayID            *int64     `json:"stay_id"`
-	OpenedAt          time.Time  `json:"opened_at"`
-	ClosedAt          *time.Time `json:"closed_at"`
-	Version           int32      `json:"version"`
-	Balance           string     `json:"balance"`
-	Totals            Totals     `json:"totals"`
-	Items             []Item     `json:"items"`
+	BillToCompanyID   *int64 `json:"bill_to_company_id"`
+	BillToCompanyName string `json:"bill_to_company_name,omitempty"`
+	Status            string `json:"status"`
+	// ReservationID is nil on the master folio of a group, which belongs to the group (BookingGroupID) and to no reservation.
+	ReservationID    *int64 `json:"reservation_id"`
+	BookingGroupID   *int64 `json:"booking_group_id"`
+	BookingGroupCode string `json:"booking_group_code,omitempty"`
+	BookingGroupName string `json:"booking_group_name,omitempty"`
+	// The contact of the group, for the master folio only: the party of its invoice when the group has no company.
+	BookingGroupContactName  string     `json:"booking_group_contact_name,omitempty"`
+	BookingGroupContactEmail string     `json:"booking_group_contact_email,omitempty"`
+	BookingGroupContactPhone string     `json:"booking_group_contact_phone,omitempty"`
+	StayID                   *int64     `json:"stay_id"`
+	OpenedAt                 time.Time  `json:"opened_at"`
+	ClosedAt                 *time.Time `json:"closed_at"`
+	Version                  int32      `json:"version"`
+	Balance                  string     `json:"balance"`
+	Totals                   Totals     `json:"totals"`
+	Items                    []Item     `json:"items"`
 }
 
 // FolioSummary is a row of the folio list.
@@ -260,7 +270,11 @@ type FolioSummary struct {
 	FolioType       string `json:"folio_type"`
 	BillToCompanyID *int64 `json:"bill_to_company_id"`
 	Status          string `json:"status"`
-	ReservationID   int64  `json:"reservation_id"`
+	ReservationID   *int64 `json:"reservation_id"`
+	BookingGroupID  *int64 `json:"booking_group_id"`
+	// BookingGroupCode and BookingGroupName name the group of a master folio (empty on the others).
+	BookingGroupCode string `json:"booking_group_code,omitempty"`
+	BookingGroupName string `json:"booking_group_name,omitempty"`
 	// ConfirmationNumber is the number of that reservation ("RES000012"), so a list can name it instead of showing its id.
 	ConfirmationNumber string    `json:"confirmation_number"`
 	StayID             *int64    `json:"stay_id"`

@@ -36,6 +36,14 @@ describe('FoliosView', () => {
     GET = vi.fn()
   })
 
+  it('names the group of a master folio, which has no reservation, and links to it', async () => {
+    const w = mountView(['folio.read'], { data: [{ id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', status: 'OPEN', reservation_id: null, booking_group_id: 4, booking_group_code: 'GRP1', booking_group_name: 'Conference', stay_id: null, version: 1, balance: '2000000' }] })
+    await flushPromises()
+    const link = w.get('[data-testid=master-group-link]')
+    expect(link.text()).toBe('GRP1 · Conference')
+    expect(link.attributes('href')).toBe('/groups/4')
+  })
+
   it('lists open folios with their balances and links', async () => {
     const w = mountView()
     await flushPromises()

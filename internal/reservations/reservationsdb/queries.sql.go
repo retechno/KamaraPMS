@@ -999,7 +999,7 @@ type ListDepositsPaidParams struct {
 }
 
 type ListDepositsPaidRow struct {
-	ReservationID int64
+	ReservationID *int64
 	FolioID       int64
 	Paid          decimal.Decimal
 }
@@ -1383,7 +1383,7 @@ ORDER BY f.id
 type ListReservationFoliosParams struct {
 	TenantID      int64
 	PropertyID    int64
-	ReservationID int64
+	ReservationID *int64
 }
 
 type ListReservationFoliosRow struct {

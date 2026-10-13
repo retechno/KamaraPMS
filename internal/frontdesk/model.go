@@ -413,4 +413,6 @@ type CheckOutResult struct {
 	PostedRoomCharges []roomcharge.Result  `json:"posted_room_charges"`
 	Folios            []folios.ClosedFolio `json:"folios"`
 	Housekeeping      string               `json:"housekeeping"`
+	// MasterFolio is set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing.
+	MasterFolio *folios.MasterInfo `json:"master_folio"`
 }

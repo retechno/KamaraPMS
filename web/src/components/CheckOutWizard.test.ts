@@ -43,6 +43,21 @@ describe('CheckOutWizard', () => {
     expect(w.emitted('done')).toHaveLength(1)
   })
 
+  it('says that the group still has an open bill when this was its last room, and only then', async () => {
+    const w = mountWizard(detail('2026-09-30'))
+    POST.mockResolvedValue({ data: { ...result, master_folio: { folio_id: 30, folio_number: 'FOL000030', balance: '2000000', group_code: 'GRP1', group_name: 'Conference' } } })
+    await w.get('[data-testid=checkout-submit]').trigger('click')
+    await flushPromises()
+    const note = w.get('[data-testid=checkout-master]')
+    expect(note.text()).toContain('This was the last room of group GRP1: its master folio FOL000030 is still open (balance 2,000,000).')
+    expect(note.get('a').attributes('href')).toBe('/folios/30')
+    const other = mountWizard(detail('2026-09-30'))
+    POST.mockResolvedValue({ data: { ...result, master_folio: null } })
+    await other.get('[data-testid=checkout-submit]').trigger('click')
+    await flushPromises()
+    expect(other.find('[data-testid=checkout-master]').exists()).toBe(false)
+  })
+
   it('needs an explicit confirmation for an early departure', async () => {
     const w = mountWizard(detail('2026-10-03'))
     expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()

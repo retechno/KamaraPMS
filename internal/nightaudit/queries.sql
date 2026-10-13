@@ -43,6 +43,19 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = '
   AND COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0) <> 0
 ORDER BY f.id;
 
+-- OPEN master folios of groups whose rooms are all over (checked out, cancelled or no-show), with their balance: the group has left and its bill is still open.
+-- name: ListOpenMastersOfGoneGroups :many
+SELECT f.id AS folio_id, f.folio_number, g.code AS group_code, g.name AS group_name,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance
+FROM folios f
+JOIN booking_groups g ON g.property_id = f.property_id AND g.id = f.booking_group_id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND f.folio_type = 'MASTER'
+  AND EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+              WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id)
+  AND NOT EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+                  WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW'))
+ORDER BY f.id;
+
 -- name: ListBlocksEndingAt :many
 SELECT b.id AS block_id, b.block_type, r.room_number, b.end_date
 FROM room_blocks b JOIN rooms r ON r.property_id = b.property_id AND r.id = b.room_id

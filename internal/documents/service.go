@@ -157,7 +157,13 @@ func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, g
 	if err != nil {
 		return Document{}, err
 	}
-	res, err := s.res.Get(ctx, propertyID, f.ReservationID)
+	if f.FolioType == folios.FolioTypeMaster {
+		return s.masterInvoice(ctx, dc, propertyID, f, group)
+	}
+	if f.ReservationID == nil {
+		return Document{}, apperr.NotFound("RESERVATION_NOT_FOUND", "the folio has no reservation")
+	}
+	res, err := s.res.Get(ctx, propertyID, *f.ReservationID)
 	if err != nil {
 		return Document{}, err
 	}
@@ -188,60 +194,7 @@ func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, g
 		}
 	}
 
-	type key struct{ typ, code, rate string }
-	type agg struct {
-		label  string
-		amount decimal.Decimal
-	}
-	var order []key
-	parts := map[key]*agg{}
-	net, charges, payments := decimal.Zero, decimal.Zero, decimal.Zero // of the lines shown
-	for _, it := range f.Items {
-		if group != "" && it.GroupCode != group {
-			continue
-		}
-		debit, credit := dec(it.Debit), dec(it.Credit)
-		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: dc.lang.TransferDescription(it.Description),
-			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
-		switch it.TransactionType {
-		case "PAYMENT", "REFUND":
-			payments = payments.Add(credit.Sub(debit))
-		default:
-			charges = charges.Add(debit.Sub(credit))
-			net = net.Add(dec(it.NetAmount))
-			for _, c := range it.Components {
-				k := key{c.ComponentType, c.Code, c.Rate}
-				a := parts[k]
-				if a == nil {
-					label := c.Name + " " + trimRate(c.Rate) + "%"
-					if c.ComponentType == "SERVICE_CHARGE" {
-						label = "Service charge " + label
-					}
-					a = &agg{label: label}
-					parts[k] = a
-					order = append(order, k)
-				}
-				a.amount = a.amount.Add(dec(c.Amount))
-			}
-		}
-	}
-	d.Summary = append(d.Summary, Amount{"Charges (net)", dc.lang.Money(net, dc.decimals)})
-	for _, typ := range []string{"SERVICE_CHARGE", "TAX"} {
-		for _, k := range order {
-			if k.typ == typ {
-				d.Summary = append(d.Summary, Amount{parts[k].label, dc.lang.Money(parts[k].amount, dc.decimals)})
-			}
-		}
-	}
-	balance := dec(f.Balance) // the folio's own balance
-	if group != "" {
-		balance = charges.Sub(payments) // a bill of one group: the balance of the lines shown
-	}
-	label := "Balance due"
-	if balance.IsNegative() {
-		label = "Balance (credit)"
-	}
-	d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
+	s.fillInvoiceLines(&d, dc, f, group)
 	pdf, err := RenderInvoice(d)
 	if err != nil {
 		return Document{}, err
@@ -318,13 +271,23 @@ func (s *Service) Receipt(ctx context.Context, propertyID, paymentID int64) (Doc
 	if err != nil {
 		return Document{}, err
 	}
-	res, err := s.res.Get(ctx, propertyID, f.ReservationID)
-	if err != nil {
-		return Document{}, err
+	var res reservations.Reservation
+	var guest Party
+	var booking string
+	if f.FolioType == folios.FolioTypeMaster {
+		guest, booking = s.masterParty(ctx, propertyID, f), f.BookingGroupCode+" "+f.BookingGroupName
+	} else {
+		if f.ReservationID == nil {
+			return Document{}, apperr.NotFound("RESERVATION_NOT_FOUND", "the folio has no reservation")
+		}
+		if res, err = s.res.Get(ctx, propertyID, *f.ReservationID); err != nil {
+			return Document{}, err
+		}
+		guest, booking = s.party(ctx, res.GuestID, guestName(res.Guest)), res.ConfirmationNumber
 	}
 	d := ReceiptData{
 		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: pay.PaymentNumber, Refund: pay.PaymentType == "REFUND", Voided: pay.Status == "VOIDED",
-		Guest: s.party(ctx, res.GuestID, guestName(res.Guest)), Folio: f.FolioNumber, Booking: res.ConfirmationNumber, Date: pay.BusinessDate,
+		Guest: guest, Folio: f.FolioNumber, Booking: booking, Date: pay.BusinessDate,
 		At: pay.PaidAt.In(dc.prop.Location()).Format("15:04"), Method: methodLabel(pay.PaymentMethod), Reference: pay.ReferenceNumber,
 		Currency: dc.prop.CurrencyCode, Amount: dc.lang.Money(dec(pay.Amount), dc.decimals), Remarks: pay.Remarks,
 	}
@@ -526,4 +489,106 @@ func (s *Service) CompanyInvoice(ctx context.Context, propertyID, invoiceID int6
 		return Document{}, err
 	}
 	return Document{Filename: "invoice-" + inv.InvoiceNumber + ".pdf", PDF: pdf}, nil
+}
+
+// fillInvoiceLines adds the lines of a folio, or of one transaction group of it, and the summary of the invoice. The lines of the folio of a stay and those of the master folio of a group read the same.
+func (s *Service) fillInvoiceLines(d *InvoiceData, dc docContext, f folios.Folio, group string) {
+	type key struct{ typ, code, rate string }
+	type agg struct {
+		label  string
+		amount decimal.Decimal
+	}
+	var order []key
+	parts := map[key]*agg{}
+	net, charges, payments := decimal.Zero, decimal.Zero, decimal.Zero // of the lines shown
+	for _, it := range f.Items {
+		if group != "" && it.GroupCode != group {
+			continue
+		}
+		debit, credit := dec(it.Debit), dec(it.Credit)
+		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: dc.lang.TransferDescription(it.Description),
+			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
+		switch it.TransactionType {
+		case "PAYMENT", "REFUND":
+			payments = payments.Add(credit.Sub(debit))
+		default:
+			charges = charges.Add(debit.Sub(credit))
+			net = net.Add(dec(it.NetAmount))
+			for _, c := range it.Components {
+				k := key{c.ComponentType, c.Code, c.Rate}
+				a := parts[k]
+				if a == nil {
+					label := c.Name + " " + trimRate(c.Rate) + "%"
+					if c.ComponentType == "SERVICE_CHARGE" {
+						label = "Service charge " + label
+					}
+					a = &agg{label: label}
+					parts[k] = a
+					order = append(order, k)
+				}
+				a.amount = a.amount.Add(dec(c.Amount))
+			}
+		}
+	}
+	d.Summary = append(d.Summary, Amount{"Charges (net)", dc.lang.Money(net, dc.decimals)})
+	for _, typ := range []string{"SERVICE_CHARGE", "TAX"} {
+		for _, k := range order {
+			if k.typ == typ {
+				d.Summary = append(d.Summary, Amount{parts[k].label, dc.lang.Money(parts[k].amount, dc.decimals)})
+			}
+		}
+	}
+	balance := dec(f.Balance) // the folio's own balance
+	if group != "" {
+		balance = charges.Sub(payments) // a bill of one group: the balance of the lines shown
+	}
+	label := "Balance due"
+	if balance.IsNegative() {
+		label = "Balance (credit)"
+	}
+	d.Summary = append(d.Summary, Amount{"Total charges", dc.lang.Money(charges, dc.decimals)}, Amount{"Payments received", dc.lang.Money(payments, dc.decimals)}, Amount{label, dc.lang.Money(balance, dc.decimals)})
+}
+
+// masterParty is who a master folio is billed to: the company of the group when it has one (its record when this user may read it, else its name), else the contact of the group.
+func (s *Service) masterParty(ctx context.Context, propertyID int64, f folios.Folio) Party {
+	if f.BillToCompanyID != nil {
+		p := Party{Name: f.BillToCompanyName}
+		if co, err := s.cos.Get(ctx, propertyID, *f.BillToCompanyID); err == nil {
+			p.Name, p.Address, p.City, p.Email, p.Phone = co.Name, co.Address, co.City, co.Email, co.Phone
+		}
+		return p
+	}
+	name := f.BookingGroupContactName
+	if name == "" {
+		name = f.BookingGroupName
+	}
+	return Party{Name: name, Email: f.BookingGroupContactEmail, Phone: f.BookingGroupContactPhone}
+}
+
+// masterInvoice renders the master folio of a group: the party is the company of the group, else its contact ("Bill to"); the booking line is the group, and the rooms of its members are listed.
+func (s *Service) masterInvoice(ctx context.Context, dc docContext, propertyID int64, f folios.Folio, group string) (Document, error) {
+	party := s.masterParty(ctx, propertyID, f)
+	d := InvoiceData{
+		Hotel: dc.hotel, Lang: dc.lang, Printed: dc.printed, Number: f.FolioNumber, Final: f.Status == "CLOSED", Currency: dc.prop.CurrencyCode,
+		Booking: strings.TrimSpace(f.BookingGroupCode + " " + f.BookingGroupName), Guest: party, BillTo: &party, Group: group, Master: true,
+	}
+	if f.BookingGroupID != nil {
+		if rooms, err := s.folios.GroupRooms(ctx, propertyID, *f.BookingGroupID); err == nil {
+			d.Room = strings.Join(rooms, ", ")
+		}
+	}
+	s.fillInvoiceLines(&d, dc, f, group)
+	pdf, err := RenderInvoice(d)
+	if err != nil {
+		return Document{}, err
+	}
+	prefix := "invoice-"
+	if !d.Final {
+		prefix = "bill-"
+	}
+	suffix := ""
+	if group != "" {
+		suffix = "-" + group
+	}
+	return Document{Filename: prefix + f.FolioNumber + suffix + ".pdf", PDF: pdf}, nil
 }

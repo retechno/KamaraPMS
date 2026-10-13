@@ -159,7 +159,7 @@ func (s *Service) PostReservationFee(ctx context.Context, propertyID, reservatio
 			return apperr.Conflict("FEE_CHARGE_CODE_UNAVAILABLE", "the charge code "+typ+" is missing or switched off in this property").WithContext("charge_code", typ)
 		}
 
-		_, err = q.FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: reservationID})
+		_, err = q.FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
 		existed := err == nil // otherwise depositFolio opens the folio of the reservation
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err

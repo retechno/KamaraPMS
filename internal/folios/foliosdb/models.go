@@ -16,7 +16,7 @@ type Folio struct {
 	TenantID        int64
 	PropertyID      int64
 	FolioNumber     string
-	ReservationID   int64
+	ReservationID   *int64
 	StayID          *int64
 	FolioType       string
 	Status          string
@@ -30,6 +30,7 @@ type Folio struct {
 	UpdatedBy       *int64
 	ClosedOn        *civil.Date
 	BillToCompanyID *int64
+	BookingGroupID  *int64
 }
 
 type FolioItem struct {

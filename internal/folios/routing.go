@@ -44,19 +44,43 @@ func (s *Service) ResolveRoomTargets(ctx context.Context, tenantID, propertyID i
 	}
 	out := make(map[int64]expected.StayTargets, len(m))
 	for id, r := range m {
-		out[id] = expected.StayTargets{Default: r.room(), ByCode: r.byCode}
+		out[id] = expected.StayTargets{Default: r.room(), ByCode: r.codes()}
 	}
 	return out, nil
 }
 
-// routing is what the instructions of a stay say, resolved to folios.
+// routing is what the instructions of a stay say, resolved to folios: the instructions of its line (to company folios of the stay) and, behind them, the instructions of its group (to the
+// master folio of the group), unless the line is excluded from the routing of the group.
 type routing struct {
 	guest  Target
 	all    *Target
 	roomT  *Target
 	byCode map[int64]Target
+	// the group stage: ignored for an excluded line
+	excluded bool
+	gAll     *Target
+	gRoom    *Target
+	gByCode  map[int64]Target
 }
 
+// groupStage is the group's instruction for a charge, when the line takes part in the routing of its group.
+func (r routing) groupStage(chargeCodeID int64, isRoom bool) (Target, bool) {
+	if r.excluded {
+		return Target{}, false
+	}
+	if t, ok := r.gByCode[chargeCodeID]; ok && chargeCodeID != 0 {
+		return t, true
+	}
+	if isRoom && r.gRoom != nil {
+		return *r.gRoom, true
+	}
+	if r.gAll != nil {
+		return *r.gAll, true
+	}
+	return Target{}, false
+}
+
+// room is what a room night does when no charge code names it: the room instruction of the line, else its "all", else the group's, else the guest folio.
 func (r routing) room() Target {
 	if r.roomT != nil {
 		return *r.roomT
@@ -64,19 +88,43 @@ func (r routing) room() Target {
 	if r.all != nil {
 		return *r.all
 	}
+	if t, ok := r.groupStage(0, true); ok {
+		return t
+	}
 	return r.guest
 }
 
-// For is the one precedence rule.
+// codes is every charge code that has an instruction of its own, the instruction of the line winning over that of the group.
+func (r routing) codes() map[int64]Target {
+	if len(r.byCode) == 0 && (r.excluded || len(r.gByCode) == 0) {
+		return r.byCode
+	}
+	out := map[int64]Target{}
+	if !r.excluded {
+		for k, v := range r.gByCode {
+			out[k] = v
+		}
+	}
+	for k, v := range r.byCode {
+		out[k] = v
+	}
+	return out
+}
+
+// For is the one precedence rule: the instructions of the line first (a charge code, the room, all), then those of the group (the same order) unless the line is excluded from them, then the
+// guest folio.
 func (r routing) For(chargeCodeID int64, isRoom bool) Target {
 	if t, ok := r.byCode[chargeCodeID]; ok && chargeCodeID != 0 {
 		return t
 	}
-	if isRoom {
-		return r.room()
+	if isRoom && r.roomT != nil {
+		return *r.roomT
 	}
 	if r.all != nil {
 		return *r.all
+	}
+	if t, ok := r.groupStage(chargeCodeID, isRoom); ok {
+		return t
 	}
 	return r.guest
 }
@@ -116,6 +164,31 @@ func (s *Service) resolve(ctx context.Context, tenantID, propertyID int64, stayI
 		if _, ok := out[id]; !ok {
 			out[id] = routing{} // no open guest folio: FolioID 0, not routed
 		}
+	}
+	groupRules, err := q.ListStayGroupRules(ctx, foliosdb.ListStayGroupRulesParams{TenantID: tenantID, PropertyID: propertyID, StayIds: stayIDs})
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range groupRules {
+		r := out[rule.StayID]
+		r.excluded = rule.Excluded
+		// the master of the group, when it is open: a rule whose master is closed or missing answers FolioID 0 and Routed, which is ROUTING_TARGET_CLOSED, never the guest folio
+		t := Target{Routed: true}
+		if rule.MasterStatus == "OPEN" {
+			t.FolioID = rule.MasterID
+		}
+		switch rule.Scope {
+		case "ALL":
+			r.gAll = &t
+		case "ROOM":
+			r.gRoom = &t
+		case "CHARGE_CODE":
+			if r.gByCode == nil {
+				r.gByCode = map[int64]Target{}
+			}
+			r.gByCode[*rule.ChargeCodeID] = t
+		}
+		out[rule.StayID] = r
 	}
 	for _, rule := range rules {
 		r := out[rule.StayID]

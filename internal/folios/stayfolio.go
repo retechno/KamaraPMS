@@ -34,7 +34,7 @@ type StayFolio struct {
 // LockUnlinkedFolio locks (L4) the reservation's open folio that has no stay, if there is one, and returns its
 // id (0 when there is none). Call it before taking any sequence number.
 func (s *Service) LockUnlinkedFolio(ctx context.Context, tenantID, propertyID, reservationID int64) (int64, error) {
-	id, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: reservationID})
+	id, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: &reservationID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
@@ -60,7 +60,7 @@ func (s *Service) AttachStayFolio(ctx context.Context, p auth.Principal, propert
 		if number, err = s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqFolio); err != nil {
 			return StayFolio{}, err
 		}
-		f, err = q.InsertFolio(ctx, foliosdb.InsertFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: reservationID, StayID: &stayID, ActorID: p.ActorID()})
+		f, err = q.InsertFolio(ctx, foliosdb.InsertFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: &reservationID, StayID: &stayID, ActorID: p.ActorID()})
 	}
 	if err != nil {
 		return StayFolio{}, err
@@ -295,7 +295,7 @@ func (s *Service) ReservationDeposits(ctx context.Context, tenantID, propertyID 
 		return nil, err
 	}
 	for _, id := range reservationIDs {
-		fid, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: id})
+		fid, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: &id})
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}

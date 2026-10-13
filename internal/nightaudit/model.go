@@ -70,6 +70,15 @@ type StaleDraft struct {
 	ArrivalDate        civil.Date `json:"arrival_date"`
 }
 
+// OpenMaster is the master folio of a group that has left, still open, with its balance.
+type OpenMaster struct {
+	FolioID     int64  `json:"folio_id"`
+	FolioNumber string `json:"folio_number"`
+	GroupCode   string `json:"group_code"`
+	GroupName   string `json:"group_name"`
+	Balance     string `json:"balance"`
+}
+
 // DeadFolio is an open folio with a balance on a reservation without any live room.
 type DeadFolio struct {
 	FolioID            int64  `json:"folio_id"`
@@ -88,8 +97,10 @@ type EndingBlock struct {
 
 // Warnings never stop the run.
 type Warnings struct {
-	StaleDrafts  []StaleDraft  `json:"stale_drafts"`
-	OpenFolios   []DeadFolio   `json:"open_folios_of_cancelled_reservations"`
+	StaleDrafts []StaleDraft `json:"stale_drafts"`
+	OpenFolios  []DeadFolio  `json:"open_folios_of_cancelled_reservations"`
+	// OpenMasters are master folios of groups that have left (every room over) and are still open: a hotel may bill a group days later, so it is a warning, never a blocker.
+	OpenMasters  []OpenMaster  `json:"open_group_masters"`
 	BlocksEnding []EndingBlock `json:"blocks_ending"`
 }
 

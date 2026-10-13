@@ -23,6 +23,7 @@ func (s *Service) RoomPoster() *RoomPoster { return &RoomPoster{s: s} }
 // RoomNightCmd is one room night to post: the amount and the charge code come from the stay's nightly snapshot.
 type RoomNightCmd struct {
 	FolioID      int64
+	StayID       int64 // the stay of the night: the night of a stay routed to the master folio of its group is still that stay's
 	ChargeCodeID int64
 	StayRoomID   int64
 	UnitPrice    decimal.Decimal
@@ -59,10 +60,10 @@ func (r *RoomPoster) Post(ctx context.Context, p auth.Principal, propertyID int6
 	if err := requireOpen(folio); err != nil {
 		return RoomNight{}, err
 	}
-	price, mode, seg := cmd.UnitPrice, cmd.PriceMode, cmd.StayRoomID
+	price, mode, seg, stayID := cmd.UnitPrice, cmd.PriceMode, cmd.StayRoomID, cmd.StayID
 	item, err := s.posting(p, propertyID, bd, folio).postCharge(ctx, chargeCmd{
 		chargeCodeID: cmd.ChargeCodeID, quantity: decimal.NewFromInt(1), unitPrice: &price, priceMode: &mode, serviceDate: cmd.ServiceDate,
-		description: cmd.Description, room: &seg,
+		description: cmd.Description, room: &seg, stayID: &stayID,
 	})
 	if err != nil {
 		return RoomNight{}, err

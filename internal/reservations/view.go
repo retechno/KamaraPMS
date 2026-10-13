@@ -110,7 +110,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID int64, res rese
 	for _, st := range stays {
 		stayBy[st.ReservationRoomID] = st.ID
 	}
-	folioRows, err := q.ListReservationFolios(ctx, reservationsdb.ListReservationFoliosParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: res.ID})
+	folioRows, err := q.ListReservationFolios(ctx, reservationsdb.ListReservationFoliosParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: &res.ID})
 	if err != nil {
 		return Reservation{}, err
 	}
@@ -362,7 +362,10 @@ func (s *Service) summaryExtras(ctx context.Context, tenantID, propertyID int64,
 		return nil, nil, err
 	}
 	for _, d := range paid {
-		deposits[d.ReservationID] = &SummaryDeposit{FolioID: d.FolioID, Paid: decimal.Max(d.Paid, decimal.Zero).StringFixed(decimals)}
+		if d.ReservationID == nil {
+			continue
+		}
+		deposits[*d.ReservationID] = &SummaryDeposit{FolioID: d.FolioID, Paid: decimal.Max(d.Paid, decimal.Zero).StringFixed(decimals)}
 	}
 	return lines, deposits, nil
 }

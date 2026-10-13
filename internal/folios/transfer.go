@@ -112,20 +112,42 @@ type TransferResult struct {
 	Replayed bool              `json:"replayed"`
 }
 
-// scopeOf says what a transfer between two folios is. Both must be OPEN (checked by the caller) and the target must belong to a stay: the deposit folio of a reservation has none.
-// A folio of the same reservation, or of a reservation of the same group, is related; anything else is ANY, which needs folio.transfer_any on the person and on the approver.
-// The master folio of a group (part C) is not there yet: a folio of that type is refused until it is.
+// scopeOf says what a transfer between two folios is. Both must be OPEN (checked by the caller) and the target must belong to a stay, unless it is the master folio of a group: the deposit
+// folio of a reservation has none. A folio of the same reservation, or of a reservation of the same group, is related; the master folio of a group and a folio of a member of that group are
+// related (GROUP_MASTER); anything else is ANY, which needs folio.transfer_any on the person and on the approver. Two master folios do not transfer to each other.
 func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, tgt foliosdb.Folio) (string, error) {
-	if src.FolioType == "MASTER" || tgt.FolioType == "MASTER" {
-		return "", errTransferInvalid("the master folio of a group takes transfers with the master folio of part C")
+	if src.FolioType == "MASTER" && tgt.FolioType == "MASTER" {
+		return "", errTransferInvalid("a master folio does not transfer to another master folio")
 	}
-	if tgt.StayID == nil {
+	if tgt.StayID == nil && tgt.FolioType != "MASTER" {
 		return "", errTransferInvalid("a charge cannot move to the deposit folio of a reservation, which has no stay")
 	}
-	if src.ReservationID == tgt.ReservationID {
+	if src.FolioType == "MASTER" || tgt.FolioType == "MASTER" {
+		master, other := src, tgt
+		if tgt.FolioType == "MASTER" {
+			master, other = tgt, src
+		}
+		if other.ReservationID == nil || master.BookingGroupID == nil {
+			return ScopeAny, nil
+		}
+		rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*other.ReservationID}})
+		if err != nil {
+			return "", err
+		}
+		for _, r := range rows {
+			if r.BookingGroupID != nil && *r.BookingGroupID == *master.BookingGroupID {
+				return ScopeGroupMaster, nil
+			}
+		}
+		return ScopeAny, nil
+	}
+	if src.ReservationID != nil && tgt.ReservationID != nil && *src.ReservationID == *tgt.ReservationID {
 		return ScopeReservation, nil
 	}
-	rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{src.ReservationID, tgt.ReservationID}})
+	if src.ReservationID == nil || tgt.ReservationID == nil {
+		return ScopeAny, nil
+	}
+	rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*src.ReservationID, *tgt.ReservationID}})
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +155,7 @@ func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, 
 	for _, r := range rows {
 		groups[r.ID] = r.BookingGroupID
 	}
-	if a, b := groups[src.ReservationID], groups[tgt.ReservationID]; a != nil && b != nil && *a == *b {
+	if a, b := groups[*src.ReservationID], groups[*tgt.ReservationID]; a != nil && b != nil && *a == *b {
 		return ScopeGroupMember, nil
 	}
 	return ScopeAny, nil

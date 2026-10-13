@@ -26,6 +26,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
@@ -116,15 +117,33 @@ async function load(): Promise<void> {
     if (!adjustCodes.value.some((c) => c.id === adjust.codeId)) adjust.codeId = adjustCodes.value[0]?.id ?? 0
     await loadCompanies(propertyId)
     await loadSiblings(propertyId)
+    await loadRouteNote(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+// The folio of a member of a group says where the room charges go, from the room of its stay (the master folio of the group, or the guest's own folio).
+const routeNote = ref('')
+async function loadRouteNote(propertyId: number): Promise<void> {
+  routeNote.value = ''
+  const f = folio.value
+  if (!f || f.stay_id === null || f.reservation_id === null || f.folio_type !== 'GUEST' || !can('reservation.read')) return
+  try {
+    const stay = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: f.stay_id } } })
+    const line = stay.data?.line?.id
+    if (!line) return
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/routing', { params: { path: { propertyId, id: f.reservation_id, lineId: line } } })
+    routeNote.value = data && 'room' in data ? routingText(data) : ''
+  } catch {
+    routeNote.value = '' // a note: the folio itself still works
   }
 }
 
 async function loadSiblings(propertyId: number): Promise<void> {
   siblings.value = []
   const f = folio.value
-  if (!f || f.status !== 'OPEN' || !can('folio.reverse')) return
+  if (!f || f.status !== 'OPEN' || !can('folio.reverse') || f.reservation_id === null) return
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', { params: { path: { propertyId }, query: { reservation_id: f.reservation_id, status: 'OPEN', limit: 50 } } })
     siblings.value = (data?.data ?? []).filter((s) => s.id !== f.id && s.stay_id !== null)
@@ -408,11 +427,15 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <PageHeader :title="`${t('folio.title')}${folio ? ` ${folio.folio_number}` : ''}`">
     <template v-if="folio" #marks>
       <StatusBadge domain="record" :status="folio.status" data-testid="folio-status" />
+      <Badge v-if="folio.folio_type === 'MASTER'" variant="outline" data-testid="folio-master">{{ t('groupMaster.masterFolioOf', { group: `${folio.booking_group_code} · ${folio.booking_group_name}` }) }}</Badge>
       <Badge v-if="folio.bill_to_company_name" variant="outline" data-testid="folio-company">{{ t('billingInstructions.folioFor', { company: folio.bill_to_company_name }) }}</Badge>
     </template>
     <template #actions>
-      <Button v-if="folio" as-child variant="outline" size="sm">
+      <Button v-if="folio && folio.reservation_id !== null" as-child variant="outline" size="sm">
         <RouterLink :to="`/reservations/${folio.reservation_id}`">{{ t('folio.reservation') }}</RouterLink>
+      </Button>
+      <Button v-else-if="folio && folio.booking_group_id !== null" as-child variant="outline" size="sm">
+        <RouterLink :to="`/groups/${folio.booking_group_id}`" data-testid="group-link">{{ t('groupMaster.masterFolioOf', { group: folio.booking_group_code ?? '' }) }}</RouterLink>
       </Button>
       <Button as-child variant="outline" size="sm">
         <RouterLink to="/folios">{{ t('folio.foliosLink') }}</RouterLink>
@@ -422,6 +445,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
   <ErrorNotice :error="error" :inline="!folio" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
   <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
   <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">{{ t('folio.noAccess') }}</p>
 
@@ -441,7 +465,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ $money(folio.balance) }}</span></p>
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
+        <Button v-if="isOpen && !folio.stay_id && (folio.folio_type === 'MASTER' ? can('folio.master_close') : can('folio.post_charge'))" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
         <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
         <NativeSelect v-if="canPrint" v-model="printGroup" class="w-auto" name="print_group" data-testid="print-group" :aria-label="t('folio.printGroup')">
           <option value="ALL">{{ t('folio.groupAll') }}</option>
