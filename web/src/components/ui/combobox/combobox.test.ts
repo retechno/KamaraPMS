@@ -98,4 +98,80 @@ describe('Combobox', () => {
     await flushPromises()
     expect(all('[data-slot=combobox-content]')).toHaveLength(0)
   })
+
+  describe('a list opened over a chosen value', () => {
+    const labels = () => all('[role=option]').map((o) => o.textContent?.trim())
+    const input = () => document.getElementById('acc') as HTMLInputElement
+    const every = options.map((o) => o.label)
+    const open = async () => {
+      input().focus()
+      await flushPromises()
+    }
+
+    it('shows every option, the chosen one checked and highlighted', async () => {
+      mountBox(2)
+      await flushPromises()
+      await open()
+      expect(labels()).toEqual(every)
+      const chosen = all('[role=option]')[2] as Element
+      expect(chosen.getAttribute('aria-selected')).toBe('true')
+      expect(chosen.hasAttribute('data-highlighted')).toBe(true)
+    })
+
+    it('selects the text of the field when it opens, so typing replaces it', async () => {
+      mountBox(2)
+      await flushPromises()
+      await open()
+      expect(input().selectionStart).toBe(0)
+      expect(input().selectionEnd).toBe(input().value.length)
+    })
+
+    it('narrows by what is typed, and shows every option again the next time it opens', async () => {
+      mountBox(2)
+      await flushPromises()
+      await open()
+      await $('#acc').setValue('4110')
+      await flushPromises()
+      expect(labels()).toEqual(['4110 · Room revenue'])
+      await $('#acc').trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect(all('[role=option]')).toHaveLength(0)
+      await $('#acc').trigger('click') // the field keeps the focus, so a click opens it again
+      await flushPromises()
+      expect(labels()).toEqual(every)
+    })
+
+    it('keeps the value and the label when it is closed without a choice', async () => {
+      mountBox(2)
+      await flushPromises()
+      await open()
+      await $('#acc').setValue('zz')
+      await $('#acc').trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect($('[data-testid=picked]').text()).toBe('2')
+      expect(input().value).toBe('4110 · Room revenue')
+    })
+
+    it('does not empty the value when the text is cleared and the list is closed', async () => {
+      mountBox(2)
+      await flushPromises()
+      await open()
+      await $('#acc').setValue('')
+      await $('#acc').trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect($('[data-testid=picked]').text()).toBe('2')
+      expect(input().value).toBe('4110 · Room revenue')
+    })
+
+    it('still chooses with the arrows and Enter', async () => {
+      mountBox(1)
+      await flushPromises()
+      await open()
+      await $('#acc').trigger('keydown', { key: 'ArrowDown' })
+      await $('#acc').trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+      expect($('[data-testid=picked]').text()).toBe('2')
+      expect(input().value).toBe('4110 · Room revenue')
+    })
+  })
 })

@@ -3,7 +3,7 @@ import { Check, ChevronsUpDown } from 'lucide-vue-next'
 import {
   ComboboxAnchor, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxItemIndicator, ComboboxPortal, ComboboxRoot, ComboboxTrigger, ComboboxViewport,
 } from 'reka-ui'
-import { computed, ref, type HTMLAttributes } from 'vue'
+import { computed, nextTick, ref, watch, type ComponentPublicInstance, type HTMLAttributes } from 'vue'
 import { t } from '@/i18n'
 import { isProgrammaticFocus } from '@/lib/focus'
 import { cn } from '@/lib/utils'
@@ -35,12 +35,15 @@ const props = withDefaults(defineProps<{
 }>(), { openOnFocus: true })
 const model = defineModel<string | number | null>({ default: null })
 
-const term = ref('')
+// What the person typed since the list opened. The text in the field is not it: a chosen value puts its label there, and a list narrowed by that label would show only the chosen option.
+const query = ref('')
 const open = ref(false)
+const field = ref<ComponentPublicInstance | null>(null)
+const root = ref<ComponentPublicInstance | null>(null)
 
 const selected = computed(() => props.options.find((o) => o.value === model.value))
 const shown = computed(() => {
-  const q = term.value.trim().toLowerCase()
+  const q = query.value.trim().toLowerCase()
   return q ? props.options.filter((o) => o.label.toLowerCase().includes(q)) : props.options
 })
 const labelOf = (value: unknown): string => props.options.find((o) => o.value === value)?.label ?? ''
@@ -51,23 +54,33 @@ function onFocus(e: FocusEvent): void {
   if (props.openOnFocus && !props.disabled && e.target instanceof HTMLInputElement && !isProgrammaticFocus()) open.value = true
 }
 
-function onOpen(value: boolean): void {
-  open.value = value
-  if (!value) term.value = ''
+// Every opening and closing starts from nothing typed: all the options show, and the text of the field is selected so that typing replaces it.
+watch(open, (value) => {
+  query.value = ''
+  if (!value) return
+  // The list is in the page on the next tick: select the text, then mark the chosen option and bring it into view (Reka does this only for the openings it makes itself, not for the one made on focus).
+  void nextTick(() => {
+    ;(field.value?.$el as HTMLInputElement | undefined)?.select?.()
+    void (root.value as unknown as { highlightSelected?: () => Promise<void> } | null)?.highlightSelected?.()
+  })
+})
+const onInput = (e: Event): void => {
+  query.value = (e.target as HTMLInputElement).value
 }
 </script>
 
 <template>
   <div :class="cn('relative w-full min-w-0', props.class)" data-slot="combobox" @focus.capture="onFocus">
-    <ComboboxRoot v-model="model" v-model:open="open" ignore-filter :open-on-focus="false" open-on-click :disabled="disabled" @update:open="onOpen">
+    <ComboboxRoot ref="root" v-model="model" v-model:open="open" ignore-filter :open-on-focus="false" open-on-click :disabled="disabled">
       <ComboboxAnchor class="relative block">
         <ComboboxInput
           :id="id"
-          v-model="term"
+          ref="field"
           v-bind="$attrs"
           :display-value="labelOf"
           :placeholder="placeholder ?? selected?.label"
           autocomplete="off"
+          @input="onInput"
           class="h-9 w-full min-w-0 rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground outline-none placeholder:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive"
         />
         <ComboboxTrigger class="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground" :aria-label="t('common.search')" tabindex="-1">
