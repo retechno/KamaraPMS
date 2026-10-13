@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import GroupBulkRooms from '@/components/groups/GroupBulkRooms.vue'
+import GroupRoomingList from '@/components/groups/GroupRoomingList.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -26,6 +28,8 @@ const members = ref<GroupMember[]>([])
 const error = ref<ApiError | null>(null)
 const editing = ref(false)
 const saving = ref(false)
+const bulkOpen = ref(false)
+const roomingReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
@@ -66,6 +70,12 @@ function startEdit(): void {
   })
   error.value = null
   editing.value = true
+}
+
+/** Rooms were booked in bulk: the members and the rooming list are read again. */
+async function bulkSaved(): Promise<void> {
+  await load()
+  roomingReload.value++
 }
 
 async function save(): Promise<void> {
@@ -109,9 +119,12 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
           <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
         </RouterLink>
+        <Button v-if="canBook" type="button" data-testid="bulk-rooms-open" @click="bulkOpen = !bulkOpen">{{ t('groupRooms.open') }}</Button>
       </div>
     </CardContent>
   </Card>
+
+  <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 
   <Card v-if="group && editing" class="mb-4">
     <form v-autofocus novalidate data-testid="group-form" @submit.prevent="save">
@@ -163,4 +176,6 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </DataTable>
     </CardContent>
   </Card>
+
+  <GroupRoomingList v-if="group" class="mt-4" :group-id="group.id" :reload="roomingReload" />
 </template>

@@ -241,6 +241,25 @@ func (q *Queries) CountFreeNights(ctx context.Context, arg CountFreeNightsParams
 	return column_1, err
 }
 
+const countGroupLines = `-- name: CountGroupLines :one
+SELECT count(*)::int AS n FROM reservation_rooms l JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+WHERE res.tenant_id = $1 AND res.property_id = $2 AND res.booking_group_id = $3
+`
+
+type CountGroupLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	GroupID    *int64
+}
+
+// Every room that was ever booked for the group (a cancelled one counts): the running number of the next placeholder guest.
+func (q *Queries) CountGroupLines(ctx context.Context, arg CountGroupLinesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countGroupLines, arg.TenantID, arg.PropertyID, arg.GroupID)
+	var n int32
+	err := row.Scan(&n)
+	return n, err
+}
+
 const deleteFreeNightQuota = `-- name: DeleteFreeNightQuota :exec
 DELETE FROM free_night_quotas WHERE tenant_id = $1 AND property_id = $2 AND occupancy_kind = $3
 `
@@ -538,6 +557,53 @@ func (q *Queries) GetRoomTypesForBooking(ctx context.Context, arg GetRoomTypesFo
 	return items, nil
 }
 
+const groupForBatch = `-- name: GroupForBatch :one
+
+SELECT id, code, name, is_active, company_id, contact_name, contact_email, contact_phone, contact_guest_id, arrival_date, departure_date FROM booking_groups
+WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GroupForBatchParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GroupForBatchRow struct {
+	ID             int64
+	Code           string
+	Name           string
+	IsActive       bool
+	CompanyID      *int64
+	ContactName    *string
+	ContactEmail   *string
+	ContactPhone   *string
+	ContactGuestID *int64
+	ArrivalDate    civil.Date
+	DepartureDate  civil.Date
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Bulk rooms of a group and its rooming list (docs/architecture/30-group-folio.md, part A)
+func (q *Queries) GroupForBatch(ctx context.Context, arg GroupForBatchParams) (GroupForBatchRow, error) {
+	row := q.db.QueryRow(ctx, groupForBatch, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GroupForBatchRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.IsActive,
+		&i.CompanyID,
+		&i.ContactName,
+		&i.ContactEmail,
+		&i.ContactPhone,
+		&i.ContactGuestID,
+		&i.ArrivalDate,
+		&i.DepartureDate,
+	)
+	return i, err
+}
+
 const groupRef = `-- name: GroupRef :one
 SELECT id, code, name, is_active, company_id, arrival_date, departure_date FROM booking_groups
 WHERE tenant_id = $1 AND property_id = $2 AND id = $3
@@ -808,6 +874,70 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		&i.BookingGroupID,
 	)
 	return i, err
+}
+
+const listBatchLines = `-- name: ListBatchLines :many
+SELECT res.id AS reservation_id, res.confirmation_number, res.idempotency_key, res.status, res.idempotency_hash, l.id AS line_id, l.guest_id, l.room_type_id, l.arrival_date, l.departure_date
+FROM reservations res JOIN reservation_rooms l ON l.property_id = res.property_id AND l.reservation_id = res.id
+WHERE res.tenant_id = $1 AND res.property_id = $2 AND res.booking_group_id = $3 AND starts_with(res.idempotency_key, $4::text)
+ORDER BY res.id, l.id
+`
+
+type ListBatchLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	GroupID    *int64
+	Prefix     string
+}
+
+type ListBatchLinesRow struct {
+	ReservationID      int64
+	ConfirmationNumber string
+	IdempotencyKey     *string
+	Status             string
+	IdempotencyHash    *string
+	LineID             int64
+	GuestID            *int64
+	RoomTypeID         int64
+	ArrivalDate        civil.Date
+	DepartureDate      civil.Date
+}
+
+// The reservations of one bulk booking: their keys all start with the key of the request.
+func (q *Queries) ListBatchLines(ctx context.Context, arg ListBatchLinesParams) ([]ListBatchLinesRow, error) {
+	rows, err := q.db.Query(ctx, listBatchLines,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.GroupID,
+		arg.Prefix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBatchLinesRow{}
+	for rows.Next() {
+		var i ListBatchLinesRow
+		if err := rows.Scan(
+			&i.ReservationID,
+			&i.ConfirmationNumber,
+			&i.IdempotencyKey,
+			&i.Status,
+			&i.IdempotencyHash,
+			&i.LineID,
+			&i.GuestID,
+			&i.RoomTypeID,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listBedTypeBriefs = `-- name: ListBedTypeBriefs :many
@@ -1320,6 +1450,81 @@ func (q *Queries) ListRoomNumbers(ctx context.Context, arg ListRoomNumbersParams
 	for rows.Next() {
 		var i ListRoomNumbersRow
 		if err := rows.Scan(&i.ID, &i.RoomNumber); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoomingRows = `-- name: ListRoomingRows :many
+SELECT res.id AS reservation_id, res.confirmation_number, res.status AS reservation_status, res.version AS reservation_version,
+       l.id AS line_id, l.status AS line_status, l.arrival_date, l.departure_date, l.guest_id, rt.code AS room_type_code, rm.room_number,
+       g.first_name, g.last_name, g.email, g.phone, COALESCE(g.is_placeholder, false)::boolean AS is_placeholder
+FROM reservations res
+JOIN reservation_rooms l ON l.property_id = res.property_id AND l.reservation_id = res.id
+JOIN room_types rt ON rt.property_id = l.property_id AND rt.id = l.room_type_id
+LEFT JOIN rooms rm ON rm.property_id = l.property_id AND rm.id = l.room_id
+LEFT JOIN guests g ON g.tenant_id = l.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE res.tenant_id = $1 AND res.property_id = $2 AND res.booking_group_id = $3
+ORDER BY res.id, l.id
+`
+
+type ListRoomingRowsParams struct {
+	TenantID   int64
+	PropertyID int64
+	GroupID    *int64
+}
+
+type ListRoomingRowsRow struct {
+	ReservationID      int64
+	ConfirmationNumber string
+	ReservationStatus  string
+	ReservationVersion int32
+	LineID             int64
+	LineStatus         string
+	ArrivalDate        civil.Date
+	DepartureDate      civil.Date
+	GuestID            *int64
+	RoomTypeCode       string
+	RoomNumber         *string
+	FirstName          *string
+	LastName           *string
+	Email              *string
+	Phone              *string
+	IsPlaceholder      bool
+}
+
+func (q *Queries) ListRoomingRows(ctx context.Context, arg ListRoomingRowsParams) ([]ListRoomingRowsRow, error) {
+	rows, err := q.db.Query(ctx, listRoomingRows, arg.TenantID, arg.PropertyID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoomingRowsRow{}
+	for rows.Next() {
+		var i ListRoomingRowsRow
+		if err := rows.Scan(
+			&i.ReservationID,
+			&i.ConfirmationNumber,
+			&i.ReservationStatus,
+			&i.ReservationVersion,
+			&i.LineID,
+			&i.LineStatus,
+			&i.ArrivalDate,
+			&i.DepartureDate,
+			&i.GuestID,
+			&i.RoomTypeCode,
+			&i.RoomNumber,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.IsPlaceholder,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1988,6 +2193,30 @@ func (q *Queries) SearchReservations(ctx context.Context, arg SearchReservations
 		return nil, err
 	}
 	return items, nil
+}
+
+const setGroupContactGuest = `-- name: SetGroupContactGuest :exec
+UPDATE booking_groups SET contact_guest_id = $1, updated_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5
+`
+
+type SetGroupContactGuestParams struct {
+	GuestID    *int64
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SetGroupContactGuest(ctx context.Context, arg SetGroupContactGuestParams) error {
+	_, err := q.db.Exec(ctx, setGroupContactGuest,
+		arg.GuestID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
 }
 
 const updateLine = `-- name: UpdateLine :one

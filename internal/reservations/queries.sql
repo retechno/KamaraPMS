@@ -360,3 +360,38 @@ WHERE n.tenant_id = @tenant_id AND n.property_id = @property_id AND rp.occupancy
   AND l.status IN ('CONFIRMED', 'CHECKED_IN', 'COMPLETED')
   AND n.stay_date >= @from_date::date AND n.stay_date < @to_date::date
   AND (sqlc.narg(exclude_line_id)::bigint IS NULL OR l.id <> sqlc.narg(exclude_line_id)::bigint);
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Bulk rooms of a group and its rooming list (docs/architecture/30-group-folio.md, part A)
+
+-- name: GroupForBatch :one
+SELECT id, code, name, is_active, company_id, contact_name, contact_email, contact_phone, contact_guest_id, arrival_date, departure_date FROM booking_groups
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: SetGroupContactGuest :exec
+UPDATE booking_groups SET contact_guest_id = @guest_id, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- Every room that was ever booked for the group (a cancelled one counts): the running number of the next placeholder guest.
+-- name: CountGroupLines :one
+SELECT count(*)::int AS n FROM reservation_rooms l JOIN reservations res ON res.property_id = l.property_id AND res.id = l.reservation_id
+WHERE res.tenant_id = @tenant_id AND res.property_id = @property_id AND res.booking_group_id = @group_id;
+
+-- The reservations of one bulk booking: their keys all start with the key of the request.
+-- name: ListBatchLines :many
+SELECT res.id AS reservation_id, res.confirmation_number, res.idempotency_key, res.status, res.idempotency_hash, l.id AS line_id, l.guest_id, l.room_type_id, l.arrival_date, l.departure_date
+FROM reservations res JOIN reservation_rooms l ON l.property_id = res.property_id AND l.reservation_id = res.id
+WHERE res.tenant_id = @tenant_id AND res.property_id = @property_id AND res.booking_group_id = @group_id AND starts_with(res.idempotency_key, @prefix::text)
+ORDER BY res.id, l.id;
+
+-- name: ListRoomingRows :many
+SELECT res.id AS reservation_id, res.confirmation_number, res.status AS reservation_status, res.version AS reservation_version,
+       l.id AS line_id, l.status AS line_status, l.arrival_date, l.departure_date, l.guest_id, rt.code AS room_type_code, rm.room_number,
+       g.first_name, g.last_name, g.email, g.phone, COALESCE(g.is_placeholder, false)::boolean AS is_placeholder
+FROM reservations res
+JOIN reservation_rooms l ON l.property_id = res.property_id AND l.reservation_id = res.id
+JOIN room_types rt ON rt.property_id = l.property_id AND rt.id = l.room_type_id
+LEFT JOIN rooms rm ON rm.property_id = l.property_id AND rm.id = l.room_id
+LEFT JOIN guests g ON g.tenant_id = l.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
+WHERE res.tenant_id = @tenant_id AND res.property_id = @property_id AND res.booking_group_id = @group_id
+ORDER BY res.id, l.id;

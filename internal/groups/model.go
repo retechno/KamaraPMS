@@ -16,14 +16,16 @@ var codePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
 
 // Group is a booking group with its totals.
 type Group struct {
-	ID               int64      `json:"id"`
-	Code             string     `json:"code"`
-	Name             string     `json:"name"`
-	CompanyID        *int64     `json:"company_id"`
-	CompanyName      string     `json:"company_name,omitempty"`
-	ContactName      string     `json:"contact_name,omitempty"`
-	ContactEmail     string     `json:"contact_email,omitempty"`
-	ContactPhone     string     `json:"contact_phone,omitempty"`
+	ID           int64  `json:"id"`
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	CompanyID    *int64 `json:"company_id"`
+	CompanyName  string `json:"company_name,omitempty"`
+	ContactName  string `json:"contact_name,omitempty"`
+	ContactEmail string `json:"contact_email,omitempty"`
+	ContactPhone string `json:"contact_phone,omitempty"`
+	// ContactGuestID is the guest made from the contact, the booker of the rooms booked for the group in bulk (nil until the first bulk booking).
+	ContactGuestID   *int64     `json:"contact_guest_id"`
 	ArrivalDate      civil.Date `json:"arrival_date"`
 	DepartureDate    civil.Date `json:"departure_date"`
 	Notes            string     `json:"notes,omitempty"`

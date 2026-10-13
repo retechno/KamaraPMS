@@ -63,7 +63,7 @@ func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string
 func toGroup(g groupsdb.BookingGroup, company *string, reservations, rooms int32) Group {
 	return Group{
 		ID: g.ID, Code: g.Code, Name: g.Name, CompanyID: g.CompanyID, CompanyName: deref(company), ContactName: deref(g.ContactName),
-		ContactEmail: deref(g.ContactEmail), ContactPhone: deref(g.ContactPhone), ArrivalDate: g.ArrivalDate, DepartureDate: g.DepartureDate,
+		ContactEmail: deref(g.ContactEmail), ContactPhone: deref(g.ContactPhone), ContactGuestID: g.ContactGuestID, ArrivalDate: g.ArrivalDate, DepartureDate: g.DepartureDate,
 		Notes: deref(g.Notes), IsActive: g.IsActive, ReservationCount: int(reservations), RoomCount: int(rooms), CreatedAt: g.CreatedAt,
 	}
 }
@@ -86,7 +86,7 @@ func (s *Service) List(ctx context.Context, propertyID, beforeID int64, active *
 	out := make([]Group, len(rows))
 	for i, r := range rows {
 		out[i] = toGroup(groupsdb.BookingGroup{
-			ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone,
+			ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone, ContactGuestID: r.ContactGuestID,
 			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Notes: r.Notes, IsActive: r.IsActive, CreatedAt: r.CreatedAt,
 		}, r.CompanyName, r.ReservationCount, r.RoomCount)
 	}
@@ -102,7 +102,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID, id int64) (Gro
 		return Group{}, err
 	}
 	return toGroup(groupsdb.BookingGroup{
-		ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone,
+		ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone, ContactGuestID: r.ContactGuestID,
 		ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Notes: r.Notes, IsActive: r.IsActive, CreatedAt: r.CreatedAt,
 	}, r.CompanyName, r.ReservationCount, r.RoomCount), nil
 }

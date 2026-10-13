@@ -20,6 +20,12 @@ INSERT INTO guests (
 )
 RETURNING *;
 
+-- A guest made by a group booking: a name like "group name · 7" and nothing else, left out of the search until it is named.
+-- name: CreatePlaceholderGuest :one
+INSERT INTO guests (tenant_id, code, origin_property_id, last_name, is_placeholder, created_by, updated_by)
+VALUES (@tenant_id, @code, @origin_property_id, @last_name, true, sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
 -- name: GetVisibleGuest :one
 SELECT * FROM guests g
 WHERE g.tenant_id = @tenant_id AND g.id = @id
@@ -48,6 +54,8 @@ UPDATE guests SET
     address = sqlc.narg(address),
     city = sqlc.narg(city),
     notes = sqlc.narg(notes),
+    -- naming a placeholder makes it a profile like any other
+    is_placeholder = CASE WHEN is_placeholder AND (last_name IS DISTINCT FROM @last_name::varchar OR first_name IS DISTINCT FROM sqlc.narg(first_name)::varchar) THEN false ELSE is_placeholder END,
     updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND id = @id
 RETURNING *;
@@ -60,6 +68,7 @@ SELECT sqlc.embed(g), (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.
 FROM guests g
 WHERE g.tenant_id = @tenant_id
   AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
@@ -84,6 +93,7 @@ SELECT sqlc.embed(g), (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.
 FROM guests g
 WHERE g.tenant_id = @tenant_id
   AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
@@ -116,6 +126,7 @@ CROSS JOIN LATERAL (
 ) k
 WHERE g.tenant_id = @tenant_id
   AND (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest(@tokens::text[]) AS t(tok)
       WHERE NOT (
@@ -148,7 +159,7 @@ LIMIT @row_limit;
 SELECT sqlc.embed(g),
        (@all_access::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, @property_ids::bigint[]))::boolean AS visible
 FROM guests g
-WHERE g.tenant_id = @tenant_id AND g.id <> @exclude_id
+WHERE g.tenant_id = @tenant_id AND g.id <> @exclude_id AND NOT g.is_placeholder
   AND (
       (@email::text <> '' AND lower(g.email) = lower(@email::text))
       OR (@phone_digits::text <> '' AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') = @phone_digits::text)

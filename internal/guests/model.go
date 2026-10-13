@@ -43,8 +43,10 @@ type Guest struct {
 	Address          string      `json:"address,omitempty"`
 	City             string      `json:"city,omitempty"`
 	Notes            string      `json:"notes,omitempty"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
+	// IsPlaceholder: made by a group booking and not yet named; left out of the search.
+	IsPlaceholder bool      `json:"is_placeholder"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // FullName is "First Last" for display and duplicate comparison.

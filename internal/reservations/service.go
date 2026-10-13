@@ -54,6 +54,9 @@ func (s *Service) confirmed(ctx context.Context, p auth.Principal, propertyID, r
 	if s.onConfirmed == nil {
 		return nil
 	}
+	if b := batchFrom(ctx); b != nil && b.noMail { // a bulk booking of a group sends no confirmation for each room (docs/architecture/30-group-folio.md)
+		return nil
+	}
 	return s.onConfirmed.ReservationConfirmed(ctx, p.TenantID, propertyID, reservationID, bd, p.ActorID())
 }
 
@@ -590,9 +593,12 @@ func (s *Service) resolveLinks(ctx context.Context, tenantID, propertyID int64, 
 	}
 	q := s.q(ctx)
 	if group != nil {
-		// L4: a share lock keeps the group's dates, company and active flag as read until this transaction ends.
-		if err := db.LockRows(ctx, db.Groups, db.ForShare, propertyID, []int64{*group}); err != nil {
-			return nil, nil, mapNotFound(err, apperr.NotFound("GROUP_NOT_FOUND", "the group does not exist in this property"))
+		// L4: a share lock keeps the group's dates, company and active flag as read until this transaction ends. A bulk booking holds the group already (for update, taken before
+		// the first document number: a lock level cannot go down again after a sequence).
+		if b := batchFrom(ctx); b == nil || b.group != *group {
+			if err := db.LockRows(ctx, db.Groups, db.ForShare, propertyID, []int64{*group}); err != nil {
+				return nil, nil, mapNotFound(err, apperr.NotFound("GROUP_NOT_FOUND", "the group does not exist in this property"))
+			}
 		}
 		g, err := q.GroupRef(ctx, reservationsdb.GroupRefParams{TenantID: tenantID, PropertyID: propertyID, ID: *group})
 		if errors.Is(err, pgx.ErrNoRows) {

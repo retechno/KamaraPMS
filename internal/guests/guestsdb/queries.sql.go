@@ -55,7 +55,7 @@ INSERT INTO guests (
     $8, $9, $10, $11, $12,
     $13, $14, $15, $16, $17, $17
 )
-RETURNING id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by, is_placeholder
 `
 
 type CreateGuestParams struct {
@@ -121,15 +121,67 @@ func (q *Queries) CreateGuest(ctx context.Context, arg CreateGuestParams) (Guest
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.IsPlaceholder,
+	)
+	return i, err
+}
+
+const createPlaceholderGuest = `-- name: CreatePlaceholderGuest :one
+INSERT INTO guests (tenant_id, code, origin_property_id, last_name, is_placeholder, created_by, updated_by)
+VALUES ($1, $2, $3, $4, true, $5, $5)
+RETURNING id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by, is_placeholder
+`
+
+type CreatePlaceholderGuestParams struct {
+	TenantID         int64
+	Code             string
+	OriginPropertyID *int64
+	LastName         string
+	ActorID          *int64
+}
+
+// A guest made by a group booking: a name like "group name · 7" and nothing else, left out of the search until it is named.
+func (q *Queries) CreatePlaceholderGuest(ctx context.Context, arg CreatePlaceholderGuestParams) (Guest, error) {
+	row := q.db.QueryRow(ctx, createPlaceholderGuest,
+		arg.TenantID,
+		arg.Code,
+		arg.OriginPropertyID,
+		arg.LastName,
+		arg.ActorID,
+	)
+	var i Guest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Code,
+		&i.OriginPropertyID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.Nationality,
+		&i.CountryCode,
+		&i.DateOfBirth,
+		&i.Gender,
+		&i.IDType,
+		&i.IDNumber,
+		&i.Address,
+		&i.City,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.IsPlaceholder,
 	)
 	return i, err
 }
 
 const findGuestDuplicates = `-- name: FindGuestDuplicates :many
-SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by,
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, g.is_placeholder,
        ($1::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $2::bigint[]))::boolean AS visible
 FROM guests g
-WHERE g.tenant_id = $3 AND g.id <> $4
+WHERE g.tenant_id = $3 AND g.id <> $4 AND NOT g.is_placeholder
   AND (
       ($5::text <> '' AND lower(g.email) = lower($5::text))
       OR ($6::text <> '' AND regexp_replace(coalesce(g.phone, ''), '\D', '', 'g') = $6::text)
@@ -203,6 +255,7 @@ func (q *Queries) FindGuestDuplicates(ctx context.Context, arg FindGuestDuplicat
 			&i.Guest.CreatedBy,
 			&i.Guest.UpdatedAt,
 			&i.Guest.UpdatedBy,
+			&i.Guest.IsPlaceholder,
 			&i.Visible,
 		); err != nil {
 			return nil, err
@@ -216,7 +269,7 @@ func (q *Queries) FindGuestDuplicates(ctx context.Context, arg FindGuestDuplicat
 }
 
 const getGuestForUpdate = `-- name: GetGuestForUpdate :one
-SELECT id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by FROM guests WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by, is_placeholder FROM guests WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type GetGuestForUpdateParams struct {
@@ -249,12 +302,13 @@ func (q *Queries) GetGuestForUpdate(ctx context.Context, arg GetGuestForUpdatePa
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.IsPlaceholder,
 	)
 	return i, err
 }
 
 const getVisibleGuest = `-- name: GetVisibleGuest :one
-SELECT id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by FROM guests g
+SELECT id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by, is_placeholder FROM guests g
 WHERE g.tenant_id = $1 AND g.id = $2
   AND ($3::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $4::bigint[]))
 `
@@ -296,6 +350,7 @@ func (q *Queries) GetVisibleGuest(ctx context.Context, arg GetVisibleGuestParams
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.IsPlaceholder,
 	)
 	return i, err
 }
@@ -440,10 +495,11 @@ func (q *Queries) NextGuestNumber(ctx context.Context, tenantID int64) (NextGues
 }
 
 const searchGuests = `-- name: SearchGuests :many
-SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, g.is_placeholder, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
 FROM guests g
 WHERE g.tenant_id = $1
   AND ($2::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $3::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest($4::text[]) AS t(tok)
       WHERE NOT (
@@ -520,6 +576,7 @@ func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]S
 			&i.Guest.CreatedBy,
 			&i.Guest.UpdatedAt,
 			&i.Guest.UpdatedBy,
+			&i.Guest.IsPlaceholder,
 			&i.SortName,
 		); err != nil {
 			return nil, err
@@ -533,10 +590,11 @@ func (q *Queries) SearchGuests(ctx context.Context, arg SearchGuestsParams) ([]S
 }
 
 const searchGuestsDesc = `-- name: SearchGuestsDesc :many
-SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, g.is_placeholder, (lower(coalesce(nullif(g.first_name, '') || ' ', '') || g.last_name) COLLATE "und-x-icu")::text AS sort_name
 FROM guests g
 WHERE g.tenant_id = $1
   AND ($2::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $3::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest($4::text[]) AS t(tok)
       WHERE NOT (
@@ -611,6 +669,7 @@ func (q *Queries) SearchGuestsDesc(ctx context.Context, arg SearchGuestsDescPara
 			&i.Guest.CreatedBy,
 			&i.Guest.UpdatedAt,
 			&i.Guest.UpdatedBy,
+			&i.Guest.IsPlaceholder,
 			&i.SortName,
 		); err != nil {
 			return nil, err
@@ -624,7 +683,7 @@ func (q *Queries) SearchGuestsDesc(ctx context.Context, arg SearchGuestsDescPara
 }
 
 const searchGuestsOrdered = `-- name: SearchGuestsOrdered :many
-SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
+SELECT g.id, g.tenant_id, g.code, g.origin_property_id, g.first_name, g.last_name, g.email, g.phone, g.nationality, g.country_code, g.date_of_birth, g.gender, g.id_type, g.id_number, g.address, g.city, g.notes, g.created_at, g.created_by, g.updated_at, g.updated_by, g.is_placeholder, (k.sk_text IS NULL)::boolean AS sort_null, coalesce(k.sk_text, '')::text AS sort_value
 FROM guests g
 CROSS JOIN LATERAL (
     SELECT CASE $1::text
@@ -635,6 +694,7 @@ CROSS JOIN LATERAL (
 ) k
 WHERE g.tenant_id = $2
   AND ($3::boolean OR guest_linked_to(g.tenant_id, g.id, g.origin_property_id, $4::bigint[]))
+  AND NOT g.is_placeholder -- a guest made by a group booking and not yet named is not found by a search
   AND NOT EXISTS (
       SELECT 1 FROM unnest($5::text[]) AS t(tok)
       WHERE NOT (
@@ -727,6 +787,7 @@ func (q *Queries) SearchGuestsOrdered(ctx context.Context, arg SearchGuestsOrder
 			&i.Guest.CreatedBy,
 			&i.Guest.UpdatedAt,
 			&i.Guest.UpdatedBy,
+			&i.Guest.IsPlaceholder,
 			&i.SortNull,
 			&i.SortValue,
 		); err != nil {
@@ -755,9 +816,11 @@ UPDATE guests SET
     address = $11,
     city = $12,
     notes = $13,
+    -- naming a placeholder makes it a profile like any other
+    is_placeholder = CASE WHEN is_placeholder AND (last_name IS DISTINCT FROM $2::varchar OR first_name IS DISTINCT FROM $1::varchar) THEN false ELSE is_placeholder END,
     updated_by = $14
 WHERE tenant_id = $15 AND id = $16
-RETURNING id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by
+RETURNING id, tenant_id, code, origin_property_id, first_name, last_name, email, phone, nationality, country_code, date_of_birth, gender, id_type, id_number, address, city, notes, created_at, created_by, updated_at, updated_by, is_placeholder
 `
 
 type UpdateGuestParams struct {
@@ -821,6 +884,7 @@ func (q *Queries) UpdateGuest(ctx context.Context, arg UpdateGuestParams) (Guest
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.IsPlaceholder,
 	)
 	return i, err
 }

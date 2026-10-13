@@ -770,6 +770,14 @@ SELECT expect_ok('a reservation names a company and a group of its property',
 SELECT expect_error('a reservation cannot name another property''s company', '23503',
     $q$UPDATE reservations SET company_id = (SELECT id FROM companies WHERE property_id = pr('SG')) WHERE id = rs('R1')$q$);
 
+SELECT expect_ok('a group names the guest made from its contact (a guest of its own tenant)',
+    $q$UPDATE booking_groups SET contact_guest_id = (SELECT id FROM guests WHERE code = 'G1') WHERE code = 'CONF'$q$);
+SELECT expect_error('a group cannot name a guest that does not exist as its contact', '23503',
+    $q$UPDATE booking_groups SET contact_guest_id = 999999 WHERE code = 'CONF'$q$);
+SELECT expect_ok('a guest made by a group booking can be a placeholder, and no guest is one by default',
+    $q$INSERT INTO guests (tenant_id, code, origin_property_id, last_name, is_placeholder) VALUES (tn('ABC'), 'GP1', pr('BALI'), 'Conference · 1', true)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM guests WHERE is_placeholder AND code <> 'GP1') = 0 THEN 1 ELSE 0 END)$q$);
+
 SELECT expect_error('a CITY_LEDGER payment needs a company', '23514',
     $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date)
        VALUES (tn('ABC'), pr('BALI'), 'PCL0', fo('F1'), 'PAYMENT', 'CITY_LEDGER', 100, '2026-10-01')$q$);
