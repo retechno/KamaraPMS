@@ -17,7 +17,6 @@ import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { statusLabel } from '@/utils/reservations'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -114,7 +113,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.status') }}</dt><dd class="m-0 text-sm">{{ group.is_active ? t('setup.active') : t('groupDetail.inactiveNote') }}</dd></div>
       </dl>
       <p v-if="group.notes" class="mb-0 mt-3 text-sm text-muted-foreground">{{ group.notes }}</p>
-      <div class="mt-4 flex justify-end gap-2">
+      <div class="mt-4 flex flex-wrap justify-end gap-2">
         <Button v-if="canManage" type="button" variant="outline" data-testid="edit-group" @click="startEdit">{{ t('common.edit') }}</Button>
         <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
           <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
@@ -172,7 +171,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <DataTable v-else :columns="columns" :rows="members" row-key="reservation_id" :row-test-id="(m) => `member-${m.confirmation_number}`" :caption="t('groupDetail.members')">
         <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`" class="text-primary hover:underline">{{ row.confirmation_number }}</RouterLink></template>
         <template #cell-dates="{ row }">{{ t('groupDetail.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
-        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" :label="statusLabel(row.status)" /></template>
+        <template #cell-status="{ row }"><StatusBadge domain="reservation" :status="row.status" /></template>
       </DataTable>
     </CardContent>
   </Card>

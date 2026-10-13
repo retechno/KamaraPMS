@@ -73,6 +73,45 @@ describe('GroupBulkRooms', () => {
     expect(w.get('[data-testid=rate-hint]').text()).toContain('Price in force')
   })
 
+  it('lists the nights earliest first whatever the order of the answer', async () => {
+    POST = vi.fn(async () => ({
+      data: previewOf({ availability: [{ room_type_id: 1, code: 'DLX', nights: [{ date: '2026-10-17', available: 5, needed: 1, left: 4 }, { date: '2026-10-14', available: 5, needed: 1, left: 4 }, { date: '2026-10-16', available: 5, needed: 1, left: 4 }, { date: '2026-10-15', available: 5, needed: 1, left: 4 }] }] }),
+    }))
+    const w = mountForm()
+    await settle()
+    const order = w.findAll('[data-testid^=bulk-night-DLX-]').map((n) => n.attributes('data-testid')?.replace('bulk-night-DLX-', ''))
+    expect(order).toEqual(['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17'])
+  })
+
+  it('says the price of a row in words: one price, or the total of a room and the range per night', async () => {
+    const w = mountForm()
+    await settle()
+    expect(w.get('[data-testid=bulk-price-0]').text()).toBe('1,000,000.00 per night')
+  })
+
+  it('shows the range when the nights differ, then the total of the row', async () => {
+    POST = vi.fn(async () => ({
+      data: previewOf({}, { uniform: false, grid_rate: undefined, rate_per_night: '', nights: 4, nightly: [{ date: 'a', amount: '500000.00' }, { date: 'b', amount: '600000.00' }, { date: 'c', amount: '500000.00' }, { date: 'd', amount: '600000.00' }], room_estimate: money('2200000'), row_estimate: money('2200000'), rooms: 1 }),
+    }))
+    const w = mountForm()
+    await settle()
+    expect(w.get('[data-testid=bulk-price-0]').text()).toBe('2,200,000 per room for 4 nights (500,000–600,000 per night)')
+    expect(w.get('[data-testid=bulk-rowtotal-0]').text()).toBe('Row total: 2,200,000')
+  })
+
+  it('gives the reason the save is off while a row is short or the preview is not done', async () => {
+    POST = vi.fn(async () => ({ data: previewOf({ ok: false }, { short: { date: '2026-10-02', missing: 1 }, problems: [{ code: 'ROOM_TYPE_NOT_AVAILABLE', message: 'short' }] }) }))
+    const w = mountForm()
+    await flushPromises()
+    await w.get('[name=count_0]').setValue('2')
+    await flushPromises()
+    expect(w.get('[data-testid=bulk-blocker]').text()).toBe('Checking the rooms…') // the preview is not made yet
+    expect(w.get('[data-testid=bulk-save]').attributes('disabled')).toBeDefined()
+    await settle()
+    expect(w.get('[data-testid=bulk-blocker]').text()).toBe('A row has too few rooms.')
+    expect(w.get('[data-testid=bulk-save]').attributes('disabled')).toBeDefined()
+  })
+
   it('marks the row that is short and does not let the request be saved', async () => {
     POST = vi.fn(async () => ({
       data: previewOf({ ok: false, availability: [{ room_type_id: 1, code: 'DLX', nights: [{ date: '2026-10-02', available: 1, needed: 2, left: -1 }] }] },
@@ -100,6 +139,17 @@ describe('GroupBulkRooms', () => {
     expect(w.emitted('saved')).toHaveLength(1)
     expect(w.get('[data-testid=bulk-done]').text()).toContain('2 rooms booked in 2 reservations')
     expect((w.get('[name=count_0]').element as HTMLInputElement).value).toBe('1') // not the same rows again: that would book them twice
+    // the fresh row is not previewed: the rooms just booked would make it look short, like a failure
+    const previews = POST.mock.calls.filter((c) => String(c[0]).endsWith('/preview')).length
+    await settle()
+    expect(POST.mock.calls.filter((c) => String(c[0]).endsWith('/preview')).length).toBe(previews)
+    expect(w.find('[data-testid^=bulk-short-]').exists()).toBe(false)
+    expect(w.find('[data-testid=bulk-blocker]').exists()).toBe(false)
+    expect(w.find('[data-testid=bulk-done]').exists()).toBe(true)
+    // the first change of the fresh row clears the message and previews again
+    await w.get('[name=count_0]').setValue('3')
+    await settle()
+    expect(w.find('[data-testid=bulk-done]').exists()).toBe(false)
   })
 
   it('keeps the same key when the answer was lost, and takes a new one when the server has answered', async () => {

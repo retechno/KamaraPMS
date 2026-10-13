@@ -344,6 +344,13 @@ func TestGroupRoomsPreview(t *testing.T) {
 	if r2.Short != nil || len(r2.Problems) != 0 {
 		t.Fatalf("row 2: %+v", r2)
 	}
+	for _, a := range pv.Availability { // the nights, earliest first
+		for i := 1; i < len(a.Nights); i++ {
+			if !a.Nights[i-1].Date.Before(a.Nights[i].Date) {
+				t.Fatalf("the nights of %s are not in date order: %+v", a.Code, a.Nights)
+			}
+		}
+	}
 	if len(pv.Availability) != 2 {
 		t.Fatalf("availability: %+v", pv.Availability)
 	}

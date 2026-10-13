@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import GroupDetailView from './GroupDetailView.vue'
@@ -45,6 +46,16 @@ describe('GroupDetailView', () => {
     expect(w.get('[data-testid=member-RES000011]').text()).toContain('Siti Nurhaliza')
     expect(w.get('[data-testid=member-RES000012]').text()).toContain('Cancelled')
     expect(w.get('[data-testid=add-rooms]').attributes('href')).toBe('/reservations/new?group=4')
+  })
+
+  it('shows the status of a reservation as a translated badge', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=member-RES000011]').text()).toContain('Confirmed')
+    setLocale('id')
+    await flushPromises()
+    expect(w.get('[data-testid=member-RES000011]').text()).not.toContain('Confirmed')
+    setLocale('en')
   })
 
   it('opens the form of rooms in bulk, and the rooming list is under the reservations', async () => {

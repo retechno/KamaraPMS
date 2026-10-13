@@ -1970,6 +1970,17 @@ export const en = {
       OVERRIDE_NOT_ALLOWED: 'A complimentary or house use room is not priced.',
       RATE_PLAN_INACTIVE: 'The rate plan is inactive.',
     },
+    price: {
+      line: '{type} · {rooms} rooms × {nights} nights',
+      uniform: '{rate} per night',
+      varies: '{total} per room for {n} nights ({min}–{max} per night)',
+      rowTotal: 'Row total: {total}',
+    },
+    blocker: {
+      checking: 'Checking the rooms…',
+      short: 'A row has too few rooms.',
+      problems: 'A row cannot be booked: see the messages above.',
+    },
     reason: 'Reason for the group rate',
     reasonHint: 'One reason, and one approval, cover every row that has its own rate.',
     reasonRequired: 'Say why the rate differs from the price.',

@@ -97,7 +97,7 @@ const requestBody = () => ({
   confirm: confirmNow.value,
 })
 const signature = computed(() => JSON.stringify(requestBody()))
-const stale = computed(() => complete.value && previewFor.value !== signature.value)
+const stale = computed(() => complete.value && signature.value !== savedSignature.value && previewFor.value !== signature.value)
 const anyOverride = computed(() => !!preview.value?.rows.some((r) => r.override))
 const previewRow = (i: number) => (preview.value && preview.value.rows.length === rows.value.length ? preview.value.rows[i] : undefined)
 
@@ -126,7 +126,12 @@ async function makePreview(): Promise<void> {
 
 watch(signature, () => {
   clearTimeout(timer)
-  if (signature.value !== savedSignature.value) result.value = null
+  if (signature.value === savedSignature.value) {
+    // the fresh row after a save: nothing to preview yet (the rooms just booked would make it look short)
+    preview.value = null
+    return
+  }
+  result.value = null
   if (!complete.value) {
     preview.value = null
     return
@@ -169,6 +174,28 @@ function problemText(code: string, message: string, detail?: string): string {
   const key = `groupRooms.problem.${code}`
   return te(key) ? t(key as never, { detail: detail ?? '' }) : message
 }
+
+/** What a row sells at, in words: one price when every night has it, else the total of a room and the range per night. */
+function priceText(i: number): string {
+  const p = previewRow(i)
+  if (!p) return ''
+  const amounts = p.nightly.map((n) => Number(n.amount))
+  const uniform = p.override ? p.rate_per_night !== '' : p.uniform
+  if (uniform) return t('groupRooms.price.uniform', { rate: formatMoney(p.rate_per_night || p.grid_rate) })
+  if (!amounts.length) return ''
+  return t('groupRooms.price.varies', { total: formatMoney(p.room_estimate.total), n: p.nights, min: formatMoney(String(Math.min(...amounts))), max: formatMoney(String(Math.max(...amounts))) })
+}
+
+const sortedNights = <T extends { date: string }>(nights: T[]): T[] => [...nights].sort((x, y) => x.date.localeCompare(y.date)) // earliest night first
+const hasShort = computed(() => !!preview.value?.rows.some((r) => r.short))
+/** Why the save button is off, when it is the preview that says so. */
+const blocker = computed(() => {
+  if (!complete.value || busy.value) return ''
+  if (checking.value || stale.value) return t('groupRooms.blocker.checking')
+  if (hasShort.value) return t('groupRooms.blocker.short')
+  if (preview.value && !preview.value.ok) return t('groupRooms.blocker.problems')
+  return ''
+})
 
 const canSave = computed(() => complete.value && !stale.value && !checking.value && !busy.value && !!preview.value?.ok && (!anyOverride.value || reason.value.trim() !== ''))
 
@@ -286,8 +313,9 @@ const failedAt = computed(() => {
           </div>
 
           <div v-if="previewRow(i)" class="mt-2 text-sm" :data-testid="`bulk-row-summary-${i}`">
-            <span class="tabular-nums">{{ typeCode(r.typeId) }} · {{ t('groupRooms.preview.totals', { rooms: previewRow(i)?.rooms ?? 0, nights: (previewRow(i)?.rooms ?? 0) * (previewRow(i)?.nights ?? 0) }) }}</span>
-            <span class="ml-2 tabular-nums text-muted-foreground">{{ formatMoney(previewRow(i)?.room_estimate.total) }} {{ t('groupRooms.preview.perRoom') }} · {{ formatMoney(previewRow(i)?.row_estimate.total) }}</span>
+            <span class="tabular-nums">{{ t('groupRooms.price.line', { type: typeCode(r.typeId), rooms: previewRow(i)?.rooms ?? 0, nights: previewRow(i)?.nights ?? 0 }) }}</span>
+            <span class="ml-2 tabular-nums text-muted-foreground" :data-testid="`bulk-price-${i}`">{{ priceText(i) }}</span>
+            <span class="ml-2 font-medium tabular-nums" :data-testid="`bulk-rowtotal-${i}`">{{ t('groupRooms.price.rowTotal', { total: formatMoney(previewRow(i)?.row_estimate.total) }) }}</span>
             <p v-if="previewRow(i)?.short" class="m-0 mt-1 font-medium text-destructive" :data-testid="`bulk-short-${i}`">
               {{ t('groupRooms.preview.short', { n: previewRow(i)?.short?.missing ?? 0, date: $date(previewRow(i)?.short?.date ?? '') }) }}
             </p>
@@ -328,7 +356,7 @@ const failedAt = computed(() => {
             <p class="m-0 mb-1 text-xs font-semibold text-muted-foreground">{{ a.code }} · {{ t('groupRooms.preview.availability') }}</p>
             <div class="flex gap-1 overflow-x-auto pb-1">
               <div
-                v-for="n in a.nights" :key="n.date" :data-testid="`bulk-night-${a.code}-${n.date}`"
+                v-for="n in sortedNights(a.nights)" :key="n.date" :data-testid="`bulk-night-${a.code}-${n.date}`"
                 :class="cn('min-w-16 shrink-0 rounded-md border border-border px-2 py-1 text-center text-xs', n.left < 0 && 'border-destructive bg-destructive/10 text-destructive')"
               >
                 <div class="text-muted-foreground">{{ $date(n.date) }}</div>
@@ -346,7 +374,8 @@ const failedAt = computed(() => {
         <p class="m-0 mt-1 text-xs text-muted-foreground">{{ !reason.trim() ? t('groupRooms.reasonRequired') : t('groupRooms.reasonHint') }}</p>
       </div>
 
-      <div class="mt-4 flex justify-end">
+      <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
+        <p v-if="blocker" class="m-0 text-sm text-destructive" data-testid="bulk-blocker">{{ blocker }}</p>
         <Button type="button" :disabled="!canSave" data-testid="bulk-save" @click="onSave">{{ busy ? t('groupRooms.saving') : t('groupRooms.save', { n: totalRooms }) }}</Button>
       </div>
     </CardContent>

@@ -1969,6 +1969,17 @@ export const id: Messages = {
       OVERRIDE_NOT_ALLOWED: 'Kamar gratis atau pemakaian hotel tidak diberi harga.',
       RATE_PLAN_INACTIVE: 'Paket tarif tidak aktif.',
     },
+    price: {
+      line: '{type} · {rooms} kamar × {nights} malam',
+      uniform: '{rate} per malam',
+      varies: '{total} per kamar untuk {n} malam ({min}–{max} per malam)',
+      rowTotal: 'Total baris: {total}',
+    },
+    blocker: {
+      checking: 'Memeriksa kamar…',
+      short: 'Ada baris yang kamarnya tidak cukup.',
+      problems: 'Ada baris yang tidak bisa dipesan: lihat pesan di atas.',
+    },
     reason: 'Alasan tarif grup',
     reasonHint: 'Satu alasan dan satu persetujuan berlaku untuk semua baris yang punya tarif sendiri.',
     reasonRequired: 'Tulis alasan tarif berbeda dari harga.',

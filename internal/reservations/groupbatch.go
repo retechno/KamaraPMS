@@ -609,7 +609,7 @@ func (s *Service) PreviewGroupRooms(ctx context.Context, propertyID, groupID int
 				}
 			}
 		}
-		slices.SortFunc(dates, func(a, b civil.Date) int { return a.DaysUntil(b) })
+		slices.SortFunc(dates, func(a, b civil.Date) int { return b.DaysUntil(a) }) // earliest first
 		inv, err := s.avail.Inventory(ctx, p.TenantID, propertyID, in.typeIDs(), dates, bd, nil)
 		if err != nil {
 			return err
