@@ -89,6 +89,40 @@ type FolioItemComponent struct {
 	GlAccountCode   *string
 }
 
+type FolioTransfer struct {
+	ID                int64
+	TenantID          int64
+	PropertyID        int64
+	BatchID           int64
+	FromFolioID       int64
+	ToFolioID         int64
+	OutItemID         int64
+	InItemID          int64
+	OriginalItemID    *int64
+	Amount            decimal.Decimal
+	OriginFolioID     int64
+	PreviousFolioID   int64
+	ReturnsTransferID *int64
+	CreatedAt         time.Time
+}
+
+type FolioTransferBatch struct {
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	Kind           string
+	IsReturn       bool
+	FromFolioID    int64
+	ToFolioID      int64
+	Scope          string
+	Reason         string
+	BusinessDate   civil.Date
+	ApprovedBy     int64
+	IdempotencyKey *string
+	CreatedAt      time.Time
+	CreatedBy      *int64
+}
+
 type Payment struct {
 	ID                     int64
 	TenantID               int64

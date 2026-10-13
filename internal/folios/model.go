@@ -224,6 +224,8 @@ type Item struct {
 	RoomNumber string `json:"room_number,omitempty"`
 	CreatedBy  *int64 `json:"created_by"`
 	ApprovedBy *int64 `json:"approved_by"`
+	// Transfer marks a line that a transfer between folios made or moved (nil: none); see ItemTransfer.
+	Transfer *ItemTransfer `json:"transfer"`
 }
 
 // Totals are the debit and credit sums of a folio.

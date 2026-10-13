@@ -54,6 +54,7 @@ const (
 	KeyInputVAT         = "INPUT_VAT"
 	KeyCashOverShort    = "CASH_OVER_SHORT"
 	KeyQRIS             = "QRIS"
+	KeyFolioTransfer    = "FOLIO_TRANSFER"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -63,6 +64,7 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyBankTransfer, TypeAsset, "Bank transfer payments"},
 	{KeyOtherPayment, TypeAsset, "Other payments (e-wallet, vouchers)"},
 	{KeyQRIS, TypeAsset, "QRIS payments (clearing)"},
+	{KeyFolioTransfer, TypeAsset, "Transfers between folios (intermediary: its balance is zero at every day close)"},
 	{KeyCityLedger, TypeAsset, "What companies owe (city ledger)"},
 	{KeyGuestLedger, TypeAsset, "What in-house guests owe (guest ledger)"},
 	{KeyAdvanceDeposits, TypeLiability, "Deposits held until the guest checks out"},

@@ -88,7 +88,7 @@ SELECT u.kind, u.id, u.code, u.name, u.is_active, u.gl_account_code,
        a.id AS account_id, a.is_active AS account_active, a.is_postable AS account_postable, a.account_type
 FROM (
     SELECT 'CHARGE_CODE'::text AS kind, c.id, c.code, c.name, c.is_active, c.gl_account_code FROM charge_codes c
-    WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id
+    WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.charge_type <> 'TRANSFER' -- TRF has no account of its own: its account is the system key FOLIO_TRANSFER
     UNION ALL
     SELECT 'TAX', t.id, t.code, t.name, t.is_active, t.gl_account_code FROM taxes t
     WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id
@@ -359,7 +359,7 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;
 
@@ -437,6 +437,18 @@ FROM charge_codes c
 LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.charge_type = 'ROOM' AND c.is_active
 ORDER BY c.code;
+
+-- The transfers of a balance between folios hand the same amount from one folio to another with the same business date, so what the lines of the code TRF come to is zero, and so is the balance of
+-- the account that receives them. These two reads are the check of that: the lines of the code up to a date, and what the journals say of the account.
+-- name: TransferLinesNet :one
+SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS net
+FROM folio_items i JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND c.charge_type = 'TRANSFER' AND i.business_date <= @as_of::date;
+
+-- name: AccountJournalNet :one
+SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS net
+FROM gl_journal_lines l JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id;
 
 -- name: CountJournalSequence :one
 SELECT count(*)::int FROM document_sequences WHERE tenant_id = @tenant_id AND property_id = @property_id AND sequence_type = 'JOURNAL';

@@ -34,6 +34,8 @@ const props = withDefaults(defineProps<{
   class?: HTMLAttributes['class']
 }>(), { openOnFocus: true })
 const model = defineModel<string | number | null>({ default: null })
+/** What the person types, as it is typed: a list too long to hold (folios, guests) asks the server for the options that match and puts them in `options`. */
+const emit = defineEmits<{ search: [query: string] }>()
 
 // What the person typed since the list opened. The text in the field is not it: a chosen value puts its label there, and a list narrowed by that label would show only the chosen option.
 const query = ref('')
@@ -66,6 +68,7 @@ watch(open, (value) => {
 })
 const onInput = (e: Event): void => {
   query.value = (e.target as HTMLInputElement).value
+  emit('search', query.value)
 }
 </script>
 

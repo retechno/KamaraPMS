@@ -2269,6 +2269,167 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/transfer-items:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: transferFolioItems
+      summary: Move several charges, or every charge of one charge code, to another folio in one go (folio.reverse, needs approval)
+      description: |
+        `{id}` is the folio the charges leave. Give `item_ids` (at most 200) or one `charge_code_id` (every charge of the code that can still move, found after the locks), not both. One reason, one approval,
+        one transaction: if one charge cannot move, none does (409 `FOLIO_TRANSFER_INVALID` with the ids in `context.item_ids`; one reversed item asked alone is 409 `ALREADY_REVERSED`).
+        Each charge is reversed on its folio and charged again on the target as a copy of the original, so the entries net to zero in every account and department.
+
+        Where it may go (`scope` of the answer): `RESERVATION` (a folio of the same reservation), `GROUP_MEMBER` (a reservation of the same booking group), or `ANY` (any other open folio of the property), which needs
+        **`folio.transfer_any` on the person and on the approver** (403 `PERMISSION_DENIED`, 403 `APPROVAL_NOT_PERMITTED`). Both folios must be OPEN (409 `FOLIO_CLOSED`, with `folio_id` and `folio_number`) and the target must
+        belong to a stay. A line of the code TRF is not moved as a charge: it goes back with a return.
+        422 `TOO_MANY_ITEMS` (more than 200); 409 `TRANSFER_SELECTION_EMPTY` (the code has nothing to move).
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferItemsRequest" }
+      responses:
+        "201":
+          description: What moved, and the balance of the folios.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/transfer-balance:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: transferFolioBalance
+      summary: Hand part of the balance of a folio to another folio (folio.reverse, always needs approval)
+      description: |
+        Two lines of the system charge code `TRF`: an adjustment (a credit) on `{id}` and a charge (a debit) on the target. The code has no tax and no service charge (the charge engine finds none for it) and
+        its account is the system key `FOLIO_TRANSFER` (409 `TRANSFER_ACCOUNT_NOT_MAPPED` when it is not mapped); the account comes to zero at every day close. It is not revenue. Revenue and tax stay on the folio
+        the balance leaves: **a tax invoice in the name of the payer needs the charges moved, not the balance.** The amount cannot be more than the balance of `{id}` read after the lock (409 `TRANSFER_EXCEEDS_BALANCE`).
+        Scope and permissions as for the transfer of charges. **Idempotent**: the same `Idempotency-Key` and request returns the transfer (200, `replayed`); another request under it is 422 `IDEMPOTENCY_KEY_REUSED`.
+        A transfer of a balance is sent back with a return, to the folio it left.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferBalanceRequest" }
+      responses:
+        "200":
+          description: The transfer was made before; this is its result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferResult" }
+        "201":
+          description: The transfer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/transfers/return:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: returnFolioTransfers
+      summary: Send back what earlier transfers moved, one or many at once (folio.reverse, always needs approval)
+      description: |
+        `{id}` is the folio that holds what the transfers moved: each transfer brought it here and nothing moved it on (409 `FOLIO_TRANSFER_INVALID` otherwise). `to` is the folio each charge came from last (`PREVIOUS`)
+        or the first folio it came from (`ORIGIN`, charges only; a balance goes back to the folio it left). The mechanism is the transfer's own (reversal and copy for a charge, the opposite pair of `TRF` lines for a balance);
+        each return is a new transfer that says which one it undoes. A transfer is returned once (409 `ALREADY_RETURNED`). Both folios must be OPEN: a closed one is 409 `FOLIO_CLOSED`, named in the context.
+        The way back is `ANY` when the two folios have nothing in common, and then needs `folio.transfer_any` as the transfer does.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReturnTransfersRequest" }
+      responses:
+        "201":
+          description: What went back.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/transfers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listFolioTransfers
+      summary: The transfers of a folio (folio.read)
+      description: |
+        `direction` is `out` (what left the folio: the screen "Show what was transferred"), `in` (what came in) or `all`. Each row says the folios on both ends, the **first origin** and the folio just before, where the charge
+        is now (`current`: it may have moved on, the end of its chain), the transfer that brought it there (`head_transfer_id`, the one to return) and whether it can be sent back now (`returnable`).
+      tags: [folios]
+      parameters:
+        - { name: direction, in: query, schema: { type: string, enum: [out, in, all], default: all } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+      responses:
+        "200":
+          description: The transfers, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/FolioTransfer" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/transfer-targets:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listTransferTargets
+      summary: The folios a charge or a balance of this folio may be sent to (folio.reverse)
+      description: |
+        At most 25 open folios of a stay, those of the same reservation and of the same booking group first. Every other open folio of the property is listed only to a person who holds `folio.transfer_any`.
+        `q` matches the folio number, the room or the name of the guest. Each says its `scope`.
+      tags: [folios]
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Folio number, room or guest. }
+      responses:
+        "200":
+          description: The folios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/TransferTarget" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folio-items/{id}/group:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -5794,7 +5955,7 @@ paths:
     get:
       operationId: getGlAccountMap
       summary: The accounts the system posts to (accounting.view)
-      description: "The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account."
+      description: "The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), FOLIO_TRANSFER (the intermediary account of the transfers of a balance between folios, 1215 in the standard chart: it comes to zero at every day close), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account."
       tags: [accounting]
       responses:
         "200":
@@ -8663,7 +8824,8 @@ components:
       examples: ["250000"]
     ChargeType:
       type: string
-      enum: [ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER]
+      enum: [ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER, TRANSFER]
+      description: "TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue."
     PriceMode:
       type: string
       enum: [EXCLUSIVE, INCLUSIVE]
@@ -9916,7 +10078,7 @@ components:
         changed: { type: boolean, description: False when the line was in that group already (nothing was written). }
     FolioItem:
       type: object
-      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code, group_code]
+      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code, group_code, transfer]
       properties:
         id: { type: integer, format: int64 }
         folio_id: { type: integer, format: int64 }
@@ -9950,6 +10112,127 @@ components:
         room_number: { type: string }
         created_by: { type: [integer, "null"], format: int64 }
         approved_by: { type: [integer, "null"], format: int64 }
+        transfer: { oneOf: [{ $ref: "#/components/schemas/ItemTransfer" }, { type: "null" }], description: "The mark of a line that a transfer between folios made or moved (null for any other line)." }
+    FolioRef:
+      type: object
+      required: [id, number]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        room: { type: string, description: The room of the stay of the folio. }
+    ItemTransfer:
+      type: object
+      description: "The mark of a line that a transfer between folios made or moved. `role` is `IN` (the line came from another folio), `OUT` (the credit of a balance, or the reversal of a moved charge) or `ORIGINAL` (the charge that was moved). `hidden` says the line is one half of a correction that sums to zero: the folio screen shows it only when asked."
+      required: [transfer_id, role, kind, is_return, hidden, from, to, origin, returned]
+      properties:
+        transfer_id: { type: integer, format: int64 }
+        role: { type: string, enum: [IN, OUT, ORIGINAL] }
+        kind: { type: string, enum: [ITEM, BALANCE] }
+        is_return: { type: boolean }
+        hidden: { type: boolean }
+        from: { $ref: "#/components/schemas/FolioRef" }
+        to: { $ref: "#/components/schemas/FolioRef" }
+        origin: { $ref: "#/components/schemas/FolioRef" }
+        returned: { type: boolean }
+    TransferItemsRequest:
+      type: object
+      required: [folio_id, reason, approval]
+      additionalProperties: false
+      properties:
+        folio_id: { type: integer, format: int64, description: The folio the charges go to. }
+        item_ids: { type: array, maxItems: 200, items: { type: integer, format: int64 } }
+        charge_code_id: { type: integer, format: int64, description: Every charge of this code that can still move. }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    TransferBalanceRequest:
+      type: object
+      required: [folio_id, amount, reason, approval]
+      additionalProperties: false
+      properties:
+        folio_id: { type: integer, format: int64, description: The folio that takes the balance. }
+        amount: { type: string, description: "A positive amount, at most the balance of the folio it leaves." }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    ReturnTransfersRequest:
+      type: object
+      required: [transfer_ids, to, reason, approval]
+      additionalProperties: false
+      properties:
+        transfer_ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer, format: int64 } }
+        to: { type: string, enum: [PREVIOUS, ORIGIN] }
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    TransferredItem:
+      type: object
+      required: [transfer_id, from_folio_id, to_folio_id, original_item_id, out_item_id, in_item_id, amount]
+      properties:
+        transfer_id: { type: integer, format: int64 }
+        from_folio_id: { type: integer, format: int64 }
+        to_folio_id: { type: integer, format: int64 }
+        original_item_id: { type: [integer, "null"], format: int64, description: "The charge that was moved (null for a balance)." }
+        out_item_id: { type: integer, format: int64, description: "The reversal on the folio it left (or the credit of a balance)." }
+        in_item_id: { type: integer, format: int64, description: "The copy on the folio it went to (or the debit of a balance)." }
+        amount: { type: string }
+    TransferResult:
+      type: object
+      required: [batch_id, kind, scope, transfers, balances, replayed]
+      properties:
+        batch_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [ITEM, BALANCE] }
+        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, ANY, RETURN] }
+        transfers: { type: array, items: { $ref: "#/components/schemas/TransferredItem" } }
+        balances:
+          type: array
+          items:
+            type: object
+            required: [folio_id, balance]
+            properties:
+              folio_id: { type: integer, format: int64 }
+              balance: { type: string }
+        replayed: { type: boolean }
+    FolioTransfer:
+      type: object
+      required: [id, batch_id, kind, is_return, scope, reason, business_date, created_at, by, approved_by, from, to, origin, previous, amount, description, original_item_id, in_item_id, out_item_id, returns_transfer_id, returned_by_transfer_id, current, head_transfer_id, head_previous, returnable]
+      properties:
+        id: { type: integer, format: int64 }
+        batch_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [ITEM, BALANCE] }
+        is_return: { type: boolean }
+        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, ANY, RETURN] }
+        reason: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        created_at: { type: string, format: date-time }
+        by: { type: string }
+        approved_by: { type: string }
+        from: { $ref: "#/components/schemas/FolioRef" }
+        to: { $ref: "#/components/schemas/FolioRef" }
+        origin: { $ref: "#/components/schemas/FolioRef" }
+        previous: { $ref: "#/components/schemas/FolioRef" }
+        amount: { type: string }
+        description: { type: string }
+        charge_code: { type: string }
+        original_item_id: { type: [integer, "null"], format: int64 }
+        in_item_id: { type: integer, format: int64 }
+        out_item_id: { type: integer, format: int64 }
+        returns_transfer_id: { type: [integer, "null"], format: int64 }
+        returned_by_transfer_id: { type: [integer, "null"], format: int64 }
+        current: { oneOf: [{ $ref: "#/components/schemas/FolioRef" }, { type: "null" }], description: "Where the charge is now." }
+        head_transfer_id: { type: integer, format: int64, description: "The transfer that brought the charge to where it is now: the one to return." }
+        head_previous: { oneOf: [{ $ref: "#/components/schemas/FolioRef" }, { type: "null" }], description: "The folio the charge came from last: where a return to the previous folio sends it." }
+        returnable: { type: boolean }
+    TransferTarget:
+      type: object
+      required: [id, folio_number, folio_type, confirmation_number, balance, scope]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_type: { type: string }
+        confirmation_number: { type: string }
+        room: { type: string }
+        guest: { type: string }
+        company: { type: string }
+        balance: { type: string }
+        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, ANY] }
     FolioTotals:
       type: object
       required: [debit, credit]

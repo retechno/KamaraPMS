@@ -284,6 +284,9 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 		case TypeReversal:
 			return apperr.Conflict("ITEM_NOT_REVERSIBLE", "a reversal cannot be reversed")
 		}
+		if err := s.refuseTransferLine(ctx, propertyID, item.ChargeCodeID); err != nil {
+			return err
+		}
 		if !item.BusinessDate.Equal(day.BusinessDate) {
 			return apperr.Conflict("CORRECTION_REQUIRES_ADJUSTMENT", "only an item posted on the current business date can be reversed: post an adjustment instead").
 				WithContext("business_date", item.BusinessDate)

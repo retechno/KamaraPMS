@@ -239,3 +239,8 @@ export type GroupRoomPreviewRow = Schemas['GroupRoomPreviewRow']
 export type RoomingRow = Schemas['RoomingRow']
 export type RoomingEdit = Schemas['RoomingEdit']
 export type RoomingImport = Schemas['RoomingImport']
+
+export type FolioTransfer = Schemas['FolioTransfer']
+export type TransferResult = Schemas['TransferResult']
+export type TransferTarget = Schemas['TransferTarget']
+export type ItemTransfer = Schemas['ItemTransfer']

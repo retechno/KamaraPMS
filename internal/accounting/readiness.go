@@ -27,6 +27,7 @@ const (
 	BlockRoomCodeUnmapped   = "ROOM_CHARGE_CODE_UNMAPPED"   // the room revenue would go to the suspense account
 	BlockDepartmentSetup    = "DEPARTMENT_SETUP_INCOMPLETE" // a required department is missing: the day close would stop at that line
 	BlockJournalSequence    = "JOURNAL_SEQUENCE_MISSING"    // the journal cannot be numbered
+	BlockTransferAccount    = "TRANSFER_ACCOUNT_NOT_ZERO"   // the account of the transfers between folios does not come to zero
 	WarnCodeUnmapped        = "CODE_UNMAPPED"               // another charge code, tax or service charge posts to a fallback account (allowed, listed in /unmapped)
 	WarnMapOptionalMissing  = "ACCOUNT_MAP_OPTIONAL"        // a key that other modules use (fiscal year close, payables, cash over and short) is not mapped
 	readinessSystemRequired = "the day close posts to it"
@@ -135,6 +136,25 @@ func (s *Service) readiness(ctx context.Context, tenantID, propertyID int64, bd 
 			if required[mk.Key] {
 				block(BlockMapUnusable, mk.Key, fmt.Sprintf("the system account %s points at account %s of type %s, it must be %s", mk.Key, e.AccountCode, a.AccountType, mk.Type))
 			}
+		}
+	}
+
+	// The account of the transfers between folios is an intermediary: what leaves one folio arrives on another the same day, so it comes to zero at every day close. When it does not (a damaged
+	// pair, or a manual journal into it) the day close would hide a difference between the folios and the ledger, so it stops here.
+	net, err := q.TransferLinesNet(ctx, accountingdb.TransferLinesNetParams{TenantID: tenantID, PropertyID: propertyID, AsOf: bd})
+	if err != nil {
+		return out, err
+	}
+	if !net.IsZero() {
+		block(BlockTransferAccount, KeyFolioTransfer, fmt.Sprintf("the lines of the code TRF come to %s instead of zero: the account of the transfers between folios must be zero at the day close", net.String()))
+	}
+	if e, ok := mapped[KeyFolioTransfer]; ok {
+		jnet, err := q.AccountJournalNet(ctx, accountingdb.AccountJournalNetParams{TenantID: tenantID, PropertyID: propertyID, AccountID: e.AccountID})
+		if err != nil {
+			return out, err
+		}
+		if !jnet.IsZero() {
+			block(BlockTransferAccount, KeyFolioTransfer, fmt.Sprintf("the account %s of the transfers between folios has a balance of %s in the journals: it must be zero at the day close", e.AccountCode, jnet.String()))
 		}
 	}
 

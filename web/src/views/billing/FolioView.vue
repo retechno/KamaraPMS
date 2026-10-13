@@ -8,6 +8,8 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, PaymentMethod } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TransferDialog from '@/components/folio/TransferDialog.vue'
+import TransferredList from '@/components/folio/TransferredList.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
@@ -64,6 +66,13 @@ const correction = reactive({ reason: '', amount: '', method: '', reference: '',
 // The other open folios of this reservation that belong to a stay: where a charge can move to.
 const siblings = ref<FolioSummary[]>([])
 const approving = ref(false)
+// Transfers between folios (docs/architecture/30-group-folio.md, part B): the charges ticked, the filter by charge code, the corrections a transfer makes (hidden unless asked), the list of what left this folio.
+const selected = ref<number[]>([])
+const codeFilter = ref(0)
+const showCorrections = ref(false)
+const showTransferred = ref(false)
+const transferOpen = ref<'items' | 'balance' | null>(null)
+const transferredReload = ref(0)
 // One key per attempt; it is kept while a request may have been lost and renewed once the server has answered.
 const keys: Record<string, string> = {}
 function keyFor(name: string): string {
@@ -74,7 +83,7 @@ const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const isOpen = computed(() => folio.value?.status === 'OPEN')
-const chargeCodes = computed(() => codes.value.filter((c) => c.is_active && c.charge_type !== 'ROOM'))
+const chargeCodes = computed(() => codes.value.filter((c) => c.is_active && c.charge_type !== 'ROOM' && c.charge_type !== 'TRANSFER'))
 // An adjustment corrects what is already posted: only the charge codes that have something posted on this folio (the net
 // of their charges, adjustments and reversals above zero). The server enforces it; this keeps the list honest.
 const postedNet = computed(() => {
@@ -268,6 +277,41 @@ async function approve(approval: Approval): Promise<void> {
   }
 }
 
+// A charge that can move to another folio: not one that was reversed, and never a line of the transfer code (it goes back with a return).
+const transferable = (i: FolioItem): boolean => isOpen.value && can('folio.reverse') && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id && i.charge_code !== 'TRF'
+const transferableItems = computed(() => (folio.value?.items ?? []).filter(transferable))
+const codesOnFolio = computed(() => {
+  const seen = new Map<number, string>()
+  for (const i of transferableItems.value) if (i.charge_code_id) seen.set(i.charge_code_id, i.charge_code ?? '')
+  return [...seen].map(([id, code]) => ({ id, code })).sort((a, b) => a.code.localeCompare(b.code))
+})
+const toggleSelect = (i: FolioItem): void => {
+  selected.value = selected.value.includes(i.id) ? selected.value.filter((x) => x !== i.id) : [...selected.value, i.id]
+}
+const selectedItems = computed(() => transferableItems.value.filter((i) => selected.value.includes(i.id)))
+const selectVisible = (): void => {
+  selected.value = [...new Set([...selected.value, ...shownItems.value.filter(transferable).map((i) => i.id)])]
+}
+// Every charge of one code is picked: the request names the code, so the server finds them all (after its locks) and nothing is missed.
+const pickedByCode = computed(() => {
+  if (codeFilter.value <= 0) return 0
+  const all = transferableItems.value.filter((i) => i.charge_code_id === codeFilter.value)
+  return all.length > 0 && selectedItems.value.length === all.length && all.every((i) => selected.value.includes(i.id)) ? codeFilter.value : 0
+})
+const transferTotal = computed(() => selectedItems.value.reduce((n, i) => n + Number(i.debit), 0))
+function transferDone(message: string): void {
+  transferOpen.value = null
+  selected.value = []
+  notice.value = message
+  transferredReload.value++
+  void load()
+}
+const transferText = (i: FolioItem): string => {
+  const tr = i.transfer
+  if (i.charge_code === 'TRF' && tr) return tr.role === 'IN' ? t('folioTransfer.trfIn', { folio: tr.from.number }) : t('folioTransfer.trfOut', { folio: tr.to.number })
+  return i.description
+}
+
 const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id
 const movable = (i: FolioItem) => isOpen.value && can('folio.reverse') && siblings.value.length > 0 && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id
 const folioLabel = (f: FolioSummary): string => (f.folio_type === 'COMPANY' ? `${f.folio_number} · ${t('billingInstructions.company')}` : f.folio_number)
@@ -289,6 +333,7 @@ const dialogTitle = computed(() => {
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
 const itemColumns = computed<Column<FolioItem>[]>(() => [
+  ...(isOpen.value && can('folio.reverse') ? [{ key: 'select', label: '', card: 'secondary' as const }] : []),
   { key: 'business_date', label: t('folio.date'), format: 'date' as const },
   { key: 'description', label: t('folio.description') },
   { key: 'charge_code', label: t('folio.code') },
@@ -311,7 +356,11 @@ const activeTab = computed(() => (postTabs.value.some((x) => x.value === postTab
 
 const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
 
-const shownItems = computed(() => (folio.value?.items ?? []).filter((i) => shownGroup.value === 'ALL' || i.group_code === shownGroup.value))
+const shownItems = computed(() =>
+  (folio.value?.items ?? []).filter(
+    (i) => (shownGroup.value === 'ALL' || i.group_code === shownGroup.value) && (codeFilter.value <= 0 || i.charge_code_id === codeFilter.value) && (showCorrections.value || !i.transfer?.hidden),
+  ),
+)
 const groupCount = (g: string) => (folio.value?.items ?? []).filter((i) => i.group_code === g).length
 // A reversal is shown with the line it reverses: it moves with it and is not moved alone.
 const groupable = (i: FolioItem) => isOpen.value && can('folio.post_charge') && i.transaction_type !== 'REVERSAL'
@@ -386,6 +435,20 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </Button>
       <span v-if="shownGroup !== 'ALL'" class="text-sm text-muted-foreground" data-testid="group-note">{{ t('folio.groupNote', { code: shownGroup }) }}</span>
     </div>
+    <div v-if="isOpen && can('folio.reverse')" class="mb-2 flex flex-wrap items-center gap-2" data-testid="transfer-bar">
+      <NativeSelect v-model.number="codeFilter" class="w-auto" name="code_filter" data-testid="code-filter" :aria-label="t('folioTransfer.filterCode')">
+        <option :value="0">{{ t('folioTransfer.allCodes') }}</option>
+        <option v-for="c in codesOnFolio" :key="c.id" :value="c.id">{{ c.code }}</option>
+      </NativeSelect>
+      <Button type="button" variant="outline" size="sm" data-testid="select-visible" @click="selectVisible">{{ codeFilter > 0 ? t('folioTransfer.selectCode') : t('folioTransfer.selectAll') }}</Button>
+      <span v-if="selectedItems.length" class="text-sm tabular-nums" data-testid="selection-summary">{{ t('folioTransfer.selected', { n: selectedItems.length, total: $money(String(transferTotal)) }) }}</span>
+      <Button v-if="selectedItems.length" type="button" variant="ghost" size="sm" data-testid="clear-selection" @click="selected = []">{{ t('folioTransfer.clear') }}</Button>
+      <Button type="button" size="sm" :disabled="!selectedItems.length" data-testid="transfer-items-open" @click="transferOpen = 'items'">{{ t('folioTransfer.transferButton') }}</Button>
+      <Button type="button" variant="outline" size="sm" data-testid="transfer-balance-open" @click="transferOpen = 'balance'">{{ t('folioTransfer.transferBalanceButton') }}</Button>
+      <label class="ml-auto inline-flex items-center gap-2 text-sm"><input v-model="showCorrections" type="checkbox" name="show_corrections" class="size-4 accent-primary" data-testid="show-corrections" />{{ t('folioTransfer.showCorrections') }}</label>
+      <Button type="button" :variant="showTransferred ? 'default' : 'outline'" size="sm" :aria-pressed="showTransferred" data-testid="show-transferred" @click="showTransferred = !showTransferred">{{ t('folioTransfer.showTransferred') }}</Button>
+    </div>
+    <TransferredList v-if="showTransferred" :folio-id="folio.id" :folio-number="folio.folio_number" :reload="transferredReload" @changed="transferDone" />
     <Card class="mb-4" data-testid="items">
       <DataTable
         :columns="itemColumns"
@@ -397,9 +460,23 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         :detail-test-id="(i) => `detail-${i.id}`"
         :caption="t('folio.title')"
       >
+        <template #cell-select="{ row: i }">
+          <input
+            v-if="transferable(i)" type="checkbox" class="size-4 accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
+          />
+        </template>
         <template #cell-description="{ row: i }">
-          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ i.description }}</button>
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ transferText(i) }}</button>
           <small class="ml-1 text-muted-foreground">{{ statusText(i.transaction_type) }}</small>
+          <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
+            {{ t('folioTransfer.fromFolio') }}
+            <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
+            <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
+          </div>
+          <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
+            <RouterLink :to="`/folios/${i.transfer.role === 'IN' ? i.transfer.from.id : i.transfer.to.id}`" class="text-primary hover:underline">{{ i.transfer.role === 'IN' ? i.transfer.from.number : i.transfer.to.number }}</RouterLink>
+            <template v-if="(i.transfer.role === 'IN' ? i.transfer.from.room : i.transfer.to.room)"> · {{ t('folioTransfer.room', { room: i.transfer.role === 'IN' ? i.transfer.from.room : i.transfer.to.room }) }}</template>
+          </div>
         </template>
         <template #cell-group_code="{ row: i }">
           <NativeSelect v-if="groupable(i)" class="w-auto" :model-value="i.group_code" :name="`group_${i.id}`" :data-testid="`item-group-${i.id}`" :aria-label="t('folio.group')" :disabled="busy" @update:model-value="moveToGroup(i, String($event))">
@@ -468,6 +545,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </Card>
 
     <ApprovalDialog v-if="approving && pending" :title="dialogTitle" :busy="busy" :error="dialogError" @approve="approve" @cancel="cancelCorrection" />
+    <TransferDialog
+      v-if="transferOpen" :key="transferOpen" :folio="folio" :items="selectedItems" :code-id="pickedByCode || undefined" :tab="transferOpen" @done="transferDone" @close="transferOpen = null"
+    />
 
     <Tabs v-if="isOpen && postTabs.length" :model-value="activeTab" @update:model-value="postTab = String($event)">
       <TabsList data-testid="post-tabs">

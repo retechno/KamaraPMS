@@ -347,7 +347,7 @@ watch(() => property.currentId, load, { immediate: true })
           <template #cell-summary="{ row }"><span data-testid="summary">{{ summary(row) }}</span></template>
           <template #cell-account="{ row }"><span data-testid="account">{{ accountLabel(row.gl_account_code) }}</span></template>
           <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
-          <template #cell-actions="{ row }"><Button type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
+          <template #cell-actions="{ row }"><Button v-if="row.charge_type !== 'TRANSFER'" type="button" variant="outline" size="sm" @click="startEdit(row)">{{ t('common.edit') }}</Button></template>
         </DataTable>
       </CardContent>
     </Card>

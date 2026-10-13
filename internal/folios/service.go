@@ -148,7 +148,7 @@ func (s *Service) lockFolio(ctx context.Context, tenantID, propertyID, folioID i
 
 func requireOpen(f foliosdb.Folio) error {
 	if f.Status != "OPEN" {
-		return apperr.Conflict("FOLIO_CLOSED", "the folio is closed").WithContext("folio_number", f.FolioNumber)
+		return apperr.Conflict("FOLIO_CLOSED", "the folio is closed").WithContext("folio_number", f.FolioNumber).WithContext("folio_id", f.ID)
 	}
 	return nil
 }
@@ -179,6 +179,10 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			BaseAmount: fixed(c.BaseAmount, decimals), Amount: fixed(c.Amount, decimals), Sequence: int(c.Sequence), GLAccountCode: c.GlAccountCode,
 		})
 	}
+	marks, err := s.itemTransfers(ctx, tenantID, propertyID, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Item, len(rows))
 	for i, r := range rows {
 		cs := byItem[r.ID]
@@ -193,7 +197,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),
 			TaxTotal: fixed(r.TaxTotal, decimals), Debit: fixed(r.Debit, decimals), Credit: fixed(r.Credit, decimals), Components: cs,
 			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, GroupCode: r.GroupCode, Reason: deref(r.Reason),
-			RoomNumber: deref(r.RoomNumber), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
+			RoomNumber: deref(r.RoomNumber), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
 		}
 	}
 	return out, nil

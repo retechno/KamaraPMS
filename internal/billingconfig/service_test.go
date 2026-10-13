@@ -74,7 +74,7 @@ func (f fixture) codeByName(t *testing.T, name string) billingconfig.ChargeCode 
 func TestNewPropertiesGetTheStandardChargeCodes(t *testing.T) {
 	f := newFixture(t)
 	list, err := f.Billing.ListChargeCodes(f.admin, f.bali, 0, billingconfig.ChargeCodeFilter{}, 200)
-	if err != nil || len(list) != 10 {
+	if err != nil || len(list) != 11 {
 		t.Fatalf("seeded codes: %v %d", err, len(list))
 	}
 	types := map[string]string{}
@@ -84,7 +84,7 @@ func TestNewPropertiesGetTheStandardChargeCodes(t *testing.T) {
 		}
 		types[c.Code] = c.ChargeType
 	}
-	for c, want := range map[string]string{"ROOM": "ROOM", "ROOM_EXEMPT": "ROOM", "BREAKFAST": "FOOD_BEVERAGE", "NO_SHOW_FEE": "FEE", "LAUNDRY": "SERVICE", "OTHER": "OTHER"} {
+	for c, want := range map[string]string{"ROOM": "ROOM", "ROOM_EXEMPT": "ROOM", "BREAKFAST": "FOOD_BEVERAGE", "NO_SHOW_FEE": "FEE", "LAUNDRY": "SERVICE", "OTHER": "OTHER", "TRF": "TRANSFER"} {
 		if types[c] != want {
 			t.Errorf("%s has type %q, want %q", c, types[c], want)
 		}
@@ -94,7 +94,7 @@ func TestNewPropertiesGetTheStandardChargeCodes(t *testing.T) {
 	}
 	// A second property gets its own codes; nothing is shared.
 	jkt := f.Property(t, f.tenantID, "JKT")
-	if n := f.Count(t, `SELECT count(*) FROM charge_codes WHERE property_id = $1`, jkt.ID); n != 10 {
+	if n := f.Count(t, `SELECT count(*) FROM charge_codes WHERE property_id = $1`, jkt.ID); n != 11 {
 		t.Fatalf("second property: %d", n)
 	}
 }

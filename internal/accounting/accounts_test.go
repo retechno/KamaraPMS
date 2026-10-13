@@ -103,8 +103,8 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 		got[e.Key] = e.AccountCode
 	}
 	want := map[string]string{"CASH": "1110", "CARD": "1150", "BANK_TRANSFER": "1130", "OTHER_PAYMENT": "1160", "CITY_LEDGER": "1220", "GUEST_LEDGER": "1210",
-		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "CASH_OVER_SHORT": "6195", "QRIS": "1155"}
-	if len(m) != 15 || len(got) != 15 {
+		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "FOLIO_TRANSFER": "1215", "CASH_OVER_SHORT": "6195", "QRIS": "1155"}
+	if len(m) != 16 || len(got) != 16 {
 		t.Fatalf("map: %+v", m)
 	}
 	for k, v := range want {
@@ -264,7 +264,7 @@ func TestSystemAccountsCannotBeSwitchedOff(t *testing.T) {
 	_, err = f.Accounting.UpdateAccount(f.admin, f.propID, guest.ID, accounting.AccountPatch{IsPostable: ptr(false)})
 	wantCode(t, err, "ACCOUNT_IN_USE")
 	// once the key points elsewhere, the account can go
-	other, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1215", Name: "Guest ledger - rooms", AccountType: "ASSET", StatementGroup: "RECEIVABLES"})
+	other, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1216", Name: "Guest ledger - rooms", AccountType: "ASSET", StatementGroup: "RECEIVABLES"})
 	must(t, err)
 	_, err = f.Accounting.SetAccountMap(f.admin, f.propID, []accounting.MapInput{{Key: "GUEST_LEDGER", AccountID: other.ID}})
 	must(t, err)
@@ -278,7 +278,7 @@ func TestAccountMap(t *testing.T) {
 	bank2, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1135", Name: "Bank - USD account", AccountType: "ASSET", StatementGroup: "CASH"})
 	must(t, err)
 	m, err := f.Accounting.SetAccountMap(f.admin, f.propID, []accounting.MapInput{{Key: "BANK_TRANSFER", AccountID: bank2.ID}})
-	if err != nil || len(m) != 15 {
+	if err != nil || len(m) != 16 {
 		t.Fatalf("set: %+v %v", m, err)
 	}
 	for _, e := range m {

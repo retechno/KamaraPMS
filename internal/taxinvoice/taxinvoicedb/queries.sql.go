@@ -138,8 +138,9 @@ func (q *Queries) FindInvoiceByKey(ctx context.Context, arg FindInvoiceByKeyPara
 }
 
 const folioCharged = `-- name: FolioCharged :one
-SELECT COALESCE(sum(debit - credit), 0)::numeric AS charged FROM folio_items
-WHERE tenant_id = $1 AND property_id = $2 AND folio_id = $3 AND transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS charged FROM folio_items i
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.folio_id = $3 AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+  AND NOT EXISTS (SELECT 1 FROM charge_codes c WHERE c.property_id = i.property_id AND c.id = i.charge_code_id AND c.charge_type = 'TRANSFER')
 `
 
 type FolioChargedParams struct {
@@ -711,6 +712,7 @@ func (q *Queries) SetDJPNumber(ctx context.Context, arg SetDJPNumberParams) erro
 
 const vATCollectedBetween = `-- name: VATCollectedBetween :one
 
+
 SELECT COALESCE(sum(k.amount), 0)::numeric AS vat
 FROM folio_item_components k
 JOIN folio_items i ON i.property_id = k.property_id AND i.id = k.folio_item_id
@@ -725,6 +727,7 @@ type VATCollectedBetweenParams struct {
 	ToDate     civil.Date
 }
 
+// a balance handed to another folio is not a supply
 // ---------------------------------------------------------------------------------------------------------------
 // Coverage of the VAT collected
 func (q *Queries) VATCollectedBetween(ctx context.Context, arg VATCollectedBetweenParams) (decimal.Decimal, error) {

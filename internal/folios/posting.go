@@ -76,6 +76,8 @@ type itemSpec struct {
 	key             *string
 	approvedBy      *int64
 	components      []foliosdb.InsertFolioItemComponentParams
+	// revenueAccount names the account of the item when it is not the account of its charge code: the code TRF has none, its account is the system key FOLIO_TRANSFER.
+	revenueAccount *string
 }
 
 // insert writes the item and its components and bumps the folio's version. The deferred trigger checks at
@@ -95,7 +97,7 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 		Description: spec.description, Quantity: a.quantity, UnitPrice: a.unitPrice, PriceMode: a.priceMode, BaseAmount: a.base,
 		DiscountAmount: a.discount, NetAmount: a.net, RoundingAdjustment: a.rounding, ServiceChargeTotal: a.service, TaxTotal: a.tax,
 		Debit: a.debit, Credit: a.credit, Source: sourceOf(spec.source), Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
-		ApprovedBy: spec.approvedBy,
+		ApprovedBy: spec.approvedBy, RevenueAccountOverride: spec.revenueAccount,
 	})
 	if err != nil {
 		return foliosdb.FolioItem{}, err
@@ -180,6 +182,9 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 	if err != nil {
 		return foliosdb.FolioItem{}, err
 	}
+	if rules.ChargeType == "TRANSFER" { // the code TRF is posted by the transfer of a balance, never by hand
+		return foliosdb.FolioItem{}, errTransferCodeNotManual(rules.Code)
+	}
 	if cmd.room != nil && rules.ChargeType != "ROOM" {
 		return foliosdb.FolioItem{}, apperr.Conflict("NOT_A_ROOM_CHARGE_CODE", "a room night is posted through a charge code of type ROOM").WithContext("charge_code", rules.Code)
 	}
@@ -231,6 +236,9 @@ type adjustmentCmd struct {
 func (ps posting) postAdjustment(ctx context.Context, cmd adjustmentCmd) (foliosdb.FolioItem, error) {
 	if cmd.approval.IsZero() {
 		return foliosdb.FolioItem{}, errApprovalRequired()
+	}
+	if ct, err := ps.s.q(ctx).GetChargeTypeOfCode(ctx, foliosdb.GetChargeTypeOfCodeParams{PropertyID: ps.propertyID, ID: cmd.chargeCodeID}); err == nil && ct == "TRANSFER" {
+		return foliosdb.FolioItem{}, errTransferCodeNotManual("TRF")
 	}
 	b, err := ps.s.billing.Calculate(ctx, billingconfig.ChargeRequest{
 		PropertyID: ps.propertyID, ChargeCodeID: cmd.chargeCodeID, Quantity: decimal.NewFromInt(1), UnitPrice: cmd.amount, PriceMode: cmd.priceMode,

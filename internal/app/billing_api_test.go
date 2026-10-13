@@ -15,7 +15,7 @@ func TestBillingConfigAPIFlow(t *testing.T) {
 	// A property created through the API starts with the ten standard charge codes, without rules.
 	codes := abc.do(http.MethodGet, base+"/charge-codes?limit=200", nil)
 	list := codes.body["data"].([]any)
-	if codes.status != 200 || len(list) != 10 {
+	if codes.status != 200 || len(list) != 11 {
 		t.Fatalf("seeded charge codes: %d %v", codes.status, codes.body)
 	}
 	var roomID string
