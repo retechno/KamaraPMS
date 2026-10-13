@@ -8,9 +8,9 @@ INSERT INTO roles (tenant_id, name) SELECT t.id, 'M76 Supervisor' FROM tenants t
 INSERT INTO role_permissions (role_id, permission_code)
 SELECT r.id, x.code
   FROM roles r JOIN tenants t ON t.id = r.tenant_id
-  JOIN (VALUES ('M76 Supervisor', 'folio.reverse'), ('M76 Supervisor', 'folio.read'),
-               ('M76 Cashier', 'folio.post_charge'), ('M76 Cashier', 'payment.post'),
+  JOIN (VALUES ('M76 Supervisor', 'correction.approve'), ('M76 Supervisor', 'folio.read'),
+               ('M76 Cashier', 'folio.post_charge'), ('M76 Cashier', 'folio.reverse'), ('M76 Cashier', 'payment.post'),
                ('M76 Viewer', 'folio.read'),
-               ('M76 Both', 'folio.reverse'), ('M76 Both', 'folio.post_charge'),
+               ('M76 Both', 'correction.approve'), ('M76 Both', 'folio.post_charge'),
                ('M76 Admin transfer', 'folio.transfer_any'), ('M76 Admin transfer', 'folio.master_close')) AS x (name, code) ON x.name = r.name
  WHERE t.code IN ('ABC', 'XYZ') AND NOT (t.code = 'XYZ' AND r.name <> 'M76 Supervisor');

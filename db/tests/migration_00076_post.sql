@@ -5,11 +5,10 @@ CREATE FUNCTION pg_temp.m76_has(p_tenant text, p_role text, p_code text) RETURNS
                        WHERE t.code = $1 AND r.name = $2 AND rp.permission_code = $3) $$;
 DO $$
 BEGIN
-    IF NOT pg_temp.m76_has('ABC', 'M76 Supervisor', 'folio.master_manage') THEN RAISE EXCEPTION 'FAIL 00076: a role with folio.reverse gets folio.master_manage'; END IF;
-    IF pg_temp.m76_has('ABC', 'M76 Supervisor', 'folio.master_close') THEN RAISE EXCEPTION 'FAIL 00076: folio.reverse alone does not give folio.master_close'; END IF;
+    IF NOT pg_temp.m76_has('ABC', 'M76 Supervisor', 'folio.master_manage') THEN RAISE EXCEPTION 'FAIL 00076: a role with correction.approve gets folio.master_manage'; END IF;
+    IF NOT pg_temp.m76_has('ABC', 'M76 Supervisor', 'folio.master_close') THEN RAISE EXCEPTION 'FAIL 00076: a role with correction.approve gets folio.master_close'; END IF;
     IF NOT pg_temp.m76_has('ABC', 'M76 Supervisor', 'folio.read') THEN RAISE EXCEPTION 'FAIL 00076: the rights a role had stay'; END IF;
-    IF NOT pg_temp.m76_has('ABC', 'M76 Cashier', 'folio.master_close') THEN RAISE EXCEPTION 'FAIL 00076: a role with folio.post_charge gets folio.master_close'; END IF;
-    IF pg_temp.m76_has('ABC', 'M76 Cashier', 'folio.master_manage') THEN RAISE EXCEPTION 'FAIL 00076: folio.post_charge alone does not give folio.master_manage'; END IF;
+    IF pg_temp.m76_has('ABC', 'M76 Cashier', 'folio.master_close') OR pg_temp.m76_has('ABC', 'M76 Cashier', 'folio.master_manage') THEN RAISE EXCEPTION 'FAIL 00076: folio.post_charge and folio.reverse (cashier level) give neither right'; END IF;
     IF pg_temp.m76_has('ABC', 'M76 Viewer', 'folio.master_manage') OR pg_temp.m76_has('ABC', 'M76 Viewer', 'folio.master_close') THEN RAISE EXCEPTION 'FAIL 00076: a role with neither right gets nothing'; END IF;
     IF NOT (pg_temp.m76_has('ABC', 'M76 Both', 'folio.master_manage') AND pg_temp.m76_has('ABC', 'M76 Both', 'folio.master_close')) THEN RAISE EXCEPTION 'FAIL 00076: a role with both rights gets both'; END IF;
     IF NOT pg_temp.m76_has('XYZ', 'M76 Supervisor', 'folio.master_manage') THEN RAISE EXCEPTION 'FAIL 00076: another tenant is handled by its own roles'; END IF;
