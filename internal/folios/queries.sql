@@ -653,13 +653,19 @@ LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
 LEFT JOIN folios m ON m.property_id = r.property_id AND m.booking_group_id = r.booking_group_id AND m.folio_type = 'MASTER'
 WHERE rr.tenant_id = @tenant_id AND rr.property_id = @property_id AND rr.reservation_id = @reservation_id AND rr.id = @id;
 
--- The member lines still to be over (a master cannot close before): not COMPLETED, CANCELLED or NO_SHOW.
+-- The member lines still to be over (a master cannot close before): not COMPLETED, CANCELLED or NO_SHOW. A line that stays out of the master (folio_group_routing_exclusions) is not waited for:
+-- it puts nothing on the master.
 -- name: ListGroupLinesNotOver :many
 SELECT rr.id AS reservation_room_id, r.confirmation_number, rr.status
 FROM reservation_rooms rr
 JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id AND rr.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+  AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = rr.id)
 ORDER BY rr.id;
+
+-- Is a line one that stays out of the master of its group?
+-- name: IsLineExcluded :one
+SELECT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = @reservation_room_id)::boolean AS excluded;
 
 -- The numbers of the rooms of the stays of a group, for the invoice of its master folio.
 -- name: ListGroupRoomNumbers :many

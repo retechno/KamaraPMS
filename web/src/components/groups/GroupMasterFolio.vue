@@ -32,6 +32,7 @@ const posted = ref<PostedCharges[]>([])
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
 const notice = ref('')
+const noticeWarns = ref(false) // a notice that says nothing was done is a warning, not a confirmation
 const moving = ref(false)
 
 // the form: the instructions as switches, the codes named, the rooms that stay out
@@ -109,6 +110,7 @@ async function run(action: () => Promise<void>): Promise<void> {
   busy.value = true
   error.value = null
   notice.value = ''
+  noticeWarns.value = false
   try {
     await action()
   } catch (e) {
@@ -158,12 +160,14 @@ async function closeMaster(): Promise<void> {
 async function stale(): Promise<void> {
   moving.value = false
   notice.value = t('groupMaster.listChanged')
+  noticeWarns.value = true
   await load()
 }
 
 async function moved(message: string): Promise<void> {
   moving.value = false
   notice.value = message
+  noticeWarns.value = false
   await load()
 }
 </script>
@@ -178,7 +182,7 @@ async function moved(message: string): Promise<void> {
           <li v-for="(l, i) in (error.context.lines as { confirmation_number: string; status: string }[])" :key="i">{{ l.confirmation_number }} · {{ t(`status.${l.status}` as never) }}</li>
         </ul>
       </ErrorNotice>
-      <p v-if="notice" class="notice" role="status" data-testid="master-notice">{{ notice }}</p>
+      <p v-if="notice" :class="noticeWarns ? 'alert warning' : 'notice'" role="status" data-testid="master-notice">{{ notice }}</p>
 
       <div class="mb-4 flex flex-wrap items-center gap-3" data-testid="master-summary">
         <template v-if="master">

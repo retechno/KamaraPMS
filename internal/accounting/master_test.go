@@ -2,6 +2,7 @@ package accounting_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/listsort"
 	"kamarapms/internal/reservations"
@@ -469,5 +471,52 @@ func TestEveryReadThatTouchesFoliosSurvivesAMasterFolio(t *testing.T) {
 	must(t, err)
 	if !rec.Reconciled {
 		t.Fatalf("the reconciliation agrees with a master that holds a payment and a transfer: %+v", rec)
+	}
+}
+
+// A room that stays out of the master puts nothing on it, so it is not waited for: the warning of the night audit and the notice of the check-out come when the last room that does put charges on the
+// master has left, and not before; the room that stays out leaving last says nothing, and the master can be closed while it is in house.
+func TestARoomThatStaysOutOfTheMasterIsNotWaitedFor(t *testing.T) {
+	h := setupHotel(t)
+	group, ms := h.groupOfMembers(t, "2026-09-30", "2026-10-01", 3)
+	h.route(t, group, ms[2].res.Rooms[0].ID) // the third member stays out
+	master := h.masterOf(t, group)
+	h.closeDay(t)
+	out := func(m member) frontdesk.CheckOutResult {
+		st, err := h.Front.GetStay(h.admin, h.propID, m.st.Stay.ID)
+		must(t, err)
+		r, err := h.Front.CheckOut(h.admin, h.propID, m.st.Stay.ID, frontdesk.CheckOutInput{Version: st.Stay.Version})
+		must(t, err)
+		return r
+	}
+	warned := func() int {
+		pre, err := h.Audit.Preview(h.admin, h.propID)
+		must(t, err)
+		return len(pre.Warnings.OpenMasters)
+	}
+	if first := out(ms[0]); first.MasterFolio != nil || warned() != 0 {
+		t.Fatalf("a member that fills the master is still in house: notice %+v, warnings %d", first.MasterFolio, warned())
+	}
+	// the last room that fills the master leaves while the room that stays out is in house: both speak
+	last := out(ms[1])
+	if last.MasterFolio == nil || last.MasterFolio.FolioID != master || last.MasterFolio.GroupCode != "GRP1" {
+		t.Fatalf("the last room that fills the master has left: %+v", last.MasterFolio)
+	}
+	if warned() != 1 {
+		t.Fatal("the night audit warns that the master of the group that has left is open")
+	}
+	// the master can be closed (after its balance is settled), the excluded room still in house
+	cur, err := h.Folios.GetFolio(h.admin, h.propID, master)
+	must(t, err)
+	_, err = h.Folios.CloseFolio(h.admin, h.propID, master, cur.Version)
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Code != "FOLIO_BALANCE_NOT_ZERO" {
+		t.Fatalf("the room that stays out does not hold the close; the balance does: %v", err)
+	}
+	// the room that stays out leaving afterwards says nothing
+	_, err = h.Folios.PostPayment(h.admin, h.propID, ms[2].st.Folio.ID, "own-folio", folios.PaymentInput{Amount: h.folioBalance(t, ms[2].st.Folio.ID).String(), PaymentMethod: "CASH"})
+	must(t, err)
+	if after := out(ms[2]); after.MasterFolio != nil {
+		t.Fatalf("a room that stays out of the master does not give the notice: %+v", after.MasterFolio)
 	}
 }

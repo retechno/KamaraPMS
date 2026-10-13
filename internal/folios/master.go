@@ -384,7 +384,7 @@ func (s *Service) SetGroupRouting(ctx context.Context, propertyID, groupID int64
 	return s.GetGroupRouting(ctx, propertyID, groupID)
 }
 
-// requireMasterCanClose is the part of closing a folio that is the master's: every line of the group is over (COMPLETED, CANCELLED or NO_SHOW), no member in house and none still to arrive. The
+// requireMasterCanClose is the part of closing a folio that is the master's: every line of the group that puts charges on the master is over (COMPLETED, CANCELLED or NO_SHOW), no such member in house and none still to arrive; a room that stays out of the master is not waited for. The
 // lines are read after the folio lock, so a check-out that committed while this waited is seen.
 func (s *Service) requireMasterCanClose(ctx context.Context, tenantID, propertyID int64, f foliosdb.Folio) error {
 	if f.BookingGroupID == nil {
@@ -494,10 +494,14 @@ type MasterInfo struct {
 	GroupName   string `json:"group_name"`
 }
 
-// OpenMasterOfFinishedGroup is the open master folio of the group of a reservation when every room of the group is over (the last member has gone), else nil. A check-out answers with it so that
-// the desk knows the group still has an open bill; it blocks nothing. It reads in the caller's transaction and takes no lock.
-func (s *Service) OpenMasterOfFinishedGroup(ctx context.Context, tenantID, propertyID, reservationID int64) (*MasterInfo, error) {
+// OpenMasterOfFinishedGroup is the open master folio of the group of a reservation when every room that puts charges on it is over (the last such member has gone), else nil. A room that stays out of
+// the master neither is waited for nor says it: the check-out of lineID answers only when lineID is not one of those. The answer lets the desk know the group still has an open bill; it blocks nothing.
+// It reads in the caller's transaction and takes no lock.
+func (s *Service) OpenMasterOfFinishedGroup(ctx context.Context, tenantID, propertyID, reservationID, lineID int64) (*MasterInfo, error) {
 	q := s.q(ctx)
+	if out, err := q.IsLineExcluded(ctx, lineID); err != nil || out {
+		return nil, err
+	}
 	rows, err := q.ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{reservationID}})
 	if err != nil {
 		return nil, err

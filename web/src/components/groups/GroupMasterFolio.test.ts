@@ -215,6 +215,7 @@ describe('GroupMasterFolio', () => {
     ;(document.body.querySelector('[data-testid=approval-dialog]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
     expect(w.get('[data-testid=master-notice]').text()).toBe('What is posted changed since the list was shown: nothing was moved. Look at the list again and ask again.')
+    expect(w.get('[data-testid=master-notice]').classes()).toContain('warning') // nothing was done: a warning, not a confirmation
     expect(has('[data-testid=move-posted-dialog]')).toBe(false)
     expect(GET.mock.calls.length).toBeGreaterThan(reads) // the list is read again
   })

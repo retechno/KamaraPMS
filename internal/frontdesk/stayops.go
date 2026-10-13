@@ -519,7 +519,7 @@ func (s *Service) CheckOut(ctx context.Context, propertyID, stayID int64, in Che
 		if posted == nil {
 			posted = []roomcharge.Result{}
 		}
-		master, err := s.folios.OpenMasterOfFinishedGroup(ctx, p.TenantID, propertyID, pre.line.ReservationID)
+		master, err := s.folios.OpenMasterOfFinishedGroup(ctx, p.TenantID, propertyID, pre.line.ReservationID, pre.line.ID)
 		if err != nil {
 			return err
 		}

@@ -489,7 +489,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ $money(folio.balance) }}</span></p>
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button v-if="isOpen && !folio.stay_id && (folio.folio_type === 'MASTER' ? can('folio.master_close') : can('folio.post_charge'))" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
+        <Button v-if="isOpen && !folio.stay_id && (folio.folio_type === 'MASTER' ? can('folio.master_close') : can('folio.post_charge'))" variant="outline" size="sm" data-testid="close" :disabled="busy || (folio.folio_type === 'MASTER' && Number(folio.balance) !== 0)" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
         <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
         <NativeSelect v-if="canPrint" v-model="printGroup" class="w-auto" name="print_group" data-testid="print-group" :aria-label="t('folio.printGroup')">
           <option value="ALL">{{ t('folio.groupAll') }}</option>
@@ -566,7 +566,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <small class="ml-1 text-muted-foreground">{{ i.charge_code === 'TRF' ? t('folioTransfer.trfType') : statusText(i.transaction_type) }}</small>
           <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
             {{ t('folioTransfer.fromFolio') }}
-            <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
+            <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room && folio?.folio_type !== 'MASTER'"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
             <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
           </div>
           <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">

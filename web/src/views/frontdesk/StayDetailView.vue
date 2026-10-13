@@ -28,6 +28,8 @@ const property = usePropertyStore()
 const detail = ref<StayDetail | null>(null)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
+// The check-out of the last room of a group says the master folio of the group is open. It is kept here, not in the wizard: the wizard goes away when the stay reloads as checked out.
+const masterOpen = ref<CheckOutResult['master_folio']>(null)
 const reversing = ref(false)
 const reason = ref('')
 const busy = ref(false)
@@ -111,6 +113,7 @@ async function changed(message: string): Promise<void> {
 
 async function checkedOut(result: CheckOutResult): Promise<void> {
   notice.value = t('stay.checkedOut', { n: result.posted_room_charges.length })
+  masterOpen.value = result.master_folio ?? null
   await load()
 }
 
@@ -130,6 +133,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </ul>
   </div>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <p v-if="masterOpen" class="alert warning" role="status" data-testid="checkout-master">
+    {{ t('groupMaster.lastCheckout', { group: masterOpen.group_code, folio: masterOpen.folio_number, balance: $money(masterOpen.balance) }) }}
+    <RouterLink :to="`/folios/${masterOpen.folio_id}`">{{ masterOpen.folio_number }}</RouterLink>
+  </p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!can('reservation.read')" class="muted" data-testid="no-access">{{ t('stay.noAccess') }}</p>
 

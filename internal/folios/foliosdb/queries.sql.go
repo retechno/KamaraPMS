@@ -2001,6 +2001,18 @@ func (q *Queries) InsertTransferPosting(ctx context.Context, arg InsertTransferP
 	return err
 }
 
+const isLineExcluded = `-- name: IsLineExcluded :one
+SELECT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = $1)::boolean AS excluded
+`
+
+// Is a line one that stays out of the master of its group?
+func (q *Queries) IsLineExcluded(ctx context.Context, reservationRoomID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, isLineExcluded, reservationRoomID)
+	var excluded bool
+	err := row.Scan(&excluded)
+	return excluded, err
+}
+
 const linkFolioToStay = `-- name: LinkFolioToStay :one
 
 UPDATE folios SET stay_id = $1, version = version + 1, updated_by = $2
@@ -2658,6 +2670,7 @@ SELECT rr.id AS reservation_room_id, r.confirmation_number, rr.status
 FROM reservation_rooms rr
 JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
 WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.booking_group_id = $3 AND rr.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+  AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = rr.id)
 ORDER BY rr.id
 `
 
@@ -2673,7 +2686,8 @@ type ListGroupLinesNotOverRow struct {
 	Status             string
 }
 
-// The member lines still to be over (a master cannot close before): not COMPLETED, CANCELLED or NO_SHOW.
+// The member lines still to be over (a master cannot close before): not COMPLETED, CANCELLED or NO_SHOW. A line that stays out of the master (folio_group_routing_exclusions) is not waited for:
+// it puts nothing on the master.
 func (q *Queries) ListGroupLinesNotOver(ctx context.Context, arg ListGroupLinesNotOverParams) ([]ListGroupLinesNotOverRow, error) {
 	rows, err := q.db.Query(ctx, listGroupLinesNotOver, arg.TenantID, arg.PropertyID, arg.GroupID)
 	if err != nil {

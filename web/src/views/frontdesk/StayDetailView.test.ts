@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import CheckOutWizard from '@/components/CheckOutWizard.vue'
 import StayDetailView from './StayDetailView.vue'
 
 let GET = vi.fn()
@@ -86,6 +87,26 @@ describe('StayDetailView', () => {
     await w.get('form[data-testid=reverse-form]').trigger('submit')
     await flushPromises()
     expect(toastText()).toContain('charges are posted')
+  })
+
+  it('keeps saying the master folio of the group is open after the last room checked out, when the wizard is gone', async () => {
+    const w = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
+    await flushPromises()
+    await w.get('[data-testid=checkout]').trigger('click')
+    GET.mockResolvedValue({ data: detail({ stay: { ...detail().stay, status: 'CHECKED_OUT' } }) }) // the stay reloads as checked out: the wizard unmounts
+    w.getComponent(CheckOutWizard).vm.$emit('done', { posted_room_charges: [], master_folio: { folio_id: 30, folio_number: 'FOL000030', balance: '2000000', group_code: 'GRP1', group_name: 'Conference' } })
+    await flushPromises()
+    expect(w.find('[data-testid=checkout-wizard]').exists()).toBe(false)
+    const note = w.get('[data-testid=checkout-master]')
+    expect(note.text()).toContain('This was the last room of group GRP1: its master folio FOL000030 is still open (balance 2,000,000).')
+    expect(note.get('a').attributes('href')).toBe('/folios/30')
+    // a check-out that is not the last one says nothing about the master
+    const other = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
+    await flushPromises()
+    await other.get('[data-testid=checkout]').trigger('click')
+    other.getComponent(CheckOutWizard).vm.$emit('done', { posted_room_charges: [], master_folio: null })
+    await flushPromises()
+    expect(other.find('[data-testid=checkout-master]').exists()).toBe(false)
   })
 
   it('opens the check-out wizard for an open stay and hides it once checked out or without permission', async () => {

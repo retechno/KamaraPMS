@@ -93,6 +93,16 @@ section down "$M71" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    
 psql_run < "$ROOT/db/tests/migration_00071_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M71" | psql_run >/dev/null
 
+echo "==> migration 00076 (rights of the master folio) on roles with and without the rights it follows"
+psql_run < "$ROOT/db/tests/migration_00076_pre.sql"
+section up "$(ls "$ROOT"/migrations/00076_*.sql)" | psql_run
+psql_run < "$ROOT/db/tests/migration_00076_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# running the Up again changes nothing (ON CONFLICT DO NOTHING)
+rp_before=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
+section up "$(ls "$ROOT"/migrations/00076_*.sql)" | psql_run
+rp_after=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
+if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00076 again changed the rights ($rp_before -> $rp_after)" >&2; exit 1; fi
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

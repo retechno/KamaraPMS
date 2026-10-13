@@ -69,19 +69,23 @@ describe('FolioView: the master folio of a group', () => {
     const owing = mountView({ ...master, balance: '3300000' }, ['folio.read', 'folio.master_close'])
     await flushPromises()
     expect(owing.get('[data-testid=master-close-hint]').text()).toContain('must be zero before it closes')
+    expect(owing.get('[data-testid=close]').attributes('disabled')).toBeDefined() // the button says the same: not while the balance is not zero
     const settled = mountView(master, ['folio.read', 'folio.master_close'])
     await flushPromises()
     expect(settled.find('[data-testid=master-close-hint]').exists()).toBe(false)
+    expect(settled.get('[data-testid=close]').attributes('disabled')).toBeUndefined()
   })
 
   it('says whose each line of the master is, and lets a charge be posted for a guest of the group', async () => {
     const line = (id: number, room: string, guest: string, over: object = {}) => ({ id, folio_id: 30, transaction_type: 'CHARGE', business_date: '2026-09-30', service_date: '2026-09-30', transaction_at: '2026-09-30T13:00:00Z', description: 'x', charge_code: 'MINIBAR', charge_code_id: 2, quantity: '1', unit_price: '1', price_mode: 'EXCLUSIVE', base_amount: '1', discount_amount: '0', net_amount: '1', rounding_adjustment: '0', service_charge_total: '0', tax_total: '0', debit: '1', credit: '0', payment_id: null, reversed_by_item_id: null, group_code: 'A', components: [], revenue_account_code: null, transfer: null, room_number: room, guest_name: guest, ...over })
-    const withItems = { ...master, items: [line(1, '101', 'Ayu Peserta'), line(2, '', '', { stay_id: null })] }
+    const withItems = { ...master, items: [line(1, '101', 'Ayu Peserta', { transfer: { role: 'IN', from: { id: 9, number: 'FOL000009', room: '101' }, origin: { id: 9, number: 'FOL000009', room: '101' } } }), line(2, '', '', { stay_id: null })] }
     const routing = { group_id: 4, master: null, instructions: [], lines: [{ reservation_room_id: 1, reservation_id: 41, confirmation_number: 'RES000001', status: 'CHECKED_IN', excluded: false, stay_id: 5, room_number: '101', guest_name: 'Ayu Peserta' }, { reservation_room_id: 2, reservation_id: 42, confirmation_number: 'RES000002', status: 'CONFIRMED', excluded: false, stay_id: null }] }
     const w = mountView(withItems, ['folio.read', 'folio.post_charge', 'reservation.read'], routing)
     await flushPromises()
     expect(w.get('[data-testid=whose-1]').text()).toBe('room 101 · Ayu Peserta')
     expect(w.find('[data-testid=whose-2]').exists()).toBe(false)
+    // the room is said once, by the line; the origin says only which folio the charge came from
+    expect(w.get('[data-testid=from-1]').text()).toBe('from FOL000009')
     const options = w.findAll('[data-testid=charge-stay] option').map((o) => o.text())
     expect(options).toEqual(['The group (nobody in particular)', '101 · Ayu Peserta']) // only a room with a guest in it now
   })

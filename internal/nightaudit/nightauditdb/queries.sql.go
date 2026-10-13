@@ -205,7 +205,8 @@ WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.status = 'OPEN' AND f.folio_
   AND EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
               WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id)
   AND NOT EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
-                  WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW'))
+                  WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+                    AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = l.id))
 ORDER BY f.id
 `
 
@@ -222,7 +223,8 @@ type ListOpenMastersOfGoneGroupsRow struct {
 	Balance     decimal.Decimal
 }
 
-// OPEN master folios of groups whose rooms are all over (checked out, cancelled or no-show), with their balance: the group has left and its bill is still open.
+// OPEN master folios of groups whose rooms are all over (checked out, cancelled or no-show), with their balance: the group has left and its bill is still open. A room that stays out of the master
+// (folio_group_routing_exclusions) is not waited for: it puts nothing on the master.
 func (q *Queries) ListOpenMastersOfGoneGroups(ctx context.Context, arg ListOpenMastersOfGoneGroupsParams) ([]ListOpenMastersOfGoneGroupsRow, error) {
 	rows, err := q.db.Query(ctx, listOpenMastersOfGoneGroups, arg.TenantID, arg.PropertyID)
 	if err != nil {

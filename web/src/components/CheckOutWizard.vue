@@ -86,10 +86,6 @@ async function submit(): Promise<void> {
 
       <template v-else-if="result">
         <p class="mt-0" data-testid="checkout-done">{{ t('checkout.done') }} <strong>{{ result.housekeeping }}</strong>.</p>
-        <p v-if="result.master_folio" class="notice" data-testid="checkout-master">
-          {{ t('groupMaster.lastCheckout', { group: result.master_folio.group_code, folio: result.master_folio.folio_number, balance: $money(result.master_folio.balance) }) }}
-          <RouterLink :to="`/folios/${result.master_folio.folio_id}`">{{ result.master_folio.folio_number }}</RouterLink>
-        </p>
         <ul class="m-0 pl-5 text-sm">
           <li v-for="c in result.posted_room_charges" :key="c.service_date">{{ t('checkout.roomCharge', { date: $date(c.service_date), total: $money(c.total) }) }}</li>
           <li v-for="f in result.folios" :key="f.id">{{ t('checkout.folioStatus', { number: f.folio_number, status: f.status }) }}</li>
