@@ -2219,7 +2219,7 @@ paths:
       operationId: reverseFolioItem
       summary: Reverse an item posted on the current business date (folio.reverse, needs approval)
       description: |
-        Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`).
+        Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`). A line of the transfer code `TRF` is not reversed (409 `FOLIO_TRANSFER_INVALID`), and neither is the copy a transfer made on the target folio (409 `TRANSFER_COPY_USE_RETURN`): it goes back with a return, from the folio it left.
       tags: [folios]
       requestBody:
         required: true

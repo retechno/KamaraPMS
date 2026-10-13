@@ -115,7 +115,7 @@ describe('TransferDialog', () => {
     mounted.push(w)
     await settle()
     expect(body('[data-testid=tax-warning]').text()).toBe("Need a tax invoice in the payer's name? Use transfer by transaction.")
-    expect((document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value).toBe('122100') // the balance, as the default
+    expect((document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value).toBe('122,100') // the balance, as the default, with thousands
     await type('input[name=transfer_balance_amount]', '50000')
     await pickTarget(8)
     await type('input[name=transfer_reason]', 'the company pays part')
@@ -135,6 +135,7 @@ describe('TransferDialog', () => {
     await pickTarget(9)
     expect(body('[data-testid=target-scope]').text()).toContain('unrelated folio')
     expect(body('[data-testid=any-warning]').text()).toContain('you do not hold the right')
+    expect(body('[data-testid=any-warning]').text()).toContain('Folio FOL000009 is not related to FOL000001') // the two folios, by number
     w.unmount()
     document.body.innerHTML = ''
     const boss = mount(TransferDialog, { props: { folio, items: [item(1)], tab: 'items' }, ...setupAuth(['folio.read', 'folio.reverse', 'folio.transfer_any']) })
@@ -142,6 +143,92 @@ describe('TransferDialog', () => {
     await settle()
     await pickTarget(9)
     expect(body('[data-testid=any-warning]').text()).toContain('approver who holds the right')
+  })
+
+  it('by transaction: the button follows what is typed, in any order, and says what is missing', async () => {
+    const w = mount(TransferDialog, { props: { folio, items: [item(1)], tab: 'items' }, ...setupAuth() })
+    mounted.push(w)
+    await settle()
+    const off = () => body('[data-testid=transfer-continue]').attributes('disabled') !== undefined
+    expect(off()).toBe(true)
+    expect(body('[data-testid=transfer-missing]').text()).toBe('Still needed: the folio to transfer to, a reason.')
+    // the reason first, then the folio
+    await type('input[name=transfer_reason]', 'x')
+    expect(off()).toBe(true)
+    expect(body('[data-testid=transfer-missing]').text()).toBe('Still needed: the folio to transfer to.')
+    await pickTarget(8)
+    expect(off()).toBe(false)
+    expect(has('[data-testid=transfer-missing]')).toBe(false)
+    // emptying the reason turns it off again, and typing turns it on
+    await type('input[name=transfer_reason]', '   ')
+    expect(off()).toBe(true)
+    await type('input[name=transfer_reason]', 'y')
+    expect(off()).toBe(false)
+    // no charge ticked: nothing to move
+    w.unmount()
+    document.body.innerHTML = ''
+    const none = mount(TransferDialog, { props: { folio, items: [], tab: 'items' }, ...setupAuth() })
+    mounted.push(none)
+    await settle()
+    await pickTarget(8)
+    await type('input[name=transfer_reason]', 'y')
+    expect(body('[data-testid=transfer-continue]').attributes('disabled')).toBeDefined()
+    expect(body('[data-testid=transfer-missing]').text()).toBe('Still needed: transactions to move.')
+  })
+
+  it('"Choose a folio" is the placeholder of the field, not an option that can be ticked', async () => {
+    const w = mount(TransferDialog, { props: { folio, items: [item(1)], tab: 'items' }, ...setupAuth() })
+    mounted.push(w)
+    await settle()
+    const input = document.body.querySelector('input[role=combobox]') as HTMLInputElement
+    expect(input.placeholder).toBe('Choose a folio')
+    expect(input.value).toBe('')
+    input.focus()
+    await settle()
+    const options = [...document.body.querySelectorAll('[role=option]')].map((o) => o.textContent?.trim())
+    expect(options.some((o) => o?.includes('Choose a folio'))).toBe(false)
+    expect(options).toHaveLength(2)
+  })
+
+  it('the amount of a balance is shown with thousands, refuses zero and more than the balance, and sends the plain number', async () => {
+    const w = mount(TransferDialog, { props: { folio, items: [], tab: 'balance' }, ...setupAuth() })
+    mounted.push(w)
+    await settle()
+    const field = () => (document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value
+    await pickTarget(8)
+    await type('input[name=transfer_reason]', 'part')
+    const off = () => body('[data-testid=transfer-continue]').attributes('disabled') !== undefined
+    await type('input[name=transfer_balance_amount]', '1500000')
+    expect(field()).toBe('1,500,000')
+    expect(body('[data-testid=amount-problem]').text()).toBe('The amount is more than the balance of this folio (122,100).')
+    expect(off()).toBe(true)
+    await type('input[name=transfer_balance_amount]', '0')
+    expect(body('[data-testid=amount-problem]').text()).toBe('The amount must be more than zero.')
+    expect(off()).toBe(true)
+    await type('input[name=transfer_balance_amount]', '-5000') // a minus is not a digit: it is not kept
+    expect(field()).toBe('5,000')
+    expect(off()).toBe(false)
+    await type('input[name=transfer_balance_amount]', '')
+    expect(off()).toBe(true)
+    await type('input[name=transfer_balance_amount]', '122100')
+    expect(off()).toBe(false) // the whole balance is allowed
+    await type('input[name=transfer_balance_amount]', '75000')
+    ;(document.body.querySelector('[data-testid=transfer-folio-form]') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    await approveWith('boss@hotel.test', 'secret')
+    expect(POST.mock.calls[0]?.[1].body.amount).toBe('75000')
+  })
+
+  it('in Indonesian the amount is grouped with dots and the comma is the decimal', async () => {
+    setLocale('id')
+    const w = mount(TransferDialog, { props: { folio, items: [], tab: 'balance' }, ...setupAuth() })
+    mounted.push(w)
+    await settle()
+    const field = () => (document.body.querySelector('input[name=transfer_balance_amount]') as HTMLInputElement).value
+    expect(field()).toBe('122.100')
+    await type('input[name=transfer_balance_amount]', '2500,5')
+    expect(field()).toBe('2.500,5')
+    setLocale('en')
   })
 
   it('keeps the dialog on a refusal, so the password can be tried again', async () => {
@@ -212,6 +299,21 @@ describe('ReturnDialog', () => {
     await flushPromises()
     expect((document.body.querySelector('input[value=ORIGIN]') as HTMLInputElement).disabled).toBe(true)
     expect(has('[data-testid=return-balance-note]')).toBe(true)
+  })
+
+  it('names a balance in words of the page, never with the description the database holds', async () => {
+    const w = mount(ReturnDialog, { props: { holderId: 8, holderNumber: 'FOL000002', rows: [row({ kind: 'BALANCE', original_item_id: null, description: 'Transfer from FOL000010' })] }, ...setupAuth() })
+    mounted.push(w)
+    await flushPromises()
+    expect(body('[data-testid=return-row-1]').text()).not.toContain('Transfer from')
+    expect(body('[data-testid=return-row-1]').text()).toContain('Balance')
+    w.unmount()
+    setLocale('id')
+    const id = mount(ReturnDialog, { props: { holderId: 8, holderNumber: 'FOL000002', rows: [row({ kind: 'BALANCE', original_item_id: null, description: 'Transfer from FOL000010' })] }, ...setupAuth() })
+    mounted.push(id)
+    await flushPromises()
+    expect(body('[data-testid=return-row-1]').text()).toContain('Saldo')
+    expect(body('[data-testid=return-row-1]').text()).not.toContain('Transfer from')
   })
 
   it('names the closed folio and lets the other way be chosen', async () => {

@@ -11,6 +11,7 @@ import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import TransferDialog from '@/components/folio/TransferDialog.vue'
 import TransferredList from '@/components/folio/TransferredList.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import type { RowAction } from '@/components/app/rowActions'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -312,8 +313,11 @@ const transferText = (i: FolioItem): string => {
   return i.description
 }
 
-const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id
-const movable = (i: FolioItem) => isOpen.value && can('folio.reverse') && siblings.value.length > 0 && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id
+// A line of the transfer code TRF is never reversed or moved, and the copy a transfer made is not reversed: both go back with a return (from the folio the transfer left).
+const isCopy = (i: FolioItem): boolean => i.transfer?.role === 'IN' && i.charge_code !== 'TRF'
+const frozen = (i: FolioItem): boolean => i.charge_code === 'TRF' || isCopy(i)
+const reversible = (i: FolioItem) => isOpen.value && can('folio.reverse') && ['CHARGE', 'ADJUSTMENT'].includes(i.transaction_type) && i.business_date === businessDate.value && !i.reversed_by_item_id && !frozen(i)
+const movable = (i: FolioItem) => isOpen.value && can('folio.reverse') && siblings.value.length > 0 && i.transaction_type === 'CHARGE' && !i.reversed_by_item_id && i.charge_code !== 'TRF'
 const folioLabel = (f: FolioSummary): string => (f.folio_type === 'COMPANY' ? `${f.folio_number} · ${t('billingInstructions.company')}` : f.folio_number)
 const voidable = (i: FolioItem) => isOpen.value && can('payment.void') && i.transaction_type === 'PAYMENT' && i.business_date === businessDate.value && !i.reversed_by_item_id
 // A transfer to a company is settled by the company's receipt, never refunded (its description names the method).
@@ -332,16 +336,25 @@ const dialogTitle = computed(() => {
 
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
+// On a phone the table is cards (a table of eight columns is cut off at the right, where the amounts are): the description is the title, the date the line under it, the code the mark in the corner, and the group and the
+// two amounts are lines with their names. The tick box of the selection is in the title there, and the buttons of a row are its actions (one main one and a menu).
 const itemColumns = computed<Column<FolioItem>[]>(() => [
-  ...(isOpen.value && can('folio.reverse') ? [{ key: 'select', label: '', card: 'secondary' as const }] : []),
-  { key: 'business_date', label: t('folio.date'), format: 'date' as const },
-  { key: 'description', label: t('folio.description') },
-  { key: 'charge_code', label: t('folio.code') },
+  ...(isOpen.value && can('folio.reverse') ? [{ key: 'select', label: '', hideOnMobile: true }] : []),
+  { key: 'business_date', label: t('folio.date'), format: 'date' as const, card: 'secondary' as const },
+  { key: 'description', label: t('folio.description'), card: 'primary' as const },
+  { key: 'charge_code', label: t('folio.code'), card: 'badge' as const },
   { key: 'group_code', label: t('folio.group') },
   { key: 'debit', label: t('folio.debit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'credit', label: t('folio.credit'), align: 'right', class: 'tabular-nums', format: 'money' as const },
   { key: 'actions', label: '', align: 'right' },
 ])
+const itemActions = (i: FolioItem): RowAction[] => [
+  ...(reversible(i) ? [{ key: `reverse-${i.id}`, label: t('folio.reverse'), primary: true, onSelect: () => startCorrection('reverse', i), testId: `reverse-${i.id}` }] : []),
+  ...(movable(i) ? [{ key: `move-${i.id}`, label: t('folio.move'), onSelect: () => startCorrection('move', i), testId: `move-${i.id}` }] : []),
+  ...(voidable(i) ? [{ key: `void-${i.id}`, label: t('folio.void'), primary: true, onSelect: () => startCorrection('void', i), testId: `void-${i.id}` }] : []),
+  ...(refundable(i) ? [{ key: `refund-${i.id}`, label: t('folio.refund'), onSelect: () => startCorrection('refund', i), testId: `refund-${i.id}` }] : []),
+  ...(i.payment_id && canPrint.value && pid.value !== null ? [{ key: `receipt-${i.id}`, label: t('folio.receipt'), onSelect: () => print(documentPath.receipt(pid.value as number, i.payment_id as number)), testId: `receipt-${i.id}` }] : []),
+]
 
 // The posting forms, one tab each, only for what the role may do. All forms stay in the page (hidden when not chosen).
 const route = useRoute()
@@ -356,12 +369,12 @@ const activeTab = computed(() => (postTabs.value.some((x) => x.value === postTab
 
 const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
 
-const shownItems = computed(() =>
-  (folio.value?.items ?? []).filter(
-    (i) => (shownGroup.value === 'ALL' || i.group_code === shownGroup.value) && (codeFilter.value <= 0 || i.charge_code_id === codeFilter.value) && (showCorrections.value || !i.transfer?.hidden),
-  ),
+// What the table may show before the group chip is applied: the corrections of transfers are hidden unless asked for, and the code filter narrows it. The chips count these, so a number says how many rows it shows.
+const baseItems = computed(() =>
+  (folio.value?.items ?? []).filter((i) => (codeFilter.value <= 0 || i.charge_code_id === codeFilter.value) && (showCorrections.value || !i.transfer?.hidden)),
 )
-const groupCount = (g: string) => (folio.value?.items ?? []).filter((i) => i.group_code === g).length
+const shownItems = computed(() => baseItems.value.filter((i) => shownGroup.value === 'ALL' || i.group_code === shownGroup.value))
+const groupCount = (g: string) => baseItems.value.filter((i) => i.group_code === g).length
 // A reversal is shown with the line it reverses: it moves with it and is not moved alone.
 const groupable = (i: FolioItem) => isOpen.value && can('folio.post_charge') && i.transaction_type !== 'REVERSAL'
 const moveToGroup = (i: FolioItem, group: string) => run(`group-${i.id}`, async () => {
@@ -431,7 +444,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
     <div class="mb-2 flex flex-wrap items-center gap-2" data-testid="group-filter" role="group" :aria-label="t('folio.groups')">
       <Button v-for="g in (['ALL', ...GROUPS] as const)" :key="g" size="sm" :variant="shownGroup === g ? 'default' : 'outline'" :data-testid="`group-${g}`" :aria-pressed="shownGroup === g" @click="shownGroup = g">
-        {{ g === 'ALL' ? t('folio.groupAll') : t('folio.groupN', { code: g }) }}<span class="ml-1 text-xs opacity-70">{{ g === 'ALL' ? folio.items.length : groupCount(g) }}</span>
+        {{ g === 'ALL' ? t('folio.groupAll') : t('folio.groupN', { code: g }) }}<span class="ml-1 text-xs opacity-70">{{ g === 'ALL' ? baseItems.length : groupCount(g) }}</span>
       </Button>
       <span v-if="shownGroup !== 'ALL'" class="text-sm text-muted-foreground" data-testid="group-note">{{ t('folio.groupNote', { code: shownGroup }) }}</span>
     </div>
@@ -459,19 +472,25 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         :is-expanded="(i) => open === i.id"
         :detail-test-id="(i) => `detail-${i.id}`"
         :caption="t('folio.title')"
+        cards
+        :row-actions="itemActions"
       >
         <template #cell-select="{ row: i }">
           <input
             v-if="transferable(i)" type="checkbox" class="size-4 accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
           />
         </template>
-        <template #cell-description="{ row: i }">
+        <template #cell-description="{ row: i, card }">
+          <input
+            v-if="card && transferable(i)" type="checkbox" class="mr-2 size-4 align-middle accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
+          />
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ transferText(i) }}</button>
-          <small class="ml-1 text-muted-foreground">{{ statusText(i.transaction_type) }}</small>
+          <small class="ml-1 text-muted-foreground">{{ i.charge_code === 'TRF' ? t('folioTransfer.trfType') : statusText(i.transaction_type) }}</small>
           <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
             {{ t('folioTransfer.fromFolio') }}
             <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
             <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
+            <div :data-testid="`copy-hint-${i.id}`">{{ t('folioTransfer.copyHint', { folio: i.transfer.from.number }) }}</div>
           </div>
           <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
             <RouterLink :to="`/folios/${i.transfer.role === 'IN' ? i.transfer.from.id : i.transfer.to.id}`" class="text-primary hover:underline">{{ i.transfer.role === 'IN' ? i.transfer.from.number : i.transfer.to.number }}</RouterLink>

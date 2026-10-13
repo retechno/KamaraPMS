@@ -131,6 +131,31 @@ describe('FolioView: transfers between folios', () => {
     expect(reader.find('[data-testid=select-1]').exists()).toBe(false)
   })
 
+  it('does not offer Reverse or Move on a line of TRF, nor Reverse on the copy a transfer made; the copy says where to return it', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=reverse-1]').exists()).toBe(true) // an ordinary charge of today
+    expect(w.find('[data-testid=reverse-6]').exists()).toBe(false) // the copy of a transfer
+    expect(w.find('[data-testid=reverse-7]').exists()).toBe(false) // a line of TRF
+    expect(w.find('[data-testid=move-7]').exists()).toBe(false)
+    expect(w.get('[data-testid=copy-hint-6]').text()).toContain('Send it back from FOL000009')
+    expect(w.find('[data-testid=copy-hint-1]').exists()).toBe(false)
+    expect(w.get('[data-testid=item-7]').text()).toContain('Balance transfer') // the debit side of TRF is typed like its credit side
+  })
+
+  it('counts the group chips by the rows the table shows', async () => {
+    const w = mountView()
+    await flushPromises()
+    // 7 lines, two of them the corrections of a transfer: hidden, so the chip says 5
+    const rows = () => w.findAll('[data-testid^=item-]').filter((r) => /^item-\d+$/.test(r.attributes('data-testid') ?? ''))
+    expect(w.get('[data-testid=group-ALL]').text()).toContain('5')
+    expect(rows()).toHaveLength(5)
+    await w.get('[data-testid=show-corrections]').setValue(true)
+    expect(w.get('[data-testid=group-ALL]').text()).toContain('7')
+    expect(w.get('[data-testid=group-A]').text()).toContain('7')
+    expect(rows()).toHaveLength(7)
+  })
+
   it('does not offer the transfer code among the charges that can be posted', async () => {
     const w = mountView()
     await flushPromises()

@@ -12,7 +12,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
@@ -32,8 +32,19 @@ const property = usePropertyStore()
 const tab = ref<'items' | 'balance'>(props.tab)
 const targets = ref<TransferTarget[]>([])
 const chosen = ref<TransferTarget | null>(null)
-const target = ref<number>(0)
-const amount = ref(Number(props.folio.balance) > 0 ? props.folio.balance : '')
+const target = ref<number | null>(null)
+// The amount is typed with the separators of the language and kept as a plain decimal text ("150000.5") for the request.
+const DECIMAL = { en: '.', id: ',' } as const
+const amount = ref(Number(props.folio.balance) > 0 ? props.folio.balance.replace(/\.0+$/, '') : '')
+const amountText = ref(formatMoney(amount.value))
+function typeAmount(text: string): void {
+  const dec = DECIMAL[currentLocale()]
+  const at = text.indexOf(dec)
+  const whole = (at < 0 ? text : text.slice(0, at)).replace(/\D/g, '').replace(/^0+(?=\d)/, '')
+  const frac = at < 0 ? null : text.slice(at + 1).replace(/\D/g, '').slice(0, 3)
+  amount.value = (whole || (frac === null ? '' : '0')) + (frac === null ? '' : `.${frac}`)
+  amountText.value = formatMoney(whole || (frac === null ? '' : '0')) + (frac === null ? '' : dec + frac)
+}
 const reason = ref('')
 const stage = ref<'form' | 'approval'>('form')
 const busy = ref(false)
@@ -51,10 +62,10 @@ const label = (x: TransferTarget): string => [x.folio_number, x.room, x.guest, x
 const options = computed(() => {
   const list = targets.value.map((x) => ({ value: x.id, label: `${label(x)} (${scopeText(x.scope)})` }))
   if (chosen.value && !targets.value.some((x) => x.id === chosen.value?.id)) list.unshift({ value: chosen.value.id, label: `${label(chosen.value)} (${scopeText(chosen.value.scope)})` })
-  return [{ value: 0, label: t('folioTransfer.chooseFolio') }, ...list]
+  return list
 })
 watch(target, (id) => {
-  chosen.value = targets.value.find((x) => x.id === id) ?? (id === 0 ? null : chosen.value)
+  chosen.value = id === null ? null : (targets.value.find((x) => x.id === id) ?? chosen.value)
 })
 
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -76,11 +87,25 @@ void search('')
 onBeforeUnmount(() => clearTimeout(timer))
 
 const balanceLeft = computed(() => Number(props.folio.balance))
-const canContinue = computed(() => {
-  if (target.value <= 0 || !reason.value.trim() || busy.value) return false
-  return tab.value === 'items' ? props.items.length > 0 : Number(amount.value) > 0
+// What the amount is wrong with, if anything (the server checks again under the lock).
+const amountProblem = computed(() => {
+  if (tab.value !== 'balance' || amount.value === '') return ''
+  if (!(Number(amount.value) > 0)) return t('folioTransfer.amountPositive')
+  if (Number(amount.value) > balanceLeft.value) return t('folioTransfer.amountTooMuch', { balance: formatMoney(props.folio.balance.replace(/\.0+$/, '')) })
+  return ''
 })
+// What is still missing before the approval, in words: a button that stays off says why.
+const missing = computed(() => {
+  const list: string[] = []
+  if (tab.value === 'items' && props.items.length === 0) list.push(t('folioTransfer.missingItems'))
+  if (tab.value === 'balance' && (!(Number(amount.value) > 0) || amountProblem.value)) list.push(t('folioTransfer.missingAmount'))
+  if (!(target.value !== null && target.value > 0)) list.push(t('folioTransfer.missingTarget'))
+  if (!reason.value.trim()) list.push(t('folioTransfer.missingReason'))
+  return list
+})
+const canContinue = computed(() => !busy.value && missing.value.length === 0)
 const needsAny = computed(() => chosen.value?.scope === 'ANY')
+const pair = computed(() => ({ source: props.folio.folio_number, target: chosen.value?.folio_number ?? '' }))
 const canAny = computed(() => auth.can('folio.transfer_any', pid.value))
 
 function start(): void {
@@ -98,17 +123,17 @@ async function approve(approval: Approval): Promise<void> {
     let result: TransferResult | undefined
     if (tab.value === 'items') {
       const body = byCode.value
-        ? { folio_id: target.value, charge_code_id: props.codeId, reason: reason.value.trim(), approval }
-        : { folio_id: target.value, item_ids: props.items.map((i) => i.id), reason: reason.value.trim(), approval }
+        ? { folio_id: target.value ?? 0, charge_code_id: props.codeId, reason: reason.value.trim(), approval }
+        : { folio_id: target.value ?? 0, item_ids: props.items.map((i) => i.id), reason: reason.value.trim(), approval }
       result = (await api.POST('/api/v1/properties/{propertyId}/folios/{id}/transfer-items', { params: { path: { propertyId, id: props.folio.id } }, body })).data
       emit('done', t('folioTransfer.doneItems', { n: result?.transfers.length ?? 0, folio: chosen.value?.folio_number ?? '' }))
     } else {
       result = (await api.POST('/api/v1/properties/{propertyId}/folios/{id}/transfer-balance', {
         params: { path: { propertyId, id: props.folio.id }, header: { 'Idempotency-Key': balanceKey } },
-        body: { folio_id: target.value, amount: String(amount.value).trim(), reason: reason.value.trim(), approval },
+        body: { folio_id: target.value ?? 0, amount: amount.value, reason: reason.value.trim(), approval },
       })).data
       balanceKey = newIdempotencyKey()
-      emit('done', t('folioTransfer.doneBalance', { amount: formatMoney(String(amount.value)), folio: chosen.value?.folio_number ?? '' }))
+      emit('done', t('folioTransfer.doneBalance', { amount: formatMoney(amount.value), folio: chosen.value?.folio_number ?? '' }))
     }
   } catch (e) {
     // the dialog stays open with what was typed; a wrong password can be tried again
@@ -143,8 +168,9 @@ async function approve(approval: Approval): Promise<void> {
 
           <TabsContent value="balance" class="pt-3">
             <FormField :label="t('folioTransfer.amount', { balance: formatMoney(folio.balance) })" :error="fieldError('amount')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="amount" name="transfer_balance_amount" inputmode="decimal" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><Input :id="id" :model-value="amountText" name="transfer_balance_amount" inputmode="decimal" autocomplete="off" :aria-invalid="invalid || amountProblem !== ''" @update:model-value="typeAmount(String($event))" /></template>
             </FormField>
+            <p v-if="amountProblem" class="m-0 mt-1 text-sm text-destructive" data-testid="amount-problem">{{ amountProblem }}</p>
             <p v-if="balanceLeft <= 0" class="m-0 mt-1 text-sm text-warning-text" data-testid="transfer-no-balance">{{ t('folioTransfer.noBalance') }}</p>
             <p class="alert warning mt-3" data-testid="tax-warning">{{ t('folioTransfer.taxWarning') }}</p>
           </TabsContent>
@@ -160,13 +186,14 @@ async function approve(approval: Approval): Promise<void> {
             <Badge :variant="chosen.scope === 'ANY' ? 'warning' : 'outline'">{{ scopeText(chosen.scope) }}</Badge>
             <span class="text-muted-foreground">{{ t('folioTransfer.targetBalance', { balance: formatMoney(chosen.balance) }) }}</span>
           </p>
-          <p v-if="needsAny" class="alert warning m-0" data-testid="any-warning">{{ canAny ? t('folioTransfer.anyWarning') : t('folioTransfer.anyDenied') }}</p>
+          <p v-if="needsAny" class="alert warning m-0" data-testid="any-warning">{{ canAny ? t('folioTransfer.anyWarning', pair) : t('folioTransfer.anyDenied', pair) }}</p>
           <FormField :label="t('folioTransfer.reason')" :error="fieldError('reason')">
             <template #default="{ id }"><Input :id="id" v-model="reason" name="transfer_reason" maxlength="500" /></template>
           </FormField>
         </div>
 
-        <div class="mt-5 flex justify-end gap-2">
+        <p v-if="missing.length" class="m-0 mt-4 text-sm text-muted-foreground" data-testid="transfer-missing">{{ t('folioTransfer.missing', { what: missing.join(', ') }) }}</p>
+        <div class="mt-3 flex justify-end gap-2">
           <Button type="button" variant="outline" data-testid="transfer-cancel" @click="emit('close')">{{ t('common.cancel') }}</Button>
           <Button type="submit" :disabled="!canContinue" data-testid="transfer-continue">{{ t('folioTransfer.continueApproval') }}</Button>
         </div>

@@ -201,7 +201,7 @@ func (s *Service) InvoiceGroup(ctx context.Context, propertyID, folioID int64, g
 			continue
 		}
 		debit, credit := dec(it.Debit), dec(it.Credit)
-		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: it.Description,
+		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: dc.lang.TransferDescription(it.Description),
 			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
 		switch it.TransactionType {
 		case "PAYMENT", "REFUND":

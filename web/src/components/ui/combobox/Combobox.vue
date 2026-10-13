@@ -83,8 +83,8 @@ const onInput = (e: Event): void => {
           :display-value="labelOf"
           :placeholder="placeholder ?? selected?.label"
           autocomplete="off"
+          :class="cn('h-9 w-full min-w-0 rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive', selected ? 'placeholder:text-foreground' : 'placeholder:text-muted-foreground')"
           @input="onInput"
-          class="h-9 w-full min-w-0 rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground outline-none placeholder:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive"
         />
         <ComboboxTrigger class="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground" :aria-label="t('common.search')" tabindex="-1">
           <ChevronsUpDown class="size-4" aria-hidden="true" />

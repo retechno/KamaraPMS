@@ -398,6 +398,8 @@ func TestTheBalanceTransferIsAnOrdinaryLineOfTheCodeTRFWithoutTaxOrService(t *te
 	// a line of the code TRF is not reversed or moved as a charge: it goes back with a return
 	_, err = p.Folios.Reverse(p.admin, p.propID, m.InItemID, folios.CorrectionInput{Reason: "x", Approval: p.approval()})
 	wantCode(t, err, "FOLIO_TRANSFER_INVALID")
+	_, err = p.Folios.Reverse(p.admin, p.propID, m.OutItemID, folios.CorrectionInput{Reason: "x", Approval: p.approval()})
+	wantCode(t, err, "FOLIO_TRANSFER_INVALID") // the credit side too, which is an adjustment
 	_, err = p.moveItems(cf, p.guestFolio, p.items(m.InItemID))
 	wantCode(t, err, "FOLIO_TRANSFER_INVALID")
 
@@ -565,4 +567,41 @@ func TestTheLogOfAFolioSaysWhereEachChargeIsNow(t *testing.T) {
 	}
 	_, err = p.Folios.ListTransfers(p.admin, p.propID, c, "sideways", 50)
 	wantCode(t, err, "VALIDATION_FAILED")
+}
+
+// The copy a transfer makes is not reversed: it goes back with a return (the rule of the review of part B, point 2).
+func TestTheCopyOfATransferIsNotReversedItGoesBackWithAReturn(t *testing.T) {
+	p := setupPayer(t)
+	cf := p.companyFolio(t, "FC1")
+	a := p.charge(t, p.guestFolio, "a")
+	res, err := p.moveItems(p.guestFolio, cf, p.items(a))
+	must(t, err)
+	m := res.Moved[0]
+
+	// the copy on the company folio: a reversal is refused and the answer says to return it
+	_, err = p.Folios.Reverse(p.admin, p.propID, m.InItemID, folios.CorrectionInput{Reason: "wrong", Approval: p.approval()})
+	wantCode(t, err, "TRANSFER_COPY_USE_RETURN")
+	if p.balance(t, cf) != "122100" || p.balance(t, p.guestFolio) != "0" {
+		t.Fatalf("nothing moved: %s %s", p.balance(t, cf), p.balance(t, p.guestFolio))
+	}
+	if p.Count(t, `SELECT count(*) FROM folio_items WHERE reverses_item_id = $1`, m.InItemID) != 0 {
+		t.Fatal("the refused reversal wrote nothing")
+	}
+
+	// the return works, and the copy of the return is not reversed either
+	back, err := p.Folios.ReturnTransfers(p.admin, p.propID, cf, folios.ReturnInput{TransferIDs: []int64{m.TransferID}, To: "PREVIOUS", Reason: "back", Approval: p.approval()})
+	must(t, err)
+	if p.balance(t, cf) != "0" || p.balance(t, p.guestFolio) != "122100" {
+		t.Fatalf("after the return: %s %s", p.balance(t, cf), p.balance(t, p.guestFolio))
+	}
+	_, err = p.Folios.Reverse(p.admin, p.propID, back.Moved[0].InItemID, folios.CorrectionInput{Reason: "wrong", Approval: p.approval()})
+	wantCode(t, err, "TRANSFER_COPY_USE_RETURN")
+	// the copy that was returned is reversed already
+	_, err = p.Folios.Reverse(p.admin, p.propID, m.InItemID, folios.CorrectionInput{Reason: "wrong", Approval: p.approval()})
+	wantCode(t, err, "ALREADY_REVERSED")
+	// and the same transfer is not returned twice
+	_, err = p.Folios.ReturnTransfers(p.admin, p.propID, cf, folios.ReturnInput{TransferIDs: []int64{m.TransferID}, To: "PREVIOUS", Reason: "again", Approval: p.approval()})
+	if err == nil {
+		t.Fatal("a returned transfer is not returned again")
+	}
 }

@@ -236,3 +236,18 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	// small words used in rows
 	"voided": "dibatalkan", "Printed ": "Dicetak ", "  ·  business date ": "  ·  tanggal bisnis ",
 }
+
+// TransferDescription writes the description of a line of a transfer between folios ("Transfer from FOL000001", "Transfer to FOL000002", stored in English) in the language of the
+// document; any other description is printed as it was posted.
+func (l Lang) TransferDescription(desc string) string {
+	if l != LangID {
+		return desc
+	}
+	if rest, ok := strings.CutPrefix(desc, "Transfer from "); ok {
+		return "Transfer dari " + rest
+	}
+	if rest, ok := strings.CutPrefix(desc, "Transfer to "); ok {
+		return "Transfer ke " + rest
+	}
+	return desc
+}

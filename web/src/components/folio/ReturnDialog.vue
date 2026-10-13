@@ -70,7 +70,7 @@ async function approve(approval: Approval): Promise<void> {
 
         <ul class="m-0 mb-3 list-none divide-y divide-border p-0 text-sm" data-testid="return-list">
           <li v-for="r in rows" :key="r.head_transfer_id" class="flex items-baseline justify-between gap-3 py-1.5" :data-testid="`return-row-${r.head_transfer_id}`">
-            <span class="min-w-0 truncate">{{ r.description }}</span>
+            <span class="min-w-0 truncate">{{ r.kind === 'BALANCE' ? t('folioTransfer.balanceLine') : r.description }}</span>
             <span class="shrink-0 tabular-nums text-muted-foreground">{{ formatMoney(r.amount) }} → {{ targetOf(r) }}</span>
           </li>
         </ul>
