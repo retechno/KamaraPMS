@@ -283,6 +283,23 @@ func (q *Queries) GetChargeCodeByCode(ctx context.Context, arg GetChargeCodeByCo
 	return i, err
 }
 
+const getChargeTypeOfCode = `-- name: GetChargeTypeOfCode :one
+SELECT charge_type FROM charge_codes WHERE property_id = $1 AND id = $2
+`
+
+type GetChargeTypeOfCodeParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+// The charge type of a charge code (a TRANSFER line is moved back by a return, never by a transfer of charges, a reversal or an adjustment).
+func (q *Queries) GetChargeTypeOfCode(ctx context.Context, arg GetChargeTypeOfCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, getChargeTypeOfCode, arg.PropertyID, arg.ID)
+	var charge_type string
+	err := row.Scan(&charge_type)
+	return charge_type, err
+}
+
 const getCompanyName = `-- name: GetCompanyName :one
 SELECT name FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -495,6 +512,36 @@ func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) 
 		&i.ClosedOn,
 		&i.BillToCompanyID,
 	)
+	return i, err
+}
+
+const getFolioPlace = `-- name: GetFolioPlace :one
+SELECT COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name
+FROM folios f
+JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id = $3
+`
+
+type GetFolioPlaceParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetFolioPlaceRow struct {
+	RoomNumber string
+	FirstName  *string
+	LastName   *string
+}
+
+// The room and the guest of a folio, for the line "from FOLxxx, room N".
+func (q *Queries) GetFolioPlace(ctx context.Context, arg GetFolioPlaceParams) (GetFolioPlaceRow, error) {
+	row := q.db.QueryRow(ctx, getFolioPlace, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetFolioPlaceRow
+	err := row.Scan(&i.RoomNumber, &i.FirstName, &i.LastName)
 	return i, err
 }
 
@@ -869,6 +916,246 @@ func (q *Queries) GetStayStatus(ctx context.Context, arg GetStayStatusParams) (s
 	return status, err
 }
 
+const getTransfer = `-- name: GetTransfer :one
+SELECT id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at FROM folio_transfers WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetTransferParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetTransfer(ctx context.Context, arg GetTransferParams) (FolioTransfer, error) {
+	row := q.db.QueryRow(ctx, getTransfer, arg.TenantID, arg.PropertyID, arg.ID)
+	var i FolioTransfer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.BatchID,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.OutItemID,
+		&i.InItemID,
+		&i.OriginalItemID,
+		&i.Amount,
+		&i.OriginFolioID,
+		&i.PreviousFolioID,
+		&i.ReturnsTransferID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTransferAccount = `-- name: GetTransferAccount :one
+SELECT a.code, a.is_active, a.is_postable, a.account_type
+FROM gl_account_map m JOIN gl_accounts a ON a.property_id = m.property_id AND a.id = m.account_id
+WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.map_key = 'FOLIO_TRANSFER'
+`
+
+type GetTransferAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type GetTransferAccountRow struct {
+	Code        string
+	IsActive    bool
+	IsPostable  bool
+	AccountType string
+}
+
+func (q *Queries) GetTransferAccount(ctx context.Context, arg GetTransferAccountParams) (GetTransferAccountRow, error) {
+	row := q.db.QueryRow(ctx, getTransferAccount, arg.TenantID, arg.PropertyID)
+	var i GetTransferAccountRow
+	err := row.Scan(
+		&i.Code,
+		&i.IsActive,
+		&i.IsPostable,
+		&i.AccountType,
+	)
+	return i, err
+}
+
+const getTransferBatch = `-- name: GetTransferBatch :one
+SELECT id, tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_at, created_by FROM folio_transfer_batches WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetTransferBatchParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) GetTransferBatch(ctx context.Context, arg GetTransferBatchParams) (FolioTransferBatch, error) {
+	row := q.db.QueryRow(ctx, getTransferBatch, arg.TenantID, arg.PropertyID, arg.ID)
+	var i FolioTransferBatch
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Kind,
+		&i.IsReturn,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.Scope,
+		&i.Reason,
+		&i.BusinessDate,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getTransferBatchByKey = `-- name: GetTransferBatchByKey :one
+SELECT id, tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_at, created_by FROM folio_transfer_batches WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetTransferBatchByKeyParams struct {
+	TenantID   int64
+	PropertyID int64
+	Key        *string
+}
+
+func (q *Queries) GetTransferBatchByKey(ctx context.Context, arg GetTransferBatchByKeyParams) (FolioTransferBatch, error) {
+	row := q.db.QueryRow(ctx, getTransferBatchByKey, arg.TenantID, arg.PropertyID, arg.Key)
+	var i FolioTransferBatch
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Kind,
+		&i.IsReturn,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.Scope,
+		&i.Reason,
+		&i.BusinessDate,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getTransferByInItem = `-- name: GetTransferByInItem :one
+SELECT id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at FROM folio_transfers WHERE property_id = $1 AND in_item_id = $2
+`
+
+type GetTransferByInItemParams struct {
+	PropertyID int64
+	ItemID     int64
+}
+
+func (q *Queries) GetTransferByInItem(ctx context.Context, arg GetTransferByInItemParams) (FolioTransfer, error) {
+	row := q.db.QueryRow(ctx, getTransferByInItem, arg.PropertyID, arg.ItemID)
+	var i FolioTransfer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.BatchID,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.OutItemID,
+		&i.InItemID,
+		&i.OriginalItemID,
+		&i.Amount,
+		&i.OriginFolioID,
+		&i.PreviousFolioID,
+		&i.ReturnsTransferID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTransferByOriginalItem = `-- name: GetTransferByOriginalItem :one
+SELECT id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at FROM folio_transfers WHERE property_id = $1 AND original_item_id = $2
+`
+
+type GetTransferByOriginalItemParams struct {
+	PropertyID int64
+	ItemID     *int64
+}
+
+func (q *Queries) GetTransferByOriginalItem(ctx context.Context, arg GetTransferByOriginalItemParams) (FolioTransfer, error) {
+	row := q.db.QueryRow(ctx, getTransferByOriginalItem, arg.PropertyID, arg.ItemID)
+	var i FolioTransfer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.BatchID,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.OutItemID,
+		&i.InItemID,
+		&i.OriginalItemID,
+		&i.Amount,
+		&i.OriginFolioID,
+		&i.PreviousFolioID,
+		&i.ReturnsTransferID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTransferChargeCode = `-- name: GetTransferChargeCode :one
+
+SELECT id, is_active FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND code = 'TRF' AND charge_type = 'TRANSFER'
+`
+
+type GetTransferChargeCodeParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type GetTransferChargeCodeRow struct {
+	ID       int64
+	IsActive bool
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Transfers between folios (docs/architecture/30-group-folio.md, part B)
+// The code TRF and the account of the system key FOLIO_TRANSFER.
+func (q *Queries) GetTransferChargeCode(ctx context.Context, arg GetTransferChargeCodeParams) (GetTransferChargeCodeRow, error) {
+	row := q.db.QueryRow(ctx, getTransferChargeCode, arg.TenantID, arg.PropertyID)
+	var i GetTransferChargeCodeRow
+	err := row.Scan(&i.ID, &i.IsActive)
+	return i, err
+}
+
+const getTransferReturnedBy = `-- name: GetTransferReturnedBy :one
+SELECT id FROM folio_transfers WHERE property_id = $1 AND returns_transfer_id = $2
+`
+
+type GetTransferReturnedByParams struct {
+	PropertyID int64
+	TransferID *int64
+}
+
+func (q *Queries) GetTransferReturnedBy(ctx context.Context, arg GetTransferReturnedByParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getTransferReturnedBy, arg.PropertyID, arg.TransferID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getUserName = `-- name: GetUserName :one
+SELECT full_name FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserName(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getUserName, id)
+	var full_name string
+	err := row.Scan(&full_name)
+	return full_name, err
+}
+
 const insertCompanyFolio = `-- name: InsertCompanyFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, 'COMPANY', $6, $7, $7)
@@ -980,14 +1267,16 @@ INSERT INTO folio_items (
     $19, $20, $21, $22, $23, $24, $25, $26,
     $27, $28, $29, $30, $31,
     -- The revenue account in force now; a reversal copies the account of the item it reverses, and so does the copy a transfer charges on the target folio (copies_item_id).
-    CASE WHEN COALESCE($10::bigint, $32::bigint) IS NOT NULL
-         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $32::bigint))
+    -- The transfer of a balance names the account of the system key FOLIO_TRANSFER in force now (revenue_account_override); the code TRF has none of its own.
+    COALESCE($32::varchar,
+    CASE WHEN COALESCE($10::bigint, $33::bigint) IS NOT NULL
+         THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $33::bigint))
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = $2 AND c.id = $8::bigint)
-    END,
+    END),
     -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
     -- a reversal copies the department of the item it reverses.
-    CASE WHEN COALESCE($10::bigint, $32::bigint) IS NOT NULL
-         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $32::bigint))
+    CASE WHEN COALESCE($10::bigint, $33::bigint) IS NOT NULL
+         THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = $2 AND o.id = COALESCE($10::bigint, $33::bigint))
          ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
                  FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
                 WHERE c.property_id = $2 AND c.id = $8::bigint)
@@ -997,38 +1286,39 @@ RETURNING id, tenant_id, property_id, folio_id, business_date, transaction_at, s
 `
 
 type InsertFolioItemParams struct {
-	TenantID           int64
-	PropertyID         int64
-	FolioID            int64
-	BusinessDate       civil.Date
-	TransactionAt      time.Time
-	ServiceDate        civil.Date
-	TransactionType    string
-	ChargeCodeID       *int64
-	PaymentID          *int64
-	ReversesItemID     *int64
-	StayID             *int64
-	StayRoomID         *int64
-	ReferenceType      *string
-	ReferenceID        *string
-	Description        string
-	Quantity           decimal.Decimal
-	UnitPrice          decimal.Decimal
-	PriceMode          string
-	BaseAmount         decimal.Decimal
-	DiscountAmount     decimal.Decimal
-	NetAmount          decimal.Decimal
-	RoundingAdjustment decimal.Decimal
-	ServiceChargeTotal decimal.Decimal
-	TaxTotal           decimal.Decimal
-	Debit              decimal.Decimal
-	Credit             decimal.Decimal
-	Source             string
-	Reason             *string
-	IdempotencyKey     *string
-	ActorID            *int64
-	ApprovedBy         *int64
-	CopiesItemID       *int64
+	TenantID               int64
+	PropertyID             int64
+	FolioID                int64
+	BusinessDate           civil.Date
+	TransactionAt          time.Time
+	ServiceDate            civil.Date
+	TransactionType        string
+	ChargeCodeID           *int64
+	PaymentID              *int64
+	ReversesItemID         *int64
+	StayID                 *int64
+	StayRoomID             *int64
+	ReferenceType          *string
+	ReferenceID            *string
+	Description            string
+	Quantity               decimal.Decimal
+	UnitPrice              decimal.Decimal
+	PriceMode              string
+	BaseAmount             decimal.Decimal
+	DiscountAmount         decimal.Decimal
+	NetAmount              decimal.Decimal
+	RoundingAdjustment     decimal.Decimal
+	ServiceChargeTotal     decimal.Decimal
+	TaxTotal               decimal.Decimal
+	Debit                  decimal.Decimal
+	Credit                 decimal.Decimal
+	Source                 string
+	Reason                 *string
+	IdempotencyKey         *string
+	ActorID                *int64
+	ApprovedBy             *int64
+	RevenueAccountOverride *string
+	CopiesItemID           *int64
 }
 
 // ---------------------------------------------------------------------------
@@ -1066,6 +1356,7 @@ func (q *Queries) InsertFolioItem(ctx context.Context, arg InsertFolioItemParams
 		arg.IdempotencyKey,
 		arg.ActorID,
 		arg.ApprovedBy,
+		arg.RevenueAccountOverride,
 		arg.CopiesItemID,
 	)
 	var i FolioItem
@@ -1292,6 +1583,118 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 	return i, err
 }
 
+const insertTransfer = `-- name: InsertTransfer :one
+INSERT INTO folio_transfers (tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at
+`
+
+type InsertTransferParams struct {
+	TenantID          int64
+	PropertyID        int64
+	BatchID           int64
+	FromFolioID       int64
+	ToFolioID         int64
+	OutItemID         int64
+	InItemID          int64
+	OriginalItemID    *int64
+	Amount            decimal.Decimal
+	OriginFolioID     int64
+	PreviousFolioID   int64
+	ReturnsTransferID *int64
+}
+
+func (q *Queries) InsertTransfer(ctx context.Context, arg InsertTransferParams) (FolioTransfer, error) {
+	row := q.db.QueryRow(ctx, insertTransfer,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BatchID,
+		arg.FromFolioID,
+		arg.ToFolioID,
+		arg.OutItemID,
+		arg.InItemID,
+		arg.OriginalItemID,
+		arg.Amount,
+		arg.OriginFolioID,
+		arg.PreviousFolioID,
+		arg.ReturnsTransferID,
+	)
+	var i FolioTransfer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.BatchID,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.OutItemID,
+		&i.InItemID,
+		&i.OriginalItemID,
+		&i.Amount,
+		&i.OriginFolioID,
+		&i.PreviousFolioID,
+		&i.ReturnsTransferID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertTransferBatch = `-- name: InsertTransferBatch :one
+INSERT INTO folio_transfer_batches (tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_at, created_by
+`
+
+type InsertTransferBatchParams struct {
+	TenantID       int64
+	PropertyID     int64
+	Kind           string
+	IsReturn       bool
+	FromFolioID    int64
+	ToFolioID      int64
+	Scope          string
+	Reason         string
+	BusinessDate   civil.Date
+	ApprovedBy     int64
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertTransferBatch(ctx context.Context, arg InsertTransferBatchParams) (FolioTransferBatch, error) {
+	row := q.db.QueryRow(ctx, insertTransferBatch,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Kind,
+		arg.IsReturn,
+		arg.FromFolioID,
+		arg.ToFolioID,
+		arg.Scope,
+		arg.Reason,
+		arg.BusinessDate,
+		arg.ApprovedBy,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var i FolioTransferBatch
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Kind,
+		&i.IsReturn,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.Scope,
+		&i.Reason,
+		&i.BusinessDate,
+		&i.ApprovedBy,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const insertTransferPosting = `-- name: InsertTransferPosting :exec
 INSERT INTO stay_charge_postings (tenant_id, property_id, stay_id, stay_room_id, service_date, charge_source, charge_code_id, folio_item_id, business_date, posting_trigger, created_by)
 VALUES ($1, $2, $3, $4, $5, 'ROOM_NIGHT', $6, $7, $8, 'MANUAL', $9)
@@ -1372,6 +1775,50 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 		&i.BillToCompanyID,
 	)
 	return i, err
+}
+
+const listBatchTransfers = `-- name: ListBatchTransfers :many
+SELECT id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at FROM folio_transfers WHERE property_id = $1 AND batch_id = $2 ORDER BY id
+`
+
+type ListBatchTransfersParams struct {
+	PropertyID int64
+	BatchID    int64
+}
+
+func (q *Queries) ListBatchTransfers(ctx context.Context, arg ListBatchTransfersParams) ([]FolioTransfer, error) {
+	rows, err := q.db.Query(ctx, listBatchTransfers, arg.PropertyID, arg.BatchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FolioTransfer{}
+	for rows.Next() {
+		var i FolioTransfer
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.BatchID,
+			&i.FromFolioID,
+			&i.ToFolioID,
+			&i.OutItemID,
+			&i.InItemID,
+			&i.OriginalItemID,
+			&i.Amount,
+			&i.OriginFolioID,
+			&i.PreviousFolioID,
+			&i.ReturnsTransferID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFolioItems = `-- name: ListFolioItems :many
@@ -1486,6 +1933,130 @@ func (q *Queries) ListFolioItems(ctx context.Context, arg ListFolioItemsParams) 
 			&i.ReversedByItemID,
 			&i.RoomNumber,
 			&i.GroupCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFolioTransfers = `-- name: ListFolioTransfers :many
+SELECT t.id, t.batch_id, b.kind, b.is_return, b.scope, b.reason, b.business_date, b.approved_by, b.created_by, b.created_at,
+       t.from_folio_id, ff.folio_number AS from_number, t.to_folio_id, tf.folio_number AS to_number,
+       t.origin_folio_id, ofo.folio_number AS origin_number, t.previous_folio_id, pf.folio_number AS previous_number,
+       t.out_item_id, t.in_item_id, t.original_item_id, t.amount, t.returns_transfer_id,
+       COALESCE(oi.description, ii.description)::text AS description, COALESCE(oc.code, ic.code)::text AS charge_code,
+       rt.id AS returned_by_transfer_id, nx.id AS moved_on_transfer_id, COALESCE(fr.room_number, '')::text AS from_room, COALESCE(tr.room_number, '')::text AS to_room
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios ff ON ff.property_id = t.property_id AND ff.id = t.from_folio_id
+JOIN folios tf ON tf.property_id = t.property_id AND tf.id = t.to_folio_id
+JOIN folios ofo ON ofo.property_id = t.property_id AND ofo.id = t.origin_folio_id
+JOIN folios pf ON pf.property_id = t.property_id AND pf.id = t.previous_folio_id
+JOIN folio_items ii ON ii.property_id = t.property_id AND ii.id = t.in_item_id
+LEFT JOIN charge_codes ic ON ic.property_id = ii.property_id AND ic.id = ii.charge_code_id
+LEFT JOIN folio_items oi ON oi.property_id = t.property_id AND oi.id = t.original_item_id
+LEFT JOIN charge_codes oc ON oc.property_id = oi.property_id AND oc.id = oi.charge_code_id
+LEFT JOIN folio_transfers rt ON rt.property_id = t.property_id AND rt.returns_transfer_id = t.id
+LEFT JOIN folio_transfers nx ON nx.property_id = t.property_id AND nx.original_item_id = t.in_item_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = ff.property_id AND sr.stay_id = ff.stay_id ORDER BY sr.id DESC LIMIT 1) fr(room_number) ON true
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = tf.property_id AND sr.stay_id = tf.stay_id ORDER BY sr.id DESC LIMIT 1) tr(room_number) ON true
+WHERE t.tenant_id = $1 AND t.property_id = $2
+  AND (($3::text IN ('out', 'all') AND t.from_folio_id = $4) OR ($3::text IN ('in', 'all') AND t.to_folio_id = $4))
+ORDER BY t.id DESC
+LIMIT $5
+`
+
+type ListFolioTransfersParams struct {
+	TenantID   int64
+	PropertyID int64
+	Direction  string
+	FolioID    int64
+	RowLimit   int32
+}
+
+type ListFolioTransfersRow struct {
+	ID                   int64
+	BatchID              int64
+	Kind                 string
+	IsReturn             bool
+	Scope                string
+	Reason               string
+	BusinessDate         civil.Date
+	ApprovedBy           int64
+	CreatedBy            *int64
+	CreatedAt            time.Time
+	FromFolioID          int64
+	FromNumber           string
+	ToFolioID            int64
+	ToNumber             string
+	OriginFolioID        int64
+	OriginNumber         string
+	PreviousFolioID      int64
+	PreviousNumber       string
+	OutItemID            int64
+	InItemID             int64
+	OriginalItemID       *int64
+	Amount               decimal.Decimal
+	ReturnsTransferID    *int64
+	Description          string
+	ChargeCode           string
+	ReturnedByTransferID *int64
+	MovedOnTransferID    *int64
+	FromRoom             string
+	ToRoom               string
+}
+
+// The log of a folio, with what a screen shows: the folios on both ends, the first origin and the folio before, the room of each, the line, who and when. direction: out, in or all.
+func (q *Queries) ListFolioTransfers(ctx context.Context, arg ListFolioTransfersParams) ([]ListFolioTransfersRow, error) {
+	rows, err := q.db.Query(ctx, listFolioTransfers,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Direction,
+		arg.FolioID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFolioTransfersRow{}
+	for rows.Next() {
+		var i ListFolioTransfersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BatchID,
+			&i.Kind,
+			&i.IsReturn,
+			&i.Scope,
+			&i.Reason,
+			&i.BusinessDate,
+			&i.ApprovedBy,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.FromFolioID,
+			&i.FromNumber,
+			&i.ToFolioID,
+			&i.ToNumber,
+			&i.OriginFolioID,
+			&i.OriginNumber,
+			&i.PreviousFolioID,
+			&i.PreviousNumber,
+			&i.OutItemID,
+			&i.InItemID,
+			&i.OriginalItemID,
+			&i.Amount,
+			&i.ReturnsTransferID,
+			&i.Description,
+			&i.ChargeCode,
+			&i.ReturnedByTransferID,
+			&i.MovedOnTransferID,
+			&i.FromRoom,
+			&i.ToRoom,
 		); err != nil {
 			return nil, err
 		}
@@ -1679,6 +2250,72 @@ func (q *Queries) ListItemComponents(ctx context.Context, arg ListItemComponents
 	return items, nil
 }
 
+const listItemsByIDs = `-- name: ListItemsByIDs :many
+SELECT id, tenant_id, property_id, folio_id, business_date, transaction_at, service_date, transaction_type, charge_code_id, payment_id, reverses_item_id, stay_id, stay_room_id, reference_type, reference_id, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, source, reason, idempotency_key, created_at, created_by, approved_by, revenue_account_code, department_id FROM folio_items WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[]) ORDER BY id
+`
+
+type ListItemsByIDsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+func (q *Queries) ListItemsByIDs(ctx context.Context, arg ListItemsByIDsParams) ([]FolioItem, error) {
+	rows, err := q.db.Query(ctx, listItemsByIDs, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FolioItem{}
+	for rows.Next() {
+		var i FolioItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.FolioID,
+			&i.BusinessDate,
+			&i.TransactionAt,
+			&i.ServiceDate,
+			&i.TransactionType,
+			&i.ChargeCodeID,
+			&i.PaymentID,
+			&i.ReversesItemID,
+			&i.StayID,
+			&i.StayRoomID,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.Description,
+			&i.Quantity,
+			&i.UnitPrice,
+			&i.PriceMode,
+			&i.BaseAmount,
+			&i.DiscountAmount,
+			&i.NetAmount,
+			&i.RoundingAdjustment,
+			&i.ServiceChargeTotal,
+			&i.TaxTotal,
+			&i.Debit,
+			&i.Credit,
+			&i.Source,
+			&i.Reason,
+			&i.IdempotencyKey,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.ApprovedBy,
+			&i.RevenueAccountCode,
+			&i.DepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLineInstructions = `-- name: ListLineInstructions :many
 
 SELECT i.id, i.scope, i.charge_code_id, i.company_id, c.name AS company_name, cc.code AS charge_code, cc.name AS charge_code_name
@@ -1724,6 +2361,85 @@ func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstruct
 			&i.CompanyName,
 			&i.ChargeCode,
 			&i.ChargeCodeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovableItemsOfCode = `-- name: ListMovableItemsOfCode :many
+SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id FROM folio_items i
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.folio_id = $3 AND i.charge_code_id = $4 AND i.transaction_type = 'CHARGE'
+  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+ORDER BY i.id
+LIMIT $5
+`
+
+type ListMovableItemsOfCodeParams struct {
+	TenantID     int64
+	PropertyID   int64
+	FolioID      int64
+	ChargeCodeID *int64
+	RowLimit     int32
+}
+
+// The charges of a code on a folio that can still be moved: a CHARGE that nothing has reversed, in posting order.
+func (q *Queries) ListMovableItemsOfCode(ctx context.Context, arg ListMovableItemsOfCodeParams) ([]FolioItem, error) {
+	rows, err := q.db.Query(ctx, listMovableItemsOfCode,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioID,
+		arg.ChargeCodeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FolioItem{}
+	for rows.Next() {
+		var i FolioItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.FolioID,
+			&i.BusinessDate,
+			&i.TransactionAt,
+			&i.ServiceDate,
+			&i.TransactionType,
+			&i.ChargeCodeID,
+			&i.PaymentID,
+			&i.ReversesItemID,
+			&i.StayID,
+			&i.StayRoomID,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.Description,
+			&i.Quantity,
+			&i.UnitPrice,
+			&i.PriceMode,
+			&i.BaseAmount,
+			&i.DiscountAmount,
+			&i.NetAmount,
+			&i.RoundingAdjustment,
+			&i.ServiceChargeTotal,
+			&i.TaxTotal,
+			&i.Debit,
+			&i.Credit,
+			&i.Source,
+			&i.Reason,
+			&i.IdempotencyKey,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.ApprovedBy,
+			&i.RevenueAccountCode,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -1911,6 +2627,41 @@ func (q *Queries) ListPaymentsOrdered(ctx context.Context, arg ListPaymentsOrder
 			&i.MdrVatRate,
 			&i.MdrVat,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReservationGroups = `-- name: ListReservationGroups :many
+SELECT id, booking_group_id FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+`
+
+type ListReservationGroupsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+type ListReservationGroupsRow struct {
+	ID             int64
+	BookingGroupID *int64
+}
+
+func (q *Queries) ListReservationGroups(ctx context.Context, arg ListReservationGroupsParams) ([]ListReservationGroupsRow, error) {
+	rows, err := q.db.Query(ctx, listReservationGroups, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReservationGroupsRow{}
+	for rows.Next() {
+		var i ListReservationGroupsRow
+		if err := rows.Scan(&i.ID, &i.BookingGroupID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2141,6 +2892,85 @@ func (q *Queries) ListStayOpenFolios(ctx context.Context, arg ListStayOpenFolios
 	return items, nil
 }
 
+const listTransfersOfItems = `-- name: ListTransfersOfItems :many
+SELECT t.id, b.kind, b.is_return, t.from_folio_id, ff.folio_number AS from_number, t.to_folio_id, tf.folio_number AS to_number, t.origin_folio_id, ofo.folio_number AS origin_number,
+       t.previous_folio_id, t.out_item_id, t.in_item_id, t.original_item_id,
+       COALESCE(fr.room_number, '')::text AS from_room, COALESCE(tr.room_number, '')::text AS to_room, rt.id AS returned_by_transfer_id
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios ff ON ff.property_id = t.property_id AND ff.id = t.from_folio_id
+JOIN folios tf ON tf.property_id = t.property_id AND tf.id = t.to_folio_id
+JOIN folios ofo ON ofo.property_id = t.property_id AND ofo.id = t.origin_folio_id
+LEFT JOIN folio_transfers rt ON rt.property_id = t.property_id AND rt.returns_transfer_id = t.id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = ff.property_id AND sr.stay_id = ff.stay_id ORDER BY sr.id DESC LIMIT 1) fr(room_number) ON true
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = tf.property_id AND sr.stay_id = tf.stay_id ORDER BY sr.id DESC LIMIT 1) tr(room_number) ON true
+WHERE t.tenant_id = $1 AND t.property_id = $2
+  AND (t.in_item_id = ANY($3::bigint[]) OR t.out_item_id = ANY($3::bigint[]) OR t.original_item_id = ANY($3::bigint[]))
+`
+
+type ListTransfersOfItemsParams struct {
+	TenantID   int64
+	PropertyID int64
+	ItemIds    []int64
+}
+
+type ListTransfersOfItemsRow struct {
+	ID                   int64
+	Kind                 string
+	IsReturn             bool
+	FromFolioID          int64
+	FromNumber           string
+	ToFolioID            int64
+	ToNumber             string
+	OriginFolioID        int64
+	OriginNumber         string
+	PreviousFolioID      int64
+	OutItemID            int64
+	InItemID             int64
+	OriginalItemID       *int64
+	FromRoom             string
+	ToRoom               string
+	ReturnedByTransferID *int64
+}
+
+// The log rows that touch some lines of a folio, for the folio view: a line that came in, the line a transfer reversed, and its reversal.
+func (q *Queries) ListTransfersOfItems(ctx context.Context, arg ListTransfersOfItemsParams) ([]ListTransfersOfItemsRow, error) {
+	rows, err := q.db.Query(ctx, listTransfersOfItems, arg.TenantID, arg.PropertyID, arg.ItemIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransfersOfItemsRow{}
+	for rows.Next() {
+		var i ListTransfersOfItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.IsReturn,
+			&i.FromFolioID,
+			&i.FromNumber,
+			&i.ToFolioID,
+			&i.ToNumber,
+			&i.OriginFolioID,
+			&i.OriginNumber,
+			&i.PreviousFolioID,
+			&i.OutItemID,
+			&i.InItemID,
+			&i.OriginalItemID,
+			&i.FromRoom,
+			&i.ToRoom,
+			&i.ReturnedByTransferID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const paymentTotals = `-- name: PaymentTotals :many
 SELECT payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT'), 0)::numeric AS paid,
@@ -2174,6 +3004,104 @@ func (q *Queries) PaymentTotals(ctx context.Context, arg PaymentTotalsParams) ([
 	for rows.Next() {
 		var i PaymentTotalsRow
 		if err := rows.Scan(&i.PaymentMethod, &i.Paid, &i.Refunded); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchTransferTargets = `-- name: SearchTransferTargets :many
+SELECT f.id, f.folio_number, f.folio_type, f.reservation_id, f.stay_id, res.confirmation_number, res.booking_group_id,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance,
+       COALESCE(cr.room_number, '')::text AS room_number,
+       g.first_name, g.last_name, comp.name AS company_name,
+       (f.reservation_id = $1)::boolean AS same_reservation,
+       ($2::bigint IS NOT NULL AND res.booking_group_id = $2::bigint)::boolean AS same_group
+FROM folios f
+JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+LEFT JOIN companies comp ON comp.property_id = f.property_id AND comp.id = f.bill_to_company_id
+WHERE f.tenant_id = $3 AND f.property_id = $4 AND f.status = 'OPEN' AND f.stay_id IS NOT NULL AND f.id <> $5
+  AND ($6::boolean OR f.reservation_id = $1 OR ($2::bigint IS NOT NULL AND res.booking_group_id = $2::bigint))
+  AND ($7::text IS NULL
+       OR f.folio_number ILIKE $7::text || '%'
+       OR EXISTS (SELECT 1 FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                  WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id AND rm.room_number ILIKE $7::text || '%')
+       OR lower(coalesce(g.first_name, '') || ' ' || coalesce(g.last_name, '')) LIKE '%' || lower($7::text) || '%')
+ORDER BY (f.reservation_id = $1) DESC, ($2::bigint IS NOT NULL AND res.booking_group_id = $2::bigint) DESC, f.id
+LIMIT $8
+`
+
+type SearchTransferTargetsParams struct {
+	FromReservationID int64
+	FromGroupID       *int64
+	TenantID          int64
+	PropertyID        int64
+	FromFolioID       int64
+	IncludeAny        bool
+	Q                 *string
+	RowLimit          int32
+}
+
+type SearchTransferTargetsRow struct {
+	ID                 int64
+	FolioNumber        string
+	FolioType          string
+	ReservationID      int64
+	StayID             *int64
+	ConfirmationNumber string
+	BookingGroupID     *int64
+	Balance            decimal.Decimal
+	RoomNumber         string
+	FirstName          *string
+	LastName           *string
+	CompanyName        *string
+	SameReservation    bool
+	SameGroup          bool
+}
+
+// The folios a charge or a balance may be sent to, for the choice in the transfer dialog: open folios of a stay, the folios of the same reservation and of the same group first.
+// include_any adds every other open folio of the property (only for who holds folio.transfer_any). q matches the folio number, the room or the name of the guest.
+func (q *Queries) SearchTransferTargets(ctx context.Context, arg SearchTransferTargetsParams) ([]SearchTransferTargetsRow, error) {
+	rows, err := q.db.Query(ctx, searchTransferTargets,
+		arg.FromReservationID,
+		arg.FromGroupID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromFolioID,
+		arg.IncludeAny,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTransferTargetsRow{}
+	for rows.Next() {
+		var i SearchTransferTargetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FolioNumber,
+			&i.FolioType,
+			&i.ReservationID,
+			&i.StayID,
+			&i.ConfirmationNumber,
+			&i.BookingGroupID,
+			&i.Balance,
+			&i.RoomNumber,
+			&i.FirstName,
+			&i.LastName,
+			&i.CompanyName,
+			&i.SameReservation,
+			&i.SameGroup,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

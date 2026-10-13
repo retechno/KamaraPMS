@@ -31,6 +31,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/folio-items/{id}/reverse", httpx.HandlerFunc(h.reverse))
 	mux.Handle("POST "+p+"/folio-items/{id}/transfer", httpx.HandlerFunc(h.transferItem))
 	mux.Handle("PATCH "+p+"/folio-items/{id}/group", httpx.HandlerFunc(h.itemGroup))
+	h.registerTransfers(mux)
 	mux.Handle("PATCH "+p+"/payments/{id}/group", httpx.HandlerFunc(h.paymentGroup))
 	mux.Handle("GET "+p+"/payments", httpx.HandlerFunc(h.listPayments))
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))

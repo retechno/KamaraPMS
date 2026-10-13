@@ -266,13 +266,13 @@ INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price
     (tn('ABC'), pr('BALI'), 'NETT',        'Room nett',   'ROOM',    'INCLUSIVE'),
     (tn('ABC'), pr('BALI'), 'LAUNDRY',     'Laundry',     'SERVICE', 'EXCLUSIVE');
 
-SELECT expect_ok('seeding creates the ten standard charge codes once (idempotent)',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 10 THEN 1 ELSE 0 END)$q$,
+SELECT expect_ok('seeding creates the eleven standard charge codes once (idempotent)',
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 11 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 0 THEN 1 ELSE 0 END)$q$,
-    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 10 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 11 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_code_taxes WHERE property_id = pr('SG')) = 0 THEN 1 ELSE 0 END)$q$);
 SELECT expect_ok('seeding only fills gaps and leaves existing codes alone',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 7 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 8 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT NOT is_system FROM charge_codes WHERE id = cc('ROOM')) THEN 1 ELSE 0 END)$q$);
 
 INSERT INTO charge_code_taxes (tenant_id, property_id, charge_code_id, tax_id, sequence) VALUES
@@ -1926,7 +1926,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_return_lines', 'CHILD', 'of tax_returns'), ('tax_return_input_claims', 'CHILD', 'of tax_returns'),
     ('tax_invoices', 'CHILD', 'of folio_items or city_ledger_invoices'), ('tax_invoice_lines', 'CHILD', 'of tax_invoices'),
     ('tax_invoice_exports', 'CHILD', 'of tax_invoices'), ('tax_invoice_export_items', 'CHILD', 'of tax_invoices'),
-    ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets');
+    ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets'),
+    ('folio_transfers', 'CHILD', 'of folio_items');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),

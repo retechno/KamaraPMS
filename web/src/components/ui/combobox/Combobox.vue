@@ -34,6 +34,8 @@ const props = withDefaults(defineProps<{
   class?: HTMLAttributes['class']
 }>(), { openOnFocus: true })
 const model = defineModel<string | number | null>({ default: null })
+/** What the person types, as it is typed: a list too long to hold (folios, guests) asks the server for the options that match and puts them in `options`. */
+const emit = defineEmits<{ search: [query: string] }>()
 
 // What the person typed since the list opened. The text in the field is not it: a chosen value puts its label there, and a list narrowed by that label would show only the chosen option.
 const query = ref('')
@@ -66,6 +68,7 @@ watch(open, (value) => {
 })
 const onInput = (e: Event): void => {
   query.value = (e.target as HTMLInputElement).value
+  emit('search', query.value)
 }
 </script>
 
@@ -80,8 +83,8 @@ const onInput = (e: Event): void => {
           :display-value="labelOf"
           :placeholder="placeholder ?? selected?.label"
           autocomplete="off"
+          :class="cn('h-9 w-full min-w-0 rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive', selected ? 'placeholder:text-foreground' : 'placeholder:text-muted-foreground')"
           @input="onInput"
-          class="h-9 w-full min-w-0 rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground outline-none placeholder:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive"
         />
         <ComboboxTrigger class="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground" :aria-label="t('common.search')" tabindex="-1">
           <ChevronsUpDown class="size-4" aria-hidden="true" />

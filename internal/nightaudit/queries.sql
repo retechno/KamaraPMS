@@ -113,7 +113,7 @@ WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.service_da
 SELECT c.charge_type, sum(i.net_amount)::numeric AS net, sum(i.service_charge_total)::numeric AS service, sum(i.tax_total)::numeric AS tax
 FROM folio_items i JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_date = @bd::date
-  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type <> 'TRANSFER' -- a balance handed to another folio is not revenue
 GROUP BY c.charge_type
 ORDER BY c.charge_type;
 

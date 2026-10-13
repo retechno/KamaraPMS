@@ -83,6 +83,25 @@ func (q *Queries) AccountBalances(ctx context.Context, arg AccountBalancesParams
 	return items, nil
 }
 
+const accountJournalNet = `-- name: AccountJournalNet :one
+SELECT COALESCE(sum(l.debit - l.credit), 0)::numeric AS net
+FROM gl_journal_lines l JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3
+`
+
+type AccountJournalNetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+}
+
+func (q *Queries) AccountJournalNet(ctx context.Context, arg AccountJournalNetParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, accountJournalNet, arg.TenantID, arg.PropertyID, arg.AccountID)
+	var net decimal.Decimal
+	err := row.Scan(&net)
+	return net, err
+}
+
 const ancestorIDs = `-- name: AncestorIDs :many
 WITH RECURSIVE up AS (
     SELECT g.id, g.parent_id, 1 AS depth FROM gl_accounts g WHERE g.property_id = $1 AND g.id = $2
@@ -1260,7 +1279,7 @@ SELECT u.kind, u.id, u.code, u.name, u.is_active, u.gl_account_code,
        a.id AS account_id, a.is_active AS account_active, a.is_postable AS account_postable, a.account_type
 FROM (
     SELECT 'CHARGE_CODE'::text AS kind, c.id, c.code, c.name, c.is_active, c.gl_account_code FROM charge_codes c
-    WHERE c.tenant_id = $1 AND c.property_id = $2
+    WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.charge_type <> 'TRANSFER' -- TRF has no account of its own: its account is the system key FOLIO_TRANSFER
     UNION ALL
     SELECT 'TAX', t.id, t.code, t.name, t.is_active, t.gl_account_code FROM taxes t
     WHERE t.tenant_id = $1 AND t.property_id = $2
@@ -1825,7 +1844,7 @@ const seedRetainedEarningsMap = `-- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, $1
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = $2 AND a.property_id = $3
 ON CONFLICT (property_id, map_key) DO NOTHING
 `
@@ -1865,6 +1884,27 @@ func (q *Queries) SetAccountMap(ctx context.Context, arg SetAccountMapParams) er
 		arg.ActorID,
 	)
 	return err
+}
+
+const transferLinesNet = `-- name: TransferLinesNet :one
+SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS net
+FROM folio_items i JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND c.charge_type = 'TRANSFER' AND i.business_date <= $3::date
+`
+
+type TransferLinesNetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+// The transfers of a balance between folios hand the same amount from one folio to another with the same business date, so what the lines of the code TRF come to is zero, and so is the balance of
+// the account that receives them. These two reads are the check of that: the lines of the code up to a date, and what the journals say of the account.
+func (q *Queries) TransferLinesNet(ctx context.Context, arg TransferLinesNetParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, transferLinesNet, arg.TenantID, arg.PropertyID, arg.AsOf)
+	var net decimal.Decimal
+	err := row.Scan(&net)
+	return net, err
 }
 
 const trialBalanceRows = `-- name: TrialBalanceRows :many

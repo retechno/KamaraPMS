@@ -31,6 +31,8 @@ const (
 	TypeService      = "SERVICE"
 	TypeFee          = "FEE"
 	TypeOther        = "OTHER"
+	// TypeTransfer is the charge type of the system code TRF, the balance handed from one folio to another (docs/architecture/30-group-folio.md). It is not a type a person can choose.
+	TypeTransfer = "TRANSFER"
 
 	ModeExclusive = "EXCLUSIVE"
 	ModeInclusive = "INCLUSIVE"

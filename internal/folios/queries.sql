@@ -96,10 +96,12 @@ INSERT INTO folio_items (
     @base_amount, @discount_amount, @net_amount, @rounding_adjustment, @service_charge_total, @tax_total, @debit, @credit,
     @source, sqlc.narg(reason), sqlc.narg(idempotency_key), sqlc.narg(actor_id), sqlc.narg(approved_by),
     -- The revenue account in force now; a reversal copies the account of the item it reverses, and so does the copy a transfer charges on the target folio (copies_item_id).
+    -- The transfer of a balance names the account of the system key FOLIO_TRANSFER in force now (revenue_account_override); the code TRF has none of its own.
+    COALESCE(sqlc.narg(revenue_account_override)::varchar,
     CASE WHEN COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint) IS NOT NULL
          THEN (SELECT o.revenue_account_code FROM folio_items o WHERE o.property_id = @property_id AND o.id = COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint))
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
-    END,
+    END),
     -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
     -- a reversal copies the department of the item it reverses.
     CASE WHEN COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint) IS NOT NULL
@@ -401,3 +403,145 @@ SELECT status, no_show_at, reservation_id FROM reservation_rooms WHERE tenant_id
 -- name: GetChargeCodeByCode :one
 SELECT id, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id AND code = @code;
 
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Transfers between folios (docs/architecture/30-group-folio.md, part B)
+
+-- The code TRF and the account of the system key FOLIO_TRANSFER.
+-- name: GetTransferChargeCode :one
+SELECT id, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id AND code = 'TRF' AND charge_type = 'TRANSFER';
+
+-- name: GetTransferAccount :one
+SELECT a.code, a.is_active, a.is_postable, a.account_type
+FROM gl_account_map m JOIN gl_accounts a ON a.property_id = m.property_id AND a.id = m.account_id
+WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.map_key = 'FOLIO_TRANSFER';
+
+-- The charge type of a charge code (a TRANSFER line is moved back by a return, never by a transfer of charges, a reversal or an adjustment).
+-- name: GetChargeTypeOfCode :one
+SELECT charge_type FROM charge_codes WHERE property_id = @property_id AND id = @id;
+
+-- name: ListItemsByIDs :many
+SELECT * FROM folio_items WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]) ORDER BY id;
+
+-- The charges of a code on a folio that can still be moved: a CHARGE that nothing has reversed, in posting order.
+-- name: ListMovableItemsOfCode :many
+SELECT i.* FROM folio_items i
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.folio_id = @folio_id AND i.charge_code_id = @charge_code_id AND i.transaction_type = 'CHARGE'
+  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+ORDER BY i.id
+LIMIT @row_limit;
+
+-- name: ListReservationGroups :many
+SELECT id, booking_group_id FROM reservations WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
+
+-- name: InsertTransferBatch :one
+INSERT INTO folio_transfer_batches (tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @kind, @is_return, @from_folio_id, @to_folio_id, @scope, @reason, @business_date, @approved_by, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: InsertTransfer :one
+INSERT INTO folio_transfers (tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id)
+VALUES (@tenant_id, @property_id, @batch_id, @from_folio_id, @to_folio_id, @out_item_id, @in_item_id, sqlc.narg(original_item_id), @amount, @origin_folio_id, @previous_folio_id, sqlc.narg(returns_transfer_id))
+RETURNING *;
+
+-- name: GetTransferByInItem :one
+SELECT * FROM folio_transfers WHERE property_id = @property_id AND in_item_id = @item_id;
+
+-- name: GetTransferByOriginalItem :one
+SELECT * FROM folio_transfers WHERE property_id = @property_id AND original_item_id = @item_id;
+
+-- name: GetTransfer :one
+SELECT * FROM folio_transfers WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetTransferReturnedBy :one
+SELECT id FROM folio_transfers WHERE property_id = @property_id AND returns_transfer_id = @transfer_id;
+
+-- name: GetTransferBatch :one
+SELECT * FROM folio_transfer_batches WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetTransferBatchByKey :one
+SELECT * FROM folio_transfer_batches WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @key;
+
+-- name: ListBatchTransfers :many
+SELECT * FROM folio_transfers WHERE property_id = @property_id AND batch_id = @batch_id ORDER BY id;
+
+-- The log of a folio, with what a screen shows: the folios on both ends, the first origin and the folio before, the room of each, the line, who and when. direction: out, in or all.
+-- name: ListFolioTransfers :many
+SELECT t.id, t.batch_id, b.kind, b.is_return, b.scope, b.reason, b.business_date, b.approved_by, b.created_by, b.created_at,
+       t.from_folio_id, ff.folio_number AS from_number, t.to_folio_id, tf.folio_number AS to_number,
+       t.origin_folio_id, ofo.folio_number AS origin_number, t.previous_folio_id, pf.folio_number AS previous_number,
+       t.out_item_id, t.in_item_id, t.original_item_id, t.amount, t.returns_transfer_id,
+       COALESCE(oi.description, ii.description)::text AS description, COALESCE(oc.code, ic.code)::text AS charge_code,
+       rt.id AS returned_by_transfer_id, nx.id AS moved_on_transfer_id, COALESCE(fr.room_number, '')::text AS from_room, COALESCE(tr.room_number, '')::text AS to_room
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios ff ON ff.property_id = t.property_id AND ff.id = t.from_folio_id
+JOIN folios tf ON tf.property_id = t.property_id AND tf.id = t.to_folio_id
+JOIN folios ofo ON ofo.property_id = t.property_id AND ofo.id = t.origin_folio_id
+JOIN folios pf ON pf.property_id = t.property_id AND pf.id = t.previous_folio_id
+JOIN folio_items ii ON ii.property_id = t.property_id AND ii.id = t.in_item_id
+LEFT JOIN charge_codes ic ON ic.property_id = ii.property_id AND ic.id = ii.charge_code_id
+LEFT JOIN folio_items oi ON oi.property_id = t.property_id AND oi.id = t.original_item_id
+LEFT JOIN charge_codes oc ON oc.property_id = oi.property_id AND oc.id = oi.charge_code_id
+LEFT JOIN folio_transfers rt ON rt.property_id = t.property_id AND rt.returns_transfer_id = t.id
+LEFT JOIN folio_transfers nx ON nx.property_id = t.property_id AND nx.original_item_id = t.in_item_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = ff.property_id AND sr.stay_id = ff.stay_id ORDER BY sr.id DESC LIMIT 1) fr(room_number) ON true
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = tf.property_id AND sr.stay_id = tf.stay_id ORDER BY sr.id DESC LIMIT 1) tr(room_number) ON true
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id
+  AND ((@direction::text IN ('out', 'all') AND t.from_folio_id = @folio_id) OR (@direction::text IN ('in', 'all') AND t.to_folio_id = @folio_id))
+ORDER BY t.id DESC
+LIMIT @row_limit;
+
+-- The log rows that touch some lines of a folio, for the folio view: a line that came in, the line a transfer reversed, and its reversal.
+-- name: ListTransfersOfItems :many
+SELECT t.id, b.kind, b.is_return, t.from_folio_id, ff.folio_number AS from_number, t.to_folio_id, tf.folio_number AS to_number, t.origin_folio_id, ofo.folio_number AS origin_number,
+       t.previous_folio_id, t.out_item_id, t.in_item_id, t.original_item_id,
+       COALESCE(fr.room_number, '')::text AS from_room, COALESCE(tr.room_number, '')::text AS to_room, rt.id AS returned_by_transfer_id
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios ff ON ff.property_id = t.property_id AND ff.id = t.from_folio_id
+JOIN folios tf ON tf.property_id = t.property_id AND tf.id = t.to_folio_id
+JOIN folios ofo ON ofo.property_id = t.property_id AND ofo.id = t.origin_folio_id
+LEFT JOIN folio_transfers rt ON rt.property_id = t.property_id AND rt.returns_transfer_id = t.id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = ff.property_id AND sr.stay_id = ff.stay_id ORDER BY sr.id DESC LIMIT 1) fr(room_number) ON true
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = tf.property_id AND sr.stay_id = tf.stay_id ORDER BY sr.id DESC LIMIT 1) tr(room_number) ON true
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id
+  AND (t.in_item_id = ANY(@item_ids::bigint[]) OR t.out_item_id = ANY(@item_ids::bigint[]) OR t.original_item_id = ANY(@item_ids::bigint[]));
+
+-- The folios a charge or a balance may be sent to, for the choice in the transfer dialog: open folios of a stay, the folios of the same reservation and of the same group first.
+-- include_any adds every other open folio of the property (only for who holds folio.transfer_any). q matches the folio number, the room or the name of the guest.
+-- name: SearchTransferTargets :many
+SELECT f.id, f.folio_number, f.folio_type, f.reservation_id, f.stay_id, res.confirmation_number, res.booking_group_id,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance,
+       COALESCE(cr.room_number, '')::text AS room_number,
+       g.first_name, g.last_name, comp.name AS company_name,
+       (f.reservation_id = @from_reservation_id)::boolean AS same_reservation,
+       (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint)::boolean AS same_group
+FROM folios f
+JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+LEFT JOIN companies comp ON comp.property_id = f.property_id AND comp.id = f.bill_to_company_id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND f.stay_id IS NOT NULL AND f.id <> @from_folio_id
+  AND (@include_any::boolean OR f.reservation_id = @from_reservation_id OR (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint))
+  AND (sqlc.narg(q)::text IS NULL
+       OR f.folio_number ILIKE sqlc.narg(q)::text || '%'
+       OR EXISTS (SELECT 1 FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                  WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id AND rm.room_number ILIKE sqlc.narg(q)::text || '%')
+       OR lower(coalesce(g.first_name, '') || ' ' || coalesce(g.last_name, '')) LIKE '%' || lower(sqlc.narg(q)::text) || '%')
+ORDER BY (f.reservation_id = @from_reservation_id) DESC, (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint) DESC, f.id
+LIMIT @row_limit;
+
+-- The room and the guest of a folio, for the line "from FOLxxx, room N".
+-- name: GetFolioPlace :one
+SELECT COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name
+FROM folios f
+JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id = @id;
+
+-- name: GetUserName :one
+SELECT full_name FROM users WHERE id = @id;

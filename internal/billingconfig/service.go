@@ -397,8 +397,8 @@ func (s *Service) ListChargeCodes(ctx context.Context, propertyID, afterID int64
 	if err != nil {
 		return nil, err
 	}
-	if f.ChargeType != nil && !chargeTypes[*f.ChargeType] {
-		return nil, apperr.Invalid("the filter is invalid", fieldErr("charge_type", "INVALID_VALUE", "ROOM, FOOD_BEVERAGE, SERVICE, FEE or OTHER"))
+	if f.ChargeType != nil && !chargeTypes[*f.ChargeType] && *f.ChargeType != TypeTransfer {
+		return nil, apperr.Invalid("the filter is invalid", fieldErr("charge_type", "INVALID_VALUE", "ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER or TRANSFER"))
 	}
 	rows, err := s.q(ctx).ListChargeCodes(ctx, billingconfigdb.ListChargeCodesParams{
 		TenantID: p.TenantID, PropertyID: propertyID, AfterID: afterID, Active: f.Active, ChargeType: f.ChargeType, RowLimit: rowLimit(limit),
@@ -522,6 +522,9 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 		if err != nil {
 			return err
 		}
+		if before.ChargeType == TypeTransfer {
+			return errTransferCodeLocked()
+		}
 		in := ChargeCodeInput{Code: before.Code, Name: before.Name, ChargeType: before.ChargeType, PriceMode: before.PriceMode, GLAccountCode: glString(before.GLAccountCode), DepartmentID: before.DepartmentID, IsActive: before.IsActive}
 		if before.DefaultUnitPrice != nil {
 			in.DefaultUnitPrice = *before.DefaultUnitPrice
@@ -602,6 +605,9 @@ func (s *Service) ReplaceRules(ctx context.Context, propertyID, chargeCodeID int
 		before, err := s.loadChargeCode(ctx, p.TenantID, propertyID, chargeCodeID)
 		if err != nil {
 			return err
+		}
+		if before.ChargeType == TypeTransfer {
+			return errTransferCodeLocked()
 		}
 
 		// Share-lock what is being mapped so it cannot be deactivated concurrently.
@@ -785,4 +791,10 @@ func (s *Service) checkDepartment(ctx context.Context, tenantID, propertyID int6
 		return nil
 	}
 	return s.depts.Check(ctx, tenantID, propertyID, *id, "department_id")
+}
+
+// errTransferCodeLocked: the code TRF is the one the transfer of a balance between folios posts. It has no tax and no service charge (nothing may be mapped to it, so the charge engine returns
+// no component), keeps its name, type and state, and its account is the system key FOLIO_TRANSFER of the account mapping, not a field of the code.
+func errTransferCodeLocked() *apperr.Error {
+	return apperr.Conflict("SYSTEM_CHARGE_CODE_LOCKED", "the transfer code TRF cannot be changed: it has no tax or service charge, and its account is the system account FOLIO_TRANSFER")
 }

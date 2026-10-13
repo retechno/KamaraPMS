@@ -98,8 +98,9 @@ ORDER BY 1, k.rate;
 
 -- What was charged on a folio, with its taxes and service charges (payments excluded).
 -- name: FolioCharged :one
-SELECT COALESCE(sum(debit - credit), 0)::numeric AS charged FROM folio_items
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id AND transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL');
+SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS charged FROM folio_items i
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.folio_id = @folio_id AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+  AND NOT EXISTS (SELECT 1 FROM charge_codes c WHERE c.property_id = i.property_id AND c.id = i.charge_code_id AND c.charge_type = 'TRANSFER'); -- a balance handed to another folio is not a supply
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Coverage of the VAT collected

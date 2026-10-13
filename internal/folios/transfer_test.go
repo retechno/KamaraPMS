@@ -219,6 +219,11 @@ func TestMigration00062Down(t *testing.T) {
 	cf := p.companyFolio(t, "FC1")
 	_, err := p.move(p.charge(t, p.guestFolio, "k1"), cf)
 	must(t, err)
+	// 00074 refuses first: the log of transfers has this one in it. Emptied (as a fixture; the log is append only), the way down goes on to 00062.
+	if _, err := migrate.DownTo(ctx, p.Pool, 61); err == nil || !strings.Contains(err.Error(), "transfer(s) are in the log") {
+		t.Fatalf("00074 must refuse while the log has a transfer: %v", err)
+	}
+	must(t, p.Exec(t, `TRUNCATE folio_transfers, folio_transfer_batches`))
 	if _, err := migrate.DownTo(ctx, p.Pool, 61); err == nil || !strings.Contains(err.Error(), "transferred folio items exist") {
 		t.Fatalf("the way down must be refused: %v", err)
 	}

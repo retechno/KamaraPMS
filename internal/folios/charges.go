@@ -284,6 +284,18 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 		case TypeReversal:
 			return apperr.Conflict("ITEM_NOT_REVERSIBLE", "a reversal cannot be reversed")
 		}
+		if err := s.refuseTransferLine(ctx, propertyID, item.ChargeCodeID); err != nil {
+			return err
+		}
+		// the copy a transfer made is not reversed: it goes back with a return, which keeps the log, the first origin and the money in step
+		if _, err := q.GetTransferByInItem(ctx, foliosdb.GetTransferByInItemParams{PropertyID: propertyID, ItemID: itemID}); err == nil {
+			if _, err := q.GetReversalOf(ctx, foliosdb.GetReversalOfParams{PropertyID: propertyID, ItemID: &itemID}); err == nil {
+				return apperr.Conflict("ALREADY_REVERSED", "the item has already been reversed")
+			}
+			return apperr.Conflict("TRANSFER_COPY_USE_RETURN", "a charge that came from another folio is sent back with a return, not reversed").WithContext("item_id", itemID)
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		if !item.BusinessDate.Equal(day.BusinessDate) {
 			return apperr.Conflict("CORRECTION_REQUIRES_ADJUSTMENT", "only an item posted on the current business date can be reversed: post an adjustment instead").
 				WithContext("business_date", item.BusinessDate)

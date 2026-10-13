@@ -871,7 +871,7 @@ SELECT c.id AS charge_code_id, c.code, c.name, c.charge_type, i.revenue_account_
        sum(i.service_charge_total)::numeric AS service, sum(i.tax_total)::numeric AS tax, sum(i.debit - i.credit)::numeric AS total
 FROM folio_items i JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.business_date BETWEEN $3::date AND $4::date
-  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL')
+  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type <> 'TRANSFER' -- a balance handed to another folio is not revenue
 GROUP BY c.id, c.code, c.name, c.charge_type, i.revenue_account_code
 ORDER BY c.charge_type, c.code, i.revenue_account_code NULLS FIRST
 `

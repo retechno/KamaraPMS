@@ -1757,7 +1757,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse an item posted on the current business date (folio.reverse, needs approval)
-         * @description Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`).
+         * @description Debit and credit are swapped and every signed column and component is negated. A payment is voided instead (409 `USE_PAYMENT_CORRECTION`); an item of an earlier date is corrected with an adjustment (409 `CORRECTION_REQUIRES_ADJUSTMENT`); an item is reversed once (409 `ALREADY_REVERSED`). A line of the transfer code `TRF` is not reversed (409 `FOLIO_TRANSFER_INVALID`), and neither is the copy a transfer made on the target folio (409 `TRANSFER_COPY_USE_RETURN`): it goes back with a return, from the folio it left.
          */
         post: operations["reverseFolioItem"];
         delete?: never;
@@ -1787,6 +1787,137 @@ export interface paths {
          *     409 `FOLIO_TRANSFER_INVALID` for another reservation, the same folio, the deposit folio, or an item that is not a charge; 409 `FOLIO_CLOSED` for a closed folio.
          */
         post: operations["transferFolioItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/transfer-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move several charges, or every charge of one charge code, to another folio in one go (folio.reverse, needs approval)
+         * @description `{id}` is the folio the charges leave. Give `item_ids` (at most 200) or one `charge_code_id` (every charge of the code that can still move, found after the locks), not both. One reason, one approval,
+         *     one transaction: if one charge cannot move, none does (409 `FOLIO_TRANSFER_INVALID` with the ids in `context.item_ids`; one reversed item asked alone is 409 `ALREADY_REVERSED`).
+         *     Each charge is reversed on its folio and charged again on the target as a copy of the original, so the entries net to zero in every account and department.
+         *
+         *     Where it may go (`scope` of the answer): `RESERVATION` (a folio of the same reservation), `GROUP_MEMBER` (a reservation of the same booking group), or `ANY` (any other open folio of the property), which needs
+         *     **`folio.transfer_any` on the person and on the approver** (403 `PERMISSION_DENIED`, 403 `APPROVAL_NOT_PERMITTED`). Both folios must be OPEN (409 `FOLIO_CLOSED`, with `folio_id` and `folio_number`) and the target must
+         *     belong to a stay. A line of the code TRF is not moved as a charge: it goes back with a return.
+         *     422 `TOO_MANY_ITEMS` (more than 200); 409 `TRANSFER_SELECTION_EMPTY` (the code has nothing to move).
+         */
+        post: operations["transferFolioItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/transfer-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand part of the balance of a folio to another folio (folio.reverse, always needs approval)
+         * @description Two lines of the system charge code `TRF`: an adjustment (a credit) on `{id}` and a charge (a debit) on the target. The code has no tax and no service charge (the charge engine finds none for it) and
+         *     its account is the system key `FOLIO_TRANSFER` (409 `TRANSFER_ACCOUNT_NOT_MAPPED` when it is not mapped); the account comes to zero at every day close. It is not revenue. Revenue and tax stay on the folio
+         *     the balance leaves: **a tax invoice in the name of the payer needs the charges moved, not the balance.** The amount cannot be more than the balance of `{id}` read after the lock (409 `TRANSFER_EXCEEDS_BALANCE`).
+         *     Scope and permissions as for the transfer of charges. **Idempotent**: the same `Idempotency-Key` and request returns the transfer (200, `replayed`); another request under it is 422 `IDEMPOTENCY_KEY_REUSED`.
+         *     A transfer of a balance is sent back with a return, to the folio it left.
+         */
+        post: operations["transferFolioBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/transfers/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send back what earlier transfers moved, one or many at once (folio.reverse, always needs approval)
+         * @description `{id}` is the folio that holds what the transfers moved: each transfer brought it here and nothing moved it on (409 `FOLIO_TRANSFER_INVALID` otherwise). `to` is the folio each charge came from last (`PREVIOUS`)
+         *     or the first folio it came from (`ORIGIN`, charges only; a balance goes back to the folio it left). The mechanism is the transfer's own (reversal and copy for a charge, the opposite pair of `TRF` lines for a balance);
+         *     each return is a new transfer that says which one it undoes. A transfer is returned once (409 `ALREADY_RETURNED`). Both folios must be OPEN: a closed one is 409 `FOLIO_CLOSED`, named in the context.
+         *     The way back is `ANY` when the two folios have nothing in common, and then needs `folio.transfer_any` as the transfer does.
+         */
+        post: operations["returnFolioTransfers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The transfers of a folio (folio.read)
+         * @description `direction` is `out` (what left the folio: the screen "Show what was transferred"), `in` (what came in) or `all`. Each row says the folios on both ends, the **first origin** and the folio just before, where the charge
+         *     is now (`current`: it may have moved on, the end of its chain), the transfer that brought it there (`head_transfer_id`, the one to return) and whether it can be sent back now (`returnable`).
+         */
+        get: operations["listFolioTransfers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/transfer-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The folios a charge or a balance of this folio may be sent to (folio.reverse)
+         * @description At most 25 open folios of a stay, those of the same reservation and of the same booking group first. Every other open folio of the property is listed only to a person who holds `folio.transfer_any`.
+         *     `q` matches the folio number, the room or the name of the guest. Each says its `scope`.
+         */
+        get: operations["listTransferTargets"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4990,7 +5121,7 @@ export interface paths {
         };
         /**
          * The accounts the system posts to (accounting.view)
-         * @description The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
+         * @description The system keys: CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS (what a payment method is received into; QRIS has its own clearing account, 1155 in the standard chart), FOLIO_TRANSFER (the intermediary account of the transfers of a balance between folios, 1215 in the standard chart: it comes to zero at every day close), CITY_LEDGER and GUEST_LEDGER (the receivables), ADVANCE_DEPOSITS (deposits held until check-out), TAX_PAYABLE and SERVICE_PAYABLE (tax and service charge with no account of their own) and SUSPENSE (anything that cannot be placed). Every key always has an account.
          */
         get: operations["getGlAccountMap"];
         /**
@@ -7562,8 +7693,11 @@ export interface components {
          * @example 250000
          */
         Amount: string;
-        /** @enum {string} */
-        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER";
+        /**
+         * @description TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue.
+         * @enum {string}
+         */
+        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER" | "TRANSFER";
         /**
          * @description Whether a price excludes or already contains the mapped service charges and taxes.
          * @enum {string}
@@ -8885,6 +9019,159 @@ export interface components {
             created_by?: number | null;
             /** Format: int64 */
             approved_by?: number | null;
+            /** @description The mark of a line that a transfer between folios made or moved (null for any other line). */
+            transfer: components["schemas"]["ItemTransfer"] | null;
+        };
+        FolioRef: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** @description The room of the stay of the folio. */
+            room?: string;
+        };
+        /** @description The mark of a line that a transfer between folios made or moved. `role` is `IN` (the line came from another folio), `OUT` (the credit of a balance, or the reversal of a moved charge) or `ORIGINAL` (the charge that was moved). `hidden` says the line is one half of a correction that sums to zero: the folio screen shows it only when asked. */
+        ItemTransfer: {
+            /** Format: int64 */
+            transfer_id: number;
+            /** @enum {string} */
+            role: "IN" | "OUT" | "ORIGINAL";
+            /** @enum {string} */
+            kind: "ITEM" | "BALANCE";
+            is_return: boolean;
+            hidden: boolean;
+            from: components["schemas"]["FolioRef"];
+            to: components["schemas"]["FolioRef"];
+            origin: components["schemas"]["FolioRef"];
+            returned: boolean;
+        };
+        TransferItemsRequest: {
+            /**
+             * Format: int64
+             * @description The folio the charges go to.
+             */
+            folio_id: number;
+            item_ids?: number[];
+            /**
+             * Format: int64
+             * @description Every charge of this code that can still move.
+             */
+            charge_code_id?: number;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        TransferBalanceRequest: {
+            /**
+             * Format: int64
+             * @description The folio that takes the balance.
+             */
+            folio_id: number;
+            /** @description A positive amount, at most the balance of the folio it leaves. */
+            amount: string;
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        ReturnTransfersRequest: {
+            transfer_ids: number[];
+            /** @enum {string} */
+            to: "PREVIOUS" | "ORIGIN";
+            reason: string;
+            approval: components["schemas"]["Approval"];
+        };
+        TransferredItem: {
+            /** Format: int64 */
+            transfer_id: number;
+            /** Format: int64 */
+            from_folio_id: number;
+            /** Format: int64 */
+            to_folio_id: number;
+            /**
+             * Format: int64
+             * @description The charge that was moved (null for a balance).
+             */
+            original_item_id: number | null;
+            /**
+             * Format: int64
+             * @description The reversal on the folio it left (or the credit of a balance).
+             */
+            out_item_id: number;
+            /**
+             * Format: int64
+             * @description The copy on the folio it went to (or the debit of a balance).
+             */
+            in_item_id: number;
+            amount: string;
+        };
+        TransferResult: {
+            /** Format: int64 */
+            batch_id: number;
+            /** @enum {string} */
+            kind: "ITEM" | "BALANCE";
+            /** @enum {string} */
+            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "ANY" | "RETURN";
+            transfers: components["schemas"]["TransferredItem"][];
+            balances: {
+                /** Format: int64 */
+                folio_id: number;
+                balance: string;
+            }[];
+            replayed: boolean;
+        };
+        FolioTransfer: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            batch_id: number;
+            /** @enum {string} */
+            kind: "ITEM" | "BALANCE";
+            is_return: boolean;
+            /** @enum {string} */
+            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "ANY" | "RETURN";
+            reason: string;
+            business_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            created_at: string;
+            by: string;
+            approved_by: string;
+            from: components["schemas"]["FolioRef"];
+            to: components["schemas"]["FolioRef"];
+            origin: components["schemas"]["FolioRef"];
+            previous: components["schemas"]["FolioRef"];
+            amount: string;
+            description: string;
+            charge_code?: string;
+            /** Format: int64 */
+            original_item_id: number | null;
+            /** Format: int64 */
+            in_item_id: number;
+            /** Format: int64 */
+            out_item_id: number;
+            /** Format: int64 */
+            returns_transfer_id: number | null;
+            /** Format: int64 */
+            returned_by_transfer_id: number | null;
+            /** @description Where the charge is now. */
+            current: components["schemas"]["FolioRef"] | null;
+            /**
+             * Format: int64
+             * @description The transfer that brought the charge to where it is now: the one to return.
+             */
+            head_transfer_id: number;
+            /** @description The folio the charge came from last: where a return to the previous folio sends it. */
+            head_previous: components["schemas"]["FolioRef"] | null;
+            returnable: boolean;
+        };
+        TransferTarget: {
+            /** Format: int64 */
+            id: number;
+            folio_number: string;
+            folio_type: string;
+            confirmation_number: string;
+            room?: string;
+            guest?: string;
+            company?: string;
+            balance: string;
+            /** @enum {string} */
+            scope: "RESERVATION" | "GROUP_MEMBER" | "ANY";
         };
         FolioTotals: {
             debit: string;
@@ -16409,6 +16696,180 @@ export interface operations {
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    transferFolioItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferItemsRequest"];
+            };
+        };
+        responses: {
+            /** @description What moved, and the balance of the folios. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    transferFolioBalance: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferBalanceRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer was made before; this is its result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResult"];
+                };
+            };
+            /** @description The transfer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    returnFolioTransfers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnTransfersRequest"];
+            };
+        };
+        responses: {
+            /** @description What went back. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    listFolioTransfers: {
+        parameters: {
+            query?: {
+                direction?: "out" | "in" | "all";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfers, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FolioTransfer"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listTransferTargets: {
+        parameters: {
+            query?: {
+                /** @description Folio number */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransferTarget"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     setFolioItemGroup: {

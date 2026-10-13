@@ -77,6 +77,7 @@ const (
 	PermFolioReverse           Permission = "folio.reverse"
 	PermFolioPostAfterCheckout Permission = "folio.post_after_checkout"
 	PermFolioReopen            Permission = "folio.reopen"
+	PermFolioTransferAny       Permission = "folio.transfer_any"
 
 	PermPaymentPost   Permission = "payment.post"
 	PermPaymentVoid   Permission = "payment.void"
@@ -173,6 +174,7 @@ var Catalogue = []PermissionInfo{
 	{PermFolioReverse, "Billing", "Reverse same-day postings and move a charge to another folio", "M9"},
 	{PermFolioPostAfterCheckout, "Billing", "Post late charges after check-out", "M9"},
 	{PermFolioReopen, "Billing", "Reopen closed folios", "M9"},
+	{PermFolioTransferAny, "Billing", "Transfer charges and balances to a folio that has nothing to do with the reservation or its group (an approver who holds it too is needed)", "S3"},
 
 	{PermPaymentPost, "Billing", "Take payments and deposits", "M9"},
 	{PermPaymentVoid, "Billing", "Void same-day payments", "M9"},
