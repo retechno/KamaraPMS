@@ -212,6 +212,7 @@ export const id: Messages = {
     left: '{n} tersisa',
     all: 'Semua',
     noArrivals: 'Tidak ada lagi tamu yang akan tiba hari ini.',
+    nothingAttention: 'Tidak ada yang perlu diperhatikan',
     noDepartures: 'Tidak ada lagi tamu yang akan berangkat hari ini.',
     noRoomYet: 'Belum ada kamar',
     balance: 'saldo',

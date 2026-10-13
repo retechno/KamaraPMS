@@ -213,6 +213,7 @@ export const en = {
     left: '{n} left',
     all: 'All',
     noArrivals: 'No one is left to arrive today.',
+    nothingAttention: 'Nothing needs attention',
     noDepartures: 'No one is left to leave today.',
     noRoomYet: 'No room yet',
     balance: 'balance',

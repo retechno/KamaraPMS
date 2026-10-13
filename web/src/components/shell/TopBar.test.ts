@@ -18,10 +18,10 @@ const clock = (over: object = {}) => ({
 const mounted: VueWrapper[] = []
 const body = <T extends Element = HTMLElement>(sel: string): T | null => document.body.querySelector<T>(sel)
 
-async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[] } = {}) {
+async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[] } = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: NAV_PERMISSIONS }] } as never
+  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? NAV_PERMISSIONS }] } as never
   const property = usePropertyStore()
   property.loaded = true
   property.properties = (opts.properties ?? [{ id: 7, code: 'BALI', name: 'Bali' }, { id: 8, code: 'LOMBOK', name: 'Lombok' }]) as never
@@ -103,6 +103,16 @@ describe('TopBar', () => {
       expect(chip.text()).toContain('30 Sep 2026')
       const late = await mountBar({ clock: clock({ property_local_time: '2026-10-01T01:10:00+07:00' }) })
       expect(late.w.get('[data-testid=business-date]').text()).toContain('local')
+    })
+
+    it('shows the date to who may not run night audit: a plain chip, no dot, no state, no link', async () => {
+      const { w } = await mountBar({ permissions: ['housekeeping.read'] })
+      const chip = w.get('[data-testid=business-date]')
+      expect(chip.text()).toContain('30 Sep 2026')
+      expect(chip.attributes('href')).toBeUndefined()
+      expect(chip.element.tagName).toBe('DIV')
+      expect(w.find('[data-testid=night-audit-status]').exists()).toBe(false)
+      expect(chip.find('span.rounded-full').exists()).toBe(false)
     })
 
     it('says whether night audit is ready, overdue or later, inside the chip', async () => {

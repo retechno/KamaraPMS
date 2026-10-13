@@ -29,7 +29,7 @@ const columns = computed<Column<Control>[]>(() => [
   { key: 'title', label: t('accounting.rcAccount'), card: 'primary' },
   { key: 'ledger', label: t('accounting.rcBooks'), align: 'right', format: 'money' as const },
   { key: 'source', label: t('accounting.rcFolios'), align: 'right', format: 'money' as const },
-  { key: 'difference', label: t('accounting.rcDifference'), align: 'right', format: 'money' as const, card: 'money' },
+  { key: 'difference', label: t('accounting.rcDifference'), align: 'right', format: 'money' as const },
 ])
 
 /** The name and the explanation of a row are in the language of the page, by the code of the row; the English text of the server is only the fallback for a code this page does not know. */

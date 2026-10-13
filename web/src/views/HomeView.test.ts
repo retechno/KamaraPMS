@@ -538,6 +538,17 @@ describe('HomeView, Today', () => {
       }
     })
 
+    it('says so when nothing needs attention, once it has loaded', async () => {
+      world.arrivals = [arrival(1)]
+      world.accounts = []
+      const other = await mountToday(['reservation.read'], { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: false })
+      expect(other.get('[data-testid=col-attention-empty]').text()).toBe('Nothing needs attention')
+      expect(other.find('[data-testid=col-attention] li').exists()).toBe(false)
+      mounted?.unmount()
+      const busy = await mountToday(FRONT)
+      expect(busy.find('[data-testid=col-attention-empty]').exists()).toBe(false)
+    })
+
     it('shows five items at most', async () => {
       const w = await mountToday()
       expect(w.get('[data-testid=col-attention]').findAll('li').length).toBeLessThanOrEqual(5)
