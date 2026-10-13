@@ -197,7 +197,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),
 			TaxTotal: fixed(r.TaxTotal, decimals), Debit: fixed(r.Debit, decimals), Credit: fixed(r.Credit, decimals), Components: cs,
 			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, GroupCode: r.GroupCode, Reason: deref(r.Reason),
-			RoomNumber: deref(r.RoomNumber), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
+			RoomNumber: r.RoomNumber, StayID: stayShown(r.StayID, r.GuestName), GuestName: r.GuestName, CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
 		}
 	}
 	return out, nil
@@ -227,11 +227,20 @@ func (s *Service) loadFolio(ctx context.Context, tenantID, propertyID int64, f f
 			return Folio{}, err
 		}
 	}
-	return Folio{
+	out := Folio{
 		ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, BillToCompanyName: company, Status: f.Status, ReservationID: f.ReservationID, StayID: f.StayID,
-		OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
+		BookingGroupID: f.BookingGroupID, OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
 		Totals: Totals{Debit: fixed(totals.Debit, decimals), Credit: fixed(totals.Credit, decimals)}, Items: items,
-	}, nil
+	}
+	if f.BookingGroupID != nil {
+		g, err := s.q(ctx).GetBookingGroupBrief(ctx, foliosdb.GetBookingGroupBriefParams{TenantID: tenantID, PropertyID: propertyID, ID: *f.BookingGroupID})
+		if err != nil {
+			return Folio{}, err
+		}
+		out.BookingGroupCode, out.BookingGroupName = g.Code, g.Name
+		out.BookingGroupContactName, out.BookingGroupContactEmail, out.BookingGroupContactPhone = deref(g.ContactName), deref(g.ContactEmail), deref(g.ContactPhone)
+	}
+	return out, nil
 }
 
 // itemView loads one item (by id) with its components.
@@ -286,7 +295,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 		return FolioList{}, err
 	}
 	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
-		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, Status: nullable(f.Status),
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), Status: nullable(f.Status),
 		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {
@@ -316,7 +325,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 	}
 	out.Data = make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
+		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Balance, decimals)}
 	}
 	return out, nil
@@ -325,7 +334,11 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 // CloseFolio closes a folio whose balance is zero (folio.post_charge). It is for folios that never got a stay
 // (cancelled or no-show reservations): a folio linked to an OPEN stay closes with the check-out.
 func (s *Service) CloseFolio(ctx context.Context, propertyID, id int64, version int32) (Folio, error) {
-	p, err := s.actor(ctx, propertyID, auth.PermFolioPostCharge)
+	perm := auth.PermFolioPostCharge
+	if pre, err := s.q(ctx).GetFolio(ctx, foliosdb.GetFolioParams{TenantID: tenantOf(ctx), PropertyID: propertyID, ID: id}); err == nil && pre.FolioType == FolioTypeMaster {
+		perm = auth.PermFolioMasterClose // the bill of a whole group is not closed by every cashier
+	}
+	p, err := s.actor(ctx, propertyID, perm)
 	if err != nil {
 		return Folio{}, err
 	}
@@ -347,6 +360,11 @@ func (s *Service) CloseFolio(ctx context.Context, propertyID, id int64, version 
 		}
 		if err := requireOpen(f); err != nil {
 			return err
+		}
+		if f.FolioType == FolioTypeMaster {
+			if err := s.requireMasterCanClose(ctx, p.TenantID, propertyID, f); err != nil {
+				return err
+			}
 		}
 		if f.StayID != nil {
 			status, err := s.q(ctx).GetStayStatus(ctx, foliosdb.GetStayStatusParams{PropertyID: propertyID, ID: *f.StayID})
@@ -380,4 +398,21 @@ func (s *Service) CloseFolio(ctx context.Context, propertyID, id int64, version 
 		return err
 	})
 	return out, err
+}
+
+// tenantOf is the tenant of the caller, 0 when there is none (a read that then finds nothing).
+func tenantOf(ctx context.Context) int64 {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return 0
+	}
+	return p.TenantID
+}
+
+// stayShown is the stay of a line as the view gives it: only on the master folio of a group (where the query names the guest), because on the folio of a stay every line has the stay of the folio.
+func stayShown(stay *int64, guest string) *int64 {
+	if guest == "" {
+		return nil
+	}
+	return stay
 }

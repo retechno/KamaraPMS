@@ -26,6 +26,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
@@ -45,7 +46,9 @@ const busy = ref(false)
 const open = ref<number | null>(null) // item whose components are shown
 
 const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'BANK_TRANSFER', 'OTHER', 'QRIS']
-const charge = reactive({ codeId: 0, quantity: '1', unitPrice: '', description: '' })
+const charge = reactive({ codeId: 0, quantity: '1', unitPrice: '', description: '', stayId: 0 })
+// The guests a charge on the master folio can be posted for: the rooms of the group that have a guest in them now.
+const memberStays = ref<{ stayId: number; label: string }[]>([])
 const payment = reactive({ amount: '', method: 'CASH' as PaymentMethod, reference: '' })
 const adjust = reactive({ codeId: 0, amount: '', reason: '' })
 const transfer = reactive({ companyId: 0, amount: '', reference: '' })
@@ -116,15 +119,46 @@ async function load(): Promise<void> {
     if (!adjustCodes.value.some((c) => c.id === adjust.codeId)) adjust.codeId = adjustCodes.value[0]?.id ?? 0
     await loadCompanies(propertyId)
     await loadSiblings(propertyId)
+    await loadRouteNote(propertyId)
+    await loadMemberStays(propertyId)
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+
+// The folio of a member of a group says where the room charges go, from the room of its stay (the master folio of the group, or the guest's own folio).
+const routeNote = ref('')
+async function loadRouteNote(propertyId: number): Promise<void> {
+  routeNote.value = ''
+  const f = folio.value
+  if (!f || f.stay_id === null || f.reservation_id === null || f.folio_type !== 'GUEST' || !can('reservation.read')) return
+  try {
+    const stay = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: f.stay_id } } })
+    const line = stay.data?.line?.id
+    if (!line) return
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/routing', { params: { path: { propertyId, id: f.reservation_id, lineId: line } } })
+    routeNote.value = data && 'room' in data ? routingText(data) : ''
+  } catch {
+    routeNote.value = '' // a note: the folio itself still works
+  }
+}
+
+async function loadMemberStays(propertyId: number): Promise<void> {
+  memberStays.value = []
+  const f = folio.value
+  if (!f || f.folio_type !== 'MASTER' || !f.booking_group_id || f.status !== 'OPEN' || !can('reservation.read')) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/groups/{id}/routing', { params: { path: { propertyId, id: f.booking_group_id as number } } })
+    memberStays.value = (data && Array.isArray(data.lines) ? data.lines : []).filter((l) => l.stay_id).map((l) => ({ stayId: l.stay_id as number, label: [l.room_number, l.guest_name].filter(Boolean).join(' · ') || l.confirmation_number }))
+  } catch {
+    memberStays.value = [] // the choice is an extra: the charge can still be posted
   }
 }
 
 async function loadSiblings(propertyId: number): Promise<void> {
   siblings.value = []
   const f = folio.value
-  if (!f || f.status !== 'OPEN' || !can('folio.reverse')) return
+  if (!f || f.status !== 'OPEN' || !can('folio.reverse') || f.reservation_id === null) return
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', { params: { path: { propertyId }, query: { reservation_id: f.reservation_id, status: 'OPEN', limit: 50 } } })
     siblings.value = (data?.data ?? []).filter((s) => s.id !== f.id && s.stay_id !== null)
@@ -171,10 +205,11 @@ async function run(name: string, action: () => Promise<unknown>): Promise<boolea
 const postCharge = () => run('charge', async () => {
   await api.POST('/api/v1/properties/{propertyId}/folios/{id}/charges', {
     params: { ...base(), header: { 'Idempotency-Key': keyFor('charge') } },
-    body: { charge_code_id: charge.codeId, quantity: charge.quantity, unit_price: charge.unitPrice || undefined, description: charge.description || undefined },
+    body: { charge_code_id: charge.codeId, quantity: charge.quantity, unit_price: charge.unitPrice || undefined, description: charge.description || undefined, stay_id: charge.stayId > 0 ? charge.stayId : undefined },
   })
   charge.unitPrice = ''
   charge.description = ''
+  charge.stayId = 0
   notice.value = t('folio.noticeCharge')
 })
 
@@ -385,6 +420,13 @@ const baseItems = computed(() =>
   (folio.value?.items ?? []).filter((i) => (codeFilter.value <= 0 || i.charge_code_id === codeFilter.value) && (showCorrections.value || !i.transfer?.hidden)),
 )
 const shownItems = computed(() => baseItems.value.filter((i) => shownGroup.value === 'ALL' || i.group_code === shownGroup.value))
+// The folios the charges of this one went to, when the table is empty only because the corrections of the transfers are hidden: "nothing was posted" would be wrong.
+const movedAway = computed(() => {
+  if (shownItems.value.length || showCorrections.value || codeFilter.value > 0 || shownGroup.value !== 'ALL') return []
+  const seen = new Map<number, { id: number; number: string }>()
+  for (const i of folio.value?.items ?? []) if (i.transfer?.hidden && i.transfer.role === 'OUT') seen.set(i.transfer.to.id, i.transfer.to)
+  return [...seen.values()]
+})
 const groupCount = (g: string) => baseItems.value.filter((i) => i.group_code === g).length
 // A reversal is shown with the line it reverses: it moves with it and is not moved alone.
 const groupable = (i: FolioItem) => isOpen.value && can('folio.post_charge') && i.transaction_type !== 'REVERSAL'
@@ -408,11 +450,15 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <PageHeader :title="`${t('folio.title')}${folio ? ` ${folio.folio_number}` : ''}`">
     <template v-if="folio" #marks>
       <StatusBadge domain="record" :status="folio.status" data-testid="folio-status" />
+      <Badge v-if="folio.folio_type === 'MASTER'" variant="outline" data-testid="folio-master">{{ t('groupMaster.masterFolioOf', { group: `${folio.booking_group_code} · ${folio.booking_group_name}` }) }}</Badge>
       <Badge v-if="folio.bill_to_company_name" variant="outline" data-testid="folio-company">{{ t('billingInstructions.folioFor', { company: folio.bill_to_company_name }) }}</Badge>
     </template>
     <template #actions>
-      <Button v-if="folio" as-child variant="outline" size="sm">
+      <Button v-if="folio && folio.reservation_id !== null" as-child variant="outline" size="sm">
         <RouterLink :to="`/reservations/${folio.reservation_id}`">{{ t('folio.reservation') }}</RouterLink>
+      </Button>
+      <Button v-else-if="folio && folio.booking_group_id !== null" as-child variant="outline" size="sm">
+        <RouterLink :to="`/groups/${folio.booking_group_id}`" data-testid="group-link">{{ t('groupMaster.masterFolioOf', { group: folio.booking_group_code ?? '' }) }}</RouterLink>
       </Button>
       <Button as-child variant="outline" size="sm">
         <RouterLink to="/folios">{{ t('folio.foliosLink') }}</RouterLink>
@@ -422,6 +468,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
   <ErrorNotice :error="error" :inline="!folio" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
+  <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t('groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>
   <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
   <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">{{ t('folio.noAccess') }}</p>
 
@@ -441,7 +489,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ $money(folio.balance) }}</span></p>
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button v-if="isOpen && can('folio.post_charge') && !folio.stay_id" variant="outline" size="sm" :disabled="busy" data-testid="close" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
+        <Button v-if="isOpen && !folio.stay_id && (folio.folio_type === 'MASTER' ? can('folio.master_close') : can('folio.post_charge'))" variant="outline" size="sm" data-testid="close" :disabled="busy || (folio.folio_type === 'MASTER' && Number(folio.balance) !== 0)" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
         <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
         <NativeSelect v-if="canPrint" v-model="printGroup" class="w-auto" name="print_group" data-testid="print-group" :aria-label="t('folio.printGroup')">
           <option value="ALL">{{ t('folio.groupAll') }}</option>
@@ -472,7 +520,16 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <label class="ml-auto inline-flex items-center gap-2 text-sm"><input v-model="showCorrections" type="checkbox" name="show_corrections" class="size-4 accent-primary" data-testid="show-corrections" />{{ t('folioTransfer.showCorrections') }}</label>
       <Button type="button" :variant="showTransferred ? 'default' : 'outline'" size="sm" :aria-pressed="showTransferred" data-testid="show-transferred" @click="showTransferred = !showTransferred">{{ t('folioTransfer.showTransferred') }}</Button>
     </div>
-    <ul v-if="copyNotes.length" class="m-0 mb-2 grid list-none gap-1 p-0 text-sm text-muted-foreground" data-testid="copy-notes">
+    <details v-if="copyNotes.length > 1" class="mb-2 text-sm text-muted-foreground" data-testid="copy-notes-summary">
+      <summary class="cursor-pointer" data-testid="copy-notes-toggle">{{ t('folioTransfer.copyNoteMany', { n: copyNotes.reduce((n, c) => n + c.n, 0), folios: copyNotes.length }) }}</summary>
+      <ul class="m-0 mt-1 grid max-h-64 list-none gap-1 overflow-y-auto p-0 pl-3" data-testid="copy-notes">
+        <li v-for="c in copyNotes" :key="c.from.id" :data-testid="`copy-note-${c.from.id}`">
+          <RouterLink :to="`/folios/${c.from.id}`" class="text-primary hover:underline">{{ c.from.number }}</RouterLink> · {{ t('folioTransfer.copyNoteLines', { n: c.n }) }}
+        </li>
+      </ul>
+      <p class="m-0 mt-1 text-xs">{{ t('folioTransfer.copyNoteHow') }}</p>
+    </details>
+    <ul v-else-if="copyNotes.length" class="m-0 mb-2 grid list-none gap-1 p-0 text-sm text-muted-foreground" data-testid="copy-notes">
       <li v-for="c in copyNotes" :key="c.from.id" :data-testid="`copy-note-${c.from.id}`">
         {{ t('folioTransfer.copyNoteHead', { n: c.n }) }}
         <RouterLink :to="`/folios/${c.from.id}`" class="text-primary hover:underline">{{ c.from.number }}</RouterLink>.
@@ -503,10 +560,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             v-if="card && transferable(i)" type="checkbox" class="mr-2 size-4 align-middle accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
           />
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ transferText(i) }}</button>
+          <div v-if="folio?.folio_type === 'MASTER' && (i.room_number || i.guest_name) && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`whose-${i.id}`">
+            {{ [i.room_number ? t('folioTransfer.room', { room: i.room_number }) : '', i.guest_name].filter(Boolean).join(' · ') }}
+          </div>
           <small class="ml-1 text-muted-foreground">{{ i.charge_code === 'TRF' ? t('folioTransfer.trfType') : statusText(i.transaction_type) }}</small>
           <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
             {{ t('folioTransfer.fromFolio') }}
-            <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
+            <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room && folio?.folio_type !== 'MASTER'"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
             <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
           </div>
           <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
@@ -539,7 +599,20 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <li v-for="c in i.components" :key="`${c.component_type}-${c.sequence}`">{{ t('folio.componentLine', { name: c.name, rate: c.rate, base: $money(c.base_amount), amount: $money(c.amount) }) }}</li>
           </ul>
         </template>
-        <template #empty><EmptyState :description="t('emptyState.folioItems')" :title="t('folio.nothing')" data-testid="empty" /></template>
+        <template #empty>
+          <div v-if="movedAway.length" class="flex flex-col items-center gap-2 py-8 text-center text-sm" data-testid="all-moved">
+            <p class="m-0 font-medium">{{ t('folioTransfer.allMoved') }}</p>
+            <p class="m-0 text-muted-foreground">
+              {{ t('folioTransfer.allMovedTo') }}
+              <template v-for="(f, i) in movedAway" :key="f.id"><template v-if="i">, </template><RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`moved-to-${f.id}`">{{ f.number }}</RouterLink></template>
+            </p>
+            <div class="flex flex-wrap justify-center gap-2">
+              <Button type="button" variant="outline" size="sm" data-testid="all-moved-show-corrections" @click="showCorrections = true">{{ t('folioTransfer.showCorrections') }}</Button>
+              <Button type="button" variant="outline" size="sm" data-testid="all-moved-show-transferred" @click="showTransferred = true">{{ t('folioTransfer.showTransferred') }}</Button>
+            </div>
+          </div>
+          <EmptyState v-else :description="t('emptyState.folioItems')" :title="t('folio.nothing')" data-testid="empty" />
+        </template>
       </DataTable>
     </Card>
 
@@ -609,6 +682,14 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                 </FormField>
                 <FormField :label="t('folio.description')">
                   <template #default="{ id }"><Input :id="id" v-model="charge.description" name="description" /></template>
+                </FormField>
+                <FormField v-if="memberStays.length" :label="t('groupMaster.chargeFor')" :error="fieldError('stay_id')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model.number="charge.stayId" name="charge_stay" data-testid="charge-stay">
+                      <option :value="0">{{ t('groupMaster.chargeForNone') }}</option>
+                      <option v-for="m in memberStays" :key="m.stayId" :value="m.stayId">{{ m.label }}</option>
+                    </NativeSelect>
+                  </template>
                 </FormField>
               </div>
               <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.postCharge') }}</Button></div>

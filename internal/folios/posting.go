@@ -66,16 +66,18 @@ type itemSpec struct {
 	reversesItemID  *int64
 	copiesItemID    *int64 // a transfer's new charge: the revenue account and the department of this item are copied
 	stayRoomID      *int64
-	source          string // MANUAL when empty
-	referenceType   *string
-	referenceID     *string
-	serviceDate     civil.Date
-	description     string
-	amounts         itemAmounts
-	reason          *string
-	key             *string
-	approvedBy      *int64
-	components      []foliosdb.InsertFolioItemComponentParams
+	// stayID is the stay the line belongs to when it is not the stay of the folio: a room night routed to the master folio of a group (no stay) is still the night of a stay.
+	stayID        *int64
+	source        string // MANUAL when empty
+	referenceType *string
+	referenceID   *string
+	serviceDate   civil.Date
+	description   string
+	amounts       itemAmounts
+	reason        *string
+	key           *string
+	approvedBy    *int64
+	components    []foliosdb.InsertFolioItemComponentParams
 	// revenueAccount names the account of the item when it is not the account of its charge code: the code TRF has none, its account is the system key FOLIO_TRANSFER.
 	revenueAccount *string
 }
@@ -93,7 +95,7 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 	item, err := q.InsertFolioItem(ctx, foliosdb.InsertFolioItemParams{
 		TenantID: ps.p.TenantID, PropertyID: ps.propertyID, FolioID: ps.folio.ID, BusinessDate: ps.bd, TransactionAt: ps.at,
 		ServiceDate: spec.serviceDate, TransactionType: spec.transactionType, ChargeCodeID: spec.chargeCodeID, PaymentID: spec.paymentID,
-		ReversesItemID: spec.reversesItemID, CopiesItemID: spec.copiesItemID, StayID: ps.folio.StayID, StayRoomID: spec.stayRoomID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
+		ReversesItemID: spec.reversesItemID, CopiesItemID: spec.copiesItemID, StayID: stayOf(spec.stayID, ps.folio.StayID), StayRoomID: spec.stayRoomID, ReferenceType: spec.referenceType, ReferenceID: spec.referenceID,
 		Description: spec.description, Quantity: a.quantity, UnitPrice: a.unitPrice, PriceMode: a.priceMode, BaseAmount: a.base,
 		DiscountAmount: a.discount, NetAmount: a.net, RoundingAdjustment: a.rounding, ServiceChargeTotal: a.service, TaxTotal: a.tax,
 		Debit: a.debit, Credit: a.credit, Source: sourceOf(spec.source), Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
@@ -173,6 +175,7 @@ type chargeCmd struct {
 	reason                     *string // what a fee is charged for (audit F-08); nil for a plain charge
 	referenceType, referenceID *string
 	room                       *int64 // set only by RoomPoster: the stay segment of the night, which makes it a room charge
+	stayID                     *int64 // set with room: the stay of the night
 }
 
 // postCharge posts a manual charge. Its breakdown comes only from the charge calculation service. A ROOM
@@ -214,6 +217,7 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 		transactionType: TypeCharge, chargeCodeID: &id, serviceDate: cmd.serviceDate, description: desc, amounts: amountsOf(b),
 		key: nullable(cmd.key), components: componentsOf(b), reason: cmd.reason, referenceType: cmd.referenceType, referenceID: cmd.referenceID,
 	}
+	spec.stayID = cmd.stayID
 	if cmd.room != nil {
 		spec.stayRoomID, spec.source = cmd.room, "ROOM_POSTING"
 	}
@@ -347,4 +351,12 @@ func (ps posting) reverseAs(ctx context.Context, orig foliosdb.FolioItem, reason
 	}
 	err = q.FlipPostingRegister(ctx, foliosdb.FlipPostingRegisterParams{PropertyID: ps.propertyID, ItemID: orig.ID, ReversalItemID: &item.ID})
 	return item, err
+}
+
+// stayOf is the stay a ledger line is stamped with: the one the posting names (a room night routed to a folio of no stay), else the stay of the folio.
+func stayOf(named, folio *int64) *int64 {
+	if named != nil {
+		return named
+	}
+	return folio
 }

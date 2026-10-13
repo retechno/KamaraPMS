@@ -132,7 +132,7 @@ func (s *Service) Members(ctx context.Context, propertyID, id int64) ([]Member, 
 	out := make([]Member, len(rows))
 	for i, r := range rows {
 		out[i] = Member{
-			ReservationID: r.ID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, GuestName: r.GuestName, CompanyID: r.CompanyID,
+			ReservationID: r.ID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, DisplayStatus: r.DisplayStatus, GuestName: r.GuestName, CompanyID: r.CompanyID,
 			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, RoomCount: int(r.RoomCount),
 		}
 	}

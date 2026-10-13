@@ -43,6 +43,35 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = '
   AND COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0) <> 0
 ORDER BY f.id;
 
+-- OPEN master folios of groups whose rooms are all over (checked out, cancelled or no-show), with their balance: the group has left and its bill is still open. A room that stays out of the master
+-- (folio_group_routing_exclusions) is not waited for: it puts nothing on the master.
+-- name: ListOpenMastersOfGoneGroups :many
+SELECT f.id AS folio_id, f.folio_number, g.code AS group_code, g.name AS group_name,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance
+FROM folios f
+JOIN booking_groups g ON g.property_id = f.property_id AND g.id = f.booking_group_id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND f.folio_type = 'MASTER'
+  AND EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+              WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id)
+  AND NOT EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+                  WHERE l.property_id = f.property_id AND r.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+                    AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = l.id))
+ORDER BY f.id;
+
+-- Groups whose instructions send charges to a master folio that is closed (or was never opened), with the rooms in house they apply to: those nights go to the guest folios, and the audit says so.
+-- name: ListClosedMastersWithRoutes :many
+SELECT g.id AS group_id, g.code AS group_code, g.name AS group_name, COALESCE(m.id, 0)::bigint AS folio_id, COALESCE(m.folio_number, '')::text AS folio_number, count(DISTINCT s.id)::int AS stays
+FROM booking_groups g
+LEFT JOIN folios m ON m.property_id = g.property_id AND m.booking_group_id = g.id AND m.folio_type = 'MASTER'
+JOIN reservations r ON r.property_id = g.property_id AND r.booking_group_id = g.id
+JOIN reservation_rooms rr ON rr.property_id = r.property_id AND rr.reservation_id = r.id
+JOIN stays s ON s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN'
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
+WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND (m.id IS NULL OR m.status <> 'OPEN') AND x.reservation_room_id IS NULL
+  AND EXISTS (SELECT 1 FROM group_billing_instructions i WHERE i.property_id = g.property_id AND i.booking_group_id = g.id)
+GROUP BY g.id, g.code, g.name, m.id, m.folio_number
+ORDER BY g.id;
+
 -- name: ListBlocksEndingAt :many
 SELECT b.id AS block_id, b.block_type, r.room_number, b.end_date
 FROM room_blocks b JOIN rooms r ON r.property_id = b.property_id AND r.id = b.room_id

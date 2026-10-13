@@ -150,6 +150,20 @@ func TestReservationsJoinTheGroup(t *testing.T) {
 		t.Fatalf("group %+v members %+v", g2, members)
 	}
 
+	// the status staff see is the one of the reservation screens: the header stays CONFIRMED while a room is in house
+	if members[0].DisplayStatus != "CONFIRMED" {
+		t.Fatalf("display status of a reserved member: %s", members[0].DisplayStatus)
+	}
+	must(t, f.Exec(t, `UPDATE reservation_rooms SET status = 'CHECKED_IN' WHERE reservation_id = $1`, r.ID))
+	if members, err = f.Groups.Members(f.admin, f.propID, g.ID); err != nil || members[0].Status != "CONFIRMED" || members[0].DisplayStatus != "IN_HOUSE" {
+		t.Fatalf("a room in house: %+v %v", members[0], err)
+	}
+	must(t, f.Exec(t, `UPDATE reservation_rooms SET status = 'COMPLETED' WHERE reservation_id = $1`, r.ID))
+	if members, err = f.Groups.Members(f.admin, f.propID, g.ID); err != nil || members[0].DisplayStatus != "CHECKED_OUT" {
+		t.Fatalf("a room that left: %+v %v", members[0], err)
+	}
+	must(t, f.Exec(t, `UPDATE reservation_rooms SET status = 'CONFIRMED' WHERE reservation_id = $1`, r.ID))
+
 	// list filters
 	byGroup, err := f.Res.List(f.admin, f.propID, reservations.ListFilter{GroupID: &g.ID}, 10)
 	must(t, err)

@@ -256,13 +256,19 @@ watch(pid, () => {
         </div>
       </StepCard>
 
-      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || preview.warnings.blocks_ending.length" class="mb-4" data-testid="warnings">
+      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length" class="mb-4" data-testid="warnings">
         <CardHeader><CardTitle>{{ t('nightAudit.warnings') }} <small class="font-normal text-muted-foreground">{{ t('nightAudit.warningsNote') }}</small></CardTitle></CardHeader>
         <CardContent>
           <ul class="m-0 pl-5 text-sm">
             <li v-for="d in preview.warnings.stale_drafts" :key="d.reservation_room_id">{{ t('nightAudit.staleDraft', { number: d.confirmation_number, date: $date(d.arrival_date) }) }}</li>
             <li v-for="f in preview.warnings.open_folios_of_cancelled_reservations" :key="f.folio_id">
               {{ t('nightAudit.openFolioBefore') }} <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> {{ t('nightAudit.openFolioAfter', { number: f.confirmation_number, balance: $money(f.balance) }) }}
+            </li>
+            <li v-for="c in preview.warnings.group_masters_closed ?? []" :key="c.group_id" :data-testid="`closed-master-${c.group_id}`">
+              {{ c.folio_number ? t('groupMaster.warnMasterClosed', { group: c.group_code, folio: c.folio_number, n: c.stays }) : t('groupMaster.warnMasterMissing', { group: c.group_code, n: c.stays }) }}
+            </li>
+            <li v-for="m in preview.warnings.open_group_masters ?? []" :key="m.folio_id" :data-testid="`open-master-${m.folio_id}`">
+              {{ t('groupMaster.warnOpen', { group: m.group_code, folio: m.folio_number, balance: $money(m.balance) }) }} <RouterLink :to="`/folios/${m.folio_id}`">{{ m.folio_number }}</RouterLink>
             </li>
             <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: $date(b.end_date) }) }}</li>
           </ul>

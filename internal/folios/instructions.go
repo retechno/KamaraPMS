@@ -240,7 +240,7 @@ func (s *Service) ensureCompanyFolios(ctx context.Context, p auth.Principal, pro
 		if err != nil {
 			return nil, err
 		}
-		f, err := q.InsertCompanyFolio(ctx, foliosdb.InsertCompanyFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: reservationID, StayID: &stayID,
+		f, err := q.InsertCompanyFolio(ctx, foliosdb.InsertCompanyFolioParams{TenantID: p.TenantID, PropertyID: propertyID, FolioNumber: number, ReservationID: &reservationID, StayID: &stayID,
 			CompanyID: &company, ActorID: p.ActorID()})
 		if err != nil {
 			return nil, err

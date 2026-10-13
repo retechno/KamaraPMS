@@ -15,13 +15,14 @@ const minibar = { id: 9, code: 'MINIBAR', name: 'Minibar', charge_type: 'FOOD_BE
 const room = { id: 1, code: 'ROOM', name: 'Room', charge_type: 'ROOM', is_active: true }
 const roomRule = { scope: 'ROOM', charge_code_id: null, company_id: 4, company_name: 'Acme Corp' }
 
-function mountSection(rules: object[], editable = true) {
+function mountSection(rules: object[], editable = true, routing: object | null = null) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['reservation.read', 'reservation.update'] }] } as never
   usePropertyStore().currentId = 7
   GET = vi.fn((path: string) => {
     if (path.endsWith('/billing-instructions')) return Promise.resolve({ data: { instructions: rules } })
+    if (path.endsWith('/routing')) return Promise.resolve({ data: routing })
     if (path.endsWith('/companies')) return Promise.resolve({ data: { data: [acme] } })
     return Promise.resolve({ data: { data: [room, minibar] } })
   })
@@ -40,6 +41,16 @@ describe('BillingInstructions', () => {
     await flushPromises()
     expect(GET.mock.calls[0]).toEqual(['/api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/billing-instructions', { params: { path: { propertyId: 7, id: 9, lineId: 3 } } }])
     expect(w.get('[data-testid=instructions-none-3]').text()).toContain('billed to the guest')
+  })
+
+  it('says where the room charges go when the group of the room has a master folio', async () => {
+    const group = { id: 4, code: 'GRP1', name: 'Conference', master_folio_id: 30, master_folio_number: 'FOL000030', master_status: 'OPEN' }
+    const w = mountSection([], true, { room: 'GROUP', excluded: false, group, group_instructions: [{ scope: 'ROOM', charge_code_id: null }] })
+    await flushPromises()
+    expect(w.get('[data-testid=routing-note-3]').text()).toBe('These charges go to the master folio FOL000030 of group GRP1: room charges.')
+    const alone = mountSection([], true, { room: 'NONE', excluded: false, group: null, group_instructions: [] })
+    await flushPromises()
+    expect(alone.find('[data-testid=routing-note-3]').exists()).toBe(false)
   })
 
   it('lists who pays what', async () => {

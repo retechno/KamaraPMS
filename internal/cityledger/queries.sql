@@ -25,11 +25,12 @@ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id = @id;
 -- Transfers of one company, oldest first, with the folio, reservation and booker they came from.
 -- name: ListTransfers :many
 SELECT p.id, p.payment_number, p.business_date, p.amount, p.status, p.reference_number,
-       f.folio_number, r.confirmation_number,
+       f.folio_number, COALESCE(r.confirmation_number, bg.code, '')::text AS confirmation_number,
        COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || g.last_name), ''), '')::text AS guest_name
 FROM payments p
 JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
-JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
 LEFT JOIN guests g ON g.tenant_id = r.tenant_id AND g.id = r.guest_id
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.company_id = @company_id AND p.payment_type = 'PAYMENT'
 ORDER BY p.business_date, p.id;
@@ -74,8 +75,14 @@ RETURNING *;
 SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
        COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = p.property_id AND a.payment_id = p.id AND a.status = 'POSTED'
                   AND NOT EXISTS (SELECT 1 FROM city_ledger_adjustment_invoices x WHERE x.property_id = a.property_id AND x.adjustment_id = a.id AND x.released_at IS NULL)), 0)::numeric AS credited,
-       f.folio_number, r.confirmation_number,
-       COALESCE(s.stay_number, '')::text AS stay_number, COALESCE(s.status, '')::text AS stay_status,
+       f.folio_number, COALESCE(r.confirmation_number, bg.code, '')::text AS confirmation_number,
+       COALESCE(s.stay_number, '')::text AS stay_number,
+       -- a transfer from the master folio of a group has no stay: it can be invoiced once every room of the group is over (the same "has left" the guest's check-out says for a folio of a stay)
+       (CASE WHEN f.folio_type = 'MASTER' THEN (CASE WHEN EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations lr ON lr.property_id = l.property_id AND lr.id = l.reservation_id
+                                                                     WHERE l.property_id = f.property_id AND lr.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+                                                                       AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = l.id))
+                                                 THEN 'OPEN' ELSE 'CHECKED_OUT' END)
+             ELSE COALESCE(s.status, '') END)::text AS stay_status,
        s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
        COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
        COALESCE((SELECT string_agg(ro.room_number, ', ' ORDER BY sr.start_business_date, sr.id)
@@ -83,7 +90,8 @@ SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
                  WHERE sr.property_id = s.property_id AND sr.stay_id = s.id), '')::text AS room_numbers
 FROM payments p
 JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
-JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
 LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
 LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.company_id = @company_id
@@ -127,7 +135,7 @@ RETURNING *;
 
 -- name: ListInvoiceLines :many
 SELECT p.id AS payment_id, p.payment_number, p.business_date, l.amount, p.reference_number,
-       f.folio_number, r.confirmation_number,
+       f.folio_number, COALESCE(r.confirmation_number, bg.code, '')::text AS confirmation_number,
        COALESCE(s.stay_number, '')::text AS stay_number,
        s.arrival_date AS arrival_date, s.departure_date AS departure_date, s.actual_check_out_at AS checked_out_at,
        COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
@@ -137,7 +145,8 @@ SELECT p.id AS payment_id, p.payment_number, p.business_date, l.amount, p.refere
 FROM city_ledger_invoice_lines l
 JOIN payments p ON p.property_id = l.property_id AND p.id = l.payment_id
 JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
-JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
 LEFT JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
 LEFT JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.invoice_id = @invoice_id

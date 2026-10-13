@@ -618,3 +618,37 @@ func TestACompanyFolioHasTheCompanyAsBuyer(t *testing.T) {
 	}
 	eq(t, "VAT", inv.VATAmount, "30000")
 }
+
+// The master folio of a group (docs/architecture/30-group-folio.md 5.4): with a company the company is the buyer, as for a COMPANY folio; with none the tax invoice is blocked, whatever buyer the
+// request names, until the rule on who the buyer is has been given (the tax consultant); nothing is invented.
+func TestTheTaxInvoiceOfAMasterFolioNeedsTheCompanyOfTheGroup(t *testing.T) {
+	f := setup(t, true)
+	var group int64
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO booking_groups (tenant_id, property_id, code, name, arrival_date, departure_date) VALUES ($1, $2, 'GRP1', 'Conference', '2026-09-30', '2026-10-02') RETURNING id`, f.tenantID, f.propID).Scan(&group))
+	opened, err := f.Folios.OpenMaster(f.admin, f.propID, group)
+	must(t, err)
+	master := opened.Master.ID
+	unit := "200000"
+	_, err = f.Folios.PostCharge(f.admin, f.propID, master, "c1", folios.ChargeInput{ChargeCodeID: f.restaurant, Quantity: "1", UnitPrice: &unit})
+	must(t, err)
+	_, err = f.Folios.PostPayment(f.admin, f.propID, master, "p1", folios.PaymentInput{Amount: "220000", PaymentMethod: "CARD"})
+	must(t, err)
+	info, err := f.Folios.GetFolio(f.admin, f.propID, master)
+	must(t, err)
+	_, err = f.Folios.CloseFolio(f.admin, f.propID, master, info.Version)
+	must(t, err)
+
+	buyer := &taxinvoice.Party{Name: "Dewi Lestari", NPWP: "3171.0123.4567.8901", Address: "Jl. Melati 5"}
+	_, err = f.TaxInvoice.Issue(f.admin, f.propID, taxinvoice.IssueInput{SourceType: taxinvoice.SourceFolio, FolioID: master, Buyer: buyer}, "m1")
+	if !has(blockerCodes(t, err), "MASTER_FOLIO_NO_COMPANY") {
+		t.Fatalf("a master with no company is not invoiced, whatever buyer is named: %v", err)
+	}
+	// the group is given a company: the folio of a master closed by mistake is reopened, not replaced; here the company is put on it by the database, as the opening of a master of a group with a company does
+	must(t, f.Exec(t, `UPDATE folios SET bill_to_company_id = $1 WHERE id = $2`, f.acme.ID, master))
+	inv, err := f.TaxInvoice.Issue(f.admin, f.propID, taxinvoice.IssueInput{SourceType: taxinvoice.SourceFolio, FolioID: master}, "m2")
+	must(t, err)
+	if inv.Buyer.Name != "ACME Ltd" || inv.FolioNumber != opened.Master.FolioNumber {
+		t.Fatalf("the company is the buyer: %+v", inv)
+	}
+	eq(t, "VAT", inv.VATAmount, "20000")
+}

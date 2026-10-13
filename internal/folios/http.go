@@ -32,6 +32,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/folio-items/{id}/transfer", httpx.HandlerFunc(h.transferItem))
 	mux.Handle("PATCH "+p+"/folio-items/{id}/group", httpx.HandlerFunc(h.itemGroup))
 	h.registerTransfers(mux)
+	h.registerMaster(mux)
 	mux.Handle("PATCH "+p+"/payments/{id}/group", httpx.HandlerFunc(h.paymentGroup))
 	mux.Handle("GET "+p+"/payments", httpx.HandlerFunc(h.listPayments))
 	mux.Handle("POST "+p+"/payments/{id}/void", httpx.HandlerFunc(h.void))
@@ -90,7 +91,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var errs []apperr.FieldError
-	f := FolioFilter{ReservationID: queryID(r, "reservation_id", &errs), StayID: queryID(r, "stay_id", &errs), Status: r.URL.Query().Get("status")}
+	f := FolioFilter{ReservationID: queryID(r, "reservation_id", &errs), StayID: queryID(r, "stay_id", &errs), BookingGroupID: queryID(r, "booking_group_id", &errs), FolioType: r.URL.Query().Get("folio_type"), Status: r.URL.Query().Get("status")}
 	if f.Status != "" && f.Status != "OPEN" && f.Status != "CLOSED" {
 		errs = append(errs, fieldErr("status", "INVALID_VALUE", "OPEN or CLOSED"))
 	}

@@ -194,7 +194,7 @@ func (s *Service) post(ctx context.Context, p auth.Principal, propertyID int64, 
 			r := resultOf(c, decimals)
 			if c.Status == expected.StatusReady {
 				night, err := s.poster.Post(ctx, p, propertyID, day.BusinessDate, folios.RoomNightCmd{
-					FolioID: *c.FolioID, ChargeCodeID: c.ChargeCodeID, StayRoomID: c.StayRoomID, UnitPrice: c.UnitPrice,
+					FolioID: *c.FolioID, StayID: c.StayID, ChargeCodeID: c.ChargeCodeID, StayRoomID: c.StayRoomID, UnitPrice: c.UnitPrice,
 					PriceMode: chargecalc.PriceMode(c.PriceMode), ServiceDate: c.ServiceDate, Description: describe(c.RoomNumber, c.ServiceDate),
 				})
 				if err != nil {

@@ -117,7 +117,10 @@ watch(() => property.currentId, () => {
       @sort-change="setSort"
     >
       <template #cell-folio_number="{ row }"><RouterLink :to="`/folios/${row.id}`">{{ row.folio_number }}</RouterLink></template>
-      <template #cell-reservation_id="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink></template>
+      <template #cell-reservation_id="{ row }">
+        <RouterLink v-if="row.reservation_id !== null" :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink>
+        <RouterLink v-else-if="row.booking_group_id !== null" :to="`/groups/${row.booking_group_id}`" data-testid="master-group-link">{{ row.booking_group_code }} · {{ row.booking_group_name }}</RouterLink>
+      </template>
       <template #cell-status="{ row }"><StatusBadge domain="record" :status="row.status" /></template>
       <template #empty><EmptyState :description="t('emptyState.folios')" :action-label="activeFilters ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('folios.empty')" data-testid="empty" /></template>
     </DataTable>

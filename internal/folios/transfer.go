@@ -112,20 +112,42 @@ type TransferResult struct {
 	Replayed bool              `json:"replayed"`
 }
 
-// scopeOf says what a transfer between two folios is. Both must be OPEN (checked by the caller) and the target must belong to a stay: the deposit folio of a reservation has none.
-// A folio of the same reservation, or of a reservation of the same group, is related; anything else is ANY, which needs folio.transfer_any on the person and on the approver.
-// The master folio of a group (part C) is not there yet: a folio of that type is refused until it is.
+// scopeOf says what a transfer between two folios is. Both must be OPEN (checked by the caller) and the target must belong to a stay, unless it is the master folio of a group: the deposit
+// folio of a reservation has none. A folio of the same reservation, or of a reservation of the same group, is related; the master folio of a group and a folio of a member of that group are
+// related (GROUP_MASTER); anything else is ANY, which needs folio.transfer_any on the person and on the approver. Two master folios do not transfer to each other.
 func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, tgt foliosdb.Folio) (string, error) {
-	if src.FolioType == "MASTER" || tgt.FolioType == "MASTER" {
-		return "", errTransferInvalid("the master folio of a group takes transfers with the master folio of part C")
+	if src.FolioType == "MASTER" && tgt.FolioType == "MASTER" {
+		return "", errTransferInvalid("a master folio does not transfer to another master folio")
 	}
-	if tgt.StayID == nil {
+	if tgt.StayID == nil && tgt.FolioType != "MASTER" {
 		return "", errTransferInvalid("a charge cannot move to the deposit folio of a reservation, which has no stay")
 	}
-	if src.ReservationID == tgt.ReservationID {
+	if src.FolioType == "MASTER" || tgt.FolioType == "MASTER" {
+		master, other := src, tgt
+		if tgt.FolioType == "MASTER" {
+			master, other = tgt, src
+		}
+		if other.ReservationID == nil || master.BookingGroupID == nil {
+			return ScopeAny, nil
+		}
+		rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*other.ReservationID}})
+		if err != nil {
+			return "", err
+		}
+		for _, r := range rows {
+			if r.BookingGroupID != nil && *r.BookingGroupID == *master.BookingGroupID {
+				return ScopeGroupMaster, nil
+			}
+		}
+		return ScopeAny, nil
+	}
+	if src.ReservationID != nil && tgt.ReservationID != nil && *src.ReservationID == *tgt.ReservationID {
 		return ScopeReservation, nil
 	}
-	rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{src.ReservationID, tgt.ReservationID}})
+	if src.ReservationID == nil || tgt.ReservationID == nil {
+		return ScopeAny, nil
+	}
+	rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*src.ReservationID, *tgt.ReservationID}})
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +155,7 @@ func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, 
 	for _, r := range rows {
 		groups[r.ID] = r.BookingGroupID
 	}
-	if a, b := groups[src.ReservationID], groups[tgt.ReservationID]; a != nil && b != nil && *a == *b {
+	if a, b := groups[*src.ReservationID], groups[*tgt.ReservationID]; a != nil && b != nil && *a == *b {
 		return ScopeGroupMember, nil
 	}
 	return ScopeAny, nil
@@ -259,7 +281,7 @@ func (s *Service) moveItem(ctx context.Context, m movement, item foliosdb.FolioI
 		}
 	}
 	moved, err := s.posting(m.p, m.propertyID, m.bd, m.tgt).insert(ctx, itemSpec{
-		transactionType: TypeCharge, chargeCodeID: item.ChargeCodeID, copiesItemID: &itemID, stayRoomID: item.StayRoomID, source: "TRANSFER",
+		transactionType: TypeCharge, chargeCodeID: item.ChargeCodeID, copiesItemID: &itemID, stayRoomID: item.StayRoomID, stayID: copyStay(item, m.tgt), source: "TRANSFER",
 		referenceType: &ref, referenceID: &refID, serviceDate: item.ServiceDate, description: item.Description, reason: &m.reason, components: copied,
 		amounts: itemAmounts{
 			quantity: item.Quantity, unitPrice: item.UnitPrice, priceMode: item.PriceMode, base: item.BaseAmount, discount: item.DiscountAmount, net: item.NetAmount,
@@ -372,35 +394,41 @@ func (s *Service) transferItems(ctx context.Context, propertyID, sourceFolioID i
 		if onlyScope != "" && scope != onlyScope {
 			return errTransferInvalid("a charge moves only between the folios of one reservation")
 		}
-		items, err := s.selectItems(ctx, p, propertyID, src, in)
-		if err != nil {
-			return err
-		}
-		q := s.q(ctx)
-		batch, err := q.InsertTransferBatch(ctx, foliosdb.InsertTransferBatchParams{
-			TenantID: p.TenantID, PropertyID: propertyID, Kind: KindItem, FromFolioID: src.ID, ToFolioID: tgt.ID, Scope: scope, Reason: reason, BusinessDate: day.BusinessDate,
-			ApprovedBy: approval.UserID(), ActorID: p.ActorID(),
-		})
-		if err != nil {
-			return err
-		}
-		m := movement{p: p, propertyID: propertyID, bd: day.BusinessDate, src: src, tgt: tgt, batchID: batch.ID, approval: approval, reason: reason, scope: scope}
-		out = TransferResult{BatchID: batch.ID, Kind: KindItem, Scope: scope, Moved: make([]TransferredItem, 0, len(items))}
-		for _, it := range items {
-			moved, err := s.moveItem(ctx, m, it, nil)
-			if err != nil {
-				return err
-			}
-			out.Moved = append(out.Moved, moved)
-		}
-		if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(), Action: "folio.items_transferred",
-			EntityType: "folio", EntityID: src.ID, EntityLabel: src.FolioNumber, New: map[string]any{"batch_id": batch.ID, "scope": scope, "to_folio_id": tgt.ID, "items": len(items),
-				"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID()}}); err != nil {
-			return err
-		}
-		out.Balances, err = s.balances(ctx, propertyID, decimals, src.ID, tgt.ID)
+		out, err = s.moveSelected(ctx, p, propertyID, day.BusinessDate, src, tgt, in, reason, approval, scope, nil, decimals)
 		return err
 	})
+	return out, err
+}
+
+// moveSelected moves the charges a request selects from src to tgt inside the transaction of the caller, which holds the business day and both folios (level 42): one batch, one audit entry for it and
+// one for each charge. key is the Idempotency-Key of the batch, when the request has one.
+func (s *Service) moveSelected(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, src, tgt foliosdb.Folio, in TransferItemsInput, reason string, approval iam.Approval, scope string, key *string, decimals int32) (TransferResult, error) {
+	items, err := s.selectItems(ctx, p, propertyID, src, in)
+	if err != nil {
+		return TransferResult{}, err
+	}
+	batch, err := s.q(ctx).InsertTransferBatch(ctx, foliosdb.InsertTransferBatchParams{
+		TenantID: p.TenantID, PropertyID: propertyID, Kind: KindItem, FromFolioID: src.ID, ToFolioID: tgt.ID, Scope: scope, Reason: reason, BusinessDate: bd,
+		ApprovedBy: approval.UserID(), IdempotencyKey: key, ActorID: p.ActorID(),
+	})
+	if err != nil {
+		return TransferResult{}, err
+	}
+	m := movement{p: p, propertyID: propertyID, bd: bd, src: src, tgt: tgt, batchID: batch.ID, approval: approval, reason: reason, scope: scope}
+	out := TransferResult{BatchID: batch.ID, Kind: KindItem, Scope: scope, Moved: make([]TransferredItem, 0, len(items))}
+	for _, it := range items {
+		moved, err := s.moveItem(ctx, m, it, nil)
+		if err != nil {
+			return TransferResult{}, err
+		}
+		out.Moved = append(out.Moved, moved)
+	}
+	if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: "folio.items_transferred",
+		EntityType: "folio", EntityID: src.ID, EntityLabel: src.FolioNumber, New: map[string]any{"batch_id": batch.ID, "scope": scope, "to_folio_id": tgt.ID, "items": len(items),
+			"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID()}}); err != nil {
+		return TransferResult{}, err
+	}
+	out.Balances, err = s.balances(ctx, propertyID, decimals, src.ID, tgt.ID)
 	return out, err
 }
 
@@ -875,4 +903,12 @@ func (s *Service) ReturnTransfers(ctx context.Context, propertyID, holderFolioID
 		return err
 	})
 	return out, err
+}
+
+// copyStay is the stay a transferred charge is stamped with: the stay of the folio it goes to, and on a folio of no stay (the master of a group) the stay it was for, so the master says whose it is.
+func copyStay(item foliosdb.FolioItem, tgt foliosdb.Folio) *int64 {
+	if tgt.StayID == nil {
+		return item.StayID
+	}
+	return nil
 }

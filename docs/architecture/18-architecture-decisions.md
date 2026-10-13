@@ -75,7 +75,7 @@ See 2.1. In short: one GUEST folio per stay, a deposit folio before it, routing 
 - The unit of idempotency is the stay, not the folio, so room charge posting can change target without a double charge risk.
 - Check-out, the stay API, the stay screen, the invoice and the tax invoice are already folio-plural or per folio.
 - Money still ends in the same two general ledger places as today: the guest ledger (while it sits on a folio) and the city ledger (after a transfer). **No general ledger account, journal or report changes**, except the one view rule in 3.9.
-- A group "master bill" is, in this model, a **city ledger invoice over the transfers of the company folios of its members**: `city_ledger_invoices` already claim transfers from many folios and a tax invoice already lists them. That removes the main reason for a master folio.
+- **Superseded by `30-group-folio.md` (part C, built):** a group has a master folio. What follows is the position taken at the time. A group "master bill" is, in this model, a **city ledger invoice over the transfers of the company folios of its members**: `city_ledger_invoices` already claim transfers from many folios and a tax invoice already lists them. That removes the main reason for a master folio.
 - The target of a routing rule is a **folio id**, resolved at check-in. When a master folio is built later it is just another folio id; no rule has to be rewritten.
 
 ### 3.6 Data model (design only)
@@ -422,7 +422,7 @@ One new blocker kind (`ROUTING_TARGET_CLOSED`) in the existing charge errors; ro
 
 ## 12. Future extension
 
-- Master (group) folio and the role-based `is_deposit`; transfer of the company folio to the city ledger automatically at check-out; routing by date range; company deposits before check-in.
+- ~~Master (group) folio and the role-based `is_deposit`~~ (built: `30-group-folio.md` part C, migration 00075); transfer of the company folio to the city ledger automatically at check-out; routing by date range; company deposits before check-in.
 - Restrictions per channel, release periods, automatic closing from yield rules, an export for a channel manager.
 - Multi-currency as in 5.9.
 

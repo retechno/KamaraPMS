@@ -1907,6 +1907,153 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/routing:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/LineId"
+    get:
+      operationId: getLineRouting
+      summary: Where the charges of a room go (reservation.read)
+      description: |
+        The instruction of the room itself (a company folio) wins over those of its group, and a room that is excluded from the routing of its group ignores them.
+        `room` says where a room night goes: `LINE` (a company folio), `GROUP` (the master folio of the group) or `NONE` (the guest folio). A reservation in no group has no `group`.
+      tags: [folios]
+      responses:
+        "200":
+          description: The routing of the room.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingNotice" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/routing:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getGroupRouting
+      summary: The master folio of a group, its instructions and its rooms (reservation.read)
+      description: The balance of the master is given only to a reader who holds `folio.read` (it is empty for the others).
+      tags: [folios]
+      responses:
+        "200":
+          description: The routing of the group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupRouting" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setGroupRouting
+      summary: Replace the instructions of a group and the rooms that stay out of them (folio.master_manage)
+      description: |
+        An instruction sends the room nights (`ROOM`), one charge code (`CHARGE_CODE`) or everything that posts without being told a folio (`ALL`) of the members of the group to its master folio.
+        The set is replaced as a whole and applies from the next night not yet posted: a night already posted stays where it is (moving it is a transfer to the master, scope `GROUP_MASTER`).
+        The first instruction opens the master folio. A room in `excluded_lines` keeps to its own instructions and its guest folio. A room's own instruction (a company folio) wins over the group's.
+        A group that is inactive takes no master (409 `GROUP_INACTIVE`). A night routed to a master that is closed is reported by the night audit as `ROUTING_TARGET_CLOSED` and nothing is posted.
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupRoutingRequest" }
+      responses:
+        "200":
+          description: The routing after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupRouting" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/routing/posted:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listPostedForMaster
+      summary: The charges already posted to members that the instructions of the group would send to the master (folio.read)
+      description: |
+        One row for each open folio of a member and charge code: the room nights for `ROOM`, the charge codes named for `CHARGE_CODE`, every charge for `ALL`. A room that is excluded and a charge that was reversed are left out.
+        They stay where they are until they are moved with `POST /folios/{id}/transfer-items` to the master folio (scope `GROUP_MASTER`).
+      tags: [folios]
+      responses:
+        "200":
+          description: What can move.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/PostedCharges" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/routing/move-posted:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveToMasterFolio
+      summary: Move the posted charges of the members that the instructions send to the master, in one transaction (folio.reverse, needs approval)
+      description: |
+        The transfer of charges by charge code over every member folio listed by `GET .../routing/posted`: all or nothing, with the folios locked once in ascending order, one reason and one approval. Each folio and
+        charge code is a batch of the transfer log under `Idempotency-Key#folio#code`: repeating the request answers 200 with what was moved and moves nothing twice. `expected_count` and `expected_total` are the
+        count and the total of the list the person was shown: if it changed before the locks (a night was posted, a charge reversed) the answer is 409 `POSTED_LIST_CHANGED` and nothing moves. The master folio must be
+        open (409 `FOLIO_CLOSED`), and a folio of a member that is closed is refused with its number. Nothing to move is 409 `TRANSFER_SELECTION_EMPTY`.
+      tags: [folios]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveToMasterRequest" }
+      responses:
+        "200":
+          description: A repeat of a request that went through.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoveToMasterResult" }
+        "201":
+          description: What moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoveToMasterResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/master-folio:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: openMasterFolio
+      summary: Open the master folio of a group (folio.master_manage)
+      description: |
+        A group has one master folio: asking again returns it (200, `created` false). The company of the group is copied onto the folio and is the buyer of its invoices; a group with no company is billed to its contact.
+        The master takes payments like any folio (a payment before its first charge is an advance deposit, after it a settlement) and is closed with `POST /folios/{id}/close`, which needs `folio.master_close`,
+        a zero balance and every room of the group over (409 `FOLIO_BALANCE_NOT_ZERO`, 409 `MASTER_FOLIO_GROUP_ACTIVE` with the rooms in the context).
+      tags: [folios]
+      responses:
+        "200":
+          description: The master folio that already existed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterResult" }
+        "201":
+          description: The master folio, opened now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reservations/{id}/rooms/{lineId}/cancel:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -2071,6 +2218,8 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: booking_group_id, in: query, schema: { type: integer, format: int64 }, description: The master folio of that group. }
+        - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER] } }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
         - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
@@ -2193,8 +2342,8 @@ paths:
       - $ref: "#/components/parameters/Id"
     post:
       operationId: closeFolio
-      summary: Close a folio with a zero balance (folio.post_charge)
-      description: For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
+      summary: Close a folio with a zero balance (folio.post_charge, or folio.master_close for a master folio)
+      description: The master folio of a group is closed with `folio.master_close` and only when every room of the group is over (409 `MASTER_FOLIO_GROUP_ACTIVE`, the rooms in the context). For folios that never got a stay. A folio linked to an OPEN stay closes with the check-out (409 `FOLIO_LINKED_TO_OPEN_STAY`). Every posting bumps the folio's version, so a stale screen gets 409 `VERSION_CONFLICT`.
       tags: [folios]
       requestBody:
         required: true
@@ -9979,6 +10128,7 @@ components:
         discount_amount: { type: string }
         service_date: { $ref: "#/components/schemas/Date" }
         description: { type: string, maxLength: 300 }
+        stay_id: { type: [integer, "null"], format: int64, description: "Only on the master folio of a group: a stay of a member, so the line says whose it is (422 `ONLY_ON_MASTER`, `NOT_IN_GROUP`). The charge stays on the master." }
     PostAdjustmentRequest:
       type: object
       required: [charge_code_id, amount, reason, approval]
@@ -10088,6 +10238,8 @@ components:
         transaction_at: { type: string, format: date-time }
         description: { type: string }
         charge_code: { type: string }
+        stay_id: { type: [integer, "null"], format: int64, description: "On the master folio of a group: the stay the line is for (a room night routed from a member, a charge posted for a guest)." }
+        guest_name: { type: string, description: "On the master folio: the guest of that stay." }
         charge_code_id: { type: [integer, "null"], format: int64 }
         revenue_account_code: { $ref: "#/components/schemas/GlAccountCode", description: The revenue account of the charge code when the item was posted. A reversal carries the account of the item it reverses. }
         quantity: { type: string }
@@ -10233,6 +10385,135 @@ components:
         company: { type: string }
         balance: { type: string }
         scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, ANY] }
+    MasterFolio:
+      type: object
+      required: [id, folio_number, status, balance, version, bill_to_company_id, opened_at, closed_at]
+      properties:
+        id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        balance: { type: string, description: "Empty for a reader who may not read folios." }
+        version: { type: integer, format: int32 }
+        bill_to_company_id: { type: [integer, "null"], format: int64 }
+        bill_to_company_name: { type: string }
+        opened_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+    MasterResult:
+      type: object
+      required: [master, created]
+      properties:
+        master: { $ref: "#/components/schemas/MasterFolio" }
+        created: { type: boolean }
+    GroupInstruction:
+      type: object
+      required: [scope, charge_code_id]
+      properties:
+        scope: { type: string, enum: [ALL, ROOM, CHARGE_CODE] }
+        charge_code_id: { type: [integer, "null"], format: int64 }
+        charge_code: { type: string }
+        charge_code_name: { type: string }
+    GroupInstructionInput:
+      type: object
+      required: [scope]
+      properties:
+        scope: { type: string, enum: [ALL, ROOM, CHARGE_CODE] }
+        charge_code_id: { type: [integer, "null"], format: int64, description: "Only for the scope CHARGE_CODE." }
+    GroupLine:
+      type: object
+      required: [reservation_room_id, reservation_id, confirmation_number, status, excluded]
+      properties:
+        reservation_room_id: { type: integer, format: int64 }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        status: { type: string }
+        excluded: { type: boolean, description: "The room stays out of the routing of the group." }
+        stay_id: { type: [integer, "null"], format: int64, description: "The open stay of the room, if any." }
+        room_number: { type: string, description: "The room the guest is in now." }
+        guest_name: { type: string }
+    GroupRouting:
+      type: object
+      required: [group_id, master, instructions, lines]
+      properties:
+        group_id: { type: integer, format: int64 }
+        master: { oneOf: [{ $ref: "#/components/schemas/MasterFolio" }, { type: "null" }] }
+        instructions:
+          type: array
+          items: { $ref: "#/components/schemas/GroupInstruction" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/GroupLine" }
+    GroupRoutingRequest:
+      type: object
+      required: [instructions, excluded_lines]
+      properties:
+        instructions:
+          type: array
+          items: { $ref: "#/components/schemas/GroupInstructionInput" }
+        excluded_lines:
+          type: array
+          items: { type: integer, format: int64 }
+    RoutingNotice:
+      type: object
+      required: [room, excluded, group, group_instructions]
+      properties:
+        room: { type: string, enum: [LINE, GROUP, NONE] }
+        excluded: { type: boolean }
+        group:
+          oneOf:
+            - type: object
+              required: [id, code, name, master_folio_id, master_folio_number, master_status]
+              properties:
+                id: { type: integer, format: int64 }
+                code: { type: string }
+                name: { type: string }
+                master_folio_id: { type: integer, format: int64, description: "0 when the group has no master folio yet." }
+                master_folio_number: { type: string }
+                master_status: { type: string, description: "OPEN, CLOSED, or empty when there is no master." }
+            - type: "null"
+        group_instructions:
+          type: array
+          items: { $ref: "#/components/schemas/GroupInstruction" }
+    PostedCharges:
+      type: object
+      required: [folio_id, folio_number, reservation_id, confirmation_number, charge_code_id, charge_code, charge_code_name, count, total]
+      properties:
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        reservation_id: { type: integer, format: int64 }
+        confirmation_number: { type: string }
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        charge_code_name: { type: string }
+        count: { type: integer }
+        total: { type: string }
+    MoveToMasterRequest:
+      type: object
+      required: [reason, approval, expected_count, expected_total]
+      additionalProperties: false
+      properties:
+        reason: { type: string, maxLength: 500 }
+        approval: { $ref: "#/components/schemas/Approval" }
+        expected_count: { type: integer, description: The number of charges of the list that was shown. }
+        expected_total: { type: string, description: The total of the list that was shown. }
+    MoveToMasterResult:
+      type: object
+      required: [batches, moved, total, replayed]
+      properties:
+        batches:
+          type: array
+          items: { $ref: "#/components/schemas/TransferResult" }
+        moved: { type: integer }
+        total: { type: string }
+        replayed: { type: boolean }
+    MasterInfo:
+      type: object
+      required: [folio_id, folio_number, balance, group_code, group_name]
+      properties:
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        balance: { type: string }
+        group_code: { type: string }
+        group_name: { type: string }
     FolioTotals:
       type: object
       required: [debit, credit]
@@ -10245,11 +10526,17 @@ components:
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
-        folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
-        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay." }
+        bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to, or the company of the group on a MASTER folio; null on a guest folio." }
         bill_to_company_name: { type: string, description: "The name of that company (absent on a guest folio)." }
         status: { type: string, enum: [OPEN, CLOSED] }
-        reservation_id: { type: integer, format: int64 }
+        reservation_id: { type: [integer, "null"], format: int64, description: "Null on a MASTER folio." }
+        booking_group_id: { type: [integer, "null"], format: int64, description: "The group of a MASTER folio; null on the others." }
+        booking_group_code: { type: string }
+        booking_group_name: { type: string }
+        booking_group_contact_name: { type: string, description: "The contact of the group, on a MASTER folio: the party of its invoice when the group has no company." }
+        booking_group_contact_email: { type: string }
+        booking_group_contact_phone: { type: string }
         stay_id: { type: [integer, "null"], format: int64 }
         opened_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
@@ -10266,10 +10553,13 @@ components:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         confirmation_number: { type: string, description: The confirmation number of the reservation of the folio (`RES000012`), so a list can name it. }
-        folio_type: { type: string, enum: [GUEST, COMPANY], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group." }
         bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
         status: { type: string, enum: [OPEN, CLOSED] }
-        reservation_id: { type: integer, format: int64 }
+        reservation_id: { type: [integer, "null"], format: int64, description: "Null on a MASTER folio." }
+        booking_group_id: { type: [integer, "null"], format: int64 }
+        booking_group_code: { type: string }
+        booking_group_name: { type: string }
         stay_id: { type: [integer, "null"], format: int64 }
         opened_at: { type: string, format: date-time }
         version: { type: integer, format: int32 }
@@ -10544,6 +10834,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ClosedFolio" }
         housekeeping: { type: string, description: The housekeeping status the room has now (DIRTY). }
+        master_folio: { oneOf: [{ $ref: "#/components/schemas/MasterInfo" }, { type: "null" }], description: "Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing." }
     StaySummary:
       type: object
       required: [id, stay_number, status, guest_id, guest_name, room_id, reservation_id, confirmation_number, arrival_date, departure_date, adult_count, child_count, version]
@@ -11578,6 +11869,30 @@ components:
               folio_number: { type: string }
               confirmation_number: { type: string }
               balance: { $ref: "#/components/schemas/Amount" }
+        group_masters_closed:
+          type: array
+          description: "Groups whose instructions point at a master folio that is closed or was never opened: the rooms in house go to their own folios until it is reopened. A warning: the night audit is not blocked."
+          items:
+            type: object
+            required: [group_id, group_code, group_name, folio_number, stays]
+            properties:
+              group_id: { type: integer, format: int64 }
+              group_code: { type: string }
+              group_name: { type: string }
+              folio_number: { type: string }
+              stays: { type: integer, description: The rooms in house the instructions apply to. }
+        open_group_masters:
+          type: array
+          description: "Master folios of groups whose rooms are all over, still open, with their balance. A warning: a hotel may bill a group days later."
+          items:
+            type: object
+            required: [folio_id, folio_number, group_code, group_name, balance]
+            properties:
+              folio_id: { type: integer, format: int64 }
+              folio_number: { type: string }
+              group_code: { type: string }
+              group_name: { type: string }
+              balance: { $ref: "#/components/schemas/Amount" }
         blocks_ending:
           type: array
           items:
@@ -12434,11 +12749,12 @@ components:
         is_active: { type: boolean }
     GroupMember:
       type: object
-      required: [reservation_id, confirmation_number, status, company_id, arrival_date, departure_date, room_count]
+      required: [reservation_id, confirmation_number, status, display_status, company_id, arrival_date, departure_date, room_count]
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
-        status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED] }
+        status: { type: string, enum: [DRAFT, CONFIRMED, CANCELLED], description: The status of the header of the reservation. }
+        display_status: { type: string, enum: [DRAFT, CONFIRMED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED], description: "The status staff see, derived from the rooms (the one of the reservation screens)." }
         guest_name: { type: string }
         company_id: { type: [integer, "null"], format: int64 }
         arrival_date: { $ref: "#/components/schemas/Date" }

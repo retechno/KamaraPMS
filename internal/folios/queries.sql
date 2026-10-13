@@ -33,7 +33,9 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id =
 -- posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
 -- name: ListFoliosOrdered :many
 SELECT f.*, bal.balance::numeric AS balance,
-       (SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id) AS confirmation_number
+       COALESCE((SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id), '')::text AS confirmation_number,
+       COALESCE((SELECT g.code FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_code,
+       COALESCE((SELECT g.name FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_name
 FROM folios f
 CROSS JOIN LATERAL (
     SELECT CASE WHEN f.status = 'OPEN'
@@ -53,6 +55,8 @@ CROSS JOIN LATERAL (
 WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(reservation_id)::bigint IS NULL OR f.reservation_id = sqlc.narg(reservation_id)::bigint)
   AND (sqlc.narg(stay_id)::bigint IS NULL OR f.stay_id = sqlc.narg(stay_id)::bigint)
+  AND (sqlc.narg(booking_group_id)::bigint IS NULL OR f.booking_group_id = sqlc.narg(booking_group_id)::bigint)
+  AND (sqlc.narg(folio_type)::text IS NULL OR f.folio_type = sqlc.narg(folio_type)::text)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
   AND (sqlc.narg(after_id)::bigint IS NULL
        OR CASE WHEN NOT @sort_desc::boolean THEN
@@ -160,9 +164,17 @@ ORDER BY folio_item_id, component_type, sequence;
 -- Items of a folio in posting order, with what a screen needs: the charge code, the reversal that undid the item
 -- and the room of the stay segment.
 -- name: ListFolioItems :many
-SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id, r.room_number AS room_number,
+SELECT i.*, c.code AS charge_code, rv.id AS reversed_by_item_id,
+       COALESCE(r.room_number, lr.room_number, '')::text AS room_number,
+       -- on the master folio of a group a line says whose it is: the guest of its stay (and the room of the stay when the line has no room segment of its own)
+       CASE WHEN fo.folio_type = 'MASTER' THEN COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '') ELSE '' END::text AS guest_name,
        COALESCE(g.group_code, 'A')::text AS group_code -- a reversal is printed with the line it reverses; a line without a row is in group A
 FROM folio_items i
+JOIN folios fo ON fo.property_id = i.property_id AND fo.id = i.folio_id
+LEFT JOIN stays st ON st.property_id = i.property_id AND st.id = i.stay_id AND fo.folio_type = 'MASTER'
+LEFT JOIN guests gu ON gu.tenant_id = st.tenant_id AND gu.id = st.guest_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms s2 JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                    WHERE s2.property_id = st.property_id AND s2.stay_id = st.id ORDER BY s2.id DESC LIMIT 1) lr ON true
 LEFT JOIN folio_item_groups g ON g.property_id = i.property_id AND g.folio_item_id = COALESCE(i.reverses_item_id, i.id)
 LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 LEFT JOIN folio_items rv ON rv.property_id = i.property_id AND rv.reverses_item_id = i.id
@@ -511,37 +523,185 @@ WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id
 -- The folios a charge or a balance may be sent to, for the choice in the transfer dialog: open folios of a stay, the folios of the same reservation and of the same group first.
 -- include_any adds every other open folio of the property (only for who holds folio.transfer_any). q matches the folio number, the room or the name of the guest.
 -- name: SearchTransferTargets :many
-SELECT f.id, f.folio_number, f.folio_type, f.reservation_id, f.stay_id, res.confirmation_number, res.booking_group_id,
+-- The open folios a charge can go to from a folio: those of the same reservation or group, the master folio of the group, and (include_any) any other. A master has no stay and no reservation.
+SELECT f.id, f.folio_number, f.folio_type, f.reservation_id, f.stay_id, COALESCE(res.confirmation_number, '')::text AS confirmation_number, res.booking_group_id,
        COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS balance,
        COALESCE(cr.room_number, '')::text AS room_number,
-       g.first_name, g.last_name, comp.name AS company_name,
-       (f.reservation_id = @from_reservation_id)::boolean AS same_reservation,
-       (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint)::boolean AS same_group
+       g.first_name, g.last_name, COALESCE(comp.name, '')::text AS company_name, COALESCE(bg.name, '')::text AS group_name,
+       COALESCE(sqlc.narg(from_reservation_id)::bigint IS NOT NULL AND f.reservation_id = sqlc.narg(from_reservation_id)::bigint, false)::boolean AS same_reservation,
+       COALESCE(sqlc.narg(from_group_id)::bigint IS NOT NULL AND f.folio_type <> 'MASTER' AND res.booking_group_id = sqlc.narg(from_group_id)::bigint AND NOT @from_is_master::boolean, false)::boolean AS same_group,
+       COALESCE(sqlc.narg(from_group_id)::bigint IS NOT NULL AND ((f.folio_type = 'MASTER' AND f.booking_group_id = sqlc.narg(from_group_id)::bigint)
+                                                                   OR (@from_is_master::boolean AND res.booking_group_id = sqlc.narg(from_group_id)::bigint)), false)::boolean AS group_master
 FROM folios f
-JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
 LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
 LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
-LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
 LEFT JOIN companies comp ON comp.property_id = f.property_id AND comp.id = f.bill_to_company_id
-WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND f.stay_id IS NOT NULL AND f.id <> @from_folio_id
-  AND (@include_any::boolean OR f.reservation_id = @from_reservation_id OR (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint))
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND (f.stay_id IS NOT NULL OR f.folio_type = 'MASTER') AND f.id <> @from_folio_id
+  AND (@include_any::boolean
+       OR (sqlc.narg(from_reservation_id)::bigint IS NOT NULL AND f.reservation_id = sqlc.narg(from_reservation_id)::bigint)
+       OR (sqlc.narg(from_group_id)::bigint IS NOT NULL AND (res.booking_group_id = sqlc.narg(from_group_id)::bigint OR f.booking_group_id = sqlc.narg(from_group_id)::bigint)))
   AND (sqlc.narg(q)::text IS NULL
        OR f.folio_number ILIKE sqlc.narg(q)::text || '%'
+       OR lower(coalesce(bg.name, '') || ' ' || coalesce(bg.code, '')) LIKE '%' || lower(sqlc.narg(q)::text) || '%'
        OR EXISTS (SELECT 1 FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
                   WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id AND rm.room_number ILIKE sqlc.narg(q)::text || '%')
        OR lower(coalesce(g.first_name, '') || ' ' || coalesce(g.last_name, '')) LIKE '%' || lower(sqlc.narg(q)::text) || '%')
-ORDER BY (f.reservation_id = @from_reservation_id) DESC, (sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint) DESC, f.id
+ORDER BY COALESCE(sqlc.narg(from_reservation_id)::bigint IS NOT NULL AND f.reservation_id = sqlc.narg(from_reservation_id)::bigint, false) DESC,
+         (f.folio_type = 'MASTER') DESC,
+         COALESCE(sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint, false) DESC, f.id
 LIMIT @row_limit;
 
 -- The room and the guest of a folio, for the line "from FOLxxx, room N".
 -- name: GetFolioPlace :one
-SELECT COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name
+SELECT COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name, COALESCE(bg.name, '')::text AS group_name
 FROM folios f
-JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
 LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
 LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
-LEFT JOIN guests g ON g.tenant_id = res.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
 WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id = @id;
 
 -- name: GetUserName :one
 SELECT full_name FROM users WHERE id = @id;
+
+-- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- The master folio of a booking group and the routing of its members (docs/architecture/30-group-folio.md, part C).
+
+-- name: GetMasterFolio :one
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND booking_group_id = @group_id AND folio_type = 'MASTER';
+
+-- name: GetBookingGroupBrief :one
+SELECT id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, is_active
+FROM booking_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: InsertMasterFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, booking_group_id, bill_to_company_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @folio_number, 'MASTER', @group_id, sqlc.narg(company_id), sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: ListGroupInstructions :many
+SELECT i.scope, i.charge_code_id, c.code AS charge_code, c.name AS charge_code_name
+FROM group_billing_instructions i
+LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.booking_group_id = @group_id
+ORDER BY CASE i.scope WHEN 'CHARGE_CODE' THEN 0 WHEN 'ROOM' THEN 1 ELSE 2 END, c.code;
+
+-- name: DeleteGroupInstructions :exec
+DELETE FROM group_billing_instructions WHERE tenant_id = @tenant_id AND property_id = @property_id AND booking_group_id = @group_id;
+
+-- name: InsertGroupInstruction :exec
+INSERT INTO group_billing_instructions (tenant_id, property_id, booking_group_id, scope, charge_code_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @group_id, @scope, sqlc.narg(charge_code_id), sqlc.narg(actor_id), sqlc.narg(actor_id));
+
+-- The lines of the reservations of a group, with the open stay of each and whether it stays out of the routing of the group.
+-- name: ListGroupLines :many
+SELECT rr.id AS reservation_room_id, r.id AS reservation_id, r.confirmation_number, rr.status,
+       COALESCE((SELECT s.id FROM stays s WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), 0)::bigint AS open_stay_id,
+       COALESCE((SELECT rm.room_number FROM stays s JOIN stay_rooms s2 ON s2.property_id = s.property_id AND s2.stay_id = s.id JOIN rooms rm ON rm.property_id = s2.property_id AND rm.id = s2.room_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC, s2.id DESC LIMIT 1), '')::text AS room_number,
+       COALESCE((SELECT NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), '') FROM stays s JOIN guests gu ON gu.tenant_id = s.tenant_id AND gu.id = s.guest_id
+                  WHERE s.property_id = rr.property_id AND s.reservation_room_id = rr.id AND s.status = 'OPEN' ORDER BY s.id DESC LIMIT 1), '')::text AS guest_name,
+       (x.reservation_room_id IS NOT NULL)::boolean AS excluded
+FROM reservation_rooms rr
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id
+ORDER BY rr.id;
+
+-- The open stays of the members of a group, ascending: what a change of the routing locks (level 41), so that it and a posting run take turns.
+-- name: ListGroupOpenStayIDs :many
+SELECT s.id FROM stays s
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND r.booking_group_id = @group_id AND s.status = 'OPEN'
+ORDER BY s.id;
+
+-- name: DeleteGroupExclusions :exec
+DELETE FROM folio_group_routing_exclusions x
+USING reservation_rooms rr, reservations r
+WHERE x.reservation_room_id = rr.id AND rr.property_id = r.property_id AND rr.reservation_id = r.id
+  AND x.tenant_id = @tenant_id AND x.property_id = @property_id AND r.booking_group_id = @group_id;
+
+-- name: InsertGroupExclusion :exec
+INSERT INTO folio_group_routing_exclusions (reservation_room_id, tenant_id, property_id, created_by)
+VALUES (@reservation_room_id, @tenant_id, @property_id, sqlc.narg(actor_id));
+
+-- The group rules that apply to the lines of many stays (the resolver): one row for each instruction of the group of the stay, with whether the line is excluded and the master folio of the group, open or not.
+-- name: ListStayGroupRules :many
+SELECT s.id AS stay_id, i.scope, i.charge_code_id, (x.reservation_room_id IS NOT NULL)::boolean AS excluded,
+       COALESCE(m.id, 0)::bigint AS master_id, COALESCE(m.status, '')::text AS master_status
+FROM stays s
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id AND r.booking_group_id IS NOT NULL
+JOIN group_billing_instructions i ON i.property_id = r.property_id AND i.booking_group_id = r.booking_group_id
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
+LEFT JOIN folios m ON m.property_id = r.property_id AND m.booking_group_id = r.booking_group_id AND m.folio_type = 'MASTER'
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = ANY(@stay_ids::bigint[]);
+
+-- The group of a line of a reservation, with its master folio and whether the line is excluded (the notice on a reservation).
+-- name: GetLineGroupRouting :one
+SELECT r.booking_group_id, g.code AS group_code, g.name AS group_name, (x.reservation_room_id IS NOT NULL)::boolean AS excluded,
+       COALESCE(m.id, 0)::bigint AS master_id, COALESCE(m.folio_number, '')::text AS master_number, COALESCE(m.status, '')::text AS master_status
+FROM reservation_rooms rr
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+JOIN booking_groups g ON g.property_id = r.property_id AND g.id = r.booking_group_id
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = rr.id
+LEFT JOIN folios m ON m.property_id = r.property_id AND m.booking_group_id = r.booking_group_id AND m.folio_type = 'MASTER'
+WHERE rr.tenant_id = @tenant_id AND rr.property_id = @property_id AND rr.reservation_id = @reservation_id AND rr.id = @id;
+
+-- The member lines still to be over (a master cannot close before): not COMPLETED, CANCELLED or NO_SHOW. A line that stays out of the master (folio_group_routing_exclusions) is not waited for:
+-- it puts nothing on the master.
+-- name: ListGroupLinesNotOver :many
+SELECT rr.id AS reservation_room_id, r.confirmation_number, rr.status
+FROM reservation_rooms rr
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id AND rr.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+  AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = rr.id)
+ORDER BY rr.id;
+
+-- Is a line one that stays out of the master of its group?
+-- name: IsLineExcluded :one
+SELECT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = @reservation_room_id)::boolean AS excluded;
+
+-- The numbers of the rooms of the stays of a group, for the invoice of its master folio.
+-- name: ListGroupRoomNumbers :many
+SELECT DISTINCT rm.room_number::text AS room_number
+FROM stay_rooms sr
+JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id
+ORDER BY 1;
+
+-- The charges already posted to the open folios of the members of a group that its instructions would send to the master now: one row for each folio and charge code, with how many and how much.
+-- A line that is excluded from the routing and a charge something has reversed are left out.
+-- name: ListPostedForMaster :many
+SELECT f.id AS folio_id, f.folio_number, r.id AS reservation_id, r.confirmation_number, i.charge_code_id, cc.code AS charge_code, cc.name AS charge_code_name, cc.charge_type,
+       count(*)::int AS item_count, sum(i.debit - i.credit)::numeric AS total
+FROM folios f
+JOIN reservations r ON r.property_id = f.property_id AND r.id = f.reservation_id
+JOIN stays s ON s.property_id = f.property_id AND s.id = f.stay_id
+LEFT JOIN folio_group_routing_exclusions x ON x.reservation_room_id = s.reservation_room_id
+JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id AND i.transaction_type = 'CHARGE'
+JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.status = 'OPEN' AND f.folio_type IN ('GUEST', 'COMPANY') AND r.booking_group_id = @group_id
+  AND x.reservation_room_id IS NULL AND cc.charge_type <> 'TRANSFER'
+  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+GROUP BY f.id, f.folio_number, r.id, r.confirmation_number, i.charge_code_id, cc.code, cc.name, cc.charge_type
+ORDER BY f.id, cc.code;
+
+-- A stay of a member of the group of a master folio (a charge posted to the master can name whose it is).
+-- name: StayOfGroup :one
+SELECT s.id FROM stays s
+JOIN reservation_rooms rr ON rr.property_id = s.property_id AND rr.id = s.reservation_room_id
+JOIN reservations r ON r.property_id = rr.property_id AND r.id = rr.reservation_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @stay_id AND r.booking_group_id = @group_id AND s.status <> 'CANCELLED';
+
+-- The batches of a request that moves many folios in one transaction: each carries the key of the request and a suffix.
+-- name: ListBatchesByKeyPrefix :many
+SELECT * FROM folio_transfer_batches WHERE tenant_id = @tenant_id AND property_id = @property_id AND starts_with(idempotency_key, @prefix::text) ORDER BY id;
