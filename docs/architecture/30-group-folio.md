@@ -1,6 +1,6 @@
 # 30. Groups: bulk rooms, folio transfers, the master folio and group check-in (APPROVED; part A is being built, the rest is design only)
 
-Status: **approved by the owner** (the decisions are in section 9; the owner's changes to part B are in 4.3 and 4.5). The decisions listed in the request of the owner are taken as agreed. Where one of them meets a platform rule or the design in force, section 1 says so with the reason; nothing was changed silently. Read first: `18-architecture-decisions.md` section 3 (folio model, rule 2 the resolver, rule 4 when a rule applies, rule 6 the transfer, rule 7 split billing, 3.9 deposits, 3.13 the master folio kept for later), `28-check-in-panel.md`, `08-backlog.md`, and the groups paragraph of `README.md`.
+Status: **approved by the owner; part A is built (PR 1, branch group-bulk-rooms)** (the decisions are in section 9; the owner's changes to part B are in 4.3 and 4.5). The decisions listed in the request of the owner are taken as agreed. Where one of them meets a platform rule or the design in force, section 1 says so with the reason; nothing was changed silently. Read first: `18-architecture-decisions.md` section 3 (folio model, rule 2 the resolver, rule 4 when a rule applies, rule 6 the transfer, rule 7 split billing, 3.9 deposits, 3.13 the master folio kept for later), `28-check-in-panel.md`, `08-backlog.md`, and the groups paragraph of `README.md`.
 
 Words: a **booking group** is `booking_groups` (a conference, a tour). A **transaction group** is `folio_item_groups` (the A/B/C/D heading of a bill, `20-transaction-group.md`): not meant here, and nothing below reads or writes it. The letters **A, B, C, E** of the request name the parts of this document (there is no D); each part is one PR.
 
@@ -44,11 +44,11 @@ Words: a **booking group** is `booking_groups` (a conference, a tour). A **trans
 
 A table form; each **row** is: room type, number of rooms, arrival, departure, rate plan, rate per night, adults, children. A row defaults to the dates of the group and must lie inside them (the same `OUTSIDE_GROUP_DATES` rule, shown on the row). The rate per night defaults to the rate in force (the grid price, with a yield rule or restriction applied, read by the preview) and can be changed. A row can be added, copied, removed. Rows of the same room type may overlap in time; the preview adds them up.
 
-**Preview before saving** (read-only, no lock, no write): `POST /booking-groups/{id}/room-batches/preview` with the same rows. It answers, per row: the number of rooms, nights, the grid price of each night, the estimate of one room and of the row (the figures of the existing charge/price engine, the client adds nothing it was not given), the sales-restriction verdict of the row (closed to arrival and so on, with the reason), and **the rooms left per room type per night after the whole batch** (a matrix, rows of one type cumulated). A row that does not fit is marked with the first night it is short and by how many. The preview is a snapshot; the save asks again under the locks, so a preview that was true a minute ago promises nothing.
+**Preview before saving** (read-only, no lock, no write): `POST /groups/{id}/room-batches/preview` with the same rows. It answers, per row: the number of rooms, nights, the grid price of each night, the estimate of one room and of the row (the figures of the existing charge/price engine, the client adds nothing it was not given), the sales-restriction verdict of the row (closed to arrival and so on, with the reason), and **the rooms left per room type per night after the whole batch** (a matrix, rows of one type cumulated). A row that does not fit is marked with the first night it is short and by how many. The preview is a snapshot; the save asks again under the locks, so a preview that was true a minute ago promises nothing.
 
 ### 3.2 The save
 
-`POST /booking-groups/{id}/room-batches` with an `Idempotency-Key` header (`reservation.create` and `group.manage` are both needed; `guest.write` too, for the guests it makes).
+`POST /groups/{id}/room-batches` with an `Idempotency-Key` header (`reservation.create`, the right that books a room into a group today, and `guest.write` for the guests it makes; `group.manage` is not needed; the routes are under `/groups/{id}`, where the group routes are).
 
 Body: `rows[]` (as above, with the rate per night as an optional `rate_per_night`), `confirm` (default **true**: a block that holds nothing is not a block; `false` makes drafts), `booker_guest_id` (optional: else the contact guest of the group), `rate_override_reason` and `rate_override_approval`, and the pass-through approvals the booking engine already knows (`occupancy_approval`, `exceed_free_quota`, `restriction_override`, each **once** for the request).
 
@@ -58,7 +58,7 @@ Body: `rows[]` (as above, with the rate per night as an optional `rate_per_night
 
 1. `RequireOpenBusinessDay` (share, level 10).
 2. `LockRows(RoomTypes, ForUpdate)` once, **all distinct room types of all rows, ascending** (level 20). No room is chosen (rooms are assigned later), so there is no level 30 lock.
-3. `LockRows(Groups, ForShare)` once (level 45); the contact guest and the placeholder guests are made now (sequence, 50); then `create` per reservation with "locks held" so `resolveLinks` does not lock the group again (finding 2).
+3. `LockRows(Groups, ForUpdate)` once (level 45; for update so that two bulk bookings of one group take turns and the running numbers never repeat); the contact guest and the placeholder guests are made now (sequence, 50); then `create` per reservation with "locks held" so `resolveLinks` does not lock the group again (finding 2).
 4. Each reservation's holds see the rows inserted by the ones before it in the same transaction, so "the rooms ran out in the middle" is found at the room where it happens, and the whole transaction rolls back.
 
 **Idempotency.** The engine stores a key and a hash on each reservation. The batch derives them: reservation *i* gets the key `K#i` (the header key is limited so that the longest suffix stays within 100 characters) and **the hash of the whole request**. A replay finds `K#1`; if its hash is not the hash of this request it is `IDEMPOTENCY_KEY_REUSED`; otherwise the *n* reservations `K#1..K#n` are read back and returned (all-or-nothing guarantees they all exist). Two requests with the same key at once: the loser gets `DUPLICATE_REQUEST` from the unique key and replays the winner, as `Create` does. No batch table is needed.
@@ -76,9 +76,9 @@ Body: `rows[]` (as above, with the rate per night as an optional `rate_per_night
 
 ### 3.4 The rooming list
 
-In Group detail: a table with one row per reservation line (room, type, dates, confirmation number, status, **name, e-mail, phone**), editable in place. Saving edits the guest row of the line (`PATCH /booking-groups/{id}/rooming-list`, `guest.write` and `reservation.update`, all rows or none). Naming a placeholder clears `is_placeholder`. Linking a line to an **existing** guest (a returning guest) is a row with `guest_id`; it changes the line, so it needs the reservation `version` and locks the reservations of the changed rows in **one ascending call** (level 40).
+In Group detail: a table with one row per reservation line (room, type, dates, confirmation number, status, **name, e-mail, phone**), editable in place. Saving edits the guest row of the line (`PATCH /groups/{id}/rooming-list`, `guest.write` and `reservation.update`, all rows or none). Naming a placeholder clears `is_placeholder`. Linking a room to an **existing** guest is not done here: it is the change of the guest of a line on the reservation screen (`PATCH /reservations/{id}/rooms/{lineId}`). The rooming list edits the guest of the room in place.
 
-**CSV import** (`POST /booking-groups/{id}/rooming-list/import?dry_run=true|false`): columns `confirmation_number` (or `n`, the running number), `first_name`, `last_name`, `email`, `phone`. All or nothing; `dry_run=true` reads and checks everything and writes nothing; **every wrong row is reported** (row number, column, code), not the first only (the same pattern as the budget CSV import). The dry run returns what would change (counts, the rows). Unknown confirmation numbers, rows of another group, duplicates in the file and malformed e-mails are row errors.
+**CSV import** (`POST /groups/{id}/rooming-list/import?dry_run=true|false`): columns `confirmation_number` (required, it names the room), `name` (required, the last word is the last name), `email`, `phone`. All or nothing; `dry_run=true` reads and checks everything and writes nothing; **every wrong row is reported** (row number, column, code), not the first only (the same pattern as the budget CSV import). The dry run returns what would change (counts, the rows). Unknown confirmation numbers, rows of another group, duplicates in the file and malformed e-mails are row errors.
 
 ### 3.5 Rate that differs from the price: one reason, one approval
 
@@ -90,7 +90,7 @@ Allotment (rooms held with a release date) and a cancel of the whole group. Room
 
 ### 3.7 API, errors, permissions, migration
 
-- OpenAPI: `POST /booking-groups/{id}/room-batches/preview`, `POST /booking-groups/{id}/room-batches`, `GET/PATCH /booking-groups/{id}/rooming-list`, `POST /booking-groups/{id}/rooming-list/import`; `Group` gains `contact_guest_id`; `Guest` gains `is_placeholder`. Run `npm run gen:api`.
+- OpenAPI: `POST /groups/{id}/room-batches/preview`, `POST /groups/{id}/room-batches`, `GET/PATCH /groups/{id}/rooming-list`, `POST /groups/{id}/rooming-list/import`; `Group` gains `contact_guest_id`; `Guest` gains `is_placeholder`. Run `npm run gen:api`.
 - Permissions: no new one (`reservation.create`, `group.manage`, `guest.write`, `reservation.update`; the approvals existing).
 - New codes: `TOO_MANY_ROOMS`, `TOO_MANY_ROWS`, `GROUP_CONTACT_REQUIRED`, `ROOMING_IMPORT_INVALID` (with the list of rows). Reused: `OUTSIDE_GROUP_DATES`, `GROUP_INACTIVE`, `IDEMPOTENCY_KEY_REUSED`, `APPROVAL_REQUIRED`, the availability error of the engine (with the row).
 - Migration **00073**: `booking_groups.contact_guest_id` (FK `(tenant_id, id)` of guests), `guests.is_placeholder`, an index for the guest search that leaves placeholders out; Down drops them (refused if a placeholder guest exists and is still the guest of a line, since the column is data, not a setting).
@@ -184,7 +184,7 @@ OpenAPI: `POST /folios/{id}/transfer-items`, `POST /folios/{id}/transfer-balance
 
 A folio of type **`MASTER`**, one per booking group, without a stay and without a reservation.
 - `folios.reservation_id` becomes nullable; new `folios.booking_group_id` (FK `(property_id, booking_group_id)`); checks: `(folio_type = 'MASTER') = (booking_group_id IS NOT NULL)`, a MASTER has no stay and no reservation, every other type keeps `reservation_id NOT NULL`; `folios_payer_ck` is relaxed so a MASTER may carry the group's company (copied when it is opened; the buyer of its invoices); `UNIQUE (booking_group_id) WHERE folio_type = 'MASTER'` (a mistaken close is repaired with `folio.reopen`, not a second folio).
-- It is opened by hand (`POST /booking-groups/{id}/master-folio`) or by the first routing rule, **never inside a posting run** (it takes a document number, the last lock).
+- It is opened by hand (`POST /groups/{id}/master-folio`) or by the first routing rule, **never inside a posting run** (it takes a document number, the last lock).
 - **Ripple:** `reservation_id` nullable changes the generated Go type to a pointer everywhere a folio is read (the compiler lists the sites). The inner joins to `reservations` (for example the night audit's list of open folios of dead reservations) already leave a MASTER out, which is wanted; the folio list, the folio view and `documents.Invoice` get a MASTER branch.
 
 ### 5.2 `is_deposit` becomes role-based (the prerequisite; doc 18 3.9)
@@ -229,7 +229,7 @@ The `folios` changes of 5.1, `group_billing_instructions`, `folio_group_routing_
 
 ### 6.2 Partial success, and why one transaction per row (items 17)
 
-`POST /booking-groups/{id}/check-ins` with `rows[]` (`line_id`, `version`, optional `room_id`, `guest_id`, adults, children, the not-ready override with its reason, and an optional per-room deposit) and a header `Idempotency-Key`. The server takes the rows in ascending line id and runs the **existing `frontdesk.CheckIn`**, **each in its own transaction**, and answers per row `CHECKED_IN` (with the stay), `ALREADY_CHECKED_IN`, or `FAILED` with the code and message of the engine (`ROOM_NOT_READY`, `ROOM_OCCUPIED`, `GUEST_MISSING`, `ARRIVAL_DATE_MISMATCH`, a version conflict, …). The HTTP answer is 200 for a request that was understood, whatever the rows did; the row is the unit of success.
+`POST /groups/{id}/check-ins` with `rows[]` (`line_id`, `version`, optional `room_id`, `guest_id`, adults, children, the not-ready override with its reason, and an optional per-room deposit) and a header `Idempotency-Key`. The server takes the rows in ascending line id and runs the **existing `frontdesk.CheckIn`**, **each in its own transaction**, and answers per row `CHECKED_IN` (with the stay), `ALREADY_CHECKED_IN`, or `FAILED` with the code and message of the engine (`ROOM_NOT_READY`, `ROOM_OCCUPIED`, `GUEST_MISSING`, `ARRIVAL_DATE_MISMATCH`, a version conflict, …). The HTTP answer is 200 for a request that was understood, whatever the rows did; the row is the unit of success.
 
 Why a transaction per row: that is what the lock rules require, not an exception to them. A check-in locks the room type (20), the room (30), the reservation (40), the folio (42) and takes a stay number (50); a second check-in in the same transaction would lock its room type (20) after the first took its stay number (50), which `EnterLockLevel` refuses. Taking every room type, room and reservation of the run up front would hold dozens of rooms for the whole run, and one room that is not ready would roll back the others, which is exactly what the owner does not want.
 
@@ -237,7 +237,7 @@ Why a transaction per row: that is what the lock rules require, not an exception
 
 ### 6.3 The group payment section (item 18)
 
-On the same screen, **Group payment**: *no master* (each member's folio carries its own charges), or *use the master* with **what is routed**: the room, chosen charge codes (a multi-select), or everything. It is saved **on the group** (`PUT /booking-groups/{id}/billing-instructions`, which opens the master folio when there is none; **`folio.master_manage`**, new: opening the master and editing the routing, held by the same people as `folio.master_close` by default advice) and nothing is stored per member, so **a member who checks in later follows the rule**: routing is resolved when a night is posted. The same editor is on the group page and can change at any time (it applies to the nights not yet posted; a button moves the posted ones with part B). A line can be excluded from the group routing from the rooming list.
+On the same screen, **Group payment**: *no master* (each member's folio carries its own charges), or *use the master* with **what is routed**: the room, chosen charge codes (a multi-select), or everything. It is saved **on the group** (`PUT /groups/{id}/billing-instructions`, which opens the master folio when there is none; **`folio.master_manage`**, new: opening the master and editing the routing, held by the same people as `folio.master_close` by default advice) and nothing is stored per member, so **a member who checks in later follows the rule**: routing is resolved when a night is posted. The same editor is on the group page and can change at any time (it applies to the nights not yet posted; a button moves the posted ones with part B). A line can be excluded from the group routing from the rooming list.
 
 ### 6.4 Deposits (item 19)
 
@@ -246,7 +246,7 @@ On the same screen, **Group payment**: *no master* (each member's folio carries 
 
 ### 6.5 No new migration, one read
 
-E uses the tables of C. API: the `booking_group_id` filter and the warning on the arrivals read, `POST /booking-groups/{id}/check-ins`. New codes: `GROUP_CHECKIN_EMPTY`, `TOO_MANY_ROWS` (at most 100 rows). Permissions: `frontdesk.checkin` (existing), `payment.post` for a deposit, `frontdesk.checkin_unready_room` for an override, `folio.master_manage` for the group payment section.
+E uses the tables of C. API: the `booking_group_id` filter and the warning on the arrivals read, `POST /groups/{id}/check-ins`. New codes: `GROUP_CHECKIN_EMPTY`, `TOO_MANY_ROWS` (at most 100 rows). Permissions: `frontdesk.checkin` (existing), `payment.post` for a deposit, `frontdesk.checkin_unready_room` for an override, `folio.master_manage` for the group payment section.
 
 ---
 
@@ -261,8 +261,8 @@ E uses the tables of C. API: the `booking_group_id` filter and the warning on th
 
 | Operation | Order |
 |---|---|
-| A batch | business day (10) → all room types, ascending (20) → group, share (45) → sequences (50: the guests, the reservations) |
-| A rooming list edit (link an existing guest) | reservations of the changed rows, one ascending call (40) |
+| A batch | business day (10) → all room types, ascending (20) → group, for update (45) → sequences (50: the guests, the reservations) |
+| A rooming list edit | the guests of the changed rows (no lock level); no reservation changes |
 | B transfers | business day (10) → both folios, ascending (42); no payment, company or group lock |
 | C routing change | business day (10) → open member stays, ascending (41) → master folio (42) → group (45) → sequence (50) |
 | C close of the master | business day (10) → the master (42); member and night state re-read after the lock |
