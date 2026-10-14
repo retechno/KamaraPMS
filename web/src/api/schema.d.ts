@@ -2217,7 +2217,7 @@ export interface paths {
         put?: never;
         /**
          * Refund part or all of a payment (payment.refund, needs approval)
-         * @description The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`).
+         * @description The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`), and against the credit the folio holds: a refund never makes a folio owe (409 `REFUND_EXCEEDS_CREDIT`, with `context.credit` and `context.refundable`, the least of the credit and what is left of the payment). A deposit that paid a fee, or a charge posted after the deposit, is therefore not given back twice.
          */
         post: operations["refundPayment"];
         delete?: never;
