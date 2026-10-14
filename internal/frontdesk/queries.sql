@@ -174,6 +174,8 @@ LIMIT 1;
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code, t.name AS room_type_name,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       g.nationality AS guest_nationality, g.id_type AS guest_id_type, (COALESCE(g.id_number, '') <> '')::boolean AS guest_has_id, (COALESCE(g.phone, '') <> '')::boolean AS guest_has_phone,
+       COALESCE(g.is_placeholder, false)::boolean AS guest_is_placeholder,
        l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code,
        l.status AS line_status, res.status AS reservation_status,
        rp.code AS rate_plan_code, rp.name AS rate_plan_name,
@@ -196,6 +198,7 @@ LEFT JOIN LATERAL (
 ) co ON true
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.arrival_date = @arrival
   AND l.status = @line_status::text AND (@line_status::text <> 'CONFIRMED' OR res.status = 'CONFIRMED')
+  AND (sqlc.narg(booking_group_id)::bigint IS NULL OR res.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (sqlc.narg(room_type_id)::bigint IS NULL OR l.room_type_id = sqlc.narg(room_type_id)::bigint)
   AND (sqlc.narg(q)::text IS NULL OR res.confirmation_number ILIKE '%' || sqlc.narg(q)::text || '%' OR r.room_number ILIKE '%' || sqlc.narg(q)::text || '%'
        OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || sqlc.narg(q)::text || '%')
@@ -243,3 +246,15 @@ SELECT EXISTS (SELECT 1 FROM stay_guests WHERE property_id = @property_id AND st
 -- name: ListPostedNights :many
 SELECT service_date FROM stay_charge_postings
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'POSTED';
+
+-- The rooms of a group that a group check-in names: the reservation, the status of the room, and the latest stay of it (a room that was checked in already).
+-- name: GroupCheckInLines :many
+SELECT l.id AS line_id, l.reservation_id, l.status AS line_status,
+       COALESCE(st.id, 0)::bigint AS stay_id, COALESCE(st.stay_number, '')::text AS stay_number
+FROM reservation_rooms l
+JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+LEFT JOIN LATERAL (SELECT s.id, s.stay_number FROM stays s WHERE s.property_id = l.property_id AND s.reservation_room_id = l.id AND s.status <> 'CANCELLED' ORDER BY s.id DESC LIMIT 1) st ON true
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND r.booking_group_id = @group_id AND l.id = ANY(@line_ids::bigint[]);
+
+-- name: GetGroupBrief :one
+SELECT id, code, name FROM booking_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

@@ -38,7 +38,33 @@ func (s *Service) Estimate(ctx context.Context, tenantID, propertyID int64, nigh
 	if err != nil {
 		return out, err
 	}
+	return s.estimate(ctx, tenantID, propertyID, decimals, map[int64]ChargeRules{}, nights)
+}
+
+// EstimateMany is Estimate for many lines at once (the arrivals of a group): the decimals of the property are read once and the rules of a charge code are resolved once for all the lines,
+// so the cost does not grow with the number of lines. A line with no nights is in the answer with zero totals.
+func (s *Service) EstimateMany(ctx context.Context, tenantID, propertyID int64, byLine map[int64][]NightCharge) (map[int64]EstimateTotals, error) {
+	out := make(map[int64]EstimateTotals, len(byLine))
+	if len(byLine) == 0 {
+		return out, nil
+	}
+	decimals, err := s.currencyDecimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
 	rules := map[int64]ChargeRules{}
+	for id, nights := range byLine {
+		if out[id], err = s.estimate(ctx, tenantID, propertyID, decimals, rules, nights); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// estimate sums the engine over the nights, resolving each charge code into the shared rules cache the first time it is met.
+func (s *Service) estimate(ctx context.Context, tenantID, propertyID int64, decimals int32, rules map[int64]ChargeRules, nights []NightCharge) (EstimateTotals, error) {
+	var out EstimateTotals
+	var err error
 	for _, n := range nights {
 		r, ok := rules[n.ChargeCodeID]
 		if !ok {

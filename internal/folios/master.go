@@ -613,3 +613,67 @@ func stayPtr(id int64) *int64 {
 	}
 	return &id
 }
+
+// RoomChargeFolio is where some of the room charges of a stay stand: the folio, how many nights, and what they add up to.
+type RoomChargeFolio struct {
+	FolioID     int64  `json:"folio_id"`
+	FolioNumber string `json:"folio_number"`
+	FolioType   string `json:"folio_type"`
+	Nights      int    `json:"nights"`
+	Total       string `json:"total"`
+}
+
+// StayRoomCharges says where the room charges of a stay stand now, one entry for each folio (no permission: the caller has its own). A stay whose group's routing changed while it was in house has
+// its nights on two folios, and the answer says how many on each.
+func (s *Service) StayRoomCharges(ctx context.Context, tenantID, propertyID, stayID int64) ([]RoomChargeFolio, error) {
+	rows, err := s.q(ctx).ListStayRoomChargesByFolio(ctx, foliosdb.ListStayRoomChargesByFolioParams{TenantID: tenantID, PropertyID: propertyID, StayID: &stayID})
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RoomChargeFolio, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, RoomChargeFolio{FolioID: r.FolioID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, Nights: int(r.Nights), Total: fixed(r.Total, decimals)})
+	}
+	return out, nil
+}
+
+// RoomChargesMaster is the open master folio the room charges of a line go to now (the routing of its group, the line not excluded and with no instruction of its own), or nil.
+func (s *Service) RoomChargesMaster(ctx context.Context, tenantID, propertyID, reservationID, lineID int64) (*MasterRef, error) {
+	q := s.q(ctx)
+	own, err := s.listInstructions(ctx, tenantID, propertyID, lineID)
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range own {
+		if i.Scope == ScopeRoom || i.Scope == ScopeAll {
+			return nil, nil
+		}
+	}
+	g, err := q.GetLineGroupRouting(ctx, foliosdb.GetLineGroupRoutingParams{TenantID: tenantID, PropertyID: propertyID, ReservationID: reservationID, ID: lineID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (g.Excluded || g.MasterStatus != "OPEN")) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	instr, err := s.groupInstructions(ctx, tenantID, propertyID, *g.BookingGroupID)
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range instr {
+		if i.Scope == ScopeRoom || i.Scope == ScopeAll {
+			return &MasterRef{FolioID: g.MasterID, FolioNumber: g.MasterNumber}, nil
+		}
+	}
+	return nil, nil
+}
+
+// MasterRef names a master folio.
+type MasterRef struct {
+	FolioID     int64  `json:"folio_id"`
+	FolioNumber string `json:"folio_number"`
+}

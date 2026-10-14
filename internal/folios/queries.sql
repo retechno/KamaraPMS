@@ -705,3 +705,13 @@ WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @stay
 -- The batches of a request that moves many folios in one transaction: each carries the key of the request and a suffix.
 -- name: ListBatchesByKeyPrefix :many
 SELECT * FROM folio_transfer_batches WHERE tenant_id = @tenant_id AND property_id = @property_id AND starts_with(idempotency_key, @prefix::text) ORDER BY id;
+
+-- Where the room charges of a stay stand now: the room-night lines that were not reversed, counted and added up for each folio (a night posted before the group's routing is on the guest folio, one after it on the master).
+-- name: ListStayRoomChargesByFolio :many
+SELECT i.folio_id, f.folio_number::text AS folio_number, f.folio_type::text AS folio_type, count(*)::int AS nights, COALESCE(sum(i.debit), 0)::numeric AS total
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.stay_id = @stay_id AND i.stay_room_id IS NOT NULL AND i.transaction_type = 'CHARGE'
+  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+GROUP BY i.folio_id, f.folio_number, f.folio_type
+ORDER BY min(i.id);

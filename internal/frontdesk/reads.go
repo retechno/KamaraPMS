@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/reservations"
 )
 
 // ListStays lists stays, newest first (reservation.read): the in-house and due-out lists. before is the id to
@@ -275,7 +276,7 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 		d = day.BusinessDate
 	}
 	rows, err := s.q(ctx).ListArrivals(ctx, frontdeskdb.ListArrivalsParams{
-		TenantID: p.TenantID, PropertyID: propertyID, Arrival: d, LineStatus: status, RoomTypeID: f.RoomTypeID, Q: likePattern(f.Q),
+		TenantID: p.TenantID, PropertyID: propertyID, Arrival: d, LineStatus: status, RoomTypeID: f.RoomTypeID, Q: likePattern(f.Q), BookingGroupID: f.BookingGroupID,
 	})
 	if err != nil {
 		return nil, err
@@ -292,6 +293,16 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 	if err != nil {
 		return nil, err
 	}
+	var estimates map[int64]reservations.Estimate
+	if f.WithEstimate {
+		lineIDs := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			lineIDs = append(lineIDs, r.LineID)
+		}
+		if estimates, err = s.res.LineEstimates(ctx, p.TenantID, propertyID, lineIDs); err != nil {
+			return nil, err
+		}
+	}
 	out := make([]Arrival, len(rows))
 	for i, r := range rows {
 		a := Arrival{
@@ -305,6 +316,11 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 		}
 		if r.NightAmount != nil {
 			a.Rate.Amount, a.Rate.PriceMode = r.NightAmount.StringFixed(prop.CurrencyDecimals), deref(r.NightPriceMode)
+		}
+		a.GuestNationality, a.GuestIDType, a.GuestHasID, a.GuestHasPhone, a.GuestIsPlaceholder = strings.TrimSpace(deref(r.GuestNationality)), deref(r.GuestIDType), r.GuestHasID, r.GuestHasPhone, r.GuestIsPlaceholder
+		if est, ok := estimates[r.LineID]; ok {
+			v := est.Total.StringFixed(prop.CurrencyDecimals)
+			a.Estimate = &v
 		}
 		if r.CompanyID != 0 { // the left join answers zero values when the line has no instruction
 			a.Company = &InHouseCompany{ID: r.CompanyID, Name: r.CompanyName}

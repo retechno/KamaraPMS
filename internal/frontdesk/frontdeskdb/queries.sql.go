@@ -205,6 +205,29 @@ func (q *Queries) CloseOpenSegment(ctx context.Context, arg CloseOpenSegmentPara
 	return i, err
 }
 
+const getGroupBrief = `-- name: GetGroupBrief :one
+SELECT id, code, name FROM booking_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetGroupBriefParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetGroupBriefRow struct {
+	ID   int64
+	Code string
+	Name string
+}
+
+func (q *Queries) GetGroupBrief(ctx context.Context, arg GetGroupBriefParams) (GetGroupBriefRow, error) {
+	row := q.db.QueryRow(ctx, getGroupBrief, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetGroupBriefRow
+	err := row.Scan(&i.ID, &i.Code, &i.Name)
+	return i, err
+}
+
 const getGuestBrief = `-- name: GetGuestBrief :one
 SELECT id, code, first_name, last_name FROM guests WHERE tenant_id = $1 AND id = $2
 `
@@ -507,6 +530,62 @@ func (q *Queries) GetStayLine(ctx context.Context, arg GetStayLineParams) (GetSt
 	return i, err
 }
 
+const groupCheckInLines = `-- name: GroupCheckInLines :many
+SELECT l.id AS line_id, l.reservation_id, l.status AS line_status,
+       COALESCE(st.id, 0)::bigint AS stay_id, COALESCE(st.stay_number, '')::text AS stay_number
+FROM reservation_rooms l
+JOIN reservations r ON r.property_id = l.property_id AND r.id = l.reservation_id
+LEFT JOIN LATERAL (SELECT s.id, s.stay_number FROM stays s WHERE s.property_id = l.property_id AND s.reservation_room_id = l.id AND s.status <> 'CANCELLED' ORDER BY s.id DESC LIMIT 1) st ON true
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND r.booking_group_id = $3 AND l.id = ANY($4::bigint[])
+`
+
+type GroupCheckInLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	GroupID    *int64
+	LineIds    []int64
+}
+
+type GroupCheckInLinesRow struct {
+	LineID        int64
+	ReservationID int64
+	LineStatus    string
+	StayID        int64
+	StayNumber    string
+}
+
+// The rooms of a group that a group check-in names: the reservation, the status of the room, and the latest stay of it (a room that was checked in already).
+func (q *Queries) GroupCheckInLines(ctx context.Context, arg GroupCheckInLinesParams) ([]GroupCheckInLinesRow, error) {
+	rows, err := q.db.Query(ctx, groupCheckInLines,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.GroupID,
+		arg.LineIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GroupCheckInLinesRow{}
+	for rows.Next() {
+		var i GroupCheckInLinesRow
+		if err := rows.Scan(
+			&i.LineID,
+			&i.ReservationID,
+			&i.LineStatus,
+			&i.StayID,
+			&i.StayNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const hasStayGuest = `-- name: HasStayGuest :one
 SELECT EXISTS (SELECT 1 FROM stay_guests WHERE property_id = $1 AND stay_id = $2 AND guest_id = $3) AS present
 `
@@ -687,6 +766,8 @@ const listArrivals = `-- name: ListArrivals :many
 SELECT l.id AS line_id, l.reservation_id, res.confirmation_number, res.version AS reservation_version, l.room_type_id, t.code AS room_type_code, t.name AS room_type_name,
        l.room_id, r.room_number, hk.status AS housekeeping_status, l.arrival_date, l.departure_date, l.adult_count, l.child_count, l.guest_id AS line_guest_id, res.guest_id AS booker_id,
        g.first_name AS guest_first_name, g.last_name AS guest_last_name,
+       g.nationality AS guest_nationality, g.id_type AS guest_id_type, (COALESCE(g.id_number, '') <> '')::boolean AS guest_has_id, (COALESCE(g.phone, '') <> '')::boolean AS guest_has_phone,
+       COALESCE(g.is_placeholder, false)::boolean AS guest_is_placeholder,
        l.requested_bed_type_id, l.bed_locked, rbt.code AS requested_bed_type_code, abt.code AS room_bed_type_code,
        l.status AS line_status, res.status AS reservation_status,
        rp.code AS rate_plan_code, rp.name AS rate_plan_name,
@@ -709,19 +790,21 @@ LEFT JOIN LATERAL (
 ) co ON true
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.arrival_date = $3
   AND l.status = $4::text AND ($4::text <> 'CONFIRMED' OR res.status = 'CONFIRMED')
-  AND ($5::bigint IS NULL OR l.room_type_id = $5::bigint)
-  AND ($6::text IS NULL OR res.confirmation_number ILIKE '%' || $6::text || '%' OR r.room_number ILIKE '%' || $6::text || '%'
-       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $6::text || '%')
+  AND ($5::bigint IS NULL OR res.booking_group_id = $5::bigint)
+  AND ($6::bigint IS NULL OR l.room_type_id = $6::bigint)
+  AND ($7::text IS NULL OR res.confirmation_number ILIKE '%' || $7::text || '%' OR r.room_number ILIKE '%' || $7::text || '%'
+       OR concat_ws(' ', g.first_name, g.last_name) ILIKE '%' || $7::text || '%')
 ORDER BY t.sort_order, l.id
 `
 
 type ListArrivalsParams struct {
-	TenantID   int64
-	PropertyID int64
-	Arrival    civil.Date
-	LineStatus string
-	RoomTypeID *int64
-	Q          *string
+	TenantID       int64
+	PropertyID     int64
+	Arrival        civil.Date
+	LineStatus     string
+	BookingGroupID *int64
+	RoomTypeID     *int64
+	Q              *string
 }
 
 type ListArrivalsRow struct {
@@ -743,6 +826,11 @@ type ListArrivalsRow struct {
 	BookerID             *int64
 	GuestFirstName       *string
 	GuestLastName        *string
+	GuestNationality     *string
+	GuestIDType          *string
+	GuestHasID           bool
+	GuestHasPhone        bool
+	GuestIsPlaceholder   bool
 	RequestedBedTypeID   *int64
 	BedLocked            bool
 	RequestedBedTypeCode *string
@@ -765,6 +853,7 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 		arg.PropertyID,
 		arg.Arrival,
 		arg.LineStatus,
+		arg.BookingGroupID,
 		arg.RoomTypeID,
 		arg.Q,
 	)
@@ -794,6 +883,11 @@ func (q *Queries) ListArrivals(ctx context.Context, arg ListArrivalsParams) ([]L
 			&i.BookerID,
 			&i.GuestFirstName,
 			&i.GuestLastName,
+			&i.GuestNationality,
+			&i.GuestIDType,
+			&i.GuestHasID,
+			&i.GuestHasPhone,
+			&i.GuestIsPlaceholder,
 			&i.RequestedBedTypeID,
 			&i.BedLocked,
 			&i.RequestedBedTypeCode,

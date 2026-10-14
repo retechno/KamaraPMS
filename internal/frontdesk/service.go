@@ -154,7 +154,8 @@ type checkInCmd struct {
 	override   bool
 	overrideBy string
 	key        string
-	lockedFund int64 // folio locked by LockUnlinkedFolio (0 = none)
+	lockedFund int64  // folio locked by LockUnlinkedFolio (0 = none)
+	batch      string // the batch of a group check-in (every row of one request names it in its audit entry); empty for a single check-in
 }
 
 // checkInCore does the writes and checks of a check-in once the locks are held (room type, room, and the
@@ -274,6 +275,9 @@ func (s *Service) checkInCore(ctx context.Context, c checkInCmd) (CheckInResult,
 		entry["override_room_not_ready"] = true
 		entry["override_reason"] = c.overrideBy
 	}
+	if c.batch != "" {
+		entry["batch_id"] = c.batch
+	}
 	if err := s.audit.Write(ctx, auditEntry(c.p, c.propertyID, c.bd, "stay.checked_in", stay.ID, stay.StayNumber, nil, entry)); err != nil {
 		return CheckInResult{}, err
 	}
@@ -352,6 +356,11 @@ func (s *Service) CheckIn(ctx context.Context, propertyID, reservationID, lineID
 	if err != nil {
 		return CheckInResult{}, err
 	}
+	return s.checkIn(ctx, p, propertyID, reservationID, lineID, key, in, "")
+}
+
+// checkIn is CheckIn for a caller that has checked the permission: the check-in of one row of a group check-in carries the batch of the request.
+func (s *Service) checkIn(ctx context.Context, p auth.Principal, propertyID, reservationID, lineID int64, key string, in CheckInInput, batch string) (CheckInResult, error) {
 	fields := in.validate()
 	if len(key) > 100 {
 		fields = append(fields, fieldErr("Idempotency-Key", "TOO_LONG", "at most 100 characters"))
@@ -401,7 +410,7 @@ func (s *Service) CheckIn(ctx context.Context, propertyID, reservationID, lineID
 					p: p, propertyID: propertyID, bd: locked.BusinessDate,
 					line:   lineFacts{ID: line.ID, ReservationID: reservationID, RoomTypeID: line.RoomTypeID, RoomID: line.RoomID, Arrival: line.ArrivalDate, Departure: line.DepartureDate, BedLocked: line.BedLocked, RequestedBedTypeID: line.RequestedBedTypeID},
 					roomID: *target, guestID: in.GuestID, accompany: dedupe(in.AccompanyingGuestIDs, in.GuestID), adults: in.AdultCount, children: in.ChildCount,
-					override: in.OverrideRoomNotReady, overrideBy: strings.TrimSpace(in.OverrideReason), key: key, lockedFund: folioID,
+					override: in.OverrideRoomNotReady, overrideBy: strings.TrimSpace(in.OverrideReason), key: key, lockedFund: folioID, batch: batch,
 				})
 				return err
 			})

@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import GroupBulkRooms from '@/components/groups/GroupBulkRooms.vue'
+import GroupCheckIn from '@/components/groups/GroupCheckIn.vue'
 import GroupMasterFolio from '@/components/groups/GroupMasterFolio.vue'
 import GroupRoomingList from '@/components/groups/GroupRoomingList.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -30,6 +31,7 @@ const editing = ref(false)
 const saving = ref(false)
 const bulkOpen = ref(false)
 const roomingReload = ref(0)
+const checkInReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
@@ -124,7 +126,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </CardContent>
   </Card>
 
-  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" />
+  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" @changed="checkInReload++" />
+  <GroupCheckIn v-if="group && !editing" :group-id="group.id" :active="group.is_active" :reload="checkInReload" @changed="roomingReload++" />
 
   <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 

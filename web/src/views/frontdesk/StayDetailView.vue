@@ -9,6 +9,7 @@ import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import StayActions from '@/components/StayActions.vue'
 import type { CheckOutResult, StayDetail } from '@/api/types'
 import { documentPath, openPdf } from '@/utils/documents'
+import { formatMoney } from '@/utils/format'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -113,6 +114,15 @@ async function changed(message: string): Promise<void> {
 
 async function checkedOut(result: CheckOutResult): Promise<void> {
   notice.value = t('stay.checkedOut', { n: result.posted_room_charges.length })
+  // where the room charges stand: said when any of them is on a master folio (a stay whose group routing changed has them on two folios: how many nights on each), and, when the check-out posted
+  // none, where the room charges of this room go
+  const where = result.room_charges ?? []
+  if (where.some((w) => w.folio_type === 'MASTER')) {
+    const parts = where.map((w) => t(w.folio_type === 'MASTER' ? 'stay.chargeAtMaster' : w.folio_type === 'COMPANY' ? 'stay.chargeAtCompany' : 'stay.chargeAtGuest', { n: w.nights, total: formatMoney(w.total), folio: w.folio_number }))
+    notice.value += ` ${t('stay.roomChargesAt', { parts: parts.join('; ') })}`
+  } else if (result.posted_room_charges.length === 0 && result.room_charges_master) {
+    notice.value = t('stay.checkedOutMaster', { folio: result.room_charges_master.folio_number })
+  }
   masterOpen.value = result.master_folio ?? null
   await load()
 }

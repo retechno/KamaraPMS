@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
@@ -98,7 +99,7 @@ describe('StayDetailView', () => {
     await flushPromises()
     expect(w.find('[data-testid=checkout-wizard]').exists()).toBe(false)
     const note = w.get('[data-testid=checkout-master]')
-    expect(note.text()).toContain('This was the last room of group GRP1: its master folio FOL000030 is still open (balance 2,000,000).')
+    expect(note.text()).toContain('This was the last room billed to the master folio of group GRP1: the master folio FOL000030 is still open (balance 2,000,000).')
     expect(note.get('a').attributes('href')).toBe('/folios/30')
     // a check-out that is not the last one says nothing about the master
     const other = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
@@ -107,6 +108,37 @@ describe('StayDetailView', () => {
     other.getComponent(CheckOutWizard).vm.$emit('done', { posted_room_charges: [], master_folio: null })
     await flushPromises()
     expect(other.find('[data-testid=checkout-master]').exists()).toBe(false)
+  })
+
+  async function checkedOutWith(result: object) {
+    const w = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
+    await flushPromises()
+    await w.get('[data-testid=checkout]').trigger('click')
+    GET.mockResolvedValue({ data: detail({ stay: { ...detail().stay, status: 'CHECKED_OUT' } }) })
+    w.getComponent(CheckOutWizard).vm.$emit('done', { posted_room_charges: [], master_folio: null, room_charges: [], room_charges_master: null, ...result })
+    await flushPromises()
+    return w.get('[data-testid=notice]').text()
+  }
+
+  it('says where the room charges of the stay stand when some are on a master folio, with the nights on each folio when the routing changed', async () => {
+    const posted = [{ service_date: '2026-10-01' }]
+    // all on the master
+    expect(await checkedOutWith({ posted_room_charges: posted, room_charges: [{ folio_id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', nights: 2, total: '1800000' }] })).toBe(
+      'Checked out with 1 room charge(s) posted. Room charges of this stay: 2 night(s) (1,800,000) on master folio FOL000030.')
+    // split: the night before the routing is on the folio of the guest, the night after it on the master
+    expect(await checkedOutWith({
+      posted_room_charges: posted,
+      room_charges: [{ folio_id: 8, folio_number: 'FOL000008', folio_type: 'GUEST', nights: 1, total: '900000' }, { folio_id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', nights: 1, total: '900000' }],
+    })).toBe('Checked out with 1 room charge(s) posted. Room charges of this stay: 1 night(s) (900,000) on folio FOL000008; 1 night(s) (900,000) on master folio FOL000030.')
+    // nothing posted by the check-out, and the room charges of this room go to the master
+    expect(await checkedOutWith({ room_charges_master: { folio_id: 30, folio_number: 'FOL000030' } })).toBe('Checked out. The room charges of this room go to the master folio FOL000030.')
+    // on the folio of the guest only: the sentence is the one it was
+    expect(await checkedOutWith({ posted_room_charges: posted, room_charges: [{ folio_id: 8, folio_number: 'FOL000008', folio_type: 'GUEST', nights: 1, total: '900000' }] })).toBe('Checked out with 1 room charge(s) posted.')
+    // in Indonesian
+    setLocale('id')
+    expect(await checkedOutWith({ posted_room_charges: posted, room_charges: [{ folio_id: 8, folio_number: 'FOL000008', folio_type: 'GUEST', nights: 1, total: '900000' }, { folio_id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', nights: 1, total: '900000' }] })).toBe(
+      'Check-out dengan 1 biaya kamar diposting. Biaya kamar menginap ini: 1 malam (900.000) di folio FOL000008; 1 malam (900.000) di master folio FOL000030.')
+    setLocale('en')
   })
 
   it('opens the check-out wizard for an open stay and hides it once checked out or without permission', async () => {

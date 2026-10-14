@@ -2249,6 +2249,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/groups/{id}/check-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check in the rooms of a group that arrive today, each in its own transaction (frontdesk.checkin; payment.post when a row has a deposit)
+         * @description Up to 100 rows (`TOO_MANY_ROWS`, `GROUP_CHECKIN_EMPTY`), taken in ascending `line_id`. The answer is 200 whatever the rows did: each row is `CHECKED_IN` (with its stay), `ALREADY_CHECKED_IN` or `FAILED` with the code and
+         *     message of the check-in (`ROOM_NOT_READY`, `ROOM_OCCUPIED`, `GUEST_MISSING`, `ARRIVAL_DATE_MISMATCH`, `VERSION_CONFLICT`, `NO_OPEN_SHIFT`, ...). Nothing is rolled back for another row failing.
+         *     A row with a `deposit` records it on the reservation first (an advance deposit, refundable) and then checks the room in; a deposit that was taken and a check-in that failed leaves the deposit where it is. A request
+         *     with a deposit row by a person without `payment.post` is refused whole (403) before anything is written.
+         *     The keys of a row come from the line, not from the request: a repeat of the request under any Idempotency-Key returns the same stay for a room that was checked in and takes no deposit twice; the same deposit with
+         *     another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
+         */
+        post: operations["checkInGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/walk-ins": {
         parameters: {
             query?: never;
@@ -9741,6 +9769,72 @@ export interface components {
             stay_room: components["schemas"]["StaySegment"];
             folio: components["schemas"]["StayFolio"];
         };
+        GroupCheckInRequest: {
+            rows: {
+                /**
+                 * Format: int64
+                 * @description The room (reservation room) of the group.
+                 */
+                line_id: number;
+                /**
+                 * Format: int32
+                 * @description The version of the reservation.
+                 */
+                version: number;
+                /** Format: int64 */
+                room_id?: number;
+                /** Format: int64 */
+                guest_id: number;
+                adult_count: number;
+                /** @default 0 */
+                child_count: number;
+                /** @default false */
+                override_room_not_ready: boolean;
+                override_reason?: string;
+                deposit?: {
+                    amount: string;
+                    payment_method: components["schemas"]["PaymentMethod"];
+                    reference_number?: string;
+                };
+            }[];
+        };
+        GroupCheckInResult: {
+            /** @description The Idempotency-Key of the request; the batch_id of the audit entries it wrote. */
+            batch_id: string;
+            checked_in: number;
+            already_checked_in: number;
+            failed: number;
+            deposits_recorded: number;
+            rows: {
+                /** Format: int64 */
+                line_id: number;
+                /** @enum {string} */
+                status: "CHECKED_IN" | "ALREADY_CHECKED_IN" | "FAILED";
+                stay?: components["schemas"]["Stay"];
+                /**
+                 * Format: int64
+                 * @description The stay of a room that was checked in by someone else (ALREADY_CHECKED_IN).
+                 */
+                stay_id?: number;
+                room_number?: string;
+                /** @description The code of the failure (FAILED). */
+                code?: string;
+                message?: string;
+                deposit?: {
+                    /**
+                     * @description REPLAYED: an earlier request took it and it was not taken again.
+                     * @enum {string}
+                     */
+                    status: "RECORDED" | "REPLAYED" | "FAILED";
+                    /** Format: int64 */
+                    payment_id?: number;
+                    payment_number?: string;
+                    amount?: string;
+                    code?: string;
+                    message?: string;
+                };
+            }[];
+        };
         ReverseResult: {
             stay: components["schemas"]["Stay"];
             folio: components["schemas"]["StayFolio"];
@@ -9812,6 +9906,22 @@ export interface components {
             housekeeping: string;
             /** @description Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing. */
             master_folio?: components["schemas"]["MasterInfo"] | null;
+            /** @description Where the room charges of the whole stay stand, one entry for each folio. A stay whose group routing changed while it was in house has them on two folios. */
+            room_charges?: {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+                /** @enum {string} */
+                folio_type: "GUEST" | "COMPANY" | "MASTER";
+                nights: number;
+                total: string;
+            }[];
+            /** @description The open master folio the room charges of this room go to by the routing of its group; null when they go to the folio of the guest. */
+            room_charges_master?: null | {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+            };
         };
         StaySummary: {
             /** Format: int64 */
@@ -9951,6 +10061,15 @@ export interface components {
             status: "CONFIRMED" | "CHECKED_IN" | "CANCELLED" | "NO_SHOW";
             reservation_status: string;
             room_type_name: string;
+            /** @description The nationality of the guest (absent when unknown); with the next fields it is what the identity hints of the check-in read. */
+            guest_nationality?: string;
+            guest_id_type?: string;
+            guest_has_id: boolean;
+            guest_has_phone: boolean;
+            /** @description The guest is a placeholder of a rooming list that has no name yet. */
+            guest_is_placeholder: boolean;
+            /** @description The total of the charge engine for the nights of the line; only with with_estimate. */
+            estimate_total?: string;
             rate: {
                 rate_plan_code: string;
                 rate_plan_name: string;
@@ -17650,6 +17769,39 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    checkInGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupCheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description What happened to each row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupCheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     walkIn: {
         parameters: {
             query?: never;
@@ -17690,6 +17842,10 @@ export interface operations {
                 status?: "CONFIRMED" | "CHECKED_IN" | "CANCELLED" | "NO_SHOW";
                 q?: string;
                 room_type_id?: number;
+                /** @description Only the rooms of the reservations of this group. */
+                booking_group_id?: number;
+                /** @description Add `estimate_total` to each row (one batch for all the rows; for the deposit proposal of a group check-in). */
+                with_estimate?: boolean;
             };
             header?: never;
             path: {

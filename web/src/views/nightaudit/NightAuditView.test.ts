@@ -160,7 +160,9 @@ describe('NightAuditView', () => {
     const w = mountView({ ...clean(), warnings: { ...clean().warnings, open_group_masters: [{ folio_id: 30, folio_number: 'FOL000030', group_code: 'GRP1', group_name: 'Conference', balance: '2000000' }] } })
     await flushPromises()
     const line = w.get('[data-testid=open-master-30]')
-    expect(line.text()).toContain('The group GRP1 has left and its master folio FOL000030 is still open (balance 2,000,000).')
+    expect(line.text()).toContain('Every room billed to the master folio of group GRP1 has left, and the master folio FOL000030 is still open (balance 2,000,000).')
+    // a room that stays out of the master may still be in house: the sentence says which rooms have left
+    expect(line.text()).not.toContain('The group GRP1 has left')
     expect(line.get('a').attributes('href')).toBe('/folios/30')
     expect(w.find('[data-testid=cannot-run]').exists()).toBe(false) // a warning, not a blocker
   })

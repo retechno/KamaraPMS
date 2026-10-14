@@ -212,22 +212,35 @@ func (s *Service) PostPayment(ctx context.Context, propertyID, folioID int64, ke
 // Deposit takes a payment against a reservation that is not checked in yet (payment.post): it goes on the
 // reservation's open folio that is not linked to a stay, which is created on the first deposit.
 func (s *Service) Deposit(ctx context.Context, propertyID, reservationID int64, key string, in PaymentInput) (PaymentResult, error) {
+	out, _, err := s.DepositInBatch(ctx, propertyID, reservationID, key, in, "")
+	return out, err
+}
+
+// DepositInBatch is Deposit for a group check-in: the audit entry names the batch of the request (batch_id), as the entries of the check-ins of the same request do. The key is one the caller keeps
+// stable for the line, so a repeat of the request under another Idempotency-Key finds the payment and takes none again; the same key with another amount or method is IDEMPOTENCY_KEY_REUSED.
+func (s *Service) DepositInBatch(ctx context.Context, propertyID, reservationID int64, key string, in PaymentInput, batch string) (PaymentResult, bool, error) {
 	p, err := s.actor(ctx, propertyID, auth.PermPaymentPost)
 	if err != nil {
-		return PaymentResult{}, err
+		return PaymentResult{}, false, err
 	}
 	decimals, err := s.decimals(ctx, propertyID)
 	if err != nil {
-		return PaymentResult{}, err
+		return PaymentResult{}, false, err
 	}
 	amount, fields := in.parse(decimals)
 	fields = append(fields, checkKey(key)...)
 	if len(fields) > 0 {
-		return PaymentResult{}, apperr.Invalid("the payment is invalid", fields...)
+		return PaymentResult{}, false, apperr.Invalid("the payment is invalid", fields...)
 	}
-	return replayLoop(key,
+	replayed := false
+	out, err := replayLoop(key,
 		func() (PaymentResult, bool, error) {
-			return s.paymentReplay(ctx, p.TenantID, propertyID, key, 0, func(pay foliosdb.Payment) bool { return pay.PaymentType == PaymentTypePayment })
+			// the same key is the same deposit: the amount and the method must be the ones that were recorded, or the answer is not silently the old one
+			res, ok, err := s.paymentReplay(ctx, p.TenantID, propertyID, key, 0, func(pay foliosdb.Payment) bool {
+				return pay.PaymentType == PaymentTypePayment && pay.Amount.Equal(amount) && pay.PaymentMethod == in.PaymentMethod
+			})
+			replayed = replayed || ok
+			return res, ok, err
 		},
 		func() (PaymentResult, error) {
 			var out PaymentResult
@@ -260,9 +273,13 @@ func (s *Service) Deposit(ctx context.Context, propertyID, reservationID int64, 
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.deposit_posted", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
+				entry := map[string]any{
 					"payment_number": pay.PaymentNumber, "folio_id": folioID, "reservation_id": reservationID, "amount": pay.Amount.String(), "method": pay.PaymentMethod,
-				})); err != nil {
+				}
+				if batch != "" {
+					entry["batch_id"] = batch
+				}
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.deposit_posted", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, entry)); err != nil {
 					return err
 				}
 				out, err = s.paymentResult(ctx, p.TenantID, propertyID, pay)
@@ -270,6 +287,7 @@ func (s *Service) Deposit(ctx context.Context, propertyID, reservationID int64, 
 			})
 			return out, err
 		})
+	return out, replayed, err
 }
 
 // depositFolio returns the reservation's open folio that has no stay, locked, or creates it. A new folio is our

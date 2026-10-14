@@ -21,6 +21,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) Register(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}"
 	mux.Handle("POST "+p+"/reservations/{id}/rooms/{lineId}/check-in", httpx.HandlerFunc(h.checkIn))
+	mux.Handle("POST "+p+"/groups/{id}/check-ins", httpx.HandlerFunc(h.groupCheckIn))
 	mux.Handle("POST "+p+"/walk-ins", httpx.HandlerFunc(h.walkIn))
 	mux.Handle("GET "+p+"/arrivals", httpx.HandlerFunc(h.arrivals))
 	mux.Handle("GET "+p+"/stays", httpx.HandlerFunc(h.list))
@@ -78,6 +79,30 @@ func (h *Handler) checkIn(w http.ResponseWriter, r *http.Request) error {
 	return httpx.WriteJSON(w, http.StatusCreated, res)
 }
 
+func (h *Handler) groupCheckIn(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	groupID, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	key, err := idempotencyKey(r)
+	if err != nil {
+		return err
+	}
+	var in GroupCheckInInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.GroupCheckIn(r.Context(), pid, groupID, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res) // 200 whatever the rows did: the row is the unit of success
+}
+
 func (h *Handler) walkIn(w http.ResponseWriter, r *http.Request) error {
 	pid, err := tenancy.PropertyID(r)
 	if err != nil {
@@ -119,6 +144,14 @@ func (h *Handler) arrivals(w http.ResponseWriter, r *http.Request) error {
 		}
 		f.RoomTypeID = &id
 	}
+	if s := r.URL.Query().Get("booking_group_id"); s != "" {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || id < 1 {
+			return apperr.Invalid("the filter is invalid", fieldErr("booking_group_id", "INVALID_VALUE", "a positive integer"))
+		}
+		f.BookingGroupID = &id
+	}
+	f.WithEstimate = r.URL.Query().Get("with_estimate") == "true"
 	rows, err := h.svc.Arrivals(r.Context(), pid, date, f)
 	if err != nil {
 		return err

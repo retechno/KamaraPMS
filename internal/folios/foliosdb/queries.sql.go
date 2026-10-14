@@ -3597,6 +3597,57 @@ func (q *Queries) ListStayOpenFolios(ctx context.Context, arg ListStayOpenFolios
 	return items, nil
 }
 
+const listStayRoomChargesByFolio = `-- name: ListStayRoomChargesByFolio :many
+SELECT i.folio_id, f.folio_number::text AS folio_number, f.folio_type::text AS folio_type, count(*)::int AS nights, COALESCE(sum(i.debit), 0)::numeric AS total
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id
+WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.stay_id = $3 AND i.stay_room_id IS NOT NULL AND i.transaction_type = 'CHARGE'
+  AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
+GROUP BY i.folio_id, f.folio_number, f.folio_type
+ORDER BY min(i.id)
+`
+
+type ListStayRoomChargesByFolioParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     *int64
+}
+
+type ListStayRoomChargesByFolioRow struct {
+	FolioID     int64
+	FolioNumber string
+	FolioType   string
+	Nights      int32
+	Total       decimal.Decimal
+}
+
+// Where the room charges of a stay stand now: the room-night lines that were not reversed, counted and added up for each folio (a night posted before the group's routing is on the guest folio, one after it on the master).
+func (q *Queries) ListStayRoomChargesByFolio(ctx context.Context, arg ListStayRoomChargesByFolioParams) ([]ListStayRoomChargesByFolioRow, error) {
+	rows, err := q.db.Query(ctx, listStayRoomChargesByFolio, arg.TenantID, arg.PropertyID, arg.StayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStayRoomChargesByFolioRow{}
+	for rows.Next() {
+		var i ListStayRoomChargesByFolioRow
+		if err := rows.Scan(
+			&i.FolioID,
+			&i.FolioNumber,
+			&i.FolioType,
+			&i.Nights,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTransfersOfItems = `-- name: ListTransfersOfItems :many
 SELECT t.id, b.kind, b.is_return, t.from_folio_id, ff.folio_number AS from_number, t.to_folio_id, tf.folio_number AS to_number, t.origin_folio_id, ofo.folio_number AS origin_number,
        t.previous_folio_id, t.out_item_id, t.in_item_id, t.original_item_id,
