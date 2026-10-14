@@ -36,6 +36,7 @@ const bulkOpen = ref(false)
 const roomingReload = ref(0)
 const checkInReload = ref(0)
 const holdingsReload = ref(0)
+const masterReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
@@ -90,6 +91,7 @@ async function bulkSaved(): Promise<void> {
 async function cancelChanged(): Promise<void> {
   await load()
   holdingsReload.value++
+  masterReload.value++
   checkInReload.value++
   roomingReload.value++
 }
@@ -132,15 +134,22 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <p v-if="group.notes" class="mb-0 mt-3 text-sm text-muted-foreground">{{ group.notes }}</p>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <Button v-if="canManage" type="button" variant="outline" data-testid="edit-group" @click="startEdit">{{ t('common.edit') }}</Button>
-        <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
-          <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
-        </RouterLink>
-        <Button v-if="canBook" type="button" data-testid="bulk-rooms-open" @click="bulkOpen = !bulkOpen">{{ t('groupRooms.open') }}</Button>
+        <template v-if="allCancelled && canBook">
+          <Button type="button" disabled :title="t('groupDetail.cancelledNoRooms')" data-testid="add-rooms-disabled">{{ t('groupDetail.addRooms') }}</Button>
+          <Button type="button" disabled :title="t('groupDetail.cancelledNoRooms')" data-testid="bulk-rooms-disabled">{{ t('groupRooms.open') }}</Button>
+        </template>
+        <template v-else>
+          <RouterLink v-if="canBook" :to="{ path: '/reservations/new', query: { group: group.id } }" data-testid="add-rooms">
+            <Button type="button" tabindex="-1">{{ t('groupDetail.addRooms') }}</Button>
+          </RouterLink>
+          <Button v-if="canBook" type="button" data-testid="bulk-rooms-open" @click="bulkOpen = !bulkOpen">{{ t('groupRooms.open') }}</Button>
+        </template>
       </div>
+      <p v-if="allCancelled && canBook" class="m-0 mt-2 text-right text-sm text-muted-foreground" data-testid="group-cancelled-note">{{ t('groupDetail.cancelledNoRooms') }}</p>
     </CardContent>
   </Card>
 
-  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" :all-cancelled="allCancelled" @changed="checkInReload++" />
+  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" :all-cancelled="allCancelled" :reload="masterReload" @changed="checkInReload++" />
   <GroupCheckIn v-if="group && !editing" :group-id="group.id" :active="group.is_active" :reload="checkInReload" @changed="roomingReload++" />
 
   <GroupCancel v-if="group && !editing" :group-id="group.id" :group-code="group.code" :members="members" @changed="cancelChanged" />

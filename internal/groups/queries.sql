@@ -31,6 +31,10 @@ FROM booking_groups g
 LEFT JOIN companies c ON c.property_id = g.property_id AND c.id = g.company_id
 WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.id < @before_id
   AND (sqlc.narg(active)::boolean IS NULL OR g.is_active = sqlc.narg(active)::boolean)
+  -- a group whose reservations are all cancelled is not active, whatever its flag says (it has no status of its own; it is derived): the active list leaves it out
+  AND (sqlc.narg(active)::boolean IS DISTINCT FROM true OR NOT (
+        EXISTS (SELECT 1 FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')
+        AND NOT EXISTS (SELECT 1 FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')))
   AND (sqlc.narg(company_id)::bigint IS NULL OR g.company_id = sqlc.narg(company_id)::bigint)
   AND (sqlc.narg(q)::text IS NULL OR g.code ILIKE '%' || sqlc.narg(q)::text || '%' OR g.name ILIKE '%' || sqlc.narg(q)::text || '%')
 ORDER BY g.id DESC

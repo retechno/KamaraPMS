@@ -278,6 +278,10 @@ FROM booking_groups g
 LEFT JOIN companies c ON c.property_id = g.property_id AND c.id = g.company_id
 WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.id < $3
   AND ($4::boolean IS NULL OR g.is_active = $4::boolean)
+  -- a group whose reservations are all cancelled is not active, whatever its flag says (it has no status of its own; it is derived): the active list leaves it out
+  AND ($4::boolean IS DISTINCT FROM true OR NOT (
+        EXISTS (SELECT 1 FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')
+        AND NOT EXISTS (SELECT 1 FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')))
   AND ($5::bigint IS NULL OR g.company_id = $5::bigint)
   AND ($6::text IS NULL OR g.code ILIKE '%' || $6::text || '%' OR g.name ILIKE '%' || $6::text || '%')
 ORDER BY g.id DESC

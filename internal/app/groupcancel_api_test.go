@@ -81,8 +81,9 @@ func TestTheGroupCancelRoutes(t *testing.T) {
 	if r := abc.do(http.MethodGet, mine.base+"/reservations/"+idOf(res), nil); r.body["status"] != "CONFIRMED" {
 		t.Fatalf("nothing was cancelled by the refused request: %v", r.body["status"])
 	}
-	if r := with(clerk, mine.base+"/groups/"+group+"/reinstatements", "k1", map[string]any{"rows": []any{row()}}); r.status != 403 {
-		t.Fatalf("a clerk may not reinstate: %d", r.status)
+	redo := user("redo@hotel.com", role("Redo", "reservation.read", "reservation.reinstate"))
+	if r := with(redo, mine.base+"/groups/"+group+"/reinstatements", "k1", map[string]any{"rows": []any{row()}}); r.status != 403 || r.body["code"] != "PERMISSION_DENIED" {
+		t.Fatalf("the right of one reservation is not the right to bring a group back: %d %v", r.status, r.body)
 	}
 	if r := clerk.do(http.MethodGet, mine.base+"/groups/"+group+"/holdings", nil); r.status != 403 {
 		t.Fatalf("the holdings need folio.read: %d", r.status)
@@ -108,6 +109,27 @@ func TestTheGroupCancelRoutes(t *testing.T) {
 	g := abc.do(http.MethodGet, mine.base+"/groups/"+group, nil)
 	if g.body["reservation_count"] != float64(0) || g.body["cancelled_reservation_count"] != float64(1) {
 		t.Fatalf("the group is cancelled: no reservation left, one cancelled: %v", g.body)
+	}
+	// the active list leaves out a group whose reservations are all cancelled; the whole list keeps it
+	listed := func(q string) bool {
+		r := abc.do(http.MethodGet, mine.base+"/groups"+q, nil)
+		for _, g := range r.body["data"].([]any) {
+			if idOf(response{body: g.(map[string]any)}) == group {
+				return true
+			}
+		}
+		return false
+	}
+	if listed("?active=true") || !listed("") {
+		t.Fatalf("a cancelled group is not in the active list (%v) and is in the whole list (%v)", listed("?active=true"), listed(""))
+	}
+	// the same person brings it back: one row, the batch, and the group is active again
+	back := with(boss, mine.base+"/groups/"+group+"/reinstatements", "k4", map[string]any{"rows": []any{map[string]any{"reservation_id": mustInt(idOf(res)), "version": abc.do(http.MethodGet, mine.base+"/reservations/"+idOf(res), nil).body["version"]}}})
+	if back.status != 200 || back.body["cancelled"] != float64(1) || back.body["rows"].([]any)[0].(map[string]any)["status"] != "REINSTATED" {
+		t.Fatalf("the reinstatement: %d %v", back.status, back.body)
+	}
+	if !listed("?active=true") {
+		t.Fatal("the group is active again")
 	}
 	// the folio filter of the follow-up is understood
 	if r := abc.do(http.MethodGet, mine.base+"/folios?cancelled_with_balance=true", nil); r.status != 200 {

@@ -2902,9 +2902,9 @@ paths:
       - $ref: "#/components/parameters/Id"
     post:
       operationId: reinstateGroup
-      summary: Bring the cancelled reservations of a group back, each in its own transaction (reservation.reinstate)
+      summary: Bring the cancelled reservations of a group back, each in its own transaction (group.cancel)
       description: |
-        The same shape as the cancellation, with no reason. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
+        The same shape as the cancellation, with no reason, and the same right: `group.cancel` is checked for the whole request (403 and nothing done without it); `reservation.reinstate`, the right of one reservation, is not asked for each row. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
         `ROOM_UNAVAILABLE`. In the counters of the answer `cancelled` counts the reservations that were reinstated. The rooms come back unassigned (as `POST /reservations/{id}/reinstate` does).
       tags: [groups]
       parameters:
@@ -4657,7 +4657,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
-        - { name: active, in: query, schema: { type: boolean } }
+        - { name: active, in: query, schema: { type: boolean }, description: "true: only the groups that are active and not cancelled (a group whose reservations are all cancelled is left out; it has no status of its own, it is derived). false: only the inactive ones." }
         - { name: company_id, in: query, schema: { type: integer, format: int64 } }
         - { name: q, in: query, description: Matches the code or the name., schema: { type: string } }
       responses:

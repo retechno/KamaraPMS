@@ -41,6 +41,7 @@ const visible = computed(() => can('group.cancel') && (cancellable.value.length 
 const selected = ref<number[]>([])
 const reason = ref('')
 const confirming = ref(false)
+const reinstating = ref(false)
 const running = ref(false)
 const progress = ref({ done: 0, total: 0 })
 const notice = ref('')
@@ -74,6 +75,7 @@ async function run(which: 'cancel' | 'reinstate'): Promise<void> {
   running.value = true
   mode.value = which
   confirming.value = false
+  reinstating.value = false
   error.value = null
   notice.value = ''
   totals.value = { cancelled: 0, partly: 0, already: 0, skipped: 0, failed: 0 }
@@ -168,8 +170,8 @@ const columns = computed<Column<GroupMember>[]>(() => [
       </template>
       <p v-else-if="!cancelled.length" class="m-0 text-sm text-muted-foreground" data-testid="cancel-nothing">{{ t('groupCancel.nothing') }}</p>
 
-      <div v-if="cancelled.length && can('reservation.reinstate')" class="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
-        <Button type="button" variant="outline" size="sm" :disabled="running" data-testid="reinstate-run" @click="run('reinstate')">{{ t('groupCancel.reinstate', { n: cancelled.length }) }}</Button>
+      <div v-if="cancelled.length" class="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+        <Button type="button" variant="outline" size="sm" :disabled="running" data-testid="reinstate-open" @click="reinstating = true">{{ t('groupCancel.reinstate', { n: cancelled.length }) }}</Button>
         <span class="text-xs text-muted-foreground">{{ t('groupCancel.reinstateHint') }}</span>
       </div>
 
@@ -186,6 +188,22 @@ const columns = computed<Column<GroupMember>[]>(() => [
       <p v-if="hasFailed" class="m-0 mt-2 text-sm text-muted-foreground" data-testid="group-cancel-failed">{{ t('groupCancel.failedHint') }}</p>
     </CardContent>
   </Card>
+
+  <Dialog v-if="reinstating" :open="true" @update:open="(v) => { if (!v) reinstating = false }">
+    <DialogContent class="max-w-md p-5" data-testid="group-reinstate-dialog" @interact-outside.prevent>
+      <DialogTitle>{{ t('groupCancel.reinstateTitle', { n: cancelled.length, group: groupCode }) }}</DialogTitle>
+      <DialogDescription class="mb-3 mt-1">{{ t('groupCancel.reinstateConfirmHint') }}</DialogDescription>
+      <ul class="m-0 list-none space-y-1 p-0 text-sm">
+        <li data-testid="reinstate-count"><strong>{{ t('groupCancel.reinstateCount', { n: cancelled.length }, cancelled.length) }}</strong></li>
+        <li class="text-warning-foreground" data-testid="reinstate-warning">{{ t('groupCancel.reinstateWarning') }}</li>
+        <li class="text-muted-foreground">{{ t('groupCancel.reinstateNoRoom') }}</li>
+      </ul>
+      <div class="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" data-testid="group-reinstate-back" @click="reinstating = false">{{ t('groupCancel.back') }}</Button>
+        <Button type="button" data-testid="group-reinstate-confirm" @click="run('reinstate')">{{ t('groupCancel.reinstateConfirm') }}</Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 
   <Dialog v-if="confirming" :open="true" @update:open="(v) => { if (!v) confirming = false }">
     <DialogContent class="max-w-md p-5" data-testid="group-cancel-dialog" @interact-outside.prevent>

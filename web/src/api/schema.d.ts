@@ -2347,8 +2347,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Bring the cancelled reservations of a group back, each in its own transaction (reservation.reinstate)
-         * @description The same shape as the cancellation, with no reason. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
+         * Bring the cancelled reservations of a group back, each in its own transaction (group.cancel)
+         * @description The same shape as the cancellation, with no reason, and the same right: `group.cancel` is checked for the whole request (403 and nothing done without it); `reservation.reinstate`, the right of one reservation, is not asked for each row. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
          *     `ROOM_UNAVAILABLE`. In the counters of the answer `cancelled` counts the reservations that were reinstated. The rooms come back unassigned (as `POST /reservations/{id}/reinstate` does).
          */
         post: operations["reinstateGroup"];
@@ -20484,6 +20484,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Opaque cursor from a previous page's next_cursor. */
                 cursor?: components["parameters"]["Cursor"];
+                /** @description true: only the groups that are active and not cancelled (a group whose reservations are all cancelled is left out; it has no status of its own, it is derived). false: only the inactive ones. */
                 active?: boolean;
                 company_id?: number;
                 /** @description Matches the code or the name. */

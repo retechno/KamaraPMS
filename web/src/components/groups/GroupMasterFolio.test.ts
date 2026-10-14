@@ -153,7 +153,7 @@ describe('GroupMasterFolio', () => {
   it('says, when every room of the group is cancelled, that the master still holds a deposit and what to do with it', async () => {
     const w = mountPanel(ALL, routing({ master: master({ balance: '-500000' }) }), [], true)
     await flushPromises()
-    expect(w.get('[data-testid=master-cancelled-hint]').text()).toBe('Every room of this group is cancelled, and the master still holds -500,000. Refund it to whoever paid (on the folio of the master), then close it.')
+    expect(w.get('[data-testid=master-cancelled-hint]').text()).toBe('Every room of this group is cancelled, and the master holds a credit of 500,000. Refund it to whoever paid (on the folio of the master), then close it.')
     const settled = mountPanel(ALL, routing({ master: master({ balance: '0' }) }), [], true)
     await flushPromises()
     expect(settled.find('[data-testid=master-cancelled-hint]').exists()).toBe(false)

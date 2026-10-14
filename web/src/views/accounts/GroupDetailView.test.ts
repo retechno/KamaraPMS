@@ -55,6 +55,13 @@ describe('GroupDetailView', () => {
     const live = mountView()
     await flushPromises()
     expect(live.find('[data-testid=group-cancelled]').exists()).toBe(false)
+    // no room is added to a cancelled group: both buttons are off, and the page says why
+    expect(w.find('[data-testid=add-rooms]').exists()).toBe(false)
+    expect(w.get('[data-testid=add-rooms-disabled]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=bulk-rooms-disabled]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=group-cancelled-note]').text()).toBe('This group is cancelled: no room is added to it. Bring its reservations back first, or make a new group.')
+    expect(live.find('[data-testid=add-rooms]').exists()).toBe(true)
+    expect(live.find('[data-testid=group-cancelled-note]').exists()).toBe(false)
     // a group with no reservation at all is not a cancelled one
     const empty = mountView(group({ reservation_count: 0, cancelled_reservation_count: 0, room_count: 0 }))
     await flushPromises()

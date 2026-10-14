@@ -120,12 +120,21 @@ describe('GroupCancel', () => {
   it('reinstates the cancelled reservations and tells the room that was taken', async () => {
     const w = mountCard([member(1, { display_status: 'CANCELLED', status: 'CANCELLED', rooms_cancellable: 0, rooms_cancelled: 1 }), member(2, { display_status: 'CANCELLED', status: 'CANCELLED', rooms_cancellable: 0, rooms_cancelled: 1 })])
     await flushPromises()
-    expect(w.get('[data-testid=reinstate-run]').text()).toBe('Reinstate the cancelled reservations (2)')
+    expect(w.get('[data-testid=reinstate-open]').text()).toBe('Reinstate the cancelled reservations (2)')
+    // the person is asked first: how many come back, and that the rooms may be gone
+    await w.get('[data-testid=reinstate-open]').trigger('click')
+    expect(body('[data-testid=reinstate-count]').text()).toBe('2 reservations will be reinstated')
+    expect(body('[data-testid=reinstate-warning]').text()).toContain('may have been taken by other bookings')
+    expect(POST).not.toHaveBeenCalled()
+    await body('[data-testid=group-reinstate-back]').trigger('click')
+    expect(document.body.querySelector('[data-testid=group-reinstate-dialog]')).toBeNull()
+    expect(POST).not.toHaveBeenCalled()
+    await w.get('[data-testid=reinstate-open]').trigger('click')
     POST.mockResolvedValueOnce(result([
       { reservation_id: 1, confirmation_number: 'RES000001', status: 'REINSTATED' },
       { reservation_id: 2, confirmation_number: 'RES000002', status: 'FAILED', code: 'ROOM_UNAVAILABLE', message: 'taken' },
     ]))
-    await w.get('[data-testid=reinstate-run]').trigger('click')
+    await body('[data-testid=group-reinstate-confirm]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]![0]).toBe('/api/v1/properties/{propertyId}/groups/{id}/reinstatements')
     expect(w.get('[data-testid=cancel-result-1]').text()).toContain('Reinstated')
@@ -137,6 +146,10 @@ describe('GroupCancel', () => {
     const w = mountCard(MEMBERS, ['reservation.read', 'reservation.cancel'])
     await flushPromises()
     expect(w.find('[data-testid=group-cancel]').exists()).toBe(false)
+    // the right of one reservation (reservation.reinstate) is not the right to bring a group back
+    const redo = mountCard([member(1, { display_status: 'CANCELLED', status: 'CANCELLED', rooms_cancellable: 0, rooms_cancelled: 1 })], ['reservation.read', 'reservation.reinstate'])
+    await flushPromises()
+    expect(redo.find('[data-testid=group-cancel]').exists()).toBe(false)
     const none = mountCard([member(2, { display_status: 'IN_HOUSE', rooms_cancellable: 0, rooms_in_house_or_done: 1 })])
     await flushPromises()
     expect(none.find('[data-testid=group-cancel]').exists()).toBe(false)

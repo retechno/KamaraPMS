@@ -364,10 +364,11 @@ func (s *Service) groupCancelRow(ctx context.Context, p auth.Principal, property
 	return res
 }
 
-// GroupReinstate brings the cancelled reservations the request names back (reservation.reinstate, checked for the whole request). A reservation whose rooms were taken meanwhile is a failed row with
+// GroupReinstate brings the cancelled reservations the request names back (group.cancel, checked for the whole request: it is the same mass action, undone, and a person who may cancel a group may bring it
+// back; reservation.reinstate, the right of one reservation, is not asked for each row). A reservation whose rooms were taken meanwhile is a failed row with
 // the code ROOM_UNAVAILABLE; a reservation that is not cancelled is skipped (NOT_CANCELLED). The counter Cancelled of the answer counts the reservations that were reinstated.
 func (s *Service) GroupReinstate(ctx context.Context, propertyID, groupID int64, key string, in GroupReinstateInput) (GroupCancelResult, error) {
-	p, err := s.writer(ctx, propertyID, auth.PermReservationReinstate)
+	p, err := s.writer(ctx, propertyID, auth.PermGroupCancel)
 	if err != nil {
 		return GroupCancelResult{}, err
 	}

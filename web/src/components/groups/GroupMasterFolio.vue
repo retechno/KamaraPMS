@@ -20,7 +20,7 @@ import { usePropertyStore } from '@/stores/property'
  * master (all of them, the room nights, some charge codes), except the rooms that stay out. Nights already posted stay where they are; right after the instructions are saved the screen offers to
  * move them with the transfer of part B.
  */
-const props = defineProps<{ groupId: number; active: boolean; allCancelled?: boolean }>()
+const props = defineProps<{ groupId: number; active: boolean; allCancelled?: boolean; reload?: number }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const auth = useAuthStore()
@@ -95,7 +95,8 @@ async function loadPosted(): Promise<void> {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/groups/{id}/routing/posted', { params: { path: { propertyId, id: props.groupId } } })
   posted.value = Array.isArray(data?.data) ? data.data : []
 }
-watch(() => [pid.value, props.groupId], () => void load(), { immediate: true })
+// read again when the group changed under the panel (rooms cancelled or brought back): its rooms, their statuses and the balance of the master
+watch(() => [pid.value, props.groupId, props.reload], () => void load(), { immediate: true })
 
 function add(): void {
   if (addCode.value > 0 && !picked.value.includes(addCode.value)) picked.value = [...picked.value, addCode.value]
@@ -192,7 +193,7 @@ async function moved(message: string): Promise<void> {
           <span v-if="master.bill_to_company_name" class="text-sm text-muted-foreground" data-testid="master-company">{{ t('groupMaster.billedTo', { company: master.bill_to_company_name }) }}</span>
           <span v-else class="text-sm text-muted-foreground">{{ t('groupMaster.billedToContact') }}</span>
           <Button v-if="canClose && master.status === 'OPEN'" type="button" variant="outline" size="sm" class="ml-auto" :disabled="busy || owes" data-testid="master-close" @click="closeMaster">{{ t('groupMaster.close') }}</Button>
-          <p v-if="allCancelled && master.status === 'OPEN' && owes" class="alert warning m-0 w-full" data-testid="master-cancelled-hint">{{ t(Number(master.balance) < 0 ? 'groupMaster.cancelledHoldsDeposit' : 'groupMaster.cancelledOwes', { balance: $money(master.balance) }) }}</p>
+          <p v-if="allCancelled && master.status === 'OPEN' && owes" class="alert warning m-0 w-full" data-testid="master-cancelled-hint">{{ t(Number(master.balance) < 0 ? 'groupMaster.cancelledHoldsDeposit' : 'groupMaster.cancelledOwes', { amount: $money(String(Math.abs(Number(master.balance)))) }) }}</p>
           <p v-if="canClose && master.status === 'OPEN' && owes" class="m-0 w-full text-sm text-muted-foreground" data-testid="master-close-hint">{{ t(Number(master.balance) < 0 ? 'groupMaster.closeNeedsRefund' : 'groupMaster.closeNeedsZero', { balance: $money(master.balance) }) }}</p>
         </template>
         <template v-else>
