@@ -4602,6 +4602,7 @@ export const id: Messages = {
     RECORD_IMMUTABLE: 'Hari bisnis tidak bisa diubah.',
     REFERENCE_PLAN_EXISTS: 'Properti ini sudah punya paket tarif acuan.',
     REFUND_EXCEEDS_PAYMENT: 'Pengembalian melebihi sisa pembayaran.',
+    REFUND_EXCEEDS_CREDIT: 'Pengembalian melebihi kredit yang dipegang folio: folio akan berutang. Kembalikan paling banyak sisa setelah biaya.',
     REQUEST_ALREADY_BLOCKED: 'Kamar sudah diblokir untuk permintaan ini.',
     REQUEST_CANCELLED: 'Proses dibatalkan atau melewati batas waktu.',
     REQUEST_HAS_NO_ROOM: 'Hanya permintaan yang menyangkut kamar yang bisa memblokir kamar.',

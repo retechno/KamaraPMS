@@ -2,12 +2,14 @@ package accounting_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/listsort"
@@ -270,8 +272,18 @@ func TestACancelledGroupLeavesNoDepositUnseenAndTheBooksAgree(t *testing.T) {
 		t.Fatalf("A (kept) and C (the rest of the deposit) are still followed up, B is not: %v, %d warnings", held(), warned())
 	}
 
-	if got := holdings(); len(got) != 2 || got[0].HeldBalance != "-300000" || got[1].HeldBalance != "-100000" || got[1].Deposits[0].Refundable != "300000" {
-		t.Fatalf("A is kept and C holds the rest of its deposit (the fee is not a refund of it): %+v", got)
+	if got := holdings(); len(got) != 2 || got[0].HeldBalance != "-300000" || got[1].HeldBalance != "-100000" || len(got[1].Deposits) != 1 || got[1].Deposits[0].Refundable != "100000" {
+		t.Fatalf("A is kept and C holds the rest of its deposit: what can be refunded is the 100,000 that the fee left, not the 300,000 of the payment: %+v", got)
+	}
+	// a refund never makes the folio owe: the whole payment of C (300,000) is refused with what can be refunded, and the rest (100,000) goes through and leaves the folio at zero
+	_, err = h.Folios.Refund(h.admin, h.propID, depC.Payment.ID, "rf-c-all", folios.RefundInput{Amount: "300000", Reason: "too much", Approval: h.approval()})
+	wantCode(t, err, "REFUND_EXCEEDS_CREDIT")
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Context["credit"] != "100000" || ae.Context["refundable"] != "100000" {
+		t.Fatalf("the refusal says what the folio holds and what can be refunded: %+v", err)
+	}
+	if got := h.folioBalance(t, stayFolio2(t, h, c.ID)); !got.Equal(dec("-100000")) {
+		t.Fatalf("the refused refund changed nothing: %s", got)
 	}
 	h.closeDay(t)
 	if got := h.balance(t, "2310"); !got.Equal(dec("-600000")) { // A 300,000 and C 300,000; B and the group were refunded
@@ -330,4 +342,12 @@ func TestAGroupIsReinstatedPerReservationAndATakenRoomIsTold(t *testing.T) {
 	if n := h.Count(t, `SELECT count(*) FROM audit_logs WHERE action = 'group.reinstated' AND new_data->>'batch_id' = 'R1' AND (new_data->>'reinstated')::int = 2`); n != 1 {
 		t.Fatal("the entry of the group")
 	}
+}
+
+// stayFolio2 is the folio of a reservation that has no stay (where its deposits and a fee of its cancellation are).
+func stayFolio2(t *testing.T, h *hotel, reservation int64) int64 {
+	t.Helper()
+	var id int64
+	must(t, h.Pool.QueryRow(context.Background(), `SELECT id FROM folios WHERE reservation_id = $1 AND stay_id IS NULL`, reservation).Scan(&id))
+	return id
 }

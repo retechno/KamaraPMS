@@ -1181,6 +1181,7 @@ func (q *Queries) ListGuestBriefs(ctx context.Context, arg ListGuestBriefsParams
 
 const listHeldDeposits = `-- name: ListHeldDeposits :many
 SELECT p.id AS payment_id, p.payment_number, p.payment_method, p.amount::numeric AS amount, f.id AS folio_id, f.folio_number, f.reservation_id,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS folio_balance,
        (p.amount - COALESCE((SELECT sum(rf.amount) FROM payments rf WHERE rf.property_id = p.property_id AND rf.refund_of_payment_id = p.id AND rf.status = 'POSTED'), 0))::numeric AS refundable
 FROM payments p
 JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
@@ -1204,6 +1205,7 @@ type ListHeldDepositsRow struct {
 	FolioID       int64
 	FolioNumber   string
 	ReservationID *int64
+	FolioBalance  decimal.Decimal
 	Refundable    decimal.Decimal
 }
 
@@ -1226,6 +1228,7 @@ func (q *Queries) ListHeldDeposits(ctx context.Context, arg ListHeldDepositsPara
 			&i.FolioID,
 			&i.FolioNumber,
 			&i.ReservationID,
+			&i.FolioBalance,
 			&i.Refundable,
 		); err != nil {
 			return nil, err

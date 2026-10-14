@@ -4610,6 +4610,7 @@ export const en = {
     RECORD_IMMUTABLE: 'The business day cannot be changed.',
     REFERENCE_PLAN_EXISTS: 'The property already has a reference rate plan.',
     REFUND_EXCEEDS_PAYMENT: 'The refund is more than what is left of the payment.',
+    REFUND_EXCEEDS_CREDIT: 'The refund is more than the credit the folio holds: the folio would owe. Refund at most what is left after the charges.',
     REQUEST_ALREADY_BLOCKED: 'The room is already blocked for this request.',
     REQUEST_CANCELLED: 'The operation was cancelled or timed out.',
     REQUEST_HAS_NO_ROOM: 'Only a request about a room can block a room.',

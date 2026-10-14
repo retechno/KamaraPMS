@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlabel"
@@ -229,15 +230,7 @@ func (s *Service) fillHeld(ctx context.Context, tenantID, propertyID int64, out 
 	if err != nil {
 		return // the cancellation is done; the group page reads what is held again
 	}
-	byRes := map[int64][]HeldDeposit{}
-	for _, h := range held {
-		if h.ReservationID == nil {
-			continue
-		}
-		byRes[*h.ReservationID] = append(byRes[*h.ReservationID], HeldDeposit{
-			PaymentID: h.PaymentID, PaymentNumber: h.PaymentNumber, PaymentMethod: h.PaymentMethod, Amount: h.Amount.String(), Refundable: h.Refundable.String(), FolioID: h.FolioID, FolioNumber: h.FolioNumber,
-		})
-	}
+	byRes := heldByReservation(held)
 	for i := range out.Rows {
 		out.Rows[i].Deposits = byRes[out.Rows[i].ReservationID]
 	}
@@ -487,15 +480,7 @@ func (s *Service) GroupHoldings(ctx context.Context, propertyID, groupID int64) 
 	if err != nil {
 		return nil, err
 	}
-	byRes := map[int64][]HeldDeposit{}
-	for _, h := range held {
-		if h.ReservationID == nil {
-			continue
-		}
-		byRes[*h.ReservationID] = append(byRes[*h.ReservationID], HeldDeposit{
-			PaymentID: h.PaymentID, PaymentNumber: h.PaymentNumber, PaymentMethod: h.PaymentMethod, Amount: h.Amount.String(), Refundable: h.Refundable.String(), FolioID: h.FolioID, FolioNumber: h.FolioNumber,
-		})
-	}
+	byRes := heldByReservation(held)
 	out := make([]GroupHolding, len(rows))
 	for i, r := range rows {
 		deps := byRes[r.ReservationID]
@@ -505,4 +490,32 @@ func (s *Service) GroupHoldings(ctx context.Context, propertyID, groupID int64) 
 		out[i] = GroupHolding{ReservationID: r.ReservationID, ConfirmationNumber: r.ConfirmationNumber, GuestName: r.GuestName, HeldBalance: r.HeldBalance.StringFixed(decimals), Deposits: deps}
 	}
 	return out, nil
+}
+
+// heldByReservation groups the deposits a reservation holds, with what of each can be refunded. That is the least of what is left of the payment and of the credit its folio holds: a deposit that paid
+// a fee is not offered again, and the credit is shared out among the payments of the folio in the order they were taken. A deposit with nothing left to refund is not listed.
+func heldByReservation(held []reservationsdb.ListHeldDepositsRow) map[int64][]HeldDeposit {
+	credit := map[int64]decimal.Decimal{} // what is left of the credit of each folio
+	out := map[int64][]HeldDeposit{}
+	for _, h := range held {
+		if h.ReservationID == nil {
+			continue
+		}
+		left, ok := credit[h.FolioID]
+		if !ok {
+			left = decimal.Zero.Sub(h.FolioBalance)
+			if left.IsNegative() {
+				left = decimal.Zero
+			}
+		}
+		refundable := decimal.Min(h.Refundable, left)
+		credit[h.FolioID] = left.Sub(refundable)
+		if !refundable.IsPositive() {
+			continue
+		}
+		out[*h.ReservationID] = append(out[*h.ReservationID], HeldDeposit{
+			PaymentID: h.PaymentID, PaymentNumber: h.PaymentNumber, PaymentMethod: h.PaymentMethod, Amount: h.Amount.String(), Refundable: refundable.String(), FolioID: h.FolioID, FolioNumber: h.FolioNumber,
+		})
+	}
+	return out
 }
