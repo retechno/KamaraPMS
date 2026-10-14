@@ -82,7 +82,7 @@ func (s *Service) AddLine(ctx context.Context, propertyID, id int64, version int
 		if err != nil {
 			return err
 		}
-		reason, err := s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, in.OccupancyReason, true, in.Arrival, in.Departure, nil)
+		reason, err := s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, in.OccupancyReason, in.RoomTypeID, true, in.Arrival, in.Departure, nil)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func (s *Service) AmendLine(ctx context.Context, propertyID, id, lineID int64, p
 		if err != nil {
 			return err
 		}
-		if next.OccupancyReason, err = s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, reasonText, planChanged || datesChanged, next.ArrivalDate, next.DepartureDate, &lineID); err != nil {
+		if next.OccupancyReason, err = s.occupancyReason(ctx, propertyID, p.TenantID, "", priced.kind, reasonText, next.RoomTypeID, planChanged || datesChanged, next.ArrivalDate, next.DepartureDate, &lineID); err != nil {
 			return err
 		}
 		if next.Status == LineConfirmed && (typeChanged || datesChanged || bedChanged) {

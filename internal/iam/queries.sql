@@ -155,3 +155,31 @@ SELECT id, code, name, status FROM tenants WHERE id = @id;
 -- name: RevokeOtherSessions :exec
 UPDATE user_sessions SET revoked_at = @at::timestamptz, revoked_reason = @reason::varchar
 WHERE user_id = @user_id AND id <> @keep_session_id AND revoked_at IS NULL;
+
+-- The rules of approval of a property (docs/architecture/32-distinct-approver.md): a kind without a row is FREE.
+-- name: GetApprovalRule :one
+SELECT rule, threshold FROM property_approval_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND kind = @kind;
+
+-- name: ListApprovalRules :many
+SELECT kind, rule, threshold, updated_at, updated_by FROM property_approval_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id
+ORDER BY kind;
+
+-- name: UpsertApprovalRule :exec
+INSERT INTO property_approval_rules (tenant_id, property_id, kind, rule, threshold, updated_by)
+VALUES (@tenant_id, @property_id, @kind, @rule, sqlc.narg(threshold), sqlc.narg(actor_id))
+ON CONFLICT (property_id, kind) DO UPDATE
+SET rule = EXCLUDED.rule, threshold = EXCLUDED.threshold, updated_at = now(), updated_by = EXCLUDED.updated_by;
+
+-- name: DeleteApprovalRule :exec
+DELETE FROM property_approval_rules
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND kind = @kind;
+
+-- Active users who are not administrators and hold a permission at a property: the people who can approve in place of the
+-- one who acts (the warning of the screen of the rules).
+-- name: CountApproversWith :one
+SELECT count(DISTINCT u.id) FROM users u
+JOIN user_properties up ON up.tenant_id = u.tenant_id AND up.user_id = u.id
+JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = @permission_code
+WHERE u.tenant_id = @tenant_id AND up.property_id = @property_id AND u.is_active AND NOT u.is_tenant_admin;

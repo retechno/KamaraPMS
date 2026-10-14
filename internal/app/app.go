@@ -175,6 +175,10 @@ func New(d Deps) *App {
 	auditReader := auditlog.NewReader(d.TxManager, authz)
 	auditlog.NewHandler(auditReader).Register(api)
 	roompanel.NewHandler(roompanel.NewService(d.TxManager, tenancySvc, hkSvc, frontdeskSvc, reservationsSvc, foliosSvc, auditReader)).Register(api)
+	iam.NewRules(iamSvc, authz).RegisterRules(api, tenancy.PropertyID, func(ctx context.Context, propertyID int64) (int32, error) {
+		prop, err := tenancySvc.GetProperty(ctx, propertyID)
+		return prop.CurrencyDecimals, err
+	})
 	subscription.NewHandler(subscriptionSvc).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)

@@ -203,5 +203,5 @@ const methodLabel = (m: string): string => t(`cashier.${m}` as never)
       </ul>
     </CardContent>
   </Card>
-  <ApprovalDialog v-if="approving !== null" :title="t('groupHoldings.approveRefund')" :busy="busy" :error="dialogError" @approve="refund" @cancel="approving = null" />
+  <ApprovalDialog kind="REFUND" v-if="approving !== null" :title="t('groupHoldings.approveRefund')" :busy="busy" :error="dialogError" @approve="refund" @cancel="approving = null" />
 </template>

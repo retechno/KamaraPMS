@@ -582,5 +582,5 @@ watch([() => pid.value, budgetId], () => {
       </CardContent>
     </Card>
   </template>
-  <ApprovalDialog v-if="asking" :title="t('budget.approveActivate')" :message="t('budget.approveActivateHint')" :busy="busy" :error="dialogError" @approve="activate" @cancel="asking = false; dialogError = null" />
+  <ApprovalDialog kind="BUDGET" v-if="asking" :title="t('budget.approveActivate')" :message="t('budget.approveActivateHint')" :busy="busy" :error="dialogError" @approve="activate" @cancel="asking = false; dialogError = null" />
 </template>

@@ -361,5 +361,5 @@ watch(() => pid.value, () => {
       </CardContent>
     </Card>
   </template>
-  <ApprovalDialog v-if="voiding?.asking" :title="t('payables.approveVoid')" :busy="busy" :error="dialogError" @approve="voidBill" @cancel="voiding = null; dialogError = null" />
+  <ApprovalDialog kind="PAYABLES" v-if="voiding?.asking" :title="t('payables.approveVoid')" :busy="busy" :error="dialogError" @approve="voidBill" @cancel="voiding = null; dialogError = null" />
 </template>

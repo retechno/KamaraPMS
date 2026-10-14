@@ -32,14 +32,9 @@ type NightAdjusted struct {
 	AdjustmentItemID int64 `json:"adjustment_item_id"`
 }
 
-// VerifyApproval checks the credentials of an approver of a correction (correction.approve) for a caller that corrects a charge itself.
-func (s *Service) VerifyApproval(ctx context.Context, propertyID int64, in *iam.ApprovalInput) (iam.Approval, error) {
-	return s.iam.VerifyApproval(ctx, propertyID, in)
-}
-
-// VerifyApprovalFor checks the credentials of an approver who must hold perm (a lower rate needs reservation.override_rate_approve).
-func (s *Service) VerifyApprovalFor(ctx context.Context, propertyID int64, in *iam.ApprovalInput, perm auth.Permission) (iam.Approval, error) {
-	return s.iam.VerifyApprovalFor(ctx, propertyID, in, perm)
+// Verify checks an approval for a caller that corrects a charge itself (the change of the rate of a stay): the one check of iam, with the kind and the amount of the caller.
+func (s *Service) Verify(ctx context.Context, req iam.ApprovalRequest) (iam.Approval, error) {
+	return s.iam.Verify(ctx, req)
 }
 
 // AdjustChargedNights posts the adjustments of room nights in the caller's transaction (it needs no permission of its own: the front desk use case was authorized, and the approval
@@ -92,10 +87,10 @@ func (s *Service) AdjustChargedNights(ctx context.Context, p auth.Principal, pro
 		if err != nil {
 			return nil, err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.adjustment_posted", "folio", folio.ID, auditlabel.Folio(ctx, propertyID, folio.ID), nil, map[string]any{
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "folio.adjustment_posted", "folio", folio.ID, auditlabel.Folio(ctx, propertyID, folio.ID), nil, approval.AuditFields(map[string]any{
 			"folio_item_id": adjItem.ID, "charge_code_id": *items[i].ChargeCodeID, "debit": adjItem.Debit.String(), "credit": adjItem.Credit.String(),
-			"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(), "related_item_id": a.ItemID, "source": "STAY_RATE_CHANGE",
-		})); err != nil {
+			"reason": reason, "actor": p.ActorID(), "related_item_id": a.ItemID, "source": "STAY_RATE_CHANGE",
+		}))); err != nil {
 			return nil, err
 		}
 		out = append(out, NightAdjusted{ItemID: a.ItemID, FolioID: folio.ID, AdjustmentItemID: adjItem.ID})

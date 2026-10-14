@@ -250,5 +250,5 @@ watch(() => pid.value, () => {
       </DataTable>
     </Card>
   </template>
-  <ApprovalDialog v-if="credit?.asking" :title="t('taxProfiles.approveCredit')" :busy="busy" :error="dialogError" @approve="confirmCredit" @cancel="credit = null; dialogError = null" />
+  <ApprovalDialog kind="TAX_DOCUMENT" :amount="credit?.amount || undefined" v-if="credit?.asking" :title="t('taxProfiles.approveCredit')" :busy="busy" :error="dialogError" @approve="confirmCredit" @cancel="credit = null; dialogError = null" />
 </template>

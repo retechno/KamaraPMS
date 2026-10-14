@@ -153,6 +153,7 @@ export const navigation: NavSection[] = [
       { id: 'companies', to: '/setup/companies', permission: ['reservation.read', 'cityledger.read'] },
       { id: 'ratePlans', to: '/setup/rate-plans' },
       { id: 'freeQuotas', to: '/setup/free-quotas' },
+      { id: 'approvalRules', to: '/setup/approval-rules' },
       { id: 'rateGrid', to: '/setup/rates' },
       { id: 'bedSupplements', to: '/setup/bed-supplements' },
       { id: 'restrictions', to: '/setup/restrictions' },

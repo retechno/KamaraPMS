@@ -671,7 +671,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <ReservationEditDialog v-if="res" v-model:open="editOpen" :reservation="res" :types="types" :rate-plans="ratePlans" :companies="companies" :busy="busy" :error="error"
     @save-line="saveLineFields" @save-header="saveHeaderFields" />
   <EditRateDialog v-model:open="rateOpen" :row="rateTarget" @saved="load" />
-  <ApprovalDialog
+  <ApprovalDialog kind="RATE_OVERRIDE"
     v-for="line in (res?.rooms ?? []).filter((l) => l.id === approvingRate)"
     :key="line.id"
     :title="t('rateOverride.approvalTitle')"

@@ -106,6 +106,8 @@ const missing = computed(() => {
 })
 const canContinue = computed(() => !busy.value && missing.value.length === 0)
 const needsAny = computed(() => chosen.value?.scope === 'ANY')
+// What the rule of approval sees: the balance handed over, or the sum of the charges named (a transfer of every charge of a code is not known here).
+const approvalAmount = computed(() => (tab.value === 'balance' ? amount.value || undefined : byCode.value ? undefined : String(total.value)))
 const pair = computed(() => ({ source: props.folio.folio_number, target: chosen.value?.folio_number ?? '' }))
 const canAny = computed(() => auth.can('folio.transfer_any', pid.value))
 
@@ -201,7 +203,7 @@ async function approve(approval: Approval): Promise<void> {
       </form>
     </DialogContent>
   </Dialog>
-  <ApprovalDialog
+  <ApprovalDialog kind="FOLIO_TRANSFER" :amount="approvalAmount"
     v-else :title="t('folioTransfer.approvalTitle')" :message="needsAny ? t('folioTransfer.approvalAny') : undefined" :busy="busy" :error="dialogError"
     @approve="approve" @cancel="stage = 'form'"
   />

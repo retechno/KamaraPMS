@@ -387,6 +387,23 @@ func (q *Queries) GetLine(ctx context.Context, arg GetLineParams) (ReservationRo
 	return i, err
 }
 
+const getReferenceRatePlanID = `-- name: GetReferenceRatePlanID :one
+SELECT id FROM rate_plans WHERE tenant_id = $1 AND property_id = $2 AND is_reference
+`
+
+type GetReferenceRatePlanIDParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The reference rate plan of the property: its grid price values the nights of a complimentary or house use room.
+func (q *Queries) GetReferenceRatePlanID(ctx context.Context, arg GetReferenceRatePlanIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getReferenceRatePlanID, arg.TenantID, arg.PropertyID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getReservation = `-- name: GetReservation :one
 SELECT id, tenant_id, property_id, confirmation_number, guest_id, reservation_date, source, market, status, special_request, remarks, confirmed_at, confirmed_by, cancelled_at, cancelled_by, cancellation_reason, version, created_at, created_by, updated_at, updated_by, idempotency_key, idempotency_hash, company_id, booking_group_id FROM reservations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `

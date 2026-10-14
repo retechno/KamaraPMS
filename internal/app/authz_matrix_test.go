@@ -94,6 +94,7 @@ const propertyRead = "configuration or reference data of a property the caller h
 
 var propertyReads = map[string]string{
 	"GET /api/v1/properties/{propertyId}":                                  propertyRead,
+	"GET /api/v1/properties/{propertyId}/approval-rules":                   propertyRead,
 	"GET /api/v1/properties/{propertyId}/bed-types":                        propertyRead,
 	"GET /api/v1/properties/{propertyId}/business-date":                    propertyRead,
 	"GET /api/v1/properties/{propertyId}/business-days":                    propertyRead,

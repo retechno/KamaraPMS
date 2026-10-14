@@ -9,6 +9,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/auditlabel"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -252,7 +253,11 @@ func (s *Service) VoidPayment(ctx context.Context, propertyID, id int64, in Void
 	if reason == "" || len([]rune(reason)) > 500 {
 		return Payment{}, apperr.Invalid("the void is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	paid := decimal.Zero // the amount of the payment voided, for the rule of approval (not found: 404 in the transaction)
+	if pay, err := s.loadPayment(ctx, p.TenantID, propertyID, id); err == nil {
+		paid = pay.Amount
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindTaxDocument, Amount: paid})
 	if err != nil {
 		return Payment{}, err
 	}
@@ -298,7 +303,7 @@ func (s *Service) VoidPayment(ctx context.Context, propertyID, id int64, in Void
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.payment_voided", "tax_payment", id, auditlabel.TaxPayment(ctx, propertyID, id),
-			map[string]any{"status": "POSTED"}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by, "payment_number": pay.Number}))
+			map[string]any{"status": "POSTED"}, approval.AuditFields(map[string]any{"status": "VOIDED", "reason": reason, "payment_number": pay.Number})))
 	})
 	if err != nil {
 		return Payment{}, err

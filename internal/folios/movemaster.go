@@ -67,7 +67,7 @@ func (s *Service) MoveToMaster(ctx context.Context, propertyID, groupID int64, k
 	if res, ok, err := s.moveReplay(ctx, p.TenantID, propertyID, key, decimals); err != nil || ok {
 		return res, err
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval) // before the transaction: no lock is held while the password is hashed
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindFolioTransfer, Amount: expected.Abs()}) // before the transaction: no lock is held while the password is hashed
 	if err != nil {
 		return MoveToMasterResult{}, err
 	}

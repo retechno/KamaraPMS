@@ -481,6 +481,76 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/approval-rules:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listApprovalRules
+      summary: The rule of approval of each kind of correction (a grant on the property)
+      description: |
+        Who may approve a correction (docs/architecture/32-distinct-approver.md). Every kind is answered, with `FREE` for a kind without a rule:
+        anyone who holds the permission may approve, including the person who makes the change. `DISTINCT`: the approver must be someone other than
+        the person who makes the change. `DISTINCT_ABOVE`: the person who makes the change may approve their own correction up to and including
+        `threshold` (an amount at the currency decimals); above it the approver must be someone else. A tenant administrator is exempt: their approval
+        of their own correction is accepted and the audit entry carries `self_approved_by_admin: true`. `approvers` counts the active users, other than
+        administrators, who hold the permission of the kind at the property: fewer than two is a warning of the screen when the rule asks for someone else.
+      tags: [properties]
+      responses:
+        "200":
+          description: The rules.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApprovalRule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setApprovalRules
+      summary: Set the rule of the kinds named (property.manage)
+      description: |
+        `FREE` removes the rule of the kind. `DISTINCT_ABOVE` needs a `threshold` of zero or more and only a kind that has an amount (422
+        `RULE_NOT_ALLOWED_FOR_KIND` otherwise). Each change is audited (`property.approval_rule_changed`, the old and the new rule). A rule may be changed
+        at any time and applies to the approvals from then on. Answers the rules after the change.
+      tags: [properties]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rules]
+              additionalProperties: false
+              properties:
+                rules:
+                  type: array
+                  items:
+                    type: object
+                    required: [kind, rule]
+                    additionalProperties: false
+                    properties:
+                      kind: { $ref: "#/components/schemas/ApprovalKind" }
+                      rule: { $ref: "#/components/schemas/ApprovalRuleType" }
+                      threshold: { type: [string, "null"], description: "The limit of a rule `DISTINCT_ABOVE`, an amount at the currency decimals; otherwise absent or null." }
+      responses:
+        "200":
+          description: The rules after the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApprovalRule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/free-night-quotas:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -4252,6 +4322,7 @@ paths:
         - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" }, description: First business date. }
         - { name: q, in: query, schema: { type: string, minLength: 3, maxLength: 64 }, description: "A part of the label of the entry (`entity_label`: a number or a code such as `RES000012`), in any case; 3 to 64 characters, else 422. Entries without a label are not found by it." }
         - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" }, description: Last business date. }
+        - { name: self_approved, in: query, schema: { type: boolean }, description: "`true` lists only the corrections a tenant administrator approved themselves although the rule of the property asked for someone else (`self_approved_by_admin: true` in the entry; docs/architecture/32-distinct-approver.md)." }
         - { name: sort, in: query, schema: { type: string, enum: [created_at] }, description: "The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first." }
         - $ref: "#/components/parameters/SortOrder"
       responses:
@@ -9347,6 +9418,24 @@ components:
       type: string
       enum: [RO, BB, HB, FB, AI]
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
+    ApprovalKind:
+      type: string
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE]
+      description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
+    ApprovalRuleType:
+      type: string
+      enum: [FREE, DISTINCT, DISTINCT_ABOVE]
+    ApprovalRule:
+      type: object
+      required: [kind, rule, threshold, has_amount, permission, approvers, updated_at]
+      properties:
+        kind: { $ref: "#/components/schemas/ApprovalKind" }
+        rule: { $ref: "#/components/schemas/ApprovalRuleType" }
+        threshold: { type: [string, "null"], description: "The limit of a rule DISTINCT_ABOVE (the person who acts may approve up to and including it)." }
+        has_amount: { type: boolean, description: "Whether the kind has an amount; only then can the rule be DISTINCT_ABOVE." }
+        permission: { type: string, description: "The permission its approver must hold at the property." }
+        approvers: { type: integer, description: "Active users, other than tenant administrators, who hold that permission at the property." }
+        updated_at: { type: [string, "null"], format: date-time }
     FreeNightQuota:
       type: object
       required: [occupancy_kind, monthly_nights]

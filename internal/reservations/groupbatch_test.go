@@ -267,9 +267,14 @@ type countingApprover struct {
 	calls atomic.Int32
 }
 
-func (c *countingApprover) VerifyApprovalFor(ctx context.Context, propertyID int64, in *iam.ApprovalInput, perm auth.Permission) (iam.Approval, error) {
+// Verify counts the checks of credentials: a request that prices several rooms checks them once (the next rooms only apply the rule again, Extend).
+func (c *countingApprover) Verify(ctx context.Context, req iam.ApprovalRequest) (iam.Approval, error) {
 	c.calls.Add(1)
-	return c.inner.VerifyApprovalFor(ctx, propertyID, in, perm)
+	return c.inner.Verify(ctx, req)
+}
+
+func (c *countingApprover) Extend(ctx context.Context, req iam.ApprovalRequest, a iam.Approval) (iam.Approval, error) {
+	return c.inner.Extend(ctx, req, a)
 }
 
 func TestGroupRoomsOneApprovalForTheRateOfTheGroup(t *testing.T) {

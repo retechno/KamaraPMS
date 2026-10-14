@@ -215,7 +215,7 @@ func (s *Service) SetOpeningCredit(ctx context.Context, propertyID, profileID in
 	if len(fields) > 0 {
 		return Profile{}, apperr.Invalid("the opening credit is invalid", fields...)
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindTaxDocument, Amount: in.Amount})
 	if err != nil {
 		return Profile{}, err
 	}
@@ -277,7 +277,7 @@ func (s *Service) SetOpeningCredit(ctx context.Context, propertyID, profileID in
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_set", "tax_opening_credit", id, auditlabel.TaxOfOpeningCredit(ctx, propertyID, id), nil,
-			map[string]any{"tax": prof.TaxCode, "amount": in.Amount.String(), "as_of": in.AsOf.String(), "approved_by": by, "journal": jnum}))
+			approval.AuditFields(map[string]any{"tax": prof.TaxCode, "amount": in.Amount.String(), "as_of": in.AsOf.String(), "journal": jnum})))
 	})
 	if err != nil {
 		return Profile{}, err
@@ -296,7 +296,13 @@ func (s *Service) VoidOpeningCredit(ctx context.Context, propertyID, profileID i
 	if reason == "" || len([]rune(reason)) > 500 {
 		return Profile{}, apperr.Invalid("the void is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	opening := decimal.Zero // the opening credit voided, for the rule of approval (not found: 404 in the transaction)
+	if prof, err := s.loadProfile(ctx, p.TenantID, propertyID, profileID); err == nil {
+		if oc, err := s.q(ctx).OpeningCreditOfTax(ctx, taxfilingdb.OpeningCreditOfTaxParams{TenantID: p.TenantID, PropertyID: propertyID, TaxID: prof.TaxID}); err == nil {
+			opening = oc.Amount
+		}
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindTaxDocument, Amount: opening})
 	if err != nil {
 		return Profile{}, err
 	}
@@ -338,7 +344,7 @@ func (s *Service) VoidOpeningCredit(ctx context.Context, propertyID, profileID i
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.opening_credit_voided", "tax_opening_credit", oc.ID, auditlabel.TaxOfOpeningCredit(ctx, propertyID, oc.ID),
-			map[string]any{"amount": oc.Amount.String()}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by}))
+			map[string]any{"amount": oc.Amount.String()}, approval.AuditFields(map[string]any{"status": "VOIDED", "reason": reason})))
 	})
 	if err != nil {
 		return Profile{}, err

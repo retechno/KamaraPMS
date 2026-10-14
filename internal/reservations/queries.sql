@@ -428,3 +428,7 @@ CROSS JOIN LATERAL (
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id AND hold.held <> 0
   AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = r.property_id AND l.reservation_id = r.id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))
 ORDER BY r.id;
+
+-- The reference rate plan of the property: its grid price values the nights of a complimentary or house use room.
+-- name: GetReferenceRatePlanID :one
+SELECT id FROM rate_plans WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_reference;

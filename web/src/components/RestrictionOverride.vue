@@ -57,5 +57,5 @@ function approve(approval: Approval): void {
     </form>
     <Button v-if="!overridable || !may" type="button" variant="outline" size="sm" class="mt-2" data-testid="cancel-override" @click="emit('cancel')">{{ t('common.close') }}</Button>
   </div>
-  <ApprovalDialog v-if="approving" :title="t('restrictions.approveTitle')" :message="t('restrictions.approveMessage')" :busy="busy" :error="error" @approve="approve" @cancel="approving = false" />
+  <ApprovalDialog kind="SALES_RESTRICTION" v-if="approving" :title="t('restrictions.approveTitle')" :message="t('restrictions.approveMessage')" :busy="busy" :error="error" @approve="approve" @cancel="approving = false" />
 </template>

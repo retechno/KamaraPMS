@@ -350,5 +350,5 @@ async function addGuest(g: Guest): Promise<void> {
       </div>
     </CardContent>
   </Card>
-  <ApprovalDialog v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submitDeparture(a, overriding)" @cancel="approving = false" />
+  <ApprovalDialog kind="RATE_OVERRIDE" v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submitDeparture(a, overriding)" @cancel="approving = false" />
 </template>

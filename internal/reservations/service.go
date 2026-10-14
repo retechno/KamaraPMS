@@ -385,7 +385,7 @@ type pricedLine struct {
 // occupancyReason applies the rule of complimentary and house use rooms to a priced line. A PAID line keeps no
 // reason. Any other kind needs a reason, and booking it (a new line, or a changed plan) needs
 // reservation.complimentary. It returns the reason to store.
-func (s *Service) occupancyReason(ctx context.Context, propertyID, tenantID int64, prefix, kind, reason string, booking bool, arrival, departure civil.Date, excludeLine *int64) (*string, error) {
+func (s *Service) occupancyReason(ctx context.Context, propertyID, tenantID int64, prefix, kind, reason string, roomTypeID int64, booking bool, arrival, departure civil.Date, excludeLine *int64) (*string, error) {
 	if kind == rates.KindPaid {
 		return nil, nil
 	}
@@ -402,7 +402,7 @@ func (s *Service) occupancyReason(ctx context.Context, propertyID, tenantID int6
 		return nil, apperr.Invalid("the room is invalid", fieldErr(prefix+"occupancy_reason", "TOO_LONG", "at most 500 characters"))
 	}
 	if booking { // the approval of a manager and the monthly quota, once the room is known to be valid
-		if err := s.requireFreeRoom(ctx, propertyID, tenantID, kind, arrival, departure, excludeLine); err != nil {
+		if err := s.requireFreeRoom(ctx, propertyID, tenantID, kind, roomTypeID, arrival, departure, excludeLine); err != nil {
 			return nil, err
 		}
 	}
@@ -427,8 +427,8 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		if err := s.authz.Require(ctx, propertyID, perm); err != nil {
 			return pricedLine{}, err
 		}
-		if perm == auth.PermReservationOverrideRate { // a booking or an extension: the override needs a reason and an approval
-			if err := s.requireOverrideApproval(ctx, propertyID); err != nil {
+		if perm == auth.PermReservationOverrideRate { // a booking or an extension: the override needs a reason, and an approval once the price in force is known
+			if err := s.requireOverrideReason(ctx); err != nil {
 				return pricedLine{}, err
 			}
 		}
@@ -479,6 +479,20 @@ func (s *Service) priceLinePerm(ctx context.Context, perm auth.Permission, prope
 		shown := unpriced[:min(len(unpriced), 31)]
 		return pricedLine{}, apperr.Conflict("RATE_NOT_SET", "some nights have no rate for this plan and room type").
 			WithContext("nights", shown).WithContext("missing_nights", len(unpriced))
+	}
+	if len(overrides) > 0 && perm == auth.PermReservationOverrideRate {
+		moved := decimal.Zero // what the overrides move: the sum over the nights of the difference to the price in force
+		for d, o := range byDate {
+			given, _ := rates.ParseAmount(o.Amount, decimals)
+			inForce := decimal.Zero
+			if g, ok := gridBy[d]; ok {
+				inForce = g.Amount
+			}
+			moved = moved.Add(given.Sub(inForce).Abs())
+		}
+		if err := s.approveOverrides(ctx, propertyID, moved); err != nil {
+			return pricedLine{}, err
+		}
 	}
 	for d := arrival; d.Before(departure); d = d.AddDays(1) {
 		if keep[d] {

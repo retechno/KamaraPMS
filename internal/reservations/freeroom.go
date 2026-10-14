@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -23,12 +24,11 @@ import (
 // whether the request knowingly takes a month over its quota. Like the rate override it is verified once per request,
 // and the nights of the lines already priced in the request count against the quota of the next ones.
 type freeAuth struct {
-	approval   *iam.ApprovalInput
-	exceed     bool
-	done       bool
-	approvedBy int64
-	exceeded   []string // the kinds and months that went over the quota, for the audit
-	pending    map[string]int
+	approval *iam.ApprovalInput
+	exceed   bool
+	run      approvalRun // the value of the free nights of the request is its amount
+	exceeded []string    // the kinds and months that went over the quota, for the audit
+	pending  map[string]int
 }
 
 type freeKey struct{}
@@ -42,10 +42,13 @@ func WithFreeApproval(ctx context.Context, approval *iam.ApprovalInput, exceedQu
 // FreeRoomAudit is what the audit entry of a request records about its free rooms: who approved, and the quotas it went over.
 func FreeRoomAudit(ctx context.Context) map[string]any {
 	fa, _ := ctx.Value(freeKey{}).(*freeAuth)
-	if fa == nil || !fa.done {
+	if fa == nil || !fa.run.done {
 		return nil
 	}
-	out := map[string]any{"free_room_approved_by": fa.approvedBy}
+	out := map[string]any{"free_room_approved_by": fa.run.approvedBy}
+	if fa.run.marked {
+		out[iam.SelfApprovedKey] = true
+	}
 	if len(fa.exceeded) > 0 {
 		out["free_quota_exceeded"] = fa.exceeded
 	}
@@ -59,44 +62,40 @@ func withFreeRoomAudit(ctx context.Context, data map[string]any) map[string]any 
 	return data
 }
 
-// requireFreeApproval is the approval of a free room: the caller's own when they hold
-// reservation.complimentary_approve, otherwise the credentials of someone who does (422 APPROVAL_REQUIRED).
-func (s *Service) requireFreeApproval(ctx context.Context, propertyID int64, fa *freeAuth) error {
-	if fa.done {
-		return nil
-	}
-	p, err := auth.Require(ctx)
+// requireFreeApproval is the approval of a free room: the caller's own when they hold reservation.complimentary_approve and
+// the rule of the property allows it, otherwise the credentials of someone who does (422 APPROVAL_REQUIRED). The amount is the
+// value of the nights given free (the grid price of the reference rate plan), added up over the lines of the request.
+func (s *Service) requireFreeApproval(ctx context.Context, propertyID int64, fa *freeAuth, value decimal.Decimal) error {
+	return s.approveRun(ctx, propertyID, iam.KindFreeRoom, auth.PermReservationComplimentaryApprove, fa.approval, &fa.run, value)
+}
+
+// freeNightsValue is what the nights of a free room would sell for: the grid price of the reference rate plan for the room type,
+// as the report of free rooms values them. Zero when the property has no reference plan or the plan has no price for a night.
+func (s *Service) freeNightsValue(ctx context.Context, tenantID, propertyID, roomTypeID int64, arrival, departure civil.Date) decimal.Decimal {
+	ref, err := s.q(ctx).GetReferenceRatePlanID(ctx, reservationsdb.GetReferenceRatePlanIDParams{TenantID: tenantID, PropertyID: propertyID})
 	if err != nil {
-		return err
+		return decimal.Zero
 	}
-	if s.authz.Require(ctx, propertyID, auth.PermReservationComplimentaryApprove) == nil {
-		if id := p.ActorID(); id != nil {
-			fa.approvedBy = *id
-		}
-	} else {
-		if s.approver == nil {
-			return apperr.New(apperr.KindInvalid, "APPROVAL_REQUIRED", "a complimentary or house use room needs an approval: the approver's email and password").
-				WithContext("permission", string(auth.PermReservationComplimentaryApprove))
-		}
-		ap, err := s.approver.VerifyApprovalFor(ctx, propertyID, fa.approval, auth.PermReservationComplimentaryApprove)
-		if err != nil {
-			return err
-		}
-		fa.approvedBy = ap.UserID()
+	grid, _, err := s.rates.PriceNights(ctx, tenantID, propertyID, ref, roomTypeID, arrival, departure)
+	if err != nil {
+		return decimal.Zero
 	}
-	fa.done = true
-	return nil
+	total := decimal.Zero
+	for _, n := range grid.Nights {
+		total = total.Add(n.Grid)
+	}
+	return total
 }
 
 // requireFreeRoom is the rule of booking a complimentary or house use room: the permission, the approval of a manager,
 // and the monthly quota of its kind (409 FREE_NIGHT_QUOTA_EXCEEDED unless the request says it goes over knowingly; the
 // approval is always there by then). excludeLine leaves a line's own stored nights out of the count (amending it).
-func (s *Service) requireFreeRoom(ctx context.Context, propertyID, tenantID int64, kind string, arrival, departure civil.Date, excludeLine *int64) error {
+func (s *Service) requireFreeRoom(ctx context.Context, propertyID, tenantID int64, kind string, roomTypeID int64, arrival, departure civil.Date, excludeLine *int64) error {
 	fa, _ := ctx.Value(freeKey{}).(*freeAuth)
 	if fa == nil {
 		fa = &freeAuth{pending: map[string]int{}}
 	}
-	if err := s.requireFreeApproval(ctx, propertyID, fa); err != nil {
+	if err := s.requireFreeApproval(ctx, propertyID, fa, s.freeNightsValue(ctx, tenantID, propertyID, roomTypeID, arrival, departure)); err != nil {
 		return err
 	}
 	q := s.q(ctx)

@@ -277,7 +277,11 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 	if len(fields) > 0 {
 		return Adjustment{}, apperr.Invalid("the credit note is invalid", fields...)
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	netTotal := decimal.Zero // the amount the rule of the property sees is the total of the note; the tax is known under the locks, where the rule is applied again to the total
+	for _, n := range nets {
+		netTotal = netTotal.Add(n)
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindCityLedgerCredit, Amount: netTotal})
 	if err != nil {
 		return Adjustment{}, err
 	}
@@ -439,6 +443,9 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 				if err != nil {
 					return err
 				}
+				if approval, err = s.iam.Extend(ctx, iam.ApprovalRequest{PropertyID: propertyID, Kind: iam.KindCityLedgerCredit, Amount: total}, approval); err != nil {
+					return err
+				}
 				var jl []accounting.SystemLine
 				taxByAccount := map[int64]*accounting.SystemLine{}
 				var taxOrder []int64
@@ -481,9 +488,9 @@ func (s *Service) CreateCreditNote(ctx context.Context, propertyID int64, key st
 						return err
 					}
 				}
-				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.credit_note_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, map[string]any{
-					"number": number, "company_id": companyID, "invoice_id": in.InvoiceID, "payment_id": in.PaymentID, "amount": total.String(), "reason": reason, "approved_by": by, "journal": jnum,
-				})); err != nil {
+				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.credit_note_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, approval.AuditFields(map[string]any{
+					"number": number, "company_id": companyID, "invoice_id": in.InvoiceID, "payment_id": in.PaymentID, "amount": total.String(), "reason": reason, "journal": jnum,
+				}))); err != nil {
 					return err
 				}
 				out, err = s.loadAdjustment(ctx, p.TenantID, propertyID, adj.ID, decimals)
@@ -540,7 +547,7 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 	if len(fields) > 0 {
 		return Adjustment{}, apperr.Invalid("the write-off is invalid", fields...)
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindCityLedgerCredit, Amount: amount})
 	if err != nil {
 		return Adjustment{}, err
 	}
@@ -623,9 +630,9 @@ func (s *Service) CreateWriteOff(ctx context.Context, propertyID int64, key stri
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.write_off_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, map[string]any{
-					"number": number, "company_id": invoice.CompanyID, "invoice": invoice.InvoiceNumber, "amount": amount.String(), "account": code, "reason": reason, "approved_by": by, "journal": jnum,
-				})); err != nil {
+				if err := s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.write_off_made", adj.ID, auditlabel.CityLedgerAdjustment(ctx, propertyID, adj.ID), nil, approval.AuditFields(map[string]any{
+					"number": number, "company_id": invoice.CompanyID, "invoice": invoice.InvoiceNumber, "amount": amount.String(), "account": code, "reason": reason, "journal": jnum,
+				}))); err != nil {
 					return err
 				}
 				out, err = s.loadAdjustment(ctx, p.TenantID, propertyID, adj.ID, decimals)
@@ -667,7 +674,7 @@ func (s *Service) VoidAdjustment(ctx context.Context, propertyID, id int64, in V
 	if err := s.authz.Require(ctx, propertyID, perm); err != nil {
 		return Adjustment{}, err
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindCityLedgerCredit, Amount: pre.Amount})
 	if err != nil {
 		return Adjustment{}, err
 	}
@@ -708,7 +715,7 @@ func (s *Service) VoidAdjustment(ctx context.Context, propertyID, id int64, in V
 			return err
 		}
 		return s.audit.Write(ctx, adjustmentAudit(p, propertyID, day.BusinessDate, "cityledger.adjustment_voided", id, auditlabel.CityLedgerAdjustment(ctx, propertyID, id),
-			map[string]any{"status": cur.Status}, map[string]any{"status": AdjustmentVoided, "reason": reason, "approved_by": by, "number": cur.AdjustmentNumber}))
+			map[string]any{"status": cur.Status}, approval.AuditFields(map[string]any{"status": AdjustmentVoided, "reason": reason, "number": cur.AdjustmentNumber})))
 	})
 	if err != nil {
 		return Adjustment{}, err

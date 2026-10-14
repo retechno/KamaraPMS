@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/cityledger/cityledgerdb"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -448,7 +449,11 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 	case len([]rune(reason)) > maxReasonLen:
 		return Invoice{}, apperr.Invalid("the void is invalid", field("reason", "TOO_LONG", "too long"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	total := decimal.Zero // the total of the invoice voided, for the rule of approval (an invoice that is not found is 404 in the transaction)
+	if inv, err := s.q(ctx).GetInvoice(ctx, cityledgerdb.GetInvoiceParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id}); err == nil {
+		total = inv.Total
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindCityLedgerVoid, Amount: total})
 	if err != nil {
 		return Invoice{}, err
 	}
@@ -507,7 +512,7 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 			return err
 		}
 		return s.audit.Write(ctx, invoiceAudit(p, propertyID, day.BusinessDate, "cityledger.invoice_voided", id, auditlabel.CityLedgerInvoice(ctx, propertyID, id),
-			map[string]any{"status": cur.Status}, map[string]any{"status": InvoiceVoided, "reason": reason, "actor": p.ActorID(), "approved_by": by}))
+			map[string]any{"status": cur.Status}, approval.AuditFields(map[string]any{"status": InvoiceVoided, "reason": reason, "actor": p.ActorID()})))
 	})
 	return out, err
 }

@@ -9,6 +9,8 @@ import (
 	"context"
 	"net/netip"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 const countActiveAdmins = `-- name: CountActiveAdmins :one
@@ -17,6 +19,28 @@ SELECT count(*) FROM users WHERE tenant_id = $1 AND is_tenant_admin AND is_activ
 
 func (q *Queries) CountActiveAdmins(ctx context.Context, tenantID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countActiveAdmins, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countApproversWith = `-- name: CountApproversWith :one
+SELECT count(DISTINCT u.id) FROM users u
+JOIN user_properties up ON up.tenant_id = u.tenant_id AND up.user_id = u.id
+JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = $1
+WHERE u.tenant_id = $2 AND up.property_id = $3 AND u.is_active AND NOT u.is_tenant_admin
+`
+
+type CountApproversWithParams struct {
+	PermissionCode string
+	TenantID       int64
+	PropertyID     int64
+}
+
+// Active users who are not administrators and hold a permission at a property: the people who can approve in place of the
+// one who acts (the warning of the screen of the rules).
+func (q *Queries) CountApproversWith(ctx context.Context, arg CountApproversWithParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countApproversWith, arg.PermissionCode, arg.TenantID, arg.PropertyID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -130,6 +154,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteApprovalRule = `-- name: DeleteApprovalRule :exec
+DELETE FROM property_approval_rules
+WHERE tenant_id = $1 AND property_id = $2 AND kind = $3
+`
+
+type DeleteApprovalRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	Kind       string
+}
+
+func (q *Queries) DeleteApprovalRule(ctx context.Context, arg DeleteApprovalRuleParams) error {
+	_, err := q.db.Exec(ctx, deleteApprovalRule, arg.TenantID, arg.PropertyID, arg.Kind)
+	return err
+}
+
 const deleteRolePermissions = `-- name: DeleteRolePermissions :exec
 DELETE FROM role_permissions WHERE role_id = $1
 `
@@ -151,6 +191,30 @@ type DeleteUserGrantsParams struct {
 func (q *Queries) DeleteUserGrants(ctx context.Context, arg DeleteUserGrantsParams) error {
 	_, err := q.db.Exec(ctx, deleteUserGrants, arg.TenantID, arg.UserID)
 	return err
+}
+
+const getApprovalRule = `-- name: GetApprovalRule :one
+SELECT rule, threshold FROM property_approval_rules
+WHERE tenant_id = $1 AND property_id = $2 AND kind = $3
+`
+
+type GetApprovalRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	Kind       string
+}
+
+type GetApprovalRuleRow struct {
+	Rule      string
+	Threshold *decimal.Decimal
+}
+
+// The rules of approval of a property (docs/architecture/32-distinct-approver.md): a kind without a row is FREE.
+func (q *Queries) GetApprovalRule(ctx context.Context, arg GetApprovalRuleParams) (GetApprovalRuleRow, error) {
+	row := q.db.QueryRow(ctx, getApprovalRule, arg.TenantID, arg.PropertyID, arg.Kind)
+	var i GetApprovalRuleRow
+	err := row.Scan(&i.Rule, &i.Threshold)
+	return i, err
 }
 
 const getGrantPermission = `-- name: GetGrantPermission :one
@@ -475,6 +539,51 @@ func (q *Queries) InsertUserGrant(ctx context.Context, arg InsertUserGrantParams
 		arg.ActorID,
 	)
 	return err
+}
+
+const listApprovalRules = `-- name: ListApprovalRules :many
+SELECT kind, rule, threshold, updated_at, updated_by FROM property_approval_rules
+WHERE tenant_id = $1 AND property_id = $2
+ORDER BY kind
+`
+
+type ListApprovalRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListApprovalRulesRow struct {
+	Kind      string
+	Rule      string
+	Threshold *decimal.Decimal
+	UpdatedAt time.Time
+	UpdatedBy *int64
+}
+
+func (q *Queries) ListApprovalRules(ctx context.Context, arg ListApprovalRulesParams) ([]ListApprovalRulesRow, error) {
+	rows, err := q.db.Query(ctx, listApprovalRules, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApprovalRulesRow{}
+	for rows.Next() {
+		var i ListApprovalRulesRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Rule,
+			&i.Threshold,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPropertiesWithPermission = `-- name: ListPropertiesWithPermission :many
@@ -912,4 +1021,32 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const upsertApprovalRule = `-- name: UpsertApprovalRule :exec
+INSERT INTO property_approval_rules (tenant_id, property_id, kind, rule, threshold, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (property_id, kind) DO UPDATE
+SET rule = EXCLUDED.rule, threshold = EXCLUDED.threshold, updated_at = now(), updated_by = EXCLUDED.updated_by
+`
+
+type UpsertApprovalRuleParams struct {
+	TenantID   int64
+	PropertyID int64
+	Kind       string
+	Rule       string
+	Threshold  *decimal.Decimal
+	ActorID    *int64
+}
+
+func (q *Queries) UpsertApprovalRule(ctx context.Context, arg UpsertApprovalRuleParams) error {
+	_, err := q.db.Exec(ctx, upsertApprovalRule,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Kind,
+		arg.Rule,
+		arg.Threshold,
+		arg.ActorID,
+	)
+	return err
 }

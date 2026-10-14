@@ -347,5 +347,5 @@ watch(() => pid.value, () => {
       </CardContent>
     </Card>
   </template>
-  <ApprovalDialog v-if="reversing?.asking" :title="t('journals.approveReversal')" :busy="busy" :error="dialogError" @approve="reverse" @cancel="reversing = null; dialogError = null" />
+  <ApprovalDialog kind="JOURNAL" v-if="reversing?.asking" :title="t('journals.approveReversal')" :busy="busy" :error="dialogError" @approve="reverse" @cancel="reversing = null; dialogError = null" />
 </template>

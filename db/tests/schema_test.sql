@@ -1932,7 +1932,7 @@ INSERT INTO pms_test.currency_lock_classes VALUES
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
     ('companies', 'CONFIG', 'credit limit'), ('city_ledger_late_fee_settings', 'CONFIG', 'late fee'), ('card_fee_rules', 'CONFIG', 'fees'),
-    ('property_cashier_settings', 'CONFIG', 'variance limit'), ('free_night_quotas', 'CONFIG', 'quotas'), ('property_tax_settings', 'CONFIG', 'tax settings'),
+    ('property_cashier_settings', 'CONFIG', 'variance limit'), ('free_night_quotas', 'CONFIG', 'quotas'), ('property_approval_rules', 'CONFIG', 'limits of the approval rules'), ('property_tax_settings', 'CONFIG', 'tax settings'),
     ('tax_filing_profiles', 'CONFIG', 'filing settings'), ('charge_code_taxes', 'CONFIG', 'tax mapping'), ('service_charges', 'CONFIG', 'service charge'),
     ('taxes', 'CONFIG', 'tax rates'), ('charge_codes', 'CONFIG', 'charge codes'),
     ('reservation_room_rates', 'PLAN', 'the nightly price of a booking: money to be charged, kept as a snapshot, not a transaction'),

@@ -112,6 +112,20 @@ describe('AuditTrailView', () => {
     expect(w.find('select[name=action]').exists()).toBe(true)
   })
 
+  it('lists only the approvals an administrator gave to their own correction against the rule, as self_approved', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(auditCalls().at(-1)?.[1].params.query.self_approved).toBeUndefined()
+    await w.get('input[name=self_approved]').setValue(true)
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(auditCalls().at(-1)?.[1]).toMatchObject({ params: { query: { self_approved: 'true' } } })
+    await w.get('[data-testid=reset]').trigger('click')
+    await flushPromises()
+    expect((w.get('input[name=self_approved]').element as HTMLInputElement).checked).toBe(false)
+    expect(auditCalls().at(-1)?.[1].params.query.self_approved).toBeUndefined()
+  })
+
   it('asks the server for the document number: a part of a label, in any case, as q', async () => {
     const w = mountView()
     await flushPromises()

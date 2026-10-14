@@ -706,7 +706,13 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 	if reason == "" || len([]rune(reason)) > 500 {
 		return Journal{}, apperr.Invalid("the reversal is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	total := decimal.Zero // the total debit of the journal reversed, for the rule of approval (a journal that is not found is 404 in the transaction)
+	if pre, err := s.loadJournal(ctx, p.TenantID, propertyID, journalID); err == nil {
+		for _, l := range pre.Lines {
+			total = total.Add(l.Debit)
+		}
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindJournal, Amount: total})
 	if err != nil {
 		return Journal{}, err
 	}
@@ -768,7 +774,7 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 			}
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, propertyID, id), nil,
-			map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason, "approved_by": by}))
+			approval.AuditFields(map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason})))
 	})
 	if err != nil {
 		return Journal{}, err

@@ -49,6 +49,7 @@ var moduleRules = []struct {
 	{"yield-rules", Core},
 	{"availability", Core},
 	{"free-night-quotas", Core},
+	{"approval-rules", Core},
 	{"tape-chart", Core},
 	{"reservations", Core},
 	{"arrivals", Core},

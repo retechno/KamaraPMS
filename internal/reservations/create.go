@@ -186,7 +186,7 @@ func (s *Service) create(ctx context.Context, p auth.Principal, propertyID int64
 			if priced[i], err = s.priceLine(ctx, propertyID, p.TenantID, prefix, l.RatePlanID, l.RoomTypeID, lockedBed(l.BedLocked, l.BedTypeID), l.Arrival, l.Departure, l.Overrides, decimals, nil); err != nil {
 				return err
 			}
-			if reasons[i], err = s.occupancyReason(ctx, propertyID, p.TenantID, prefix, priced[i].kind, l.OccupancyReason, true, l.Arrival, l.Departure, nil); err != nil {
+			if reasons[i], err = s.occupancyReason(ctx, propertyID, p.TenantID, prefix, priced[i].kind, l.OccupancyReason, l.RoomTypeID, true, l.Arrival, l.Departure, nil); err != nil {
 				return err
 			}
 		}

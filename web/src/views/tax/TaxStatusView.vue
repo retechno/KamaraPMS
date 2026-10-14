@@ -192,5 +192,5 @@ watch(() => pid.value, () => {
       </DataTable>
     </Card>
   </template>
-  <ApprovalDialog v-if="asking" :title="t('taxStatus.approveTitle')" :message="t('taxStatus.backdated')" :busy="busy" :error="dialogError" @approve="submit" @cancel="asking = false; dialogError = null" />
+  <ApprovalDialog kind="TAX_SETTINGS" v-if="asking" :title="t('taxStatus.approveTitle')" :message="t('taxStatus.backdated')" :busy="busy" :error="dialogError" @approve="submit" @cancel="asking = false; dialogError = null" />
 </template>

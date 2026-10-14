@@ -535,7 +535,11 @@ func (s *Service) VoidReceipt(ctx context.Context, propertyID, receiptID int64, 
 	case len([]rune(reason)) > maxReasonLen:
 		return ReceiptResult{}, apperr.Invalid("the void is invalid", field("reason", "TOO_LONG", "too long"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	amount := decimal.Zero // the amount of the receipt voided, for the rule of approval (a receipt that is not found is 404 in the transaction)
+	if rc, err := s.q(ctx).GetReceipt(ctx, cityledgerdb.GetReceiptParams{TenantID: p.TenantID, PropertyID: propertyID, ID: receiptID}); err == nil {
+		amount = rc.Amount
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindCityLedgerVoid, Amount: amount})
 	if err != nil {
 		return ReceiptResult{}, err
 	}
@@ -578,7 +582,7 @@ func (s *Service) VoidReceipt(ctx context.Context, propertyID, receiptID int64, 
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_voided", receiptID, auditlabel.CityLedgerReceipt(ctx, propertyID, receiptID),
-			map[string]any{"status": r.Status}, map[string]any{"status": v.Status, "reason": reason, "actor": p.ActorID(), "approved_by": by})); err != nil {
+			map[string]any{"status": r.Status}, approval.AuditFields(map[string]any{"status": v.Status, "reason": reason, "actor": p.ActorID()}))); err != nil {
 			return err
 		}
 		alloc, err := s.allocationsOf(ctx, p.TenantID, propertyID, pre.CompanyID, decimals)

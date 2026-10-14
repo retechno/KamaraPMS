@@ -57,6 +57,7 @@ export const AUDIT_ACTIONS = [
   'group.cancelled',
   'accounting.deposit_release_locked',
   'property.deposit_release_set',
+  'property.approval_rule_changed',
   'group.reinstated',
   'group.rooming_list_updated',
   'group.routing_set',
@@ -205,6 +206,7 @@ export const AUDIT_ACTIONS = [
 ] as const
 
 export const AUDIT_ENTITIES = [
+  'approval_rule',
   'booking_group',
   'budget',
   'business_day',
