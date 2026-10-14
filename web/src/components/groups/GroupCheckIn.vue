@@ -125,9 +125,12 @@ const methodCounts = computed(() => {
   return [...counts].map(([m, n]) => `${t(`cashier.${m}` as never)} × ${n}`).join(', ')
 })
 /** What the person is about to send, in a line: how many rooms, and the deposits with their total and methods. */
-const sendSummary = computed(() => (withDeposit.value.length === 0
-  ? t('groupCheckIn.sendNoDeposit', { n: chosen.value.length }, chosen.value.length)
-  : t('groupCheckIn.sendDeposit', { n: chosen.value.length, total: formatMoney(depositTotal.value), methods: methodCounts.value }, chosen.value.length)))
+const sendSummary = computed(() => {
+  const rooms = t('groupCheckIn.sendRooms', { n: chosen.value.length }, chosen.value.length)
+  const d = withDeposit.value.length
+  // the rooms and the deposits are counted apart: three rooms can come with two deposits
+  return `${rooms}, ${d === 0 ? t('groupCheckIn.sendNoDeposit') : t('groupCheckIn.sendDeposits', { d, total: formatMoney(depositTotal.value), methods: methodCounts.value }, d)}`
+})
 const selectable = (a: Arrival): boolean => rowSelectable(a, overrideNotReady.value && canOverride.value)
 const readyLines = computed(() => rows.value.filter(selectable).map((a) => a.reservation_room_id))
 const isSelected = (a: Arrival): boolean => selected.value.includes(a.reservation_room_id)
@@ -293,7 +296,7 @@ async function depositDone(message: string): Promise<void> {
             <p v-if="outcome[a.reservation_room_id]?.status === 'FAILED'" class="m-0 mt-1 text-xs text-destructive" :data-testid="`failed-${a.reservation_room_id}`">
               {{ outcome[a.reservation_room_id]?.code }}: {{ reason(outcome[a.reservation_room_id]?.code, outcome[a.reservation_room_id]?.message) }}
             </p>
-            <p v-if="outcome[a.reservation_room_id]?.deposit && outcome[a.reservation_room_id]?.deposit?.status !== 'FAILED'" class="m-0 mt-1 text-xs text-muted-foreground" :data-testid="`deposit-note-${a.reservation_room_id}`">
+            <p v-if="!received(a) && outcome[a.reservation_room_id]?.deposit && outcome[a.reservation_room_id]?.deposit?.status !== 'FAILED'" class="m-0 mt-1 text-xs text-muted-foreground" :data-testid="`deposit-note-${a.reservation_room_id}`">
               {{ t('groupCheckIn.depositNote', { number: outcome[a.reservation_room_id]?.deposit?.payment_number ?? '', amount: formatMoney(outcome[a.reservation_room_id]?.deposit?.amount ?? '0') }) }}
             </p>
           </template>
@@ -306,7 +309,7 @@ async function depositDone(message: string): Promise<void> {
             </p>
             <span v-else-if="!editable(a)" class="text-muted-foreground" :title="t(`groupCheckIn.basis.${proposals.get(a.reservation_room_id)?.basis}` as never)" :data-testid="`deposit-none-${a.reservation_room_id}`">—</span>
             <div v-else class="flex flex-wrap items-center justify-end gap-1.5">
-              <MoneyInput v-model="deposits[a.reservation_room_id]" class="w-32 text-right tabular-nums placeholder:italic" :decimals="decimals" :placeholder="formatMoney(proposalOf(a))" :name="`deposit_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.deposit')" :data-testid="`deposit-${a.reservation_room_id}`" />
+              <MoneyInput v-model="deposits[a.reservation_room_id]" class="w-40 text-right tabular-nums placeholder:italic" :decimals="decimals" :placeholder="hasProposal(a) ? t('groupCheckIn.proposalPlaceholder', { amount: formatMoney(proposalOf(a)) }) : ''" :name="`deposit_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.deposit')" :data-testid="`deposit-${a.reservation_room_id}`" />
               <NativeSelect v-model="methods[a.reservation_room_id]" class="w-auto" :name="`deposit_method_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.depositMethod')" :data-testid="`deposit-method-${a.reservation_room_id}`">
                 <option value="">{{ t('groupCheckIn.methodPick') }}</option>
                 <option v-for="m in DEPOSIT_METHODS" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>

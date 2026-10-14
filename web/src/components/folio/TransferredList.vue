@@ -13,6 +13,7 @@ import { formatMoney } from '@/utils/format'
 import { usePropertyStore } from '@/stores/property'
 import { useAuthStore } from '@/stores/auth'
 import ReturnDialog from './ReturnDialog.vue'
+import { folioDescription } from '@/utils/folioDescription'
 
 /**
  * "Show what was transferred" of a folio (docs/architecture/30-group-folio.md, part B): the transactions that left it, each with the amount, the folio it went to and where it is now (it may have moved on),
@@ -83,7 +84,7 @@ function done(message: string): void {
           <span v-else />
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="font-medium">{{ r.kind === 'BALANCE' ? t('folioTransfer.balanceLine') : r.description }}</span>
+              <span class="font-medium">{{ r.kind === 'BALANCE' ? t('folioTransfer.balanceLine') : folioDescription(r.description) }}</span>
               <Badge v-if="r.kind === 'BALANCE'" variant="outline">{{ t('folioTransfer.kindBalance') }}</Badge>
               <Badge v-if="status(r)" variant="outline" :data-testid="`transferred-status-${r.id}`">{{ status(r) }}</Badge>
             </div>

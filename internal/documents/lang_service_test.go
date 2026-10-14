@@ -16,12 +16,12 @@ func TestDocumentsInIndonesian(t *testing.T) {
 	bill, err := f.Docs.Invoice(ctx, f.propID, f.stay.Folio.ID)
 	must(t, err)
 	s := pdfText(t, bill)
-	for _, want := range []string{"TAGIHAN TAMU", "Siti Nurhaliza", "Biaya layanan Service 10%", "Total biaya", "122.100", "Pembayaran diterima", "50.000", "72.100", "Saldo terutang", "Halaman 1 dari", "Dicetak", "Tanggal menginap"} {
+	for _, want := range []string{"TAGIHAN TAMU", "Siti Nurhaliza", "Biaya layanan Service 10%", "Total biaya", "122.100", "Pembayaran diterima", "50.000", "72.100", "Saldo terutang", "Halaman 1 dari", "Dicetak", "Tanggal menginap", "Pembayaran PAY"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("bill lacks %q", want)
 		}
 	}
-	for _, unwanted := range []string{"GUEST BILL", "Payments received", "122,100"} {
+	for _, unwanted := range []string{"GUEST BILL", "Payments received", "122,100", "Payment PAY", "(CASH)"} {
 		if strings.Contains(s, unwanted) {
 			t.Errorf("bill still says %q", unwanted)
 		}
@@ -49,7 +49,7 @@ func TestDocumentsInIndonesian(t *testing.T) {
 	// without a language the documents stay English
 	en, err := f.Docs.Invoice(f.admin, f.propID, f.stay.Folio.ID)
 	must(t, err)
-	if e := pdfText(t, en); !strings.Contains(e, "GUEST BILL") || !strings.Contains(e, "122,100") {
+	if e := pdfText(t, en); !strings.Contains(e, "GUEST BILL") || !strings.Contains(e, "122,100") || !strings.Contains(e, "Payment PAY") {
 		t.Error("English by default")
 	}
 }

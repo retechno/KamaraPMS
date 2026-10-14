@@ -506,7 +506,7 @@ func (s *Service) fillInvoiceLines(d *InvoiceData, dc docContext, f folios.Folio
 			continue
 		}
 		debit, credit := dec(it.Debit), dec(it.Credit)
-		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: dc.lang.TransferDescription(it.Description),
+		d.Lines = append(d.Lines, InvoiceLine{Date: it.ServiceDate, Description: dc.lang.FolioDescription(it.Description),
 			Debit: dc.lang.Money(debit, dc.decimals), Credit: dc.lang.Money(credit, dc.decimals), DebitSet: !debit.IsZero(), CreditSet: !credit.IsZero()})
 		switch it.TransactionType {
 		case "PAYMENT", "REFUND":

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
+import { folioDescription } from '@/utils/folioDescription'
 
 /**
  * Send transfers back (docs/architecture/30-group-folio.md, part B): one or several, from the folio that holds them now, to the folio each came from last or to the first folio it came from. A return is a
@@ -70,7 +71,7 @@ async function approve(approval: Approval): Promise<void> {
 
         <ul class="m-0 mb-3 list-none divide-y divide-border p-0 text-sm" data-testid="return-list">
           <li v-for="r in rows" :key="r.head_transfer_id" class="flex items-baseline justify-between gap-3 py-1.5" :data-testid="`return-row-${r.head_transfer_id}`">
-            <span class="min-w-0 truncate">{{ r.kind === 'BALANCE' ? t('folioTransfer.balanceLine') : r.description }}</span>
+            <span class="min-w-0 truncate">{{ r.kind === 'BALANCE' ? t('folioTransfer.balanceLine') : folioDescription(r.description) }}</span>
             <span class="shrink-0 tabular-nums text-muted-foreground">{{ formatMoney(r.amount) }} → {{ targetOf(r) }}</span>
           </li>
         </ul>
