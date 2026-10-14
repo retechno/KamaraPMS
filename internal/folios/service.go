@@ -295,7 +295,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 		return FolioList{}, err
 	}
 	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
-		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), Status: nullable(f.Status),
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), Status: nullable(f.Status), CancelledWithBalance: f.CancelledWithBalance,
 		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {

@@ -60,11 +60,11 @@ func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string
 	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "booking_group", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
-func toGroup(g groupsdb.BookingGroup, company *string, reservations, rooms int32) Group {
+func toGroup(g groupsdb.BookingGroup, company *string, reservations, cancelled, rooms int32) Group {
 	return Group{
 		ID: g.ID, Code: g.Code, Name: g.Name, CompanyID: g.CompanyID, CompanyName: deref(company), ContactName: deref(g.ContactName),
 		ContactEmail: deref(g.ContactEmail), ContactPhone: deref(g.ContactPhone), ContactGuestID: g.ContactGuestID, ArrivalDate: g.ArrivalDate, DepartureDate: g.DepartureDate,
-		Notes: deref(g.Notes), IsActive: g.IsActive, ReservationCount: int(reservations), RoomCount: int(rooms), CreatedAt: g.CreatedAt,
+		Notes: deref(g.Notes), IsActive: g.IsActive, ReservationCount: int(reservations), CancelledReservationCount: int(cancelled), RoomCount: int(rooms), CreatedAt: g.CreatedAt,
 	}
 }
 
@@ -88,7 +88,7 @@ func (s *Service) List(ctx context.Context, propertyID, beforeID int64, active *
 		out[i] = toGroup(groupsdb.BookingGroup{
 			ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone, ContactGuestID: r.ContactGuestID,
 			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Notes: r.Notes, IsActive: r.IsActive, CreatedAt: r.CreatedAt,
-		}, r.CompanyName, r.ReservationCount, r.RoomCount)
+		}, r.CompanyName, r.ReservationCount, r.CancelledReservationCount, r.RoomCount)
 	}
 	return out, nil
 }
@@ -104,7 +104,7 @@ func (s *Service) load(ctx context.Context, tenantID, propertyID, id int64) (Gro
 	return toGroup(groupsdb.BookingGroup{
 		ID: r.ID, Code: r.Code, Name: r.Name, CompanyID: r.CompanyID, ContactName: r.ContactName, ContactEmail: r.ContactEmail, ContactPhone: r.ContactPhone, ContactGuestID: r.ContactGuestID,
 		ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Notes: r.Notes, IsActive: r.IsActive, CreatedAt: r.CreatedAt,
-	}, r.CompanyName, r.ReservationCount, r.RoomCount), nil
+	}, r.CompanyName, r.ReservationCount, r.CancelledReservationCount, r.RoomCount), nil
 }
 
 // Get returns one group.
@@ -129,11 +129,17 @@ func (s *Service) Members(ctx context.Context, propertyID, id int64) ([]Member, 
 	if err != nil {
 		return nil, err
 	}
+	decimals, err := s.q(ctx).CurrencyDecimals(ctx, groupsdb.CurrencyDecimalsParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Member, len(rows))
 	for i, r := range rows {
 		out[i] = Member{
 			ReservationID: r.ID, ConfirmationNumber: r.ConfirmationNumber, Status: r.Status, DisplayStatus: r.DisplayStatus, GuestName: r.GuestName, CompanyID: r.CompanyID,
-			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, RoomCount: int(r.RoomCount),
+			ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, RoomCount: int(r.RoomCount), Version: r.Version,
+			RoomsCancellable: int(r.RoomsCancellable), RoomsInHouseOrDone: int(r.RoomsInHouseOrDone), RoomsNoShow: int(r.RoomsNoShow), RoomsCancelled: int(r.RoomsCancelled),
+			HeldBalance: r.HeldBalance.StringFixed(decimals),
 		}
 	}
 	return out, nil

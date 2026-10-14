@@ -11,7 +11,7 @@ let GET = vi.fn()
 let POST = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
 
-const group = { id: 4, code: 'CONF', name: 'Conference', arrival_date: '2026-10-01', departure_date: '2026-10-10', is_active: true, company_id: null, contact_guest_id: null, reservation_count: 0, room_count: 0, created_at: '' }
+const group = { id: 4, code: 'CONF', name: 'Conference', arrival_date: '2026-10-01', departure_date: '2026-10-10', is_active: true, company_id: null, contact_guest_id: null, reservation_count: 0, cancelled_reservation_count: 0, room_count: 0, created_at: '' }
 const money = (total: string) => ({ net: total, service: '0', tax: '0', total })
 
 const previewOf = (over: object = {}, rowOver: object = {}) => ({

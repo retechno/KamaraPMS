@@ -264,6 +264,7 @@ watch(pid, () => {
             <li v-for="f in preview.warnings.open_folios_of_cancelled_reservations" :key="f.folio_id">
               {{ t('nightAudit.openFolioBefore') }} <RouterLink :to="`/folios/${f.folio_id}`">{{ f.folio_number }}</RouterLink> {{ t('nightAudit.openFolioAfter', { number: f.confirmation_number, balance: $money(f.balance) }) }}
             </li>
+            <li v-if="preview.warnings.open_folios_of_cancelled_reservations.length" data-testid="open-folios-all"><RouterLink :to="{ path: '/folios', query: { cancelled_with_balance: 'true' } }">{{ t('nightAudit.openFoliosAll') }}</RouterLink></li>
             <li v-for="c in preview.warnings.group_masters_closed ?? []" :key="c.group_id" :data-testid="`closed-master-${c.group_id}`">
               {{ c.folio_number ? t('groupMaster.warnMasterClosed', { group: c.group_code, folio: c.folio_number, n: c.stays }) : t('groupMaster.warnMasterMissing', { group: c.group_code, n: c.stays }) }}
             </li>

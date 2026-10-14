@@ -58,6 +58,9 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(booking_group_id)::bigint IS NULL OR f.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (sqlc.narg(folio_type)::text IS NULL OR f.folio_type = sqlc.narg(folio_type)::text)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
+  -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
+  AND (NOT @cancelled_with_balance::boolean OR (f.status = 'OPEN' AND f.stay_id IS NULL AND f.reservation_id IS NOT NULL AND bal.balance <> 0
+       AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = f.property_id AND l.reservation_id = f.reservation_id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))))
   AND (sqlc.narg(after_id)::bigint IS NULL
        OR CASE WHEN NOT @sort_desc::boolean THEN
                (k.sk_text > sqlc.narg(after_text)::text COLLATE "und-x-icu" OR k.sk_num > sqlc.narg(after_num)::numeric

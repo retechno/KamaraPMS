@@ -54,6 +54,8 @@ export const AUDIT_ACTIONS = [
   'group.updated',
   'group.rooms_added',
   'group.checked_in',
+  'group.cancelled',
+  'group.reinstated',
   'group.rooming_list_updated',
   'group.routing_set',
   'guest.created',

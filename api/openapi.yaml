@@ -2222,6 +2222,7 @@ paths:
         - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER] } }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
+        - { name: cancelled_with_balance, in: query, schema: { type: boolean }, description: "true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee." }
         - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
         - $ref: "#/components/parameters/SortOrder"
       responses:
@@ -2757,7 +2758,7 @@ paths:
     post:
       operationId: refundPayment
       summary: Refund part or all of a payment (payment.refund, needs approval)
-      description: The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`).
+      description: "The amount is checked against what is left of the payment under the payment's row lock (409 `REFUND_EXCEEDS_PAYMENT`, with `context.refundable`), and against the credit the folio holds: a refund never makes a folio owe (409 `REFUND_EXCEEDS_CREDIT`, with `context.credit` and `context.refundable`, the least of the credit and what is left of the payment). A deposit that paid a fee, or a charge posted after the deposit, is therefore not given back twice."
       tags: [folios]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
@@ -2837,6 +2838,88 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GroupCheckInResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/cancellations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelGroup
+      summary: Cancel the rooms of a group that are waiting, each reservation in its own transaction (group.cancel)
+      description: |
+        Up to 100 reservations (`TOO_MANY_ROWS`, `GROUP_CANCEL_EMPTY`), taken in ascending `reservation_id`; one `reason` for all (required). Without `group.cancel` the whole request is refused (403) before anything is done:
+        the right to cancel one reservation is not enough. The answer is 200 whatever the rows did. A row is `CANCELLED` (every room is cancelled), `PARTLY_CANCELLED` (a reservation with a room in house keeps it
+        and stays; only the rooms that waited are cancelled, room by room), `ALREADY_CANCELLED`, `SKIPPED` (nothing waits: every room is checked in, checked out or a no-show; `ALREADY_CHECKED_IN` or `NO_SHOW`) or
+        `FAILED` with the code of the cancellation (`VERSION_CONFLICT`, `RESERVATION_NOT_IN_GROUP`, ...). Each room of a row says `CANCELLED`, `SKIPPED` (with its code) or `ALREADY_CANCELLED`.
+        A repeat of the request (any Idempotency-Key) finds what the first did: a reservation with nothing left to cancel is answered from its rooms, whatever version the repeat names.
+        The cancellation moves no money and posts no fee. The deposits that a cancelled reservation holds and that can still be refunded are listed on its row (`deposits`); what to do with each is decided one
+        reservation at a time with the refund (`payment.refund`) and the fee of the cancellation (`folio.post_charge`) that exist. No e-mail is sent for a cancellation (there is none for a single one either).
+        The Idempotency-Key of the request is the `batch_id` of the audit entries of the reservations and of the entry `group.cancelled` of the group.
+      tags: [groups]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupCancelRequest" }
+      responses:
+        "200":
+          description: What happened to each reservation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupCancelResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/holdings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listGroupHoldings
+      summary: What the cancelled reservations of a group still hold (folio.read)
+      description: |
+        The reservations of the group that have no live room and still hold something on their open folios without a stay: a deposit that was kept (a negative `held_balance`) or a fee not yet paid, each with the
+        deposits that can still be refunded. It is the follow-up of a cancellation: the same set the folio list shows with `cancelled_with_balance` and the night audit warns of, and it lasts until the deposit is
+        refunded or used for a fee.
+      tags: [groups]
+      responses:
+        "200":
+          description: The reservations that hold something.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupHoldingList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/reinstatements:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reinstateGroup
+      summary: Bring the cancelled reservations of a group back, each in its own transaction (group.cancel)
+      description: |
+        The same shape as the cancellation, with no reason, and the same right: `group.cancel` is checked for the whole request (403 and nothing done without it); `reservation.reinstate`, the right of one reservation, is not asked for each row. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
+        `ROOM_UNAVAILABLE`. In the counters of the answer `cancelled` counts the reservations that were reinstated. The rooms come back unassigned (as `POST /reservations/{id}/reinstate` does).
+      tags: [groups]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupReinstateRequest" }
+      responses:
+        "200":
+          description: What happened to each reservation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupCancelResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -4574,7 +4657,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
-        - { name: active, in: query, schema: { type: boolean } }
+        - { name: active, in: query, schema: { type: boolean }, description: "true: only the groups that are active and not cancelled (a group whose reservations are all cancelled is left out; it has no status of its own, it is derived). false: only the inactive ones." }
         - { name: company_id, in: query, schema: { type: integer, format: int64 } }
         - { name: q, in: query, description: Matches the code or the name., schema: { type: string } }
       responses:
@@ -10824,6 +10907,113 @@ components:
                   amount: { type: string }
                   payment_method: { $ref: "#/components/schemas/PaymentMethod" }
                   reference_number: { type: string }
+    GroupHoldingList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [reservation_id, confirmation_number, held_balance, deposits]
+            properties:
+              reservation_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+              guest_name: { type: string }
+              held_balance: { type: string, description: What its open folios without a stay hold; a deposit is negative. }
+              deposits:
+                type: array
+                items:
+                  type: object
+                  required: [payment_id, payment_number, payment_method, amount, refundable, folio_id, folio_number]
+                  properties:
+                    payment_id: { type: integer, format: int64 }
+                    payment_number: { type: string }
+                    payment_method: { type: string }
+                    amount: { type: string }
+                    refundable: { type: string }
+                    folio_id: { type: integer, format: int64 }
+                    folio_number: { type: string }
+    GroupCancelRequest:
+      type: object
+      required: [reason, rows]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500, description: One reason for every reservation of the request. }
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [reservation_id, version]
+            additionalProperties: false
+            properties:
+              reservation_id: { type: integer, format: int64, description: A reservation of the group, named once. }
+              version: { type: integer, format: int32, description: The version of the reservation the person saw. }
+    GroupReinstateRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [reservation_id, version]
+            additionalProperties: false
+            properties:
+              reservation_id: { type: integer, format: int64 }
+              version: { type: integer, format: int32 }
+    GroupCancelResult:
+      type: object
+      required: [batch_id, rows, cancelled, partly_cancelled, already_cancelled, skipped, failed, rooms_cancelled, rooms_skipped, deposits_held]
+      properties:
+        batch_id: { type: string, description: The Idempotency-Key of the request; the batch_id of the audit entries it wrote. }
+        cancelled: { type: integer, description: "Reservations cancelled whole (for a reinstatement: reinstated)." }
+        partly_cancelled: { type: integer }
+        already_cancelled: { type: integer }
+        skipped: { type: integer }
+        failed: { type: integer }
+        rooms_cancelled: { type: integer }
+        rooms_skipped: { type: integer }
+        deposits_held: { type: integer, description: Reservations that were cancelled and still hold a deposit that can be refunded. }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [reservation_id, status]
+            properties:
+              reservation_id: { type: integer, format: int64 }
+              confirmation_number: { type: string }
+              status: { type: string, enum: [CANCELLED, PARTLY_CANCELLED, ALREADY_CANCELLED, SKIPPED, FAILED, REINSTATED] }
+              code: { type: string, description: "The code of the failure (FAILED) or the reason a reservation was skipped (ALREADY_CHECKED_IN, NO_SHOW, NOT_CANCELLED)." }
+              message: { type: string }
+              rooms:
+                type: array
+                items:
+                  type: object
+                  required: [line_id, status]
+                  properties:
+                    line_id: { type: integer, format: int64 }
+                    status: { type: string, enum: [CANCELLED, ALREADY_CANCELLED, SKIPPED] }
+                    code: { type: string }
+              deposits:
+                type: array
+                description: The deposits the cancelled reservation holds on its open folios without a stay and that can still be refunded.
+                items:
+                  type: object
+                  required: [payment_id, payment_number, payment_method, amount, refundable, folio_id, folio_number]
+                  properties:
+                    payment_id: { type: integer, format: int64 }
+                    payment_number: { type: string }
+                    payment_method: { type: string }
+                    amount: { type: string }
+                    refundable: { type: string, description: The amount less the refunds posted against it. }
+                    folio_id: { type: integer, format: int64 }
+                    folio_number: { type: string }
     GroupCheckInResult:
       type: object
       required: [batch_id, rows, checked_in, already_checked_in, failed, deposits_recorded]
@@ -12655,7 +12845,7 @@ components:
         is_active: { type: boolean }
     Group:
       type: object
-      required: [id, code, name, company_id, contact_guest_id, arrival_date, departure_date, is_active, reservation_count, room_count, created_at]
+      required: [id, code, name, company_id, contact_guest_id, arrival_date, departure_date, is_active, reservation_count, cancelled_reservation_count, room_count, created_at]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -12671,6 +12861,7 @@ components:
         notes: { type: string }
         is_active: { type: boolean }
         reservation_count: { type: integer, description: Reservations that are not cancelled. }
+        cancelled_reservation_count: { type: integer, description: "Reservations that are cancelled. With reservation_count 0 and this above 0 the group is cancelled (a group has no status of its own; it is derived)." }
         room_count: { type: integer, description: Rooms that are not cancelled. }
         created_at: { type: string, format: date-time }
     GroupRoomBatchRow:
@@ -12887,7 +13078,7 @@ components:
         is_active: { type: boolean }
     GroupMember:
       type: object
-      required: [reservation_id, confirmation_number, status, display_status, company_id, arrival_date, departure_date, room_count]
+      required: [reservation_id, confirmation_number, status, display_status, company_id, arrival_date, departure_date, room_count, version, rooms_cancellable, rooms_in_house_or_done, rooms_no_show, rooms_cancelled, held_balance]
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
@@ -12898,6 +13089,12 @@ components:
         arrival_date: { $ref: "#/components/schemas/Date" }
         departure_date: { $ref: "#/components/schemas/Date" }
         room_count: { type: integer }
+        version: { type: integer, format: int32, description: The version of the reservation; a cancellation of the group names it. }
+        rooms_cancellable: { type: integer, description: "Rooms that wait (draft or confirmed): a cancellation of the group cancels them." }
+        rooms_in_house_or_done: { type: integer, description: "Rooms checked in or checked out: a cancellation of the group skips them." }
+        rooms_no_show: { type: integer }
+        rooms_cancelled: { type: integer }
+        held_balance: { type: string, description: What the open folios of the reservation without a stay hold; a deposit is negative. }
     GroupMemberList:
       type: object
       required: [data]

@@ -566,6 +566,19 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 					return apperr.Conflict("REFUND_EXCEEDS_PAYMENT", "the refund is more than what is left of the payment").
 						WithContext("refundable", fixed(refundable, decimals))
 				}
+				// A refund never makes a folio owe: it is at most the credit the folio holds (what the payments and corrections leave over what was charged). A deposit that paid a fee, or a charge posted after
+				// the deposit, is not given back a second time. The refund of the rest is what is left.
+				balance, _, err := s.balanceOf(ctx, propertyID, pre.FolioID)
+				if err != nil {
+					return err
+				}
+				if credit := decimal.Zero.Sub(balance); credit.IsNegative() || amount.GreaterThan(credit) {
+					if credit.IsNegative() {
+						credit = decimal.Zero
+					}
+					return apperr.Conflict("REFUND_EXCEEDS_CREDIT", "the refund is more than the credit the folio holds: the folio would owe").
+						WithContext("credit", fixed(credit, decimals)).WithContext("refundable", fixed(decimal.Min(refundable, credit), decimals))
+				}
 				// Without a method the refund leaves by the payment's own when the property allows it, else by the first
 				// method it allows (cash unless configured otherwise).
 				if method == "" {

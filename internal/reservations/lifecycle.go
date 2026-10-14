@@ -347,8 +347,13 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 	if err := requireVersion(version); err != nil {
 		return Reservation{}, err
 	}
+	return s.reinstate(ctx, p, propertyID, id, version, "")
+}
+
+// reinstate is Reinstate once the right is checked, in a transaction of its own; batch is the Idempotency-Key of the request of a group that reinstates many reservations ("" for one).
+func (s *Service) reinstate(ctx context.Context, p auth.Principal, propertyID, id int64, version int32, batch string) (Reservation, error) {
 	var out Reservation
-	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
+	err := s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		st, err := s.lock(ctx, p.TenantID, propertyID, id, version, lockOpts{inventory: true})
 		if err != nil {
 			return err
@@ -409,7 +414,7 @@ func (s *Service) Reinstate(ctx context.Context, propertyID, id int64, version i
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, st.bd, "reservation.reinstated", id, auditlabel.Reservation(ctx, propertyID, id),
-			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, map[string]any{"status": res.Status, "rooms": len(back)}))); err != nil {
+			map[string]any{"status": st.res.Status}, withRestrictionAudit(ctx, withBatchID(map[string]any{"status": res.Status, "rooms": len(back)}, batch)))); err != nil {
 			return err
 		}
 		out, err = s.load(ctx, p.TenantID, propertyID, res)

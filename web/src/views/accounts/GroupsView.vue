@@ -184,7 +184,7 @@ watch(activeOnly, () => void load())
       <DataTable v-else-if="groups.length" :columns="columns" :rows="groups" row-key="id" :row-test-id="(g) => `group-${g.code}`" :caption="t('groups.title')">
         <template #cell-code="{ row }"><RouterLink :to="`/groups/${row.id}`" class="text-primary hover:underline"><b>{{ row.code }}</b></RouterLink></template>
         <template #cell-dates="{ row }">{{ t('groups.dateRange', { from: $date(row.arrival_date), to: $date(row.departure_date) }) }}</template>
-        <template #cell-status="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
+        <template #cell-status="{ row }"><Badge v-if="row.reservation_count === 0 && row.cancelled_reservation_count > 0" variant="cancelled" data-testid="group-cancelled">{{ t('groupDetail.cancelled') }}</Badge><Badge v-else :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('setup.active') : t('setup.inactive') }}</Badge></template>
       </DataTable>
       <div v-if="nextCursor" class="mt-3 flex justify-center">
         <Button type="button" variant="outline" data-testid="more" @click="load(true)">{{ t('groups.more') }}</Button>

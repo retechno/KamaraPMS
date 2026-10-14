@@ -5,7 +5,7 @@ import { useServerSort } from '@/composables/useServerSort'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Search, Wallet } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import type { FolioSummary } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
@@ -22,10 +22,13 @@ import { usePropertyStore } from '@/stores/property'
 const auth = useAuthStore()
 const property = usePropertyStore()
 
-const status = ref('OPEN')
+const route = useRoute()
+// The follow-up of a cancellation: the open folios of cancelled reservations that still hold a deposit or a fee. The night audit links here (?cancelled_with_balance=true).
+const followUp = ref(route.query.cancelled_with_balance === 'true')
+const status = ref(followUp.value ? '' : 'OPEN')
 
 // Open folios are what the page shows to begin with: another choice is a filter that is on.
-const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1))
+const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1) + (followUp.value ? 1 : 0))
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 
@@ -42,7 +45,7 @@ const columns = computed<Column<FolioSummary>[]>(() => [
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
 const list = usePagedList<FolioSummary>(async (cursor) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', {
-    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, ...sortParams.value } },
+    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, ...sortParams.value } },
   })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
@@ -50,6 +53,7 @@ const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 
 function clearFilters(): void {
   status.value = 'OPEN'
+  followUp.value = false
   void load()
 }
 
@@ -95,6 +99,10 @@ watch(() => property.currentId, () => {
           </NativeSelect>
         </template>
       </FormField>
+      <label class="flex items-center gap-2 pb-2 text-sm" data-testid="follow-up-filter">
+        <input v-model="followUp" type="checkbox" name="cancelled_with_balance" class="size-4 accent-primary" />
+        <span>{{ t('folios.followUp') }}</span>
+      </label>
       <template #actions>
         <Button type="submit" :disabled="loading"><Search />{{ t('folios.search') }}</Button>
       </template>

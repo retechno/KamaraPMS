@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/folios"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/listsort"
@@ -305,12 +307,19 @@ func TestIsDepositByRoleOfTheFolio(t *testing.T) {
 	must(t, p.Pool.QueryRow(context.Background(), `SELECT min(item_id) FROM folio_item_gl WHERE folio_id = $1 AND payment_id IS NOT NULL`, master).Scan(&depItem))
 	var firstPayment int64
 	must(t, p.Pool.QueryRow(context.Background(), `SELECT payment_id FROM folio_items WHERE id = $1`, depItem).Scan(&firstPayment))
-	_, err = p.Folios.Refund(p.admin, p.propID, firstPayment, "rfm", folios.RefundInput{Amount: "10000", Reason: "too much", Approval: p.approval()})
-	must(t, err)
+	// the transfer to the city ledger first; then a refund never makes a folio owe, so the master needs a credit: one more payment (a settlement, taken after the first charge) that pays what it owes and 10,000 more
 	_, err = p.Folios.Transfer(p.admin, p.propID, master, "trm", folios.TransferInput{CompanyID: p.company, Amount: "20000"})
 	must(t, err)
-	if got := deposit(master); len(got) != 4 || !got[0] || got[1] || !got[2] || got[3] {
-		t.Fatalf("master rows (deposit, settlement, refund of the deposit, city ledger): %v, want [true false true false]", got)
+	info, err := p.Folios.GetFolio(p.admin, p.propID, master)
+	must(t, err)
+	extra, err := decimal.NewFromString(info.Balance)
+	must(t, err)
+	_, err = p.Folios.PostPayment(p.admin, p.propID, master, "extra", folios.PaymentInput{Amount: extra.Add(decimal.NewFromInt(10000)).String(), PaymentMethod: "CARD"})
+	must(t, err)
+	_, err = p.Folios.Refund(p.admin, p.propID, firstPayment, "rfm", folios.RefundInput{Amount: "10000", Reason: "too much", Approval: p.approval()})
+	must(t, err)
+	if got := deposit(master); len(got) != 5 || !got[0] || got[1] || got[2] || got[3] || !got[4] {
+		t.Fatalf("master rows (deposit, settlement, city ledger, a second settlement, refund of the deposit): %v, want [true false false false true]", got)
 	}
 	// the old expression, evaluated by hand for every row of a stay or of no stay, is what the view says for them
 	var diff int

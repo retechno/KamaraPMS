@@ -557,6 +557,29 @@ func (q *Queries) GetRoomTypesForBooking(ctx context.Context, arg GetRoomTypesFo
 	return items, nil
 }
 
+const groupBrief = `-- name: GroupBrief :one
+SELECT id, code FROM booking_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GroupBriefParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GroupBriefRow struct {
+	ID   int64
+	Code string
+}
+
+// The group a request names: its code for the entry of the audit.
+func (q *Queries) GroupBrief(ctx context.Context, arg GroupBriefParams) (GroupBriefRow, error) {
+	row := q.db.QueryRow(ctx, groupBrief, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GroupBriefRow
+	err := row.Scan(&i.ID, &i.Code)
+	return i, err
+}
+
 const groupForBatch = `-- name: GroupForBatch :one
 
 SELECT id, code, name, is_active, company_id, contact_name, contact_email, contact_phone, contact_guest_id, arrival_date, departure_date FROM booking_groups
@@ -1060,6 +1083,61 @@ func (q *Queries) ListFreeNightQuotas(ctx context.Context, arg ListFreeNightQuot
 	return items, nil
 }
 
+const listGroupHoldings = `-- name: ListGroupHoldings :many
+SELECT r.id AS reservation_id, r.confirmation_number,
+       COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name, hold.held::numeric AS held_balance
+FROM reservations r
+LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id
+CROSS JOIN LATERAL (
+    SELECT COALESCE(sum(i.debit - i.credit), 0) AS held
+    FROM folios f JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+    WHERE f.property_id = r.property_id AND f.reservation_id = r.id AND f.stay_id IS NULL AND f.status = 'OPEN'
+) hold
+WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.booking_group_id = $3 AND hold.held <> 0
+  AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = r.property_id AND l.reservation_id = r.id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))
+ORDER BY r.id
+`
+
+type ListGroupHoldingsParams struct {
+	TenantID   int64
+	PropertyID int64
+	GroupID    *int64
+}
+
+type ListGroupHoldingsRow struct {
+	ReservationID      int64
+	ConfirmationNumber string
+	GuestName          string
+	HeldBalance        decimal.Decimal
+}
+
+// The reservations of a group that have no live room and still hold something on their open folios without a stay: a deposit that was kept, a fee not yet paid. It is the follow-up of a cancellation of the
+// group, the same set the folio list shows with cancelled_with_balance and the night audit warns of.
+func (q *Queries) ListGroupHoldings(ctx context.Context, arg ListGroupHoldingsParams) ([]ListGroupHoldingsRow, error) {
+	rows, err := q.db.Query(ctx, listGroupHoldings, arg.TenantID, arg.PropertyID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGroupHoldingsRow{}
+	for rows.Next() {
+		var i ListGroupHoldingsRow
+		if err := rows.Scan(
+			&i.ReservationID,
+			&i.ConfirmationNumber,
+			&i.GuestName,
+			&i.HeldBalance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGuestBriefs = `-- name: ListGuestBriefs :many
 SELECT id, code, first_name, last_name FROM guests WHERE tenant_id = $1 AND id = ANY($2::bigint[])
 `
@@ -1090,6 +1168,68 @@ func (q *Queries) ListGuestBriefs(ctx context.Context, arg ListGuestBriefsParams
 			&i.Code,
 			&i.FirstName,
 			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHeldDeposits = `-- name: ListHeldDeposits :many
+SELECT p.id AS payment_id, p.payment_number, p.payment_method, p.amount::numeric AS amount, f.id AS folio_id, f.folio_number, f.reservation_id,
+       COALESCE((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id), 0)::numeric AS folio_balance,
+       (p.amount - COALESCE((SELECT sum(rf.amount) FROM payments rf WHERE rf.property_id = p.property_id AND rf.refund_of_payment_id = p.id AND rf.status = 'POSTED'), 0))::numeric AS refundable
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND f.reservation_id = ANY($3::bigint[])
+  AND f.stay_id IS NULL AND f.status = 'OPEN' AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED' AND p.payment_method <> 'CITY_LEDGER'
+  AND p.amount > COALESCE((SELECT sum(rf.amount) FROM payments rf WHERE rf.property_id = p.property_id AND rf.refund_of_payment_id = p.id AND rf.status = 'POSTED'), 0)
+ORDER BY p.id
+`
+
+type ListHeldDepositsParams struct {
+	TenantID       int64
+	PropertyID     int64
+	ReservationIds []int64
+}
+
+type ListHeldDepositsRow struct {
+	PaymentID     int64
+	PaymentNumber string
+	PaymentMethod string
+	Amount        decimal.Decimal
+	FolioID       int64
+	FolioNumber   string
+	ReservationID *int64
+	FolioBalance  decimal.Decimal
+	Refundable    decimal.Decimal
+}
+
+// The deposits a reservation holds on its open folios without a stay (the folio the deposits of a reservation that has not arrived go to), with what of each can still be refunded: the amount less the refunds
+// that were posted against it. A voided payment holds nothing. The group cancellation shows them so that a person can decide, room by room, to keep them, refund them or turn them into a fee.
+func (q *Queries) ListHeldDeposits(ctx context.Context, arg ListHeldDepositsParams) ([]ListHeldDepositsRow, error) {
+	rows, err := q.db.Query(ctx, listHeldDeposits, arg.TenantID, arg.PropertyID, arg.ReservationIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHeldDepositsRow{}
+	for rows.Next() {
+		var i ListHeldDepositsRow
+		if err := rows.Scan(
+			&i.PaymentID,
+			&i.PaymentNumber,
+			&i.PaymentMethod,
+			&i.Amount,
+			&i.FolioID,
+			&i.FolioNumber,
+			&i.ReservationID,
+			&i.FolioBalance,
+			&i.Refundable,
 		); err != nil {
 			return nil, err
 		}

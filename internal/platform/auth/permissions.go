@@ -56,6 +56,7 @@ const (
 	PermReservationUpdate               Permission = "reservation.update"
 	PermReservationCancel               Permission = "reservation.cancel"
 	PermReservationReinstate            Permission = "reservation.reinstate"
+	PermGroupCancel                     Permission = "group.cancel"
 	PermReservationOverrideRate         Permission = "reservation.override_rate"
 	PermReservationUpgrade              Permission = "reservation.upgrade"
 	PermReservationComplimentary        Permission = "reservation.complimentary"
@@ -154,6 +155,7 @@ var Catalogue = []PermissionInfo{
 	{PermReservationUpdate, "Reservations", "Amend reservations and assign rooms", "M8"},
 	{PermReservationCancel, "Reservations", "Cancel reservations", "M8"},
 	{PermReservationReinstate, "Reservations", "Reinstate cancelled reservations", "M8"},
+	{PermGroupCancel, "Reservations", "Cancel the rooms of a whole group in one go, and bring them back", "S3"},
 	{PermReservationOverrideRate, "Reservations", "Override nightly rates", "M8"},
 	{PermReservationUpgrade, "Reservations", "Assign upgraded rooms", "M8"},
 	{PermReservationComplimentary, "Reservations", "Book complimentary and house use rooms", "M8"},

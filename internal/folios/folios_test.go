@@ -581,6 +581,32 @@ func TestRefundRules(t *testing.T) {
 
 func mustErr2(_ folios.PaymentResult, err error) error { return err }
 
+// A refund never makes a folio owe: it is at most the credit the folio holds, whatever is left of the payment.
+func TestARefundNeverMakesAFolioOwe(t *testing.T) {
+	f := setup(t)
+	pay := f.payment(t, "p1", "200000")
+	f.charge(t, "c1") // 100,000 and its service charge and tax (122,100 in all) charged: the folio holds a credit of 77,900
+	try := func(key, amount string) error {
+		_, err := f.Folios.Refund(f.admin, f.propID, pay.Payment.ID, key, folios.RefundInput{Amount: amount, Reason: "goodwill", Approval: f.approval()})
+		return err
+	}
+	e := code(t, try("r1", "200000"), "REFUND_EXCEEDS_CREDIT")
+	if e.Context["credit"] != "77900" || e.Context["refundable"] != "77900" {
+		t.Fatalf("the refusal says what the folio holds and what can be refunded: %v", e.Context)
+	}
+	must(t, try("r2", "77900"))
+	e = code(t, try("r3", "1"), "REFUND_EXCEEDS_CREDIT") // 122,100 of the payment is left, and the folio holds nothing
+	if e.Context["credit"] != "0" || e.Context["refundable"] != "0" {
+		t.Fatalf("nothing is left to refund: %v", e.Context)
+	}
+	// a payment of the same folio that is refunded beyond the credit by a second payment is refused too
+	pay2 := f.payment(t, "p2", "30000")
+	_, err := f.Folios.Refund(f.admin, f.propID, pay2.Payment.ID, "r4", folios.RefundInput{Amount: "30001", Reason: "x", Approval: f.approval()})
+	wantCode(t, err, "REFUND_EXCEEDS_PAYMENT")
+	_, err = f.Folios.Refund(f.admin, f.propID, pay2.Payment.ID, "r5", folios.RefundInput{Amount: "30000", Reason: "x", Approval: f.approval()})
+	must(t, err)
+}
+
 func TestConcurrentRefundsCannotExceedThePayment(t *testing.T) {
 	f := setup(t)
 	pay := f.payment(t, "p1", "100000")
