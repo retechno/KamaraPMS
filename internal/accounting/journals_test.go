@@ -41,7 +41,19 @@ type hotel struct {
 	revenueAcct int64
 }
 
-func setupHotel(t *testing.T) *hotel {
+// setupHotel is a property on the books of ON_CLOSE: a deposit stays whole in 2310 until its folio closes. Most of these tests were written for that release (it is what the books did until
+// docs/architecture/31-deposit-release.md), and they run unchanged in that mode; the new default, EVERY_DAY, has its own tests (depositrelease_test.go, setupHotelMode).
+func setupHotel(t *testing.T) *hotel { return setupHotelMode(t, "ON_CLOSE") }
+
+// setupHotelMode is the same property with the release of deposits chosen before its first transaction (the setting is locked after it).
+func setupHotelMode(t *testing.T, mode string) *hotel {
+	t.Helper()
+	h := newHotel(t)
+	must(t, h.Exec(t, `UPDATE properties SET deposit_release_mode = $1 WHERE id = $2`, mode, h.propID))
+	return h
+}
+
+func newHotel(t *testing.T) *hotel {
 	t.Helper()
 	e := roomstest.Setup(t)
 	tn := e.Tenant(t, "ABC")

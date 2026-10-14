@@ -483,7 +483,7 @@ func (s *Service) Reconciliation(ctx context.Context, propertyID int64, asOf *ci
 	out := Reconciliation{AsOf: at, StartDate: cfg.StartDate, PendingDays: int(pending), IncludesToday: !at.Before(today)}
 	out.Controls = []Control{
 		mk("GUEST_LEDGER", "Guest ledger", "What the folios owe (all items to the date) plus the deposits they hold", SideDebit, src.FolioBalance.Add(src.DepositsHeld)),
-		mk("ADVANCE_DEPOSITS", "Advance deposits", "Deposits on folios that were not closed yet", SideCredit, src.DepositsHeld),
+		mk("ADVANCE_DEPOSITS", "Advance deposits", "Deposits held as a liability: not yet applied to the charges they pay (release every day), or on folios not closed yet (release on close)", SideCredit, src.DepositsHeld),
 		mk("CITY_LEDGER", "City ledger", "Guest balances transferred to companies, less receipts taken, credit notes and write-offs", SideDebit, src.CityTransferred.Sub(src.CityReceived).Sub(src.CityAdjusted)),
 		mk(KeyAccountsPayable, "Accounts payable", "Supplier bills entered, less supplier payments made", SideCredit, src.BillsEntered.Sub(src.PaymentsMade)),
 	}

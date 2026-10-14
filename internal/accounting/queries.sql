@@ -145,17 +145,34 @@ FROM (
      WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.business_date = @business_date AND r.status = 'POSTED'
      GROUP BY r.payment_method
     UNION ALL
+    -- ON_CLOSE: the deposits of a folio that closed on this date are released (debit 2310, credit 1210)
     SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
      WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
+       AND (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = @property_id) = 'ON_CLOSE'
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
     UNION ALL
     SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @business_date
      WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.closed_on = @business_date
+       AND (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = @property_id) = 'ON_CLOSE'
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+    UNION ALL
+    -- EVERY_DAY: what the deposit of a folio pays of its charges, as of this date, less what was journaled for the folio so far (DEPOSIT_APPLIED and DEPOSIT_RELEASE lines on 2310). A folio that has
+    -- no line yet and is carried by the first close after the migration says so ("includes the adjustment").
+    SELECT x.role, '', 'DEPOSIT_APPLIED', x.folio_number, x.amount, x.detail, NULL::bigint
+      FROM (SELECT d.folio_number, d.applied - COALESCE(sf.so_far, 0) AS delta, (sf.so_far IS NULL AND @adjust::boolean) AS adjusted
+              FROM folio_deposit_state(@property_id, @business_date) d
+              LEFT JOIN (SELECT l.source_ref AS folio_number, sum(l.debit - l.credit) AS so_far
+                           FROM gl_journal_lines l
+                          WHERE l.property_id = @property_id AND l.account_id = @advance_account_id AND l.source_type IN ('DEPOSIT_APPLIED', 'DEPOSIT_RELEASE')
+                          GROUP BY l.source_ref) sf ON sf.folio_number = d.folio_number
+             WHERE (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = @property_id) = 'EVERY_DAY') dl
+      CROSS JOIN LATERAL (VALUES ('ADVANCE_DEPOSITS', dl.delta), ('GUEST_LEDGER', -dl.delta)) AS v(role, amount)
+      CROSS JOIN LATERAL (SELECT v.role, v.amount, dl.folio_number, (CASE WHEN dl.adjusted THEN 'includes the adjustment' ELSE '' END)::text AS detail) x
+     WHERE dl.delta <> 0
 ) x
 WHERE x.amount <> 0;
 
@@ -300,10 +317,11 @@ LIMIT @row_limit;
 SELECT
     (SELECT COALESCE(sum(i.debit - i.credit), 0) FROM folio_items i
       WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_date <= @as_of::date)::numeric AS folio_balance,
-    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
-       JOIN folios f ON f.property_id = g.property_id AND f.id = g.folio_id
-      WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= @as_of::date
-        AND (f.closed_on IS NULL OR f.closed_on > @as_of::date))::numeric AS deposits_held,
+    -- the deposits still held as a liability: ON_CLOSE, those of the folios not closed by the date; EVERY_DAY, what the deposits have not yet paid of the charges (held less applied)
+    (SELECT CASE WHEN (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = @property_id) = 'EVERY_DAY'
+                 THEN COALESCE((SELECT sum(d.held - d.applied) FROM folio_deposit_state(@property_id, @as_of::date) d), 0)
+                 ELSE COALESCE((SELECT sum(d.held) FROM folio_deposit_state(@property_id, @as_of::date) d WHERE NOT d.closed), 0)
+            END)::numeric AS deposits_held,
     (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
       WHERE g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
         AND g.business_date <= @as_of::date)::numeric AS city_transferred,
@@ -452,3 +470,18 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id
 
 -- name: CountJournalSequence :one
 SELECT count(*)::int FROM document_sequences WHERE tenant_id = @tenant_id AND property_id = @property_id AND sequence_type = 'JOURNAL';
+
+-- The release of deposits of a property (docs/architecture/31-deposit-release.md): the mode, the date the setting was locked, and whether the first close from the migration still has to
+-- carry the adjustment of the deposits held whole until then.
+-- name: GetDepositRelease :one
+SELECT deposit_release_mode::text AS mode, deposit_release_locked_on, deposit_release_adjust_pending AS adjust_pending FROM properties WHERE tenant_id = @tenant_id AND id = @property_id;
+
+-- name: ClearDepositAdjustPending :exec
+UPDATE properties SET deposit_release_adjust_pending = false WHERE tenant_id = @tenant_id AND id = @property_id AND deposit_release_adjust_pending;
+
+-- Has the lock of the setting been written to the audit? And the first item that made it.
+-- name: DepositReleaseLockAudited :one
+SELECT EXISTS (SELECT 1 FROM audit_logs a WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.action = 'accounting.deposit_release_locked')::boolean AS audited;
+
+-- name: FirstFolioItemOf :one
+SELECT i.id, i.business_date FROM folio_items i WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id ORDER BY i.id LIMIT 1;

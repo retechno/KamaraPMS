@@ -45,6 +45,7 @@ const form = reactive({
   night_audit_marks_occupied_dirty: true,
   refund_methods: ['CASH'] as string[],
   checkin_incidental_deposit: '0',
+  deposit_release_mode: 'EVERY_DAY' as 'EVERY_DAY' | 'ON_CLOSE',
   status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
   opening_business_date: '',
   // The language of the names the property starts with (chart of accounts, departments, charge codes): the language of the page, to begin with. Only when it is created.
@@ -54,6 +55,8 @@ const form = reactive({
 let original: PropertyWithDay | null = null
 // The property has financial data: the currency and the decimals are read-only and say why.
 const currencyLocked = ref(false)
+// The release of deposits is chosen until the first transaction of the property; after it the page says since when it is locked (the server refuses a change: DEPOSIT_RELEASE_LOCKED).
+const depositLockedOn = ref<string | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
@@ -84,6 +87,7 @@ onMounted(async () => {
     if (data) {
       original = data
       currencyLocked.value = data.currency_locked
+      depositLockedOn.value = data.deposit_release_locked_on ?? null
       Object.assign(form, {
         code: data.code,
         name: data.name,
@@ -104,6 +108,7 @@ onMounted(async () => {
         night_audit_marks_occupied_dirty: data.night_audit_marks_occupied_dirty,
         refund_methods: [...data.refund_methods],
         checkin_incidental_deposit: data.checkin_incidental_deposit,
+        deposit_release_mode: data.deposit_release_mode,
         status: data.status,
       })
     }
@@ -140,6 +145,7 @@ async function submit(): Promise<void> {
         night_audit_marks_occupied_dirty: form.night_audit_marks_occupied_dirty,
         refund_methods: form.refund_methods as CreatePropertyRequest['refund_methods'],
         checkin_incidental_deposit: form.checkin_incidental_deposit.trim() || '0',
+        deposit_release_mode: form.deposit_release_mode,
         opening_business_date: form.opening_business_date,
         data_language: form.data_language,
       }
@@ -171,6 +177,7 @@ function changedFields(): PatchPropertyRequest {
     'check_out_time', 'night_audit_earliest_time', 'require_room_inspection_for_checkin',
     'night_audit_marks_occupied_dirty', 'checkin_incidental_deposit', 'status',
   ] as const
+  if (!depositLockedOn.value && form.deposit_release_mode !== original.deposit_release_mode) patch.deposit_release_mode = form.deposit_release_mode
   if (form.refund_methods.length && [...form.refund_methods].sort().join() !== [...original.refund_methods].sort().join()) patch.refund_methods = form.refund_methods
   for (const k of keys) {
     const now = k === 'currency_decimals' ? Number(form[k]) : form[k]
@@ -283,6 +290,16 @@ function changedFields(): PatchPropertyRequest {
             <input v-model="form.night_audit_marks_occupied_dirty" type="checkbox" name="night_audit_marks_occupied_dirty" class="size-4 accent-primary" />
             <span>{{ t('propertyForm.markDirty') }}</span>
           </label>
+          <fieldset class="flex flex-col gap-1 rounded-md border border-border px-3 py-2 sm:col-span-2" data-testid="deposit-release">
+            <legend class="px-1 text-sm font-medium">{{ t('propertyForm.depositRelease') }}</legend>
+            <label v-for="m in ['EVERY_DAY', 'ON_CLOSE']" :key="m" class="flex items-start gap-2 text-sm">
+              <input v-model="form.deposit_release_mode" type="radio" name="deposit_release_mode" :value="m" :disabled="depositLockedOn !== null" class="mt-1 size-4 accent-primary" :data-testid="`deposit-release-${m}`" />
+              <span><strong>{{ t(`propertyForm.depositRelease_${m}`) }}</strong> <small class="block text-xs text-muted-foreground">{{ t(`propertyForm.depositRelease_${m}_hint`) }}</small></span>
+            </label>
+            <small v-if="depositLockedOn" class="text-xs text-muted-foreground" data-testid="deposit-release-locked">{{ t('propertyForm.depositReleaseLocked', { date: formatBusinessDate(depositLockedOn) }) }}</small>
+            <small v-else class="text-xs text-muted-foreground">{{ t('propertyForm.depositReleaseFree') }}</small>
+            <small v-if="fieldError('deposit_release_mode')" role="alert" class="text-xs text-destructive">{{ fieldError('deposit_release_mode') }}</small>
+          </fieldset>
           <fieldset class="flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2" data-testid="refund-methods">
             <legend class="px-1 text-sm font-medium">{{ t('propertyForm.refundBy') }}</legend>
             <label v-for="m in REFUND_CHOICES" :key="m.value" class="flex items-center gap-1.5 text-sm">

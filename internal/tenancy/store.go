@@ -66,10 +66,12 @@ func toProperty(p tenancydb.Property) Property {
 			NightAuditEarliestTime:          p.NightAuditEarliestTime,
 			RefundMethods:                   p.RefundMethods,
 			CheckinIncidentalDeposit:        p.CheckinIncidentalDeposit,
+			DepositReleaseMode:              p.DepositReleaseMode,
 		},
-		Status:    p.Status,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		DepositReleaseLockedOn: p.DepositReleaseLockedOn,
+		Status:                 p.Status,
+		CreatedAt:              p.CreatedAt,
+		UpdatedAt:              p.UpdatedAt,
 	}
 }
 

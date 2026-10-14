@@ -41,9 +41,11 @@ type Property struct {
 	TenantID int64  `json:"-"`
 	Code     string `json:"code"`
 	PropertySettings
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// DepositReleaseLockedOn is the business date of the first transaction of the property, from which the mode of the release of deposits cannot change (null while it is free).
+	DepositReleaseLockedOn *civil.Date `json:"deposit_release_locked_on"`
+	Status                 string      `json:"status"`
+	CreatedAt              time.Time   `json:"created_at"`
+	UpdatedAt              time.Time   `json:"updated_at"`
 }
 
 // Location returns the property's time zone (validated on write).
@@ -77,7 +79,16 @@ type PropertySettings struct {
 	RefundMethods []string `json:"refund_methods"`
 	// CheckinIncidentalDeposit is the incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (0: none; a proposal the desk can change).
 	CheckinIncidentalDeposit decimal.Decimal `json:"checkin_incidental_deposit"`
+	// DepositReleaseMode is when a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio, or ON_CLOSE when
+	// the folio closes. It can be chosen until the property has its first transaction; after that it is locked.
+	DepositReleaseMode string `json:"deposit_release_mode"`
 }
+
+// The modes of the release of deposits.
+const (
+	DepositReleaseEveryDay = "EVERY_DAY"
+	DepositReleaseOnClose  = "ON_CLOSE"
+)
 
 var (
 	codePattern     = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
@@ -109,6 +120,10 @@ func ValidateTimezone(tz string) error {
 
 // Normalize trims text and upper-cases codes.
 func (s *PropertySettings) Normalize() {
+	s.DepositReleaseMode = strings.ToUpper(strings.TrimSpace(s.DepositReleaseMode))
+	if s.DepositReleaseMode == "" {
+		s.DepositReleaseMode = DepositReleaseEveryDay
+	}
 	s.Name = strings.TrimSpace(s.Name)
 	s.Address = strings.TrimSpace(s.Address)
 	s.City = strings.TrimSpace(s.City)
@@ -171,6 +186,9 @@ func (s PropertySettings) Validate() []apperr.FieldError {
 			break
 		}
 		seen[m] = true
+	}
+	if s.DepositReleaseMode != "" && s.DepositReleaseMode != DepositReleaseEveryDay && s.DepositReleaseMode != DepositReleaseOnClose { // empty is the default, filled in by Normalize
+		add("deposit_release_mode", "INVALID_VALUE", DepositReleaseEveryDay+" or "+DepositReleaseOnClose)
 	}
 	if s.CheckinIncidentalDeposit.IsNegative() {
 		add("checkin_incidental_deposit", "OUT_OF_RANGE", "zero or more")

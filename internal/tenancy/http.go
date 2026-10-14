@@ -111,6 +111,7 @@ type createPropertyRequest struct {
 	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
 	RefundMethods                   []string `json:"refund_methods"`
 	CheckinIncidentalDeposit        *string  `json:"checkin_incidental_deposit"`
+	DepositReleaseMode              *string  `json:"deposit_release_mode"`
 	OpeningBusinessDate             *string  `json:"opening_business_date"`
 	// DataLanguage is the language of the names the property starts with (the chart of accounts, the departments, the charge codes): en (the default) or id.
 	DataLanguage string `json:"data_language"`
@@ -131,7 +132,11 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 			NightAuditMarksOccupiedDirty:    true,
 			NightAuditEarliestTime:          civil.MustParseTimeOfDay("20:00"),
 			RefundMethods:                   []string{"CASH"},
+			DepositReleaseMode:              DepositReleaseEveryDay,
 		},
+	}
+	if req.DepositReleaseMode != nil {
+		in.Settings.DepositReleaseMode = *req.DepositReleaseMode
 	}
 	if req.RefundMethods != nil {
 		in.Settings.RefundMethods = req.RefundMethods
@@ -223,6 +228,7 @@ type patchPropertyRequest struct {
 	NightAuditEarliestTime          *string  `json:"night_audit_earliest_time"`
 	RefundMethods                   []string `json:"refund_methods"`
 	CheckinIncidentalDeposit        *string  `json:"checkin_incidental_deposit"`
+	DepositReleaseMode              *string  `json:"deposit_release_mode"`
 	Status                          *string  `json:"status"`
 }
 
@@ -242,6 +248,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
 		RequireRoomInspectionForCheckin: req.RequireRoomInspectionForCheckin,
 		NightAuditMarksOccupiedDirty:    req.NightAuditMarksOccupiedDirty,
 		RefundMethods:                   req.RefundMethods,
+		DepositReleaseMode:              req.DepositReleaseMode,
 		Status:                          req.Status,
 	}
 	var fp fieldParser
