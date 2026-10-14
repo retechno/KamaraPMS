@@ -2677,7 +2677,9 @@ paths:
     post:
       operationId: postDeposit
       summary: Take a deposit on a draft or confirmed reservation (payment.post)
-      description: The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+      description: |
+        The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+        **Changed (group check-in):** the same Idempotency-Key with another `amount` or `payment_method` than the payment it found is now `IDEMPOTENCY_KEY_REUSED` (422). It used to answer the old payment as if it were the new one. A repeat with the same payload answers as before.
       tags: [folios]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
@@ -2806,6 +2808,39 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/groups/{id}/check-ins:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: checkInGroup
+      summary: Check in the rooms of a group that arrive today, each in its own transaction (frontdesk.checkin; payment.post when a row has a deposit)
+      description: |
+        Up to 100 rows (`TOO_MANY_ROWS`, `GROUP_CHECKIN_EMPTY`), taken in ascending `line_id`. The answer is 200 whatever the rows did: each row is `CHECKED_IN` (with its stay), `ALREADY_CHECKED_IN` or `FAILED` with the code and
+        message of the check-in (`ROOM_NOT_READY`, `ROOM_OCCUPIED`, `GUEST_MISSING`, `ARRIVAL_DATE_MISMATCH`, `VERSION_CONFLICT`, `NO_OPEN_SHIFT`, ...). Nothing is rolled back for another row failing.
+        A row with a `deposit` records it on the reservation first (an advance deposit, refundable) and then checks the room in; a deposit that was taken and a check-in that failed leaves the deposit where it is. A request
+        with a deposit row by a person without `payment.post` is refused whole (403) before anything is written.
+        The keys of a row come from the line, not from the request: a repeat of the request under any Idempotency-Key returns the same stay for a room that was checked in and takes no deposit twice; the same deposit with
+        another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. A deposit of a room that was voided (`DEPOSIT_VOIDED`) or refunded in full (`DEPOSIT_REFUNDED`) is not answered as taken: the row is `FAILED` with that code and is not checked in; send the room without a deposit, and record any new deposit on the folio of the reservation.
+        The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
+      tags: [frontdesk]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupCheckInRequest" }
+      responses:
+        "200":
+          description: What happened to each row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupCheckInResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/walk-ins:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -2848,6 +2883,8 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW] } }
         - { name: q, in: query, schema: { type: string } }
         - { name: room_type_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: booking_group_id, in: query, schema: { type: integer, format: int64 }, description: Only the rooms of the reservations of this group. }
+        - { name: with_estimate, in: query, schema: { type: boolean, default: false }, description: Add `estimate_total` to each row (one batch for all the rows; for the deposit proposal of a group check-in). }
       responses:
         "200":
           description: The arrivals.
@@ -10757,6 +10794,68 @@ components:
         stay: { $ref: "#/components/schemas/Stay" }
         stay_room: { $ref: "#/components/schemas/StaySegment" }
         folio: { $ref: "#/components/schemas/StayFolio" }
+    GroupCheckInRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [line_id, version, guest_id, adult_count]
+            additionalProperties: false
+            properties:
+              line_id: { type: integer, format: int64, description: The room (reservation room) of the group. }
+              version: { type: integer, format: int32, description: The version of the reservation. }
+              room_id: { type: integer, format: int64 }
+              guest_id: { type: integer, format: int64 }
+              adult_count: { type: integer, minimum: 1 }
+              child_count: { type: integer, minimum: 0, default: 0 }
+              override_room_not_ready: { type: boolean, default: false }
+              override_reason: { type: string, maxLength: 500 }
+              deposit:
+                type: object
+                required: [amount, payment_method]
+                additionalProperties: false
+                properties:
+                  amount: { type: string }
+                  payment_method: { $ref: "#/components/schemas/PaymentMethod" }
+                  reference_number: { type: string }
+    GroupCheckInResult:
+      type: object
+      required: [batch_id, rows, checked_in, already_checked_in, failed, deposits_recorded]
+      properties:
+        batch_id: { type: string, description: The Idempotency-Key of the request; the batch_id of the audit entries it wrote. }
+        checked_in: { type: integer }
+        already_checked_in: { type: integer }
+        failed: { type: integer }
+        deposits_recorded: { type: integer }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [line_id, status]
+            properties:
+              line_id: { type: integer, format: int64 }
+              status: { type: string, enum: [CHECKED_IN, ALREADY_CHECKED_IN, FAILED] }
+              stay: { $ref: "#/components/schemas/Stay" }
+              stay_id: { type: integer, format: int64, description: The stay of a room that was checked in by someone else (ALREADY_CHECKED_IN). }
+              room_number: { type: string }
+              code: { type: string, description: The code of the failure (FAILED). }
+              message: { type: string }
+              deposit:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [RECORDED, REPLAYED, FAILED], description: "REPLAYED: an earlier request took it and it was not taken again." }
+                  payment_id: { type: integer, format: int64 }
+                  payment_number: { type: string }
+                  amount: { type: string }
+                  code: { type: string }
+                  message: { type: string }
     ReverseResult:
       type: object
       required: [stay, folio, closed_folios]
@@ -10835,6 +10934,27 @@ components:
           items: { $ref: "#/components/schemas/ClosedFolio" }
         housekeeping: { type: string, description: The housekeeping status the room has now (DIRTY). }
         master_folio: { oneOf: [{ $ref: "#/components/schemas/MasterInfo" }, { type: "null" }], description: "Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing." }
+        room_charges:
+          type: array
+          description: Where the room charges of the whole stay stand, one entry for each folio. A stay whose group routing changed while it was in house has them on two folios.
+          items:
+            type: object
+            required: [folio_id, folio_number, folio_type, nights, total]
+            properties:
+              folio_id: { type: integer, format: int64 }
+              folio_number: { type: string }
+              folio_type: { type: string, enum: [GUEST, COMPANY, MASTER] }
+              nights: { type: integer }
+              total: { type: string }
+        room_charges_master:
+          description: The open master folio the room charges of this room go to by the routing of its group; null when they go to the folio of the guest.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [folio_id, folio_number]
+              properties:
+                folio_id: { type: integer, format: int64 }
+                folio_number: { type: string }
     StaySummary:
       type: object
       required: [id, stay_number, status, guest_id, guest_name, room_id, reservation_id, confirmation_number, arrival_date, departure_date, adult_count, child_count, version]
@@ -10948,7 +11068,7 @@ components:
         next_cursor: { type: string }
     Arrival:
       type: object
-      required: [reservation_id, confirmation_number, reservation_room_id, reservation_version, guest_id, room_type_id, room_type_code, room_type_name, room_id, arrival_date, departure_date, adult_count, child_count, status, reservation_status, rate, company, deposit, readiness]
+      required: [reservation_id, confirmation_number, reservation_room_id, reservation_version, guest_id, room_type_id, room_type_code, room_type_name, room_id, arrival_date, departure_date, adult_count, child_count, status, reservation_status, rate, company, deposit, readiness, guest_has_id, guest_has_phone, guest_is_placeholder]
       properties:
         reservation_id: { type: integer, format: int64 }
         confirmation_number: { type: string }
@@ -10972,6 +11092,24 @@ components:
         status: { type: string, enum: [CONFIRMED, CHECKED_IN, CANCELLED, NO_SHOW], description: The status of the reservation room. }
         reservation_status: { type: string }
         room_type_name: { type: string }
+        guest_nationality: { type: string, description: The nationality of the guest (absent when unknown); with the next fields it is what the identity hints of the check-in read. }
+        guest_id_type: { type: string }
+        guest_has_id: { type: boolean }
+        guest_has_phone: { type: boolean }
+        guest_is_placeholder: { type: boolean, description: The guest is a placeholder of a rooming list that has no name yet. }
+        estimate_total: { type: string, description: The total of the charge engine for the nights of the line; only with with_estimate. }
+        group_deposit:
+          description: The deposit a group check-in took for this room (found by the key made from the room), only on the arrivals of a group; null when none. The screen shows it as received and does not send it again.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [status, payment_id, payment_number, amount, refunded]
+              properties:
+                status: { type: string, enum: [RECEIVED, VOIDED, REFUNDED], description: "RECEIVED includes a deposit refunded in part; VOIDED and REFUNDED (in full) are deposits that are no longer there." }
+                payment_id: { type: integer, format: int64 }
+                payment_number: { type: string }
+                amount: { type: string }
+                refunded: { type: string }
         rate:
           type: object
           required: [rate_plan_code, rate_plan_name, amount, price_mode]

@@ -523,7 +523,15 @@ func (s *Service) CheckOut(ctx context.Context, propertyID, stayID int64, in Che
 		if err != nil {
 			return err
 		}
-		out = CheckOutResult{Stay: toStay(done, pre.line.ReservationID), PostedRoomCharges: posted, Folios: closedFolios, Housekeeping: string(housekeeping.Dirty), MasterFolio: master}
+		where, err := s.folios.StayRoomCharges(ctx, p.TenantID, propertyID, stayID)
+		if err != nil {
+			return err
+		}
+		toMaster, err := s.folios.RoomChargesMaster(ctx, p.TenantID, propertyID, pre.line.ReservationID, pre.line.ID)
+		if err != nil {
+			return err
+		}
+		out = CheckOutResult{Stay: toStay(done, pre.line.ReservationID), PostedRoomCharges: posted, Folios: closedFolios, Housekeeping: string(housekeeping.Dirty), MasterFolio: master, RoomCharges: where, RoomChargesMaster: toMaster}
 		return nil
 	})
 	return out, err
@@ -580,7 +588,7 @@ func (s *Service) checkedOutResult(ctx context.Context, p auth.Principal, proper
 	for i, f := range fs {
 		closed[i] = folios.ClosedFolio{ID: f.ID, FolioNumber: f.FolioNumber, Status: f.Status}
 	}
-	return CheckOutResult{Stay: toStay(st, line.ReservationID), PostedRoomCharges: []roomcharge.Result{}, Folios: closed, Housekeeping: string(housekeeping.Dirty)}, nil
+	return CheckOutResult{Stay: toStay(st, line.ReservationID), PostedRoomCharges: []roomcharge.Result{}, Folios: closed, Housekeeping: string(housekeeping.Dirty), RoomCharges: []folios.RoomChargeFolio{}}, nil
 }
 
 // mergeAudit adds the extra fields (who approved a rate override, and why) to the data of an audit entry.

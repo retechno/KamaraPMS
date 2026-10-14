@@ -140,6 +140,10 @@ describe('GroupMasterFolio', () => {
     await flushPromises()
     expect(w.get('[data-testid=master-close]').attributes('disabled')).toBeDefined()
     expect(w.get('[data-testid=master-close-hint]').text()).toBe('The balance of the master folio (2,000,000) must be zero before it closes: have it paid, or move it to the city ledger of the company.')
+    // a credit is refunded or moved, not paid
+    const credit = mountPanel(ALL, routing({ master: master({ balance: '-2300000' }) }))
+    await flushPromises()
+    expect(credit.get('[data-testid=master-close-hint]').text()).toBe('The balance of the master folio (-2,300,000) is a credit: refund it to whoever paid, or move it to another folio, before it closes.')
     const paid = mountPanel(ALL, routing({ master: master({ balance: '0' }) }))
     await flushPromises()
     expect(paid.get('[data-testid=master-close]').attributes('disabled')).toBeUndefined()

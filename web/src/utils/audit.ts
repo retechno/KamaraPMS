@@ -53,6 +53,7 @@ export const AUDIT_ACTIONS = [
   'group.created',
   'group.updated',
   'group.rooms_added',
+  'group.checked_in',
   'group.rooming_list_updated',
   'group.routing_set',
   'guest.created',

@@ -263,6 +263,17 @@ type Arrival struct {
 	Rate ArrivalRate `json:"rate"`
 	// Company is the company of the first billing instruction of the line (nil: the guest pays).
 	Company *InHouseCompany `json:"company"`
+	// The facts of the guest that the identity hints of the check-in read (nationality, identity document, phone), and whether the guest is a placeholder of a rooming list that has no name yet.
+	GuestNationality   string `json:"guest_nationality,omitempty"`
+	GuestIDType        string `json:"guest_id_type,omitempty"`
+	GuestHasID         bool   `json:"guest_has_id"`
+	GuestHasPhone      bool   `json:"guest_has_phone"`
+	GuestIsPlaceholder bool   `json:"guest_is_placeholder"`
+	// GroupDeposit is the deposit a group check-in took for this room, found by the key made from the room (nil: none). The screen shows it as received and does not send it again; a deposit that was voided
+	// or refunded is shown as such and is not sent either (another deposit is recorded on the folio). Read only for the arrivals of a group.
+	GroupDeposit *folios.GroupDepositState `json:"group_deposit"`
+	// Estimate is the total the charge engine gives for the nights of the line; only when the list asks for it (with_estimate), for the deposit proposal of the group check-in.
+	Estimate *string `json:"estimate_total,omitempty"`
 	// Deposit is what the reservation holds before check-in (nil: no deposit folio).
 	Deposit *folios.ReservationDeposit `json:"deposit"`
 	// Readiness says what stands in the way of a check-in, with the rules the check-in itself applies; the check-in still validates.
@@ -286,9 +297,11 @@ type Readiness struct {
 
 // ArrivalFilter narrows the arrivals of a date: the status of the reservation room (CONFIRMED when empty), a room type, and a search of the guest, the confirmation number and the room.
 type ArrivalFilter struct {
-	Status     string
-	RoomTypeID *int64
-	Q          string
+	Status         string
+	RoomTypeID     *int64
+	Q              string
+	BookingGroupID *int64 // only the rooms of the reservations of this group
+	WithEstimate   bool   // add the estimate of each line (one batch for all the lines)
 }
 
 // InHouseFilter narrows the in-house list; the departures list is the in-house list that leaves on or before a date.
@@ -415,4 +428,8 @@ type CheckOutResult struct {
 	Housekeeping      string               `json:"housekeeping"`
 	// MasterFolio is set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing.
 	MasterFolio *folios.MasterInfo `json:"master_folio"`
+	// RoomCharges is where the room charges of the whole stay stand, one entry for each folio: a stay whose group's routing changed while it was in house has them on two folios.
+	RoomCharges []folios.RoomChargeFolio `json:"room_charges"`
+	// RoomChargesMaster is the open master folio the room charges of this room go to by the routing of its group (nil when they go to the guest's folio); it is what the screen says when the check-out posted none.
+	RoomChargesMaster *folios.MasterRef `json:"room_charges_master"`
 }

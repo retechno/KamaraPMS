@@ -383,3 +383,29 @@ func folioTotals(folios []FolioBrief) (decimal.Decimal, bool) {
 	}
 	return total, open
 }
+
+// LineEstimates is the charge engine's estimate of the nights of many lines, for the arrivals of a group: one read of the nightly rates of all the lines and one set of charge rules for all of them
+// (no permission check: the caller has its own). A line with no nights has a zero estimate.
+func (s *Service) LineEstimates(ctx context.Context, tenantID, propertyID int64, lineIDs []int64) (map[int64]Estimate, error) {
+	out := make(map[int64]Estimate, len(lineIDs))
+	if len(lineIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).ListNightRates(ctx, reservationsdb.ListNightRatesParams{TenantID: tenantID, PropertyID: propertyID, LineIds: lineIDs})
+	if err != nil {
+		return nil, err
+	}
+	charges := make(map[int64][]billingconfig.NightCharge, len(lineIDs))
+	for _, r := range rows {
+		charges[r.ReservationRoomID] = append(charges[r.ReservationRoomID], billingconfig.NightCharge{ChargeCodeID: r.ChargeCodeID, PriceMode: chargecalc.PriceMode(r.PriceMode), Amount: r.Amount})
+	}
+	totals, err := s.billing.EstimateMany(ctx, tenantID, propertyID, charges)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range lineIDs {
+		t := totals[id]
+		out[id] = Estimate{Net: t.Net, Service: t.Service, Tax: t.Tax, Total: t.Total}
+	}
+	return out, nil
+}
