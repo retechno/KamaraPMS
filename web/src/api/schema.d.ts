@@ -7341,6 +7341,11 @@ export interface components {
             refund_methods: components["schemas"]["RefundMethods"];
             /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
             checkin_incidental_deposit: components["schemas"]["Amount"];
+            /**
+             * @description When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change).
+             * @enum {string}
+             */
+            deposit_release_mode: "EVERY_DAY" | "ON_CLOSE";
         };
         /** @description The methods a refund may leave by (default CASH only, whatever the guest paid with). A refund by another method is 422 `payment_method: NOT_ALLOWED`. */
         RefundMethods: ("CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS")[];
@@ -7357,6 +7362,8 @@ export interface components {
         };
         PropertyWithDay: components["schemas"]["Property"] & {
             business_date: components["schemas"]["Date"];
+            /** @description The business date of the first transaction of the property, from which deposit_release_mode cannot change (null while it is free). */
+            deposit_release_locked_on?: components["schemas"]["Date"] | null;
             /** @description True once the property has financial data (a folio item, a payment, a journal, a bill, a receipt, a shift, a bank statement, a tax filing, a budget): the currency and the decimals can no longer change (409 `CURRENCY_LOCKED`) and nothing is converted. */
             currency_locked: boolean;
         };
@@ -7397,6 +7404,11 @@ export interface components {
             refund_methods?: components["schemas"]["RefundMethods"];
             /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
             checkin_incidental_deposit?: components["schemas"]["Amount"];
+            /**
+             * @description When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change).
+             * @enum {string}
+             */
+            deposit_release_mode?: "EVERY_DAY" | "ON_CLOSE";
             /** @description The property's current local date or the day before. */
             opening_business_date: components["schemas"]["Date"];
         };
@@ -7424,6 +7436,11 @@ export interface components {
             refund_methods?: components["schemas"]["RefundMethods"];
             /** @description The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it. */
             checkin_incidental_deposit?: components["schemas"]["Amount"];
+            /**
+             * @description When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change).
+             * @enum {string}
+             */
+            deposit_release_mode?: "EVERY_DAY" | "ON_CLOSE";
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
         };

@@ -81,13 +81,13 @@ const createProperty = `-- name: CreateProperty :one
 INSERT INTO properties (
     tenant_id, code, name, address, city, country_code, phone, email, tax_id, document_footer, timezone, currency_code, currency_decimals,
     check_in_time, check_out_time, require_room_inspection_for_checkin,
-    night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, checkin_incidental_deposit, created_by, updated_by
+    night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, checkin_incidental_deposit, deposit_release_mode, created_by, updated_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
     $12, $13, $14, $15, $16,
-    $17, $18, $19, $20, $21, $21
+    $17, $18, $19, $20, $21, $22, $22
 )
-RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit
+RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit, deposit_release_mode, deposit_release_locked_on, deposit_release_adjust_pending
 `
 
 type CreatePropertyParams struct {
@@ -111,6 +111,7 @@ type CreatePropertyParams struct {
 	NightAuditEarliestTime          civil.TimeOfDay
 	RefundMethods                   []string
 	CheckinIncidentalDeposit        decimal.Decimal
+	DepositReleaseMode              string
 	ActorID                         *int64
 }
 
@@ -136,6 +137,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg CreatePropertyParams) 
 		arg.NightAuditEarliestTime,
 		arg.RefundMethods,
 		arg.CheckinIncidentalDeposit,
+		arg.DepositReleaseMode,
 		arg.ActorID,
 	)
 	var i Property
@@ -166,6 +168,9 @@ func (q *Queries) CreateProperty(ctx context.Context, arg CreatePropertyParams) 
 		&i.DocumentFooter,
 		&i.RefundMethods,
 		&i.CheckinIncidentalDeposit,
+		&i.DepositReleaseMode,
+		&i.DepositReleaseLockedOn,
+		&i.DepositReleaseAdjustPending,
 	)
 	return i, err
 }
@@ -224,7 +229,7 @@ func (q *Queries) GetOpenBusinessDay(ctx context.Context, propertyID int64) (Bus
 }
 
 const getProperty = `-- name: GetProperty :one
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties WHERE tenant_id = $1 AND id = $2
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit, deposit_release_mode, deposit_release_locked_on, deposit_release_adjust_pending FROM properties WHERE tenant_id = $1 AND id = $2
 `
 
 type GetPropertyParams struct {
@@ -262,12 +267,15 @@ func (q *Queries) GetProperty(ctx context.Context, arg GetPropertyParams) (Prope
 		&i.DocumentFooter,
 		&i.RefundMethods,
 		&i.CheckinIncidentalDeposit,
+		&i.DepositReleaseMode,
+		&i.DepositReleaseLockedOn,
+		&i.DepositReleaseAdjustPending,
 	)
 	return i, err
 }
 
 const getPropertyForUpdate = `-- name: GetPropertyForUpdate :one
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit, deposit_release_mode, deposit_release_locked_on, deposit_release_adjust_pending FROM properties WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type GetPropertyForUpdateParams struct {
@@ -305,6 +313,9 @@ func (q *Queries) GetPropertyForUpdate(ctx context.Context, arg GetPropertyForUp
 		&i.DocumentFooter,
 		&i.RefundMethods,
 		&i.CheckinIncidentalDeposit,
+		&i.DepositReleaseMode,
+		&i.DepositReleaseLockedOn,
+		&i.DepositReleaseAdjustPending,
 	)
 	return i, err
 }
@@ -415,7 +426,7 @@ func (q *Queries) ListBusinessDays(ctx context.Context, arg ListBusinessDaysPara
 }
 
 const listProperties = `-- name: ListProperties :many
-SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit FROM properties
+SELECT id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit, deposit_release_mode, deposit_release_locked_on, deposit_release_adjust_pending FROM properties
 WHERE tenant_id = $1 AND id > $2
 ORDER BY id
 LIMIT $3
@@ -463,6 +474,9 @@ func (q *Queries) ListProperties(ctx context.Context, arg ListPropertiesParams) 
 			&i.DocumentFooter,
 			&i.RefundMethods,
 			&i.CheckinIncidentalDeposit,
+			&i.DepositReleaseMode,
+			&i.DepositReleaseLockedOn,
+			&i.DepositReleaseAdjustPending,
 		); err != nil {
 			return nil, err
 		}
@@ -475,7 +489,7 @@ func (q *Queries) ListProperties(ctx context.Context, arg ListPropertiesParams) 
 }
 
 const listPropertiesForUser = `-- name: ListPropertiesForUser :many
-SELECT p.id, p.tenant_id, p.code, p.name, p.address, p.city, p.country_code, p.timezone, p.currency_code, p.currency_decimals, p.check_in_time, p.check_out_time, p.require_room_inspection_for_checkin, p.night_audit_marks_occupied_dirty, p.night_audit_earliest_time, p.status, p.created_at, p.created_by, p.updated_at, p.updated_by, p.phone, p.email, p.tax_id, p.document_footer, p.refund_methods, p.checkin_incidental_deposit FROM properties p
+SELECT p.id, p.tenant_id, p.code, p.name, p.address, p.city, p.country_code, p.timezone, p.currency_code, p.currency_decimals, p.check_in_time, p.check_out_time, p.require_room_inspection_for_checkin, p.night_audit_marks_occupied_dirty, p.night_audit_earliest_time, p.status, p.created_at, p.created_by, p.updated_at, p.updated_by, p.phone, p.email, p.tax_id, p.document_footer, p.refund_methods, p.checkin_incidental_deposit, p.deposit_release_mode, p.deposit_release_locked_on, p.deposit_release_adjust_pending FROM properties p
 JOIN user_properties up ON up.property_id = p.id AND up.tenant_id = p.tenant_id
 WHERE p.tenant_id = $1 AND up.user_id = $2 AND p.id > $3
 ORDER BY p.id
@@ -530,6 +544,9 @@ func (q *Queries) ListPropertiesForUser(ctx context.Context, arg ListPropertiesF
 			&i.DocumentFooter,
 			&i.RefundMethods,
 			&i.CheckinIncidentalDeposit,
+			&i.DepositReleaseMode,
+			&i.DepositReleaseLockedOn,
+			&i.DepositReleaseAdjustPending,
 		); err != nil {
 			return nil, err
 		}
@@ -646,10 +663,11 @@ UPDATE properties SET
     night_audit_earliest_time = $16,
     refund_methods = $17,
     checkin_incidental_deposit = $18,
-    status = $19,
-    updated_by = $20
-WHERE tenant_id = $21 AND id = $22
-RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit
+    deposit_release_mode = $19,
+    status = $20,
+    updated_by = $21
+WHERE tenant_id = $22 AND id = $23
+RETURNING id, tenant_id, code, name, address, city, country_code, timezone, currency_code, currency_decimals, check_in_time, check_out_time, require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, status, created_at, created_by, updated_at, updated_by, phone, email, tax_id, document_footer, refund_methods, checkin_incidental_deposit, deposit_release_mode, deposit_release_locked_on, deposit_release_adjust_pending
 `
 
 type UpdatePropertyParams struct {
@@ -671,6 +689,7 @@ type UpdatePropertyParams struct {
 	NightAuditEarliestTime          civil.TimeOfDay
 	RefundMethods                   []string
 	CheckinIncidentalDeposit        decimal.Decimal
+	DepositReleaseMode              string
 	Status                          string
 	ActorID                         *int64
 	TenantID                        int64
@@ -697,6 +716,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg UpdatePropertyParams) 
 		arg.NightAuditEarliestTime,
 		arg.RefundMethods,
 		arg.CheckinIncidentalDeposit,
+		arg.DepositReleaseMode,
 		arg.Status,
 		arg.ActorID,
 		arg.TenantID,
@@ -730,6 +750,9 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg UpdatePropertyParams) 
 		&i.DocumentFooter,
 		&i.RefundMethods,
 		&i.CheckinIncidentalDeposit,
+		&i.DepositReleaseMode,
+		&i.DepositReleaseLockedOn,
+		&i.DepositReleaseAdjustPending,
 	)
 	return i, err
 }

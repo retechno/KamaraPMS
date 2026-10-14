@@ -189,6 +189,7 @@ func (s *Service) CreateProperty(ctx context.Context, in CreatePropertyInput) (P
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
 			RefundMethods:                   st.RefundMethods,
 			CheckinIncidentalDeposit:        st.CheckinIncidentalDeposit,
+			DepositReleaseMode:              st.DepositReleaseMode,
 			ActorID:                         p.ActorID(),
 		})
 		if err != nil {
@@ -307,6 +308,7 @@ type PropertyPatch struct {
 	NightAuditEarliestTime          *civil.TimeOfDay
 	RefundMethods                   []string
 	CheckinIncidentalDeposit        *decimal.Decimal
+	DepositReleaseMode              *string
 	Status                          *string
 }
 
@@ -354,6 +356,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		apply(&st.NightAuditMarksOccupiedDirty, patch.NightAuditMarksOccupiedDirty)
 		apply(&st.NightAuditEarliestTime, patch.NightAuditEarliestTime)
 		apply(&st.CheckinIncidentalDeposit, patch.CheckinIncidentalDeposit)
+		apply(&st.DepositReleaseMode, patch.DepositReleaseMode)
 		if patch.RefundMethods != nil {
 			st.RefundMethods = patch.RefundMethods
 		}
@@ -383,6 +386,10 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			}
 		}
 
+		if st.DepositReleaseMode != before.DepositReleaseMode && before.DepositReleaseLockedOn != nil {
+			return apperr.Conflict("DEPOSIT_RELEASE_LOCKED", "the release of deposits cannot change: the property has had transactions since "+before.DepositReleaseLockedOn.String()).WithContext("locked_on", before.DepositReleaseLockedOn.String())
+		}
+
 		updated, err := q.UpdateProperty(ctx, tenancydb.UpdatePropertyParams{
 			TenantID:                        p.TenantID,
 			ID:                              propertyID,
@@ -404,6 +411,7 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 			NightAuditEarliestTime:          st.NightAuditEarliestTime,
 			RefundMethods:                   st.RefundMethods,
 			CheckinIncidentalDeposit:        st.CheckinIncidentalDeposit,
+			DepositReleaseMode:              st.DepositReleaseMode,
 			Status:                          status,
 			ActorID:                         p.ActorID(),
 		})
@@ -415,6 +423,12 @@ func (s *Service) UpdateProperty(ctx context.Context, propertyID int64, patch Pr
 		day, err := q.GetOpenBusinessDay(ctx, propertyID)
 		if err != nil {
 			return notFound(err, errBusinessDayNotFound)
+		}
+		if out.DepositReleaseMode != before.DepositReleaseMode { // the choice is in the audit, before the lock
+			if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &out.ID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(), Action: "property.deposit_release_set",
+				EntityType: "property", EntityID: out.ID, EntityLabel: out.Code, Old: map[string]any{"deposit_release_mode": before.DepositReleaseMode}, New: map[string]any{"deposit_release_mode": out.DepositReleaseMode}}); err != nil {
+				return err
+			}
 		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &out.ID, BusinessDate: &day.BusinessDate,
 			UserID: p.ActorID(), Action: "property.updated", EntityType: "property", EntityID: out.ID, EntityLabel: out.Code, Old: before, New: out})

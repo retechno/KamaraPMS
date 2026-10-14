@@ -55,6 +55,8 @@ export const AUDIT_ACTIONS = [
   'group.rooms_added',
   'group.checked_in',
   'group.cancelled',
+  'accounting.deposit_release_locked',
+  'property.deposit_release_set',
   'group.reinstated',
   'group.rooming_list_updated',
   'group.routing_set',

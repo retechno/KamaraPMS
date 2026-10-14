@@ -202,6 +202,20 @@ func (q *Queries) CashEffectByCounterpart(ctx context.Context, arg CashEffectByC
 	return items, nil
 }
 
+const clearDepositAdjustPending = `-- name: ClearDepositAdjustPending :exec
+UPDATE properties SET deposit_release_adjust_pending = false WHERE tenant_id = $1 AND id = $2 AND deposit_release_adjust_pending
+`
+
+type ClearDepositAdjustPendingParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) ClearDepositAdjustPending(ctx context.Context, arg ClearDepositAdjustPendingParams) error {
+	_, err := q.db.Exec(ctx, clearDepositAdjustPending, arg.TenantID, arg.PropertyID)
+	return err
+}
+
 const closePeriod = `-- name: ClosePeriod :exec
 INSERT INTO gl_periods (tenant_id, property_id, period_start, status, closed_at, closed_by)
 VALUES ($1, $2, $3, 'CLOSED', $4, $5)
@@ -232,10 +246,11 @@ const controlSources = `-- name: ControlSources :one
 SELECT
     (SELECT COALESCE(sum(i.debit - i.credit), 0) FROM folio_items i
       WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.business_date <= $3::date)::numeric AS folio_balance,
-    (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
-       JOIN folios f ON f.property_id = g.property_id AND f.id = g.folio_id
-      WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3::date
-        AND (f.closed_on IS NULL OR f.closed_on > $3::date))::numeric AS deposits_held,
+    -- the deposits still held as a liability: ON_CLOSE, those of the folios not closed by the date; EVERY_DAY, what the deposits have not yet paid of the charges (held less applied)
+    (SELECT CASE WHEN (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = $2) = 'EVERY_DAY'
+                 THEN COALESCE((SELECT sum(d.held - d.applied) FROM folio_deposit_state($2, $3::date) d), 0)
+                 ELSE COALESCE((SELECT sum(d.held) FROM folio_deposit_state($2, $3::date) d WHERE NOT d.closed), 0)
+            END)::numeric AS deposits_held,
     (SELECT COALESCE(-sum(g.signed_amount), 0) FROM folio_item_gl g
       WHERE g.tenant_id = $1 AND g.property_id = $2 AND g.kind = 'PAYMENT' AND g.payment_method = 'CITY_LEDGER'
         AND g.business_date <= $3::date)::numeric AS city_transferred,
@@ -520,25 +535,44 @@ FROM (
      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3 AND r.status = 'POSTED'
      GROUP BY r.payment_method
     UNION ALL
+    -- ON_CLOSE: the deposits of a folio that closed on this date are released (debit 2310, credit 1210)
     SELECT 'ADVANCE_DEPOSITS', '', 'DEPOSIT_RELEASE', f.folio_number, -sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
+       AND (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = $2) = 'ON_CLOSE'
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
     UNION ALL
     SELECT 'GUEST_LEDGER', '', 'DEPOSIT_RELEASE', f.folio_number, sum(g.signed_amount), '', NULL::bigint
       FROM folios f
       JOIN folio_item_gl g ON g.property_id = f.property_id AND g.folio_id = f.id AND g.kind = 'PAYMENT' AND g.is_deposit AND g.business_date <= $3
      WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.closed_on = $3
+       AND (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = $2) = 'ON_CLOSE'
      GROUP BY f.folio_number HAVING sum(g.signed_amount) <> 0
+    UNION ALL
+    -- EVERY_DAY: what the deposit of a folio pays of its charges, as of this date, less what was journaled for the folio so far (DEPOSIT_APPLIED and DEPOSIT_RELEASE lines on 2310). A folio that has
+    -- no line yet and is carried by the first close after the migration says so ("includes the adjustment").
+    SELECT x.role, '', 'DEPOSIT_APPLIED', x.folio_number, x.amount, x.detail, NULL::bigint
+      FROM (SELECT d.folio_number, d.applied - COALESCE(sf.so_far, 0) AS delta, (sf.so_far IS NULL AND $4::boolean) AS adjusted
+              FROM folio_deposit_state($2, $3) d
+              LEFT JOIN (SELECT l.source_ref AS folio_number, sum(l.debit - l.credit) AS so_far
+                           FROM gl_journal_lines l
+                          WHERE l.property_id = $2 AND l.account_id = $5 AND l.source_type IN ('DEPOSIT_APPLIED', 'DEPOSIT_RELEASE')
+                          GROUP BY l.source_ref) sf ON sf.folio_number = d.folio_number
+             WHERE (SELECT pr.deposit_release_mode FROM properties pr WHERE pr.id = $2) = 'EVERY_DAY') dl
+      CROSS JOIN LATERAL (VALUES ('ADVANCE_DEPOSITS', dl.delta), ('GUEST_LEDGER', -dl.delta)) AS v(role, amount)
+      CROSS JOIN LATERAL (SELECT v.role, v.amount, dl.folio_number, (CASE WHEN dl.adjusted THEN 'includes the adjustment' ELSE '' END)::text AS detail) x
+     WHERE dl.delta <> 0
 ) x
 WHERE x.amount <> 0
 `
 
 type DayActivityParams struct {
-	TenantID     int64
-	PropertyID   int64
-	BusinessDate civil.Date
+	TenantID         int64
+	PropertyID       int64
+	BusinessDate     civil.Date
+	Adjust           bool
+	AdvanceAccountID int64
 }
 
 type DayActivityRow struct {
@@ -557,7 +591,13 @@ type DayActivityRow struct {
 // CITY_LEDGER are system accounts, METHOD is the payment method received into (key), REVENUE the charge code's revenue
 // account (key), TAX and SERVICE the component's account (key). The service resolves roles to accounts.
 func (q *Queries) DayActivity(ctx context.Context, arg DayActivityParams) ([]DayActivityRow, error) {
-	rows, err := q.db.Query(ctx, dayActivity, arg.TenantID, arg.PropertyID, arg.BusinessDate)
+	rows, err := q.db.Query(ctx, dayActivity,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.Adjust,
+		arg.AdvanceAccountID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -741,6 +781,23 @@ func (q *Queries) DepartmentSetupSources(ctx context.Context, arg DepartmentSetu
 	return items, nil
 }
 
+const depositReleaseLockAudited = `-- name: DepositReleaseLockAudited :one
+SELECT EXISTS (SELECT 1 FROM audit_logs a WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.action = 'accounting.deposit_release_locked')::boolean AS audited
+`
+
+type DepositReleaseLockAuditedParams struct {
+	TenantID   int64
+	PropertyID *int64
+}
+
+// Has the lock of the setting been written to the audit? And the first item that made it.
+func (q *Queries) DepositReleaseLockAudited(ctx context.Context, arg DepositReleaseLockAuditedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, depositReleaseLockAudited, arg.TenantID, arg.PropertyID)
+	var audited bool
+	err := row.Scan(&audited)
+	return audited, err
+}
+
 const findJournalByKey = `-- name: FindJournalByKey :one
 SELECT id FROM gl_journals WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
 `
@@ -756,6 +813,27 @@ func (q *Queries) FindJournalByKey(ctx context.Context, arg FindJournalByKeyPara
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const firstFolioItemOf = `-- name: FirstFolioItemOf :one
+SELECT i.id, i.business_date FROM folio_items i WHERE i.tenant_id = $1 AND i.property_id = $2 ORDER BY i.id LIMIT 1
+`
+
+type FirstFolioItemOfParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type FirstFolioItemOfRow struct {
+	ID           int64
+	BusinessDate civil.Date
+}
+
+func (q *Queries) FirstFolioItemOf(ctx context.Context, arg FirstFolioItemOfParams) (FirstFolioItemOfRow, error) {
+	row := q.db.QueryRow(ctx, firstFolioItemOf, arg.TenantID, arg.PropertyID)
+	var i FirstFolioItemOfRow
+	err := row.Scan(&i.ID, &i.BusinessDate)
+	return i, err
 }
 
 const getAccountByCode = `-- name: GetAccountByCode :one
@@ -845,6 +923,30 @@ func (q *Queries) GetDayPost(ctx context.Context, arg GetDayPostParams) (int64, 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getDepositRelease = `-- name: GetDepositRelease :one
+SELECT deposit_release_mode::text AS mode, deposit_release_locked_on, deposit_release_adjust_pending AS adjust_pending FROM properties WHERE tenant_id = $1 AND id = $2
+`
+
+type GetDepositReleaseParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type GetDepositReleaseRow struct {
+	Mode                   string
+	DepositReleaseLockedOn *civil.Date
+	AdjustPending          bool
+}
+
+// The release of deposits of a property (docs/architecture/31-deposit-release.md): the mode, the date the setting was locked, and whether the first close from the migration still has to
+// carry the adjustment of the deposits held whole until then.
+func (q *Queries) GetDepositRelease(ctx context.Context, arg GetDepositReleaseParams) (GetDepositReleaseRow, error) {
+	row := q.db.QueryRow(ctx, getDepositRelease, arg.TenantID, arg.PropertyID)
+	var i GetDepositReleaseRow
+	err := row.Scan(&i.Mode, &i.DepositReleaseLockedOn, &i.AdjustPending)
+	return i, err
 }
 
 const getPeriod = `-- name: GetPeriod :one

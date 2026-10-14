@@ -197,7 +197,7 @@ func methodKey(method string) string {
 
 var sourceLabels = map[string]string{
 	"CHARGE_CODE": "Charges", "TAX": "Tax", "SERVICE_CHARGE": "Service charge", "PAYMENT": "Payments",
-	"RECEIPT": "City ledger receipts", "DEPOSIT_RELEASE": "Deposit released at checkout, folio",
+	"RECEIPT": "City ledger receipts", "DEPOSIT_RELEASE": "Deposit released at checkout, folio", "DEPOSIT_APPLIED": "Deposit applied to charges, folio",
 }
 
 type target struct {
@@ -321,9 +321,34 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return false, err
 	}
-	rows, err := q.DayActivity(ctx, accountingdb.DayActivityParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd})
+	rel, err := q.GetDepositRelease(ctx, accountingdb.GetDepositReleaseParams{TenantID: p.TenantID, PropertyID: propertyID})
 	if err != nil {
 		return false, err
+	}
+	if err := s.auditDepositReleaseLock(ctx, p, propertyID, bd, rel.DepositReleaseLockedOn); err != nil {
+		return false, err
+	}
+	var advance int64 // the account the deposits are held in, which the journaled part of each folio is read from
+	if r0, err := s.newResolver(ctx, p.TenantID, propertyID); err == nil {
+		if t, err := r0.system("ADVANCE_DEPOSITS"); err == nil {
+			advance = t.id
+		}
+	}
+	adjust := rel.AdjustPending && rel.Mode == "EVERY_DAY" // the first close after the migration carries the deposits that were held whole until then
+	rows, err := q.DayActivity(ctx, accountingdb.DayActivityParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, Adjust: adjust, AdvanceAccountID: advance})
+	if err != nil {
+		return false, err
+	}
+	adjusted := 0
+	if adjust {
+		for _, r := range rows {
+			if r.Role == "ADVANCE_DEPOSITS" && r.SourceType == "DEPOSIT_APPLIED" && r.Detail == "includes the adjustment" {
+				adjusted++
+			}
+		}
+		if err := q.ClearDepositAdjustPending(ctx, accountingdb.ClearDepositAdjustPendingParams{TenantID: p.TenantID, PropertyID: propertyID}); err != nil {
+			return false, err
+		}
 	}
 	now := s.clock.Now()
 	post := accountingdb.InsertDayPostParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, PostedAt: now, ActorID: p.ActorID()}
@@ -427,7 +452,7 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		return false, err
 	}
 	return true, s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.day_posted", "gl_journal", id, auditlabel.Journal(ctx, propertyID, id), nil,
-		map[string]any{"journal_number": number, "lines": len(keys), "debit_lines": debits}))
+		withAdjusted(map[string]any{"journal_number": number, "lines": len(keys), "debit_lines": debits}, adjusted)))
 }
 
 // PostPending makes the journals of closed business days that have none (accounting.close): the days from before
@@ -749,4 +774,36 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 		return Journal{}, err
 	}
 	return s.loadJournal(ctx, p.TenantID, propertyID, id)
+}
+
+// withAdjusted adds to the entry of a day close how many folios its DEPOSIT_APPLIED lines carried over from the deposits that were held whole until the release of deposits was made daily (the first
+// close after migration 00078): none on any other day.
+func withAdjusted(m map[string]any, folios int) map[string]any {
+	if folios > 0 {
+		m["deposit_applied_adjusted_folios"] = folios
+	}
+	return m
+}
+
+// auditDepositReleaseLock writes, once, the entry that says the setting of the release of deposits is locked: the lock is made by a trigger of the database at the first folio item of the property, which
+// cannot write the audit, so the first day close that finds the date set writes it (the date and the item are exact).
+func (s *Service) auditDepositReleaseLock(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, lockedOn *civil.Date) error {
+	if lockedOn == nil {
+		return nil
+	}
+	q := s.q(ctx)
+	done, err := q.DepositReleaseLockAudited(ctx, accountingdb.DepositReleaseLockAuditedParams{TenantID: p.TenantID, PropertyID: &propertyID})
+	if err != nil || done {
+		return err
+	}
+	first, err := q.FirstFolioItemOf(ctx, accountingdb.FirstFolioItemOfParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return err
+	}
+	rel, err := q.GetDepositRelease(ctx, accountingdb.GetDepositReleaseParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return err
+	}
+	return s.audit.Write(ctx, entry(p, propertyID, bd, "accounting.deposit_release_locked", "property", propertyID, "", nil,
+		map[string]any{"mode": rel.Mode, "locked_on": lockedOn.String(), "first_folio_item_id": first.ID, "first_item_date": first.BusinessDate.String()}))
 }

@@ -8440,7 +8440,7 @@ components:
     PropertySettings:
       type: object
       required: [name, timezone, currency_code, currency_decimals, check_in_time, check_out_time,
-                 require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, checkin_incidental_deposit]
+                 require_room_inspection_for_checkin, night_audit_marks_occupied_dirty, night_audit_earliest_time, refund_methods, checkin_incidental_deposit, deposit_release_mode]
       properties:
         name: { type: string }
         address: { type: string }
@@ -8460,6 +8460,7 @@ components:
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
         refund_methods: { $ref: "#/components/schemas/RefundMethods" }
         checkin_incidental_deposit: { $ref: "#/components/schemas/Amount", description: "The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it." }
+        deposit_release_mode: { type: string, enum: [EVERY_DAY, ON_CLOSE], description: "When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change)." }
     RefundMethods:
       type: array
       minItems: 1
@@ -8484,6 +8485,7 @@ components:
           required: [business_date, currency_locked]
           properties:
             business_date: { $ref: "#/components/schemas/Date" }
+            deposit_release_locked_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: "The business date of the first transaction of the property, from which deposit_release_mode cannot change (null while it is free)." }
             currency_locked: { type: boolean, description: "True once the property has financial data (a folio item, a payment, a journal, a bill, a receipt, a shift, a bank statement, a tax filing, a budget): the currency and the decimals can no longer change (409 `CURRENCY_LOCKED`) and nothing is converted." }
     PropertyPage:
       type: object
@@ -8522,6 +8524,7 @@ components:
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
         refund_methods: { $ref: "#/components/schemas/RefundMethods" }
         checkin_incidental_deposit: { $ref: "#/components/schemas/Amount", description: "The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it." }
+        deposit_release_mode: { type: string, enum: [EVERY_DAY, ON_CLOSE], description: "When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change)." }
         opening_business_date:
           $ref: "#/components/schemas/Date"
           description: The property's current local date or the day before.
@@ -8547,6 +8550,7 @@ components:
         night_audit_earliest_time: { $ref: "#/components/schemas/TimeOfDay" }
         refund_methods: { $ref: "#/components/schemas/RefundMethods" }
         checkin_incidental_deposit: { $ref: "#/components/schemas/Amount", description: "The incidental deposit the desk proposes at check-in, per room, on top of the stay estimate (an amount at the currency decimals, 0 by default: none). A proposal the desk can change; the check-in never requires it." }
+        deposit_release_mode: { type: string, enum: [EVERY_DAY, ON_CLOSE], description: "When a deposit is released against the charges it pays (docs/architecture/31-deposit-release.md): EVERY_DAY (the default) at each day close, folio by folio (journal lines DEPOSIT_APPLIED), or ON_CLOSE when the folio closes (DEPOSIT_RELEASE). It can be chosen until the property has its first transaction (a folio item, a payment or a deposit); after that a change is 409 `DEPOSIT_RELEASE_LOCKED` (the same value is not a change)." }
         status: { type: string, enum: [ACTIVE, INACTIVE] }
     DayClock:
       type: object

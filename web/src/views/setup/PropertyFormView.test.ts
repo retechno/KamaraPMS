@@ -197,6 +197,48 @@ describe('PropertyFormView (edit)', () => {
     expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body.checkin_incidental_deposit).toBe('0')
   })
 
+  it('chooses the release of deposits until the first transaction, and sends it only when it changed', async () => {
+    const w = await mountEdit(property({ deposit_release_mode: 'EVERY_DAY', deposit_release_locked_on: null }))
+    expect((w.get('[data-testid=deposit-release-EVERY_DAY]').element as HTMLInputElement).checked).toBe(true)
+    expect(w.get('[data-testid=deposit-release-ON_CLOSE]').attributes('disabled')).toBeUndefined()
+    expect(w.find('[data-testid=deposit-release-locked]').exists()).toBe(false)
+    PATCH = vi.fn().mockResolvedValue({ data: property() })
+    await w.get('input[name=name]').setValue('Hotel Bali 2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((PATCH.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toEqual({ name: 'Hotel Bali 2' })
+    PATCH = vi.fn().mockResolvedValue({ data: property() })
+    await w.get('[data-testid=deposit-release-ON_CLOSE]').setValue(true)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((PATCH.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ deposit_release_mode: 'ON_CLOSE' })
+  })
+
+  it('shows the release of deposits read-only, with the date, once the property has had a transaction', async () => {
+    const w = await mountEdit(property({ deposit_release_mode: 'ON_CLOSE', deposit_release_locked_on: '2026-09-30' }))
+    expect((w.get('[data-testid=deposit-release-ON_CLOSE]').element as HTMLInputElement).checked).toBe(true)
+    expect(w.get('[data-testid=deposit-release-EVERY_DAY]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=deposit-release-ON_CLOSE]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=deposit-release-locked]').text()).toContain('Locked since 30 Sep 2026')
+  })
+
+  it('a new property releases every day unless it is told otherwise', async () => {
+    const created = { id: 7, code: 'BALI', name: 'Hotel Bali', business_date: '2026-09-30' }
+    POST = vi.fn().mockResolvedValue({ data: created })
+    GET = vi.fn().mockResolvedValue({ data: created })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    const w = mount(PropertyFormView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect((w.get('[data-testid=deposit-release-EVERY_DAY]').element as HTMLInputElement).checked).toBe(true)
+    await w.get('input[name=code]').setValue('BALI')
+    await w.get('input[name=name]').setValue('Hotel Bali')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body.deposit_release_mode).toBe('EVERY_DAY')
+  })
+
   it('has no choice of the language of the standard names: it is for a new property only', async () => {
     const w = await mountEdit(property())
     expect(w.find('[data-testid=data-language-card]').exists()).toBe(false)

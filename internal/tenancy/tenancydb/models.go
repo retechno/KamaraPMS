@@ -53,6 +53,9 @@ type Property struct {
 	DocumentFooter                  *string
 	RefundMethods                   []string
 	CheckinIncidentalDeposit        decimal.Decimal
+	DepositReleaseMode              string
+	DepositReleaseLockedOn          *civil.Date
+	DepositReleaseAdjustPending     bool
 }
 
 type Tenant struct {
