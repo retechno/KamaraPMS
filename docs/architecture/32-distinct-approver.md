@@ -1,6 +1,6 @@
 # 32. Who may approve a correction: rules by kind of approval and by amount (PLAN: nothing is built; waiting for the owner)
 
-Status: **plan, no code**, a PR of its own, after the release of deposits (document 31). Asked by the owner on 2026-10-14 (review of PR 6); **changed by the owner the same day**: not one switch, but **a rule for each kind of approval and for each amount, per property**. Decisions of the owner are marked **D**.
+Status: **plan, APPROVED by the owner on 2026-10-15** (code starts after PR 31 is merged; the two mappings to verify, `folios/nightadjust.go` and `bankrec.Reopen`, are written up in an "as built" part when the PR is done), a PR of its own, after the release of deposits (document 31). Asked by the owner on 2026-10-14 (review of PR 6); **changed by the owner the same day**: not one switch, but **a rule for each kind of approval and for each amount, per property**. Decisions of the owner are marked **D**.
 
 ## 1. What exists
 
