@@ -130,18 +130,18 @@ describe('GroupCheckIn', () => {
     // nothing is filled: the proposal (the incidental deposit for the room that goes to the master, the estimate and the incidental for the room that is left out) is only a placeholder
     const d1 = w.get('[data-testid=deposit-1]').element as HTMLInputElement
     expect(d1.value).toBe('')
-    expect(d1.placeholder).toBe('200,000')
-    expect((w.get('[data-testid=deposit-3]').element as HTMLInputElement).placeholder).toBe('1,200,000')
+    expect(d1.placeholder).toBe('Proposal 200,000')
+    expect((w.get('[data-testid=deposit-3]').element as HTMLInputElement).placeholder).toBe('Proposal 1,200,000')
     expect((w.get('[data-testid=deposit-method-1]').element as HTMLSelectElement).value).toBe('')
     await w.get('[data-testid=select-ready]').trigger('click')
-    expect(progress(w)).toBe('2 rooms, no deposit')
+    expect(progress(w)).toBe('2 rooms to check in, no deposit')
     // "Use proposal" fills the amount, with the separators; the method is still a choice
     await w.get('[data-testid=use-proposal-1]').trigger('click')
     expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).value).toBe('200,000')
     expect(progress(w)).toBe('Still needed: the method of the deposit of 1 room')
     expect(w.get('[data-testid=group-checkin-run]').attributes('disabled')).toBeDefined()
     await pickMethod(w, 1, 'BANK_TRANSFER')
-    expect(progress(w)).toBe('2 rooms, total deposit 200,000 (Bank transfer × 1)')
+    expect(progress(w)).toBe('2 rooms to check in, 1 deposit (200,000): Bank transfer × 1')
     expect(w.get('[data-testid=group-checkin-run]').attributes('disabled')).toBeUndefined()
     // a typed amount is grouped as it is typed and kept as a plain decimal
     await typeIn(w, '[data-testid=deposit-3]', '1500000')
@@ -150,10 +150,10 @@ describe('GroupCheckIn', () => {
     // the choice of the method for every room fills them all, to be changed room by room
     await w.get('[data-testid=group-checkin-method]').setValue('CASH')
     await flushPromises()
-    expect(progress(w)).toBe('2 rooms, total deposit 1,700,000 (Cash × 2)')
+    expect(progress(w)).toBe('2 rooms to check in, 2 deposits (1,700,000): Cash × 2')
     expect((w.get('[data-testid=group-checkin-method]').element as HTMLSelectElement).value).toBe('') // the choice is an action: the list shows its title again
     await pickMethod(w, 3, 'BANK_TRANSFER')
-    expect(progress(w)).toBe('2 rooms, total deposit 1,700,000 (Cash × 1, Bank transfer × 1)')
+    expect(progress(w)).toBe('2 rooms to check in, 2 deposits (1,700,000): Cash × 1, Bank transfer × 1')
     POST.mockResolvedValueOnce({ data: { batch_id: 'k', rows: [{ ...rowResult(1), deposit: { status: 'RECORDED', payment_number: 'PAY000001', amount: '200000' } }, rowResult(3)], checked_in: 2, already_checked_in: 0, failed: 0, deposits_recorded: 1 } })
     await w.get('[data-testid=group-checkin-run]').trigger('click')
     await flushPromises()
@@ -168,7 +168,7 @@ describe('GroupCheckIn', () => {
     await flushPromises()
     await w.get('[data-testid=select-ready]').trigger('click')
     await pickMethod(w, 1, 'CASH')
-    expect(progress(w)).toBe('2 rooms, no deposit')
+    expect(progress(w)).toBe('2 rooms to check in, no deposit')
     await w.get('[data-testid=group-checkin-run]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]![1].body.rows.map((r: { deposit?: unknown }) => r.deposit)).toEqual([undefined, undefined])
@@ -217,6 +217,8 @@ describe('GroupCheckIn', () => {
     await flushPromises()
     expect(w.find('[data-testid=deposit-1]').exists()).toBe(false) // the amount cannot be changed any more
     expect(w.get('[data-testid=deposit-received-1]').text()).toContain('Received PAY000001 · 200,000')
+    // the deposit is said once, in the deposit column: the readiness column does not repeat "Deposit PAY000001"
+    expect(w.find('[data-testid=deposit-note-1]').exists()).toBe(false)
     // the room is ready again: the repeat does not send the deposit
     GET = vi.fn(async (path: string) => (path.endsWith('/arrivals') ? { data: { data: [{ ...after[0], readiness: { status: 'READY', blockers: [] } }] } } : { data: routing() }))
     await w.get('[data-testid=group-checkin-reload]').trigger('click')
@@ -225,6 +227,17 @@ describe('GroupCheckIn', () => {
     await w.get('[data-testid=group-checkin-run]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[1]![1].body.rows[0].deposit).toBeUndefined()
+  })
+
+  it('counts the rooms and the deposits apart: three rooms, two deposits', async () => {
+    const w = mountCard(ALL, [arrival(1), arrival(2), arrival(3)])
+    await flushPromises()
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await typeIn(w, '[data-testid=deposit-1]', '1000000')
+    await pickMethod(w, 1, 'BANK_TRANSFER')
+    await typeIn(w, '[data-testid=deposit-3]', '2100000')
+    await pickMethod(w, 3, 'CASH')
+    expect(progress(w)).toBe('3 rooms to check in, 2 deposits (3,100,000): Bank transfer × 1, Cash × 1')
   })
 
   it('shows no deposit column when everything goes to the master or the person may not take payments', async () => {
@@ -329,7 +342,7 @@ describe('GroupCheckIn', () => {
     await flushPromises()
     expect(w.get('[data-testid=group-checkin]').text()).toContain('Check-in grup')
     expect(w.get('[data-testid=group-pay-routing]').text()).toBe('Masuk master folio: biaya kamar.')
-    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).placeholder).toBe('200.000')
+    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).placeholder).toBe('Usulan 200.000')
     await w.get('[data-testid=select-ready]').trigger('click')
     await w.get('[data-testid=use-proposal-1]').trigger('click')
     expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).value).toBe('200.000')

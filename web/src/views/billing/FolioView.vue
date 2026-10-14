@@ -30,6 +30,7 @@ import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
+import { folioDescription } from '@/utils/folioDescription'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -345,7 +346,7 @@ function transferDone(message: string): void {
 const transferText = (i: FolioItem): string => {
   const tr = i.transfer
   if (i.charge_code === 'TRF' && tr) return tr.role === 'IN' ? t('folioTransfer.trfIn', { folio: tr.from.number }) : t('folioTransfer.trfOut', { folio: tr.to.number })
-  return i.description
+  return folioDescription(i.description)
 }
 
 // A line of the transfer code TRF is never reversed or moved, and the copy a transfer made is not reversed: both go back with a return (from the folio the transfer left).
@@ -618,7 +619,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
 
     <Card v-if="pending && pending.kind !== 'adjust' && !approving" class="mb-4 border-primary/50">
       <form novalidate data-testid="correction-form" @submit.prevent="approving = true">
-        <CardHeader><CardTitle>{{ t(`folio.${pending.kind}` as never) }}: {{ pending.item.description }}</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{{ t(`folio.${pending.kind}` as never) }}: {{ folioDescription(pending.item.description) }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField v-if="pending.kind === 'refund'" :label="t('folio.amount')">

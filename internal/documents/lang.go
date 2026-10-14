@@ -238,9 +238,15 @@ var idExact = map[string]string{ //nolint:gosec // G101: the labels of a documen
 	"voided": "dibatalkan", "Printed ": "Dicetak ", "  ·  business date ": "  ·  tanggal bisnis ",
 }
 
-// TransferDescription writes the description of a line of a transfer between folios ("Transfer from FOL000001", "Transfer to FOL000002", stored in English) in the language of the
-// document; any other description is printed as it was posted.
-func (l Lang) TransferDescription(desc string) string {
+var (
+	roomNightRe = regexp.MustCompile(`^Room (\S+) - (\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$`)
+	methodID    = map[string]string{"BANK_TRANSFER": "Transfer bank", "CARD": "Kartu", "QRIS": "QRIS", "CASH": "Tunai", "CITY_LEDGER": "Piutang perusahaan", "OTHER": "Lainnya"}
+	paymentRe   = regexp.MustCompile(`^(Payment|Refund) (\S+) \(([A-Z_]+)\)$`)
+)
+
+// FolioDescription writes the description of a folio line in the language of the document. The server stores it in English ("Room 209 - 12 Oct 2026", "Payment PAY000001 (BANK_TRANSFER)",
+// "Refund PAY000002 (CASH)", "Transfer from FOL000001", "Reversal: ..."); the stored text never changes, only what is printed. Any other description (what people typed) is printed as it was posted.
+func (l Lang) FolioDescription(desc string) string {
 	if l != LangID {
 		return desc
 	}
@@ -249,6 +255,30 @@ func (l Lang) TransferDescription(desc string) string {
 	}
 	if rest, ok := strings.CutPrefix(desc, "Transfer to "); ok {
 		return "Transfer ke " + rest
+	}
+	if rest, ok := strings.CutPrefix(desc, "Reversal: "); ok {
+		return "Pembalikan: " + l.FolioDescription(rest)
+	}
+	if rest, ok := strings.CutPrefix(desc, "Adjustment: "); ok {
+		return "Penyesuaian: " + rest
+	}
+	if m := roomNightRe.FindStringSubmatch(desc); m != nil {
+		for i, en := range monthShort {
+			if en == m[3] {
+				return "Kamar " + m[1] + " - " + m[2] + " " + monthID[i] + " " + m[4]
+			}
+		}
+	}
+	if m := paymentRe.FindStringSubmatch(desc); m != nil {
+		word := "Pembayaran"
+		if m[1] == "Refund" {
+			word = "Pengembalian"
+		}
+		method := methodID[m[3]]
+		if method == "" {
+			method = m[3]
+		}
+		return word + " " + m[2] + " (" + method + ")"
 	}
 	return desc
 }
