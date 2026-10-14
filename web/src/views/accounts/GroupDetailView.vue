@@ -6,12 +6,15 @@ import { ApiError } from '@/api/problem'
 import type { Group, GroupMember } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import GroupBulkRooms from '@/components/groups/GroupBulkRooms.vue'
+import GroupCancel from '@/components/groups/GroupCancel.vue'
 import GroupCheckIn from '@/components/groups/GroupCheckIn.vue'
+import GroupHoldings from '@/components/groups/GroupHoldings.vue'
 import GroupMasterFolio from '@/components/groups/GroupMasterFolio.vue'
 import GroupRoomingList from '@/components/groups/GroupRoomingList.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,6 +35,7 @@ const saving = ref(false)
 const bulkOpen = ref(false)
 const roomingReload = ref(0)
 const checkInReload = ref(0)
+const holdingsReload = ref(0)
 const form = reactive({ name: '', arrival_date: '', departure_date: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', is_active: true })
 
 const columns = computed<Column<GroupMember>[]>(() => [
@@ -44,6 +48,8 @@ const columns = computed<Column<GroupMember>[]>(() => [
 
 const pid = computed(() => property.currentId)
 const canManage = computed(() => auth.can('group.manage', pid.value))
+// A group has no status of its own: it is cancelled when it has reservations and none of them is left (derived from the reservations, there is no column)
+const allCancelled = computed(() => !!group.value && group.value.reservation_count === 0 && group.value.cancelled_reservation_count > 0)
 const canBook = computed(() => auth.can('reservation.create', pid.value) && !!group.value?.is_active)
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 const path = () => ({ path: { propertyId: pid.value as number, id: Number(props.id) } })
@@ -80,6 +86,14 @@ async function bulkSaved(): Promise<void> {
   roomingReload.value++
 }
 
+/** Rooms were cancelled or brought back, or a deposit was decided: the group, its members and what is held are read again. */
+async function cancelChanged(): Promise<void> {
+  await load()
+  holdingsReload.value++
+  checkInReload.value++
+  roomingReload.value++
+}
+
 async function save(): Promise<void> {
   saving.value = true
   error.value = null
@@ -113,7 +127,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.companyBilled') }}</dt><dd class="m-0 text-sm">{{ group.company_name || t('groupDetail.noCompany') }}</dd></div>
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.contact') }}</dt><dd class="m-0 text-sm">{{ group.contact_name }} {{ group.contact_email }} {{ group.contact_phone }}</dd></div>
         <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.reservations') }}</dt><dd class="m-0 text-sm">{{ t('groupDetail.reservationsValue', { n: group.reservation_count, rooms: group.room_count }) }}</dd></div>
-        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.status') }}</dt><dd class="m-0 text-sm">{{ group.is_active ? t('setup.active') : t('groupDetail.inactiveNote') }}</dd></div>
+        <div><dt class="text-xs text-muted-foreground">{{ t('groupDetail.status') }}</dt><dd class="m-0 text-sm"><Badge v-if="allCancelled" variant="cancelled" data-testid="group-cancelled">{{ t('groupDetail.cancelled') }}</Badge><template v-else>{{ group.is_active ? t('setup.active') : t('groupDetail.inactiveNote') }}</template></dd></div>
       </dl>
       <p v-if="group.notes" class="mb-0 mt-3 text-sm text-muted-foreground">{{ group.notes }}</p>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
@@ -126,8 +140,11 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </CardContent>
   </Card>
 
-  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" @changed="checkInReload++" />
+  <GroupMasterFolio v-if="group && !editing" :group-id="group.id" :active="group.is_active" :all-cancelled="allCancelled" @changed="checkInReload++" />
   <GroupCheckIn v-if="group && !editing" :group-id="group.id" :active="group.is_active" :reload="checkInReload" @changed="roomingReload++" />
+
+  <GroupCancel v-if="group && !editing" :group-id="group.id" :group-code="group.code" :members="members" @changed="cancelChanged" />
+  <GroupHoldings v-if="group && !editing" :group-id="group.id" :reload="holdingsReload" @changed="cancelChanged" />
 
   <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 

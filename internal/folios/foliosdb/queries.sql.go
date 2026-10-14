@@ -2437,34 +2437,38 @@ WHERE f.tenant_id = $2 AND f.property_id = $3
   AND ($6::bigint IS NULL OR f.booking_group_id = $6::bigint)
   AND ($7::text IS NULL OR f.folio_type = $7::text)
   AND ($8::text IS NULL OR f.status = $8::text)
-  AND ($9::bigint IS NULL
-       OR CASE WHEN NOT $10::boolean THEN
-               (k.sk_text > $11::text COLLATE "und-x-icu" OR k.sk_num > $12::numeric
-                OR ((k.sk_text = $11::text COLLATE "und-x-icu" OR k.sk_num = $12::numeric) AND f.id > $9::bigint))
+  -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
+  AND (NOT $9::boolean OR (f.status = 'OPEN' AND f.stay_id IS NULL AND f.reservation_id IS NOT NULL AND bal.balance <> 0
+       AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = f.property_id AND l.reservation_id = f.reservation_id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))))
+  AND ($10::bigint IS NULL
+       OR CASE WHEN NOT $11::boolean THEN
+               (k.sk_text > $12::text COLLATE "und-x-icu" OR k.sk_num > $13::numeric
+                OR ((k.sk_text = $12::text COLLATE "und-x-icu" OR k.sk_num = $13::numeric) AND f.id > $10::bigint))
            ELSE
-               (k.sk_text < $11::text COLLATE "und-x-icu" OR k.sk_num < $12::numeric
-                OR ((k.sk_text = $11::text COLLATE "und-x-icu" OR k.sk_num = $12::numeric) AND f.id < $9::bigint))
+               (k.sk_text < $12::text COLLATE "und-x-icu" OR k.sk_num < $13::numeric
+                OR ((k.sk_text = $12::text COLLATE "und-x-icu" OR k.sk_num = $13::numeric) AND f.id < $10::bigint))
            END)
-ORDER BY (CASE WHEN NOT $10::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $10::boolean THEN k.sk_num END) ASC,
-         (CASE WHEN $10::boolean THEN k.sk_text END) DESC, (CASE WHEN $10::boolean THEN k.sk_num END) DESC,
-         (CASE WHEN NOT $10::boolean THEN f.id END) ASC, (CASE WHEN $10::boolean THEN f.id END) DESC
-LIMIT $13
+ORDER BY (CASE WHEN NOT $11::boolean THEN k.sk_text END) ASC, (CASE WHEN NOT $11::boolean THEN k.sk_num END) ASC,
+         (CASE WHEN $11::boolean THEN k.sk_text END) DESC, (CASE WHEN $11::boolean THEN k.sk_num END) DESC,
+         (CASE WHEN NOT $11::boolean THEN f.id END) ASC, (CASE WHEN $11::boolean THEN f.id END) DESC
+LIMIT $14
 `
 
 type ListFoliosOrderedParams struct {
-	SortKey        string
-	TenantID       int64
-	PropertyID     int64
-	ReservationID  *int64
-	StayID         *int64
-	BookingGroupID *int64
-	FolioType      *string
-	Status         *string
-	AfterID        *int64
-	SortDesc       bool
-	AfterText      *string
-	AfterNum       *decimal.Decimal
-	RowLimit       int32
+	SortKey              string
+	TenantID             int64
+	PropertyID           int64
+	ReservationID        *int64
+	StayID               *int64
+	BookingGroupID       *int64
+	FolioType            *string
+	Status               *string
+	CancelledWithBalance bool
+	AfterID              *int64
+	SortDesc             bool
+	AfterText            *string
+	AfterNum             *decimal.Decimal
+	RowLimit             int32
 }
 
 type ListFoliosOrderedRow struct {
@@ -2509,6 +2513,7 @@ func (q *Queries) ListFoliosOrdered(ctx context.Context, arg ListFoliosOrderedPa
 		arg.BookingGroupID,
 		arg.FolioType,
 		arg.Status,
+		arg.CancelledWithBalance,
 		arg.AfterID,
 		arg.SortDesc,
 		arg.AfterText,

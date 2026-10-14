@@ -165,6 +165,7 @@ var reservationsGuard = guardConfig{
 	notASale: map[string]string{
 		"Cancel":              "a cancellation releases nights, it sells none",
 		"CancelLine":          "a cancellation releases nights, it sells none",
+		"GroupCancel":         "a cancellation of the rooms of a group releases nights, it sells none",
 		"NoShow":              "a no-show releases nothing new and sells none",
 		"BulkNoShow":          "a no-show releases nothing new and sells none",
 		"AssignRoom":          "operational: the product sold does not change (Architecture 18 section 4.7)",

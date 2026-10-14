@@ -2279,6 +2279,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/groups/{id}/cancellations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel the rooms of a group that are waiting, each reservation in its own transaction (group.cancel)
+         * @description Up to 100 reservations (`TOO_MANY_ROWS`, `GROUP_CANCEL_EMPTY`), taken in ascending `reservation_id`; one `reason` for all (required). Without `group.cancel` the whole request is refused (403) before anything is done:
+         *     the right to cancel one reservation is not enough. The answer is 200 whatever the rows did. A row is `CANCELLED` (every room is cancelled), `PARTLY_CANCELLED` (a reservation with a room in house keeps it
+         *     and stays; only the rooms that waited are cancelled, room by room), `ALREADY_CANCELLED`, `SKIPPED` (nothing waits: every room is checked in, checked out or a no-show; `ALREADY_CHECKED_IN` or `NO_SHOW`) or
+         *     `FAILED` with the code of the cancellation (`VERSION_CONFLICT`, `RESERVATION_NOT_IN_GROUP`, ...). Each room of a row says `CANCELLED`, `SKIPPED` (with its code) or `ALREADY_CANCELLED`.
+         *     A repeat of the request (any Idempotency-Key) finds what the first did: a reservation with nothing left to cancel is answered from its rooms, whatever version the repeat names.
+         *     The cancellation moves no money and posts no fee. The deposits that a cancelled reservation holds and that can still be refunded are listed on its row (`deposits`); what to do with each is decided one
+         *     reservation at a time with the refund (`payment.refund`) and the fee of the cancellation (`folio.post_charge`) that exist. No e-mail is sent for a cancellation (there is none for a single one either).
+         *     The Idempotency-Key of the request is the `batch_id` of the audit entries of the reservations and of the entry `group.cancelled` of the group.
+         */
+        post: operations["cancelGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What the cancelled reservations of a group still hold (folio.read)
+         * @description The reservations of the group that have no live room and still hold something on their open folios without a stay: a deposit that was kept (a negative `held_balance`) or a fee not yet paid, each with the
+         *     deposits that can still be refunded. It is the follow-up of a cancellation: the same set the folio list shows with `cancelled_with_balance` and the night audit warns of, and it lasts until the deposit is
+         *     refunded or used for a fee.
+         */
+        get: operations["listGroupHoldings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/groups/{id}/reinstatements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bring the cancelled reservations of a group back, each in its own transaction (reservation.reinstate)
+         * @description The same shape as the cancellation, with no reason. A row is `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`; a reservation whose rooms were taken by other bookings since it was cancelled is `FAILED` with
+         *     `ROOM_UNAVAILABLE`. In the counters of the answer `cancelled` counts the reservations that were reinstated. The rooms come back unassigned (as `POST /reservations/{id}/reinstate` does).
+         */
+        post: operations["reinstateGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/walk-ins": {
         parameters: {
             query?: never;
@@ -9800,6 +9879,95 @@ export interface components {
                 };
             }[];
         };
+        GroupHoldingList: {
+            data: {
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number: string;
+                guest_name?: string;
+                /** @description What its open folios without a stay hold; a deposit is negative. */
+                held_balance: string;
+                deposits: {
+                    /** Format: int64 */
+                    payment_id: number;
+                    payment_number: string;
+                    payment_method: string;
+                    amount: string;
+                    refundable: string;
+                    /** Format: int64 */
+                    folio_id: number;
+                    folio_number: string;
+                }[];
+            }[];
+        };
+        GroupCancelRequest: {
+            /** @description One reason for every reservation of the request. */
+            reason: string;
+            rows: {
+                /**
+                 * Format: int64
+                 * @description A reservation of the group
+                 */
+                reservation_id: number;
+                /**
+                 * Format: int32
+                 * @description The version of the reservation the person saw.
+                 */
+                version: number;
+            }[];
+        };
+        GroupReinstateRequest: {
+            rows: {
+                /** Format: int64 */
+                reservation_id: number;
+                /** Format: int32 */
+                version: number;
+            }[];
+        };
+        GroupCancelResult: {
+            /** @description The Idempotency-Key of the request; the batch_id of the audit entries it wrote. */
+            batch_id: string;
+            /** @description Reservations cancelled whole (for a reinstatement: reinstated). */
+            cancelled: number;
+            partly_cancelled: number;
+            already_cancelled: number;
+            skipped: number;
+            failed: number;
+            rooms_cancelled: number;
+            rooms_skipped: number;
+            /** @description Reservations that were cancelled and still hold a deposit that can be refunded. */
+            deposits_held: number;
+            rows: {
+                /** Format: int64 */
+                reservation_id: number;
+                confirmation_number?: string;
+                /** @enum {string} */
+                status: "CANCELLED" | "PARTLY_CANCELLED" | "ALREADY_CANCELLED" | "SKIPPED" | "FAILED" | "REINSTATED";
+                /** @description The code of the failure (FAILED) or the reason a reservation was skipped (ALREADY_CHECKED_IN, NO_SHOW, NOT_CANCELLED). */
+                code?: string;
+                message?: string;
+                rooms?: {
+                    /** Format: int64 */
+                    line_id: number;
+                    /** @enum {string} */
+                    status: "CANCELLED" | "ALREADY_CANCELLED" | "SKIPPED";
+                    code?: string;
+                }[];
+                /** @description The deposits the cancelled reservation holds on its open folios without a stay and that can still be refunded. */
+                deposits?: {
+                    /** Format: int64 */
+                    payment_id: number;
+                    payment_number: string;
+                    payment_method: string;
+                    amount: string;
+                    /** @description The amount less the refunds posted against it. */
+                    refundable: string;
+                    /** Format: int64 */
+                    folio_id: number;
+                    folio_number: string;
+                }[];
+            }[];
+        };
         GroupCheckInResult: {
             /** @description The Idempotency-Key of the request; the batch_id of the audit entries it wrote. */
             batch_id: string;
@@ -11544,6 +11712,8 @@ export interface components {
             is_active: boolean;
             /** @description Reservations that are not cancelled. */
             reservation_count: number;
+            /** @description Reservations that are cancelled. With reservation_count 0 and this above 0 the group is cancelled (a group has no status of its own; it is derived). */
+            cancelled_reservation_count: number;
             /** @description Rooms that are not cancelled. */
             room_count: number;
             /** Format: date-time */
@@ -11781,6 +11951,19 @@ export interface components {
             arrival_date: components["schemas"]["Date"];
             departure_date: components["schemas"]["Date"];
             room_count: number;
+            /**
+             * Format: int32
+             * @description The version of the reservation; a cancellation of the group names it.
+             */
+            version: number;
+            /** @description Rooms that wait (draft or confirmed): a cancellation of the group cancels them. */
+            rooms_cancellable: number;
+            /** @description Rooms checked in or checked out: a cancellation of the group skips them. */
+            rooms_in_house_or_done: number;
+            rooms_no_show: number;
+            rooms_cancelled: number;
+            /** @description What the open folios of the reservation without a stay hold; a deposit is negative. */
+            held_balance: string;
         };
         GroupMemberList: {
             data: components["schemas"]["GroupMember"][];
@@ -17083,6 +17266,8 @@ export interface operations {
                 folio_type?: "GUEST" | "COMPANY" | "MASTER";
                 stay_id?: number;
                 status?: "OPEN" | "CLOSED";
+                /** @description true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee. */
+                cancelled_with_balance?: boolean;
                 /** @description The column to sort by; the id breaks a tie in the direction of the order. */
                 sort?: "folio_number" | "balance" | "status";
                 /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
@@ -17809,6 +17994,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroupCheckInResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description What happened to each reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupCancelResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listGroupHoldings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reservations that hold something. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupHoldingList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reinstateGroup: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupReinstateRequest"];
+            };
+        };
+        responses: {
+            /** @description What happened to each reservation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupCancelResult"];
                 };
             };
             400: components["responses"]["Problem"];

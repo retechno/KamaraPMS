@@ -145,6 +145,17 @@ describe('NightAuditView', () => {
     expect(GET.mock.calls.length).toBe(2)
   })
 
+  it('warns of a cancelled reservation that still holds a deposit, with the folio to open and the list of all of them', async () => {
+    const w = mountView({ ...clean(), warnings: { stale_drafts: [], open_folios_of_cancelled_reservations: [{ folio_id: 31, folio_number: 'FOL000031', confirmation_number: 'RES000007', balance: '-300000' }], blocks_ending: [] } })
+    await flushPromises()
+    const warnings = w.get('[data-testid=warnings]')
+    expect(warnings.text()).toContain('FOL000031')
+    expect(warnings.text()).toContain('of RES000007 is open with a balance of -300,000. The reservation is cancelled (a negative balance is a deposit that was kept).')
+    expect(warnings.get('a[href="/folios/31"]').text()).toBe('FOL000031')
+    expect(w.get('[data-testid=open-folios-all] a').attributes('href')).toBe('/folios?cancelled_with_balance=true')
+    expect(w.find('[data-testid=cannot-run]').exists()).toBe(false) // a warning never stops the audit
+  })
+
   it('explains the time guard and shows warnings; needs the permission', async () => {
     const early = mountView({ ...clean(), time_guard_ok: false, can_run: false, warnings: { stale_drafts: [{ reservation_room_id: 1, reservation_id: 2, confirmation_number: 'RES2', arrival_date: '2026-09-29' }], open_folios_of_cancelled_reservations: [], blocks_ending: [] } })
     await flushPromises()

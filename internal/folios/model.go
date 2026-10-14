@@ -121,6 +121,8 @@ type FolioFilter struct {
 	BookingGroupID *int64
 	FolioType      string
 	Status         string
+	// CancelledWithBalance keeps the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee.
+	CancelledWithBalance bool
 }
 
 // PaymentFilter narrows the cashier list.

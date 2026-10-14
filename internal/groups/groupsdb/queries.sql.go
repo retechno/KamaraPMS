@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -142,9 +143,27 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Booki
 	return i, err
 }
 
+const currencyDecimals = `-- name: CurrencyDecimals :one
+SELECT currency_decimals::int FROM properties WHERE tenant_id = $1 AND id = $2
+`
+
+type CurrencyDecimalsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The decimals of the currency of the property, for the amounts the group reads show.
+func (q *Queries) CurrencyDecimals(ctx context.Context, arg CurrencyDecimalsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, currencyDecimals, arg.TenantID, arg.PropertyID)
+	var currency_decimals int32
+	err := row.Scan(&currency_decimals)
+	return currency_decimals, err
+}
+
 const getGroup = `-- name: GetGroup :one
 SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, g.contact_guest_id, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
+       (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')::int AS cancelled_reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
 FROM booking_groups g
@@ -159,27 +178,28 @@ type GetGroupParams struct {
 }
 
 type GetGroupRow struct {
-	ID               int64
-	TenantID         int64
-	PropertyID       int64
-	Code             string
-	Name             string
-	CompanyID        *int64
-	ContactName      *string
-	ContactEmail     *string
-	ContactPhone     *string
-	ArrivalDate      civil.Date
-	DepartureDate    civil.Date
-	Notes            *string
-	IsActive         bool
-	CreatedAt        time.Time
-	CreatedBy        *int64
-	UpdatedAt        time.Time
-	UpdatedBy        *int64
-	ContactGuestID   *int64
-	CompanyName      *string
-	ReservationCount int32
-	RoomCount        int32
+	ID                        int64
+	TenantID                  int64
+	PropertyID                int64
+	Code                      string
+	Name                      string
+	CompanyID                 *int64
+	ContactName               *string
+	ContactEmail              *string
+	ContactPhone              *string
+	ArrivalDate               civil.Date
+	DepartureDate             civil.Date
+	Notes                     *string
+	IsActive                  bool
+	CreatedAt                 time.Time
+	CreatedBy                 *int64
+	UpdatedAt                 time.Time
+	UpdatedBy                 *int64
+	ContactGuestID            *int64
+	CompanyName               *string
+	ReservationCount          int32
+	CancelledReservationCount int32
+	RoomCount                 int32
 }
 
 func (q *Queries) GetGroup(ctx context.Context, arg GetGroupParams) (GetGroupRow, error) {
@@ -206,6 +226,7 @@ func (q *Queries) GetGroup(ctx context.Context, arg GetGroupParams) (GetGroupRow
 		&i.ContactGuestID,
 		&i.CompanyName,
 		&i.ReservationCount,
+		&i.CancelledReservationCount,
 		&i.RoomCount,
 	)
 	return i, err
@@ -250,6 +271,7 @@ func (q *Queries) GetGroupForUpdate(ctx context.Context, arg GetGroupForUpdatePa
 const listGroups = `-- name: ListGroups :many
 SELECT g.id, g.tenant_id, g.property_id, g.code, g.name, g.company_id, g.contact_name, g.contact_email, g.contact_phone, g.arrival_date, g.departure_date, g.notes, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by, g.contact_guest_id, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
+       (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')::int AS cancelled_reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
 FROM booking_groups g
@@ -273,27 +295,28 @@ type ListGroupsParams struct {
 }
 
 type ListGroupsRow struct {
-	ID               int64
-	TenantID         int64
-	PropertyID       int64
-	Code             string
-	Name             string
-	CompanyID        *int64
-	ContactName      *string
-	ContactEmail     *string
-	ContactPhone     *string
-	ArrivalDate      civil.Date
-	DepartureDate    civil.Date
-	Notes            *string
-	IsActive         bool
-	CreatedAt        time.Time
-	CreatedBy        *int64
-	UpdatedAt        time.Time
-	UpdatedBy        *int64
-	ContactGuestID   *int64
-	CompanyName      *string
-	ReservationCount int32
-	RoomCount        int32
+	ID                        int64
+	TenantID                  int64
+	PropertyID                int64
+	Code                      string
+	Name                      string
+	CompanyID                 *int64
+	ContactName               *string
+	ContactEmail              *string
+	ContactPhone              *string
+	ArrivalDate               civil.Date
+	DepartureDate             civil.Date
+	Notes                     *string
+	IsActive                  bool
+	CreatedAt                 time.Time
+	CreatedBy                 *int64
+	UpdatedAt                 time.Time
+	UpdatedBy                 *int64
+	ContactGuestID            *int64
+	CompanyName               *string
+	ReservationCount          int32
+	CancelledReservationCount int32
+	RoomCount                 int32
 }
 
 func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]ListGroupsRow, error) {
@@ -334,6 +357,7 @@ func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]ListG
 			&i.ContactGuestID,
 			&i.CompanyName,
 			&i.ReservationCount,
+			&i.CancelledReservationCount,
 			&i.RoomCount,
 		); err != nil {
 			return nil, err
@@ -347,7 +371,7 @@ func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]ListG
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT r.id, r.confirmation_number, r.status, r.company_id,
+SELECT r.id, r.confirmation_number, r.status, r.company_id, r.version,
        -- the status staff see: DisplayStatus (reservations/model.go) in SQL, as the list of reservations has it
        (CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
              WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
@@ -357,6 +381,8 @@ SELECT r.id, r.confirmation_number, r.status, r.company_id,
              WHEN agg.n_no_show > 0 THEN 'NO_SHOW'
              ELSE 'CANCELLED' END)::text AS display_status,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
+       (agg.n_waiting)::int AS rooms_cancellable, (agg.n_checked_in + agg.n_completed)::int AS rooms_in_house_or_done, agg.n_no_show::int AS rooms_no_show, agg.n_cancelled::int AS rooms_cancelled,
+       hold.held AS held_balance,
        COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name
 FROM reservations r
 CROSS JOIN LATERAL (
@@ -366,9 +392,15 @@ CROSS JOIN LATERAL (
            count(*) FILTER (WHERE l.status = 'CHECKED_IN') AS n_checked_in,
            count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) AS n_waiting,
            count(*) FILTER (WHERE l.status = 'COMPLETED') AS n_completed,
-           count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show
+           count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show,
+           count(*) FILTER (WHERE l.status = 'CANCELLED') AS n_cancelled
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
+CROSS JOIN LATERAL (
+    SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS held
+    FROM folios f JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+    WHERE f.property_id = r.property_id AND f.reservation_id = r.id AND f.stay_id IS NULL AND f.status = 'OPEN'
+) hold
 LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id
 WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.booking_group_id = $3
 ORDER BY r.id
@@ -385,13 +417,20 @@ type ListMembersRow struct {
 	ConfirmationNumber string
 	Status             string
 	CompanyID          *int64
+	Version            int32
 	DisplayStatus      string
 	ArrivalDate        civil.Date
 	DepartureDate      civil.Date
 	RoomCount          int32
+	RoomsCancellable   int32
+	RoomsInHouseOrDone int32
+	RoomsNoShow        int32
+	RoomsCancelled     int32
+	HeldBalance        decimal.Decimal
 	GuestName          string
 }
 
+// what the open folios of the reservation that have no stay hold: a deposit is a credit (negative), a fee or a charge a debit. A cancelled reservation that still holds something is what the follow-up is about.
 func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error) {
 	rows, err := q.db.Query(ctx, listMembers, arg.TenantID, arg.PropertyID, arg.GroupID)
 	if err != nil {
@@ -406,10 +445,16 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 			&i.ConfirmationNumber,
 			&i.Status,
 			&i.CompanyID,
+			&i.Version,
 			&i.DisplayStatus,
 			&i.ArrivalDate,
 			&i.DepartureDate,
 			&i.RoomCount,
+			&i.RoomsCancellable,
+			&i.RoomsInHouseOrDone,
+			&i.RoomsNoShow,
+			&i.RoomsCancelled,
+			&i.HeldBalance,
 			&i.GuestName,
 		); err != nil {
 			return nil, err

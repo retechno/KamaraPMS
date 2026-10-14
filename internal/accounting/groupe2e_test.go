@@ -102,7 +102,7 @@ func TestAGroupFromBookingToTheCloseOfItsMaster(t *testing.T) {
 		stayID[i], folioOf[i] = r.Stay.ID, stayFolio(t, h, r.Stay.ID)
 	}
 	// the clock of the test stands still, so a deposit and the check-in of its row carry the same instant; in service the deposit of a row is taken first, a moment before the check-in, and that moment
-	// is what makes it an advance deposit (2310) and not a settlement
+	// is what makes it an advance deposit (2310) and not a settlement. This is the shift the owner noted for a separate PR that stores is_deposit when the payment is posted: see doc 30 section 15.7
 	must(t, h.Exec(t, `UPDATE stays SET actual_check_in_at = actual_check_in_at + interval '1 second'`))
 	// the repeat of the whole request in a new one finds everything and takes no deposit again
 	again, err := h.Front.GroupCheckIn(h.admin, h.propID, group, "gci-2", frontdesk.GroupCheckInInput{Rows: []frontdesk.GroupCheckInRow{rows[0], rows[1], rows[2], rows[3]}})

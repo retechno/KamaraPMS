@@ -64,6 +64,27 @@ describe('FoliosView', () => {
     expect(w.get('[data-testid=empty]').text()).toContain('No folios')
   })
 
+  it('keeps the follow-up of a cancellation: the filter asks the server for the cancelled reservations that still hold something', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['folio.read'] }] } as never
+    usePropertyStore().currentId = 7
+    GET = vi.fn().mockResolvedValue({ data: { data: [] } })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    await router.push('/folios?cancelled_with_balance=true') // the link of the night audit
+    const w = mount(FoliosView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect(GET.mock.calls[0]![1].params.query).toMatchObject({ cancelled_with_balance: true })
+    expect(GET.mock.calls[0]![1].params.query.status).toBeUndefined() // the folios of all statuses, not only the open ones
+    expect((w.get('[name=cancelled_with_balance]').element as HTMLInputElement).checked).toBe(true)
+    expect(w.get('[data-testid=follow-up-filter]').text()).toBe('Cancelled reservations with a balance')
+    // unticked: the plain list again
+    await w.get('[name=cancelled_with_balance]').setValue(false)
+    await w.get('[role=search]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)![1].params.query.cancelled_with_balance).toBeUndefined()
+  })
+
   it('needs folio.read', async () => {
     const w = mountView(['guest.read'])
     await flushPromises()

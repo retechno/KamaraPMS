@@ -31,8 +31,10 @@ type Group struct {
 	Notes            string     `json:"notes,omitempty"`
 	IsActive         bool       `json:"is_active"`
 	ReservationCount int        `json:"reservation_count"`
-	RoomCount        int        `json:"room_count"`
-	CreatedAt        time.Time  `json:"created_at"`
+	// CancelledReservationCount is how many reservations of the group are cancelled: with a reservation_count of 0 and a count above 0 the group is cancelled (there is no status column; it is derived).
+	CancelledReservationCount int       `json:"cancelled_reservation_count"`
+	RoomCount                 int       `json:"room_count"`
+	CreatedAt                 time.Time `json:"created_at"`
 }
 
 // Member is a reservation of a group.
@@ -47,6 +49,15 @@ type Member struct {
 	ArrivalDate   civil.Date `json:"arrival_date"`
 	DepartureDate civil.Date `json:"departure_date"`
 	RoomCount     int        `json:"room_count"`
+	// Version is the version of the reservation, which a cancellation of the group names.
+	Version int32 `json:"version"`
+	// The rooms of the reservation by what a cancellation of the group can do with them: those waiting (draft or confirmed) are cancelled; those checked in or completed are skipped.
+	RoomsCancellable   int `json:"rooms_cancellable"`
+	RoomsInHouseOrDone int `json:"rooms_in_house_or_done"`
+	RoomsNoShow        int `json:"rooms_no_show"`
+	RoomsCancelled     int `json:"rooms_cancelled"`
+	// HeldBalance is what the open folios of the reservation without a stay hold (a deposit is negative).
+	HeldBalance string `json:"held_balance"`
 }
 
 // Input is the editable part of a group (the code is fixed at creation).

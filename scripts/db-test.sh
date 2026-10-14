@@ -103,6 +103,15 @@ section up "$(ls "$ROOT"/migrations/00076_*.sql)" | psql_run
 rp_after=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
 if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00076 again changed the rights ($rp_before -> $rp_after)" >&2; exit 1; fi
 
+echo "==> migration 00077 (the right to cancel a whole group) on roles with and without the right it follows"
+psql_run < "$ROOT/db/tests/migration_00077_pre.sql"
+section up "$(ls "$ROOT"/migrations/00077_*.sql)" | psql_run
+psql_run < "$ROOT/db/tests/migration_00077_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+rp_before=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
+section up "$(ls "$ROOT"/migrations/00077_*.sql)" | psql_run
+rp_after=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
+if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00077 again changed the rights ($rp_before -> $rp_after)" >&2; exit 1; fi
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

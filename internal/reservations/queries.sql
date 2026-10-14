@@ -395,3 +395,35 @@ LEFT JOIN rooms rm ON rm.property_id = l.property_id AND rm.id = l.room_id
 LEFT JOIN guests g ON g.tenant_id = l.tenant_id AND g.id = COALESCE(l.guest_id, res.guest_id)
 WHERE res.tenant_id = @tenant_id AND res.property_id = @property_id AND res.booking_group_id = @group_id
 ORDER BY res.id, l.id;
+
+-- The deposits a reservation holds on its open folios without a stay (the folio the deposits of a reservation that has not arrived go to), with what of each can still be refunded: the amount less the refunds
+-- that were posted against it. A voided payment holds nothing. The group cancellation shows them so that a person can decide, room by room, to keep them, refund them or turn them into a fee.
+-- name: ListHeldDeposits :many
+SELECT p.id AS payment_id, p.payment_number, p.payment_method, p.amount::numeric AS amount, f.id AS folio_id, f.folio_number, f.reservation_id,
+       (p.amount - COALESCE((SELECT sum(rf.amount) FROM payments rf WHERE rf.property_id = p.property_id AND rf.refund_of_payment_id = p.id AND rf.status = 'POSTED'), 0))::numeric AS refundable
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND f.reservation_id = ANY(@reservation_ids::bigint[])
+  AND f.stay_id IS NULL AND f.status = 'OPEN' AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED' AND p.payment_method <> 'CITY_LEDGER'
+  AND p.amount > COALESCE((SELECT sum(rf.amount) FROM payments rf WHERE rf.property_id = p.property_id AND rf.refund_of_payment_id = p.id AND rf.status = 'POSTED'), 0)
+ORDER BY p.id;
+
+-- The group a request names: its code for the entry of the audit.
+-- name: GroupBrief :one
+SELECT id, code FROM booking_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The reservations of a group that have no live room and still hold something on their open folios without a stay: a deposit that was kept, a fee not yet paid. It is the follow-up of a cancellation of the
+-- group, the same set the folio list shows with cancelled_with_balance and the night audit warns of.
+-- name: ListGroupHoldings :many
+SELECT r.id AS reservation_id, r.confirmation_number,
+       COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name, hold.held::numeric AS held_balance
+FROM reservations r
+LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id
+CROSS JOIN LATERAL (
+    SELECT COALESCE(sum(i.debit - i.credit), 0) AS held
+    FROM folios f JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+    WHERE f.property_id = r.property_id AND f.reservation_id = r.id AND f.stay_id IS NULL AND f.status = 'OPEN'
+) hold
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id AND hold.held <> 0
+  AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = r.property_id AND l.reservation_id = r.id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))
+ORDER BY r.id;

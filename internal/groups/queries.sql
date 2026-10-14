@@ -11,6 +11,7 @@ RETURNING *;
 -- name: GetGroup :one
 SELECT g.*, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
+       (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')::int AS cancelled_reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
 FROM booking_groups g
@@ -23,6 +24,7 @@ SELECT * FROM booking_groups WHERE tenant_id = @tenant_id AND property_id = @pro
 -- name: ListGroups :many
 SELECT g.*, c.name AS company_name,
        (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status <> 'CANCELLED')::int AS reservation_count,
+       (SELECT count(*) FROM reservations r WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND r.status = 'CANCELLED')::int AS cancelled_reservation_count,
        (SELECT count(*) FROM reservation_rooms l JOIN reservations r ON r.id = l.reservation_id
          WHERE r.property_id = g.property_id AND r.booking_group_id = g.id AND l.status <> 'CANCELLED')::int AS room_count
 FROM booking_groups g
@@ -55,7 +57,7 @@ WHERE r.property_id = @property_id AND r.booking_group_id = @group_id AND r.stat
   AND r.company_id IS DISTINCT FROM sqlc.narg(company_id)::bigint;
 
 -- name: ListMembers :many
-SELECT r.id, r.confirmation_number, r.status, r.company_id,
+SELECT r.id, r.confirmation_number, r.status, r.company_id, r.version,
        -- the status staff see: DisplayStatus (reservations/model.go) in SQL, as the list of reservations has it
        (CASE WHEN r.status = 'DRAFT' THEN 'DRAFT'
              WHEN r.status = 'CANCELLED' THEN 'CANCELLED'
@@ -65,6 +67,8 @@ SELECT r.id, r.confirmation_number, r.status, r.company_id,
              WHEN agg.n_no_show > 0 THEN 'NO_SHOW'
              ELSE 'CANCELLED' END)::text AS display_status,
        agg.arrival_date::date AS arrival_date, agg.departure_date::date AS departure_date, agg.room_count::int AS room_count,
+       (agg.n_waiting)::int AS rooms_cancellable, (agg.n_checked_in + agg.n_completed)::int AS rooms_in_house_or_done, agg.n_no_show::int AS rooms_no_show, agg.n_cancelled::int AS rooms_cancelled,
+       hold.held AS held_balance,
        COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name
 FROM reservations r
 CROSS JOIN LATERAL (
@@ -74,12 +78,23 @@ CROSS JOIN LATERAL (
            count(*) FILTER (WHERE l.status = 'CHECKED_IN') AS n_checked_in,
            count(*) FILTER (WHERE l.status IN ('CONFIRMED', 'DRAFT')) AS n_waiting,
            count(*) FILTER (WHERE l.status = 'COMPLETED') AS n_completed,
-           count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show
+           count(*) FILTER (WHERE l.status = 'NO_SHOW') AS n_no_show,
+           count(*) FILTER (WHERE l.status = 'CANCELLED') AS n_cancelled
     FROM reservation_rooms l WHERE l.reservation_id = r.id
 ) agg
+-- what the open folios of the reservation that have no stay hold: a deposit is a credit (negative), a fee or a charge a debit. A cancelled reservation that still holds something is what the follow-up is about.
+CROSS JOIN LATERAL (
+    SELECT COALESCE(sum(i.debit - i.credit), 0)::numeric AS held
+    FROM folios f JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id
+    WHERE f.property_id = r.property_id AND f.reservation_id = r.id AND f.stay_id IS NULL AND f.status = 'OPEN'
+) hold
 LEFT JOIN guests gu ON gu.tenant_id = r.tenant_id AND gu.id = r.guest_id
 WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.booking_group_id = @group_id
 ORDER BY r.id;
 
 -- name: CompanyActive :one
 SELECT is_active FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The decimals of the currency of the property, for the amounts the group reads show.
+-- name: CurrencyDecimals :one
+SELECT currency_decimals::int FROM properties WHERE tenant_id = @tenant_id AND id = @property_id;

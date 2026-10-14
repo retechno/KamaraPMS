@@ -1,6 +1,6 @@
 # 30. Groups: bulk rooms, folio transfers, the master folio and group check-in (APPROVED; part A is being built, the rest is design only)
 
-Status: **approved by the owner; parts A, B, C and E are built (PR 1 to PR 4; see sections 12, 13 and 14)** (the decisions are in section 9; the owner's changes to part B are in 4.3 and 4.5). The decisions listed in the request of the owner are taken as agreed. Where one of them meets a platform rule or the design in force, section 1 says so with the reason; nothing was changed silently. Read first: `18-architecture-decisions.md` section 3 (folio model, rule 2 the resolver, rule 4 when a rule applies, rule 6 the transfer, rule 7 split billing, 3.9 deposits, 3.13 the master folio kept for later), `28-check-in-panel.md`, `08-backlog.md`, and the groups paragraph of `README.md`.
+Status: **approved by the owner; parts A, B, C, E and F are built (PR 1 to PR 6; see sections 12, 13, 14 and 15)** (the decisions are in section 9; the owner's changes to part B are in 4.3 and 4.5). The decisions listed in the request of the owner are taken as agreed. Where one of them meets a platform rule or the design in force, section 1 says so with the reason; nothing was changed silently. Read first: `18-architecture-decisions.md` section 3 (folio model, rule 2 the resolver, rule 4 when a rule applies, rule 6 the transfer, rule 7 split billing, 3.9 deposits, 3.13 the master folio kept for later), `28-check-in-panel.md`, `08-backlog.md`, and the groups paragraph of `README.md`.
 
 Words: a **booking group** is `booking_groups` (a conference, a tour). A **transaction group** is `folio_item_groups` (the A/B/C/D heading of a bill, `20-transaction-group.md`): not meant here, and nothing below reads or writes it. The letters **A, B, C, E** of the request name the parts of this document (there is no D); each part is one PR.
 
@@ -10,6 +10,7 @@ Words: a **booking group** is `booking_groups` (a conference, a tour). A **trans
 | B | Transfer by item and by charge code, balance transfer, wider targets | **00074** | 2 |
 | C | Master folio, group routing, role-based `is_deposit`, closing, invoices | **00075** | 3 |
 | E | Group check-in with partial success, group payment section, deposits | none (uses C) | 4 |
+| F | Cancel the rooms of a group, the follow-up of what is kept, reinstate | **00077** (`group.cancel`) | 6 |
 
 ## 1. Findings and conflicts with what exists (read this first)
 
@@ -280,7 +281,7 @@ All the proposals of this document were approved; the owner's changes are marked
 3. Confirmation e-mails of a batch are **suppressed**; one e-mail for the group follows later (not in these PRs).
 4. `guests.is_placeholder` and `booking_groups.contact_guest_id` (00073). Placeholders are **left out of guest search**, shown **muted with a badge**, the name **cut to 100 characters**.
 5. A bulk booking is **confirmed by default**; a draft can be chosen.
-6. **Cancelling a whole group is a separate, small PR later**, not now.
+6. **Cancelling a whole group is a separate, small PR later**, not now. (Built as part F, section 15.)
 7. `folio.transfer_any` is **built and given to no built-in role**. `folio.master_manage` (open the master, set the routing) and `folio.master_close` (close it) are new permissions.
 8. A master **without a company is allowed**, the invoice goes to the group contact; **the route of its faktur pajak is to be confirmed with the tax consultant** (marked in 5.4).
 9. A master still open after every member has checked out is a **warning** in the night audit, not a blocker.
@@ -335,7 +336,7 @@ Every PR finishes with: build, vet, lint (0 issues), `go test ./...`, `scripts/d
 
 ## 11. Not in this design
 
-Allotment; a cancel of the whole group (decision 5); a percentage split of a charge; a payment moved between folios; routing by date range; an exclusion per scope; several masters per group; moving a credit balance; a master for a reservation that is in no group; sending the group confirmation e-mail (decision 2, later); the guest merge of placeholders.
+Allotment; a percentage split of a charge; a payment moved between folios; routing by date range; an exclusion per scope; several masters per group; moving a credit balance; a master for a reservation that is in no group; sending the group confirmation e-mail (decision 2, later); the guest merge of placeholders.
 
 ## 12. As built: part B (PR 2, migration 00074)
 
@@ -472,3 +473,58 @@ The estimate comes from **one batch**: `GET /arrivals?booking_group_id=&with_est
 - **The readiness column no longer repeats "Deposit PAYxxx"** for a room whose deposit was received: the deposit column says it ("Received PAYxxx · 200,000"). The list of rooms checked in under the table keeps its note, because those rooms have left the table.
 - **The descriptions of folio lines are stored in English and never changed;** what is shown or printed follows the language. One function for the documents (`Lang.FolioDescription`, which replaces `TransferDescription`) and one for the screens (`folioDescription` in `web/src/utils/folioDescription.ts`) know the same patterns: "Room 209 - 12 Oct 2026" (the month in the language: "Kamar 209 - 12 Okt 2026"), "Payment PAYxxx (BANK_TRANSFER)" and "Refund PAYxxx (CASH)" (with the method in words: "Pembayaran PAYxxx (Transfer bank)"), "Transfer from/to FOLxxx", "Reversal: ..." (the part after the colon follows the same rules) and "Adjustment: reason" (the reason is what a person typed and stays). Any other text, what people typed, is shown as it was posted. **Where it is used:** the invoice and the guest bill (`fillInvoiceLines`, which is also the path of the master folio), the folio screen (the line, and the title of the dialog of a correction), the list of what a transfer moved and the dialog of a return. The payment receipt does not print the description of a folio line (it prints the method, the number and the remarks of the payment), the statement of a company prints the descriptions of the city ledger; both are unchanged. A room whose number is the word "service" would read as a room night ("Room service - 12 Oct 2026"); room numbers are not words, and a charge typed with that text on a stay is the only case, which is accepted.
 - **The test of a whole group** (`internal/accounting/groupe2e_test.go`, real PostgreSQL): four rooms of one group over three days (one left out of the routing; two leave early), the master opened with the routing of the room nights and the minibar, the check-in of the group with a deposit for two rooms and a deposit of the group on the master, a repeat of the check-in that takes no deposit again, charges (a minibar posted to the master for the stay of A, the minibar of the room left out moved to the master by a transfer between folios, a laundry that is not routed), the refund of a deposit at the check-out, four night audits, check-outs one after the other with the last room that fills the master (the notice and the warning of the night audit appear exactly then and go when the master is closed), the payment of the rest and the close of the master. On every day it checks that the reconciliation agrees, that the account of the transfers (1215) is zero, that the advance deposits (2310) are the deposits not yet used or released, and at the end that the room, minibar and laundry revenue are each posted once and that no night is in the register twice. The clock of the test stands still, so the test moves the check-in of the stays one second later than their deposits (in service the deposit of a row is taken first and is earlier than the check-in, which is what makes it an advance deposit).
+
+## 15. As built: part F, cancelling the rooms of a group (PR 6, migration 00077)
+
+Decision 5 of section 9, answered by the owner on 2026-10-14. A group has no status column, so nothing in the schema says "cancelled": the screens derive it (a group is cancelled when it has reservations and none of them is left: `reservation_count` 0 and `cancelled_reservation_count` above 0 on the group read).
+
+### 15.1 The request
+
+`POST /groups/{id}/cancellations` (Idempotency-Key required; **`group.cancel`**, new; checked for the whole request: without it 403 and nothing is done, and `reservation.cancel` is not enough). Body: one `reason` (required, 500 characters) and `rows` of `{reservation_id, version}`, up to 100 (`TOO_MANY_ROWS`, `GROUP_CANCEL_EMPTY`), each once. The server takes them in ascending order of reservation id, **each in its own transaction** (the order of locks is the global one: business day, then the reservation and its rooms), and the answer is 200 whatever the rows did. The screen sends 20 rows at a time, with a key for each part.
+
+- **A room in house is skipped, not cancelled** (decision 1). A reservation with a room waiting and a room in house is **partly cancelled**: the waiting rooms are cancelled one by one with the same rules as `CancelLine` (the reservation stays, its version moves, one entry `reservation.room_cancelled` for each room). A reservation with no room in house is cancelled whole, as `POST /reservations/{id}/cancel` does (`reservation.cancelled`, the rooms lose their room so the inventory is free again). A room that is a no-show is skipped (`NO_SHOW`); a room that is checked in or out is skipped (`ALREADY_CHECKED_IN`).
+- **A row** is `CANCELLED`, `PARTLY_CANCELLED`, `ALREADY_CANCELLED`, `SKIPPED` (with its code) or `FAILED` (the code and message of the cancellation: `VERSION_CONFLICT`, `RESERVATION_NOT_IN_GROUP`, ...). Each room of the row says `CANCELLED`, `SKIPPED` or `ALREADY_CANCELLED`. The counters add up the rows and the rooms.
+- **Not all or nothing**, as for the check-in: a hundred rooms with one that cannot be cancelled is the ordinary case, and one transaction for all would hold the locks of a hundred reservations at once (decision 9 of section 1).
+- **A repeat finds what the first did.** A reservation that is cancelled answers `ALREADY_CANCELLED`, and one with nothing left that waits answers from its rooms, **whatever version the repeat names** (the answer is read without a lock). So a lost answer is repeated with the same rows and nothing is done twice; a reservation that still has a room waiting is cancelled only if its version is the one the person saw (`VERSION_CONFLICT` on its row otherwise).
+- **No e-mail.** The e-mail of a cancellation does not exist for a single reservation either, so there is nothing to suppress in the batch (the confirmation e-mail of the bulk booking is the one that was suppressed, part A). The group e-mail stays deferred.
+- **Audit.** The Idempotency-Key is the `batch_id` of the entries of the reservations and of one entry `group.cancelled` (`rooms_cancelled`, `rooms_skipped`, the counters, the reason). A request that cancelled nothing writes no entry of the group.
+
+### 15.2 Money: the cancellation moves none
+
+A deposit of a room (on the folio of the reservation without a stay) and the deposit of the group (on the master) stay where they are. The row of a cancelled reservation lists the deposits that can still be refunded (`deposits`: the payment, the amount, what can still be refunded after earlier refunds). **What to do is decided one reservation at a time, with what exists:**
+
+- **keep it**: nothing is done; it stays in the follow-up (15.3);
+- **refund it**: the refund of the payment (`payment.refund`, an approver, a method of the property), for the whole deposit or a part;
+- **turn it into the fee of the cancellation**: the manual fee of document 21 (`folio.post_charge`; the person gives the amount, nothing is calculated), which the deposit on the folio pays; what is left of the deposit stays held until it is refunded.
+
+There is no rule that decides for the person, no percentage and no first-night calculation (document 21 keeps those out). **Deferred, on purpose (decision 3 of the owner):** a shortcut "refund every deposit that is left" and a shortcut "the same fee for every room". Only the action for one reservation exists. The no-show fee and the bulk no-show of the night audit are unchanged.
+
+**The master.** The cancellation does not touch the master folio. When every room of the group is cancelled the group page says that the master still holds the deposit (or owes), that it is refunded on the folio of the master (the same refund), and then closed (`folio.master_close`; the close needs a zero balance, as always, and every room over, which a cancelled room is).
+
+### 15.3 The follow-up of what is kept (decision 4)
+
+A deposit that is kept is not forgotten. It is the same set in four places, all by one rule: **the open folio without a stay of a reservation that has no live room (all rooms cancelled or no-show) whose balance is not zero.**
+
+1. **The group page**, "What the cancelled reservations still hold" (`GET /groups/{id}/holdings`, `folio.read`): each reservation with what it holds and the decision buttons of 15.2. It lasts until the balance is zero.
+2. **The list of folios**, the filter "Cancelled reservations with a balance" (`GET /folios?cancelled_with_balance=true`), which is where the night audit links to. (The notice on the page of a reservation, `requires_folio_resolution`, stays as it was: it speaks only to the person who cancelled that one reservation.)
+3. **The night audit**, a warning that never blocks (it already existed as `open_folios_of_cancelled_reservations`: it was built for a single cancelled reservation and covers this case as it is). Its text now says that the reservation is cancelled and that a negative balance is a deposit that was kept; each folio is a link, and one more link opens the list of all of them. A test holds the warning through a cancellation of a group, a refund and a fee.
+4. **The master of a group that has left** has its own warning (part C), which a cancelled group also triggers.
+
+### 15.4 Reinstating
+
+`POST /groups/{id}/reinstatements` (Idempotency-Key; `reservation.reinstate`, checked for the whole request; the same rows, no reason). It is `Reinstate` of one reservation for each row, in its own transaction, so **the answer is per row**: `REINSTATED`, `SKIPPED` (`NOT_CANCELLED`) or `FAILED`. A reservation whose rooms were taken by other bookings since it was cancelled is **`FAILED` with `ROOM_UNAVAILABLE`** (the availability errors `ROOM_TYPE_NOT_AVAILABLE`, `BED_NOT_AVAILABLE` and `ROOM_NOT_AVAILABLE` of the single reinstatement are told with this one code on a row); the others come back, without a room assigned, as for one reservation. A reservation that was only partly cancelled (a room in house stayed) has nothing to reinstate: its cancelled rooms were cancelled one by one, and there is no reinstatement of a room. The entries carry the `batch_id`, and the group has one entry `group.reinstated`.
+
+### 15.5 Reads, API, migration
+
+- `GET /groups/{id}/reservations` (the members) carries, for each reservation, `version`, the rooms by what a cancellation does with them (`rooms_cancellable`, `rooms_in_house_or_done`, `rooms_no_show`, `rooms_cancelled`) and `held_balance`. The group read carries `cancelled_reservation_count`. Both are added fields.
+- **Migration 00077** grants `group.cancel` to the roles that hold `correction.approve`, once (the pattern of 00076: roles are the tenant's data, a role created later is the tenant's choice); it has a migration test (`db/tests/migration_00077_*.sql`) for a role with the right it follows, one with the cashier-level rights, one without, one that has it already, and another tenant.
+- New codes: `GROUP_CANCEL_EMPTY`, `RESERVATION_NOT_IN_GROUP`, `ROOM_UNAVAILABLE` (and `TOO_MANY_ROWS`, which exists).
+
+### 15.6 Tests
+
+Real PostgreSQL (`internal/accounting/groupcancel_test.go`): five rooms of which one is in house, a reservation of two rooms with one in house (partly cancelled), a stale version, a reservation of another booking, a repeat under another key; the right (403, nothing done) and the shape of the request; three deposits and a deposit of the group, decided (kept, refunded, turned into a fee, refunded on the master) with the reconciliation, 2310, 1215 (zero) and the fee in 4510 (once); the follow-up in the list of folios, in the holdings and in the warnings of the night audit; the reinstatement with a room that was taken. The route (`internal/app/groupcancel_api_test.go`), the web components and the migration have tests of their own.
+
+### 15.7 Noted for later
+
+- **`is_deposit` stored at posting (a separate PR, after this one).** The rule of a guest or company folio decides "deposit" by comparing the time of the payment with the time of the check-in (`paid_at < actual_check_in_at`, view `folio_item_gl`, migration 00075). With the same instant the payment is a settlement, not a deposit (1210 and not 2310); in service the deposit of a group check-in is taken first, in a transaction of its own, a moment before the check-in, so it is rarely the same, but the design does not guarantee it. The owner leans to **(b): decide `is_deposit` when the payment is posted for a guest or company folio and store it**, with the posting of a payment and the check-in both locking the stay row so that the order is certain; the master keeps its rule by id. The old data is filled in with the rule as it is today, and a migration test with the reconciliation before and after must be equal. A short plan comparing (a), a marker of the check-in, with (b) is to be sent before any code. Until then the test of a whole group moves the check-in of its stays one second later than their deposits (a comment there points here).
+- Master invoice: the section "Room" lists only rooms whose charges are on the master (the room left out of the routing is listed now); and the PDF shows the name of the guest on each line ("Kamar 102 - 9 Okt 2026 · Budi Peserta"), as the screen does.

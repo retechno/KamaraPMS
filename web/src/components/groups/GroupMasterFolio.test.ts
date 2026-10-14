@@ -31,7 +31,7 @@ const posted = [
 
 const ALL = ['reservation.read', 'folio.read', 'folio.reverse', 'folio.master_manage', 'folio.master_close']
 const mounted: VueWrapper[] = []
-function mountPanel(permissions = ALL, data: object = routing(), movable: object[] = []) {
+function mountPanel(permissions = ALL, data: object = routing(), movable: object[] = [], allCancelled = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'boss@hotel.test', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -44,7 +44,7 @@ function mountPanel(permissions = ALL, data: object = routing(), movable: object
   PUT = vi.fn(async () => ({ data: routing() }))
   POST = vi.fn(async () => ({ data: { master: master(), created: true } }))
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
-  const w = mount(GroupMasterFolio, { props: { groupId: 4, active: true }, global: { plugins: [pinia, router] }, attachTo: document.body })
+  const w = mount(GroupMasterFolio, { props: { groupId: 4, active: true, allCancelled }, global: { plugins: [pinia, router] }, attachTo: document.body })
   mounted.push(w)
   return w
 }
@@ -148,6 +148,18 @@ describe('GroupMasterFolio', () => {
     await flushPromises()
     expect(paid.get('[data-testid=master-close]').attributes('disabled')).toBeUndefined()
     expect(paid.find('[data-testid=master-close-hint]').exists()).toBe(false)
+  })
+
+  it('says, when every room of the group is cancelled, that the master still holds a deposit and what to do with it', async () => {
+    const w = mountPanel(ALL, routing({ master: master({ balance: '-500000' }) }), [], true)
+    await flushPromises()
+    expect(w.get('[data-testid=master-cancelled-hint]').text()).toBe('Every room of this group is cancelled, and the master still holds -500,000. Refund it to whoever paid (on the folio of the master), then close it.')
+    const settled = mountPanel(ALL, routing({ master: master({ balance: '0' }) }), [], true)
+    await flushPromises()
+    expect(settled.find('[data-testid=master-cancelled-hint]').exists()).toBe(false)
+    const live = mountPanel(ALL, routing({ master: master({ balance: '-500000' }) }))
+    await flushPromises()
+    expect(live.find('[data-testid=master-cancelled-hint]').exists()).toBe(false) // a group with rooms left is not told it is cancelled
   })
 
   it('offers to move what is already posted, in one request with one key, one reason and one approval', async () => {
