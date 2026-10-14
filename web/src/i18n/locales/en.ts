@@ -4933,7 +4933,7 @@ export const en = {
     kind: 'Correction',
     rule: 'Rule',
     limit: 'Limit',
-    approver: 'The approver needs',
+    approver: 'The approver needs the permission',
     noLimit: 'No amount',
     limitPlaceholder: 'Amount',
     amountOf: 'The amount is',

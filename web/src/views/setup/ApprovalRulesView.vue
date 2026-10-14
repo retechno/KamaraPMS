@@ -13,6 +13,7 @@ import { t } from '@/i18n'
 import { useApprovalRulesStore } from '@/stores/approvalRules'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { permissionText } from '@/utils/permissions'
 
 /**
  * The rule of approval of each kind of correction at the property (docs/architecture/32-distinct-approver.md): anyone who may approve (the default), always someone other than the person who makes the
@@ -119,7 +120,7 @@ watch(() => property.currentId, load, { immediate: true })
           <div class="min-w-0">
             <strong class="block text-sm">{{ t(`approvalRules.kind_${r.kind}`) }}</strong>
             <small class="block text-xs text-muted-foreground">{{ t('approvalRules.amountOf') }} {{ t(`approvalRules.amount_${r.kind}`).replace(/^./, (c) => c.toLowerCase()) }}</small>
-            <small class="block text-xs text-muted-foreground">{{ t('approvalRules.approver') }} <code>{{ r.permission }}</code></small>
+            <small class="block text-xs text-muted-foreground" :data-testid="`permission-${r.kind}`">{{ t('approvalRules.approver') }}: {{ permissionText({ code: r.permission, description: r.permission }) }}</small>
           </div>
           <div>
             <label class="sr-only" :for="`rule-select-${r.kind}`">{{ t('approvalRules.rule') }}: {{ t(`approvalRules.kind_${r.kind}`) }}</label>

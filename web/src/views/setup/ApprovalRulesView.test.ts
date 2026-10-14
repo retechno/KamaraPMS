@@ -104,6 +104,15 @@ describe('ApprovalRulesView', () => {
     expect(w.get('select[name=rule_REFUND]').attributes('disabled')).toBeDefined()
   })
 
+  it('names the permission of the approver in words, not as a code', async () => {
+    const w = mountView()
+    await flushPromises()
+    const text = w.get('[data-testid=permission-REFUND]').text()
+    expect(text).toContain('The approver needs the permission')
+    expect(text).toContain('Approve corrections')
+    expect(text).not.toContain('correction.approve')
+  })
+
   it('speaks Indonesian', async () => {
     await setLocale('id')
     const w = mountView(['property.manage'], rules({ BUDGET: { rule: 'DISTINCT', threshold: null } }))
