@@ -130,6 +130,8 @@ describe('StayDetailView', () => {
       posted_room_charges: posted,
       room_charges: [{ folio_id: 8, folio_number: 'FOL000008', folio_type: 'GUEST', nights: 1, total: '900000' }, { folio_id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', nights: 1, total: '900000' }],
     })).toBe('Checked out with 1 room charge(s) posted. Room charges of this stay: 1 night(s) (900,000) on folio FOL000008; 1 night(s) (900,000) on master folio FOL000030.')
+    // nothing was posted by the check-out and the nights stand on the master: no "0 charges posted", straight to where they stand
+    expect(await checkedOutWith({ room_charges: [{ folio_id: 30, folio_number: 'FOL000030', folio_type: 'MASTER', nights: 1, total: '900000' }] })).toBe('Room charges of this stay: 1 night(s) (900,000) on master folio FOL000030.')
     // nothing posted by the check-out, and the room charges of this room go to the master
     expect(await checkedOutWith({ room_charges_master: { folio_id: 30, folio_number: 'FOL000030' } })).toBe('Checked out. The room charges of this room go to the master folio FOL000030.')
     // on the folio of the guest only: the sentence is the one it was

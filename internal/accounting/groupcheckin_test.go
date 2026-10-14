@@ -2,6 +2,7 @@ package accounting_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"kamarapms/internal/folios"
@@ -392,5 +393,90 @@ func TestTheCheckOutSaysWhereTheRoomChargesOfTheStayStand(t *testing.T) {
 	rest := out(ms[1])
 	if rest.RoomChargesMaster != nil || len(rest.RoomCharges) != 2 {
 		t.Fatalf("a room that stays out: %+v %+v", rest.RoomCharges, rest.RoomChargesMaster)
+	}
+}
+
+// The arrivals of a group say what became of the deposit of each room, and a deposit that was voided or refunded in full is never answered as taken: the row is refused with a clear code and is not checked
+// in on money that is not there. The keys of the group check-in are scoped to the property (and so to the tenant).
+func TestADepositThatWasVoidedOrRefundedIsNotAnsweredAsTaken(t *testing.T) {
+	h := setupHotel(t)
+	r103 := h.Room(t, h.admin, h.propID, h.typ.ID, "103", housekeeping.Clean)
+	must(t, h.Exec(t, `UPDATE room_housekeeping SET status = 'DIRTY' WHERE room_id IN ($1, $2, $3)`, h.r101.ID, h.r102.ID, r103.ID)) // every room is not ready: the deposits are taken and the check-ins fail
+	group, rs := h.groupArrivals(t, h.r101, h.r102, r103)
+	rows := []frontdesk.GroupCheckInRow{h.gciRow(rs[0], h.r101), h.gciRow(rs[1], h.r102), h.gciRow(rs[2], r103)}
+	for i := range rows {
+		rows[i].Deposit = &frontdesk.GroupDepositInput{Amount: "500000", PaymentMethod: "BANK_TRANSFER"}
+	}
+	first := h.gci(t, group, "K1", rows...)
+	if first.DepositsRecorded != 3 || first.Failed != 3 {
+		t.Fatalf("three deposits taken, three rooms not ready: %+v", first)
+	}
+	depositOf := func(i int) int64 {
+		var id int64
+		must(t, h.Pool.QueryRow(context.Background(), `SELECT p.id FROM payments p JOIN folios f ON f.id = p.folio_id WHERE f.reservation_id = $1`, rs[i].ID).Scan(&id))
+		return id
+	}
+	arrivals := func() map[int64]*folios.GroupDepositState {
+		list, err := h.Front.Arrivals(h.admin, h.propID, nil, frontdesk.ArrivalFilter{BookingGroupID: &group})
+		must(t, err)
+		out := map[int64]*folios.GroupDepositState{}
+		for _, a := range list {
+			out[a.ReservationRoomID] = a.GroupDeposit
+		}
+		return out
+	}
+	// the arrivals say it is received, with its number and amount
+	for _, r := range rows {
+		if d := arrivals()[r.LineID]; d == nil || d.Status != "RECEIVED" || d.Amount != "500000" || d.PaymentNumber == "" {
+			t.Fatalf("a deposit that was taken: %+v", d)
+		}
+	}
+	// room 1: the deposit is voided; room 2: refunded in full; room 3: refunded in part
+	_, err := h.Folios.Void(h.admin, h.propID, depositOf(0), folios.CorrectionInput{Reason: "taken by mistake", Approval: h.approval()})
+	must(t, err)
+	_, err = h.Folios.Refund(h.admin, h.propID, depositOf(1), "rf-2", folios.RefundInput{Amount: "500000", PaymentMethod: "CASH", Reason: "the guest changed plans", Approval: h.approval()})
+	must(t, err)
+	_, err = h.Folios.Refund(h.admin, h.propID, depositOf(2), "rf-3", folios.RefundInput{Amount: "100000", PaymentMethod: "CASH", Reason: "a part back", Approval: h.approval()})
+	must(t, err)
+	got := arrivals()
+	if got[rows[0].LineID].Status != "VOIDED" || got[rows[1].LineID].Status != "REFUNDED" || got[rows[2].LineID].Status != "RECEIVED" || got[rows[2].LineID].Refunded != "100000" {
+		t.Fatalf("what became of the deposits: %+v %+v %+v", got[rows[0].LineID], got[rows[1].LineID], got[rows[2].LineID])
+	}
+
+	// every room is ready now and the same rows are sent again in a new request, deposit and all
+	for _, r := range []rooms.Room{h.r101, h.r102, r103} {
+		h.setClean(t, r)
+	}
+	second := h.gci(t, group, "K2", rows...)
+	voided, refunded, partly := rowOf(t, second, rows[0].LineID), rowOf(t, second, rows[1].LineID), rowOf(t, second, rows[2].LineID)
+	if voided.Status != frontdesk.RowFailed || voided.Code != "DEPOSIT_VOIDED" || voided.Deposit == nil || voided.Deposit.Status != frontdesk.RowFailed {
+		t.Fatalf("a voided deposit is not answered as taken: %+v", voided)
+	}
+	if refunded.Status != frontdesk.RowFailed || refunded.Code != "DEPOSIT_REFUNDED" {
+		t.Fatalf("a deposit refunded in full is not answered as taken: %+v", refunded)
+	}
+	if partly.Status != frontdesk.RowCheckedIn || partly.Deposit == nil || partly.Deposit.Status != "REPLAYED" {
+		t.Fatalf("a deposit refunded in part is still the deposit: %+v", partly)
+	}
+	if h.Count(t, `SELECT count(*) FROM stays`) != 1 {
+		t.Fatal("only the room whose deposit stands was checked in")
+	}
+	if h.paymentsOf(t, rs[0].ID) != 1 || h.paymentsOf(t, rs[1].ID) != 2 {
+		t.Fatal("no new deposit was taken by the refused rows (the second count is the deposit and its refund)")
+	}
+	// without a deposit in the row the room is checked in (the deposit, if any, is recorded on the folio)
+	voided2 := rows[0]
+	voided2.Deposit = nil
+	if r := rowOf(t, h.gci(t, group, "K3", voided2), voided2.LineID); r.Status != frontdesk.RowCheckedIn {
+		t.Fatalf("the room checks in without a deposit: %+v", r)
+	}
+
+	// the keys are scoped to the property: the unique indexes are (property, key), and every read of them asks for the tenant and the property
+	for _, idx := range []string{"payments_idempotency_uk", "stays_idempotency_uk"} {
+		var def string
+		must(t, h.Pool.QueryRow(context.Background(), `SELECT indexdef FROM pg_indexes WHERE indexname = $1`, idx).Scan(&def))
+		if !strings.Contains(def, "(property_id, idempotency_key)") {
+			t.Fatalf("%s: %s", idx, def)
+		}
 	}
 }

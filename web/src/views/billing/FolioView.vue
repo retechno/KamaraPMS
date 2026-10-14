@@ -469,7 +469,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <ErrorNotice :error="error" :inline="!folio" />
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
-  <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t('groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>
+  <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t(Number(folio.balance) < 0 ? 'groupMaster.closeNeedsRefund' : 'groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>
   <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
   <p v-else-if="!can('folio.read')" class="muted" data-testid="no-access">{{ t('folio.noAccess') }}</p>
 

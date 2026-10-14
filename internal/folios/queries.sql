@@ -715,3 +715,10 @@ WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.stay_id = 
   AND NOT EXISTS (SELECT 1 FROM folio_items rv WHERE rv.property_id = i.property_id AND rv.reverses_item_id = i.id)
 GROUP BY i.folio_id, f.folio_number, f.folio_type
 ORDER BY min(i.id);
+
+-- The payments (not refunds) that carry one of these idempotency keys, with what was refunded of each: the deposits of a group check-in, read by the key made from the room.
+-- name: ListPaymentsByKeys :many
+SELECT p.id, p.payment_number, p.amount, p.status, p.idempotency_key,
+       COALESCE((SELECT sum(r.amount) FROM payments r WHERE r.property_id = p.property_id AND r.refund_of_payment_id = p.id AND r.status = 'POSTED'), 0)::numeric AS refunded
+FROM payments p
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.payment_type = 'PAYMENT' AND p.idempotency_key = ANY(@keys::text[]);

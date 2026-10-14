@@ -2677,7 +2677,9 @@ paths:
     post:
       operationId: postDeposit
       summary: Take a deposit on a draft or confirmed reservation (payment.post)
-      description: The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+      description: |
+        The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+        **Changed (group check-in):** the same Idempotency-Key with another `amount` or `payment_method` than the payment it found is now `IDEMPOTENCY_KEY_REUSED` (422). It used to answer the old payment as if it were the new one. A repeat with the same payload answers as before.
       tags: [folios]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
@@ -2819,7 +2821,8 @@ paths:
         A row with a `deposit` records it on the reservation first (an advance deposit, refundable) and then checks the room in; a deposit that was taken and a check-in that failed leaves the deposit where it is. A request
         with a deposit row by a person without `payment.post` is refused whole (403) before anything is written.
         The keys of a row come from the line, not from the request: a repeat of the request under any Idempotency-Key returns the same stay for a room that was checked in and takes no deposit twice; the same deposit with
-        another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
+        another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. A deposit of a room that was voided (`DEPOSIT_VOIDED`) or refunded in full (`DEPOSIT_REFUNDED`) is not answered as taken: the row is `FAILED` with that code and is not checked in; send the room without a deposit, and record any new deposit on the folio of the reservation.
+        The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
       tags: [frontdesk]
       parameters:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
@@ -11095,6 +11098,18 @@ components:
         guest_has_phone: { type: boolean }
         guest_is_placeholder: { type: boolean, description: The guest is a placeholder of a rooming list that has no name yet. }
         estimate_total: { type: string, description: The total of the charge engine for the nights of the line; only with with_estimate. }
+        group_deposit:
+          description: The deposit a group check-in took for this room (found by the key made from the room), only on the arrivals of a group; null when none. The screen shows it as received and does not send it again.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [status, payment_id, payment_number, amount, refunded]
+              properties:
+                status: { type: string, enum: [RECEIVED, VOIDED, REFUNDED], description: "RECEIVED includes a deposit refunded in part; VOIDED and REFUNDED (in full) are deposits that are no longer there." }
+                payment_id: { type: integer, format: int64 }
+                payment_number: { type: string }
+                amount: { type: string }
+                refunded: { type: string }
         rate:
           type: object
           required: [rate_plan_code, rate_plan_name, amount, price_mode]

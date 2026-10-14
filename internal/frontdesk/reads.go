@@ -303,6 +303,16 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 			return nil, err
 		}
 	}
+	var groupDeposits map[string]folios.GroupDepositState
+	if f.BookingGroupID != nil {
+		keys := make([]string, 0, len(rows))
+		for _, r := range rows {
+			keys = append(keys, groupDepositKey(r.LineID))
+		}
+		if groupDeposits, err = s.folios.GroupDeposits(ctx, p.TenantID, propertyID, keys); err != nil {
+			return nil, err
+		}
+	}
 	out := make([]Arrival, len(rows))
 	for i, r := range rows {
 		a := Arrival{
@@ -316,6 +326,9 @@ func (s *Service) Arrivals(ctx context.Context, propertyID int64, date *civil.Da
 		}
 		if r.NightAmount != nil {
 			a.Rate.Amount, a.Rate.PriceMode = r.NightAmount.StringFixed(prop.CurrencyDecimals), deref(r.NightPriceMode)
+		}
+		if d, ok := groupDeposits[groupDepositKey(r.LineID)]; ok {
+			a.GroupDeposit = &d
 		}
 		a.GuestNationality, a.GuestIDType, a.GuestHasID, a.GuestHasPhone, a.GuestIsPlaceholder = strings.TrimSpace(deref(r.GuestNationality)), deref(r.GuestIDType), r.GuestHasID, r.GuestHasPhone, r.GuestIsPlaceholder
 		if est, ok := estimates[r.LineID]; ok {

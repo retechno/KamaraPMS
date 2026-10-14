@@ -119,7 +119,8 @@ async function checkedOut(result: CheckOutResult): Promise<void> {
   const where = result.room_charges ?? []
   if (where.some((w) => w.folio_type === 'MASTER')) {
     const parts = where.map((w) => t(w.folio_type === 'MASTER' ? 'stay.chargeAtMaster' : w.folio_type === 'COMPANY' ? 'stay.chargeAtCompany' : 'stay.chargeAtGuest', { n: w.nights, total: formatMoney(w.total), folio: w.folio_number }))
-    notice.value += ` ${t('stay.roomChargesAt', { parts: parts.join('; ') })}`
+    const at = t('stay.roomChargesAt', { parts: parts.join('; ') })
+    notice.value = result.posted_room_charges.length === 0 ? at : `${notice.value} ${at}`
   } else if (result.posted_room_charges.length === 0 && result.room_charges_master) {
     notice.value = t('stay.checkedOutMaster', { folio: result.room_charges_master.folio_number })
   }

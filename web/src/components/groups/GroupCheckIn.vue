@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -7,6 +7,7 @@ import type { Arrival, GroupCheckInResult, GroupRouting } from '@/api/types'
 import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import MoneyInput from '@/components/app/MoneyInput.vue'
 import GroupDepositDialog from '@/components/groups/GroupDepositDialog.vue'
 import ReadinessBadge from '@/components/ReadinessBadge.vue'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,7 @@ import { usePropertyStore } from '@/stores/property'
 import { DEPOSIT_METHODS, type DepositMethod } from '@/utils/checkin'
 import { formatMoney } from '@/utils/format'
 import { GROUP_CHECKIN_CHUNK, chunk, depositProposal, identityHint, rowSelectable, takesDeposit } from '@/utils/groupCheckin'
+import { fromMinor, toMinor } from '@/utils/checkin'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { lineOfArrival } from '@/utils/roomAssign'
 
@@ -49,8 +51,9 @@ const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
 const selected = ref<number[]>([])
+// The deposit of a room is empty until a person fills it (the proposal is a placeholder and a button, never a value that is sent unseen), and so is its method: nothing is recorded by default.
 const deposits = reactive<Record<number, string>>({})
-const method = ref<DepositMethod>('BANK_TRANSFER')
+const methods = reactive<Record<number, DepositMethod | ''>>({})
 const overrideNotReady = ref(false)
 const overrideReason = ref('')
 const running = ref(false)
@@ -61,7 +64,7 @@ const autoOpen = ref(false)
 const depositOpen = ref(false)
 
 let latest = 0
-async function load(): Promise<void> {
+async function load(forgetOldFailures = false): Promise<void> {
   if (!visible.value || pid.value === null) return
   const mine = ++latest
   error.value = null
@@ -76,8 +79,9 @@ async function load(): Promise<void> {
     routing.value = r.data ?? null
     const lines = new Set(rows.value.map((x) => x.reservation_room_id))
     selected.value = selected.value.filter((id) => lines.has(id))
+    // when the person reads the rooms again, a room that failed and is ready now no longer says it failed (the reason was about the room as it was); a room that is still not ready keeps what was said
     for (const a2 of rows.value) {
-      if (deposits[a2.reservation_room_id] === undefined) deposits[a2.reservation_room_id] = depositProposal(a2, routing.value, { incidental: incidental.value, decimals: decimals.value }).amount ?? ''
+      if (forgetOldFailures && a2.readiness.status === 'READY' && outcome[a2.reservation_room_id]?.status === 'FAILED') delete outcome[a2.reservation_room_id]
     }
   } catch (e) {
     if (mine === latest) error.value = e instanceof ApiError ? e : null
@@ -88,14 +92,49 @@ async function load(): Promise<void> {
 watch([() => props.groupId, pid, () => props.reload, visible], () => void load(), { immediate: true })
 
 const proposals = computed(() => new Map(rows.value.map((a) => [a.reservation_room_id, depositProposal(a, routing.value, { incidental: incidental.value, decimals: decimals.value })])))
-const depositColumn = computed(() => canDeposit.value && [...proposals.value.values()].some((p) => p.amount !== null))
+const received = (a: Arrival) => a.group_deposit ?? null
+const depositColumn = computed(() => canDeposit.value && rows.value.some((a) => received(a) !== null || proposals.value.get(a.reservation_room_id)?.amount !== null))
+/** The room's deposit can be typed: a deposit is asked of the room, and none was taken for it already (that one is shown as received and is not sent again). */
+const editable = (a: Arrival): boolean => canDeposit.value && received(a) === null && proposals.value.get(a.reservation_room_id)?.amount !== null
+const proposalOf = (a: Arrival): string => proposals.value.get(a.reservation_room_id)?.amount ?? ''
+const hasProposal = (a: Arrival): boolean => takesDeposit(proposalOf(a), decimals.value)
+function useProposal(a: Arrival): void {
+  deposits[a.reservation_room_id] = proposalOf(a)
+}
+function useProposalAll(): void {
+  for (const a of rows.value) if (editable(a) && hasProposal(a)) useProposal(a)
+}
+/** The method chosen once for every room that has a deposit to take, to be changed room by room. */
+const fillChoice = ref('')
+async function fillMethod(m: string): Promise<void> {
+  if (!m) return
+  for (const a of rows.value) if (editable(a)) methods[a.reservation_room_id] = m as DepositMethod
+  await nextTick()
+  fillChoice.value = '' // the choice is an action, not a state: the list shows its title again
+}
+const depositOf = (a: Arrival): string => (editable(a) ? (deposits[a.reservation_room_id] ?? '') : '')
+const withDeposit = computed(() => chosen.value.filter((a) => takesDeposit(depositOf(a), decimals.value)))
+const missingMethod = computed(() => withDeposit.value.filter((a) => !methods[a.reservation_room_id]).length)
+const depositTotal = computed(() => fromMinor(withDeposit.value.reduce((n, a) => n + toMinor(depositOf(a), decimals.value), 0n), decimals.value))
+const methodCounts = computed(() => {
+  const counts = new Map<string, number>()
+  for (const a of withDeposit.value) {
+    const m = methods[a.reservation_room_id]
+    if (m) counts.set(m, (counts.get(m) ?? 0) + 1)
+  }
+  return [...counts].map(([m, n]) => `${t(`cashier.${m}` as never)} × ${n}`).join(', ')
+})
+/** What the person is about to send, in a line: how many rooms, and the deposits with their total and methods. */
+const sendSummary = computed(() => (withDeposit.value.length === 0
+  ? t('groupCheckIn.sendNoDeposit', { n: chosen.value.length }, chosen.value.length)
+  : t('groupCheckIn.sendDeposit', { n: chosen.value.length, total: formatMoney(depositTotal.value), methods: methodCounts.value }, chosen.value.length)))
 const selectable = (a: Arrival): boolean => rowSelectable(a, overrideNotReady.value && canOverride.value)
 const readyLines = computed(() => rows.value.filter(selectable).map((a) => a.reservation_room_id))
 const isSelected = (a: Arrival): boolean => selected.value.includes(a.reservation_room_id)
 const autoLines = computed(() => rows.value.filter((a) => can('reservation.update') && !a.room_id).map(lineOfArrival))
 const chosen = computed(() => rows.value.filter((a) => isSelected(a) && selectable(a)))
 const needsReason = computed(() => overrideNotReady.value && chosen.value.some((a) => a.readiness.blockers.includes('ROOM_NOT_READY')) && !overrideReason.value.trim())
-const canRun = computed(() => chosen.value.length > 0 && !running.value && !needsReason.value)
+const canRun = computed(() => chosen.value.length > 0 && !running.value && !needsReason.value && missingMethod.value === 0)
 
 function toggle(a: Arrival, on: boolean): void {
   const id = a.reservation_room_id
@@ -107,7 +146,7 @@ const selectReady = (): void => {
 
 function rowBody(a: Arrival) {
   const notReady = a.readiness.blockers.includes('ROOM_NOT_READY')
-  const dep = deposits[a.reservation_room_id] ?? ''
+  const dep = depositOf(a)
   return {
     line_id: a.reservation_room_id,
     version: a.reservation_version,
@@ -117,7 +156,7 @@ function rowBody(a: Arrival) {
     child_count: a.child_count,
     override_room_not_ready: notReady && overrideNotReady.value,
     override_reason: notReady && overrideNotReady.value ? overrideReason.value.trim() : undefined,
-    deposit: canDeposit.value && takesDeposit(dep, decimals.value) ? { amount: dep.trim(), payment_method: method.value } : undefined,
+    deposit: takesDeposit(dep, decimals.value) && methods[a.reservation_room_id] ? { amount: dep.trim(), payment_method: methods[a.reservation_room_id] as DepositMethod } : undefined,
   }
 }
 
@@ -220,14 +259,15 @@ async function depositDone(message: string): Promise<void> {
         <div class="mb-3 flex flex-wrap items-center gap-2" data-testid="group-checkin-bar">
           <Button type="button" variant="outline" size="sm" :disabled="!readyLines.length || running" data-testid="select-ready" @click="selectReady">{{ t('groupCheckIn.selectReady', { n: readyLines.length }) }}</Button>
           <Button v-if="selected.length" type="button" variant="ghost" size="sm" data-testid="select-none" @click="selected = []">{{ t('groupCheckIn.clear') }}</Button>
-          <Button type="button" variant="ghost" size="sm" :disabled="running" data-testid="group-checkin-reload" @click="load">{{ t('groupCheckIn.reload') }}</Button>
+          <Button type="button" variant="ghost" size="sm" :disabled="running" data-testid="group-checkin-reload" @click="load(true)">{{ t('groupCheckIn.reload') }}</Button>
           <Button v-if="autoLines.length" type="button" variant="outline" size="sm" :disabled="running" data-testid="group-auto-assign" @click="autoOpen = true">{{ t('groupCheckIn.autoAssign', { n: autoLines.length }) }}</Button>
-          <label v-if="depositColumn" class="ml-auto inline-flex items-center gap-2 text-sm">
-            <span>{{ t('groupCheckIn.depositMethod') }}</span>
-            <NativeSelect v-model="method" class="w-auto" name="group_checkin_method" data-testid="group-checkin-method">
+          <template v-if="depositColumn">
+            <Button type="button" variant="outline" size="sm" :disabled="running" data-testid="use-proposal-all" @click="useProposalAll">{{ t('groupCheckIn.useProposalAll') }}</Button>
+            <NativeSelect class="ml-auto w-auto" v-model="fillChoice" name="group_checkin_fill_method" :aria-label="t('groupCheckIn.fillMethod')" data-testid="group-checkin-method" @update:model-value="fillMethod(String($event))">
+              <option value="">{{ t('groupCheckIn.fillMethod') }}</option>
               <option v-for="m in DEPOSIT_METHODS" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>
             </NativeSelect>
-          </label>
+          </template>
         </div>
         <div v-if="canOverride && rows.some((a) => a.readiness.blockers.includes('ROOM_NOT_READY'))" class="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="group-checkin-override">
           <label class="inline-flex items-center gap-2"><input v-model="overrideNotReady" type="checkbox" name="override_not_ready" class="size-4 accent-primary" /> {{ t('groupCheckIn.overrideNotReady') }}</label>
@@ -258,8 +298,21 @@ async function depositDone(message: string): Promise<void> {
             </p>
           </template>
           <template #cell-deposit="{ row: a }">
-            <span v-if="proposals.get(a.reservation_room_id)?.amount === null" class="text-muted-foreground" :title="t(`groupCheckIn.basis.${proposals.get(a.reservation_room_id)?.basis}` as never)" :data-testid="`deposit-none-${a.reservation_room_id}`">—</span>
-            <Input v-else v-model="deposits[a.reservation_room_id]" class="w-28 text-right tabular-nums" inputmode="decimal" autocomplete="off" :name="`deposit_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.deposit')" :data-testid="`deposit-${a.reservation_room_id}`" />
+            <p v-if="received(a)" class="m-0 text-right text-sm" :data-testid="`deposit-received-${a.reservation_room_id}`">
+              <template v-if="received(a)?.status === 'RECEIVED'">{{ t('groupCheckIn.received', { number: received(a)?.payment_number ?? '', amount: formatMoney(received(a)?.amount ?? '0') }) }}</template>
+              <template v-else-if="received(a)?.status === 'VOIDED'">{{ t('groupCheckIn.voided', { number: received(a)?.payment_number ?? '' }) }}</template>
+              <template v-else>{{ t('groupCheckIn.refunded', { number: received(a)?.payment_number ?? '' }) }}</template>
+              <span class="block text-xs text-muted-foreground">{{ t('groupCheckIn.moreOnFolio') }}</span>
+            </p>
+            <span v-else-if="!editable(a)" class="text-muted-foreground" :title="t(`groupCheckIn.basis.${proposals.get(a.reservation_room_id)?.basis}` as never)" :data-testid="`deposit-none-${a.reservation_room_id}`">—</span>
+            <div v-else class="flex flex-wrap items-center justify-end gap-1.5">
+              <MoneyInput v-model="deposits[a.reservation_room_id]" class="w-32 text-right tabular-nums placeholder:italic" :decimals="decimals" :placeholder="formatMoney(proposalOf(a))" :name="`deposit_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.deposit')" :data-testid="`deposit-${a.reservation_room_id}`" />
+              <NativeSelect v-model="methods[a.reservation_room_id]" class="w-auto" :name="`deposit_method_${a.reservation_room_id}`" :aria-label="t('groupCheckIn.depositMethod')" :data-testid="`deposit-method-${a.reservation_room_id}`">
+                <option value="">{{ t('groupCheckIn.methodPick') }}</option>
+                <option v-for="m in DEPOSIT_METHODS" :key="m" :value="m">{{ t(`cashier.${m}` as never) }}</option>
+              </NativeSelect>
+              <Button v-if="hasProposal(a)" type="button" variant="ghost" size="sm" :data-testid="`use-proposal-${a.reservation_room_id}`" :title="t(`groupCheckIn.basis.${proposals.get(a.reservation_room_id)?.basis}` as never)" @click="useProposal(a)">{{ t('groupCheckIn.useProposal') }}</Button>
+            </div>
           </template>
         </DataTable>
 
@@ -267,6 +320,8 @@ async function depositDone(message: string): Promise<void> {
           <p class="m-0 text-sm text-muted-foreground" data-testid="group-checkin-progress">
             <template v-if="running">{{ t('groupCheckIn.progress', { done: progress.done, total: progress.total }) }}</template>
             <template v-else-if="needsReason">{{ t('groupCheckIn.reasonMissing') }}</template>
+            <template v-else-if="missingMethod > 0">{{ t('groupCheckIn.stillNeeded', { what: t('groupCheckIn.missingMethod', { n: missingMethod }, missingMethod) }) }}</template>
+            <template v-else-if="chosen.length">{{ sendSummary }}</template>
             <template v-else>{{ t('groupCheckIn.chosen', { n: chosen.length }) }}</template>
           </p>
           <Button type="button" :disabled="!canRun" data-testid="group-checkin-run" @click="checkIn">{{ t('groupCheckIn.run', { n: chosen.length }) }}</Button>
@@ -283,6 +338,6 @@ async function depositDone(message: string): Promise<void> {
       <p v-if="failed.length" class="m-0 mt-2 text-sm text-muted-foreground" data-testid="group-checkin-failed">{{ t('groupCheckIn.failedHint', { n: failed.length }) }}</p>
     </CardContent>
   </Card>
-  <AutoAssignDialog v-if="visible" v-model:open="autoOpen" :lines="autoLines" @changed="load" />
+  <AutoAssignDialog v-if="visible" v-model:open="autoOpen" :lines="autoLines" @changed="load()" />
   <GroupDepositDialog v-if="depositOpen && routing?.master" :master="routing.master" @done="depositDone" @close="depositOpen = false" />
 </template>

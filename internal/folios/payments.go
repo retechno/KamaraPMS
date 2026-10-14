@@ -236,6 +236,11 @@ func (s *Service) DepositInBatch(ctx context.Context, propertyID, reservationID 
 	out, err := replayLoop(key,
 		func() (PaymentResult, bool, error) {
 			// the same key is the same deposit: the amount and the method must be the ones that were recorded, or the answer is not silently the old one
+			if batch != "" { // a group check-in: the deposit of a room that was voided or refunded since is not answered as if it were there
+				if err := s.requireDepositNotSpent(ctx, p.TenantID, propertyID, key); err != nil {
+					return PaymentResult{}, false, err
+				}
+			}
 			res, ok, err := s.paymentReplay(ctx, p.TenantID, propertyID, key, 0, func(pay foliosdb.Payment) bool {
 				return pay.PaymentType == PaymentTypePayment && pay.Amount.Equal(amount) && pay.PaymentMethod == in.PaymentMethod
 			})
@@ -288,6 +293,70 @@ func (s *Service) DepositInBatch(ctx context.Context, propertyID, reservationID 
 			return out, err
 		})
 	return out, replayed, err
+}
+
+// requireDepositNotSpent refuses a deposit key whose payment was voided (DEPOSIT_VOIDED) or refunded in full (DEPOSIT_REFUNDED): the money is not there, so the answer "found, not taken again" would be
+// untrue and the room would be checked in on a deposit that does not exist. The key stays what it is (the payment keeps it); another deposit for the room is recorded on the folio of the reservation.
+func (s *Service) requireDepositNotSpent(ctx context.Context, tenantID, propertyID int64, key string) error {
+	pay, err := s.q(ctx).GetPaymentByKey(ctx, foliosdb.GetPaymentByKeyParams{TenantID: tenantID, PropertyID: propertyID, IdempotencyKey: &key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if pay.PaymentType != PaymentTypePayment {
+		return nil
+	}
+	if pay.Status == "VOIDED" {
+		return apperr.Conflict("DEPOSIT_VOIDED", "the deposit of this room was voided: record a new deposit on the folio of the reservation").WithContext("payment_number", pay.PaymentNumber)
+	}
+	refunds, err := s.q(ctx).SumRefundsOf(ctx, foliosdb.SumRefundsOfParams{PropertyID: propertyID, PaymentID: &pay.ID})
+	if err != nil {
+		return err
+	}
+	if refunds.Refunded.GreaterThanOrEqual(pay.Amount) {
+		return apperr.Conflict("DEPOSIT_REFUNDED", "the deposit of this room was refunded: record a new deposit on the folio of the reservation").WithContext("payment_number", pay.PaymentNumber)
+	}
+	return nil
+}
+
+// GroupDepositState is what became of the deposit a group check-in took for a room, read by its key: RECEIVED (partly refunded included), VOIDED or REFUNDED (in full).
+type GroupDepositState struct {
+	Status        string `json:"status"`
+	PaymentID     int64  `json:"payment_id"`
+	PaymentNumber string `json:"payment_number"`
+	Amount        string `json:"amount"`
+	Refunded      string `json:"refunded"`
+}
+
+// GroupDeposits reads the deposits of group check-ins by their keys (no permission: the caller has its own), for the arrivals of a group.
+func (s *Service) GroupDeposits(ctx context.Context, tenantID, propertyID int64, keys []string) (map[string]GroupDepositState, error) {
+	out := map[string]GroupDepositState{}
+	if len(keys) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).ListPaymentsByKeys(ctx, foliosdb.ListPaymentsByKeysParams{TenantID: tenantID, PropertyID: propertyID, Keys: keys})
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		st := GroupDepositState{Status: "RECEIVED", PaymentID: r.ID, PaymentNumber: r.PaymentNumber, Amount: fixed(r.Amount, decimals), Refunded: fixed(r.Refunded, decimals)}
+		switch {
+		case r.Status == "VOIDED":
+			st.Status = "VOIDED"
+		case r.Refunded.GreaterThanOrEqual(r.Amount):
+			st.Status = "REFUNDED"
+		}
+		if r.IdempotencyKey != nil {
+			out[*r.IdempotencyKey] = st
+		}
+	}
+	return out, nil
 }
 
 // depositFolio returns the reservation's open folio that has no stay, locked, or creates it. A new folio is our

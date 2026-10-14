@@ -70,6 +70,10 @@ describe('FolioView: the master folio of a group', () => {
     await flushPromises()
     expect(owing.get('[data-testid=master-close-hint]').text()).toContain('must be zero before it closes')
     expect(owing.get('[data-testid=close]').attributes('disabled')).toBeDefined() // the button says the same: not while the balance is not zero
+    // a credit is refunded or moved, not "paid"
+    const credit = mountView({ ...master, balance: '-2300000' }, ['folio.read', 'folio.master_close'])
+    await flushPromises()
+    expect(credit.get('[data-testid=master-close-hint]').text()).toBe('The balance of the master folio (-2,300,000) is a credit: refund it to whoever paid, or move it to another folio, before it closes.')
     const settled = mountView(master, ['folio.read', 'folio.master_close'])
     await flushPromises()
     expect(settled.find('[data-testid=master-close-hint]').exists()).toBe(false)

@@ -3109,6 +3109,56 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 	return items, nil
 }
 
+const listPaymentsByKeys = `-- name: ListPaymentsByKeys :many
+SELECT p.id, p.payment_number, p.amount, p.status, p.idempotency_key,
+       COALESCE((SELECT sum(r.amount) FROM payments r WHERE r.property_id = p.property_id AND r.refund_of_payment_id = p.id AND r.status = 'POSTED'), 0)::numeric AS refunded
+FROM payments p
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.payment_type = 'PAYMENT' AND p.idempotency_key = ANY($3::text[])
+`
+
+type ListPaymentsByKeysParams struct {
+	TenantID   int64
+	PropertyID int64
+	Keys       []string
+}
+
+type ListPaymentsByKeysRow struct {
+	ID             int64
+	PaymentNumber  string
+	Amount         decimal.Decimal
+	Status         string
+	IdempotencyKey *string
+	Refunded       decimal.Decimal
+}
+
+// The payments (not refunds) that carry one of these idempotency keys, with what was refunded of each: the deposits of a group check-in, read by the key made from the room.
+func (q *Queries) ListPaymentsByKeys(ctx context.Context, arg ListPaymentsByKeysParams) ([]ListPaymentsByKeysRow, error) {
+	rows, err := q.db.Query(ctx, listPaymentsByKeys, arg.TenantID, arg.PropertyID, arg.Keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPaymentsByKeysRow{}
+	for rows.Next() {
+		var i ListPaymentsByKeysRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PaymentNumber,
+			&i.Amount,
+			&i.Status,
+			&i.IdempotencyKey,
+			&i.Refunded,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPaymentsOrdered = `-- name: ListPaymentsOrdered :many
 SELECT p.id, p.tenant_id, p.property_id, p.payment_number, p.folio_id, p.payment_type, p.payment_method, p.amount, p.paid_at, p.business_date, p.reference_number, p.refund_of_payment_id, p.status, p.voided_at, p.voided_by, p.void_reason, p.idempotency_key, p.remarks, p.created_at, p.created_by, p.approved_by, p.company_id, p.shift_id, p.mdr_rate, p.mdr_fee, p.expected_settlement_date, p.mdr_vat_rate, p.mdr_vat
 FROM payments p

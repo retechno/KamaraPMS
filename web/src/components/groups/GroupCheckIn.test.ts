@@ -112,26 +112,126 @@ describe('GroupCheckIn', () => {
     expect(w.get('[data-testid=group-checkin-done]').text()).toBe('Room 101 checked in: STY000001 · Deposit PAY000001: 200,000 (taken by an earlier request, not taken again)')
   })
 
-  it('shows the deposit column only where it can be taken, with the amount by the rule of each room, and sends it with the row', async () => {
+  const typeIn = async (w: VueWrapper, sel: string, value: string) => {
+    const el = w.get(sel).element as HTMLInputElement
+    el.value = value
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+  }
+  const pickMethod = async (w: VueWrapper, line: number, method: string) => {
+    await w.get(`[data-testid=deposit-method-${line}]`).setValue(method)
+    await flushPromises()
+  }
+  const progress = (w: VueWrapper) => w.get('[data-testid=group-checkin-progress]').text()
+
+  it('leaves the deposit and its method empty, shows the proposal as a placeholder and a button, and says what is still needed', async () => {
     const w = mountCard()
     await flushPromises()
-    // the room goes to the master (ROOM): the incidental deposit alone; the room that is left out (3) follows the panel: estimate and incidental
-    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).value).toBe('200000')
-    expect((w.get('[data-testid=deposit-3]').element as HTMLInputElement).value).toBe('1200000')
+    // nothing is filled: the proposal (the incidental deposit for the room that goes to the master, the estimate and the incidental for the room that is left out) is only a placeholder
+    const d1 = w.get('[data-testid=deposit-1]').element as HTMLInputElement
+    expect(d1.value).toBe('')
+    expect(d1.placeholder).toBe('200,000')
+    expect((w.get('[data-testid=deposit-3]').element as HTMLInputElement).placeholder).toBe('1,200,000')
+    expect((w.get('[data-testid=deposit-method-1]').element as HTMLSelectElement).value).toBe('')
     await w.get('[data-testid=select-ready]').trigger('click')
+    expect(progress(w)).toBe('2 rooms, no deposit')
+    // "Use proposal" fills the amount, with the separators; the method is still a choice
+    await w.get('[data-testid=use-proposal-1]').trigger('click')
+    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).value).toBe('200,000')
+    expect(progress(w)).toBe('Still needed: the method of the deposit of 1 room')
+    expect(w.get('[data-testid=group-checkin-run]').attributes('disabled')).toBeDefined()
+    await pickMethod(w, 1, 'BANK_TRANSFER')
+    expect(progress(w)).toBe('2 rooms, total deposit 200,000 (Bank transfer × 1)')
+    expect(w.get('[data-testid=group-checkin-run]').attributes('disabled')).toBeUndefined()
+    // a typed amount is grouped as it is typed and kept as a plain decimal
+    await typeIn(w, '[data-testid=deposit-3]', '1500000')
+    expect((w.get('[data-testid=deposit-3]').element as HTMLInputElement).value).toBe('1,500,000')
+    expect(progress(w)).toBe('Still needed: the method of the deposit of 1 room')
+    // the choice of the method for every room fills them all, to be changed room by room
+    await w.get('[data-testid=group-checkin-method]').setValue('CASH')
+    await flushPromises()
+    expect(progress(w)).toBe('2 rooms, total deposit 1,700,000 (Cash × 2)')
+    expect((w.get('[data-testid=group-checkin-method]').element as HTMLSelectElement).value).toBe('') // the choice is an action: the list shows its title again
+    await pickMethod(w, 3, 'BANK_TRANSFER')
+    expect(progress(w)).toBe('2 rooms, total deposit 1,700,000 (Cash × 1, Bank transfer × 1)')
     POST.mockResolvedValueOnce({ data: { batch_id: 'k', rows: [{ ...rowResult(1), deposit: { status: 'RECORDED', payment_number: 'PAY000001', amount: '200000' } }, rowResult(3)], checked_in: 2, already_checked_in: 0, failed: 0, deposits_recorded: 1 } })
     await w.get('[data-testid=group-checkin-run]').trigger('click')
     await flushPromises()
     const rows = POST.mock.calls[0]![1].body.rows
-    expect(rows[0].deposit).toEqual({ amount: '200000', payment_method: 'BANK_TRANSFER' })
-    expect(rows[1].deposit).toEqual({ amount: '1200000', payment_method: 'BANK_TRANSFER' })
-    expect(w.get('[data-testid=deposit-note-1]').text()).toBe('Deposit PAY000001: 200,000')
-    // everything goes to the master: no deposit asked, and no column
+    expect(rows[0].deposit).toEqual({ amount: '200000', payment_method: 'CASH' })
+    expect(rows[1].deposit).toEqual({ amount: '1500000', payment_method: 'BANK_TRANSFER' })
+    expect(w.get('[data-testid=group-checkin-done]').text()).toContain('Deposit PAY000001: 200,000')
+  })
+
+  it('sends no deposit for a room with an empty amount, whatever its method', async () => {
+    const w = mountCard()
+    await flushPromises()
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await pickMethod(w, 1, 'CASH')
+    expect(progress(w)).toBe('2 rooms, no deposit')
+    await w.get('[data-testid=group-checkin-run]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls[0]![1].body.rows.map((r: { deposit?: unknown }) => r.deposit)).toEqual([undefined, undefined])
+  })
+
+  it('shows a deposit that was received as received, locked, and does not send it again; the proposals button skips it', async () => {
+    const got = { status: 'RECEIVED', payment_id: 5, payment_number: 'PAY000001', amount: '200000', refunded: '0' }
+    const w = mountCard(ALL, [arrival(1, { group_deposit: got }), arrival(3)])
+    await flushPromises()
+    expect(w.get('[data-testid=deposit-received-1]').text()).toContain('Received PAY000001 · 200,000')
+    expect(w.find('[data-testid=deposit-1]').exists()).toBe(false) // it cannot be changed here: more is recorded on the folio
+    expect(w.get('[data-testid=deposit-received-1]').text()).toContain('Another deposit is recorded on the folio.')
+    await w.get('[data-testid=use-proposal-all]').trigger('click')
+    await w.get('[data-testid=group-checkin-method]').setValue('CASH')
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=group-checkin-run]').trigger('click')
+    await flushPromises()
+    const rows = POST.mock.calls[0]![1].body.rows
+    expect(rows[0].deposit).toBeUndefined() // the room that has its deposit
+    expect(rows[1].deposit).toEqual({ amount: '1200000', payment_method: 'CASH' })
+  })
+
+  it('says a deposit was voided or refunded, and does not send it', async () => {
+    const w = mountCard(ALL, [arrival(1, { group_deposit: { status: 'VOIDED', payment_id: 5, payment_number: 'PAY000001', amount: '200000', refunded: '0' } }), arrival(3, { group_deposit: { status: 'REFUNDED', payment_id: 6, payment_number: 'PAY000002', amount: '200000', refunded: '200000' } })])
+    await flushPromises()
+    expect(w.get('[data-testid=deposit-received-1]').text()).toContain('Deposit PAY000001 was voided')
+    expect(w.get('[data-testid=deposit-received-3]').text()).toContain('Deposit PAY000002 was refunded')
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await w.get('[data-testid=group-checkin-run]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls[0]![1].body.rows.map((r: { deposit?: unknown }) => r.deposit)).toEqual([undefined, undefined])
+  })
+
+  it('locks the deposit of a room whose check-in failed after it was taken, and the repeat sends none for it', async () => {
+    const w = mountCard(ALL, [arrival(1), arrival(3)])
+    await flushPromises()
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await w.get('[data-testid=use-proposal-1]').trigger('click')
+    await pickMethod(w, 1, 'BANK_TRANSFER')
+    POST.mockResolvedValueOnce({ data: { batch_id: 'k', rows: [{ line_id: 1, status: 'FAILED', code: 'ROOM_NOT_READY', message: 'x', deposit: { status: 'RECORDED', payment_number: 'PAY000001', amount: '200000' } }, rowResult(3)], checked_in: 1, already_checked_in: 0, failed: 1, deposits_recorded: 1 } })
+    // the list as it is after: the room is not ready and its deposit is on the arrival
+    const after = [arrival(1, { readiness: { status: 'BLOCKED', blockers: ['ROOM_NOT_READY'] }, group_deposit: { status: 'RECEIVED', payment_id: 5, payment_number: 'PAY000001', amount: '200000', refunded: '0' } })]
+    GET = vi.fn(async (path: string) => (path.endsWith('/arrivals') ? { data: { data: after } } : { data: routing() }))
+    await w.get('[data-testid=group-checkin-run]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=deposit-1]').exists()).toBe(false) // the amount cannot be changed any more
+    expect(w.get('[data-testid=deposit-received-1]').text()).toContain('Received PAY000001 · 200,000')
+    // the room is ready again: the repeat does not send the deposit
+    GET = vi.fn(async (path: string) => (path.endsWith('/arrivals') ? { data: { data: [{ ...after[0], readiness: { status: 'READY', blockers: [] } }] } } : { data: routing() }))
+    await w.get('[data-testid=group-checkin-reload]').trigger('click')
+    await flushPromises()
+    POST.mockResolvedValueOnce({ data: { batch_id: 'k2', rows: [{ ...rowResult(1), deposit: { status: 'REPLAYED', payment_number: 'PAY000001', amount: '200000' } }], checked_in: 1, already_checked_in: 0, failed: 0, deposits_recorded: 0 } })
+    await w.get('[data-testid=group-checkin-run]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls[1]![1].body.rows[0].deposit).toBeUndefined()
+  })
+
+  it('shows no deposit column when everything goes to the master or the person may not take payments', async () => {
     const all = mountCard(ALL, [arrival(1)], routing({ instructions: [{ scope: 'ALL', charge_code_id: null }] }))
     await flushPromises()
     expect(all.find('[data-testid=deposit-1]').exists()).toBe(false)
     expect(all.find('[data-testid=group-checkin-method]').exists()).toBe(false)
-    // without payment.post: no column, and no deposit in the request
     const clerk = mountCard(['reservation.read', 'frontdesk.checkin'])
     await flushPromises()
     expect(clerk.find('[data-testid=deposit-1]').exists()).toBe(false)
@@ -156,6 +256,7 @@ describe('GroupCheckIn', () => {
     await flushPromises()
     expect(w.get('[data-testid=pick-3]').element).toHaveProperty('checked', true)
     expect(w.get('[data-testid=group-checkin-run]').attributes('disabled')).toBeUndefined()
+    expect(w.find('[data-testid=failed-3]').exists()).toBe(false) // it failed because the room was not ready; it is ready now
   })
 
   it('checks in a room that is not ready only with the override and a reason', async () => {
@@ -183,10 +284,21 @@ describe('GroupCheckIn', () => {
     expect(w.get('[data-testid=group-pay-master]').text()).toContain('FOL000030')
     expect(w.get('[data-testid=group-pay-master]').text()).toContain('2,000,000')
     await w.get('[data-testid=group-deposit-open]').trigger('click')
+    // nothing is chosen for the person: the button says what is still needed, and answers as the fields are filled
+    expect(body('[data-testid=group-deposit-save]').attributes('disabled')).toBeDefined()
+    expect(body('[data-testid=group-deposit-missing]').text()).toBe('Still needed: an amount, a method')
     const amount = document.body.querySelector('[name=group_deposit_amount]') as HTMLInputElement
     amount.value = '5000000'
     amount.dispatchEvent(new Event('input', { bubbles: true }))
     await flushPromises()
+    expect(amount.value).toBe('5,000,000')
+    expect(body('[data-testid=group-deposit-missing]').text()).toBe('Still needed: a method')
+    const method = document.body.querySelector('[name=group_deposit_method]') as HTMLSelectElement
+    method.value = 'BANK_TRANSFER'
+    method.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid=group-deposit-missing]')).toBeNull()
+    expect(body('[data-testid=group-deposit-save]').attributes('disabled')).toBeUndefined()
     POST.mockResolvedValueOnce({ data: {} })
     await body('[data-testid=group-deposit-save]').trigger('click')
     await flushPromises()
@@ -217,5 +329,10 @@ describe('GroupCheckIn', () => {
     await flushPromises()
     expect(w.get('[data-testid=group-checkin]').text()).toContain('Check-in grup')
     expect(w.get('[data-testid=group-pay-routing]').text()).toBe('Masuk master folio: biaya kamar.')
+    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).placeholder).toBe('200.000')
+    await w.get('[data-testid=select-ready]').trigger('click')
+    await w.get('[data-testid=use-proposal-1]').trigger('click')
+    expect((w.get('[data-testid=deposit-1]').element as HTMLInputElement).value).toBe('200.000')
+    expect(w.get('[data-testid=group-checkin-progress]').text()).toBe('Masih perlu: metode deposit untuk 1 kamar')
   })
 })

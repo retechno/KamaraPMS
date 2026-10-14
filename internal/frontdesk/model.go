@@ -269,6 +269,9 @@ type Arrival struct {
 	GuestHasID         bool   `json:"guest_has_id"`
 	GuestHasPhone      bool   `json:"guest_has_phone"`
 	GuestIsPlaceholder bool   `json:"guest_is_placeholder"`
+	// GroupDeposit is the deposit a group check-in took for this room, found by the key made from the room (nil: none). The screen shows it as received and does not send it again; a deposit that was voided
+	// or refunded is shown as such and is not sent either (another deposit is recorded on the folio). Read only for the arrivals of a group.
+	GroupDeposit *folios.GroupDepositState `json:"group_deposit"`
 	// Estimate is the total the charge engine gives for the nights of the line; only when the list asks for it (with_estimate), for the deposit proposal of the group check-in.
 	Estimate *string `json:"estimate_total,omitempty"`
 	// Deposit is what the reservation holds before check-in (nil: no deposit folio).

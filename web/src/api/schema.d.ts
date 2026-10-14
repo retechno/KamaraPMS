@@ -2149,6 +2149,7 @@ export interface paths {
         /**
          * Take a deposit on a draft or confirmed reservation (payment.post)
          * @description The payment goes on the reservation's open folio that is not linked to a stay; the first deposit creates it.
+         *     **Changed (group check-in):** the same Idempotency-Key with another `amount` or `payment_method` than the payment it found is now `IDEMPOTENCY_KEY_REUSED` (422). It used to answer the old payment as if it were the new one. A repeat with the same payload answers as before.
          */
         post: operations["postDeposit"];
         delete?: never;
@@ -2268,7 +2269,8 @@ export interface paths {
          *     A row with a `deposit` records it on the reservation first (an advance deposit, refundable) and then checks the room in; a deposit that was taken and a check-in that failed leaves the deposit where it is. A request
          *     with a deposit row by a person without `payment.post` is refused whole (403) before anything is written.
          *     The keys of a row come from the line, not from the request: a repeat of the request under any Idempotency-Key returns the same stay for a room that was checked in and takes no deposit twice; the same deposit with
-         *     another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
+         *     another amount or method is `FAILED` with `IDEMPOTENCY_KEY_REUSED` on its row. A deposit of a room that was voided (`DEPOSIT_VOIDED`) or refunded in full (`DEPOSIT_REFUNDED`) is not answered as taken: the row is `FAILED` with that code and is not checked in; send the room without a deposit, and record any new deposit on the folio of the reservation.
+         *     The Idempotency-Key of the request is the `batch_id` that every audit entry of the request carries.
          */
         post: operations["checkInGroup"];
         delete?: never;
@@ -10070,6 +10072,19 @@ export interface components {
             guest_is_placeholder: boolean;
             /** @description The total of the charge engine for the nights of the line; only with with_estimate. */
             estimate_total?: string;
+            /** @description The deposit a group check-in took for this room (found by the key made from the room), only on the arrivals of a group; null when none. The screen shows it as received and does not send it again. */
+            group_deposit?: null | {
+                /**
+                 * @description RECEIVED includes a deposit refunded in part; VOIDED and REFUNDED (in full) are deposits that are no longer there.
+                 * @enum {string}
+                 */
+                status: "RECEIVED" | "VOIDED" | "REFUNDED";
+                /** Format: int64 */
+                payment_id: number;
+                payment_number: string;
+                amount: string;
+                refunded: string;
+            };
             rate: {
                 rate_plan_code: string;
                 rate_plan_name: string;
