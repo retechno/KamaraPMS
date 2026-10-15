@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kasir · pembayaran</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.method{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;height:84px;padding:0 18px;border:1px solid #e3e6ea;border-radius:12px;background:#fff;font:inherit;color:#1c2128;text-align:left;cursor:pointer}
+.method .t{font-weight:700;font-size:15px}
+.method .s{font-size:12px;color:#626b77}
+.key{height:60px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-size:20px;font-weight:600;color:#1c2128}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex;flex-direction:column">
+  <header style="height:60px;flex-shrink:0;background:#ffffff;border-bottom:1px solid #e3e6ea;display:flex;align-items:center;gap:16px;padding:0 20px">
+    <a href="11-pos-pesanan.dc.html" style="display:flex;align-items:center;gap:6px;text-decoration:none;font-weight:600;font-size:14px;height:40px;padding:0 12px;border:1px solid #e3e6ea;border-radius:8px;color:#1c2128">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Kembali ke bill</a>
+    <div style="font-weight:700;font-size:17px">Pembayaran · R-0123 · Meja 5</div>
+    <div style="flex:1"></div>
+    <div style="font-size:13px;border:1px solid #e3e6ea;border-radius:8px;padding:8px 12px">Shift kasir · Made · laci 1</div>
+  </header>
+
+  <div style="flex:1;display:flex;gap:24px;padding:24px;min-height:0">
+    <section style="flex:1;display:flex;flex-direction:column;gap:16px;min-width:0">
+      <h1 style="margin:0;font-size:22px">Cara bayar</h1>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <button class="method"><span class="t">Tunai</span><span class="s">Laci terbuka otomatis</span></button>
+        <button class="method"><span class="t">Kartu</span><span class="s">Debit / kredit (EDC)</span></button>
+        <button class="method"><span class="t">QRIS</span><span class="s">Tampilkan kode di layar</span></button>
+        <button class="method" style="border:2px solid #1f6f5c;background:#e3f2ee"><span class="t" style="color:#185a4a">Bebankan ke kamar</span><span class="s" style="color:#185a4a">Masuk folio tamu menginap</span></button>
+        <button class="method"><span class="t">Perusahaan</span><span class="s">Piutang perusahaan (city ledger)</span></button>
+        <button class="method"><span class="t">Komplimen</span><span class="s">Perlu persetujuan</span></button>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e3e6ea;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px">
+        <h2 style="margin:0;font-size:17px">Bebankan ke kamar</h2>
+        <div>
+          <label for="kamar" style="display:block;font-size:12px;color:#626b77;margin-bottom:6px">Nomor kamar atau nama tamu</label>
+          <input id="kamar" value="30" style="width:100%;box-sizing:border-box;height:44px;border:1px solid #1f6f5c;border-radius:10px;padding:0 14px;font:inherit;box-shadow:0 0 0 3px #e3f2ee">
+        </div>
+        <div style="display:flex;flex-direction:column;border:1px solid #e3e6ea;border-radius:12px;overflow:hidden">
+          <button style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:0;background:#e3f2ee;font:inherit;text-align:left;color:#1c2128">
+            <div style="width:48px;height:48px;border-radius:10px;background:#2552c4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">304</div>
+            <div style="flex:1"><div style="font-weight:700">Intan Permata</div><div style="font-size:13px;color:#4a5361">Menginap 12 – 16 Okt · FOL000027 · ditagihkan ke tamu</div></div>
+            <div style="text-align:right;font-size:13px"><div style="display:inline-flex;align-items:center;gap:6px;color:#1b7a4b;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>Folio dibuka untuk outlet</div><div style="color:#626b77">Batas 2.000.000 · terpakai 0</div></div>
+          </button>
+          <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-top:1px solid #eef0f2;background:#f6f7f9;color:#4a5361">
+            <div style="width:48px;height:48px;border-radius:10px;background:#eef0f2;color:#4a5361;display:flex;align-items:center;justify-content:center;font-weight:700">305</div>
+            <div style="flex:1"><div style="font-weight:700">Budi Santoso</div><div style="font-size:13px">Menginap 14 – 17 Okt · FOL000031</div></div>
+            <div style="text-align:right;font-size:13px"><div style="display:inline-flex;align-items:center;gap:6px;color:#b4332c;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Folio terkunci untuk outlet</div><div>Minta resepsionis membukanya</div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#4a5361;background:#f6f7f9;border-radius:10px;padding:12px 14px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4a5361" stroke-width="2" aria-hidden="true" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>Di folio tamu muncul satu baris "Restoran Teratai · R-0123" yang bisa dibuka rinciannya. Pendapatan dan pajak tetap tercatat di restoran. Tanda tangan tamu diambil di struk. Resepsionis menerima pemberitahuan setiap ada beban outlet yang masuk.</span>
+        </div>
+      </div>
+    </section>
+
+    <aside style="width:440px;flex-shrink:0;display:flex;flex-direction:column;gap:16px">
+      <div style="background:#fff;border:1px solid #e3e6ea;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#4a5361"><span>Total bill</span><span>453.750</span></div>
+        <div style="font-size:12px;font-weight:600;color:#626b77;margin-top:6px">Pembayaran</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e3e6ea;border-radius:10px">
+          <span style="font-weight:600;flex:1">Tunai</span><span style="font-weight:600">200.000</span>
+          <button aria-label="Hapus pembayaran tunai" style="width:36px;height:36px;border:0;background:transparent;font:inherit;font-size:18px;color:#626b77">×</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:2px solid #1f6f5c;border-radius:10px;background:#e3f2ee">
+          <span style="font-weight:600;flex:1">Kamar 304 · Intan Permata</span><span style="font-weight:700">253.750</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:22px;font-weight:700;margin-top:8px;padding-top:12px;border-top:1px solid #e3e6ea"><span>Sisa</span><span style="color:#1b7a4b">0</span></div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e3e6ea;border-radius:16px;padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <button class="key">7</button><button class="key">8</button><button class="key">9</button>
+        <button class="key">4</button><button class="key">5</button><button class="key">6</button>
+        <button class="key">1</button><button class="key">2</button><button class="key">3</button>
+        <button class="key">000</button><button class="key">0</button><button class="key" aria-label="Hapus angka">⌫</button>
+        <button class="key" style="grid-column:span 3;font-size:15px">Uang pas · 253.750</button>
+      </div>
+
+      <button style="height:60px;border:0;border-radius:14px;background:#1f6f5c;color:#fff;font:inherit;font-weight:700;font-size:17px;margin-top:auto">Selesaikan &amp; cetak struk</button>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

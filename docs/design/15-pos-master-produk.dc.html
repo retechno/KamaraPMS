@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Master produk</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.card h3{margin:0;font-size:15px}
+.lbl{display:block;font-size:12px;color:#626b77;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inp{width:100%;box-sizing:border-box;height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 12px;font:inherit;background:#fff;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea}
+.td{padding:8px 10px;border-bottom:1px solid #eef0f2;font-size:13px}
+.prow{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid #eef0f2;font-size:14px}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;background:#f6f7f9;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">POS</div>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128">Outlet</a>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128;background:#e3f2ee;font-weight:600">Produk &amp; menu</a>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128">Varian &amp; tambahan</a>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128">Denah meja</a>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128">Stasiun &amp; printer</a>
+    <a href="#" style="padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128">Laporan outlet</a>
+  </aside>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div style="padding:20px 24px 12px;display:flex;align-items:center;gap:12px">
+      <h1 style="margin:0;font-size:24px">Produk &amp; menu</h1>
+      <div style="flex:1"></div>
+      <button style="height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600">Impor CSV</button>
+      <button style="height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;color:#fff;font:inherit;font-weight:600">Produk baru</button>
+    </div>
+    <div style="flex:1;display:flex;gap:20px;padding:0 24px 24px;min-height:0">
+      <section style="width:340px;flex-shrink:0;background:#fff;border:1px solid #e3e6ea;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:12px 16px;display:flex;gap:8px">
+          <label for="cp" style="position:absolute;left:-9999px">Cari produk</label>
+          <input id="cp" class="inp" placeholder="Cari produk">
+        </div>
+        <div style="padding:6px 16px;font-size:11px;font-weight:600;color:#626b77;background:#f6f7f9">MAKANAN UTAMA · 7</div>
+        <div class="prow" style="background:#e3f2ee;font-weight:600"><span>Nasi Goreng Kampung</span><span>85.000</span></div>
+        <div class="prow"><span>Mie Goreng Seafood</span><span>95.000</span></div>
+        <div class="prow"><span>Sate Ayam Madura</span><span>90.000</span></div>
+        <div class="prow"><span>Bebek Betutu</span><span>165.000</span></div>
+        <div class="prow"><span>Ikan Bakar Jimbaran</span><span>185.000</span></div>
+        <div style="padding:6px 16px;font-size:11px;font-weight:600;color:#626b77;background:#f6f7f9">LAYANAN · 2</div>
+        <div class="prow"><span>Cuci setrika kemeja</span><span>35.000</span></div>
+        <div class="prow"><span>Cetak dokumen per lembar</span><span>3.000</span></div>
+      </section>
+
+      <section style="flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-content:start;min-width:0;overflow:auto">
+        <div class="card">
+          <h3>Nasi Goreng Kampung</h3>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end">
+            <div><label class="lbl" for="kat">Kategori</label><select id="kat" class="inp"><option>Makanan utama</option></select></div>
+            <div><label class="lbl" for="kb">Kode biaya</label><select id="kb" class="inp"><option>FOOD · Makanan</option></select></div>
+            <div><label class="lbl" for="st">Stasiun</label><select id="st" class="inp"><option>Dapur utama</option></select></div>
+            <div><label class="lbl" for="kode">Kode / SKU</label><input id="kode" class="inp" value="NGK-01"></div>
+          </div>
+          <div style="font-size:12px;color:#626b77">Kode biaya menentukan akun pendapatan dan departemen.</div>
+        </div>
+
+        <div class="card">
+          <h3>Harga per outlet</h3>
+          <table style="border-collapse:collapse;width:100%">
+            <thead><tr><th class="th">Outlet</th><th class="th">Dijual</th><th class="th" style="text-align:right">Harga</th></tr></thead>
+            <tbody>
+              <tr><td class="td">Restoran Teratai</td><td class="td">Ya</td><td class="td" style="text-align:right">85.000</td></tr>
+              <tr><td class="td">Room service</td><td class="td">Ya</td><td class="td" style="text-align:right">95.000</td></tr>
+              <tr><td class="td">Bar Kolam</td><td class="td">Ya</td><td class="td" style="text-align:right">90.000</td></tr>
+              <tr><td class="td" style="color:#626b77">Laundry</td><td class="td" style="color:#626b77">Tidak</td><td class="td" style="text-align:right;color:#626b77">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Varian</h3>
+          <div style="font-size:13px;font-weight:600">Porsi <span class="pill">wajib · pilih 1</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+            <div style="display:flex;justify-content:space-between"><span>Reguler</span><span style="color:#626b77">+0</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Jumbo</span><span>+20.000</span></div>
+          </div>
+          <div style="font-size:13px;font-weight:600;margin-top:6px">Level pedas <span class="pill">wajib · pilih 1</span></div>
+          <div style="font-size:13px;color:#4a5361">Tidak pedas · Sedang · Pedas (tanpa harga)</div>
+        </div>
+
+        <div class="card">
+          <h3>Tambahan</h3>
+          <div style="font-size:13px;font-weight:600">Lauk tambahan <span class="pill">opsional · maks 3</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+            <div style="display:flex;justify-content:space-between"><span>Telur ceplok</span><span>+8.000</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Kerupuk</span><span>+5.000</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Sate ayam 2 tusuk</span><span>+20.000</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Pajak &amp; servis</h3>
+          <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="radio" name="pajak" checked style="width:18px;height:18px;margin-top:2px"><span><strong>Ikuti outlet</strong><br><span style="font-size:12px;color:#626b77">Restoran: servis 10%, PB1 10% · Room service: servis 10%, PB1 10%</span></span></label>
+          <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="radio" name="pajak" style="width:18px;height:18px;margin-top:2px"><span><strong>Atur khusus produk ini</strong><br><span style="font-size:12px;color:#626b77">Mis. tanpa servis, atau harga sudah termasuk pajak</span></span></label>
+        </div>
+
+        <div class="card" style="background:#f6f7f9;border-style:dashed">
+          <h3>Resep &amp; biaya bahan</h3>
+          <div style="font-size:13px;color:#4a5361">Tersambung ke modul inventory: bahan per porsi, biaya resep, dan food cost %. Tersedia setelah modul inventory aktif.</div>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#626b77">
+            <div style="display:flex;justify-content:space-between"><span>Beras putih</span><span>200 g</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Ayam fillet</span><span>80 g</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Telur</span><span>1 butir</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid #e3e6ea;background:#fff;display:flex;justify-content:flex-end;gap:8px">
+      <button style="height:44px;padding:0 18px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600">Nonaktifkan</button>
+      <button style="height:44px;padding:0 22px;border:0;border-radius:10px;background:#1f6f5c;color:#fff;font:inherit;font-weight:600">Simpan</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

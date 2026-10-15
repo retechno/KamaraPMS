@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Layar dapur</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7fd0b9}a:hover{color:#a9e2d2}
+.col{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+.colh{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:#c9d1da;text-transform:uppercase;letter-spacing:.06em}
+.tk{background:#1d2229;border:1px solid #2f3640;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.tkh{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #2f3640}
+.tkn{font-size:20px;font-weight:700;color:#f3f5f7}
+.tkm{font-size:12px;color:#aeb7c2}
+.it{display:flex;gap:10px;padding:10px 14px;font-size:16px;color:#f3f5f7;border-top:1px solid #262c34}
+.it .q{width:26px;font-weight:700}
+.it .n{font-size:13px;color:#f0a35e}
+.tkb{display:flex;gap:8px;padding:12px 14px;border-top:1px solid #2f3640}
+.btn{flex:1;height:48px;border-radius:10px;border:1px solid #3a414b;background:#262b33;color:#f3f5f7;font:inherit;font-weight:700;font-size:15px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#13161b;color:#f3f5f7;display:flex;flex-direction:column">
+  <header style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid #2a2f37">
+    <div style="font-size:20px;font-weight:700">Dapur utama</div>
+    <div style="display:flex;gap:4px;background:#1d2229;border-radius:10px;padding:4px">
+      <button style="height:40px;padding:0 16px;border:0;border-radius:8px;background:#3fa98d;color:#0c1512;font:inherit;font-weight:700">Dapur</button>
+      <button style="height:40px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:#c9d1da;font:inherit">Bar</button>
+      <button style="height:40px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:#c9d1da;font:inherit">Pastry</button>
+    </div>
+    <span style="font-size:13px;color:#aeb7c2">Restoran Teratai, Room service</span>
+    <div style="flex:1"></div>
+    <span style="font-size:13px;color:#aeb7c2">Rata-rata 11 mnt · 3 terlambat</span>
+    <div style="font-size:22px;font-weight:700">12.47</div>
+  </header>
+
+  <div style="flex:1;display:flex;gap:20px;padding:20px 24px;min-height:0">
+    <div class="col">
+      <div class="colh"><span style="width:10px;height:10px;border-radius:5px;background:#8fb0ff"></span>Baru · 2</div>
+      <div class="tk" style="border-color:#3a4f8a">
+        <div class="tkh"><span class="tkn">Meja 5</span><span class="tkm">R-0123 · Ketut · tambahan</span><span style="flex:1"></span><span class="tkm">1 mnt</span></div>
+        <div class="it"><span class="q">1</span><div>Es Teh Manis<div class="n">Kurang manis</div></div></div>
+        <div class="tkb"><button class="btn" style="background:#3fa98d;border-color:#3fa98d;color:#0c1512">Mulai</button></div>
+      </div>
+      <div class="tk" style="border-color:#3a4f8a">
+        <div class="tkh"><span class="tkn">Kamar 214</span><span class="tkm">Room service · RS-0045</span><span style="flex:1"></span><span class="tkm">3 mnt</span></div>
+        <div class="it"><span class="q">1</span><div>Soto Ayam</div></div>
+        <div class="it"><span class="q">1</span><div>Gado-gado<div class="n">Bumbu dipisah</div></div></div>
+        <div class="tkb"><button class="btn" style="background:#3fa98d;border-color:#3fa98d;color:#0c1512">Mulai</button></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="colh"><span style="width:10px;height:10px;border-radius:5px;background:#b9a3f5"></span>Dimasak · 3</div>
+      <div class="tk">
+        <div class="tkh"><span class="tkn">Meja 5</span><span class="tkm">R-0123 · Ketut</span><span style="flex:1"></span><span class="tkm">16 mnt</span></div>
+        <div class="it"><span class="q">2</span><div>Nasi Goreng Kampung<div class="n">Reguler · Sedang · + Telur ceplok · Tanpa bawang goreng</div></div></div>
+        <div class="it" style="color:#8b96a3;text-decoration:line-through"><span class="q">1</span><div>Bebek Betutu<div class="n" style="color:#f0a35e;text-decoration:none">DIBATALKAN 12.40</div></div></div>
+        <div class="tkb"><button class="btn" style="background:#5fd0a0;border-color:#5fd0a0;color:#0c1512">Siap</button></div>
+      </div>
+      <div class="tk" style="border-color:#b4332c;box-shadow:0 0 0 2px #b4332c">
+        <div class="tkh"><span class="tkn">Meja 7</span><span class="tkm">R-0117 · Wayan</span><span style="flex:1"></span><span class="tkm" style="color:#ff8f86;font-weight:700">27 mnt · terlambat</span></div>
+        <div class="it"><span class="q">2</span><div>Ikan Bakar Jimbaran</div></div>
+        <div class="it"><span class="q">3</span><div>Mie Goreng Seafood<div class="n">Jumbo · Pedas</div></div></div>
+        <div class="tkb"><button class="btn" style="background:#5fd0a0;border-color:#5fd0a0;color:#0c1512">Siap</button></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="colh"><span style="width:10px;height:10px;border-radius:5px;background:#5fd0a0"></span>Siap diambil · 2</div>
+      <div class="tk" style="border-color:#2a5a3f">
+        <div class="tkh"><span class="tkn">Meja 5</span><span class="tkm">R-0123</span><span style="flex:1"></span><span class="tkm">Siap 2 mnt lalu</span></div>
+        <div class="it"><span class="q">1</span><div>Sate Ayam Madura</div></div>
+        <div class="tkb"><button class="btn">Sudah diambil</button></div>
+      </div>
+      <div class="tk" style="border-color:#2a5a3f">
+        <div class="tkh"><span class="tkn">Meja 10</span><span class="tkm">R-0124</span><span style="flex:1"></span><span class="tkm">Siap baru saja</span></div>
+        <div class="it"><span class="q">3</span><div>Soto Ayam</div></div>
+        <div class="tkb"><button class="btn">Sudah diambil</button></div>
+      </div>
+      <div style="margin-top:auto;font-size:13px;color:#aeb7c2">Selesai 1 jam terakhir: 14 tiket · <a href="#riwayat">Riwayat</a></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
