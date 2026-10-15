@@ -6034,6 +6034,9 @@ export const id: Messages = {
     empty_voids: 'Tidak ada void pada rentang ini',
     empty_discounts: 'Tidak ada diskon pada rentang ini',
     empty_comps: 'Tidak ada komplimen pada rentang ini',
+    emptyHint_voids: 'Item yang dibatalkan setelah dikirim ke dapur muncul di sini.',
+    emptyHint_discounts: 'Diskon item atau bill yang disetujui muncul di sini.',
+    emptyHint_comps: 'Bill atau item yang digratiskan muncul di sini.',
   },
   outletCharges: {
     emptyTitle: 'Belum ada beban dari outlet hari ini',

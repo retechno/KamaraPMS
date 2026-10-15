@@ -6036,6 +6036,9 @@ export const en = {
     empty_voids: 'No voids in this range',
     empty_discounts: 'No discounts in this range',
     empty_comps: 'No complimentary in this range',
+    emptyHint_voids: 'Items cancelled after they were sent to the kitchen appear here.',
+    emptyHint_discounts: 'Approved item or bill discounts appear here.',
+    emptyHint_comps: 'Complimentary bills or items appear here.',
   },
   outletCharges: {
     emptyTitle: 'No outlet charges today',

@@ -148,7 +148,7 @@ function csv(): void {
       <section class="grid gap-4 lg:grid-cols-3">
         <div v-for="block in ([['voids', report.voids], ['discounts', report.discounts], ['comps', report.comps]] as const)" :key="block[0]" class="rounded-xl border border-border bg-card p-3" :data-testid="`report-${block[0]}`">
           <h2 class="m-0 mb-2 text-base font-semibold">{{ t(`posReport.${block[0]}`) }}</h2>
-          <EmptyState v-if="block[1].length === 0" :title="t(`posReport.empty_${block[0]}`)" :data-testid="`empty-${block[0]}`" />
+          <EmptyState v-if="block[1].length === 0" :title="t(`posReport.empty_${block[0]}`)" :description="t(`posReport.emptyHint_${block[0]}`)" :data-testid="`empty-${block[0]}`" />
           <ul v-else class="m-0 list-none p-0 text-sm">
             <li v-for="(e, i) in block[1]" :key="i" class="border-t border-border py-1.5 first:border-t-0">
               <strong>{{ e.bill_number }}</strong> · {{ e.what }} <span class="float-right tabular-nums">{{ formatMoney(e.amount) }}</span>
